@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 
 // STRUCTURAL GUARD (labelled as such).
 //
@@ -43,7 +43,9 @@ describe("email send-site policy", () => {
       const src = stripComments(readFileSync(file, "utf8"));
       if (!src.includes("resend.emails.send")) continue;
 
-      const rel = file.slice(root.length + 1);
+      // ALLOWED keys are posix paths; walk() yields native ones (backslashes on
+      // Windows), so normalise before the lookup or every excuse silently misses.
+      const rel = file.slice(root.length + 1).split(sep).join("/");
       if (ALLOWED[rel]) continue;
 
       // Either it passes a headers key, or it goes through the shared layer.
