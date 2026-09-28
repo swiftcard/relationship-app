@@ -27,6 +27,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ use
   if (!username) return NextResponse.json({ error: "Missing card" }, { status: 400 });
 
   if (!(await isCardActive(username))) {
+    // Old-format slug from before the 2026-08-26 rename (lib/slug-alias): the
+    // card page 308s these to the current username, but this route is hit
+    // directly (SaveContactButton/ScanSaveContact pass whatever username they
+    // were given) and was 404ing instead of following the same alias.
+    const { findSlugAlias } = await import("@/lib/slug-alias");
+    const current = await findSlugAlias(username);
+    if (current && current !== username) {
+      return NextResponse.redirect(new URL(`/api/card/${encodeURIComponent(current)}/vcard`, APP_URL), 308);
+    }
     return NextResponse.json({ error: "Card not available" }, { status: 404 });
   }
 
