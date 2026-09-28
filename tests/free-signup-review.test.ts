@@ -28,8 +28,9 @@ describe("step 1: the one required field", () => {
   });
 
   it("the Socials bio is named like everywhere else", () => {
-    expect(w).toContain(">Swift Links bio<");
-    expect(w).not.toContain(">Swiftlinks bio<");
+    // Followed by the required-field asterisk (swift-links-bio-required.test).
+    expect(w).toMatch(/>\s*Swift Links bio[<{]/);
+    expect(w).not.toMatch(/>\s*Swiftlinks bio[<{]/);
   });
 });
 

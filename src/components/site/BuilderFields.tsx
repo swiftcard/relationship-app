@@ -28,11 +28,14 @@ export function Field({
   );
 }
 
-export function TextArea({ label, ...props }: { label: string } & React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function TextArea({ label, hint, ...props }: { label: string; hint?: React.ReactNode } & React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <label className="block">
-      <span className="block text-white/55 text-[0.75rem] font-medium mb-1.5">{label}</span>
+      <span className="block text-white/55 text-[0.75rem] font-medium mb-1.5">
+        {label}{props.required && <span className="text-red-400 ml-0.5" aria-hidden="true">*</span>}
+      </span>
       <textarea className={`${inputCls} resize-none`} rows={3} {...props} />
+      {hint && <span className="block text-white/70 text-[0.6875rem] mt-1.5 leading-snug">{hint}</span>}
     </label>
   );
 }

@@ -6,6 +6,7 @@ import { isLockedLead, ownsLead } from "@/lib/lead-access";
 import { isPaidPlan } from "@/lib/plan";
 import { aiComplete } from "@/lib/ai";
 import { aiConsentBlock } from "@/lib/ai-consent-server";
+import { senderAbout } from "@/lib/sender-about";
 
 type Step = { day: number; time: string };
 
@@ -47,17 +48,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // follow-up can be drafted for it (lib/lead-access isLockedLead).
   if (isLockedLead(lead) && !isPaidPlan(profile?.plan)) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // The contact belongs to a specific card — prefer THAT card's About (what the
-  // user does for this audience), falling back to the profile-level About so the
-  // AI always knows what the sender actually does.
+  // The contact belongs to a specific card — that card's Swift Links bio (what
+  // the user does for this audience) leads, then its About, then the profile's,
+  // so the AI always knows what the sender actually does (lib/sender-about).
   const { data: card } = await admin
     .from("cards")
     .select("customization")
     .eq("username", lead.card_owner)
     .maybeSingle();
-  const about = (
-    ((card?.customization as { about?: string } | null)?.about ?? "").trim() ||
-    ((profile?.customization as { about?: string } | null)?.about ?? "").trim()
+  const about = senderAbout(
+    card?.customization as { bio?: string; about?: string } | null,
+    profile?.customization as { about?: string } | null,
   );
 
   // ── Which half of this feature the plan buys ────────────────────────────

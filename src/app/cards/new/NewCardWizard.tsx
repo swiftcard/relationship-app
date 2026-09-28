@@ -511,6 +511,34 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
   // Step 1's one required field, flagged in place when Next finds it empty.
   const nameInputRef = useRef<HTMLInputElement>(null);
   const [nameMissing, setNameMissing] = useState(false);
+  // Step 3's one required field: the Swift Links bio (the AI follow-ups write
+  // from it — lib/sender-about). An office-set bio fills it on its own. Next on
+  // Socials, the final save and a create from any gate all check it; a miss
+  // lands on step 3 with the box outlined and focused. Two frames, so it runs
+  // after the step change's own jump to the top.
+  const bioRequiredMissing = !bioManaged && !bio.trim();
+  const [bioMissing, setBioMissing] = useState(false);
+  const [bioFocusTick, setBioFocusTick] = useState(0);
+  useEffect(() => {
+    if (!bioFocusTick) return;
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => {
+        const el = document.getElementById("wizard-bio");
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+        el?.focus({ preventScroll: true });
+      });
+    });
+    return () => { cancelAnimationFrame(outer); cancelAnimationFrame(inner); };
+  }, [bioFocusTick]);
+  /** False (and sends them to the bio) when the required bio is empty. */
+  function requireBio(): boolean {
+    if (!bioRequiredMissing) return true;
+    setStep(3);
+    setBioMissing(true);
+    setBioFocusTick((n) => n + 1);
+    return false;
+  }
   // Native-only: when a Free user hits the card cap we can't send them to the
   // /upgrade selling screen (forbidden in-app), so we show a neutral notice
   // instead. Stays false on web, so the web flow (router.push("/upgrade")) is
@@ -1064,6 +1092,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
       setError("Full name is required.");
       return;
     }
+    if (!requireBio()) return;
     if (creatingRef.current) return; // a create is already in flight
     creatingRef.current = true;
     setStatus("loading");
@@ -1716,13 +1745,15 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
           <div className="space-y-5">
             <div className="mb-1">
               <h1 className="text-2xl font-bold text-white">Socials</h1>
-              <p className="text-gray-400 text-sm mt-1">Your bio, social profiles, and extra links — they live on your Swift Links page. All optional.</p>
+              <p className="text-gray-400 text-sm mt-1">Your bio, social profiles, and extra links — they live on your Swift Links page. Only the bio is required.</p>
             </div>
 
             {/* Swiftlinks bio */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-medium text-gray-400">Swift Links bio</label>
+                <label htmlFor="wizard-bio" className="block text-xs font-medium text-gray-400">
+                  Swift Links bio{!bioManaged && <span className="text-red-400 ml-0.5" aria-hidden="true">*</span>}
+                </label>
                 {/* The office can write one bio for the whole team, and the
                     server puts it on the card when it's created — so an
                     editable box here quietly threw the member's words away
@@ -1732,18 +1763,25 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                   : <span className="text-[0.625rem] font-semibold text-blue-400">Tip: be descriptive</span>}
               </div>
               <textarea
+                id="wizard-bio"
                 value={bioManaged ? (org?.linkBio ?? "") : bio}
-                onChange={(e) => setBio(e.target.value)}
+                onChange={(e) => {
+                  setBio(e.target.value);
+                  if (bioMissing && e.target.value.trim()) setBioMissing(false);
+                }}
                 readOnly={bioManaged}
+                required={!bioManaged}
+                aria-invalid={bioMissing || undefined}
                 rows={3}
                 placeholder="e.g. Austin realtor helping first-time buyers find their dream home — 10+ years, 200+ closings. Let's talk!"
-                className={`w-full bg-gray-900 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors resize-none ${bioManaged ? "opacity-70 cursor-default" : ""}`}
+                className={`w-full bg-gray-900 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors resize-none ${bioManaged ? "opacity-70 cursor-default" : ""}${bioMissing ? " ring-2 ring-red-500/70 border-red-500" : ""}`}
               />
+              {bioMissing && <p className="text-red-400 text-xs mt-1">Add a bio to continue.</p>}
               {bioManaged ? (
-                <p className="text-gray-600 text-[0.6875rem] mt-1">Your company writes one bio for the whole team.</p>
+                <p className="text-gray-600 text-[0.6875rem] mt-1">Your company writes one bio for the whole team. AI follow-ups also read this bio when they write your messages.</p>
               ) : (
                 <p className="text-gray-600 text-[0.6875rem] mt-1">
-                  Shows at the top of your Swift Links — the first thing visitors read. Say <strong className="text-gray-400">who you help, what you do, and why they should reach out</strong>. Descriptive bios get more taps.
+                  Shows at the top of your Swift Links — the first thing visitors read. Say <strong className="text-gray-400">who you help, what you do, and why they should reach out</strong>. Descriptive bios get more taps. <strong className="text-gray-400">AI follow-ups also read your bio</strong>, so the messages they write speak to what you do.
                 </p>
               )}
             </div>
@@ -1928,7 +1966,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
               <button onClick={() => setStep(2)} className="flex-1 border border-gray-700 text-gray-400 hover:border-gray-500 font-semibold py-3 rounded-full transition-colors text-sm">
                 ← Back
               </button>
-              <button onClick={() => setStep(4)} className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-full transition-colors text-sm">
+              <button onClick={() => { if (requireBio()) setStep(4); }} className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-full transition-colors text-sm">
                 Next: Social design →
               </button>
             </div>
@@ -2245,6 +2283,9 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                   the plan decision, once, with the account already in hand. */}
               <button
                 onClick={() => {
+                  // Before any gate or sign-up: a guest's card is created from
+                  // the saved draft after the account exists, never here.
+                  if (!requireBio()) return;
                   if (!guest) {
                     // First-card design preview on an authed Free account →
                     // force the same Free/Pro choice a guest gets, since they

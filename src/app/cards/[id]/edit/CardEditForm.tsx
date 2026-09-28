@@ -219,6 +219,25 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
 
   // Sharing — bio, social links, additional links
   const [bio, setBio] = useState(card.customization?.bio || "");
+  // The Swift Links bio is required — the AI follow-ups write from it
+  // (lib/sender-about). A Save without one lands on the Socials tab with the
+  // box outlined and focused: the message beside Save can be a phone-screen
+  // below the field it is about. Two frames, so it runs after the tab change's
+  // own jump to the top.
+  const [bioMissing, setBioMissing] = useState(false);
+  const [bioFocusTick, setBioFocusTick] = useState(0);
+  useEffect(() => {
+    if (!bioFocusTick) return;
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => {
+        const el = document.querySelector<HTMLTextAreaElement>('[data-hydrate="bio"]');
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+        el?.focus({ preventScroll: true });
+      });
+    });
+    return () => { cancelAnimationFrame(outer); cancelAnimationFrame(inner); };
+  }, [bioFocusTick]);
   // Social-design toggle: "View SwiftCard →" on the Swift Links page (default shown).
   const [showCardLinkBtn, setShowCardLinkBtn] = useState(card.customization?.hideCardLink !== true);
   const [website, setWebsite] = useState(orgWebsite ?? (card.website || ""));
@@ -514,6 +533,16 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
     if (!name.trim()) {
       setTab("content");
       setError("Full name is required.");
+      setProBlock(null);
+      return;
+    }
+    // An office-set bio fills the page on its own (bioManaged); otherwise the
+    // member's own bio is required.
+    if (!bioManaged && !bio.trim()) {
+      setTab("sharing");
+      setBioMissing(true);
+      setBioFocusTick((n) => n + 1);
+      setError("Your Swift Links bio is required.");
       setProBlock(null);
       return;
     }
@@ -1124,7 +1153,9 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
             {/* Swiftlinks bio */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-medium text-gray-400">Swiftlinks bio</label>
+                <label htmlFor="card-bio" className="block text-xs font-medium text-gray-400">
+                  Swiftlinks bio{!bioManaged && <span className="text-red-400 ml-0.5" aria-hidden="true">*</span>}
+                </label>
                 {/* The office can write one bio for the whole team. When it has,
                     the field is read-only rather than editable-then-overwritten:
                     the server replaces it on save, so an editable box here would
@@ -1134,22 +1165,29 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                   : <span className="text-[0.625rem] font-semibold text-blue-400">Tip: be descriptive</span>}
               </div>
               <textarea
+                id="card-bio"
                 value={bioManaged ? (org?.linkBio ?? "") : bio}
                 data-hydrate="bio"
-                onChange={(e) => setBio(e.target.value)}
+                onChange={(e) => {
+                  setBio(e.target.value);
+                  if (bioMissing && e.target.value.trim()) { setBioMissing(false); setError(""); }
+                }}
                 readOnly={bioManaged}
+                required={!bioManaged}
+                aria-invalid={bioMissing || undefined}
                 rows={3}
                 placeholder="e.g. Austin realtor helping first-time buyers find their dream home — 10+ years, 200+ closings. Let's talk!"
-                className={`${inputCls} resize-none ${bioManaged ? "opacity-70 cursor-default" : ""}`}
+                className={`${inputCls} resize-none ${bioManaged ? "opacity-70 cursor-default" : ""}${bioMissing ? " ring-2 ring-red-500/70 border-red-500" : ""}`}
               />
+              {bioMissing && <p className="text-red-400 text-xs mt-1">Add a bio to save your card.</p>}
               {bioManaged ? (
                 <p className="text-gray-600 text-[0.6875rem] mt-1">
                   Your company writes one bio for the whole team. Anything you had written is saved and
-                  comes back if they stop setting one.
+                  comes back if they stop setting one. AI follow-ups also read this bio when they write your messages.
                 </p>
               ) : (
                 <p className="text-gray-600 text-[0.6875rem] mt-1">
-                  Shows at the top of your Swift Links — the first thing visitors read. Say <strong className="text-gray-400">who you help, what you do, and why they should reach out</strong>. Descriptive bios get more taps.
+                  Shows at the top of your Swift Links — the first thing visitors read. Say <strong className="text-gray-400">who you help, what you do, and why they should reach out</strong>. Descriptive bios get more taps. <strong className="text-gray-400">AI follow-ups also read your bio</strong>, so the messages they write speak to what you do.
                 </p>
               )}
             </div>

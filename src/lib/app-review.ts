@@ -12,8 +12,13 @@ import { detectNativeApp } from "@/lib/platform";
 //     here is a no-op.
 //  2. Only after a real win: a lead has landed, or the person has shared their
 //     own card SHARES_NEEDED times. Opening the app is not a win.
-//  3. Never on first launch. The install clock starts the first time the app
-//     runs this code, and nothing is asked until MIN_DAYS_INSTALLED later.
+//  3. Only someone who has really used the app. A new user doesn't know it
+//     yet and has nothing to say about it (owner, 2026-09-28: "a user who's
+//     been using it for maybe a week or so knows something about it"). So the
+//     install clock starts the first time the app runs this code, nothing is
+//     asked until MIN_DAYS_INSTALLED later, AND the app has to have been opened
+//     on ACTIVE_DAYS_NEEDED different days — a week-old install opened once is
+//     still a new user.
 //  4. At most once every REASK_DAYS. The timestamp is written BEFORE the request
 //     — iOS never says whether the sheet appeared, so a call that silently
 //     failed must not re-arm on the next load.
@@ -29,7 +34,8 @@ import { detectNativeApp } from "@/lib/platform";
 // survive the webview clearing its site data; localStorage is the fallback.
 
 export const SHARES_NEEDED = 3;
-export const MIN_DAYS_INSTALLED = 3;
+export const MIN_DAYS_INSTALLED = 7;
+export const ACTIVE_DAYS_NEEDED = 4;
 export const REASK_DAYS = 90;
 const DAY_MS = 86_400_000;
 
@@ -38,6 +44,8 @@ const KEYS = {
   lastPrompted: "sc_review_last_prompted", // ISO time we last asked iOS for the sheet
   shares: "sc_review_shares",              // completed shares of the owner's own card
   hadLead: "sc_review_had_lead",           // "1" once any lead has landed
+  activeDays: "sc_review_active_days",     // how many different days the app was opened
+  lastActiveDay: "sc_review_last_active_day", // local YYYY-MM-DD of the last one counted
 } as const;
 
 /** A win worth recording. Deliberately a closed set. */
@@ -48,12 +56,15 @@ export type ReviewState = {
   lastPrompted: number | null;
   shares: number;
   hadLead: boolean;
+  /** Different days the app has been opened (rule 3). */
+  activeDays: number;
 };
 
 /** Every rule in one pure function, so the tests can walk the calendar. */
 export function shouldAskForReview(s: ReviewState, now: number): boolean {
   if (s.firstSeen === null) return false;
   if (now - s.firstSeen < MIN_DAYS_INSTALLED * DAY_MS) return false;
+  if (s.activeDays < ACTIVE_DAYS_NEEDED) return false;
   if (!s.hadLead && s.shares < SHARES_NEEDED) return false;
   if (s.lastPrompted !== null && now - s.lastPrompted < REASK_DAYS * DAY_MS) return false;
   return true;
@@ -122,11 +133,23 @@ async function check(opts: { hasLead?: boolean }): Promise<boolean> {
   if (firstSeen === null) await s.set(KEYS.firstSeen, new Date(now).toISOString());
   if (opts.hasLead) await s.set(KEYS.hadLead, "1");
 
+  // Count this day once, by the phone's own calendar — opening the app five
+  // times this afternoon is one day of use, not five.
+  const d = new Date(now);
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  let activeDays = Number.parseInt((await s.get(KEYS.activeDays)) ?? "0", 10) || 0;
+  if ((await s.get(KEYS.lastActiveDay)) !== today) {
+    activeDays += 1;
+    await s.set(KEYS.activeDays, String(activeDays));
+    await s.set(KEYS.lastActiveDay, today);
+  }
+
   const state: ReviewState = {
     firstSeen,
     lastPrompted: toTime(await s.get(KEYS.lastPrompted)),
     shares: Number.parseInt((await s.get(KEYS.shares)) ?? "0", 10) || 0,
     hadLead: opts.hasLead === true || (await s.get(KEYS.hadLead)) === "1",
+    activeDays,
   };
   if (!shouldAskForReview(state, now)) return false;
 

@@ -6,6 +6,7 @@ import { getOwnerUsernames } from "@/lib/owner-usernames";
 import { isPaidPlan } from "@/lib/plan";
 import { aiComplete, hasAiProvider } from "@/lib/ai";
 import { aiConsentBlock } from "@/lib/ai-consent-server";
+import { senderAbout } from "@/lib/sender-about";
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -59,12 +60,22 @@ export async function POST(req: NextRequest) {
   const ownerName = profile?.name ?? "I";
   const title = profile?.title ?? "";
   const company = profile?.company ?? "";
-  const about = ((profile?.customization as { about?: string } | null)?.about ?? "").trim();
+  // The contact came in through one card — its Swift Links bio says what the
+  // sender does for this audience (lib/sender-about).
+  const { data: card } = await adminSupabase
+    .from("cards")
+    .select("customization")
+    .eq("username", lead.card_owner)
+    .maybeSingle();
+  const about = senderAbout(
+    card?.customization as { bio?: string; about?: string } | null,
+    profile?.customization as { about?: string } | null,
+  );
   const leadName = lead.name.split(" ")[0];
 
   const contextLines = [
     title && `${ownerName} works as a ${title}${company ? ` at ${company}` : ""}`,
-    about && `What ${ownerName} does / offers (their About): ${about}`,
+    about && `What ${ownerName} does / offers (their bio): ${about}`,
     lead.company && `${leadName} works at ${lead.company}`,
     meetContext && `They met at: ${meetContext}`,
     lead.message && `${leadName} mentioned: "${lead.message}"`,

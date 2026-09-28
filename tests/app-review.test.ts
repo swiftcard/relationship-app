@@ -15,9 +15,9 @@ const DAY = 86_400_000;
 
 // ── the rules, as a pure function ───────────────────────────────────────────
 describe("shouldAskForReview", async () => {
-  const { shouldAskForReview, REASK_DAYS, MIN_DAYS_INSTALLED, SHARES_NEEDED } = await import("@/lib/app-review");
+  const { shouldAskForReview, REASK_DAYS, MIN_DAYS_INSTALLED, SHARES_NEEDED, ACTIVE_DAYS_NEEDED } = await import("@/lib/app-review");
   const now = Date.UTC(2026, 8, 11);
-  const base = { firstSeen: now - 10 * DAY, lastPrompted: null, shares: 0, hadLead: true };
+  const base = { firstSeen: now - 10 * DAY, lastPrompted: null, shares: 0, hadLead: true, activeDays: 5 };
 
   it("says yes after a lead, days after install, never asked before", () => {
     expect(shouldAskForReview(base, now)).toBe(true);
@@ -27,6 +27,21 @@ describe("shouldAskForReview", async () => {
     expect(REASK_DAYS).toBe(90);
     expect(SHARES_NEEDED).toBe(3);
     expect(MIN_DAYS_INSTALLED).toBeGreaterThanOrEqual(1);
+  });
+
+  // Owner, 2026-09-28: a new user doesn't know the app yet and has nothing to
+  // say; someone who has used it for about a week does.
+  it("only asks someone who has used the app for about a week", () => {
+    expect(MIN_DAYS_INSTALLED).toBeGreaterThanOrEqual(7);
+    expect(ACTIVE_DAYS_NEEDED).toBeGreaterThanOrEqual(4);
+    expect(shouldAskForReview({ ...base, firstSeen: now - 6 * DAY }, now)).toBe(false);
+    expect(shouldAskForReview({ ...base, firstSeen: now - 7 * DAY }, now)).toBe(true);
+  });
+
+  it("a week-old install opened on too few days is still a new user", () => {
+    expect(shouldAskForReview({ ...base, firstSeen: now - 30 * DAY, activeDays: 1 }, now)).toBe(false);
+    expect(shouldAskForReview({ ...base, activeDays: ACTIVE_DAYS_NEEDED - 1 }, now)).toBe(false);
+    expect(shouldAskForReview({ ...base, activeDays: ACTIVE_DAYS_NEEDED }, now)).toBe(true);
   });
 
   it("never on first launch — no install clock yet means no", () => {
@@ -84,20 +99,29 @@ describe("noteReviewMoment / maybeAskForReview", () => {
     expect(requestReview).not.toHaveBeenCalled();
   });
 
-  it("asks once after 3 shares + 3 days, then not again for 90 days", async () => {
+  it("asks once after 3 shares + a week of use, then not again for 90 days", async () => {
     const m = await import("@/lib/app-review");
-    await m.maybeAskForReview();                      // day 0: clock starts
+    await m.maybeAskForReview();                      // day 0: clock starts (active day 1)
     for (let i = 0; i < 3; i++) await m.noteReviewMoment("card_shared");
     expect(requestReview).not.toHaveBeenCalled();     // recording never prompts
 
-    vi.setSystemTime(Date.UTC(2026, 8, 14));          // day 3
+    vi.setSystemTime(Date.UTC(2026, 8, 18, 12));      // day 7, but only the 2nd day opened
+    expect(await m.maybeAskForReview()).toBe(false);
+    vi.setSystemTime(Date.UTC(2026, 8, 18, 15));      // same day again — still 2 days
+    expect(await m.maybeAskForReview()).toBe(false);
+    expect(mem.get("sc_review_active_days")).toBe("2");
+    vi.setSystemTime(Date.UTC(2026, 8, 19, 12));      // 3rd day
+    expect(await m.maybeAskForReview()).toBe(false);
+    vi.setSystemTime(Date.UTC(2026, 8, 20, 12));      // 4th day: a week in, used on 4 days
     expect(await m.maybeAskForReview()).toBe(true);
     expect(requestReview).toHaveBeenCalledTimes(1);
-    expect(mem.get("sc_review_last_prompted")).toBe(new Date(Date.UTC(2026, 8, 14)).toISOString());
+    expect(mem.get("sc_review_last_prompted")).toBe(new Date(Date.UTC(2026, 8, 20, 12)).toISOString());
 
     vi.setSystemTime(Date.UTC(2026, 10, 1));          // ~48 days later
     expect(await m.maybeAskForReview()).toBe(false);
-    vi.setSystemTime(Date.UTC(2026, 11, 13));         // 90 days later
+    vi.setSystemTime(Date.UTC(2026, 11, 19, 11));     // a hair under 90 days
+    expect(await m.maybeAskForReview()).toBe(false);
+    vi.setSystemTime(Date.UTC(2026, 11, 19, 12));     // 90 days later
     expect(await m.maybeAskForReview()).toBe(true);
     expect(requestReview).toHaveBeenCalledTimes(2);
   });
@@ -106,6 +130,7 @@ describe("noteReviewMoment / maybeAskForReview", () => {
     requestReview.mockRejectedValueOnce(new Error("no plugin"));
     const m = await import("@/lib/app-review");
     mem.set("sc_review_first_seen", new Date(Date.UTC(2026, 7, 1)).toISOString());
+    mem.set("sc_review_active_days", "10");
     expect(await m.maybeAskForReview({ hasLead: true })).toBe(true);
     expect(await m.maybeAskForReview({ hasLead: true })).toBe(false);
     expect(requestReview).toHaveBeenCalledTimes(1);
@@ -114,6 +139,7 @@ describe("noteReviewMoment / maybeAskForReview", () => {
   it("two overlapping checks ask once, not twice", async () => {
     const m = await import("@/lib/app-review");
     mem.set("sc_review_first_seen", new Date(Date.UTC(2026, 7, 1)).toISOString());
+    mem.set("sc_review_active_days", "10");
     const [a, b] = await Promise.all([m.maybeAskForReview({ hasLead: true }), m.maybeAskForReview({ hasLead: true })]);
     expect([a, b]).toEqual([true, true]); // the same single check, shared
     expect(requestReview).toHaveBeenCalledTimes(1);

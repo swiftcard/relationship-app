@@ -54,6 +54,9 @@ async function seed() {
     body: JSON.stringify({
       user_id: u.id, username: uname, name: "Dana Ellis", title: "Principal Broker",
       company: "Northbeam Group", email, phone: "(415) 555-0192", template: "modern-bold",
+      // The Swift Links bio is required — the editor won't save a card
+      // without one, so a real card always has it.
+      customization: { bio: "Principal broker helping Bay Area families buy and sell with confidence." },
     }),
   })).json();
   cardId = c?.[0]?.id;
@@ -216,6 +219,43 @@ FLOWS["card-edit-validation"] = async () => {
 };
 
 // ── C. Profile form: Saved ✓ has to mean saved ───────────────────────────────
+// ── B2. Required Swift Links bio: a blank bio must not save ─────────────────
+// Save with it empty sends nothing, opens the Socials tab and puts the cursor
+// in the box; typing one and saving again goes through.
+FLOWS["card-edit-bio-required"] = async () => {
+  const { ctx, page } = await newPage();
+  try {
+    await login(page);
+    await dismissOverlays(page);
+    await page.goto(`${BASE}/cards/${cardId}/edit`, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector('input[placeholder="John Smith"]', { timeout: 30000 });
+    await page.waitForTimeout(1200);
+    await page.locator('button:has-text("Socials")').first().click();
+    await page.waitForSelector("#card-bio", { timeout: 10000 });
+    await page.fill("#card-bio", "");
+    await page.locator('button:has-text("Card info")').first().click();
+    await page.waitForTimeout(600);
+
+    const save = page.locator('button:has-text("Save changes")').first();
+    const writes = await countWrites(page, "/api/cards", async () => { await save.click(); await page.waitForTimeout(2000); });
+    if (writes.length) fail("card-edit-bio-required", `a blank bio was sent: ${writes.join(", ")}`);
+    else pass("card-edit bio required", "blank bio not sent");
+    const onSocials = await page.locator("#card-bio").isVisible().catch(() => false);
+    const focused = await page.evaluate(() => document.activeElement?.id === "card-bio");
+    if (!onSocials || !focused) fail("card-edit-bio-required", `Save did not take them to the bio (visible=${onSocials}, focused=${focused})`);
+    else pass("card-edit bio required", "Save opened Socials with the bio focused");
+    await page.screenshot({ path: `${OUT}/card-edit-bio-required.png` }).catch(() => {});
+
+    const bio = `Bio ${stamp}`;
+    await page.fill("#card-bio", bio);
+    await save.click();
+    await page.waitForURL(/\/dashboard/, { timeout: 20000 }).catch(() => {});
+    const row = await (await adm(`/rest/v1/cards?id=eq.${cardId}&select=customization`)).json();
+    if (row?.[0]?.customization?.bio !== bio) fail("card-edit-bio-required", `after filling it the DB bio is "${row?.[0]?.customization?.bio}"`);
+    else pass("card-edit bio required", "a written bio saves");
+  } finally { await ctx.close(); }
+};
+
 FLOWS["profile-persistence"] = async () => {
   const { ctx, page } = await newPage();
   try {

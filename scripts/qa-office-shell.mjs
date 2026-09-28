@@ -349,6 +349,12 @@ try {
         const b = page.locator(`button:has-text("${label}")`).first();
         if (!(await b.isVisible().catch(() => false))) { note(shot, "missing-button", label); break; }
         if (await b.isDisabled().catch(() => false)) { note(shot, "button-disabled", label); break; }
+        // Socials: the Swift Links bio is required unless the office set one
+        // (then the box is read-only).
+        if (label === "Next: Social design →") {
+          const bio = page.locator("#wizard-bio");
+          if (await bio.isEditable().catch(() => false)) await bio.fill("Associate broker helping Portland families buy their first home.").catch(() => {});
+        }
         await b.click(); await page.waitForTimeout(1800); await dismissOverlays(page);
         await audit(page, shot);
       }

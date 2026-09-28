@@ -120,6 +120,9 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
     {
       title: "Your bio, socials & links",
       subtitle: "A line about you, the socials you have, and any links you want front and center.",
+      // The bio is required, the same as the real builder's Socials step
+      // (NewCardWizard requireBio) — Next and "Make it live" wait for it.
+      canAdvance: sketch.bio.trim().length > 0,
       content: (
         <div className="space-y-4">
           <TextArea
@@ -127,6 +130,8 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
             placeholder="Founder & CEO at Morgan & Co. Helping brands grow"
             value={sketch.bio}
             onChange={(e) => patch({ bio: e.target.value })}
+            required
+            hint="AI follow-ups also read your bio, so the messages they write speak to what you do."
             autoFocus
           />
           <SocialFields socials={sketch.socials} onChange={patchSocial} />
