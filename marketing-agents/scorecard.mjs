@@ -24,6 +24,11 @@ import { sbCount, sbRows, isoAgo, DAY } from "./lib/probe.mjs";
 import { email } from "./lib/agentkit.mjs";
 
 const APP_ID = "6798875872";
+// The QA harness mints `*@swiftcard-test.invalid` accounts nightly and after
+// every deploy and deletes them in a finally block — but a run that dies
+// mid-way leaves residue (2 of 18 signups the week this shipped). Same
+// predicate as src/lib/test-mailbox.ts, which this .mjs cannot import.
+const REAL_PEOPLE = "email=not.like.*swiftcard-test.invalid";
 const wk = (col, from, to) => `${col}=gte.${isoAgo(from * DAY)}&${col}=lt.${isoAgo(to * DAY)}`;
 
 async function pair(table, col, extra = "") {
@@ -63,11 +68,11 @@ const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt
 
 async function main() {
   const [signups, cards, shares, referrals, trials, leads, views, viewedNow, viewedPrev, store] = await Promise.all([
-    pair("profiles", "created_at"),
+    pair("profiles", "created_at", REAL_PEOPLE),
     pair("cards", "created_at"),
     pair("product_events", "created_at", "name=eq.card_shared&is_internal=eq.false"),
-    pair("profiles", "created_at", "signup_source=eq.referral"),
-    pair("profiles", "pro_trial_started_at"),
+    pair("profiles", "created_at", `signup_source=eq.referral&${REAL_PEOPLE}`),
+    pair("profiles", "pro_trial_started_at", REAL_PEOPLE),
     pair("leads", "created_at"),
     pair("card_views", "viewed_at"),
     newCardsViewed(7, 0),
