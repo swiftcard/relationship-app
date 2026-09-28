@@ -60,10 +60,16 @@ describe("a team member is never shown notifications meant for someone else", ()
     expect(hideForReader(rows, ORDINARY_READER)).toEqual(rows);
   });
   it("both lists apply it: the notifications API and the dashboard", () => {
+    // The two reads are resolved together (they hit the same profiles row and
+    // neither needs the other), then applied in the SAME order as before:
+    // hideForReader first, redactForPlan second. Both sources are pinned here,
+    // so removing either filter — or flipping the order — still fails.
     const api = code("src/app/api/notifications/route.ts");
-    const filtered = api.indexOf("data = hideForReader(data ?? [], await notificationReader(user.id));");
+    expect(api).toMatch(/notificationReader\(user\.id\)/);
+    expect(api).toMatch(/isPaidUser\(user\.id\)/);
+    const filtered = api.indexOf("data = hideForReader(data ?? [], reader);");
     expect(filtered).toBeGreaterThan(-1);
-    expect(api.indexOf("return NextResponse.json(redactForPlan(data ?? [], await isPaidUser(user.id)));")).toBeGreaterThan(filtered);
+    expect(api.indexOf("return NextResponse.json(redactForPlan(data ?? [], paid));")).toBeGreaterThan(filtered);
     const dash = code("src/app/dashboard/page.tsx");
     for (const list of ["panelNotifications", "bellNotifications"]) {
       const hide = dash.indexOf(`${list} = hideForReader(${list} ?? [], notifReader);`);

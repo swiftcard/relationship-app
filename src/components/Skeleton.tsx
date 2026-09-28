@@ -3,10 +3,6 @@
 // cream #FAF7F2 background) so a loading state never flashes the wrong theme
 // before the real page paints.
 
-export function SkeletonBlock({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse bg-gray-800 rounded-lg ${className}`} />;
-}
-
 export function SkeletonBlockLight({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse bg-[#E4DDD4] rounded-lg ${className}`} />;
 }

@@ -24,8 +24,11 @@ export async function GET(req: NextRequest) {
   } | null = null;
 
   if (userId) {
-    const { data: profile } = await admin.from("profiles").select("username, plan").eq("id", userId).single();
-    const { data: extraCards } = await admin.from("cards").select("username").eq("user_id", userId);
+    // Independent reads — neither needs the other's answer, so one round trip.
+    const [{ data: profile }, { data: extraCards }] = await Promise.all([
+      admin.from("profiles").select("username, plan").eq("id", userId).single(),
+      admin.from("cards").select("username").eq("user_id", userId),
+    ]);
     const usernames = [profile?.username, ...(extraCards ?? []).map((c: { username: string }) => c.username)].filter(Boolean);
 
     const { data } = await admin.from("leads").select("name, phone, email, company, where_met, notes, tags").eq("id", leadId).in("card_owner", usernames).single();

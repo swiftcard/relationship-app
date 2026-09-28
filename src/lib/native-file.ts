@@ -15,11 +15,6 @@ import { detectNativeApp } from "@/lib/platform";
  * these helpers return false and callers keep their existing Blob/anchor path.
  */
 
-/** True only inside the native shell. */
-export function isNativeShell(): boolean {
-  return detectNativeApp();
-}
-
 /**
  * On native, open an absolute (or root-relative) URL in the system browser and
  * return true (handled). On web, return false so the caller runs its normal

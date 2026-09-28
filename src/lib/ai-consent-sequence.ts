@@ -37,10 +37,6 @@ export function reportAiAsk(next: AiAskPhase): void {
   for (const l of [...listeners]) l(next);
 }
 
-export function aiAskPhase(): AiAskPhase {
-  return phase;
-}
-
 /** Only a fetch that never answers can leave the phase at "pending" for good. */
 export const AI_ASK_FALLBACK_MS = 15_000;
 /** Lets the permission sheet finish closing before the tour's first step opens. */

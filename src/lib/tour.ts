@@ -6,15 +6,22 @@
 
 import { TOUR_STEPS, resolveTourPath, type TourContext } from "./tour-steps";
 
-// sessionStorage — per-tab, cleared when the tour ends.
-export const TOUR_RUNNING = "sc_tour_running";
-export const TOUR_INDEX = "sc_tour_index";
-export const TOUR_CARD = "sc_tour_card"; // the card slug to keep selected across pages
-
-// localStorage — the account's plan/role, written by the dashboard so the tour
-// (mounted globally, with no server data of its own) can describe the RIGHT
-// plan. Persists across the tour's page navigations and between visits.
-export const TOUR_CTX_KEY = "sc_tour_ctx";
+// The bare key/event strings live in ./tour-keys, which imports nothing — so a
+// module can check whether a tour is running without pulling in both step
+// lists. Re-exported here so every existing `from "@/lib/tour"` import is
+// unchanged.
+export {
+  TOUR_RUNNING, TOUR_INDEX, TOUR_CARD, TOUR_CTX_KEY, TOUR_DONE,
+  TOUR_START_EVENT, TOUR_END_EVENT,
+  ADMIN_TOUR_RUNNING, ADMIN_TOUR_INDEX, ADMIN_TOUR_DONE, ADMIN_TOUR_SEEN,
+  ADMIN_TOUR_START_EVENT, ADMIN_TOUR_END_EVENT,
+} from "./tour-keys";
+import {
+  TOUR_RUNNING, TOUR_INDEX, TOUR_CARD, TOUR_CTX_KEY, TOUR_DONE,
+  TOUR_START_EVENT, TOUR_END_EVENT,
+  ADMIN_TOUR_RUNNING, ADMIN_TOUR_INDEX, ADMIN_TOUR_DONE, ADMIN_TOUR_SEEN,
+  ADMIN_TOUR_START_EVENT, ADMIN_TOUR_END_EVENT,
+} from "./tour-keys";
 
 // Read the persisted plan context. Defaults to the free shape when nothing is
 // stored yet (brand-new tab that hasn't loaded the dashboard) — the safest,
@@ -57,14 +64,6 @@ export function readTourContext(): TourContext {
   } catch { /* ignore */ }
   return base;
 }
-
-// localStorage — persists so we don't nag a returning user.
-export const TOUR_DONE = "sc_tour_completed";
-
-// Events let an already-mounted tour host react instantly (no reload) when the
-// tour is started or ended on the current page.
-export const TOUR_START_EVENT = "sc:tour-start";
-export const TOUR_END_EVENT = "sc:tour-end";
 
 // The active card slug, so Dashboard/Contacts steps stay on the same card.
 function currentCard(): string | null {
@@ -126,18 +125,6 @@ export function tourCompleted(): boolean {
 // of the main dashboard tour — no shared "card" concept, since every step
 // lives inside the Office admin console.
 import { ADMIN_TOUR_STEPS } from "./admin-tour-steps";
-
-export const ADMIN_TOUR_RUNNING = "sc_admin_tour_running";
-export const ADMIN_TOUR_INDEX = "sc_admin_tour_index";
-export const ADMIN_TOUR_DONE = "sc_admin_tour_completed";
-// Separate from DONE: DONE is only set when the tour is FINISHED, so gating the
-// first-visit auto-start on it alone would re-launch the tour on every visit for
-// anyone who skipped it. This records that we've offered it once, so the
-// auto-start fires exactly once either way. Replaying via the "Take a tour"
-// button is unaffected.
-export const ADMIN_TOUR_SEEN = "sc_admin_tour_seen";
-export const ADMIN_TOUR_START_EVENT = "sc:admin-tour-start";
-export const ADMIN_TOUR_END_EVENT = "sc:admin-tour-end";
 
 export function startAdminTour(): void {
   if (typeof window === "undefined") return;

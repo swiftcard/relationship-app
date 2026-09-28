@@ -56,8 +56,6 @@ export type TeamInvite = {
   status: "invite_sent" | "invite_expired";
 };
 
-export type TeamRow = TeamPerson | TeamInvite;
-
 export type TeamOverview = {
   stats: {
     leadsThisMonth: MonthStat;
@@ -288,7 +286,7 @@ export async function getTeamOverview(
     const { data: ownerUser } = await admin.auth.admin.getUserById(ownerId);
     ownerAuthEmail = ownerUser?.user?.email ?? null;
   } catch { /* falls back to profiles.email below */ }
-  const people: TeamPerson[] = analytics.employees.map((e, i) => {
+  const people: TeamPerson[] = analytics.employees.map((e) => {
     const counts = cardCounts.get(e.userId) ?? { total: 0, live: 0 };
     const prof = profById.get(e.userId);
     const lastActiveAt = lastActive(e.userId);

@@ -336,7 +336,7 @@ export async function renderFaceImage(
             const px = (e.w / 100) * W, py = (e.h / 100) * H;
             return (
               // eslint-disable-next-line @next/next/no-img-element -- Satori element
-              <img key={`e${i}`} src={src} width={Math.round(px)} height={Math.round(py)}
+              <img key={`e${i}`} alt="" src={src} width={Math.round(px)} height={Math.round(py)}
                 style={{ position: "absolute", left: `${e.x}%`, top: `${e.y}%`, objectFit: e.kind === "logo" ? "contain" : "cover", borderRadius: e.round ? 9999 : 12 }} />
             );
           }

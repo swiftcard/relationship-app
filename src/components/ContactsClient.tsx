@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getSourceLabel } from "@/lib/source-labels";
 import { locationLabel } from "@/lib/location-display";
@@ -792,37 +792,46 @@ export default function ContactsClient({
   }
 
 
-  const filtered = leads
-    .filter((l) => {
-      if (cardFilter !== "all" && l.card_owner !== cardFilter) return false;
-      const q = search.toLowerCase();
-      return (
-        l.name.toLowerCase().includes(q) ||
-        (l.email ?? "").toLowerCase().includes(q) ||
-        (l.phone ?? "").includes(q) ||
-        (l.company ?? "").toLowerCase().includes(q)
-      );
-    })
-    .sort((a, b) => {
-      if (sortBy === "recent") {
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      }
-      if (sortBy === "activity") {
-        const aDate = a.follow_up_date ?? a.created_at;
-        const bDate = b.follow_up_date ?? b.created_at;
-        return new Date(bDate).getTime() - new Date(aDate).getTime();
-      }
-      return a.name.localeCompare(b.name);
-    });
+  // Filtering, sorting and the A–Z grouping used to run on EVERY render of this
+  // component — and it re-renders constantly: every keystroke in a notes field,
+  // every tab switch, every 10s notification poll, every optimistic tag edit.
+  // None of that changes the list, so the whole derivation is memoised on the
+  // four inputs that actually do. Same output, same order, same objects.
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return leads
+      .filter((l) => {
+        if (cardFilter !== "all" && l.card_owner !== cardFilter) return false;
+        return (
+          l.name.toLowerCase().includes(q) ||
+          (l.email ?? "").toLowerCase().includes(q) ||
+          (l.phone ?? "").includes(q) ||
+          (l.company ?? "").toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => {
+        if (sortBy === "recent") {
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        }
+        if (sortBy === "activity") {
+          const aDate = a.follow_up_date ?? a.created_at;
+          const bDate = b.follow_up_date ?? b.created_at;
+          return new Date(bDate).getTime() - new Date(aDate).getTime();
+        }
+        return a.name.localeCompare(b.name);
+      });
+  }, [leads, cardFilter, search, sortBy]);
 
   // Group alphabetically
-  const grouped: Record<string, Lead[]> = {};
-  for (const lead of filtered) {
-    const letter = lead.name[0]?.toUpperCase() ?? "#";
-    if (!grouped[letter]) grouped[letter] = [];
-    grouped[letter].push(lead);
-  }
-  const letters = Object.keys(grouped).sort();
+  const { grouped, letters } = useMemo(() => {
+    const g: Record<string, Lead[]> = {};
+    for (const lead of filtered) {
+      const letter = lead.name[0]?.toUpperCase() ?? "#";
+      if (!g[letter]) g[letter] = [];
+      g[letter].push(lead);
+    }
+    return { grouped: g, letters: Object.keys(g).sort() };
+  }, [filtered]);
 
   async function selectLead(lead: Lead) {
     const seq = ++selectSeq.current;

@@ -55,9 +55,18 @@ export async function GET(req: NextRequest) {
   // An Office account is never handed referral pitches, nor a team member
   // billing rows about a subscription they no longer have
   // (lib/office-account-notifications). Same rule as the dashboard's lists.
-  data = hideForReader(data ?? [], await notificationReader(user.id));
+  //
+  // Both reads hit the same profiles row and neither needs the other's answer,
+  // so they go together — this endpoint is polled every 10–30s by every
+  // signed-in tab, and it was paying for two serial round trips per poll.
+  // Each keeps its own error handling, so the fallbacks are unchanged.
+  const [reader, paid] = await Promise.all([
+    notificationReader(user.id),
+    isPaidUser(user.id),
+  ]);
+  data = hideForReader(data ?? [], reader);
 
-  return NextResponse.json(redactForPlan(data ?? [], await isPaidUser(user.id)));
+  return NextResponse.json(redactForPlan(data ?? [], paid));
 }
 
 export async function PATCH(req: NextRequest) {

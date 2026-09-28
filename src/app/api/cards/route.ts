@@ -124,8 +124,11 @@ export async function POST(req: NextRequest) {
   // once — it decides both the company nickname AND whether the card is flagged
   // is_office_card (below). The owner is deliberately excluded: their personal
   // cards are individual and must never be touched by office propagation.
-  const subCtx = await getOfficeSubUserContext(user.id);
-  const brand = await getMemberBrandForUser(user.id);
+  // Independent lookups — resolved together rather than one after the other.
+  const [subCtx, brand] = await Promise.all([
+    getOfficeSubUserContext(user.id),
+    getMemberBrandForUser(user.id),
+  ]);
   // Company-level fields are org territory for a SUB-USER (owner decision,
   // Jul 2026): the UI never asks a member for them, and the server backstops
   // that here — whatever a crafted request supplies is discarded, then the

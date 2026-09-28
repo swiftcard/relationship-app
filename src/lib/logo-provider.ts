@@ -200,8 +200,3 @@ export function parseLogoDevMatches(body: unknown): LogoCandidate[] {
 export function getLogoProvider(): LogoProvider {
   return new LogoDevProvider();
 }
-
-/** True when logo suggestion is usable — used to hide the UI when unconfigured. */
-export function isLogoSuggestEnabled(): boolean {
-  return getLogoProvider().isConfigured();
-}

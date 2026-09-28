@@ -75,7 +75,26 @@ describe("the Office admin tour and the dashboard tour don't fight", () => {
   const tourLib = stripComments(read("src/lib/tour.ts"));
 
   it("the root tour goes dormant inside the admin console", () => {
-    expect(rootLayout).toMatch(/<GuidedTour pausePathPrefix="\/office\/admin"/);
+    // The engine is fetched lazily (GuidedTourHost) so a public card page does
+    // not ship it, but the mount point and the pause prefix are unchanged —
+    // and the host must pass the prefix STRAIGHT through, or the dashboard
+    // tour starts shoving Office owners out of the admin console again.
+    expect(rootLayout).toMatch(/<GuidedTourHost pausePathPrefix="\/office\/admin"/);
+    const host = stripComments(read("src/components/GuidedTourHost.tsx"));
+    expect(host).toMatch(/<GuidedTour pausePathPrefix=\{pausePathPrefix\}/);
+  });
+
+  it("the lazy host cannot swallow a tour that is already running", () => {
+    // Two ways in, and both must stay: a page load while a tour is mid-flight
+    // (the sessionStorage flag), and a tour started on the page we are already
+    // on (the event). Lose either and "Take a tour" silently does nothing.
+    const host = stripComments(read("src/components/GuidedTourHost.tsx"));
+    expect(host).toMatch(/sessionStorage\.getItem\(TOUR_RUNNING\) === "1"/);
+    expect(host).toMatch(/addEventListener\(TOUR_START_EVENT/);
+    // And it must not re-import the engine's own step lists, which is the
+    // whole point of loading it separately.
+    expect(host).toMatch(/from "@\/lib\/tour-keys"/);
+    expect(host).not.toMatch(/from "@\/lib\/tour-steps"/);
   });
 
   it("dormant means it does not navigate", () => {

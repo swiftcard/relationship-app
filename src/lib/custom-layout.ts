@@ -27,8 +27,6 @@ import type {
 const EMPHASIS_PX: Record<CardEmphasis, number> = { hero: 25, normal: 13, quiet: 10 };
 const EMPHASIS_IMG: Record<CardEmphasis, number> = { hero: 108, normal: 84, quiet: 62 };
 
-export const EMPHASIS_ORDER: CardEmphasis[] = ["quiet", "normal", "hero"];
-
 /** Text blocks that carry a written value, i.e. the ones that cost vertical room. */
 const TEXT_TYPES = new Set(["field", "text", "social", "socials"]);
 
@@ -47,10 +45,6 @@ const TEXT_TYPES = new Set(["field", "text", "social", "socials"]);
  */
 export function zoneFor(block: CustomBlock): CardZone {
   return TEXT_TYPES.has(block.type) ? "right" : block.zone;
-}
-
-export function canChangeZone(block: CustomBlock): boolean {
-  return !TEXT_TYPES.has(block.type);
 }
 
 // ── The card is a FIXED size, so the content has to be solved for ───────────
@@ -387,10 +381,6 @@ export function visibleBlocks(blocks: CustomBlock[]): CustomBlock[] {
     out.push(b);
   }
   return out;
-}
-
-export function isFull(blocks: CustomBlock[]): boolean {
-  return blockLoad(blocks) >= MAX_VISIBLE_BLOCKS;
 }
 
 export function blockFontPx(emphasis: CardEmphasis, density: number): number {
@@ -799,60 +789,7 @@ export const SCAN_PROMPT = [
 
 // ── Adding blocks ───────────────────────────────────────────────────────────
 
-/** Blocks the owner can add that aren't in every preset. */
-export const ADDABLE: { type: CustomBlock["type"]; field?: string; social?: string; label: string }[] = [
-  { type: "field", field: "fax", label: "Fax" },
-  { type: "text", label: "Custom text" },
-  { type: "divider", label: "Divider line" },
-  { type: "social", social: "linkedin", label: "LinkedIn" },
-  { type: "social", social: "instagram", label: "Instagram" },
-  { type: "social", social: "twitter", label: "X" },
-  { type: "social", social: "tiktok", label: "TikTok" },
-  { type: "social", social: "facebook", label: "Facebook" },
-  { type: "social", social: "youtube", label: "YouTube" },
-];
-
-export function newBlockId(existing: CustomBlock[], base: string): string {
-  let n = 1;
-  let id = base;
-  while (existing.some((x) => x.id === id)) id = `${base}-${++n}`;
-  return id;
-}
-
 // ── Legacy ──────────────────────────────────────────────────────────────────
-
-/**
- * Convert an absolute-positioned layout to blocks.
- *
- * Deliberately lossy and deliberately loud about it: x/y become a zone plus a
- * reading order, and a font size becomes the nearest emphasis. A layout someone
- * hand-tuned will shift, so the editor shows the result and offers undo rather
- * than converting anything silently on save.
- */
-export function legacyToBlocks(elements: CustomElement[]): CustomBlock[] {
-  return [...elements]
-    .sort((a, c) => a.y - c.y || a.x - c.x)
-    .map((el) => {
-      const size = el.fontSize ?? el.size ?? 12;
-      const emphasis: CardEmphasis =
-        el.type === "field" || el.type === "text" || el.type === "social" || el.type === "socials"
-          ? size >= 18 ? "hero" : size >= 11.5 ? "normal" : "quiet"
-          : (el.size ?? 48) >= 96 ? "hero" : (el.size ?? 48) >= 70 ? "normal" : "quiet";
-      return {
-        id: el.id,
-        type: el.type,
-        field: el.field,
-        social: el.social,
-        text: el.text,
-        on: true,
-        // The old canvas was read left-to-right: anything past the midline was
-        // the "side" column, which is what the left zone represents here.
-        zone: (el.x >= 60 ? "left" : "right") as CardZone,
-        emphasis,
-        color: el.color,
-      };
-    });
-}
 
 // ── Normalisation ───────────────────────────────────────────────────────────
 
@@ -1091,42 +1028,6 @@ export function blockHasValue(block: CustomBlock, data: CardData): boolean {
     default: return false;
   }
 }
-
-export function blockLabel(block: CustomBlock): string {
-  if (block.type === "field") {
-    const map: Record<string, string> = {
-      name: "Name", title: "Job title", company: "Company", phone: "Phone",
-      email: "Email", website: "Website", address: "Address", fax: "Fax",
-    };
-    return map[block.field ?? ""] ?? "Field";
-  }
-  if (block.type === "social") {
-    const map: Record<string, string> = {
-      instagram: "Instagram", linkedin: "LinkedIn", twitter: "X", tiktok: "TikTok",
-      snapchat: "Snapchat", youtube: "YouTube", facebook: "Facebook",
-    };
-    return map[block.social ?? ""] ?? "Social";
-  }
-  const map: Record<string, string> = {
-    logo: "Logo", headshot: "Headshot", qr: "QR code", text: "Custom text",
-    divider: "Divider line", socials: "Social handles",
-  };
-  return map[block.type] ?? block.type;
-}
-
-/** Which zone labels make sense for the chosen skeleton. */
-export function zoneLabels(skeleton: CardSkeleton | undefined): Record<CardZone, string> {
-  return skeleton === "stacked"
-    ? { left: "Top band", right: "Below" }
-    : { left: "Side panel", right: "Main area" };
-}
-
-/** Labelled for the "Panel" row in the designer, so they read as one sentence. */
-export const SKELETONS: { key: CardSkeleton; label: string }[] = [
-  { key: "split", label: "Left" },
-  { key: "mirror", label: "Right" },
-  { key: "stacked", label: "Across the top" },
-];
 
 // ── A custom design for a WHOLE TEAM ─────────────────────────────────────────
 //

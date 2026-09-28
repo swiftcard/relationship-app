@@ -35,14 +35,6 @@ export function relativeTime(iso: string | null | undefined, now: number = Date.
   return `${y} year${y === 1 ? "" : "s"} ago`;
 }
 
-// Has this timestamp happened within the last `ms`? (false for null/garbage).
-export function isWithin(iso: string | null | undefined, ms: number, now: number = Date.now()): boolean {
-  if (!iso) return false;
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return false;
-  return now - t < ms;
-}
-
 // "Jul 12" style — for invite-sent dates where the calendar day matters more
 // than the distance.
 // `timeZone` — pass one whenever the output is rendered on BOTH the server and

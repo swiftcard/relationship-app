@@ -164,10 +164,3 @@ export function noteAskAccount(state: { pushOn?: boolean; stopped?: boolean }): 
   if (state.stopped && !stopped) { stopped = true; changed = true; }
   if (changed) emit();
 }
-
-/** Tests only. */
-export function __resetAskStore(): void {
-  wanting.clear(); decisions.clear(); inflight.clear();
-  stopped = false; pushOn = false; snoozed = false; enabledFor = null;
-  emit();
-}

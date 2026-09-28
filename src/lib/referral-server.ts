@@ -404,8 +404,11 @@ async function computeProgress(userId: string): Promise<Omit<ReferralProgress, "
 // For Settings / dashboard. Resilient: returns null pre-migration so UI never breaks.
 export async function getReferralProgress(userId: string): Promise<ReferralProgress | null> {
   try {
-    const code = await ensureReferralCode(userId);
-    const p = await computeProgress(userId);
+    // Independent: the code is ensured while progress is computed.
+    const [code, p] = await Promise.all([
+      ensureReferralCode(userId),
+      computeProgress(userId),
+    ]);
     return { code, ...p };
   } catch {
     return null;
@@ -591,8 +594,10 @@ export async function markReferralConversion(referredUserId: string): Promise<vo
 
   // Payment-method self-referral: the friend pays with the SAME card as the
   // referrer → same person on two accounts. Flag it (removes it from counting).
-  const { data: friendPm } = await admin.from("profiles").select("payment_fingerprint").eq("id", referredUserId).maybeSingle();
-  const { data: referrerPm } = await admin.from("profiles").select("payment_fingerprint").eq("id", ref.referrer_id).maybeSingle();
+  const [{ data: friendPm }, { data: referrerPm }] = await Promise.all([
+    admin.from("profiles").select("payment_fingerprint").eq("id", referredUserId).maybeSingle(),
+    admin.from("profiles").select("payment_fingerprint").eq("id", ref.referrer_id).maybeSingle(),
+  ]);
   if (friendPm?.payment_fingerprint && referrerPm?.payment_fingerprint && friendPm.payment_fingerprint === referrerPm.payment_fingerprint) {
     await admin.from("referrals").update({ status: "flagged", flagged_reason: "same_payment_method", paid_at: nowIso }).eq("id", ref.id);
     return;

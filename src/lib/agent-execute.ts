@@ -193,12 +193,6 @@ export function connectorStatus(): Record<string, boolean> {
   return Object.fromEntries(CONNECTORS.map((c) => [c.id, c.ready()]));
 }
 
-/** The connector that would handle this item, if any (armed or not). */
-export function connectorFor(it: QueueItemLite): { id: string; label: string; ready: boolean } | null {
-  const c = CONNECTORS.find((c) => c.matches(it));
-  return c ? { id: c.id, label: c.label, ready: c.ready() } : null;
-}
-
 /** Execute one owner-approved item. Never throws. */
 export async function executeItem(it: QueueItemLite): Promise<ExecOutcome> {
   const c = CONNECTORS.find((c) => c.matches(it));

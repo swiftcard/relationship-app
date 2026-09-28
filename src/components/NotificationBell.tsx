@@ -92,6 +92,11 @@ export default function NotificationBell({
   useEffect(() => {
     const poll = async () => {
       if (openRef.current) return;
+      // Nobody is looking: a backgrounded tab kept polling forever. The
+      // visibility listener below polls the moment it comes back, so this
+      // costs nothing but the requests nobody was waiting for. Same guard
+      // NotificationsPanel already uses.
+      if (document.visibilityState === "hidden") return;
       try {
         // The bell watches EVERY card (no ?card= scope) — activity on any card
         // shows here, tagged with that card's name.

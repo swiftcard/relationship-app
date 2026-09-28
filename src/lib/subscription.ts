@@ -43,10 +43,6 @@ export function priceIdFor(plan: BillingPlan, interval: BillingInterval, prices:
 }
 
 // ── Runtime (env-backed) convenience wrappers ─────────────────────────────────
-export function allPrices(): PriceEntry[] {
-  return buildPrices();
-}
-
 // Which plan (pro/office) + interval a live Stripe price ID represents. Matches
 // BOTH monthly and annual for each plan — fixing the old bug where only the
 // monthly Office price was recognised and annual Office was treated as Pro.
@@ -56,10 +52,6 @@ export function planFromPriceId(priceId: string | null | undefined): { plan: Bil
 
 export function priceIdForPlan(plan: BillingPlan, interval: BillingInterval): string | null {
   return priceIdFor(plan, interval, buildPrices());
-}
-
-export function expectedCentsForPriceId(priceId: string): number | null {
-  return buildPrices().find((p) => p.id === priceId)?.cents ?? null;
 }
 
 // ── Upgrade vs downgrade ─────────────────────────────────────────────────────

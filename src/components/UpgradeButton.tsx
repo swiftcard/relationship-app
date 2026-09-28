@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { PLAN_PRICES } from "@/lib/plan";
 import { formatUsd } from "@/lib/currency";
 import { track, trackCta } from "@/lib/events";
@@ -77,19 +76,5 @@ export default function UpgradeButton({ variant = "banner", placement = "unknown
         {loading ? "…" : `Upgrade · ${PRO_PRICE} →`}
       </button>
     </span>
-  );
-}
-
-export function UpgradeLink({ className, placement = "unknown" }: { className?: string; placement?: string }) {
-  const native = useIsNativeApp();
-  if (native) return null;
-  return (
-    <Link
-      href="/upgrade"
-      onClick={() => trackCta("upgrade_link", placement, { plan: "pro" })}
-      className={className ?? "text-xs text-blue-400 hover:text-blue-300 font-semibold"}
-    >
-      Upgrade →
-    </Link>
   );
 }

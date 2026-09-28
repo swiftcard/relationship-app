@@ -131,7 +131,6 @@ function socialHandles(data: CardData): string[] {
 
 /** The card's design width, the width every size here is measured against. */
 export const FREE_CARD_W = 460;
-const FREE_CARD_H = FREE_CARD_W / 1.75;
 
 /** Average advance of one character, in em, by typeface family — for fitting. */
 function charEm(font: string): number {
@@ -362,9 +361,6 @@ export function FreeCard({ data, layout, placeholder = false }: { data: CardData
     </div>
   );
 }
-
-/** Design height of the free card, in px — for the editor's drag maths. */
-export const FREE_CARD_H_PX = FREE_CARD_H;
 
 // ── Block rendering ─────────────────────────────────────────────────────────
 

@@ -153,7 +153,12 @@ describe("nothing else has to remember", () => {
   });
 
   it("both endpoints that hand notifications to a browser redact by plan", () => {
-    expect(read("src/app/api/notifications/route.ts")).toMatch(/redactForPlan\(data \?\? \[\], await isPaidUser\(user\.id\)\)/);
+    // The route resolves the plan into `paid` (alongside the office reader, in
+    // one round trip) and redacts with it — same guarantee, one fetch fewer.
+    // Both halves are pinned: drop either and this fails.
+    const api = read("src/app/api/notifications/route.ts");
+    expect(api).toMatch(/isPaidUser\(user\.id\)/);
+    expect(api).toMatch(/redactForPlan\(data \?\? \[\], paid\)/);
     expect(read("src/app/dashboard/page.tsx")).toMatch(/redactForPlan\(panelNotifications \?\? \[\], isPro\)/);
     expect(read("src/app/dashboard/page.tsx")).toMatch(/redactForPlan\(bellNotifications \?\? \[\], isPro\)/);
   });

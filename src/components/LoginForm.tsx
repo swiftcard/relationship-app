@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import { detectNativeApp, useIsNativeApp } from "@/lib/platform";
+import { useIsNativeApp } from "@/lib/platform";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import PasswordField from "@/components/PasswordField";
 import { safeNextPath } from "@/lib/safe-next";
