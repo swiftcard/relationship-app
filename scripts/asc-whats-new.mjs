@@ -11,14 +11,11 @@ import { asc, APP_ID } from "./lib/asc.mjs";
 
 const APPLY = process.argv.includes("--apply");
 
-// 1.0.3 / build 13 (2026-09-24). Native changes since the live build 12: the
-// v3 launch screen and foreground push banners (presentationOptions). The
-// "stops receiving notifications" fix is server-side and already live, but its
-// symptom was in the app, so the note names it. History lives in
+// 1.0.4 / build 14 (2026-09-28). One native change since the live build 13:
+// the UIScene lifecycle adoption that stops iOS 27 killing the app at launch
+// (SceneDelegate.swift). Nothing else in the binary changed. History lives in
 // docs/ios-review/APP-STORE-METADATA.md "## Version".
-const WHATS_NEW = `A new launch screen, and notifications now show as banners while you're using the app.
-
-Also fixed: the app no longer quietly stops receiving notifications after the first one.`;
+const WHATS_NEW = `Fixes the app closing right after opening on iOS 27.`;
 
 const vers = await asc("GET", `/apps/${APP_ID}/appStoreVersions?limit=5&fields[appStoreVersions]=versionString,appStoreState`);
 const v = (vers.data ?? []).find((x) => x.attributes.appStoreState === "PREPARE_FOR_SUBMISSION");

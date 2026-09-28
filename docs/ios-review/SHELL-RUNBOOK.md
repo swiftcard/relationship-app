@@ -266,7 +266,13 @@ looks perfectly like a QR code.
 ```bash
 npx cap sync ios && npx cap open ios
 ```
-Run on a real device. Verification checklist (all fixed/audited surfaces):
+Run on a real device — **one of them on iOS 27 or newer.** iOS 27 refuses to
+launch an app that has not adopted the UIScene lifecycle (it trips a UIKit
+breakpoint at scene creation: black frame, app gone, no code of ours has run).
+Build 13 shipped that way and App Review, on iOS 26, never saw it. The shell
+now adopts scenes (`SceneDelegate.swift` + `UIApplicationSceneManifest` in
+Info.plist, pinned by `tests/ios-scene-lifecycle.test.ts`); never move the
+window back onto the AppDelegate. Verification checklist (all fixed/audited surfaces):
 - Login: email/password ✓, Apple ✓ (§4), Google ✓ (§5).
 - NO selling anywhere: dashboard (no "Keep Pro"), settings (no Plan & billing),
   new-card wizard guest plan step (free-only), /welcome (free-only), office

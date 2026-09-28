@@ -182,9 +182,14 @@ describe("the phone is what feeds the watch", () => {
 
   it("activates at launch and re-publishes on every foreground", () => {
     // The webview may never call setCard in a session where nothing changed,
-    // so a watch that missed the last update needs another chance.
+    // so a watch that missed the last update needs another chance. Launch is
+    // the AppDelegate's; "every foreground" is sceneDidBecomeActive — under
+    // the UIScene lifecycle (required by iOS 27) UIKit never calls
+    // applicationDidBecomeActive, so a re-publish left there is dead code.
     expect(delegate).toMatch(/WatchSessionBridge\.shared\.activate\(\)/);
-    expect(delegate).toMatch(/WatchSessionBridge\.shared\.publishCurrentCard\(\)/);
+    const scene = read("ios/App/App/SceneDelegate.swift");
+    expect(scene).toMatch(/func sceneDidBecomeActive[\s\S]*?WatchSessionBridge\.shared\.publishCurrentCard\(\)/);
+    expect(delegate).not.toMatch(/applicationDidBecomeActive/);
   });
 
   it("stamps each payload so an unchanged card is not skipped as a duplicate", () => {

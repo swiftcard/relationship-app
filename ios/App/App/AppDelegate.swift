@@ -1,10 +1,13 @@
 import UIKit
 import Capacitor
 
+// LIFECYCLE: UIScene, not the classic app-delegate window. Info.plist's
+// UIApplicationSceneManifest hands the window and the foreground/URL/link
+// callbacks to SceneDelegate.swift; iOS 27 kills at launch any app that still
+// owns a `window` here without a scene manifest (build 13, 2026-09-28 — see
+// the header of SceneDelegate.swift). Do not add a `window` property back.
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
-
-    var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Apple Watch link. Activation must happen at launch, not when the card
@@ -17,37 +20,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return true
     }
 
-    func applicationWillResignActive(_ application: UIApplication) {
-        // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
-        // Use this method to pause ongoing tasks, disable timers, and invalidate graphics rendering callbacks. Games should use this method to pause the game.
-    }
+    // No app-level "did become active" / "will enter foreground" methods here:
+    // under the scene lifecycle UIKit does not call them. The every-foreground
+    // Apple Watch re-publish lives in SceneDelegate.sceneDidBecomeActive.
 
-    func applicationDidEnterBackground(_ application: UIApplication) {
-        // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later.
-        // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
-    }
-
-    func applicationWillEnterForeground(_ application: UIApplication) {
-        // Called as part of the transition from the background to the active state; here you can undo many of the changes made on entering the background.
-    }
-
-    func applicationDidBecomeActive(_ application: UIApplication) {
-        // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
-        //
-        // Re-publish the card on every foreground. This is the cheap, reliable
-        // catch-all for the states WatchConnectivity cannot notify us about:
-        // the watch app was reinstalled and lost its cache, the phone was
-        // rebooted, or the pair simply had no chance to talk since the last
-        // change. The payload carries a timestamp so an identical card is
-        // still accepted rather than skipped as a duplicate.
-        WatchSessionBridge.shared.publishCurrentCard()
-    }
-
-    func applicationWillTerminate(_ application: UIApplication) {
-        // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
-    }
-
-    // APNs registration results. The PushNotifications plugin listens on these
+    // APNs registration results — still delivered to the APPLICATION delegate
+    // under scenes, so these stay here. The PushNotifications plugin listens on these
     // notifications rather than the delegate itself, so without these two
     // forwards `PushNotifications.register()` never resolves — EnablePushButton
     // would sit on its timeout and no device token would ever reach lib/apns.ts.
@@ -59,16 +37,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
     }
 
+    // URL opens and Universal Links: with a scene manifest UIKit delivers these
+    // to SceneDelegate (openURLContexts / continue userActivity), which forwards
+    // them to the same ApplicationDelegateProxy. These two stay as a belt-and-
+    // braces path for any OS that still routes through the application
+    // delegate; both post the same Capacitor notifications either way.
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
-        // Called when the app was launched with a url. Feel free to add additional processing here,
-        // but if you want the App API to support tracking app url opens, make sure to keep this call
         return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
     }
 
     func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
-        // Called when the app was launched with an activity, including Universal Links.
-        // Feel free to add additional processing here, but if you want the App API to support
-        // tracking app url opens, make sure to keep this call
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 

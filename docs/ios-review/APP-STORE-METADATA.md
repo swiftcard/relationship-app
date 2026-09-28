@@ -202,6 +202,17 @@ composed from it. A listing refresh means steps 1–3 in order, on a machine tha
 has the service-role key.
 
 ## Version
+- 1.0.4, build 14. "What's New": `Fixes the app closing right after opening on
+  iOS 27.` (The iOS 27 launch crash: build 13 still used the pre-iOS-13
+  app-delegate window with no UIApplicationSceneManifest, which iOS 27 turns
+  from a runtime warning into a kill at scene creation — a black frame, then
+  gone, before any of our code runs; crash log `App-2026-09-28-114750.ips`,
+  `___UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`. Build 14
+  adopts the UIScene lifecycle: `ios/App/App/SceneDelegate.swift`, the scene
+  manifest in Info.plist, URL opens / Universal Links / the Apple Watch
+  re-publish moved to the scene delegate. Pinned by
+  `tests/ios-scene-lifecycle.test.ts`. Build on the Mac with
+  `npm run ios:release -- --no-watch`, then attach, What's New, submit.)
 - 1.0.3, build 13. "What's New": `A new launch screen, and notifications now
   show as banners while you're using the app. Also fixed: the app no longer
   quietly stops receiving notifications after the first one.`
