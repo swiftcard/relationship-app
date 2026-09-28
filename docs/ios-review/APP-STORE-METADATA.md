@@ -212,7 +212,12 @@ has the service-role key.
   manifest in Info.plist, URL opens / Universal Links / the Apple Watch
   re-publish moved to the scene delegate. Pinned by
   `tests/ios-scene-lifecycle.test.ts`. Build on the Mac with
-  `npm run ios:release -- --no-watch`, then attach, What's New, submit.)
+  `npm run ios:release -- --no-watch`, wait for build 14 to show VALID, then
+  `node scripts/asc-submit-104.mjs --go` — it creates 1.0.4 (release
+  AFTER_APPROVAL), attaches the build, writes What's New and submits. Then
+  request an expedited review. The launch screen is unchanged from 1.0.3 —
+  the v3 screen from the owner's 2026-09-20 reference is already in the
+  binary and stays.)
 - 1.0.3, build 13. "What's New": `A new launch screen, and notifications now
   show as banners while you're using the app. Also fixed: the app no longer
   quietly stops receiving notifications after the first one.`

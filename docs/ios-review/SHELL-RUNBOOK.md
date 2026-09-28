@@ -286,6 +286,14 @@ window back onto the AppDelegate. Verification checklist (all fixed/audited surf
 
 ## 8. App Store Connect
 
+**A fix that people are locked out without (2026-09-28: iOS 27 could not open
+build 13): ask for an expedited review.** After the submission is in, open
+https://developer.apple.com/contact/app-store/?topic=expedite, choose the app
+and version, and state plainly: the current App Store build crashes on launch
+on iOS 27 for every user, the fix is the UIScene lifecycle adoption, and the
+build under review is that fix. Apple usually turns these around within a day.
+There is no API for this; it is a form.
+
 1. appstoreconnect.apple.com → New App → bundle `me.swiftcard.app`.
 2. **Privacy nutrition labels** (accurate for this codebase): Contact Info
    (name, email, phone — account + cards), User Content (photos users upload,
