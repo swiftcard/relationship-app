@@ -22,7 +22,7 @@ export const SITE_SEGMENTS = [
   // app routes
   "account-deleted", "admin", "api", "auth", "blog", "business-card-view-tracking", "cards", "checkout",
   "company", "compare", "contact", "contacts", "dashboard", "email", "for", "grow", "link-in-bio-with-analytics",
-  "linkedin-connected", "login", "office", "onboarding", "preview", "pricing", "privacy", "products", "profile",
+  "linkedin-connected", "login", "office", "onboarding", "press", "preview", "pricing", "privacy", "products", "profile",
   "r", "review", "settings", "share", "sms-consent", "sms-terms", "splash-preview", "templates", "terms",
   "testimonials", "unsubscribe", "upgrade", "welcome", "signup",
   // generated metadata files

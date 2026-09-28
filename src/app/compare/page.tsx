@@ -146,7 +146,7 @@ export default function ComparePage() {
 
         {/* Deep-dive pages per competitor — each owns one "<x> alternative" query. */}
         <div className="mt-10 flex flex-wrap justify-center gap-2">
-          {["linktree", "popl", "blinq", "hihello"].map((s) => (
+          {["linktree", "popl", "blinq", "hihello", "mobilo", "linq"].map((s) => (
             <Link key={s} href={`/compare/${s}-alternative`} className="text-[0.8125rem] text-slate-600 hover:text-slate-900 hover:border-slate-300 rounded-full px-3.5 py-1.5 bg-white border border-slate-200 transition-colors capitalize">
               {s === "hihello" ? "HiHello" : s.charAt(0).toUpperCase() + s.slice(1)} alternative →
             </Link>

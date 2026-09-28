@@ -404,7 +404,9 @@ describe("agent emails: digest and criticals only", () => {
   // agent-watch.mjs is the shared full pass for Rex's nine servicing watchdogs
   // (2026-09-08) and agent-layout.mjs is Pix's browser pass — same rule: one
   // email, critical only.
-  const MAY_EMAIL = ["agent-manager.mjs", "agent-perf.mjs", "agent-security.mjs", "agent-flowcheck.mjs", "agent-watch.mjs", "agent-layout.mjs"];
+  // scorecard.mjs is the Sunday growth sheet the owner asked for on
+  // 2026-09-28 — a report, like the digest, not an alarm.
+  const MAY_EMAIL = ["agent-manager.mjs", "agent-perf.mjs", "agent-security.mjs", "agent-flowcheck.mjs", "agent-watch.mjs", "agent-layout.mjs", "scorecard.mjs"];
   it("exactly these files may email, and agentkit itself sends none", () => {
     expect(read("marketing-agents/lib/agentkit.mjs")).not.toMatch(/await email\(/);
     for (const f of MAY_EMAIL)
@@ -414,7 +416,7 @@ describe("agent emails: digest and criticals only", () => {
   });
 
   it("the non-digest emails fire only on CRITICAL findings", () => {
-    for (const f of MAY_EMAIL.filter((f) => f !== "agent-manager.mjs")) {
+    for (const f of MAY_EMAIL.filter((f) => f !== "agent-manager.mjs" && f !== "scorecard.mjs")) {
       const src = read(`marketing-agents/${f}`);
       const at = src.indexOf("await email(");
       expect(src.slice(Math.max(0, at - 400), at), `${f} email must be critical-gated`).toMatch(/critical/i);

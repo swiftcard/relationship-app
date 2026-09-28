@@ -29,6 +29,8 @@ const COMPARE_SLUGS = [
   "popl-alternative",
   "blinq-alternative",
   "hihello-alternative",
+  "mobilo-alternative",
+  "linq-alternative",
 ];
 
 const PRODUCT_SLUGS = [
@@ -53,7 +55,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // from the main nav and footer, so it belongs in the sitemap and is no longer
   // disallowed in robots.ts.
   const routes = [
-    "", "/pricing", "/compare", "/contact", "/privacy", "/terms", "/company",
+    "", "/pricing", "/compare", "/contact", "/privacy", "/terms", "/company", "/press",
     "/business-card-view-tracking", "/link-in-bio-with-analytics",
     "/sms-terms", "/sms-consent", "/login", "/templates", "/testimonials",
     ...PRODUCT_SLUGS.map((s) => `/products/${s}`),

@@ -1,0 +1,36 @@
+name: Weekly growth scorecard
+
+# Sunday 18:00 New York (22:00 UTC in EDT, 23:00 in EST — an hour either way
+# is fine for a weekly sheet). One email to the owner's digest address with
+# this week's funnel next to last week's; marketing-agents/scorecard.mjs.
+#
+# A GitHub schedule, not a Vercel cron: the Hobby plan allows two daily cron
+# jobs, and a third in vercel.json silently blocks every deploy
+# (cron_jobs_limits_reached). Same reasoning as push-catchup.yml.
+on:
+  schedule:
+    - cron: "0 22 * * 0"
+  workflow_dispatch:
+
+concurrency:
+  group: weekly-scorecard
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  scorecard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - name: Count the week and email it
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          AGENT_RELAY_SECRET: ${{ secrets.AGENT_RELAY_SECRET }}
+        run: node marketing-agents/scorecard.mjs

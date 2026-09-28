@@ -50,6 +50,7 @@ const COLS: { title: string; links: { label: string; href: string }[] }[] = [
       { label: "Templates", href: "/templates" },
       { label: "Why SwiftCard", href: "/testimonials" },
       { label: "Company", href: "/company" },
+      { label: "Press", href: "/press" },
       { label: "Contact Us", href: "/contact" },
       { label: "Privacy Policy", href: "/privacy" },
       // "Terms of Service", not "Terms & Legal": A2P 10DLC vetting crawls the
