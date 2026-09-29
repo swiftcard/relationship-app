@@ -163,7 +163,8 @@ refresh it — it regenerates the JWT and re-verifies. Put it in a calendar.
 - [x] **AASA is live and correct** (verified 2026-08-07):
       `curl https://swiftcard.me/.well-known/apple-app-site-association`
       returns `"appID":"NHK8FA2RR2.me.swiftcard.app"` with paths
-      `/card/*`, `/links/*`, `/join/*`, `/auth/callback` — the real Team ID,
+      `/join/*`, `/auth/callback` (card links were dropped 2026-09-29: they
+      open in Safari, never the app) — the real Team ID,
       not `TEAMID_PLACEHOLDER`. So `APPLE_TEAM_ID` is already set in Vercel
       Production and Universal Links are activated server-side.
 - [x] Audit commits are on origin/main; nothing is local-only any more.

@@ -1,4 +1,4 @@
-import { aasaComponents } from "@/lib/universal-links";
+import { APP_PATHS, aasaComponents } from "@/lib/universal-links";
 
 // Apple App Site Association (AASA) — served at the exact path
 // /.well-known/apple-app-site-association with a JSON content-type and no
@@ -46,13 +46,14 @@ function buildAasa() {
       {
         appIDs: [`${appleTeamId()}.me.swiftcard.app`],
         appID: `${appleTeamId()}.me.swiftcard.app`,
-        // Public card pages, Swift Links pages, and Office invite links open
-        // in the app when installed. /auth/callback is kept as a safety net
-        // for any web-initiated OAuth round-trip that lands on a device with
-        // the app installed — the primary native OAuth return leg is the
-        // swiftcard://auth-callback custom scheme (see src/lib/native-auth.ts
-        // + NativeAppBridge), not this universal link.
-        paths: ["/card/*", "/links/*", "/join/*", "/auth/callback"],
+        // Office invite links open in the app when installed. Card and Swift
+        // Links pages never do — they open in the browser (lib/universal-links).
+        // /auth/callback is kept as a safety net for any web-initiated OAuth
+        // round-trip that lands on a device with the app installed — the
+        // primary native OAuth return leg is the swiftcard://auth-callback
+        // custom scheme (see src/lib/native-auth.ts + NativeAppBridge), not
+        // this universal link.
+        paths: [...APP_PATHS],
         components: aasaComponents(),
       },
     ],
@@ -65,8 +66,9 @@ export async function GET() {
     status: 200,
     headers: {
       "Content-Type": "application/json",
-      // Apple caches this; a modest cache is fine and avoids staleness when the
-      // real Team ID lands.
+      // Apple's CDN caches this too (and phones cache the CDN's copy), so a
+      // change here reaches iPhones over hours to days — NativeAppBridge sends
+      // any card link that still arrives from an old copy on to the browser.
       "Cache-Control": "public, max-age=3600",
     },
   });

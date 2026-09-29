@@ -4,6 +4,12 @@ import { useEffect } from "react";
 import { safeNextPath } from "@/lib/safe-next";
 import { detectNativeApp } from "@/lib/platform";
 import { LINKEDIN_MESSAGE } from "@/lib/linkedin-popup";
+import { opensInApp } from "@/lib/universal-links";
+
+/** The page a card link was shown on inside the app, when it could not go to the browser. */
+const CARD_ESCAPE_KEY = "sc_card_escape";
+/** The last card link handed to the browser — module scope, so it outlives an effect re-run. */
+let handedOff: { dest: string; at: number } | null = null;
 
 /**
  * Native-shell runtime bridge. Renders nothing; on web every effect is a no-op.
@@ -11,8 +17,10 @@ import { LINKEDIN_MESSAGE } from "@/lib/linkedin-popup";
  * Inside the Capacitor iOS shell it wires two things:
  *
  * 1. Universal Links → webview navigation. When iOS opens the app from a
- *    swiftcard.me link (AASA paths: /card/*, /links/*, /auth/callback), the
- *    shell fires `appUrlOpen`; we navigate the webview to that exact URL. This
+ *    swiftcard.me link (AASA paths: /join/*, /auth/callback), the shell fires
+ *    `appUrlOpen`; we navigate the webview to that exact URL. A card link that
+ *    still arrives (an old cached AASA) is sent on to the default browser —
+ *    cards never open inside the app. This
  *    is ALSO the return leg of the native login flow: the system-browser OAuth
  *    round-trip ends at /auth/callback?code=…, the universal link re-opens the
  *    app, and navigating the webview there completes the PKCE exchange with
@@ -58,6 +66,12 @@ export default function NativeAppBridge() {
       if (meta && !meta.content.includes("viewport-fit")) {
         meta.content = `${meta.content}, viewport-fit=cover`;
       }
+    } catch { /* ignore */ }
+
+    // A card link the handler below had to show in the webview: give it a way
+    // back to the app, since a public card page has no app nav of its own.
+    try {
+      if (sessionStorage.getItem(CARD_ESCAPE_KEY) === window.location.pathname) showCardEscape();
     } catch { /* ignore */ }
 
     let removeListener: (() => void) | null = null;
@@ -146,7 +160,43 @@ export default function NativeAppBridge() {
             // Only ever navigate to our own origin — never let an arbitrary
             // scheme/host steer the webview.
             if (u.hostname === "swiftcard.me" || u.hostname === "www.swiftcard.me") {
-              window.location.href = u.pathname + u.search + u.hash;
+              const dest = u.pathname + u.search + u.hash;
+              // "/" is the home-screen widget's empty state (no card yet).
+              if (opensInApp(u.pathname) || u.pathname === "/") {
+                window.location.href = dest;
+                return;
+              }
+              // A home-screen widget tap: the widget's widgetURL is the card's
+              // own address (?source=widget, also what its QR encodes), and a
+              // widget tap always opens the app. That is the owner opening
+              // their app — land on their dashboard with that card selected,
+              // not on their public card with no way back.
+              if (u.searchParams.get("source") === "widget") {
+                const card = u.pathname.split("/").filter(Boolean).pop() ?? "";
+                window.location.replace(/^[a-z0-9][a-z0-9_-]{0,79}$/i.test(card)
+                  ? `/dashboard?card=${encodeURIComponent(card)}`
+                  : "/dashboard");
+                return;
+              }
+              // A card or Swift Links link. The app no longer claims these
+              // (lib/universal-links), but a phone keeps Apple's cached copy of
+              // the old association file for a while, so they can still arrive
+              // here. They belong in the browser (owner, 2026-09-29): shown in
+              // the webview, a public card had no app chrome and no way out.
+              //
+              // `handedOff` catches a bounce — iOS handing the same link
+              // straight back — so this can never loop between app and Safari.
+              const bounced =
+                handedOff?.dest === dest && Date.now() - handedOff.at < 15_000;
+              if (!bounced) {
+                handedOff = { dest, at: Date.now() };
+                const { openLinkInDefaultBrowser } = await import("@/lib/external-purchase");
+                if (await openLinkInDefaultBrowser(dest)) return;
+              }
+              // Last resort (no default-browser plugin in this build, or the
+              // bounce above): show it here, but never as a dead end.
+              try { sessionStorage.setItem(CARD_ESCAPE_KEY, u.pathname); } catch { /* ignore */ }
+              window.location.href = dest;
             }
           } catch { /* malformed URL — ignore */ }
         });
@@ -305,6 +355,35 @@ export default function NativeAppBridge() {
   return null;
 }
 
+
+/**
+ * "Done" for a card shown inside the app — the last-resort path in the link
+ * handler. A public card page has no app nav, and that dead end is the bug
+ * this exists to close (owner, 2026-09-29). Raw DOM, like the overlay below:
+ * it belongs to the shell, not to the card page, so the card's own markup
+ * stays exactly what everyone else sees.
+ */
+function showCardEscape(): void {
+  try {
+    if (document.getElementById("sc-card-escape")) return;
+    const btn = document.createElement("button");
+    btn.id = "sc-card-escape";
+    btn.type = "button";
+    btn.textContent = "Done";
+    btn.setAttribute("aria-label", "Done — back to SwiftCard");
+    btn.style.cssText =
+      "position:fixed;top:calc(env(safe-area-inset-top, 0px) + 10px);left:12px;z-index:2147483646;" +
+      "padding:8px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.18);" +
+      "background:rgba(3,7,18,.78);color:#fff;font:600 15px/1.2 system-ui,-apple-system,sans-serif;" +
+      "-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);cursor:pointer";
+    btn.addEventListener("click", () => {
+      try { sessionStorage.removeItem(CARD_ESCAPE_KEY); } catch { /* ignore */ }
+      // replace: Back from the dashboard must not return to the dead end.
+      window.location.replace("/dashboard");
+    });
+    document.body.appendChild(btn);
+  } catch { /* never block the page */ }
+}
 
 /**
  * Full-screen "Signing you in…" cover for the OAuth return leg.

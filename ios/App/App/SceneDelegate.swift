@@ -28,7 +28,8 @@ import Capacitor
 //     legs) → ApplicationDelegateProxy, which posts .capacitorOpenURL. The
 //     @capacitor/app plugin turns that into appUrlOpen, which NativeAppBridge
 //     listens on.
-//   • Universal Links (swiftcard.me/card/*, /links/*, /auth/callback) →
+//   • Universal Links (swiftcard.me/join/*, /auth/callback — card links open
+//     in the browser, never the app) →
 //     ApplicationDelegateProxy, which posts .capacitorOpenUniversalLink.
 //   • "did become active" → the Apple Watch re-publish that used to sit in
 //     applicationDidBecomeActive.

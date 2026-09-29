@@ -77,7 +77,9 @@ Core product
 - [ ] Email signature builder: copy works in the webview.
 - [ ] Analytics screens render.
 - [ ] Widget (target now ships in the binary): add from gallery, shows QR after
-      opening the app signed-in, tap opens the app.
+      opening the app signed-in, tap opens the app on the dashboard.
+- [ ] Someone else's card link (Messages/Notes) with the app installed and
+      signed in: opens in Safari, NOT inside the app.
 - [ ] Account deletion end-to-end: survey → DELETE → password → signed out →
       /account-deleted state; log back in within window → reopen works.
 - [ ] Office: invite acceptance via emailed link (universal link opens app →

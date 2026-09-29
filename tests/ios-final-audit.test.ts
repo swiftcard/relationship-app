@@ -156,8 +156,9 @@ describe("open signups (invite-only removed)", () => {
 });
 
 describe("Universal Links — AASA covers office invites", () => {
-  const s = read("src/app/.well-known/apple-app-site-association/route.ts");
-  it("includes /join/* alongside cards and links", () => {
+  // The list lives in lib/universal-links (cards open in the browser, not the app).
+  const s = read("src/lib/universal-links.ts");
+  it("includes /join/*", () => {
     expect(s).toContain('"/join/*"');
   });
 });

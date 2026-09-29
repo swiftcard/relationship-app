@@ -95,7 +95,8 @@ WHY IT'S MORE THAN A WEBSITE
 - Apple Wallet: Dashboard → Share → "Add to Apple Wallet" produces a signed
   pass with your live QR code, which updates in place when the card changes.
 - Native share sheet, camera-based paper-business-card scanning, universal
-  links (swiftcard.me/card/* links open in the app), home-screen QR widget,
+  links (Office invite links swiftcard.me/join/* open in the app; public card
+  links always open in Safari), home-screen QR widget,
   offline launch fallback.
 
 PERMISSIONS USED

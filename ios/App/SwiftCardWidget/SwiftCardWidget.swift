@@ -140,7 +140,9 @@ struct WidgetView: View {
             }
         }
         .padding(family == .systemSmall ? 10 : 14)
-        // Deep link: tapping the widget opens the card (universal link → app).
+        // Tapping the widget opens the app; NativeAppBridge sees ?source=widget
+        // and lands on the dashboard with this card selected (a public card
+        // page inside the app had no way back out).
         .widgetURL(URL(string: entry.card?.url ?? "https://swiftcard.me"))
         .containerBackground(for: .widget) {
             // Matches the app's brand navy; the system supplies glass/tinting

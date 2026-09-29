@@ -52,7 +52,7 @@ backfilled.
 
 - [ ] Signs in with email + password on a clean install.
 - [ ] Dashboard shows a populated business card with a working QR.
-- [ ] Public card link opens (universal link) and shows the share-back form
+- [ ] Public card link opens in Safari (never inside the app) and shows the share-back form
       and the "Report this card" link at the bottom.
 - [ ] Contacts list contains 2–3 FICTIONAL demo leads with tags/statuses.
 - [ ] Analytics shows non-zero demo views.

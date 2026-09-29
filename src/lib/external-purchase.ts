@@ -128,3 +128,25 @@ export function canOpenInDefaultBrowser(): boolean {
 export async function openInDefaultBrowser(path = "/"): Promise<boolean> {
   return openViaPlugin(path);
 }
+
+/**
+ * Hand a card link that reached the app back to the default browser, exactly
+ * as it was sent (no ?src — it is someone's card, not a purchase link).
+ *
+ * Owner, 2026-09-29: a SwiftCard link someone sent you must open in the
+ * browser, never inside the app. It goes out through www.swiftcard.me, which
+ * the app does NOT claim (entitlements: applinks:swiftcard.me only), so iOS
+ * cannot route it straight back into the app while a phone still holds the old
+ * association file; the site's www → apex 308 then lands Safari on the real
+ * address.
+ */
+export async function openLinkInDefaultBrowser(pathAndQuery: string): Promise<boolean> {
+  const p = plugin();
+  if (!p || !pathAndQuery.startsWith("/") || pathAndQuery.startsWith("//")) return false;
+  try {
+    const { opened } = await p.open({ url: `https://www.swiftcard.me${pathAndQuery}` });
+    return !!opened;
+  } catch {
+    return false;
+  }
+}
