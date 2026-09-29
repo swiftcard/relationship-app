@@ -78,9 +78,10 @@ export const productDocs = defineDocs([
     triggers: [
       "share", "share my card", "how do i share", "send my card", "other ways to share",
       "share link", "how do people get my card", "qr", "qr code", "scan",
+      "scan to connect", "full screen card", "show my card", "sideways", "landscape",
     ],
     answer:
-      "On the dashboard, the \"Share\" button opens your phone's share sheet with your card link, and \"Other ways to share\" next to it opens everything else: copy the link, download the card or QR as a PNG, add it to Apple Wallet, or write an NFC tag. On a phone the \"Your Card\" panel also has \"Scan to connect (QR)\" to hold up on the spot.",
+      "On the dashboard, the \"Share\" button opens your phone's share sheet with your card link, and \"Other ways to share\" next to it opens everything else: copy the link, download the card or QR as a PNG, add it to Apple Wallet, or write an NFC tag. To share in person on a phone, tap your card in the \"Your Card\" panel: it opens full screen and sideways — turn the phone, let them scan the QR code in the bottom-right corner of the card, and tap the × to close it. (There is no longer a separate \"Scan to connect\" button.)",
     detail:
       "The \"Links\" tab (/share) is where the Swift Links URL and the Swift Signature generator live. Everything shares the same card page, so a printed QR or a written NFC card keeps working after you edit the card — they store the link, not the details. Each sharing surface tags itself, so the dashboard can tell you a visit came from a QR scan, an NFC tap, Apple Wallet, or a plain link.",
   },

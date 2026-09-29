@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { CardData } from "@/components/card-templates/types";
 import { withoutSocials } from "@/components/card-templates/types";
 import DownloadCardButton from "@/components/DownloadCardButton";
-import ScanToConnectButton from "@/components/ScanToConnectButton";
+import CardFullscreen from "@/components/CardFullscreen";
 import { useRegisterCardCapture } from "@/components/CardCaptureContext";
 import { qrScanUrl } from "@/lib/share-source";
 
@@ -45,8 +45,11 @@ export default function CardPreviewDownload({ data, template, username, previewU
   const cardRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0);
   const [height, setHeight] = useState(0);
+  const [fullscreen, setFullscreen] = useState(false);
+  const closeFullscreen = useCallback(() => setFullscreen(false), []);
   const Template = TEMPLATE_MAP[template] ?? ClassicPro;
   const filename = `swiftcard-${username}.png`;
+  const shown = template === "custom" ? data : withoutSocials(data);
 
   // Hand the live card node to sibling panels — "Other ways to share" offers a
   // PNG of it on mobile and cannot reach across boxes on its own. No-op when
@@ -72,7 +75,7 @@ export default function CardPreviewDownload({ data, template, username, previewU
     <div>
       <div
         ref={outerRef}
-        className="w-full rounded-xl overflow-hidden"
+        className="relative w-full rounded-xl overflow-hidden"
         // RESERVE THE SPACE BEFORE THE CARD EXISTS. The templates are
         // dynamic(ssr:false), so on the server and until that chunk downloads
         // this box has no content — height resolved to 0 and everything below
@@ -99,8 +102,20 @@ export default function CardPreviewDownload({ data, template, username, previewU
             opacity: scale ? 1 : 0,
           }}
         >
-          <Template data={template === "custom" ? data : withoutSocials(data)} />
+          <Template data={shown} />
         </div>
+        {/* PHONE: the card itself is the button — tap it and it opens full
+            screen and sideways to hold up (CardFullscreen). This replaced the
+            "Scan to connect (QR)" button that sat under the card (owner,
+            2026-09-29): the QR every template prints on the card is what gets
+            scanned. lg:hidden, the width at which this whole panel moves to
+            the desktop column, where you can't hold a monitor up to a camera. */}
+        <button
+          type="button"
+          onClick={() => setFullscreen(true)}
+          aria-label="Show your card full screen"
+          className="lg:hidden absolute inset-0 w-full h-full rounded-xl cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        />
       </div>
 
       {/* NO "Preview" link here. It was removed on purpose (2026-07-10) and
@@ -111,29 +126,41 @@ export default function CardPreviewDownload({ data, template, username, previewU
           a generated PNG, so it shares this link instead of dead-tapping.
           Passing the prop must never resurrect the link — that regression is
           exactly what happened once and is now pinned by a test. */}
-      {/* MOBILE gets a QR to hold up; DESKTOP keeps the PNG download.
-          Saving an image you then have to go find in Files is a poor way to
-          hand someone your card in person, and you can't hold a monitor up to
-          a camera. The download is one tap away in "Other ways to share",
-          which is where the QR IMAGE used to live — the two swapped places.
+      {/* MOBILE shows the card full screen to hold up; DESKTOP keeps the PNG
+          download. Saving an image you then have to go find in Files is a poor
+          way to hand someone your card in person, and you can't hold a monitor
+          up to a camera. The download is one tap away in "Other ways to share".
 
           lg:, not sm:, because lg is where this whole panel changes position
           (dashboard renders it under My Cards below lg, in the sticky right
           column above it). Splitting the controls at a different width would
           put a desktop control inside the mobile-positioned panel.
 
-          Without previewUrl there is no URL to encode, so the download simply
-          stays at every width rather than leaving an empty slot. */}
+          Without previewUrl (no live card link yet) the download simply stays
+          at every width rather than leaving an empty slot. */}
       <div className="mt-3">
         {previewUrl && (
-          <div className="lg:hidden">
-            <ScanToConnectButton url={qrScanUrl(previewUrl)} />
-          </div>
+          <p className="lg:hidden flex items-center justify-center gap-1.5 text-gray-500 text-[0.6875rem]">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5 shrink-0" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5V4a1 1 0 011-1h3.5M12.5 3H16a1 1 0 011 1v3.5M17 12.5V16a1 1 0 01-1 1h-3.5M7.5 17H4a1 1 0 01-1-1v-3.5" />
+            </svg>
+            Tap your card to show it full screen
+          </p>
         )}
         <div className={previewUrl ? "hidden lg:block" : undefined}>
           <DownloadCardButton cardRef={cardRef} filename={filename} compact shareUrl={previewUrl} />
         </div>
       </div>
+
+      {/* The QR printed on the card encodes data.cardUrl. Full screen it is
+          there to be SCANNED, so it carries the same "QR code scan" tag every
+          other QR we show carries (lib/share-source) — otherwise each scan
+          lands in Traffic as "Card link". */}
+      {fullscreen && (
+        <CardFullscreen width={NATURAL} onClose={closeFullscreen}>
+          <Template data={shown.cardUrl ? { ...shown, cardUrl: qrScanUrl(shown.cardUrl) } : shown} />
+        </CardFullscreen>
+      )}
     </div>
   );
 }

@@ -392,7 +392,7 @@ export default function GuidedTour({
     // Hidden AND out of the way. It used to go transparent but keep catching
     // every tap, full-screen and above the page — so the spotlight hole was
     // never actually open: an "interactive" step ("Your SwiftCard — try it",
-    // which invites you to tap Scan to connect) or a clickToAdvance step could
+    // which invites you to tap the card) or a clickToAdvance step could
     // not be clicked at all. The four masks and the hole cover below are what
     // block the rest of the page during a spotlight step.
     if (full.current) { full.current.style.opacity = "0"; full.current.style.pointerEvents = "none"; }
@@ -449,8 +449,7 @@ export default function GuidedTour({
         // Nothing fits with the target where scrollIntoView left it (centred),
         // but target and tooltip DO fit stacked. On a phone the "Your SwiftCard —
         // try it" card is ~310px tall: centred, the tooltip was clamped over the
-        // card's lower half — over the very Scan to connect button the step asks
-        // them to tap. Once the scroll has settled, move the page up just enough
+        // card's lower half — over the very card the step asks them to tap. Once the scroll has settled, move the page up just enough
         // for the tooltip to sit underneath (once per step; the next frame lays
         // out "below" with the new rect).
         if (m.nudgedStep !== idxRef.current && (y1 - y0) + GAP + th + 16 <= H) {

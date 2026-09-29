@@ -38,7 +38,7 @@ describe("an address's unit keeps the word the person typed", () => {
 
 describe("nothing sits on the phone's tab bar or edge", () => {
   it("'Tap outside to close' sits under the QR card, never pinned to the screen bottom", () => {
-    for (const f of ["src/components/ScanToConnectButton.tsx", "src/components/QRCodeModal.tsx"]) {
+    for (const f of ["src/components/QRCodeModal.tsx"]) {
       const s = read(f);
       expect(s, f).not.toMatch(/absolute bottom-8[^"]*">Tap outside to close/);
       // On its own SOLID pill: under the card it can land over dimmed page

@@ -23,9 +23,9 @@ describe("the tour's spotlight hole can actually be clicked", () => {
   });
 });
 
-describe("the QR screen opened from the tour sits above the tour", () => {
+describe("the full-screen card opened from the tour sits above the tour", () => {
   it("is layered over the tour's masks and tooltip", () => {
-    const scan = readFileSync("src/components/ScanToConnectButton.tsx", "utf8");
-    expect(scan).toMatch(/fixed inset-0 z-\[10001\]/);
+    const full = readFileSync("src/components/CardFullscreen.tsx", "utf8");
+    expect(full).toMatch(/fixed inset-0 z-\[10001\]/);
   });
 });

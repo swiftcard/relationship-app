@@ -56,6 +56,11 @@ describe("the dashboard has exactly one way to open your live card", () => {
     expect(rendered.length, "View live is missing, or duplicated").toBe(1);
   });
 
+  it("reads 'View Live Link' on a phone, 'View live' on a computer", () => {
+    // Owner, 2026-09-29 — the rename is for the phone (app and phone web).
+    expect(dashboard).toMatch(/<span className="lg:hidden">View Live Link<\/span>\s*<span className="hidden lg:inline">View live<\/span>/);
+  });
+
   it("it lives in the My Cards box, not a page header", () => {
     // The header (an <h1>Dashboard</h1> and the selected card's name) is gone;
     // the control belongs beside the card list it acts on.

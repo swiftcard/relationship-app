@@ -34,9 +34,11 @@ beforeAll(async () => {
 
   writeFileSync(join(tmp, "entry.tsx"), `
     import { createRoot } from "react-dom/client";
-    import { createElement as h, useRef } from "react";
+    import { createElement as h, useRef, useState } from "react";
     import MoreShareOptions from "@/components/MoreShareOptions";
-    import ScanToConnectButton from "@/components/ScanToConnectButton";
+    import CardFullscreen from "@/components/CardFullscreen";
+    import ClassicPro from "@/components/card-templates/ClassicPro";
+    import { SAMPLE_DATA } from "@/components/card-templates/types";
     import { CardCaptureProvider, useRegisterCardCapture, useCardCapture } from "@/components/CardCaptureContext";
 
     // Stands in for CardPreviewDownload: registers a real DOM node.
@@ -63,8 +65,18 @@ beforeAll(async () => {
       createRoot(el).render(tree);
     };
 
-    (window as any).mountScan = (url: string) => {
-      createRoot(document.getElementById("root")!).render(h(ScanToConnectButton, { url }));
+    // The dashboard's tap-to-full-screen card, with a REAL template so the QR
+    // measured is the one the card actually prints.
+    function FullscreenHarness() {
+      const [open, setOpen] = useState(false);
+      return h("div", null,
+        h("button", { id: "open-full", onClick: () => setOpen(true) }, "open"),
+        open ? h(CardFullscreen, { width: 460, onClose: () => setOpen(false) },
+          h(ClassicPro, { data: { ...SAMPLE_DATA, cardUrl: "swiftcard.me/alexmorgan?source=qr_code" } })) : null,
+      );
+    }
+    (window as any).mountFull = () => {
+      createRoot(document.getElementById("root")!).render(h(FullscreenHarness));
     };
   `);
 
@@ -195,86 +207,116 @@ describe("without a capturable card (the /preview demo) nothing changes", () => 
   }, 90_000);
 });
 
-describe("Scan to connect (QR) opens a real QR popup", () => {
-  const QR_URL = `${URL}?source=qr_code`;
-
-  async function mountScan(): Promise<Page> {
+// The dashboard's "Scan to connect (QR)" button was replaced by tapping the
+// card itself (owner, 2026-09-29): it opens full screen and SIDEWAYS, to hold
+// up while someone scans the QR printed on the card. Measured here at real
+// phone sizes, because every property the owner asked for — sideways, as big
+// as the screen allows, centred, an × to leave — is layout, which no source
+// scan can see.
+describe("the full-screen card (tap your card on a phone)", () => {
+  async function mountFull(width: number, height: number): Promise<Page> {
     const css = await appCss();
     const page = await browser.newPage();
-    await page.setViewportSize({ width: MOBILE, height: 900 });
+    await page.setViewportSize({ width, height });
     await page.setContent(
       `<!doctype html><html><head><meta charset="utf-8"><style>${css}</style>
        <style>body{margin:0;padding:16px;background:#030712}</style></head>
        <body class="sc-app"><div id="root"></div><script>${bundle}</script></body></html>`,
     );
-    await page.evaluate((u) => (window as unknown as { mountScan: (u: string) => void }).mountScan(u), QR_URL);
-    await page.waitForSelector("button");
+    await page.evaluate(() => (window as unknown as { mountFull: () => void }).mountFull());
+    await page.locator("#open-full").click();
+    await page.waitForSelector('[aria-label="Your card, full screen"]');
+    await page.waitForTimeout(300);
     return page;
   }
 
-  it("shows nothing until tapped", async () => {
-    const page = await mountScan();
+  /** The card's on-screen box, the close button's, and the QR's. */
+  function measureFull(page: Page) {
+    return page.evaluate(() => {
+      const overlay = document.querySelector('[aria-label="Your card, full screen"]') as HTMLElement;
+      const card = overlay.querySelector(".rounded-2xl") as HTMLElement;
+      const close = overlay.querySelector('button[aria-label="Close"]') as HTMLElement;
+      // The card's QR: the largest svg inside the card.
+      const qr = Array.from(card.querySelectorAll("svg"))
+        .map((s) => s.getBoundingClientRect())
+        .sort((a, b) => b.width * b.height - a.width * a.height)[0];
+      const box = (r: DOMRect) => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height });
+      return {
+        vw: window.innerWidth, vh: window.innerHeight,
+        parentIsBody: overlay.parentElement === document.body,
+        zIndex: Number(getComputedStyle(overlay).zIndex),
+        focusedClose: document.activeElement === close,
+        card: box(card.getBoundingClientRect()),
+        close: box(close.getBoundingClientRect()),
+        qr: qr ? box(qr) : null,
+      };
+    });
+  }
+
+  it("on a phone held upright, the card is turned sideways and fills the screen, centred", async () => {
+    const page = await mountFull(390, 844);
     try {
-      // :text-is, not text= — the trigger's own label contains "Scan to
-      // connect", so a substring match finds the button and never the panel.
-      expect(await page.locator('p:text-is("Scan to connect")').count()).toBe(0);
-      expect(await page.locator('button:has-text("Scan to connect (QR)")').count()).toBe(1);
+      const m = await measureFull(page);
+      expect(m.parentIsBody, "not portaled — an ancestor transform would cage it").toBe(true);
+      expect(m.zIndex, "must sit above the guided tour (z 10000)").toBeGreaterThanOrEqual(10001);
+      // Turned: on screen the card is TALLER than it is wide.
+      expect(m.card.height).toBeGreaterThan(m.card.width * 1.5);
+      // As big as fits: its short side uses nearly the whole screen width.
+      expect(m.card.width).toBeGreaterThan(m.vw * 0.85);
+      // Entirely on screen, with room at both ends for the notch and home bar.
+      expect(m.card.left).toBeGreaterThanOrEqual(0);
+      expect(m.card.right).toBeLessThanOrEqual(m.vw);
+      expect(m.card.top).toBeGreaterThanOrEqual(40);
+      expect(m.card.bottom).toBeLessThanOrEqual(m.vh - 40);
+      // Evenly: centred both ways.
+      expect(Math.abs((m.card.left + m.card.right) / 2 - m.vw / 2)).toBeLessThan(2);
+      expect(Math.abs((m.card.top + m.card.bottom) / 2 - m.vh / 2)).toBeLessThan(2);
+      // The QR is there and scannable-sized.
+      expect(m.qr, "no QR on the full-screen card").not.toBeNull();
+      expect(m.qr!.width).toBeGreaterThan(60);
+      // The × is on screen, a real target, and clear of the card.
+      expect(m.close.width).toBeGreaterThanOrEqual(40);
+      expect(m.close.left).toBeGreaterThanOrEqual(0);
+      expect(m.close.right).toBeLessThanOrEqual(m.vw);
+      expect(m.close.bottom).toBeLessThanOrEqual(m.vh);
+      const overlaps = !(m.close.right <= m.card.left || m.close.left >= m.card.right || m.close.bottom <= m.card.top || m.close.top >= m.card.bottom);
+      expect(overlaps, "the × sits on the card").toBe(false);
+      expect(m.focusedClose, "focus should land on the × when it opens").toBe(true);
     } finally { await page.close(); }
   }, 90_000);
 
-  it("tapping it renders a scannable QR in an overlay", async () => {
-    const page = await mountScan();
+  it("on a phone already turned sideways, the card is shown upright and fills the screen", async () => {
+    const page = await mountFull(844, 390);
     try {
-      await page.locator('button:has-text("Scan to connect (QR)")').click();
-      await page.waitForTimeout(200);
-      const r = await page.evaluate(() => {
-        // QRCodeSVG renders <svg width={size} height={size}> at 180 in QRCard.
-        // Selecting on "an svg with paths" instead matched the trigger's own
-        // 14px icon and reported a 14px "QR".
-        const qr = Array.from(document.querySelectorAll("svg")).find(
-          (s) => Number(s.getAttribute("width") ?? 0) >= 100,
-        );
-        const panel = Array.from(document.querySelectorAll("p")).find((p) => p.textContent === "Scan to connect");
-        const overlay = document.querySelector(".fixed.inset-0") as HTMLElement | null;
-        return {
-          hasQr: !!qr,
-          qrBox: qr ? Math.round(qr.getBoundingClientRect().width) : 0,
-          qrModules: qr ? (qr.getAttribute("viewBox") ?? "").split(" ")[2] : null,
-          panelVisible: !!panel && panel.getBoundingClientRect().height > 0,
-          overlayIsChildOfBody: overlay?.parentElement === document.body,
-          zIndex: overlay ? getComputedStyle(overlay).zIndex : null,
-        };
-      });
-      // A real module grid for a ~45-char URL, not a decorative glyph.
-      expect(Number(r.qrModules)).toBeGreaterThanOrEqual(21);
-      expect(r.hasQr, "no QR rendered in the popup").toBe(true);
-      // A real module grid, not a stray icon.
-      expect(r.qrBox).toBeGreaterThan(100);
-      expect(r.panelVisible).toBe(true);
-      // Portaled to <body>: an ancestor transform would otherwise cage a
-      // position:fixed overlay inside the card panel, and CardPreviewDownload
-      // puts scale() on the card a few levels up.
-      expect(r.overlayIsChildOfBody, "the overlay is not portaled to body").toBe(true);
-      expect(Number(r.zIndex)).toBeGreaterThanOrEqual(50);
+      const m = await measureFull(page);
+      expect(m.card.width).toBeGreaterThan(m.card.height * 1.5);
+      expect(m.card.height).toBeGreaterThan(m.vh * 0.85);
+      expect(m.card.left).toBeGreaterThanOrEqual(40);
+      expect(m.card.right).toBeLessThanOrEqual(m.vw - 40);
+      expect(m.card.top).toBeGreaterThanOrEqual(0);
+      expect(m.card.bottom).toBeLessThanOrEqual(m.vh);
+      expect(Math.abs((m.card.left + m.card.right) / 2 - m.vw / 2)).toBeLessThan(2);
+      const overlaps = !(m.close.right <= m.card.left || m.close.left >= m.card.right || m.close.bottom <= m.card.top || m.close.top >= m.card.bottom);
+      expect(overlaps, "the × sits on the card").toBe(false);
+      // Top-right for the person holding it.
+      expect(m.close.top).toBeLessThan(m.vh / 4);
+      expect(m.close.left).toBeGreaterThan(m.vw * 0.75);
     } finally { await page.close(); }
   }, 90_000);
 
-  it("closes on the × and on a backdrop tap", async () => {
-    const page = await mountScan();
+  it("the × closes it, and so does Escape", async () => {
+    const page = await mountFull(390, 844);
     try {
-      const open = page.locator('button:has-text("Scan to connect (QR)")');
-      await open.click();
-      await page.waitForTimeout(150);
       await page.locator('button[aria-label="Close"]').click();
       await page.waitForTimeout(150);
-      expect(await page.locator(".fixed.inset-0").count(), "× did not close the popup").toBe(0);
+      expect(await page.locator('[aria-label="Your card, full screen"]').count(), "× did not close it").toBe(0);
+      expect(await page.evaluate(() => document.documentElement.style.overflow), "page scroll left locked").toBe("");
 
-      await open.click();
+      await page.locator("#open-full").click();
+      await page.waitForSelector('[aria-label="Your card, full screen"]');
+      await page.keyboard.press("Escape");
       await page.waitForTimeout(150);
-      // Click the backdrop itself, well away from the QR panel.
-      await page.mouse.click(10, 10);
-      await page.waitForTimeout(150);
-      expect(await page.locator(".fixed.inset-0").count(), "backdrop tap did not close the popup").toBe(0);
+      expect(await page.locator('[aria-label="Your card, full screen"]').count(), "Escape did not close it").toBe(0);
     } finally { await page.close(); }
   }, 90_000);
 });

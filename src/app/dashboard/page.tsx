@@ -1005,7 +1005,11 @@ export default async function DashboardPage({
                     <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
                     <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
                   </svg>
-                  View live
+                  {/* "View Live Link" on a phone (owner, 2026-09-29); the
+                      computer keeps "View live". lg: is the dashboard's own
+                      phone/computer split. */}
+                  <span className="lg:hidden">View Live Link</span>
+                  <span className="hidden lg:inline">View live</span>
                 </a>
                 {/* Always rendered now (owner, 2026-09-11). A Free account at
                     the limit gets the SAME button, and pressing it opens the
@@ -1137,9 +1141,13 @@ export default async function DashboardPage({
 
           {/* Traffic — SwiftCard & SwiftLink views (full width; Swift Links + Email signature moved to /share) */}
           <div data-tour="traffic" className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5 mb-5">
+              {/* PHONE (owner, 2026-09-29): no "Traffic" heading, and the range
+                  bar runs the full width of the box with four equal tabs, from
+                  the left edge. The COMPUTER keeps the heading with the bar at
+                  its right. lg: is the dashboard's own phone/computer split. */}
               <div className="flex items-center justify-between mb-4">
-                <p className="text-white font-semibold text-sm">Traffic</p>
-                <div className="flex items-center bg-gray-800 rounded-lg p-0.5">
+                <p className="hidden lg:block text-white font-semibold text-sm">Traffic</p>
+                <div className="grid grid-cols-4 w-full lg:flex lg:w-auto items-center bg-gray-800 rounded-lg p-0.5">
                   {([
                     { id: "today", label: "Today" },
                     { id: "week", label: "Week" },
@@ -1147,10 +1155,14 @@ export default async function DashboardPage({
                     { id: "locations", label: "Locations" },
                   ] as const).map((r) => (
                     <Link key={r.id} scroll={false} href={`?vrange=${r.id}&view=${view}&sort=${sortBy}${selectedCard ? `&card=${selectedCard}` : ""}`}
-                      className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-colors inline-flex items-center gap-1 ${viewsRange === r.id ? "bg-gray-700 text-white" : "text-gray-500 hover:text-gray-300"}`}>
+                      className={`text-[0.6875rem] min-[375px]:text-xs font-semibold px-0.5 py-1.5 lg:px-2.5 lg:py-1 rounded-md whitespace-nowrap transition-colors inline-flex items-center justify-center gap-0.5 lg:gap-1 ${viewsRange === r.id ? "bg-gray-700 text-white" : "text-gray-500 hover:text-gray-300"}`}>
                       {r.label}
                       {r.id === "locations" && !isPro && (
-                        <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 opacity-70"><path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" /></svg>
+                        // shrink-0: in a quarter-width phone tab a flex svg
+                        // otherwise squeezes to a dot. Below 360px (iPhone SE
+                        // 1st gen) there is no room for it beside "Locations",
+                        // so it steps aside; the tab still opens the Pro notice.
+                        <svg viewBox="0 0 20 20" fill="currentColor" className="max-[359px]:hidden w-2.5 h-2.5 lg:w-3 lg:h-3 shrink-0 opacity-70"><path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" /></svg>
                       )}
                     </Link>
                   ))}

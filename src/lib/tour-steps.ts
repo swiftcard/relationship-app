@@ -233,19 +233,20 @@ const STEP_DEFS: TourStepDef[] = [
     // out of the dashboard entirely and lives in Settings → Cards and sharing.
     // A tour that names a missing control is worse than no tour, so this now
     // says where the editor actually is.
-    // The control under the card differs by viewport: a phone gets "Scan to
-    // connect (QR)" (hold the code up and they scan it), a desktop keeps the PNG
-    // download. TourContext carries no viewport, so the QR is mentioned as a
-    // phone aside — true there, simply absent on a laptop — the same shape the
-    // my-cards step uses. The PNG isn't named here: on a phone it lives one tap
-    // deeper in "Other ways to share", which the next step covers.
-    body: "Exactly what people see when you share — on a phone, Scan to connect puts a QR on screen for them to point a camera at. To change the template (Photo First is the most popular), colors, photo or links, head to Settings → Cards and sharing.",
+    // What the card does differs by viewport: on a phone, tapping it opens it
+    // full screen and sideways to hold up (they scan the QR printed on it); a
+    // desktop keeps the PNG download under it. TourContext carries no viewport,
+    // so the full-screen tap is mentioned as a phone aside — true there, simply
+    // absent on a laptop — the same shape the my-cards step uses. The PNG isn't
+    // named here: on a phone it lives one tap deeper in "Other ways to share",
+    // which the next step covers.
+    body: "Exactly what people see when you share — on a phone, tap it to show it full screen, turn your phone sideways, and they scan the QR code on it. To change the template (Photo First is the most popular), colors, photo or links, head to Settings → Cards and sharing.",
     placement: "right",
     interactive: true,
     bodyFor: (ctx) =>
       ctx.isOfficeMember
-        ? "Exactly what people see when you share — on a phone, Scan to connect puts a QR on screen for them to point a camera at. Your company sets the card's branding — update your own name, title, photo and links in Settings → Cards and sharing."
-        : "Exactly what people see when you share — on a phone, Scan to connect puts a QR on screen for them to point a camera at. To change the template (Photo First is the most popular), colors, photo or links, head to Settings → Cards and sharing.",
+        ? "Exactly what people see when you share — on a phone, tap it to show it full screen, turn your phone sideways, and they scan the QR code on it. Your company sets the card's branding — update your own name, title, photo and links in Settings → Cards and sharing."
+        : "Exactly what people see when you share — on a phone, tap it to show it full screen, turn your phone sideways, and they scan the QR code on it. To change the template (Photo First is the most popular), colors, photo or links, head to Settings → Cards and sharing.",
   },
   {
     id: "share",

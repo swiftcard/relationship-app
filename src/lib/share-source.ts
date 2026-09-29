@@ -9,7 +9,7 @@
 //
 // This lives here rather than inline in one component because THREE surfaces now
 // render a QR of the same card — the share modal's image, its PNG download, and
-// the dashboard's "Scan to connect" popup. A second copy of the rule is how it
+// the QR printed on the card in the dashboard's full-screen view. A second copy of the rule is how it
 // drifts back to zero.
 //
 // NFC does its OWN tagging and does not come through here: NFCWriter appends

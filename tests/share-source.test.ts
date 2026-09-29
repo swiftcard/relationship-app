@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { withSource, qrScanUrl } from "@/lib/share-source";
 import { SOURCE_LABELS } from "@/lib/source-labels";
@@ -44,14 +44,17 @@ describe("every QR surface goes through the shared helper", () => {
     expect(c, "a local copy of the tagging rule is back").not.toMatch(/function withSource/);
   });
 
-  it("the dashboard's Scan-to-connect popup does", () => {
+  it("the dashboard's full-screen card does — its printed QR is what gets scanned", () => {
+    // "Scan to connect (QR)" was replaced by tapping the card (owner,
+    // 2026-09-29). The QR on the card encodes data.cardUrl, so the full-screen
+    // copy must hand the template a TAGGED url or every scan reads "Card link".
     const c = code("src/components/CardPreviewDownload.tsx");
-    expect(c).toMatch(/ScanToConnectButton url=\{qrScanUrl\(previewUrl\)\}/);
+    expect(c).toMatch(/<CardFullscreen[\s\S]{0,200}cardUrl: qrScanUrl\(shown\.cardUrl\)/);
   });
 
-  it("the popup never receives an untagged URL", () => {
-    const c = code("src/components/CardPreviewDownload.tsx");
-    expect(c, "the QR would attribute scans to Card link").not.toMatch(/ScanToConnectButton url=\{previewUrl\}/);
+  it("the old Scan-to-connect popup is gone, not left orphaned", () => {
+    expect(existsSync(join(root, "src/components/ScanToConnectButton.tsx"))).toBe(false);
+    expect(code("src/components/CardPreviewDownload.tsx")).not.toMatch(/ScanToConnectButton/);
   });
 
   it("but NFC gets the PLAIN url — it tags itself", () => {
@@ -68,9 +71,9 @@ describe("the mobile card panel swaps QR and download", () => {
   const preview = () => code("src/components/CardPreviewDownload.tsx");
   const share = () => code("src/components/MoreShareOptions.tsx");
 
-  it("under the card: QR on mobile, download on desktop", () => {
+  it("on the card: full-screen tap on mobile, download on desktop", () => {
     const c = preview();
-    expect(c).toMatch(/lg:hidden[\s\S]{0,120}<ScanToConnectButton/);
+    expect(c).toMatch(/onClick=\{\(\) => setFullscreen\(true\)\}[\s\S]{0,160}className="lg:hidden absolute inset-0/);
     expect(c).toMatch(/hidden lg:block[\s\S]{0,200}<DownloadCardButton/);
   });
 
@@ -80,7 +83,7 @@ describe("the mobile card panel swaps QR and download", () => {
     // desktop control inside the mobile-positioned panel on a tablet.
     const c = preview();
     expect(c, "the control split no longer matches the panel's own breakpoint").not.toMatch(
-      /sm:hidden[\s\S]{0,120}<ScanToConnectButton/,
+      /className="sm:hidden absolute inset-0/,
     );
   });
 
