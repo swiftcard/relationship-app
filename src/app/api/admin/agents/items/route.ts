@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { firstName } from "@/lib/agent-org";
@@ -161,6 +162,11 @@ export async function POST(req: NextRequest) {
       // The option not taken is free to come back another day with a better angle.
       const otherSlug = ((raw.payload as ChoicePayload | null)?.options ?? []).map((o) => (o.payload as { slug?: string } | undefined)?.slug).find((sl) => sl && sl !== post.slug);
       if (chosen && otherSlug) await admin.from("agent_blog_topics").update({ status: "declined" }).eq("slug", otherSlug).neq("status", "published");
+      // Both pages sit behind a 5-minute ISR window (revalidate = 300) — without
+      // this, a just-published post can 404 or be missing from the list for up
+      // to 5 minutes after the owner sees "published" in the queue.
+      revalidatePath("/blog");
+      revalidatePath(`/blog/${post.slug}`);
     }
   }
   // Comms log: one line per decision (not per item) so bulk actions read as
