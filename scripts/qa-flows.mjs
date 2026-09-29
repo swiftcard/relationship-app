@@ -528,9 +528,12 @@ FLOWS["mobile-tabs"] = async () => {
     // tap lands (the layout viewport grows past the visual one), so the tab is
     // "not covered" yet never takes the tap. Name what sticks out instead of
     // reporting a bare click timeout.
+    // Measured against the PHONE's 390px, not innerWidth: a mobile browser
+    // zooms out to fit wider content, and then innerWidth grows with it and
+    // the page "fits" (how the Rate us banner hid this, 2026-09-29).
     const wide = await page.evaluate(() => {
-      const vw = window.innerWidth, sw = document.documentElement.scrollWidth;
-      if (sw <= vw + 1) return null;
+      const vw = 390, sw = document.documentElement.scrollWidth;
+      if (sw <= vw + 1 && (window.visualViewport?.scale ?? 1) > 0.99) return null;
       const out = [];
       for (const el of document.querySelectorAll("body *")) {
         const cs = getComputedStyle(el);

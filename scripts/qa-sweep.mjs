@@ -65,7 +65,11 @@ async function makeUser(email, name, uname, plan, withCard) {
 
 // ── the audit, run inside the page ───────────────────────────────────────────
 const AUDIT = async () => {
-  const W = innerWidth, H = innerHeight;
+  // × the visual scale: a phone ZOOMS OUT to fit content wider than itself,
+  // and then innerWidth grows with it, so an overflow measured against
+  // innerWidth "fits" — how the dashboard's Rate us banner pushed the tab bar
+  // off-screen unreported (2026-09-29). Scale is 1 on a computer.
+  const W = innerWidth * (window.visualViewport?.scale ?? 1), H = innerHeight;
   const out = [];
   const vis = (el) => {
     const r = el.getBoundingClientRect(), cs = getComputedStyle(el);

@@ -32,7 +32,12 @@ export default function RateUsBanner({ leadCount, viewCount, dismissedAt }: { le
         {leadCount >= 1 ? "Your card is bringing in contacts." : "People are viewing your card."} If SwiftCard is working for you, a quick App Store review helps others find it.
         <span className="hidden md:inline text-blue-300/70"> Best on iPhone.</span>
       </p>
-      <div className="flex items-center gap-3 shrink-0">
+      {/* Wraps, never forces its width: "Rate us on the App Store" + the App
+          Store badge + Dismiss are ~380px on one line. With shrink-0 and no
+          wrap they ran past a phone's edge, the phone zoomed the whole
+          dashboard out to fit, and the fixed tab bar ended up below the
+          screen — every tab "untappable" (nightly QA, 2026-09-29). */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 min-w-0">
         {/* The click bubbles up from the link: the link tracks, this hides. */}
         <span onClick={hide} className="contents">
           <RateUsLink
