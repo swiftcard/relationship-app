@@ -122,7 +122,10 @@ describe("desktop is unaffected", () => {
   it("the container and row classes are unchanged", () => {
     const c = code(LIST);
     expect(c).toMatch(/className="flex flex-wrap gap-2" role="radiogroup"/);
-    expect(c).toMatch(/rounded-xl px-4 py-3 transition-all border flex-1 min-w-full sm:min-w-\[200px\]/);
+    // 240, not 200, since each row gained its Edit pencil (2026-09-29): the
+    // tile minimum grew by exactly that footprint so the name kept its room.
+    // Measured in tests/render/my-cards-edit-button.interactive.test.ts.
+    expect(c).toMatch(/rounded-xl px-4 py-3 transition-all border flex-1 min-w-full sm:min-w-\[240px\]/);
   });
 });
 

@@ -22,11 +22,10 @@ export default function ManageCards({
 }: {
   cards: Card[];
   /**
-   * Office SUB-USERS get this list so they can EDIT their own card — which is
-   * the only place they can, now that the dashboard's Edit links are gone — but
-   * not delete it. The card belongs to the company, and they never had a delete
-   * control before (this whole section was hidden from them), so passing false
-   * keeps that posture exactly rather than handing them a new capability.
+   * False for office SUB-USERS: the card belongs to the company, and they have
+   * never had a delete control, so they see their card's status here but
+   * cannot remove it. (They edit it from the dashboard's My Cards, like
+   * everyone else.)
    */
   canDelete?: boolean;
   /**
@@ -161,9 +160,8 @@ export default function ManageCards({
                   {restoringId === card.id ? "Turning on…" : "Bring online"}
                 </button>
               )}
-              <Link href={`/cards/${card.id}/edit`} className="text-xs text-gray-500 hover:text-white transition-colors">
-                Edit
-              </Link>
+              {/* No Edit here any more: each card in the dashboard's My Cards
+                  has its own Edit button (owner, 2026-09-29). */}
               {canDelete && (
               <button
                 type="button"

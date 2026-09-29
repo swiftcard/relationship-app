@@ -121,7 +121,10 @@ export default function MyCardsList({
         return (
           <div
             key={card.id}
-            className={`items-center gap-3 rounded-xl px-4 py-3 transition-all border flex-1 min-w-full sm:min-w-[200px] ${visibility} ${
+            // sm:min-w is 40px wider than it was (200 → 240) — exactly the Edit
+            // pencil plus its gap — so on the narrowest desktop tile the NAME
+            // keeps the room it always had. Height is untouched.
+            className={`@container items-center gap-3 rounded-xl px-4 py-3 transition-all border flex-1 min-w-full sm:min-w-[240px] ${visibility} ${
               isActive ? "bg-blue-600/10 border-blue-600/40" : "bg-gray-800/60 border-gray-700/60"
             }`}
           >
@@ -147,8 +150,13 @@ export default function MyCardsList({
                   </svg>
                 )}
               </span>
+              {/* max-sm:@max-[230px]:hidden — only on the narrowest phones
+                  (320px), where the Edit pencil and the arrow would otherwise
+                  cut the name: the initial is decoration (the checkbox marks
+                  the selected card), so it gives way and the name keeps the
+                  room it always had. */}
               <div
-                className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
+                className={`max-sm:@max-[230px]:hidden w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
                   // text-gray-300, not -400: the card's initial is 12px BOLD,
                   // so it needs 4.5:1, and gray-400 on the gray-700 chip
                   // measured 3.96:1 in dark mode. gray-300 clears it at 7.34.
@@ -187,6 +195,35 @@ export default function MyCardsList({
               {/* Inside the Link on purpose — useLinkStatus reads the pending
                   state of the navigation it is rendered within. */}
               <SelectingSpinner />
+            </Link>
+
+            {/* Edit, on every card (owner, 2026-09-29: the editor moved here
+                from Settings → Cards and sharing, which now only deletes).
+                A SIBLING of the select link, never inside it — a link in a
+                link is invalid, and a tap here must open the editor, not
+                switch cards. h-7 (28px) sits inside the row's existing 32px
+                line (the initial chip), so the row is exactly as tall as it
+                was; the name beside it truncates first, as it always has. */}
+            <Link
+              href={`/cards/${card.id}/edit`}
+              aria-label={`Edit ${card.label || card.name || card.username}`}
+              title="Edit this card"
+              className={`shrink-0 inline-flex items-center justify-center gap-1 h-7 min-w-7 px-2 rounded-lg border text-[0.6875rem] font-semibold transition-colors ${
+                isActive
+                  ? "border-blue-500/40 text-blue-300 hover:text-white hover:bg-blue-600/20"
+                  : "border-gray-600/70 text-gray-300 hover:text-white hover:border-gray-500 hover:bg-gray-700/40"
+              }`}
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 shrink-0" aria-hidden="true">
+                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+              </svg>
+              {/* On a phone every row shows the pencil alone, a 28px square
+                  that matches the dropdown arrow beside it: with the word, the
+                  selected row (which also holds the arrow) cut a name as short
+                  as "Nadlan Realty" at 375px, and the rows should look alike.
+                  A computer tile shows "Edit" whenever it can without taking
+                  room from the name. aria-label and title say Edit either way. */}
+              <span className="max-sm:hidden @max-[250px]:hidden">Edit</span>
             </Link>
 
             {/* Mobile-only switcher, on the right of the SELECTED card. Absent

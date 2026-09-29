@@ -762,9 +762,8 @@ export default async function DashboardPage({
     <CardCaptureProvider>
       {/* Your card */}
       <div data-tour="your-card" className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5">
-        {/* Editing lives in Settings → Cards and sharing, and only there. This
-            header used to carry an Edit link; the dashboard is now for viewing
-            and sharing a card, not changing it. */}
+        {/* No Edit link in this header: each card's Edit button is on its row
+            in My Cards above (owner, 2026-09-29), one place for every card. */}
         {/* mb-3 on mobile takes over the spacing the caption's own mb-3 gave
             it, so hiding the caption tightens the box without collaring the
             preview against the heading. */}

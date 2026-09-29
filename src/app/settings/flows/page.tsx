@@ -263,30 +263,20 @@ export default async function FlowSettingsPage({
         </div>
       ),
     },
-    // Office SUB-USERS get this section too — a change from when it was hidden
-    // from them entirely.
+    // Editing moved OUT of here (owner, 2026-09-29): every card in the
+    // dashboard's My Cards has its own Edit button, office sub-users included.
+    // This section keeps the card list for deleting a card, the offline status
+    // and "Bring online", and the share link.
     //
-    // It was excluded on the reasoning that an employee's cards "are managed
-    // from /office/admin", but that is the ADMIN's console and a plain employee
-    // cannot open it (canViewOfficeAdmin needs isOwner or view_org_analytics).
-    // Their real edit path was the dashboard's Edit link, and removing that
-    // left them with no way to change their own name, title or photo anywhere
-    // in the product. The card editor already expects them — it locks the
-    // company-managed branding fields for a sub-user — and the guided tour has
-    // always carried an office-member variant of this step, which could never
-    // have fired.
-    //
-    // Scoped, not opened up: canDelete={false} keeps deletion owner-only, which
-    // is the posture they already had (no delete control existed for them).
+    // Office SUB-USERS still see it (their card's offline status lives here),
+    // with canDelete={false}: deletion stays owner-only, the posture they have
+    // always had.
     {
       id: "cards",
       label: "Cards and sharing",
-      // "Edit" leads now: this is the ONLY place a card can be edited from —
-      // the dashboard's Edit links were removed, so this description is the
-      // signpost for anyone looking for them.
       desc: isOfficeSubUser
-        ? "Edit your card and share your links."
-        : "Edit, open, or remove a card, and share your links.",
+        ? "Your card's status, and your share links."
+        : "Remove a card, and share your links.",
       icon: I.cards,
       content: (
         <div data-tour="settings-cards" className="space-y-3">

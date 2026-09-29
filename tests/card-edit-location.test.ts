@@ -7,26 +7,50 @@ const root = process.cwd();
 const code = (p: string) =>
   readFileSync(join(root, p), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
-// Editing a card happens in ONE place: Settings → Cards and sharing. The
-// dashboard shows and shares cards; it does not edit them. These pin that, and
-// pin the copy that tells people where to go — a signpost pointing at a control
+// Editing a card happens in ONE place: the Edit button on each card in the
+// dashboard's My Cards (owner, 2026-09-29). It used to be Settings → Cards and
+// sharing; that section now deletes, and has no Edit. These pin both halves,
+// and the copy that tells people where to go — a signpost pointing at a control
 // that no longer exists is worse than no signpost.
 
 const DASHBOARD = "src/app/dashboard/page.tsx";
 const CARD_LIST = "src/components/dashboard/MyCardsList.tsx";
 const MANAGE_CARDS = "src/components/ManageCards.tsx";
+const SETTINGS = "src/app/settings/flows/page.tsx";
+const EDIT_HREF = "/cards/${card.id}/edit";
 
-describe("the dashboard cannot edit a card", () => {
-  it("has no link into the card editor", () => {
-    // Both halves: the page, and the client component the card rows moved into.
-    for (const f of [DASHBOARD, CARD_LIST]) {
-      expect(code(f), `an Edit link is back in ${f}`).not.toMatch(/\/cards\/\$\{[^}]*\}\/edit/);
-    }
+describe("every card in My Cards has its own Edit button", () => {
+  it("links each row to that card's editor", () => {
+    const c = code(CARD_LIST);
+    // Inside the per-card map, so every card gets one — not just the selected.
+    const map = c.slice(c.indexOf("cards.map("), c.indexOf("{upsell}"));
+    expect(map).toContain(`href={\`${EDIT_HREF}\`}`);
+  });
+
+  it("is a sibling of the select link, never nested in it", () => {
+    // A link inside the radio link is invalid HTML, and a tap on Edit would
+    // switch cards instead of opening the editor.
+    const c = code(CARD_LIST);
+    const selectClose = c.indexOf("</Link>");
+    const editAt = c.indexOf(EDIT_HREF);
+    expect(selectClose).toBeGreaterThan(0);
+    expect(editAt, "Edit sits inside the select link").toBeGreaterThan(selectClose);
+  });
+
+  it("does not make the row taller: 28px inside the row's 32px line", () => {
+    const c = code(CARD_LIST);
+    const at = c.indexOf(EDIT_HREF);
+    const edit = c.slice(at, at + 900);
+    expect(edit).toMatch(/\bh-7\b/);
+    expect(edit).toMatch(/\bshrink-0\b/);
+    expect(c).toMatch(/w-8 h-8 rounded-lg/);
+  });
+
+  it("names the card to a screen reader", () => {
+    expect(code(CARD_LIST)).toContain("aria-label={`Edit ${card.label || card.name || card.username}`}");
   });
 
   it("still lets you SELECT and ADD cards", () => {
-    // Removing edit must not have taken the rest of the box with it. Selection
-    // now lives in MyCardsList; adding stays on the page.
     expect(code(CARD_LIST)).toMatch(/role="radiogroup"/);
     expect(code(CARD_LIST)).toMatch(/href=\{`\?card=\$\{card\.username\}/);
     expect(code(DASHBOARD)).toMatch(/\/cards\/new\?add=1/);
@@ -37,66 +61,43 @@ describe("the dashboard cannot edit a card", () => {
     expect(c).toMatch(/data-tour="my-cards"/);
     expect(c).toMatch(/data-tour="your-card"/);
   });
-});
 
-describe("Settings → Cards and sharing is the editor's home", () => {
-  it("still links into the editor", () => {
-    expect(code(MANAGE_CARDS)).toMatch(/\/cards\/\$\{card\.id\}\/edit/);
-  });
-
-  it("the settings section is described as the place to edit", () => {
-    const c = code("src/app/settings/flows/page.tsx");
-    expect(c).toMatch(/label: "Cards and sharing"/);
-    expect(c).toMatch(/Edit, open, or remove a card/);
+  it("is shown to every account type, office members included", () => {
+    // My Cards is not gated on the plan or the seat — it is how a team member
+    // reaches the editor now that Settings has no Edit.
+    const c = code(DASHBOARD);
+    expect(c).toMatch(/<MyCardsList/);
+    expect(c, "My Cards got gated away from office members").not.toMatch(/!isOfficeMember && <MyCardsList/);
   });
 });
 
-describe("EVERY account type can still reach the editor", () => {
-  const SETTINGS = "src/app/settings/flows/page.tsx";
+describe("Settings → Cards and sharing no longer edits", () => {
+  it("ManageCards has no link into the editor", () => {
+    expect(code(MANAGE_CARDS)).not.toMatch(/\/cards\/\$\{[^}]*\}\/edit/);
+  });
 
-  it("the Cards section is no longer hidden from office sub-users", () => {
-    // This is the regression that removing the dashboard Edit links caused:
-    // the section was excluded for sub-users, their only other path was the
-    // dashboard, and /office/admin needs a capability a plain employee lacks.
-    // They were left with no way to edit their own name, title or photo.
+  it("the section is described as what it is now", () => {
     const c = code(SETTINGS);
-    expect(
-      c,
-      "the cards section is spread away for sub-users again",
-    ).not.toMatch(/\.\.\.\(isOfficeSubUser \? \[\] : \[\{\s*id: "cards"/);
-    expect(c).toMatch(/id: "cards"/);
+    expect(c).toMatch(/label: "Cards and sharing"/);
+    expect(c).toContain('"Remove a card, and share your links."');
+    expect(c, "the description still promises Edit").not.toMatch(/Edit, open, or remove a card/);
   });
 
-  it("but sub-users still cannot DELETE a company card", () => {
-    // Restoring their edit path must not hand them a capability they never
-    // had — no delete control existed for them before.
+  it("sub-users still cannot DELETE a company card", () => {
     expect(code(SETTINGS)).toMatch(/canDelete=\{!isOfficeSubUser\}/);
-  });
-
-  it("ManageCards actually honours canDelete", () => {
     const c = code(MANAGE_CARDS);
     expect(c).toMatch(/canDelete = true/);
     expect(c).toMatch(/\{canDelete && \(/);
-    // Edit is NOT gated — that is the whole point of showing them the section.
-    const editAt = c.indexOf("/edit");
-    const gateAt = c.indexOf("{canDelete && (");
-    expect(editAt).toBeGreaterThan(0);
-    expect(editAt, "the Edit link got swept behind the delete gate").toBeLessThan(gateAt);
-  });
-
-  it("no other linked route offers the editor, so this really is the only path", () => {
-    // /profile/card imports CardEditForm but nothing links to it (same dead
-    // route as the audit's /profile finding), so it is not a path.
-    const linked = code("src/app/settings/flows/page.tsx") + code(MANAGE_CARDS);
-    expect(linked).toMatch(/\/cards\/\$\{card\.id\}\/edit/);
   });
 });
 
-describe("nothing still points users at a dashboard Edit button", () => {
-  it("the guided tour sends them to Settings", () => {
+describe("nothing points users at the old place", () => {
+  it("the guided tour sends them to Edit in My Cards", () => {
     const c = code("src/lib/tour-steps.ts");
-    expect(c, "the tour still names an Edit control on the dashboard").not.toMatch(/Use Edit above/);
-    expect(c).toMatch(/Settings → Cards and sharing/);
+    expect(c, "the tour still sends people to Settings to edit").not.toMatch(/head to Settings → Cards and sharing/);
+    expect(c).not.toMatch(/This is where you edit/);
+    expect(c).toMatch(/Tap Edit on a card to change its details or design/);
+    expect(c).toMatch(/tap Edit on it in My Cards/);
   });
 
   it("the tour teaches the mobile card switcher without misleading desktop", () => {
@@ -104,27 +105,23 @@ describe("nothing still points users at a dashboard Edit button", () => {
     // FREE variant must NOT mention the arrow — one card renders no arrow.
     const c = code("src/lib/tour-steps.ts");
     expect(c).toMatch(/tap the arrow beside the selected card/);
-    const freeBranch = c.match(/"Your card\. Free includes one[^"]*"/)?.[0] ?? "";
+    const freeBranch = c.match(/"Your card — tap Edit[^"]*"/)?.[0] ?? "";
+    expect(freeBranch, "the Free branch lost its Edit line").not.toBe("");
     expect(freeBranch, "the Free copy promises an arrow that never renders").not.toMatch(/arrow/);
   });
 
-  it("the settings-cards step says it is where editing happens", () => {
-    const c = code("src/lib/tour-steps.ts");
-    expect(c).toMatch(/This is where you edit a card/);
-    // And the office-member branch, which is finally reachable.
-    expect(c).toMatch(/This is where you edit your company card/);
-  });
-
-  it("the in-app AI help sends them to Settings", () => {
-    // The assistants no longer carry their own copy of the product — they
-    // answer from src/lib/knowledge, so that is where this claim now lives.
-    const c = code("src/lib/knowledge/docs/cards.ts");
-    expect(c, "AI help still routes people to 'My Cards → Edit'").not.toMatch(/My Cards → Edit/);
-    expect(c).toMatch(/Settings → Cards and sharing/);
+  it("the help assistant knows where Edit is", () => {
+    const cards = code("src/lib/knowledge/docs/cards.ts");
+    expect(cards).toContain('every card has its own \\"Edit\\" button');
+    expect(cards, "the knowledge base still sends people to Settings to edit").not.toContain("Settings → Cards and sharing → \\\"Edit\\\"");
+    expect(cards).not.toContain("Settings → Cards and sharing → Edit");
+    expect(code("src/lib/knowledge/docs/dashboard.ts")).not.toMatch(/no Edit link/);
+    expect(code("src/lib/knowledge/docs/account.ts")).not.toMatch(/only place a card can be edited/);
+    expect(code("src/lib/knowledge/personas.ts")).not.toContain("Cards and sharing → Edit");
+    expect(code("src/app/api/ai/help/route.ts")).not.toContain("tap Edit to change your card)");
   });
 
   it("plan marketing copy makes no claim about where editing lives", () => {
-    // Guards against the feature list drifting into a stale nav instruction.
     const all = [...PLAN_FEATURES.free, ...PLAN_FEATURES.pro].join(" | ");
     expect(all).not.toMatch(/My Cards/i);
   });

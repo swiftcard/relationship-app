@@ -209,30 +209,28 @@ const STEP_DEFS: TourStepDef[] = [
     // never reaches this box at all. Office counts as paid (isPaidPlan covers
     // enterprise), so office members do get it. It now sits top-right of the box
     // on BOTH viewports, which is why this needs no phone/desktop hedge.
-    body: "All your cards. Pick one and the dashboard follows it — once you have more than one, tap the arrow beside the selected card on a phone to see the rest. + Add card is in the top right. Free has one; Pro is unlimited.",
+    body: "All your cards. Pick one and the dashboard follows it — once you have more than one, tap the arrow beside the selected card on a phone to see the rest. Tap Edit on a card to change its details or design. + Add card is in the top right. Free has one; Pro is unlimited.",
     placement: "bottom",
     bodyFor: (ctx) =>
       ctx.tier === "free"
-        ? "Your card. Free includes one — upgrade to Pro for unlimited cards."
+        ? "Your card — tap Edit to change its details or design. Free includes one — upgrade to Pro for unlimited cards."
         // A team member holds exactly ONE card, the company card: no arrow is
         // drawn, "+ Add card" is hidden for members, and /cards/new sends them
         // back here — so the office wording below described three things
         // they would never see.
         : ctx.isOfficeMember
-          ? "Your company card — the one your team set up for you. Everything on this dashboard follows it."
+          ? "Your company card — the one your team set up for you. Everything on this dashboard follows it. Tap Edit to update your name, title, photo and links."
         : ctx.tier === "office"
-          ? "Your company cards. Pick one and the dashboard follows it — once you have more than one, tap the arrow beside the selected card on a phone to see the rest. + Add card is in the top right."
-          : "All your cards. Pick one and the dashboard follows it — once you have more than one, tap the arrow beside the selected card on a phone to see the rest. + Add card is in the top right. Pro gives you unlimited cards.",
+          ? "Your company cards. Pick one and the dashboard follows it — once you have more than one, tap the arrow beside the selected card on a phone to see the rest. Tap Edit on a card to change its details or design. + Add card is in the top right."
+          : "All your cards. Pick one and the dashboard follows it — once you have more than one, tap the arrow beside the selected card on a phone to see the rest. Tap Edit on a card to change its details or design. + Add card is in the top right. Pro gives you unlimited cards.",
   },
   {
     id: "your-card",
     path: DASH,
     anchor: "your-card",
     title: "Your SwiftCard — try it",
-    // "Use Edit above" pointed at a link that no longer exists: editing moved
-    // out of the dashboard entirely and lives in Settings → Cards and sharing.
-    // A tour that names a missing control is worse than no tour, so this now
-    // says where the editor actually is.
+    // Editing lives on the dashboard: every card in My Cards has an Edit
+    // button (owner, 2026-09-29; it used to be Settings → Cards and sharing).
     // What the card does differs by viewport: on a phone, tapping it opens it
     // full screen and sideways to hold up (they scan the QR printed on it); a
     // desktop keeps the PNG download under it. TourContext carries no viewport,
@@ -240,13 +238,13 @@ const STEP_DEFS: TourStepDef[] = [
     // absent on a laptop — the same shape the my-cards step uses. The PNG isn't
     // named here: on a phone it lives one tap deeper in "Other ways to share",
     // which the next step covers.
-    body: "Exactly what people see when you share — on a phone, tap it to show it full screen, turn your phone sideways, and they scan the QR code on it. To change the template (Photo First is the most popular), colors, photo or links, head to Settings → Cards and sharing.",
+    body: "Exactly what people see when you share — on a phone, tap it to show it full screen, turn your phone sideways, and they scan the QR code on it. To change the template (Photo First is the most popular), colors, photo or links, tap Edit on it in My Cards.",
     placement: "right",
     interactive: true,
     bodyFor: (ctx) =>
       ctx.isOfficeMember
-        ? "Exactly what people see when you share — on a phone, tap it to show it full screen, turn your phone sideways, and they scan the QR code on it. Your company sets the card's branding — update your own name, title, photo and links in Settings → Cards and sharing."
-        : "Exactly what people see when you share — on a phone, tap it to show it full screen, turn your phone sideways, and they scan the QR code on it. To change the template (Photo First is the most popular), colors, photo or links, head to Settings → Cards and sharing.",
+        ? "Exactly what people see when you share — on a phone, tap it to show it full screen, turn your phone sideways, and they scan the QR code on it. Your company sets the card's branding — update your own name, title, photo and links with Edit in My Cards."
+        : "Exactly what people see when you share — on a phone, tap it to show it full screen, turn your phone sideways, and they scan the QR code on it. To change the template (Photo First is the most popular), colors, photo or links, tap Edit on it in My Cards.",
   },
   {
     id: "share",
@@ -353,19 +351,16 @@ const STEP_DEFS: TourStepDef[] = [
     section: "cards",
     anchor: "settings-cards",
     title: "Your cards",
-    // This is where the tour lands people now that the dashboard's Edit links
-    // are gone, so the step says so outright rather than just listing verbs.
-    // The office-member variant finally reaches something: this section used to
-    // be hidden from sub-users entirely, which made that branch unreachable.
-    // The section holds Edit (details, design, links, nickname) and Delete —
-    // there is no add or open control here; new cards come from "+ Add card"
-    // on the dashboard.
-    body: "This is where you edit a card — tap Edit to change its details, design, links, or nickname, or remove a card you no longer need.",
+    // Editing moved to the dashboard's My Cards (owner, 2026-09-29), so this
+    // step says so rather than sending people back and forth. The section holds
+    // Delete and a card's offline status — no add, open or edit control; new
+    // cards come from "+ Add card" on the dashboard.
+    body: "Your cards and their status — remove a card you no longer need here. To change a card, tap Edit on it in My Cards on the dashboard.",
     placement: "bottom",
     bodyFor: (ctx) =>
       ctx.isOfficeMember
-        ? "This is where you edit your company card — your name, title, photo and links. Your company's branding stays locked."
-        : "This is where you edit a card — tap Edit to change its details, design, links, or nickname, or remove a card you no longer need.",
+        ? "Your company card and its status. To update your name, title, photo and links, tap Edit on it in My Cards on the dashboard — your company's branding stays locked."
+        : "Your cards and their status — remove a card you no longer need here. To change a card, tap Edit on it in My Cards on the dashboard.",
   },
   {
     id: "settings-help",
