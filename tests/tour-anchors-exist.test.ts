@@ -234,10 +234,17 @@ describe("the tour describes each plan honestly", () => {
     const free = buildTourSteps({ tier: "free", isOfficeMember: false, hasCards: true, isNative: false });
     const member = buildTourSteps({ tier: "office", isOfficeMember: true, hasCards: true, isNative: false });
 
-    // Free has exactly one card and no automations.
+    // Free has exactly one card, and EMAIL follow-ups only (owner, 2026-09-11):
+    // texts and AI-written messages are Pro. It used to say the whole
+    // automation feature was Pro, which was false.
     expect(free.find((s) => s.id === "my-cards")!.body).toMatch(/free includes one/i);
-    expect(free.find((s) => s.id === "contact-automations")!.body).toMatch(/pro feature/i);
+    const auto = free.find((s) => s.id === "contact-automations")!.body;
+    expect(auto).toMatch(/flip on email/i);
+    expect(auto).toMatch(/text follow-ups and ai-written messages are on pro/i);
+    expect(auto, "Free told email follow-ups are Pro").not.toMatch(/automated follow-up is a pro feature/i);
     expect(free.find((s) => s.id === "traffic")!.body).toMatch(/unlock on pro/i);
+    // CRM sync is Pro: Free is told so, not promised it.
+    expect(free.find((s) => s.id === "settings-integrations")!.body).toMatch(/^On Pro, connect/);
 
     // A sub-user's branding is company-owned; the copy must not tell them to
     // change what is locked.

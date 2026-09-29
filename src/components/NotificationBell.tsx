@@ -312,14 +312,19 @@ export default function NotificationBell({
               measuring against the real viewport. */}
           <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
 
-          {/* Dropdown menu — pinned to the VIEWPORT (below the nav bar, inset
-              from the right edge) rather than anchored to the bell. Anchoring
-              right-0 to the bell pushed the panel's left side off-screen on
-              phones, since the bell isn't at the screen edge. */}
+          {/* Dropdown menu — pinned to the VIEWPORT (below the nav bar),
+              CENTRED on the page (owner, 2026-09-29: this is the notification
+              centre now that the dashboard's list is gone). Anchoring it to the
+              bell pushed its left side off-screen on phones; it then sat
+              against the right edge, off-centre on a phone and at the far right
+              of a computer. left-0 right-0 mx-auto centres it without a
+              transform, which the drop-in animation owns — so it grows from
+              its top centre, not the corner. */}
           <div
             role="dialog"
             aria-label="Notifications"
-            className="sc-drop-in fixed z-[61] right-3 top-[calc(env(safe-area-inset-top)+4.25rem)] w-[min(360px,calc(100vw-1.5rem))] max-h-[70vh] bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl shadow-black/40 overflow-hidden flex flex-col"
+            className="sc-drop-in fixed z-[61] left-0 right-0 mx-auto top-[calc(env(safe-area-inset-top)+4.25rem)] w-[min(360px,calc(100vw-1.5rem))] max-h-[70vh] bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl shadow-black/40 overflow-hidden flex flex-col"
+            style={{ transformOrigin: "top center" }}
           >
 
             <div className="relative flex items-center justify-between px-4 py-3 border-b border-gray-800 shrink-0">

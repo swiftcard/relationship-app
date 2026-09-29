@@ -202,10 +202,12 @@ export default function OfficeNotificationBell({
               layer only covered the header strip and clicks on the page below
               never closed the panel. */}
           <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
+          {/* Centred on the page, like the personal bell (owner, 2026-09-29). */}
           <div
             role="dialog"
             aria-label="Team notifications"
-            className="sc-drop-in fixed z-[61] right-3 top-[calc(env(safe-area-inset-top)+86px)] w-[min(360px,calc(100vw-1.5rem))] max-h-[70vh] bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl shadow-black/40 overflow-hidden flex flex-col"
+            className="sc-drop-in fixed z-[61] left-0 right-0 mx-auto top-[calc(env(safe-area-inset-top)+86px)] w-[min(360px,calc(100vw-1.5rem))] max-h-[70vh] bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl shadow-black/40 overflow-hidden flex flex-col"
+            style={{ transformOrigin: "top center" }}
           >
             <div className="relative flex items-center justify-between px-4 py-3 border-b border-gray-800 shrink-0">
               <div className="min-w-0">

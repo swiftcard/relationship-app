@@ -198,12 +198,20 @@ const STEP_DEFS: TourStepDef[] = [
     path: DASH,
     anchor: "notif-bell",
     title: "Notifications",
-    body: "Every new contact, save, and milestone across ALL your cards lands here — each tagged with the card it came from. They stay unread until you mark them read.",
+    body: "Every new contact, save, and milestone across ALL your cards lands here — with more than one card, each is tagged with the card it came from. Tap one about a contact to open them. They stay unread until you mark them read.",
     placement: "bottom",
+    // Rows about a contact open Contacts (NotificationBell, 2026-09-23) — the
+    // person themselves when the row names them, which on Free it may not.
+    // The card tag only renders once an account has two or more cards
+    // (NotificationBell), so the copy doesn't promise it on a single card.
+    // The bell is the one notification list since Quick Contacts and the
+    // dashboard's list went (2026-09-29).
     bodyFor: (ctx) =>
-      ctx.tier === "free" || ctx.isOfficeMember
-        ? "Every new contact, save, and milestone on your card lands here. They stay unread until you mark them read."
-        : "Every new contact, save, and milestone across ALL your cards lands here — each tagged with the card it came from. They stay unread until you mark them read.",
+      ctx.tier === "free"
+        ? "Every new contact, save, and milestone on your card lands here — tap one to jump to your contacts. They stay unread until you mark them read."
+        : ctx.isOfficeMember
+          ? "Every new contact, save, and milestone on your card lands here — tap one about a contact to open them. They stay unread until you mark them read."
+          : "Every new contact, save, and milestone across ALL your cards lands here — with more than one card, each is tagged with the card it came from. Tap one about a contact to open them. They stay unread until you mark them read.",
   },
   {
     id: "theme",
@@ -290,7 +298,9 @@ const STEP_DEFS: TourStepDef[] = [
     id: "traffic",
     path: DASH,
     anchor: "traffic",
-    title: "Traffic",
+    // Not "Traffic": the box lost that heading on every device (owner,
+    // 2026-09-29), so the step names what is in it instead.
+    title: "Your views",
     body: "Views of your card and Swift Links. Switch Today / Week / Month, or tap Locations for top places.",
     placement: "bottom",
     bodyFor: (ctx) =>
@@ -334,9 +344,13 @@ const STEP_DEFS: TourStepDef[] = [
     title: "Follow up on autopilot",
     body: "The magic: flip on Email or Text, pick a cadence (Light, Medium, Aggressive), and AI writes each message from your notes. Every email is signed with your Swift Signature card. Hit Submit and SwiftCard sends the whole sequence for you — leads never go cold. Email and text run separately.",
     placement: "top",
+    // Free sends automatic EMAIL follow-ups (owner, 2026-09-11 — the reminders
+    // route holds back only text steps on Free), with ready-made wording it
+    // can edit; texts and AI-written messages are Pro (generate-sequence). This
+    // used to call the whole feature Pro, which undersold Free.
     bodyFor: (ctx) =>
       ctx.tier === "free"
-        ? "Automated follow-up is a Pro feature. On Pro you flip on Email or Text, pick a cadence, and AI writes each message from your notes — SwiftCard then sends the whole sequence for you so leads never go cold. Upgrade to turn it on."
+        ? "Flip on Email, pick a cadence (Light, Medium, Aggressive), edit the ready-made messages if you like, and SwiftCard sends the whole sequence for you — leads never go cold. Text follow-ups and AI-written messages are on Pro."
         : "The magic: flip on Email or Text, pick a cadence (Light, Medium, Aggressive), and AI writes each message from your notes. Every email is signed with your Swift Signature card. Hit Submit and SwiftCard sends the whole sequence for you — leads never go cold. Email and text run separately.",
   },
 
@@ -390,10 +404,14 @@ const STEP_DEFS: TourStepDef[] = [
     placement: "bottom",
     // A member's contacts may already go to the TEAM's CRM, and the page itself
     // warns that connecting their own sends them elsewhere — so don't pitch it.
+    // Connecting a CRM is Pro (settings/crm, the connect routes) — Free was
+    // told it could sync with no mention that it can't yet.
     bodyFor: (ctx) =>
       ctx.isOfficeMember
         ? "If your team connects a CRM, your new contacts go there automatically. Your own tools can be connected here too."
-        : "Connect Salesforce, GoHighLevel, Pipedrive, HubSpot, Google Contacts or Zapier so new leads sync to your tools automatically.",
+        : ctx.tier === "free"
+          ? "On Pro, connect Salesforce, GoHighLevel, Pipedrive, HubSpot, Google Contacts or Zapier so new leads sync to your tools automatically."
+          : "Connect Salesforce, GoHighLevel, Pipedrive, HubSpot, Google Contacts or Zapier so new leads sync to your tools automatically.",
   },
   {
     id: "settings-general",

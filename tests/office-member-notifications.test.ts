@@ -141,3 +141,17 @@ describe("office news about their card is clear and correct", () => {
     expect(officeRemovedMessage("free")).toContain("turn it back on any time in Settings → Cards and sharing");
   });
 });
+
+describe("the bell's two sources agree on who is a team member", () => {
+  // The dashboard renders the bell's first list; /api/notifications refreshes
+  // it seconds later. If they disagree about the reader, rows appear on first
+  // paint and vanish on the first poll (2026-09-29 bell review). Both now say:
+  // a team member is ON an Office plan, in an office they do not own.
+  it("the API's reader requires the Office plan before looking up the office", () => {
+    expect(read("src/lib/office-account-notifications.ts")).toMatch(/if \(officeAccount && p\.office_id\) \{/);
+  });
+
+  it("the dashboard's reader is the same rule", () => {
+    expect(read("src/app/dashboard/page.tsx")).toMatch(/teamMember: isEnterprise && !ownedOfficeRes\.data && !!profile\.office_id,/);
+  });
+});

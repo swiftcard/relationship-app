@@ -66,8 +66,15 @@ export async function notificationReader(userId: string): Promise<NotificationRe
     const ownSubscription =
       !!p.stripe_subscription_id ||
       (p.customization as { _planSource?: unknown } | null)?._planSource === "apple";
+    // A team member is someone ON an Office plan in someone else's office —
+    // the same rule the dashboard applies to the bell's first render
+    // (isEnterprise && office not owned && office_id). This used to skip the
+    // plan check, so an account still attached to an office but no longer on
+    // Office got referral / billing rows on first paint and lost them on the
+    // bell's first poll a second later. It also skips a lookup per poll for
+    // every account that isn't on Office.
     let teamMember = false;
-    if (p.office_id) {
+    if (officeAccount && p.office_id) {
       const { data: office } = await admin.from("offices").select("owner_id").eq("id", p.office_id).maybeSingle();
       teamMember = !!office && office.owner_id !== userId;
     }
