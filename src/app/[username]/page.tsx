@@ -31,6 +31,7 @@ import { buildConnectLinks } from "@/lib/social-url";
 import SignupNudgeHost from "@/components/SignupNudgeHost";
 import ReportCardLink from "@/components/ReportCardLink";
 import { SwiftCardIcon } from "@/components/SwiftCardLogo";
+import { PUBLIC_PAGE_META } from "@/lib/universal-links";
 
 const TEMPLATES: Record<string, React.ComponentType<{ data: CardData }>> = {
   "classic-pro": ClassicPro,
@@ -64,7 +65,7 @@ export async function generateMetadata({
   const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
   const p = await resolveCardMeta(username);
-  if (!p) return { title: "SwiftCard", itunes: null };
+  if (!p) return { title: "SwiftCard", itunes: null, other: { [PUBLIC_PAGE_META]: "card" } };
 
   const name = p.name ?? username;
   const parts = [p.title, p.company].filter(Boolean).join(" at ");
@@ -87,6 +88,9 @@ export async function generateMetadata({
     itunes: null,
     // The root URL is canonical; legacy /card/<username> 308s here.
     alternates: { canonical: `${APP_URL}/${username}` },
+    // Marks a public card page for the iOS shell: NativeAppBridge sends it to
+    // Safari if the app's webview ever lands here (links never open in the app).
+    other: { [PUBLIC_PAGE_META]: "card" },
     openGraph: {
       title: name,
       description,

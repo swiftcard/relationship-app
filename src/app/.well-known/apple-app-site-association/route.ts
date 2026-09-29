@@ -1,4 +1,4 @@
-import { APP_PATHS, aasaComponents } from "@/lib/universal-links";
+import { AASA_PATHS, aasaComponents } from "@/lib/universal-links";
 
 // Apple App Site Association (AASA) — served at the exact path
 // /.well-known/apple-app-site-association with a JSON content-type and no
@@ -46,14 +46,9 @@ function buildAasa() {
       {
         appIDs: [`${appleTeamId()}.me.swiftcard.app`],
         appID: `${appleTeamId()}.me.swiftcard.app`,
-        // Office invite links open in the app when installed. Card and Swift
-        // Links pages never do — they open in the browser (lib/universal-links).
-        // /auth/callback is kept as a safety net for any web-initiated OAuth
-        // round-trip that lands on a device with the app installed — the
-        // primary native OAuth return leg is the swiftcard://auth-callback
-        // custom scheme (see src/lib/native-auth.ts + NativeAppBridge), not
-        // this universal link.
-        paths: [...APP_PATHS],
+        // No link opens the app — every path is excluded (lib/universal-links).
+        // Sign-in returns use the swiftcard:// scheme, not a universal link.
+        paths: [...AASA_PATHS],
         components: aasaComponents(),
       },
     ],

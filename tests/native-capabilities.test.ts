@@ -77,10 +77,11 @@ describe("NativeAppBridge is mounted and handles links + push taps", () => {
 
 describe("AASA covers the OAuth return path", () => {
   const aasa = read("src/app/.well-known/apple-app-site-association/route.ts");
-  // Card and links paths are gone on purpose — cards open in the browser.
-  it("includes /auth/callback alongside the invite path", () => {
-    expect(aasa).toMatch(/paths: \[\.\.\.APP_PATHS\]/);
-    expect(read("src/lib/universal-links.ts")).toMatch(/APP_PATHS = \["\/join\/\*", "\/auth\/callback"\]/);
+  // No link opens the app any more (owner, 2026-09-29): the OAuth return is
+  // the swiftcard:// scheme, so the AASA excludes every path.
+  it("excludes every path — the OAuth return never needed it", () => {
+    expect(aasa).toMatch(/paths: \[\.\.\.AASA_PATHS\]/);
+    expect(read("src/lib/universal-links.ts")).toMatch(/AASA_PATHS = \["NOT \/\*"\]/);
   });
 });
 

@@ -94,9 +94,9 @@ WHY IT'S MORE THAN A WEBSITE
   your card produces a real APNs notification that deep-links to the contact.
 - Apple Wallet: Dashboard → Share → "Add to Apple Wallet" produces a signed
   pass with your live QR code, which updates in place when the card changes.
-- Native share sheet, camera-based paper-business-card scanning, universal
-  links (Office invite links swiftcard.me/join/* open in the app; public card
-  links always open in Safari), home-screen QR widget,
+- Native share sheet, camera-based paper-business-card scanning, home-screen
+  QR widget (swiftcard.me links, including public cards, always open in
+  Safari, never inside the app),
   offline launch fallback.
 
 PERMISSIONS USED

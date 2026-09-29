@@ -15,13 +15,13 @@ describe("Item 8 — /.well-known/apple-app-site-association", () => {
     expect(Array.isArray(body.applinks.details)).toBe(true);
   });
 
-  // Card and Swift Links paths are deliberately absent: they open in the
-  // browser, never the app (owner, 2026-09-29 — tests/aasa-card-links.test.ts).
-  it("declares the bundle id and only the invite + OAuth return paths", async () => {
+  // No link opens the app — every path is excluded (owner, 2026-09-29;
+  // tests/aasa-card-links.test.ts).
+  it("declares the bundle id and excludes every path", async () => {
     const body = await (await GET()).json();
     const detail = body.applinks.details[0];
     expect(detail.appID).toContain("me.swiftcard.app");
-    expect(detail.paths).toEqual(["/join/*", "/auth/callback"]);
+    expect(detail.paths).toEqual(["NOT /*"]);
   });
 
   // The Team ID now comes from APPLE_TEAM_ID (the same variable Wallet and

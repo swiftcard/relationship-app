@@ -155,11 +155,13 @@ describe("open signups (invite-only removed)", () => {
   });
 });
 
-describe("Universal Links — AASA covers office invites", () => {
-  // The list lives in lib/universal-links (cards open in the browser, not the app).
+describe("Universal Links — no link opens the app, office invites included", () => {
+  // Owner, 2026-09-29: links never open in the app. An Office invite opens in
+  // the browser, where /join/[token] works signed in or out.
   const s = read("src/lib/universal-links.ts");
-  it("includes /join/*", () => {
-    expect(s).toContain('"/join/*"');
+  it("claims no path", () => {
+    expect(s).not.toContain('"/join/*"');
+    expect(s).toContain('"NOT /*"');
   });
 });
 

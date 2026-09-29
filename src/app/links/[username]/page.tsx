@@ -17,6 +17,7 @@ import ReportCardLink from "@/components/ReportCardLink";
 import { safeCssValue, safeFontValue } from "@/lib/custom-layout";
 import { resolveCardMeta } from "@/lib/resolve-card";
 import { shareImageUrl } from "@/lib/share-preview";
+import { PUBLIC_PAGE_META } from "@/lib/universal-links";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
@@ -77,7 +78,7 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
   const { username: rawUsername } = await params;
   const username = rawUsername.toLowerCase();
   const { cardOrLegacy, awaitingPlan } = await resolve(username);
-  if (!cardOrLegacy || awaitingPlan) return { title: "Swift Links", itunes: null };
+  if (!cardOrLegacy || awaitingPlan) return { title: "Swift Links", itunes: null, other: { [PUBLIC_PAGE_META]: "links" } };
   const name = cardOrLegacy.name || username;
   const description = `Connect with ${name} — all their links in one place.`;
   // The SAME content-versioned image URL the card page uses. The bare
@@ -94,6 +95,9 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
     // The lowercase /links URL is canonical — mixed case 308s there, and query
     // variants (?source=, ?embed=) must consolidate onto one indexed URL.
     alternates: { canonical: `${APP_URL}/links/${username}` },
+    // Marks a public links page for the iOS shell: NativeAppBridge sends it to
+    // Safari if the app's webview ever lands here (links never open in the app).
+    other: { [PUBLIC_PAGE_META]: "links" },
     // Texted /links/ URLs unfurl with the same picture-of-the-card preview the
     // card link gets (iMessage/WhatsApp/SMS), reusing the card's OG image.
     openGraph: {
