@@ -108,7 +108,8 @@ const linkedin: Connector = {
     const token = conn ? await freshAccessToken(conn) : process.env.LINKEDIN_ACCESS_TOKEN;
     if (!token) return { executed: false, connector: "linkedin", reason: "LinkedIn token expired — reconnect it in Settings" };
     const orgUrn = conn?.meta.org_urn as string | undefined;
-    const author = orgUrn ?? (conn?.account_id ? `urn:li:person:${conn.account_id}` : process.env.LINKEDIN_AUTHOR_URN!);
+    const author = orgUrn ?? (conn?.account_id ? `urn:li:person:${conn.account_id}` : process.env.LINKEDIN_AUTHOR_URN);
+    if (!author) return { executed: false, connector: "linkedin", reason: "LinkedIn connection has no Page yet — reconnect once LinkedIn grants Page access" };
 
     let res: Response;
     if (orgUrn) {

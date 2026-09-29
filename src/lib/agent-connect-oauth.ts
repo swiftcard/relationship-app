@@ -45,10 +45,14 @@ const SCOPES: Record<AgentProvider, string> = {
   // linked IG Business account; the rest are what the two need to list + read.
   meta: "pages_show_list pages_read_engagement pages_manage_posts instagram_basic instagram_content_publish business_management",
   youtube: "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly",
-  // Add "w_organization_social r_organization_admin" via LINKEDIN_AGENT_SCOPES
-  // once the Community Management API is granted — requesting them before that
-  // makes LinkedIn refuse the whole authorization (unauthorized_scope_error).
-  linkedin: process.env.LINKEDIN_AGENT_SCOPES || "openid profile w_member_social",
+  // The Page-attached "SwiftCard Agent Flow" app (LINKEDIN_AGENT_CLIENT_ID) can
+  // only hold the Community Management API — LinkedIn refuses to add Sign In /
+  // Share products next to it — so it asks for the organization scopes alone.
+  // Until LinkedIn grants that product the authorization fails with
+  // unauthorized_scope_error, which the panel shows as a connect error. The
+  // legacy fallback (sign-in app) keeps the member scopes.
+  linkedin: process.env.LINKEDIN_AGENT_SCOPES
+    || (process.env.LINKEDIN_AGENT_CLIENT_ID ? "w_organization_social r_organization_admin" : "openid profile w_member_social"),
 };
 
 export function authorizeUrl(p: AgentProvider, state: string, codeChallenge?: string): string {
@@ -160,12 +164,15 @@ export async function describeAccount(p: AgentProvider, t: TokenSet): Promise<Ac
       return { account_id: ch.id, account_label: ch.snippet?.customUrl ?? ch.snippet?.title ?? ch.id, access_token: t.access_token, expires_at, meta: { channel_title: ch.snippet?.title ?? null } };
     }
     case "linkedin": {
-      const me = (await getJson("https://api.linkedin.com/v2/userinfo", bearer)) as { sub?: string; name?: string };
+      // userinfo needs the openid scope, which the Page-only app cannot request.
+      const me = (t.scope ?? SCOPES.linkedin).includes("openid")
+        ? ((await getJson("https://api.linkedin.com/v2/userinfo", bearer)) as { sub?: string; name?: string })
+        : {};
       const meta: Record<string, unknown> = {};
       let label = me.name ?? null;
       // Page admin lookup needs r_organization_admin (Community Management API).
       // Without it this simply 403s and the connection stays person-scoped.
-      if ((t.scope ?? "").includes("r_organization_admin")) {
+      if ((t.scope ?? SCOPES.linkedin).includes("r_organization_admin")) {
         try {
           const acl = (await getJson("https://api.linkedin.com/rest/organizationAcls?q=roleAssignee&role=ADMINISTRATOR&state=APPROVED&projection=(elements*(organization~(localizedName)))",
             { ...bearer, "LinkedIn-Version": LINKEDIN_VERSION, "X-Restli-Protocol-Version": "2.0.0" })) as { elements?: Array<{ organization?: string; "organization~"?: { localizedName?: string } }> };
