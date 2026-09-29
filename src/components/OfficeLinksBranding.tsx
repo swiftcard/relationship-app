@@ -278,18 +278,6 @@ export default function OfficeLinksBranding({ office }: { office: OfficeRow }) {
                   ))}
                 </div>
               )}
-              {/* Outside the list wrapper on purpose: a header has to be able to
-                  open the first section before any company link exists. */}
-              <button
-                type="button"
-                onClick={() => setLinks((prev) => [...prev, { label: "", url: "", kind: "header" as const }])}
-                // Real padding, not a bare text link: measured at 15px tall
-                // without it, which is a miss on a phone — and this control
-                // sits on the page fifteen people hand to customers.
-                className="block mb-1 -ml-1.5 px-1.5 py-2 rounded-lg text-[0.6875rem] font-semibold text-gray-400 hover:text-gray-200 hover:bg-gray-800/60 transition-colors"
-              >
-                + Add a section header
-              </button>
               {/* The same add form as every teammate's (AddLinkForm): ideas that
                   show what a link is for, then "Button text" and "Web address". */}
               <AddLinkForm
@@ -301,6 +289,20 @@ export default function OfficeLinksBranding({ office }: { office: OfficeRow }) {
                 ideas={["Book a meeting", "Leave a review", "See our listings", "Watch our video", "Shop now"]}
                 idPrefix="office-link-new"
               />
+              {/* Below the form, as on every teammate's Socials step: an extra,
+                  not the first thing to do. Outside the list wrapper on purpose:
+                  a header has to be able to open the first section before any
+                  company link exists. */}
+              <button
+                type="button"
+                onClick={() => setLinks((prev) => [...prev, { label: "", url: "", kind: "header" as const }])}
+                // Real padding, not a bare text link: measured at 15px tall
+                // without it, which is a miss on a phone — and this control
+                // sits on the page fifteen people hand to customers.
+                className="block mt-2 -ml-1.5 px-1.5 py-2 rounded-lg text-[0.6875rem] font-semibold text-gray-400 hover:text-gray-200 hover:bg-gray-800/60 transition-colors"
+              >
+                + Add a section header
+              </button>
             </div>
           </div>
         </Section>

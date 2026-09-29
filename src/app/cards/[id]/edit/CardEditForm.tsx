@@ -545,7 +545,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
       setTab("sharing");
       setBioMissing(true);
       setBioFocusTick((n) => n + 1);
-      setError("Your Swift Links bio is required.");
+      setError("Your bio is required.");
       setProBlock(null);
       return;
     }

@@ -48,6 +48,28 @@ describe("the card wizard uses the one-shot photo import", () => {
     expect(suggest).toMatch(/status === "nophoto"/);
   });
 
+  it("the returning ?li_photo= is APPLIED, not just stored (effect order)", () => {
+    // Review 2026-09-29: the restore effect is declared first, so it runs
+    // first, and its body is synchronous — it called applyLiPhoto() before the
+    // reader below had set the ref, and in production (no StrictMode double
+    // run) the photo was silently dropped. The reader must apply it itself once
+    // hydration is done.
+    const restoreAt = wizard.indexOf("if (!canDraft) { hydratedRef.current = true; applyLiPhoto(); return; }");
+    const readerAt = wizard.indexOf('const photo = url.searchParams.get("li_photo");');
+    expect(restoreAt).toBeGreaterThan(0);
+    expect(readerAt, "the reader effect moved — re-check the order argument").toBeGreaterThan(restoreAt);
+    const reader = wizard.slice(readerAt, wizard.indexOf("}, []);", readerAt));
+    expect(reader).toMatch(/liPhotoRef\.current = photo;\s*if \(hydratedRef\.current\) applyLiPhoto\(\);/);
+  });
+
+  it("comes back to THIS builder with its parameters, not a fixed ?add=1", () => {
+    expect(wizard).toMatch(/returnTo=\{photoReturnTo\}/);
+    expect(wizard).not.toMatch(/returnTo=\{guest \? "\/cards\/new" : "\/cards\/new\?add=1"\}/);
+    const def = wizard.slice(wizard.indexOf("const photoReturnTo = "), wizard.indexOf("})();", wizard.indexOf("const photoReturnTo = ")));
+    expect(def).toMatch(/new URLSearchParams\(searchParams\.toString\(\)\)/);
+    expect(def).toMatch(/for \(const k of \["li_photo", "integration", "status"\]\) p\.delete\(k\);/);
+  });
+
   it("the phone tip's \"connect your LinkedIn\" is a working link, not text", () => {
     expect(suggest).toMatch(/<a href=\{connectHref\} onClick=\{connectLinkedIn\}[^>]*>\s*connect your LinkedIn\s*<\/a>/);
   });

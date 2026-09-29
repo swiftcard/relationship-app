@@ -196,7 +196,7 @@ export default function LinkButtonsControls({
   if (real.length === 0) {
     return (
       <p className="text-[0.6875rem] text-gray-500 bg-gray-950/40 border border-gray-800 rounded-lg px-3 py-2.5 leading-relaxed">
-        No links yet — add them on the Socials step first.
+        No links yet — add them under Socials first.
       </p>
     );
   }

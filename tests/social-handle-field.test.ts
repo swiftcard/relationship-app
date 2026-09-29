@@ -66,8 +66,21 @@ describe("the box itself", () => {
     expect(src).not.toMatch(/yourname/);
   });
 
+  it("after a prefix, a leading @ is dropped as typed — a lone @ could never be cleared", () => {
+    expect(src).toMatch(/onChange\(withPrefix \? e\.target\.value\.replace\(\/\^@\+\/, ""\) : e\.target\.value\)/);
+    // …and "filled" is what the person can see, not the raw value.
+    expect(src).toMatch(/const filled = \(withPrefix \? shown : value\)\.trim\(\)\.length > 0/);
+  });
+
+  it("is not mistaken for a login form by password managers", () => {
+    expect(src).toMatch(/autoComplete="off"/);
+    expect(src).toMatch(/name=\{`social-\$\{spec\.key\}`\}/);
+  });
+
   it("keeps the saved value untouched — only the display changes", () => {
-    expect(src).toMatch(/onChange=\{\(e\) => onChange\(e\.target\.value\)\}/);
+    // What is typed goes out as typed (only a leading @ after a prefix is
+    // dropped, pinned above); normalizeSocial still runs on the caller's blur.
+    expect(src).toMatch(/: e\.target\.value\)\}/);
     // The box always shows the tidied value — a managed (office) one too,
     // which read "instagram.com/ @northbeamhomes" before (live check).
     expect(src).toMatch(/value=\{shown\}/);

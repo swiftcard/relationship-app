@@ -18,7 +18,7 @@ import { useRef } from "react";
 // One component for the create-card wizard, the card editor, the homepage
 // SwiftLink builder and Office Links branding, so they cannot drift apart.
 
-export const LINK_IDEAS = ["Book a meeting", "Leave a review", "See my listings", "Watch my video", "Shop now"] as const;
+const LINK_IDEAS = ["Book a meeting", "Leave a review", "See my listings", "Watch my video", "Shop now"] as const;
 
 type Variant = "app" | "site";
 
@@ -48,6 +48,7 @@ export default function AddLinkForm({
   addClass = "sc-btn-glow bg-blue-600 hover:bg-blue-500 text-white border border-blue-500",
   ideas = LINK_IDEAS,
   idPrefix = "add-link",
+  inert = false,
 }: {
   value: { label: string; url: string };
   onChange: (next: { label: string; url: string }) => void;
@@ -58,10 +59,13 @@ export default function AddLinkForm({
   addClass?: string;
   ideas?: readonly string[];
   idPrefix?: string;
+  /** Draw the real form but let nothing be typed or added — the marketing
+   *  Teams demo, which must never create a link (a link row fetches a preview). */
+  inert?: boolean;
 }) {
   const t = TONE[variant];
   const urlRef = useRef<HTMLInputElement>(null);
-  const ready = !!value.label.trim() && !!value.url.trim();
+  const ready = !inert && !!value.label.trim() && !!value.url.trim();
 
   return (
     <div className="space-y-3" data-add-link>
@@ -77,12 +81,17 @@ export default function AddLinkForm({
                 key={idea}
                 type="button"
                 aria-pressed={on}
+                disabled={inert}
                 onClick={() => {
                   onChange({ ...value, label: idea });
                   // Straight to the address, which is the only thing left.
-                  requestAnimationFrame(() => urlRef.current?.focus());
+                  // Synchronously, inside the tap: iOS only raises the keyboard
+                  // for a focus() that happens within the user's gesture, and a
+                  // requestAnimationFrame callback is already outside it. The
+                  // box is always rendered, so there is nothing to wait for.
+                  urlRef.current?.focus();
                 }}
-                className={`text-[0.6875rem] font-semibold px-2.5 py-1.5 rounded-full border transition-colors ${on ? t.chipOn : t.chip}`}
+                className={`text-[0.6875rem] font-semibold px-2.5 py-1.5 rounded-full border transition-colors disabled:cursor-default ${on ? t.chipOn : t.chip}`}
               >
                 {idea}
               </button>
@@ -97,6 +106,7 @@ export default function AddLinkForm({
           id={`${idPrefix}-label`}
           type="text"
           placeholder="e.g. Leave a review"
+          readOnly={inert}
           value={value.label}
           onChange={(e) => onChange({ ...value, label: e.target.value })}
           className={t.input}
@@ -113,6 +123,7 @@ export default function AddLinkForm({
           autoCorrect="off"
           spellCheck={false}
           placeholder="e.g. calendly.com/alex"
+          readOnly={inert}
           value={value.url}
           onChange={(e) => onChange({ ...value, url: e.target.value })}
           onKeyDown={(e) => { if (e.key === "Enter" && ready) { e.preventDefault(); onAdd(); } }}

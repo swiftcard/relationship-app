@@ -65,7 +65,12 @@ export function socialUrl(platform: string, raw?: string | null): string | null 
     case "tiktok":    return escapeSpaces(`https://tiktok.com/@${handle}`);
     case "facebook":  return escapeSpaces(`https://facebook.com/${handle}`);
     case "snapchat":  return escapeSpaces(`https://snapchat.com/add/${handle}`);
-    case "youtube":   return escapeSpaces(`https://youtube.com/@${handle}`);
+    case "youtube":
+      // The box shows "youtube.com/@", which invites typing the rest of an
+      // older channel address — "c/Name", "channel/UC…", "user/…". Those are
+      // paths, not @handles: youtube.com/@channel/UC… is a 404.
+      if (/^(c|channel|user)\//i.test(handle)) return escapeSpaces(`https://youtube.com/${handle}`);
+      return escapeSpaces(`https://youtube.com/@${handle}`);
     case "website":   return /\.[a-z]{2,}/i.test(handle) ? escapeSpaces(`https://${handle.replace(/^\/+/, "")}`) : null;
     default:          return escapeSpaces(`https://${handle}`);
   }

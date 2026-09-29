@@ -171,7 +171,9 @@ describe("what the rows show and say", () => {
   });
 
   it("an empty box says nothing under it; a filled one says where it opens; a hopeless one says so in red", async () => {
-    const page = await mount(390, phoneCol(390), { initial: { tiktok: "@alexmorgan", twitter: "@" } });
+    // "/" — visible in the box and impossible to link. (A lone "@" now counts as
+    // empty: after the prefix it shows nothing, so it must say nothing.)
+    const page = await mount(390, phoneCol(390), { initial: { tiktok: "@alexmorgan", twitter: "/" } });
     try {
       const note = (k: string) => page.$eval(`[data-social-row="${k}"]`, (r) => (r.querySelector("p") as HTMLElement | null)?.innerText ?? null);
       expect(await note("facebook")).toBeNull();
@@ -192,6 +194,19 @@ describe("what the rows show and say", () => {
       // …and the box still shows it without the @ after instagram.com/.
       expect(await page.$eval('[data-social-row="instagram"] input', (i) => (i as HTMLInputElement).value)).toBe("alexmorgan");
       expect(await page.$eval('[data-social-row="instagram"] p', (p) => (p as HTMLElement).innerText)).toBe("Opens instagram.com/alexmorgan");
+    } finally { await page.close(); }
+  });
+
+  it("a lone @ typed after the prefix leaves the box truly empty — no stuck value, no red line", async () => {
+    const page = await mount(390, phoneCol(390), {});
+    try {
+      await page.locator('[data-social-row="snapchat"] input').pressSequentially("@");
+      const s = () => page.evaluate(() => (window as unknown as { __state: { socials: Record<string, string> } }).__state.socials.snapchat);
+      expect(await s()).toBe("");
+      expect(await page.$('[data-social-row="snapchat"] p')).toBeNull();
+      // …and "@alex" typed the same way is just the handle.
+      await page.locator('[data-social-row="snapchat"] input').pressSequentially("@alex");
+      expect(await s()).toBe("alex");
     } finally { await page.close(); }
   });
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { SOCIAL_INPUTS, socialHint, socialInput } from "@/lib/social-input";
+import { SOCIAL_INPUTS, socialInput } from "@/lib/social-input";
 import { socialUrl } from "@/lib/social-url";
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
@@ -94,18 +94,15 @@ describe("every social box asks for the same thing", () => {
   });
 
   it("never asks for a URL in the box", () => {
-    for (const s of SOCIAL_INPUTS) {
-      expect(s.placeholder, `${s.key} placeholder still asks for a URL`).not.toMatch(/\.com|https?:|\//);
-      expect(s.placeholder, `${s.key} placeholder still shows an @`).not.toMatch(/@/);
-    }
+    // One placeholder for every row since 2026-09-29, after the link prefix
+    // the box shows (components/SocialHandleField).
+    expect(read("src/components/SocialHandleField.tsx")).toMatch(/placeholder="username"/);
   });
 
-  it("shows what the username becomes, per platform", () => {
+  it("the prefix in each box is the address we actually build", () => {
     for (const s of SOCIAL_INPUTS) {
-      const hint = socialHint(s);
-      expect(hint).toContain("Just your username");
-      expect(hint).toContain(s.stem);
-      // …and the stem has to be the address we ACTUALLY build, or the hint lies.
+      // The stem sits in the box in front of the username, so it has to be
+      // the address we ACTUALLY build, or the box lies.
       const built = socialUrl(s.key, s.example);
       expect(built, `${s.key} builds no URL from a plain username`).toBeTruthy();
       expect(built!.replace(/^https?:\/\//, "")).toBe(`${s.stem}${s.example}`);

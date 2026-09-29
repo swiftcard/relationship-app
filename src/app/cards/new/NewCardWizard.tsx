@@ -195,6 +195,18 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
   // dashboard with the tour — an Office owner included; the team console is
   // one tap away on its Admin tab (owner, 2026-09-22).
   const searchParams = useSearchParams();
+  // Where the LinkedIn photo import comes back to: THIS builder, with every
+  // parameter it was opened with (plan, interval, seats, promo, template…),
+  // minus the import's own. A hardcoded "/cards/new?add=1" sent a Free
+  // account that came in through a Pro offer (?plan=pro) to /upgrade, and
+  // dropped the checkout hand-off (review 2026-09-29).
+  const photoReturnTo = (() => {
+    const p = new URLSearchParams(searchParams.toString());
+    for (const k of ["li_photo", "integration", "status"]) p.delete(k);
+    if (!guest && !p.toString()) p.set("add", "1");
+    const q = p.toString();
+    return `/cards/new${q ? `?${q}` : ""}`;
+  })();
   const postCheckout = searchParams.get("postcheckout");
   // First card → the guided tour starts on the dashboard (the empty-state
   // dashboard deliberately does not run it — nothing to point at yet).
@@ -1005,10 +1017,13 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
   // ── Guest LinkedIn photo return (?li_photo=) ──────────────────────────────
   // A guest's "Connect LinkedIn" in the headshot suggester runs a one-shot
   // OAuth import (no account) and lands back here with the stored photo URL.
-  // The value is stashed here (mount effects run before the async draft
-  // restore above resumes) and applied by the restore effect once hydration is
-  // done — applying it directly here would race the restore, whose draft photo
-  // would then overwrite the photo the user just connected for.
+  // The restore effect ABOVE runs before this one (effects run in declaration
+  // order) and its body is synchronous, so on a silent resume it has already
+  // called applyLiPhoto() — with this ref still empty — and the photo was
+  // dropped in production (dev's StrictMode double-run hid it; review
+  // 2026-09-29). So apply it here when hydration is already done; when the
+  // resume question is still open, continueDraft / startNewCard apply it once
+  // it is answered. Either way it lands AFTER the draft's own photo.
   // Only our own storage host is accepted — the param is never trusted blind.
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -1017,6 +1032,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
     const supa = process.env.NEXT_PUBLIC_SUPABASE_URL;
     if (supa && photo.startsWith(`${supa}/storage/v1/object/public/`)) {
       liPhotoRef.current = photo;
+      if (hydratedRef.current) applyLiPhoto();
     }
     url.searchParams.delete("li_photo");
     url.searchParams.delete("integration");
@@ -1685,7 +1701,9 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                     </div>
                   ))}
                 </div>
-                <p className="text-gray-600 text-xs mt-1.5">Pick which numbers show on your card.</p>
+                <p className="text-gray-600 text-xs mt-1.5">
+                  {org ? "Numbers you add are your mobile. Pick which show on your card." : "Pick which numbers show on your card."}
+                </p>
                 {org && orgPhone && (
                   <p className="text-gray-500 text-xs mt-1">
                     Your office number ({orgPhone}) is added to your card automatically by your organization.
@@ -1831,6 +1849,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
             <FormSection
               id="links"
               title="Additional links"
+              trailing={officeLinks?.length ? <ManagedTag /> : undefined}
               note={officeLinks?.length
                 ? "Your company's links are already on your page. Add your own below."
                 : "Buttons on your page that open any website."}
@@ -2057,7 +2076,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                     popup that keeps this page alive. */}
                 <ProfilePhotoSuggest
                   linkedinEnabled={linkedinEnabled}
-                  returnTo={guest ? "/cards/new" : "/cards/new?add=1"}
+                  returnTo={photoReturnTo}
                   guest={guest}
                   email={email}
                   photoReturn={canDraft}

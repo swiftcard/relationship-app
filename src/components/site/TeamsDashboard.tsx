@@ -17,8 +17,10 @@ import { Segmented } from "@/components/ui/DesignControls";
 import { SwiftLinkStyleControls, type SwiftLinkStyle } from "@/components/SwiftLinkDesign";
 import SwiftLinkLivePreview from "@/components/SwiftLinkLivePreview";
 import ViewsChart from "@/components/ViewsChart";
-import { normalizeSocial, socialDestination } from "@/lib/social-url";
-import { socialHint, socialInput } from "@/lib/social-input";
+import { normalizeSocial } from "@/lib/social-url";
+import { socialInput } from "@/lib/social-input";
+import SocialHandleField from "@/components/SocialHandleField";
+import AddLinkForm from "@/components/AddLinkForm";
 import { getSourceLabel } from "@/lib/source-labels";
 import { computeConversionRate, defaultEmployeeSort } from "@/lib/office-analytics-metrics";
 import { FOLLOW_UP_COPY, FOLLOW_UP_STATES, type FollowUpState } from "@/lib/lead-followup";
@@ -909,7 +911,6 @@ function LinksBranding() {
     setTimeout(() => setSaved(false), 2500);
   };
 
-  const igDest = instagram.trim() ? socialDestination("instagram", instagram) : null;
   const controlled = [
     ...(bio ? ["The bio"] : []),
     ...(instagram ? ["Company Instagram"] : []),
@@ -938,31 +939,16 @@ function LinksBranding() {
             </div>
 
             <div>
-              <label htmlFor="demo-office-link-ig" className="block text-xs font-medium text-gray-400 mb-1">Company Instagram</label>
-              <input
+              {/* The same row as the real Office Links tab (SocialHandleField). */}
+              <SocialHandleField
+                spec={{ ...socialInput("instagram")!, label: "Company Instagram" }}
                 id="demo-office-link-ig"
                 value={instagram}
-                onChange={(e) => setInstagram(e.target.value)}
+                onChange={setInstagram}
                 onBlur={() => setInstagram((v) => normalizeSocial(v, "instagram"))}
-                placeholder="yourcompany"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                className={`${inputCls} px-3.5`}
               />
-              {igDest ? (
-                <p className="text-gray-600 text-[0.6875rem] mt-1">
-                  Opens <span className="text-gray-400 font-medium break-all">{igDest}</span>
-                </p>
-              ) : instagram.trim() ? (
-                <p className="text-red-400 text-[0.6875rem] mt-1">This won&rsquo;t open as a link — just the username, like <span className="font-medium">yourcompany</span></p>
-              ) : (
-                <p className="text-gray-600 text-[0.6875rem] mt-1">{socialHint(socialInput("instagram")!)}</p>
-              )}
               <p className="text-[0.625rem] text-gray-600 mt-1">
-                The only social the office sets — a Swift Links page has one Instagram button, so yours is
-                the one it shows. Each teammate&apos;s own handle is kept and comes back if you clear this.
-                LinkedIn, TikTok, X and the rest stay theirs either way.
+                Shows on everyone&apos;s page. Their own Instagram comes back if you clear this — other socials stay theirs.
               </p>
             </div>
 
@@ -996,20 +982,25 @@ function LinksBranding() {
                   ))}
                 </div>
               )}
+              {/* The real add form, drawn but inert: a company LINK row would make
+                  the preview fetch /api/link-preview (see `links` above). */}
+              <AddLinkForm
+                value={{ label: "", url: "" }}
+                onChange={() => {}}
+                onAdd={() => {}}
+                addLabel="+ Add company link"
+                ideas={["Book a meeting", "Leave a review", "See our listings", "Watch our video", "Shop now"]}
+                idPrefix="demo-office-link-new"
+                inert
+              />
+              {/* Below the form, like the real Office Links tab. */}
               <button
                 type="button"
                 onClick={() => setLinks((prev) => [...prev, { label: "", url: "", kind: "header" }])}
-                className="block mb-1 -ml-1.5 px-1.5 py-2 rounded-lg text-[0.6875rem] font-semibold text-gray-400 hover:text-gray-200 hover:bg-gray-800/60 transition-colors"
+                className="block mt-2 -ml-1.5 px-1.5 py-2 rounded-lg text-[0.6875rem] font-semibold text-gray-400 hover:text-gray-200 hover:bg-gray-800/60 transition-colors"
               >
                 + Add a section header
               </button>
-              <div className="space-y-2">
-                <input readOnly placeholder="Button name (e.g. Book a meeting)" aria-label="Button name" className={`${inputCls} px-3.5`} />
-                <input readOnly placeholder="https://…" aria-label="Button link" className={`${inputCls} px-3.5`} />
-                <button type="button" disabled className="w-full text-xs font-semibold py-2.5 rounded-xl transition-colors border border-dashed border-gray-700 text-gray-500">
-                  + Add company link
-                </button>
-              </div>
             </div>
           </div>
         </LinksSection>

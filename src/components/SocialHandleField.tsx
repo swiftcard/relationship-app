@@ -101,19 +101,24 @@ export default function SocialHandleField({
 }) {
   const t = TONE[variant];
   const inputId = id ?? `social-${spec.key}`;
-  const filled = value.trim().length > 0;
   const { withPrefix, shown } = displayHandle(spec.stem, value);
+  // "Filled" is what the person can SEE. A stored lone "@" or a pasted bare
+  // "instagram.com/" shows an empty box, and a red line or an "Opens" line
+  // under an empty-looking box reads as a glitch (review 2026-09-29).
+  const filled = (withPrefix ? shown : value).trim().length > 0;
   const href = filled ? socialUrl(spec.key, value) : null;
   const dest = filled ? socialDestination(spec.key, value) : null;
 
   return (
     <div data-social-row={spec.key}>
       <div className="flex items-center justify-between gap-2 mb-1.5">
-        <label htmlFor={inputId} className={`flex items-center gap-2 min-w-0 text-xs font-medium ${t.label}`}>
+        {/* Wraps rather than truncates: on a 320px phone the office's
+            "Managed by your organization" tag would squeeze "Instagram". */}
+        <label htmlFor={inputId} className={`flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0 text-xs font-medium ${t.label}`}>
           <span aria-hidden className={`grid place-items-center w-6 h-6 rounded-lg shrink-0 ${t.chip}`}>
             <PlatformIcon label={ICON_LABEL[spec.key] ?? spec.label} className="w-3.5 h-3.5" />
           </span>
-          <span className="truncate">{spec.label}</span>
+          <span>{spec.label}</span>
           {managed && managedTag && <span className="shrink-0">{managedTag}</span>}
         </label>
         {!managed && href && (
@@ -155,11 +160,19 @@ export default function SocialHandleField({
           autoCorrect="off"
           spellCheck={false}
           placeholder="username"
+          // Not a sign-in field: without these, password managers treat seven
+          // "username" boxes as a login form and offer saved accounts.
+          name={`social-${spec.key}`}
+          autoComplete="off"
           aria-label={`${spec.label} username or profile link`}
           // `shown` for a managed value too: it sits after the same prefix,
           // and the raw "@northbeamhomes" read "instagram.com/ @northbeamhomes".
           value={shown}
-          onChange={(e) => onChange(e.target.value)}
+          // After a prefix, a leading "@" is dropped as it is typed: the box
+          // would show it stripped anyway, so a lone "@" became an invisible
+          // value that backspace could not reach. The caller's blur still
+          // saves "@handle" where a platform keeps one (normalizeSocial).
+          onChange={(e) => onChange(withPrefix ? e.target.value.replace(/^@+/, "") : e.target.value)}
           onBlur={onBlur}
           readOnly={managed}
           style={{ outline: "none" }}

@@ -191,7 +191,7 @@ export default function LogoFirst({ data }: { data: CardData }) {
     if (!s || one >= 14 || f < 0.92) return one;
     const longest = s.split(/\s+/).reduce((m, w) => Math.max(m, w.length), 0);
     const byWord = NAME_COL / (longest * 0.66);
-    const twoLines = (NAME_COL * 2 * 0.85) / (s.length * 0.62);
+    const twoLines = (NAME_COL * 2 * 0.85) / (s.length * 0.66);
     return Math.max(one, Math.min(base, byWord, twoLines, 18));
   })();
 

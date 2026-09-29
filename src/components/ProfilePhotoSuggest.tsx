@@ -399,7 +399,7 @@ export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, return
     }
   }
 
-  const linkBtn = "inline-flex items-center gap-1.5 text-xs font-medium text-blue-700 hover:text-blue-800 transition-colors";
+  const linkBtn = "inline-flex items-center gap-1.5 text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors";
 
   return (
     <div className="mt-2">
@@ -422,7 +422,7 @@ export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, return
           {linkedinEnabled && (
             <p className="lg:hidden text-[0.6875rem] text-gray-500 mt-1">
               Tip:{" "}
-              <a href={connectHref} onClick={connectLinkedIn} className="font-medium text-blue-700 hover:text-blue-800 underline underline-offset-2">
+              <a href={connectHref} onClick={connectLinkedIn} className="font-medium text-blue-400 hover:text-blue-300 underline underline-offset-2">
                 connect your LinkedIn
               </a>{" "}
               and we&apos;ll pull your photo from there automatically.
@@ -449,7 +449,7 @@ export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, return
       {state.kind === "error" && (
         <p className="text-[0.6875rem] text-gray-500 mt-1">
           {state.message}{" "}
-          <button type="button" onClick={suggest} className="text-blue-700 hover:text-blue-800">Retry</button>
+          <button type="button" onClick={suggest} className="text-blue-400 hover:text-blue-300">Retry</button>
         </p>
       )}
 

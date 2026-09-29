@@ -20,6 +20,17 @@ describe("socialUrl", () => {
     expect(socialUrl("linkedin", "company/malve")).toBe("https://linkedin.com/company/malve");
   });
 
+  it("keeps an older YouTube channel path a path, not an @handle", () => {
+    // The box shows "youtube.com/@", which invites typing the rest of an
+    // older address; youtube.com/@channel/UC… is a 404.
+    expect(socialUrl("youtube", "c/AlexMorganHomes")).toBe("https://youtube.com/c/AlexMorganHomes");
+    expect(socialUrl("youtube", "channel/UC1234")).toBe("https://youtube.com/channel/UC1234");
+    expect(socialUrl("youtube", "user/alexmorgan")).toBe("https://youtube.com/user/alexmorgan");
+    expect(socialUrl("youtube", "@alexmorgan")).toBe("https://youtube.com/@alexmorgan");
+    // A handle that merely starts with those letters is still a handle.
+    expect(socialUrl("youtube", "cooking")).toBe("https://youtube.com/@cooking");
+  });
+
   it("only treats a website value with a dot as a URL", () => {
     expect(socialUrl("website", "malvecapital.com")).toBe("https://malvecapital.com");
     expect(socialUrl("website", "not-a-domain")).toBeNull();
