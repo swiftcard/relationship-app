@@ -858,135 +858,150 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
               </p>
             )}
 
-            {org && <p className={sectionLabel}>Your information</p>}
+            {/* Four boxed groups instead of one long column (owner, 2026-09-29:
+                "make that page look much more organized to the human eye"):
+                About you, How people reach you, Location, Card nickname — the
+                same FormSection boxes, in the same order, as the create-card
+                wizard. Fields, placeholders and data-hydrate keys unchanged.
 
-            {/* Company-level fields are the ORGANIZATION's territory for a
+                Company-level fields are the ORGANIZATION's territory for a
                 sub-user — hidden whether or not the admin filled them in, so a
                 member can never add their own company info. (Owner decision,
-                Jul 2026: gate on `org`, not per-field values.) */}
-            {!isPrimary && !org && (
+                Jul 2026: gate on `org`, not per-field values.) A group left
+                with nothing to show is not drawn at all. */}
+            <FormSection id="about" title="About you">
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Card nickname</label>
-                <input type="text" placeholder="e.g. Sales Card" value={label} onChange={(e) => setLabel(e.target.value)} className={inputCls} />
-                <p className="text-gray-600 text-xs mt-1">A label shown on your dashboard so you can tell your cards apart.</p>
+                <label htmlFor="card-name" className="block text-xs font-medium text-gray-400 mb-1.5">Full name <span className="text-red-500">*</span></label>
+                <input id="card-name" type="text" placeholder="John Smith" data-hydrate="name" value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
+                {/* A member has no company field, which is where the URL editor
+                    lives for everyone else — so they could never change their
+                    card's address, although it is theirs (the rename API allows
+                    it). */}
+                {org && <CardUrlEditor cardId={card.id} currentSlug={card.username} />}
               </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">Full name <span className="text-red-500">*</span></label>
-              <input type="text" placeholder="John Smith" data-hydrate="name" value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
-              {/* A member has no company field, which is where the URL editor
-                  lives for everyone else — so they could never change their
-                  card's address, although it is theirs (the rename API allows
-                  it). */}
-              {org && <CardUrlEditor cardId={card.id} currentSlug={card.username} />}
-            </div>
-            {!org && (
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Company name</label>
-                <input type="text" placeholder="Acme Corp" data-hydrate="company" value={company} onChange={(e) => setCompany(e.target.value)} className={inputCls} />
-                <CardUrlEditor cardId={card.id} currentSlug={card.username} />
+                <label htmlFor="card-title" className="block text-xs font-medium text-gray-400 mb-1.5">Job title</label>
+                <input id="card-title" type="text" placeholder="Sales Director" data-hydrate="title" value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} />
               </div>
-            )}
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">Job title</label>
-              <input type="text" placeholder="Sales Director" data-hydrate="title" value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-medium text-gray-400">Phone numbers</label>
-                <button type="button" onClick={addPhone} className="text-xs font-semibold text-blue-400 hover:text-blue-300">+ Add number</button>
-              </div>
-              <div className="space-y-2">
-                {phones.map((p, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    {/* Office members don't choose a type — see the wizard: the
-                        company number is admin-set and server-injected, so every
-                        number added here is a personal mobile. */}
-                    {org ? (
-                      <span
-                        title="Your organization sets the office number — numbers you add are your mobile."
-                        className="bg-gray-900 border border-gray-700 text-gray-400 rounded-xl px-3 py-3 text-sm shrink-0"
-                      >
-                        Mobile
-                      </span>
-                    ) : (
-                      <select
-                        aria-label={`Label for phone number ${i + 1}`}
-                        value={p.label}
-                        onChange={(e) => updatePhone(i, { label: e.target.value as PhoneLabel })}
-                        className="bg-gray-900 border border-gray-700 text-gray-200 rounded-xl px-2 py-3 text-sm focus:outline-none focus:border-blue-500 shrink-0"
-                      >
-                        <option value="mobile">Mobile</option>
-                        <option value="office">Office</option>
-                      </select>
-                    )}
-                    <input
-                      type="tel"
-                      placeholder="+1 (555) 000-0000"
-                      value={p.number}
-                      onChange={(e) => updatePhone(i, { number: e.target.value })}
-                      className={`${inputCls} flex-1 min-w-0`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => updatePhone(i, { showOnCard: !p.showOnCard })}
-                      title={p.showOnCard ? "Showing on card" : "Hidden from card"}
-                      // gray-400, not gray-500: same button as the wizard, same
-                      // reason — gray-500 on gray-900 is 3.67:1, under the 4.5:1
-                      // this 12px label needs (see NewCardWizard "Off card").
-                      className={`shrink-0 px-3 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${p.showOnCard ? "bg-blue-600 border-blue-600 text-white" : "bg-gray-900 border-gray-700 text-gray-400"}`}
-                    >
-                      {p.showOnCard ? "On card ✓" : "Off card"}
-                    </button>
-                    {phones.length > 1 && (
-                      <button type="button" onClick={() => removePhone(i)} className="shrink-0 text-gray-600 hover:text-red-400 px-1 text-lg leading-none" aria-label="Remove number">×</button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <p className="text-gray-600 text-xs mt-1.5">
-                {org
-                  ? "Numbers you add are your mobile — pick which ones appear on your card (you can show more than one)."
-                  : "Label each number and pick which ones appear on your card (you can show more than one)."}
-              </p>
-              {org && orgPhone && (
-                <p className="text-gray-500 text-xs mt-1">
-                  Your office number ({orgPhone}) is added to your card automatically by your organization.
-                </p>
+              {!org && (
+                <div>
+                  <label htmlFor="card-company" className="block text-xs font-medium text-gray-400 mb-1.5">Company name</label>
+                  <input id="card-company" type="text" placeholder="Acme Corp" data-hydrate="company" value={company} onChange={(e) => setCompany(e.target.value)} className={inputCls} />
+                  <CardUrlEditor cardId={card.id} currentSlug={card.username} />
+                </div>
               )}
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">Email</label>
-              <input type="email" placeholder="john@company.com" data-hydrate="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
-            </div>
+            </FormSection>
 
-            {/* Website is CARD information — it renders on the card itself (and
-                on Swift Links too), so it's asked here with the other card
-                fields, not on the Socials tab. Company-level for a sub-user:
-                the org decides it, so members never get the input. */}
-            {!org && (
+            <FormSection id="reach" title="How people reach you">
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Website</label>
-                <input
-                  type="text"
-                  placeholder="yoursite.com"
-                  data-hydrate="website" value={website}
-                  onChange={(e) => setWebsite(e.target.value)}
-                  className={inputCls}
-                />
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-medium text-gray-400">Phone numbers</label>
+                  <button type="button" onClick={addPhone} className="text-xs font-semibold text-blue-400 hover:text-blue-300">+ Add number</button>
+                </div>
+                <div className="space-y-2">
+                  {/* flex-wrap + min-w-[9rem], like the wizard: inside its box the
+                      row is 32px narrower, and at 320px the number field would
+                      otherwise be squeezed until you could not read what you
+                      typed. The On-card toggle drops to a second line instead. */}
+                  {phones.map((p, i) => (
+                    <div key={i} className="flex flex-wrap items-center gap-2">
+                      {/* Office members don't choose a type — see the wizard: the
+                          company number is admin-set and server-injected, so every
+                          number added here is a personal mobile. */}
+                      {org ? (
+                        <span
+                          title="Your organization sets the office number — numbers you add are your mobile."
+                          className="bg-gray-900 border border-gray-700 text-gray-400 rounded-xl px-3 py-3 text-sm shrink-0"
+                        >
+                          Mobile
+                        </span>
+                      ) : (
+                        <select
+                          aria-label={`Label for phone number ${i + 1}`}
+                          value={p.label}
+                          onChange={(e) => updatePhone(i, { label: e.target.value as PhoneLabel })}
+                          className="bg-gray-900 border border-gray-700 text-gray-200 rounded-xl px-2 py-3 text-sm focus:outline-none focus:border-blue-500 shrink-0"
+                        >
+                          <option value="mobile">Mobile</option>
+                          <option value="office">Office</option>
+                        </select>
+                      )}
+                      <input
+                        type="tel"
+                        placeholder="+1 (555) 000-0000"
+                        value={p.number}
+                        onChange={(e) => updatePhone(i, { number: e.target.value })}
+                        className={`${inputCls} flex-1 min-w-[9rem]`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => updatePhone(i, { showOnCard: !p.showOnCard })}
+                        title={p.showOnCard ? "Showing on card" : "Hidden from card"}
+                        // gray-400, not gray-500: same button as the wizard, same
+                        // reason — gray-500 on gray-900 is 3.67:1, under the 4.5:1
+                        // this 12px label needs (see NewCardWizard "Off card").
+                        className={`shrink-0 px-3 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${p.showOnCard ? "bg-blue-600 border-blue-600 text-white" : "bg-gray-900 border-gray-700 text-gray-400"}`}
+                      >
+                        {p.showOnCard ? "On card ✓" : "Off card"}
+                      </button>
+                      {phones.length > 1 && (
+                        <button type="button" onClick={() => removePhone(i)} className="shrink-0 text-gray-600 hover:text-red-400 px-1 text-lg leading-none" aria-label="Remove number">×</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-gray-600 text-xs mt-1.5">
+                  {org ? "Numbers you add are your mobile. Pick which show on your card." : "Pick which numbers show on your card."}
+                </p>
+                {org && orgPhone && (
+                  <p className="text-gray-500 text-xs mt-1">
+                    Your office number ({orgPhone}) is added to your card automatically by your organization.
+                  </p>
+                )}
               </div>
+              <div>
+                <label htmlFor="card-email" className="block text-xs font-medium text-gray-400 mb-1.5">Email</label>
+                <input id="card-email" type="email" placeholder="john@company.com" data-hydrate="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
+              </div>
+
+              {/* Website is CARD information — it renders on the card itself (and
+                  on Swift Links too), so it's asked here with the other card
+                  fields, not on the Socials tab. Company-level for a sub-user:
+                  the org decides it, so members never get the input. */}
+              {!org && (
+                <div>
+                  <label htmlFor="card-website" className="block text-xs font-medium text-gray-400 mb-1.5">Website</label>
+                  <input
+                    id="card-website"
+                    type="text"
+                    placeholder="yoursite.com"
+                    data-hydrate="website" value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                    className={inputCls}
+                  />
+                </div>
+              )}
+            </FormSection>
+
+            {!org && (
+              <FormSection id="location" title="Location" note="Optional.">
+                <AddressInput value={address} onChange={setAddress} />
+                <div>
+                  <label htmlFor="card-fax" className="block text-xs font-medium text-gray-400 mb-1.5">
+                    Fax number <span className="text-gray-600 font-normal">· shows on your card only</span>
+                  </label>
+                  <input id="card-fax" type="tel" placeholder="+1 (555) 000-0000" value={fax} onChange={(e) => setFax(e.target.value)} className={inputCls} />
+                </div>
+              </FormSection>
             )}
 
-            {!org && <AddressInput value={address} onChange={setAddress} />}
-
-            {!org && (
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                  Fax number <span className="text-gray-600 font-normal">· shows on your card only</span>
-                </label>
-                <input type="tel" placeholder="+1 (555) 000-0000" value={fax} onChange={(e) => setFax(e.target.value)} className={inputCls} />
-              </div>
+            {/* Last: it never appears on the card — it only names the card on
+                the dashboard. Not for the primary card (it saves through
+                /api/profile, which has no label) or an office member. */}
+            {!isPrimary && !org && (
+              <FormSection id="nickname" title="Card nickname" labelFor="card-nickname" note="Only you see this — it names the card on your dashboard.">
+                <input id="card-nickname" type="text" placeholder="e.g. Sales Card" value={label} onChange={(e) => setLabel(e.target.value)} className={inputCls} />
+              </FormSection>
             )}
 
             {/* Mobile: the card preview sits at the BOTTOM of this step, after

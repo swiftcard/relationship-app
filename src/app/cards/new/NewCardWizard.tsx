@@ -1482,7 +1482,9 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
           <div className="space-y-4">
             <div className="mb-1">
               <h1 className="text-2xl font-bold text-white">New card</h1>
-              <p className="text-gray-400 text-sm mt-1">Start with the basics.</p>
+              {/* The required rule lives here now, in the heading — it was a
+                  separate blue banner, one more box to read before any field. */}
+              <p className="text-gray-400 text-sm mt-1">Start with the basics — only your name is required.</p>
               {/* Say so when we bring a draft back, otherwise a pre-filled form
                   after a reload reads as a glitch rather than a save. */}
               {restored && (
@@ -1510,15 +1512,6 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                 </div>
               </div>
             )}
-
-            <div className="flex items-start gap-2.5 rounded-xl border border-blue-800/40 bg-blue-950/30 px-3.5 py-3">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth={1.8} className="w-4 h-4 shrink-0 mt-0.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
-              </svg>
-              <p className="text-blue-200/90 text-xs leading-relaxed">
-                You only need to fill out the fields marked with a red asterisk <span className="text-red-500 font-semibold">*</span> — but for the best results, fill out everything you can.
-              </p>
-            </div>
 
             {/* Office sub-users: the company half is already prepared by their
                 organization — shown read-only so they know it's done, never
@@ -1569,163 +1562,178 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
               </p>
             )}
 
-            {/* Company-level fields are the ORGANIZATION's territory for a
+            {/* Four boxed groups instead of one long column (owner, 2026-09-29:
+                "make that page look much more organized to the human eye"):
+                About you, How people reach you, Location, Card nickname. The
+                fields, their order inside each group and every placeholder are
+                unchanged — FormSection is the same box the Socials step uses.
+
+                Company-level fields are the ORGANIZATION's territory for a
                 sub-user — hidden whether or not the admin filled them in, so a
                 member can never add their own company info. (Owner decision,
-                Jul 2026: gate on `org`, not per-field values.) */}
-            {!org && (
+                Jul 2026: gate on `org`, not per-field values.) A group left
+                with nothing to show is not drawn at all. */}
+            <FormSection id="about" title="About you">
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Card nickname</label>
-                <input type="text" placeholder="e.g. Sales Card" value={nickname} onChange={(e) => setNickname(e.target.value)} className={inputCls} />
-                <p className="text-gray-600 text-xs mt-1">A label shown on your dashboard so you can tell your cards apart.</p>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">Full name <span className="text-red-500">*</span></label>
-              <input
-                ref={nameInputRef}
-                type="text"
-                placeholder="John Smith"
-                maxLength={120}
-                value={name}
-                aria-invalid={nameMissing || undefined}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  // The error sat under the Next button and stayed there after
-                  // the name was filled in (2026-09-22 signup review).
-                  if (nameMissing && e.target.value.trim()) { setNameMissing(false); setError(""); }
-                }}
-                className={`${inputCls}${nameMissing ? " ring-2 ring-red-500/70 border-red-500" : ""}`}
-              />
-              {/* A member has no company field, which is where this hint lives
-                  for everyone else — so they never saw their card's address
-                  until the card was already live. */}
-              {org && <p className="text-gray-600 text-xs mt-1">Card URL: swiftcard.me/{prettyUsername || "your-name"}</p>}
-            </div>
-            {!org && (
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Company name</label>
-                <input type="text" placeholder="Acme Corp" value={company} onChange={(e) => setCompany(e.target.value)} className={inputCls} />
-                <p className="text-gray-600 text-xs mt-1">Card URL: swiftcard.me/{prettyUsername || "your-name"}</p>
-              </div>
-            )}
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">Job title</label>
-              <input type="text" placeholder="Sales Director" value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-medium text-gray-400">Phone numbers</label>
-                <button type="button" onClick={addPhone} className="text-xs font-semibold text-blue-400 hover:text-blue-300">+ Add number</button>
-              </div>
-              <div className="space-y-2">
-                {/* flex-wrap: the type picker, the number and the On-card toggle
-                    are three fixed-ish items in one row. At 320px that squeezed
-                    the number field to 98px and hid 30px of what you'd typed —
-                    you could not read your own phone number back. Wrapping lets
-                    the toggle drop to a second line there; at 375px and up the
-                    row still fits on one line exactly as before. */}
-                {phones.map((p, i) => (
-                  <div key={i} className="flex flex-wrap items-center gap-2">
-                    {/* Office members don't choose a type: the company number is
-                        set once by their admin on the Branding page and injected
-                        server-side, so every number they add here is a personal
-                        mobile. Offering "Office" let them add a second, competing
-                        office number to a company-branded card. */}
-                    {org ? (
-                      <span
-                        title="Your organization sets the office number — numbers you add are your mobile."
-                        className="bg-gray-900 border border-gray-700 text-gray-400 rounded-xl px-3 py-3 text-sm shrink-0"
-                      >
-                        Mobile
-                      </span>
-                    ) : (
-                      <select
-                        // Its only visible context is the phone field beside it,
-                        // so on its own it announced as an unlabelled select.
-                        aria-label={`Label for phone number ${i + 1}`}
-                        value={p.label}
-                        onChange={(e) => updatePhone(i, { label: e.target.value as PhoneLabel })}
-                        className="bg-gray-900 border border-gray-700 text-gray-200 rounded-xl px-2 py-3 text-sm focus:outline-none focus:border-blue-500 shrink-0"
-                      >
-                        <option value="mobile">Mobile</option>
-                        <option value="office">Office</option>
-                      </select>
-                    )}
-                    <input
-                      type="tel"
-                      placeholder="+1 (555) 000-0000"
-                      value={p.number}
-                      onChange={(e) => updatePhone(i, { number: e.target.value })}
-                      // min-w-[9rem], not min-w-0: with min-w-0 the field just
-                      // shrank to 98px at 320px and hid 30px of the number, and
-                      // flex-wrap never fired because nothing ever exceeded the
-                      // line. Giving it a floor forces the On-card toggle onto a
-                      // second row there instead. 9rem = 144px is below the
-                      // 153px the field already gets at 375px, so every real
-                      // phone keeps the single-row layout untouched.
-                      className={`${inputCls} flex-1 min-w-[9rem]`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => updatePhone(i, { showOnCard: !p.showOnCard })}
-                      title={p.showOnCard ? "Showing on card" : "Hidden from card"}
-                      // "Off card" is STATE the owner has to be able to read —
-                      // this number is hidden from their card — not decoration.
-                      // At gray-500 it measured 3.67:1 against gray-900 in the
-                      // dark theme, under the 4.5:1 a 12px label needs. gray-400
-                      // is 6.82:1, still clearly quieter than the blue "on"
-                      // state, and it is the shade the template chips below
-                      // already use for exactly the same unselected job.
-                      className={`shrink-0 px-3 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${p.showOnCard ? "bg-blue-600 border-blue-600 text-white" : "bg-gray-900 border-gray-700 text-gray-400"}`}
-                    >
-                      {p.showOnCard ? "On card ✓" : "Off card"}
-                    </button>
-                    {phones.length > 1 && (
-                      <button type="button" onClick={() => removePhone(i)} className="shrink-0 text-gray-600 hover:text-red-400 px-1 text-lg leading-none" aria-label="Remove number">×</button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <p className="text-gray-600 text-xs mt-1.5">Label each number and pick which ones appear on your card (you can show more than one).</p>
-              {org && orgPhone && (
-                <p className="text-gray-500 text-xs mt-1">
-                  Your office number ({orgPhone}) is added to your card automatically by your organization.
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">Email</label>
-              <input type="email" placeholder="john@company.com" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
-            </div>
-
-            {/* Website is CARD information — it renders on the card itself (and
-                on Swift Links too), so it's asked here with the other card
-                fields, not on the Socials step. Company-level for a sub-user:
-                the org decides it, so members never get the input. */}
-            {!org && (
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Website</label>
+                <label htmlFor="wizard-name" className="block text-xs font-medium text-gray-400 mb-1.5">Full name <span className="text-red-500">*</span></label>
                 <input
+                  id="wizard-name"
+                  ref={nameInputRef}
                   type="text"
-                  placeholder="yoursite.com"
-                  value={website}
-                  onChange={(e) => setWebsite(e.target.value)}
-                  className={inputCls}
+                  placeholder="John Smith"
+                  maxLength={120}
+                  value={name}
+                  aria-invalid={nameMissing || undefined}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    // The error sat under the Next button and stayed there after
+                    // the name was filled in (2026-09-22 signup review).
+                    if (nameMissing && e.target.value.trim()) { setNameMissing(false); setError(""); }
+                  }}
+                  className={`${inputCls}${nameMissing ? " ring-2 ring-red-500/70 border-red-500" : ""}`}
                 />
+                {/* A member has no company field, which is where this hint lives
+                    for everyone else — so they never saw their card's address
+                    until the card was already live. */}
+                {org && <p className="text-gray-600 text-xs mt-1">Card URL: swiftcard.me/{prettyUsername || "your-name"}</p>}
               </div>
-            )}
+              <div>
+                <label htmlFor="wizard-title" className="block text-xs font-medium text-gray-400 mb-1.5">Job title</label>
+                <input id="wizard-title" type="text" placeholder="Sales Director" value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} />
+              </div>
+              {!org && (
+                <div>
+                  <label htmlFor="wizard-company" className="block text-xs font-medium text-gray-400 mb-1.5">Company name</label>
+                  <input id="wizard-company" type="text" placeholder="Acme Corp" value={company} onChange={(e) => setCompany(e.target.value)} className={inputCls} />
+                  <p className="text-gray-600 text-xs mt-1">Card URL: swiftcard.me/{prettyUsername || "your-name"}</p>
+                </div>
+              )}
+            </FormSection>
 
-            {!org && <AddressInput value={address} onChange={setAddress} />}
+            <FormSection id="reach" title="How people reach you">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-medium text-gray-400">Phone numbers</label>
+                  <button type="button" onClick={addPhone} className="text-xs font-semibold text-blue-400 hover:text-blue-300">+ Add number</button>
+                </div>
+                <div className="space-y-2">
+                  {/* flex-wrap: the type picker, the number and the On-card toggle
+                      are three fixed-ish items in one row. At 320px that squeezed
+                      the number field to 98px and hid 30px of what you'd typed —
+                      you could not read your own phone number back. Wrapping lets
+                      the toggle drop to a second line there; at 375px and up the
+                      row still fits on one line exactly as before. */}
+                  {phones.map((p, i) => (
+                    <div key={i} className="flex flex-wrap items-center gap-2">
+                      {/* Office members don't choose a type: the company number is
+                          set once by their admin on the Branding page and injected
+                          server-side, so every number they add here is a personal
+                          mobile. Offering "Office" let them add a second, competing
+                          office number to a company-branded card. */}
+                      {org ? (
+                        <span
+                          title="Your organization sets the office number — numbers you add are your mobile."
+                          className="bg-gray-900 border border-gray-700 text-gray-400 rounded-xl px-3 py-3 text-sm shrink-0"
+                        >
+                          Mobile
+                        </span>
+                      ) : (
+                        <select
+                          // Its only visible context is the phone field beside it,
+                          // so on its own it announced as an unlabelled select.
+                          aria-label={`Label for phone number ${i + 1}`}
+                          value={p.label}
+                          onChange={(e) => updatePhone(i, { label: e.target.value as PhoneLabel })}
+                          className="bg-gray-900 border border-gray-700 text-gray-200 rounded-xl px-2 py-3 text-sm focus:outline-none focus:border-blue-500 shrink-0"
+                        >
+                          <option value="mobile">Mobile</option>
+                          <option value="office">Office</option>
+                        </select>
+                      )}
+                      <input
+                        type="tel"
+                        placeholder="+1 (555) 000-0000"
+                        value={p.number}
+                        onChange={(e) => updatePhone(i, { number: e.target.value })}
+                        // min-w-[9rem], not min-w-0: with min-w-0 the field just
+                        // shrank to 98px at 320px and hid 30px of the number, and
+                        // flex-wrap never fired because nothing ever exceeded the
+                        // line. Giving it a floor forces the On-card toggle onto a
+                        // second row there instead. 9rem = 144px is below the
+                        // 153px the field already gets at 375px, so every real
+                        // phone keeps the single-row layout untouched.
+                        className={`${inputCls} flex-1 min-w-[9rem]`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => updatePhone(i, { showOnCard: !p.showOnCard })}
+                        title={p.showOnCard ? "Showing on card" : "Hidden from card"}
+                        // "Off card" is STATE the owner has to be able to read —
+                        // this number is hidden from their card — not decoration.
+                        // At gray-500 it measured 3.67:1 against gray-900 in the
+                        // dark theme, under the 4.5:1 a 12px label needs. gray-400
+                        // is 6.82:1, still clearly quieter than the blue "on"
+                        // state, and it is the shade the template chips below
+                        // already use for exactly the same unselected job.
+                        className={`shrink-0 px-3 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${p.showOnCard ? "bg-blue-600 border-blue-600 text-white" : "bg-gray-900 border-gray-700 text-gray-400"}`}
+                      >
+                        {p.showOnCard ? "On card ✓" : "Off card"}
+                      </button>
+                      {phones.length > 1 && (
+                        <button type="button" onClick={() => removePhone(i)} className="shrink-0 text-gray-600 hover:text-red-400 px-1 text-lg leading-none" aria-label="Remove number">×</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-gray-600 text-xs mt-1.5">Pick which numbers show on your card.</p>
+                {org && orgPhone && (
+                  <p className="text-gray-500 text-xs mt-1">
+                    Your office number ({orgPhone}) is added to your card automatically by your organization.
+                  </p>
+                )}
+              </div>
+              <div>
+                <label htmlFor="wizard-email" className="block text-xs font-medium text-gray-400 mb-1.5">Email</label>
+                <input id="wizard-email" type="email" placeholder="john@company.com" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
+              </div>
+
+              {/* Website is CARD information — it renders on the card itself (and
+                  on Swift Links too), so it's asked here with the other card
+                  fields, not on the Socials step. Company-level for a sub-user:
+                  the org decides it, so members never get the input. */}
+              {!org && (
+                <div>
+                  <label htmlFor="wizard-website" className="block text-xs font-medium text-gray-400 mb-1.5">Website</label>
+                  <input
+                    id="wizard-website"
+                    type="text"
+                    placeholder="yoursite.com"
+                    value={website}
+                    onChange={(e) => setWebsite(e.target.value)}
+                    className={inputCls}
+                  />
+                </div>
+              )}
+            </FormSection>
 
             {!org && (
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">
-                  Fax number <span className="text-gray-600 font-normal">· shows on your card only</span>
-                </label>
-                <input type="tel" placeholder="+1 (555) 000-0000" value={fax} onChange={(e) => setFax(e.target.value)} className={inputCls} />
-              </div>
+              <FormSection id="location" title="Location" note="Optional.">
+                <AddressInput value={address} onChange={setAddress} />
+                <div>
+                  <label htmlFor="wizard-fax" className="block text-xs font-medium text-gray-400 mb-1.5">
+                    Fax number <span className="text-gray-600 font-normal">· shows on your card only</span>
+                  </label>
+                  <input id="wizard-fax" type="tel" placeholder="+1 (555) 000-0000" value={fax} onChange={(e) => setFax(e.target.value)} className={inputCls} />
+                </div>
+              </FormSection>
+            )}
+
+            {/* Last: it never appears on the card — it only names the card on
+                the dashboard, so it is the least important thing to fill in. */}
+            {!org && (
+              <FormSection id="nickname" title="Card nickname" labelFor="wizard-nickname" note="Only you see this — it names the card on your dashboard.">
+                <input id="wizard-nickname" type="text" placeholder="e.g. Sales Card" value={nickname} onChange={(e) => setNickname(e.target.value)} className={inputCls} />
+              </FormSection>
             )}
 
             {/* Mobile: the card preview sits at the BOTTOM of this step, right
