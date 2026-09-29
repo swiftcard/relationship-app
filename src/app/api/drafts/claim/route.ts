@@ -13,6 +13,7 @@ import {
   buildClaimInsert,
   findClaimedCard,
   isDataUrl,
+  isHostedImageUrl,
   parseDataUrl,
   extFromMime,
   ALLOWED_IMAGE_MIME,
@@ -205,6 +206,10 @@ export async function POST(req: NextRequest) {
     insert.logo_url = url; // resolved URL, or null if the upload was rejected
   } else if (isDataUrl(insert.logo_url)) {
     insert.logo_url = null;
+  } else if (!insert.logo_url && isHostedImageUrl(imgs.logo)) {
+    // Already hosted (the suggested company logo): keep it. This used to be
+    // dropped, so the card lost its logo on the way to the plan step.
+    insert.logo_url = imgs.logo;
   }
 
   // Headshot: lives on customization.photoUrl (per-card).
@@ -219,6 +224,9 @@ export async function POST(req: NextRequest) {
     cust.photoUrl = url;
   } else if (isDataUrl(cust.photoUrl)) {
     cust.photoUrl = null;
+  } else if (!cust.photoUrl && isHostedImageUrl(imgs.photo)) {
+    // An already-hosted headshot (e.g. imported): kept, same as the logo above.
+    cust.photoUrl = imgs.photo;
   }
 
   // ── Office uniform branding overlay (mirror api/cards) ────────────────────

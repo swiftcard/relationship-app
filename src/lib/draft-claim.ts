@@ -207,5 +207,25 @@ export function extFromMime(mime: string): string {
   }
 }
 
+/**
+ * An image that is ALREADY hosted: the suggested company logo (lib/logo-provider,
+ * img.logo.dev) or an imported headshot. Nothing to upload — the URL is kept as
+ * is, the same as /api/cards stores it for a signed-in build.
+ *
+ * Owner, 2026-09-29: a guest's card lost its logo. The wizard's draft keeps the
+ * logo only in `images.logo` (payload.logo_url is null), and this claim used to
+ * accept only data: URLs there — so the suggested logo, an https URL, was
+ * dropped the moment the account was created, and the card reached the plan
+ * step (and Free) without it. https only; nothing else is a card image.
+ */
+export function isHostedImageUrl(v: unknown): v is string {
+  if (typeof v !== "string" || v.length > 2048) return false;
+  try {
+    return new URL(v).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 // Same guard as the upload route — reject anything that isn't an allowed image.
 export const ALLOWED_IMAGE_MIME = ["image/jpeg", "image/png", "image/webp", "image/gif"];

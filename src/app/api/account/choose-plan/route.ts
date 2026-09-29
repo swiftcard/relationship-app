@@ -130,10 +130,20 @@ export async function POST(req: Request) {
 
     for (const card of cards ?? []) {
       const before = (card.customization ?? {}) as Record<string, unknown>;
-      const afterCust = sanitizeCustomizationForPlan(before, false, (card.template as string) || "classic-pro", { keepLinks: proEnded });
+      const beforeTemplate = (card.template as string) || "classic-pro";
+      // ONLY the Pro design goes (owner, 2026-09-29: "make sure it properly
+      // downgrades to the free plan features"). The logo (logo_url) and the
+      // headshot (photoUrl) are Free and are never touched here.
+      const afterCust = sanitizeCustomizationForPlan(before, false, beforeTemplate, { keepLinks: proEnded });
+      // The custom designer is Pro. Converting drops its layout, so the card
+      // must also stop CLAIMING the custom template — otherwise the row reads
+      // "custom" with no layout, which only renders because Free maps custom →
+      // Classic Pro at display time, and breaks the day they upgrade again.
+      // Same rule api/cards and the draft claim apply on create.
+      const afterTemplate = beforeTemplate === "custom" ? "classic-pro" : beforeTemplate;
       // Only write when something actually changed — an untouched Free card
       // must not take a pointless UPDATE and a cache invalidation.
-      if (JSON.stringify(afterCust) === JSON.stringify(before)) {
+      if (JSON.stringify(afterCust) === JSON.stringify(before) && afterTemplate === beforeTemplate) {
         // Pro ended: which card is live may have just changed even when its
         // design did not, so the public pages still need to hear about it.
         if (proEnded) revalidateCardPage(card.username as string);
@@ -141,7 +151,7 @@ export async function POST(req: Request) {
       }
       const { error } = await admin
         .from("cards")
-        .update({ customization: afterCust })
+        .update(afterTemplate === beforeTemplate ? { customization: afterCust } : { customization: afterCust, template: afterTemplate })
         .eq("id", card.id);
       if (!error) {
         converted++;
