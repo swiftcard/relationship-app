@@ -101,8 +101,7 @@ async function measure(width: number, longTitle = false) {
              <div id="actions" class="${actionsCls}">
                <a id="viewBtn" href="#" class="${viewBtnCls}">
                  <svg viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3 sm:w-3.5 sm:h-3.5"><path d="M10 4v12M4 10h12"/></svg>
-                 <span class="lg:hidden">View Live Link</span>
-                 <span class="hidden lg:inline">View live</span>
+                 View Live Link
                </a>
                <a id="addBtn" href="#" class="${addBtnCls}">
                  <svg viewBox="0 0 20 20" fill="currentColor" class="w-3 h-3 sm:w-3.5 sm:h-3.5"><path d="M10 4v12M4 10h12"/></svg>
@@ -220,7 +219,8 @@ describe("mobile: the Add card button is a small control in the top-right", () =
 
   // "View Live Link" on a phone (owner, 2026-09-29) is the longer label, so it
   // is the one that could wrap or crowd the title on a narrow phone.
-  it.each([320, 360, 375, 390, 430])("at %ipx 'View Live Link' stays on one line beside Add card", async (w) => {
+  // …and on a computer, which got the same label (owner, 2026-09-29).
+  it.each([320, 360, 375, 390, 430, 768, 1024, 1280])("at %ipx 'View Live Link' stays on one line beside Add card", async (w) => {
     const m = await measure(w, true);
     expect(m.viewBtn, "View Live Link is missing").not.toBeNull();
     // One line: the same height as Add card, centred on the same row.

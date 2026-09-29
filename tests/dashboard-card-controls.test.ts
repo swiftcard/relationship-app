@@ -52,13 +52,18 @@ describe("the dashboard has exactly one way to open your live card", () => {
     // matches the old "View live card" — so resurrecting the header control
     // under either label trips the duplicate check rather than sneaking past a
     // now-stale exact string.
-    const rendered = dashboard.match(/>\s*View live[^<]*</g) ?? [];
+    // Case-insensitive, and a text node may follow a JSX comment's `}` as well
+    // as a tag's `>`, so the rename to "View Live Link" is still counted here.
+    const rendered = dashboard.match(/(?:>|\})\s*View live[^<{]*</gi) ?? [];
     expect(rendered.length, "View live is missing, or duplicated").toBe(1);
   });
 
-  it("reads 'View Live Link' on a phone, 'View live' on a computer", () => {
-    // Owner, 2026-09-29 — the rename is for the phone (app and phone web).
-    expect(dashboard).toMatch(/<span className="lg:hidden">View Live Link<\/span>\s*<span className="hidden lg:inline">View live<\/span>/);
+  it("reads 'View Live Link' on every device", () => {
+    // Owner, 2026-09-29: the phone first, then the computer too. One label, no
+    // phone/computer split left behind.
+    expect(dashboard).toMatch(/\}\s*View Live Link\s*<\/a>/);
+    expect(dashboard, "the old computer-only label is back").not.toMatch(/>\s*View live\s*</);
+    expect(dashboard).not.toMatch(/<span className="lg:hidden">View Live Link<\/span>/);
   });
 
   it("it lives in the My Cards box, not a page header", () => {

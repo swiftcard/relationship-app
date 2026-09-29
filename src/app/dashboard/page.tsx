@@ -1014,11 +1014,9 @@ export default async function DashboardPage({
                     <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
                     <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
                   </svg>
-                  {/* "View Live Link" on a phone (owner, 2026-09-29); the
-                      computer keeps "View live". lg: is the dashboard's own
-                      phone/computer split. */}
-                  <span className="lg:hidden">View Live Link</span>
-                  <span className="hidden lg:inline">View live</span>
+                  {/* "View Live Link" on every device (owner, 2026-09-29 —
+                      the phone first, then the computer). */}
+                  View Live Link
                 </a>
                 {/* Always rendered now (owner, 2026-09-11). A Free account at
                     the limit gets the SAME button, and pressing it opens the
@@ -1150,12 +1148,13 @@ export default async function DashboardPage({
 
           {/* Traffic — SwiftCard & SwiftLink views (full width; Swift Links + Email signature moved to /share) */}
           <div data-tour="traffic" className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5 mb-5">
-              {/* PHONE (owner, 2026-09-29): no "Traffic" heading, and the range
-                  bar runs the full width of the box with four equal tabs, from
-                  the left edge. The COMPUTER keeps the heading with the bar at
-                  its right. lg: is the dashboard's own phone/computer split. */}
-              <div className="flex items-center justify-between mb-4">
-                <p className="hidden lg:block text-white font-semibold text-sm">Traffic</p>
+              {/* No "Traffic" heading on any device (owner, 2026-09-29). The
+                  range bar starts at the box's left edge: on a PHONE it runs
+                  the full width in four equal tabs; on a COMPUTER, where the
+                  box is ~940px wide and four equal tabs would be ~235px each,
+                  it keeps its compact size (owner's pick). lg: is the
+                  dashboard's own phone/computer split. */}
+              <div className="flex items-center mb-4">
                 <div className="grid grid-cols-4 w-full lg:flex lg:w-auto items-center bg-gray-800 rounded-lg p-0.5">
                   {([
                     { id: "today", label: "Today" },

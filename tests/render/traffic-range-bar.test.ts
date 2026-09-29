@@ -4,10 +4,11 @@ import { join } from "node:path";
 import type { Browser } from "playwright";
 import { appCss, launchBrowser } from "./harness";
 
-// The dashboard's views box on a PHONE (owner, 2026-09-29): no "Traffic"
-// heading, and the Today / Week / Month / Locations bar runs the full width of
-// the box from its left edge, four equal tabs. The COMPUTER keeps the heading
-// with the bar at its right.
+// The dashboard's views box (owner, 2026-09-29): no "Traffic" heading on any
+// device, and the Today / Week / Month / Locations bar starts at the box's left
+// edge. On a PHONE it runs the full width in four equal tabs; on a COMPUTER it
+// keeps its compact size (the owner's pick — four equal tabs across a ~940px
+// box would be ~235px each).
 //
 // The dashboard is behind login, so it is laid out here with the app's REAL
 // compiled Tailwind, and the class strings are READ OUT OF THE PAGE SOURCE —
@@ -45,8 +46,7 @@ afterAll(async () => { await browser?.close(); });
 async function measure(width: number) {
   const css = await appCss();
   const boxCls = classNameContaining("bg-gray-900 border border-gray-800/80 rounded-2xl p-5 mb-5");
-  const headerCls = classNameContaining("flex items-center justify-between mb-4");
-  const titleCls = classNameContaining("text-white font-semibold text-sm");
+  const headerCls = classNameContaining("flex items-center mb-4");
   const barCls = classNameContaining("bg-gray-800 rounded-lg p-0.5");
   // The Free lock beside "Locations", with its real classes. A flex svg with no
   // shrink-0 squeezed to a dot in a quarter-width tab — which a label-overflow
@@ -68,7 +68,6 @@ async function measure(width: number) {
        <body class="sc-app">
          <div id="box" class="${boxCls}">
            <div id="header" class="${headerCls}">
-             <p id="title" class="${titleCls}">Traffic</p>
              <div id="bar" class="${barCls}">${tabs}</div>
            </div>
          </div>
@@ -89,7 +88,6 @@ async function measure(width: number) {
         innerWidth: window.innerWidth,
         contentLeft: box.getBoundingClientRect().left + parseFloat(bs.borderLeftWidth) + parseFloat(bs.paddingLeft),
         contentRight: box.getBoundingClientRect().right - parseFloat(bs.borderRightWidth) - parseFloat(bs.paddingRight),
-        title: r(document.getElementById("title")!),
         bar: r(document.getElementById("bar")!),
         lock: r(document.getElementById("lock")!),
         tabs,
@@ -100,11 +98,17 @@ async function measure(width: number) {
   }
 }
 
-describe("phone: no Traffic heading, the range bar spans the box evenly", () => {
+describe("no Traffic heading on any device", () => {
+  it("the views box has no heading in the source at all", () => {
+    // Gone, not hidden: no "Traffic" text node in the box's own markup.
+    expect(scopedSrc().slice(0, 1500)).not.toMatch(/>\s*Traffic\s*</);
+  });
+});
+
+describe("phone: the range bar spans the box evenly", () => {
   it.each([320, 360, 375, 390, 430])("at %ipx", async (w) => {
     const m = await measure(w);
     expect(m.innerWidth).toBe(w);
-    expect(m.title.display, "the Traffic heading still shows on a phone").toBe("none");
     // Starts at the box's left edge and runs to its right edge.
     expect(Math.abs(m.bar.x - m.contentLeft)).toBeLessThan(1);
     expect(Math.abs(m.bar.right - m.contentRight)).toBeLessThan(1);
@@ -127,14 +131,14 @@ describe("phone: no Traffic heading, the range bar spans the box evenly", () => 
   });
 });
 
-describe("computer: unchanged — heading on the left, bar on the right", () => {
-  it("at 1280px", async () => {
-    const m = await measure(1280);
-    expect(m.title.display).not.toBe("none");
-    expect(Math.abs(m.title.x - m.contentLeft)).toBeLessThan(1);
-    // Hugs its content at the right, not stretched across the box.
-    expect(Math.abs(m.bar.right - m.contentRight)).toBeLessThan(1);
+describe("computer: the compact bar, at the box's left edge", () => {
+  it.each([1024, 1280])("at %ipx", async (w) => {
+    const m = await measure(w);
+    // Starts at the left edge where the heading used to be…
+    expect(Math.abs(m.bar.x - m.contentLeft)).toBeLessThan(1);
+    // …and hugs its content, not stretched across the box.
     expect(m.bar.width).toBeLessThan((m.contentRight - m.contentLeft) / 2);
+    for (const t of m.tabs) expect(t.overflows, "a tab's label is cut off").toBe(false);
     // Tabs sized to their labels (Locations wider than Week).
     expect(m.tabs[3].width).toBeGreaterThan(m.tabs[1].width);
     // The lock at its original desktop size.
