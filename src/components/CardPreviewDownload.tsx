@@ -91,8 +91,15 @@ export default function CardPreviewDownload({ data, template, username, previewU
           aspectRatio: height ? undefined : "1.75",
         }}
       >
+        {/* inert: this is a PICTURE of the card. Its phone/email/links were
+            never tappable here (pointer-events-none), but they could still take
+            keyboard focus — and nightly QA (issue #47) rightly reported them as
+            controls buried under the full-screen tap target below. inert takes
+            them out of tap AND tab order; it changes nothing about how the card
+            looks or how its PNG is captured. */}
         <div
           ref={cardRef}
+          inert
           className="pointer-events-none"
           style={{
             width: NATURAL,

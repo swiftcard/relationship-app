@@ -121,8 +121,11 @@ export default function CardFullscreen({
           className="overflow-hidden rounded-2xl"
           style={{ width: width * scale, height: cardH * scale, opacity: scale ? 1 : 0 }}
         >
+          {/* inert: a picture to scan, not a page to use — the × is the
+              only thing in here that takes a tap or keyboard focus. */}
           <div
             ref={cardRef}
+            inert
             className="pointer-events-none"
             style={{ width, transform: `scale(${scale})`, transformOrigin: "top left" }}
           >

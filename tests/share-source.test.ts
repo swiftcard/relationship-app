@@ -71,6 +71,15 @@ describe("the mobile card panel swaps QR and download", () => {
   const preview = () => code("src/components/CardPreviewDownload.tsx");
   const share = () => code("src/components/MoreShareOptions.tsx");
 
+  it("the card PICTURE is inert, so its links are not controls buried under the tap target", () => {
+    // Nightly QA (issue #47, 2026-09-29): the preview card's phone and email
+    // links were reported as covered by "Show your card full screen". They
+    // were never tappable (pointer-events-none) but could take keyboard focus.
+    // The QA sweeps treat an [inert] subtree as a picture and skip it.
+    expect(preview()).toMatch(/ref=\{cardRef\}\s+inert\s+className="pointer-events-none"/);
+    expect(code("src/components/CardFullscreen.tsx")).toMatch(/ref=\{cardRef\}\s+inert\s+className="pointer-events-none"/);
+  });
+
   it("on the card: full-screen tap on mobile, download on desktop", () => {
     const c = preview();
     expect(c).toMatch(/onClick=\{\(\) => setFullscreen\(true\)\}[\s\S]{0,160}className="lg:hidden absolute inset-0/);
