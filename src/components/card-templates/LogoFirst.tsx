@@ -1,6 +1,7 @@
 // LogoFirst — Navy & Mark
-// Style: Deep navy card that leads with the company mark on the left, a hairline
-// rule, then name, title and contact details spread down the right.
+// Style: Deep navy card that leads with the company mark on the left (the QR
+// under it), a hairline rule, then name, title and contact details spread down
+// the right.
 // Includes: Logo (hero), name, title, company, phone, email, website, address, QR
 // Best for: firms that lead with a brand mark rather than a face — agencies,
 // practices, contractors, funds, anyone whose logo is the recognisable thing.
@@ -12,7 +13,7 @@ import type { CardData } from "./types";
 import { cardLogoShape,
   cardAspect, ContactRows, fitFactor, fitName, fitTitle, fitTitleFluid, titleBox, fitCompany, heroGrow,
   qrSize, templateStyle, CARD_BASE_FONT, isDarkBg, infoPaletteFrom,
-  DetailsGap, QR_PINNED, textWidthFactor, cardFontClass } from "./shared";
+  DetailsGap, textWidthFactor, cardFontClass } from "./shared";
 import PanelVideo from "./PanelVideo";
 
 const NAVY   = "#2C3A52";
@@ -174,6 +175,26 @@ export default function LogoFirst({ data }: { data: CardData }) {
     return Math.max(7, Math.min(base, NAME_COL / (s.length * perChar)));
   };
 
+  /**
+   * The name, as typed. One line when it fits at a readable size; otherwise TWO
+   * lines rather than one tiny one — "Maximilian Alexander Richardson-Montgomery"
+   * came out at 8px on a card with half its column empty. Two lines cost height,
+   * so only a card with room gets them (roomGrow's threshold); a packed card
+   * keeps the single shrunk line its details are budgeted around.
+   * 0.66 per char: mixed case at the widest face the picker offers (Georgia,
+   * semibold).
+   */
+  const nameSize = (() => {
+    const base = 21 * grow;
+    const s = (data.name ?? "").trim();
+    const one = fitUnbroken(fitName(base, s, 16), s, 0.66);
+    if (!s || one >= 14 || f < 0.92) return one;
+    const longest = s.split(/\s+/).reduce((m, w) => Math.max(m, w.length), 0);
+    const byWord = NAME_COL / (longest * 0.66);
+    const twoLines = (NAME_COL * 2 * 0.85) / (s.length * 0.62);
+    return Math.max(one, Math.min(base, byWord, twoLines, 18));
+  })();
+
   return (
     <div
       className="sc-card relative w-full flex rounded-2xl overflow-hidden"
@@ -214,14 +235,23 @@ export default function LogoFirst({ data }: { data: CardData }) {
           failed to load. One step off the ground — lighter on a dark card,
           darker on a light one — costs nothing, works on every ground the
           picker offers, and makes the space deliberate. */}
+      {/* The QR lives HERE, under the mark, not under the contact details.
+          In its own bottom row of the right column it took ~80px of height from
+          the details and left the space beside it empty, so the details were
+          sized for a box a third smaller than the column (owner, 2026-09-29:
+          "the contact details do not take up as much space as they can"). The
+          panel had that height to spare: the mark is centred in what is left
+          above the code, and the code keeps the bottom edge like every other
+          template's. */}
       <div
-        className="relative flex items-center justify-center shrink-0"
+        className="relative flex flex-col items-center shrink-0"
         style={{
           width: `${PANEL * 100}%`,
           padding: "14px 12px 14px 15px",
           background: dark ? "rgba(255,255,255,0.045)" : "rgba(20,27,38,0.035)",
         }}
       >
+        <div className="flex-1 min-h-0 w-full flex items-center justify-center">
         <div
           className="flex items-center justify-center"
           style={{
@@ -286,37 +316,41 @@ export default function LogoFirst({ data }: { data: CardData }) {
             </span>
           )}
         </div>
+        </div>
+        <div className="shrink-0" style={{ marginTop: 10, lineHeight: 0 }}>
+          <QR size={qrSize(f)} bg={qrBg} fg={qrFg} url={data.cardUrl} />
+        </div>
       </div>
 
       {/* ── Hairline rule ──────────────────────────────────────────────────── */}
       <div className="self-stretch shrink-0" style={{ width: 1, margin: "20px 0", background: ruleColor }} />
 
-      {/* ── Right: identity, then details, QR pinned to the bottom ───────────
+      {/* ── Right: identity, then details down to the bottom edge ────────────
           Details start directly under the identity block and fill DOWNWARD
           (DetailsGap, shared.tsx). This was `justify-between`, which floated a
-          lone phone number into the middle of the column; the QR keeps the
-          bottom through its own auto margin, so the card still uses its height.
+          lone phone number into the middle of the column.
 
-          The QR sits in its OWN bottom row rather than beside the contact rows.
-          That is not cosmetic: sharing a row with the QR left the contact column
+          Nothing shares this column with the details. Beside the QR they had
           ~176px on a 460px card, which split "Board.LevLev@gmai / l.com" across
-          two lines and let a phone's "MOBILE" label slide underneath the code.
-          On its own row the block gets the full column and both defects go. */}
+          two lines and let a phone's "MOBILE" label slide underneath the code;
+          under it they lost a third of their height. The QR is in the mark
+          panel now, so the block gets the full width AND the full height. */}
       <div className="flex-1 min-w-0 flex flex-col justify-start" style={{ padding: "16px 16px 14px 15px" }}>
         {/* titleBox: the job title sizes itself to THIS column (shared.tsx). */}
         <div className="min-w-0" style={titleBox}>
           <h2
             className="leading-tight min-w-0"
             style={{
-              // 0.78 per char: uppercase, plus the 0.03em tracking below, at the
-              // widest of the faces the picker offers (Georgia).
-              fontSize: fitUnbroken(fitName(23 * grow, data.name, 16), data.name, 0.78),
+              // The name as the person typed it. Forced capitals made it the
+              // loudest thing on the card by a distance — "very big and very
+              // awkward" (owner, 2026-09-29) — and shouted over the mark this
+              // design is named for. The title keeps its small-caps label style.
+              fontSize: nameSize,
               color: nameColor,
               fontWeight: 600,
-              letterSpacing: "0.03em",
-              textTransform: "uppercase",
+              letterSpacing: "-0.005em",
               overflowWrap: "anywhere",
-              lineHeight: 1.12,
+              lineHeight: 1.15,
             }}
           >
             {data.name}
@@ -371,17 +405,10 @@ export default function LogoFirst({ data }: { data: CardData }) {
         </div>
 
         <DetailsGap f={f} />
+        {/* Runs to the bottom of the column: with the QR in the mark panel the
+            details own every pixel under the name, full width and full height. */}
         <div className="min-w-0 flex flex-col min-h-0" style={{ flex: "1 1 0" }}>
           <ContactRows data={data} palette={{ accent, ...infoPal, phoneWeight: 700 }} />
-        </div>
-
-        {/* Same shape, size and corner as every other template's QR: its own
-            bottom-right row at the shared qrSize, tinted to the card's palette
-            rather than left a stark white sticker. */}
-        <div className="flex items-end justify-end" style={QR_PINNED}>
-          <div className="flex flex-col items-end gap-1">
-            <QR size={qrSize(f)} bg={qrBg} fg={qrFg} url={data.cardUrl} />
-          </div>
         </div>
       </div>
     </div>

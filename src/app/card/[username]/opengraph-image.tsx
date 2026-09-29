@@ -321,7 +321,9 @@ function LogoFirstOG(p: Meta) {
 
       {/* Right: identity above, contact below */}
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", flex: 1, padding: "48px 60px" }}>
-        <div style={{ fontSize: 60, fontWeight: 600, color: "#ffffff", lineHeight: 1.08, letterSpacing: 2, textTransform: "uppercase" }}>
+        {/* As typed, like the card: forced capitals made the name the loudest
+            thing on it (owner, 2026-09-29). */}
+        <div style={{ fontSize: 58, fontWeight: 600, color: "#ffffff", lineHeight: 1.1 }}>
           {p.name}
         </div>
         {/* Name, TITLE, then company — matching the card, which reordered these

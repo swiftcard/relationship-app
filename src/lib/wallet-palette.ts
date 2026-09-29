@@ -503,7 +503,8 @@ function logoFirst(style: TemplateStyle): RawLook {
     value: firstHex(style.infoColor) ?? (dark ? "#ffffff" : "#141b26"),
     label: accent,
     prefer: "mark",
-    voice: voice({ weight: 600, caps: true, tracking: 0.03, titleCaps: true, titleTracking: 0.14 }),
+    // Name as typed, like the card (no forced capitals since 2026-09-29).
+    voice: voice({ weight: 600, caps: false, tracking: 0, titleCaps: true, titleTracking: 0.14 }),
   };
 }
 
