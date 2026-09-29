@@ -524,6 +524,25 @@ FLOWS["mobile-tabs"] = async () => {
     await dismissOverlays(page);
     const bar = page.locator(".sc-tabbar").first();
     if (!(await bar.isVisible().catch(() => false))) { fail("mobile-tabs", "no tab bar on /dashboard at 390px"); return; }
+    // A page wider than the phone moves the fixed tab bar away from where a
+    // tap lands (the layout viewport grows past the visual one), so the tab is
+    // "not covered" yet never takes the tap. Name what sticks out instead of
+    // reporting a bare click timeout.
+    const wide = await page.evaluate(() => {
+      const vw = window.innerWidth, sw = document.documentElement.scrollWidth;
+      if (sw <= vw + 1) return null;
+      const out = [];
+      for (const el of document.querySelectorAll("body *")) {
+        const cs = getComputedStyle(el);
+        if (cs.position === "fixed" || cs.display === "none") continue;
+        const r = el.getBoundingClientRect();
+        if (r.width && r.right > vw + 1) out.push({ r: Math.round(r.right), w: Math.round(r.width), el: `${el.tagName.toLowerCase()}.${(el.getAttribute("class") || "").trim().split(/\s+/).slice(0, 4).join(".")} “${(el.textContent || "").trim().slice(0, 30)}”` });
+      }
+      out.sort((a, b) => a.w - b.w);
+      return { vw, sw, offenders: out.slice(0, 4) };
+    }).catch(() => null);
+    if (wide) fail("mobile-tabs", `/dashboard is ${wide.sw}px wide on a ${wide.vw}px phone — ${wide.offenders.map((o) => `${o.el} (right ${o.r}, w ${o.w})`).join(" · ") || "no offender found"}`);
+    await page.screenshot({ path: `${OUT}/mobile-tabs-before.png` }).catch(() => {});
     for (const [label, expect] of [["Contacts", "/contacts"], ["Links", "/share"], ["Settings", "/settings"], ["Home", "/dashboard"]]) {
       const tab = page.locator(`.sc-tabbar a:has-text("${label}")`).first();
       if (!(await tab.isVisible().catch(() => false))) { fail("mobile-tabs", `no "${label}" tab in the bar`); continue; }
@@ -545,7 +564,9 @@ FLOWS["mobile-tabs"] = async () => {
         continue;
       }
       if (blocker) { fail("mobile-tabs", `"${label}" is covered by ${blocker}`); continue; }
-      await tab.click().catch((e) => fail("mobile-tabs", `"${label}" would not click — ${e.message.split("\n")[0]}`));
+      // Playwright's call log names WHY a click never happened (not stable,
+      // outside the viewport, another element receives the tap…) — keep it.
+      await tab.click().catch((e) => fail("mobile-tabs", `"${label}" would not click — ${e.message.split("\n").filter((l) => l.trim()).slice(0, 1).concat(e.message.split("\n").filter((l) => /waiting|retrying|intercepts|not stable|outside|scroll/i.test(l)).slice(-3)).join(" | ").slice(0, 400)}`));
       await page.waitForTimeout(2200);
       const url = page.url().replace(BASE, "");
       if (!url.startsWith(expect)) fail("mobile-tabs", `"${label}" landed on ${url}, expected ${expect}`);
