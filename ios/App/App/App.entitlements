@@ -2,12 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Universal Links: matches the served AASA (appID <TEAMID>.me.swiftcard.app,
-	     paths /card/*, /links/*, /auth/callback). -->
-	<key>com.apple.developer.associated-domains</key>
-	<array>
-		<string>applinks:swiftcard.me</string>
-	</array>
+	<!-- NO associated domains, on purpose (owner, 2026-09-29): no swiftcard.me
+	     link may ever open this app — a SwiftCard, Swift Links or Swift
+	     Signature link someone sends you opens in Safari/Chrome, never here.
+	     Emptying the served AASA was not enough: each phone keeps the copy it
+	     downloaded at install for days, so links kept opening the app. Without
+	     this entitlement iOS never asks the app about any link. Sign-in and
+	     integration returns use the swiftcard:// scheme (Info.plist), not
+	     universal links. Do not add an associated-domains entry back. -->
 	<!-- APNs push (EnablePushButton native path + lib/apns.ts). Xcode's signing
 	     step rewrites this to "production" automatically for App Store builds. -->
 	<key>aps-environment</key>

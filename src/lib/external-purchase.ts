@@ -135,10 +135,10 @@ export async function openInDefaultBrowser(path = "/"): Promise<boolean> {
  *
  * Owner, 2026-09-29: a SwiftCard link someone sent you must open in the
  * browser, never inside the app. It goes out through www.swiftcard.me, which
- * the app does NOT claim (entitlements: applinks:swiftcard.me only), so iOS
- * cannot route it straight back into the app while a phone still holds the old
- * association file; the site's www → apex 308 then lands Safari on the real
- * address.
+ * no build of the app has ever claimed (1.0.4 on claims no domain at all), so
+ * iOS cannot route it straight back into the app while a phone still holds an
+ * old association file; the site's www → apex 308 then lands Safari on the
+ * real address.
  */
 export async function openLinkInDefaultBrowser(pathAndQuery: string): Promise<boolean> {
   const p = plugin();

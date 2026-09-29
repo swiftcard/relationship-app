@@ -18,11 +18,11 @@
 	     failed on every device with "no valid aps-environment entitlement string",
 	     Universal Links opened Safari, and the widget could not read its shared
 	     container. scripts/ios-release.sh now signs the archive and verifies the
-	     exported binary's real entitlements before it will upload. -->
-	<key>com.apple.developer.associated-domains</key>
-	<array>
-		<string>applinks:swiftcard.me</string>
-	</array>
+	     exported binary's real entitlements before it will upload.
+
+	     NO associated domains, on purpose (owner, 2026-09-29): no swiftcard.me
+	     link may ever open this app. See App.entitlements. The release script
+	     now refuses to upload a build that carries them. -->
 	<key>aps-environment</key>
 	<string>production</string>
 	<key>com.apple.security.application-groups</key>

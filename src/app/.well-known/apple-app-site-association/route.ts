@@ -6,22 +6,19 @@ import { AASA_PATHS, aasaComponents } from "@/lib/universal-links";
 // is used (rather than a static file in /public) so the content-type is
 // application/json and the path can be served without a file extension.
 //
-// This is the web-servable half of Universal Links (Part 0). The matching
-// native entitlement (applinks:swiftcard.me) and the real Apple Team ID are
-// owner/Xcode actions tracked separately.
+// NO LINK OPENS THE APP (owner, 2026-09-29). From 1.0.4 the app carries no
+// Associated Domains entitlement at all, so iOS never consults this file for
+// it. It is still served — excluding every path — for the builds already on
+// phones that DO carry the entitlement: when such a phone refreshes its copy,
+// this is what it gets. Never add an include here.
 //
 // The Team ID is read from APPLE_TEAM_ID — the SAME variable Wallet already
 // passes as teamIdentifier (lib/wallet.ts) and Sign-in-with-Apple revocation
 // uses (lib/apple-revoke.ts). One Team ID, one variable, already listed in
 // .env.example. Nothing in this file needs editing to go live.
 //
-// ⚠️ Until APPLE_TEAM_ID is set, this serves the original
-// "TEAMID_PLACEHOLDER.me.swiftcard.app" — byte-identical to before — so
-// Universal Links stay dormant rather than half-working. To activate: set
-// APPLE_TEAM_ID (Production) in Vercel, then REDEPLOY; env changes only take
-// effect on a new deployment. Apple ALSO requires the matching Associated
-// Domains entitlement (applinks:swiftcard.me) on the Xcode target — without
-// that half the links stay dead no matter what is served here. Runbook §2–3.
+// Until APPLE_TEAM_ID is set, this serves "TEAMID_PLACEHOLDER.me.swiftcard.app",
+// which matches no app — equally harmless.
 
 /** Apple Team IDs are exactly 10 alphanumeric characters, e.g. "ABCDE12345". */
 const TEAM_ID_RE = /^[A-Z0-9]{10}$/i;

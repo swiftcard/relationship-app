@@ -202,6 +202,20 @@ composed from it. A listing refresh means steps 1–3 in order, on a machine tha
 has the service-role key.
 
 ## Version
+- 1.0.5, build 15. "What's New": `Links to SwiftCards and Swift Links now
+  always open in your web browser, never inside the app.` (The app no longer
+  carries the Associated Domains entitlement — `ios/App/App/App.entitlements`
+  and `AppRelease.entitlements` — so iOS never offers it a swiftcard.me link.
+  Owner, 2026-09-29: a card or Swift Links link opened from a text or an
+  Instagram bio must open in Safari/Chrome and "not be connected at all" to
+  the app. The served AASA already excluded every path, but 1.0.4 was
+  released at 12:14 ET that day, before the exclude-all file went live at
+  13:47, so phones that updated in between cached the old rules for days.
+  `scripts/ios-release.sh` now REFUSES a build that carries the entitlement.
+  Pinned by `tests/aasa-card-links.test.ts` and
+  `tests/native-capabilities.test.ts`. Build on the Mac with
+  `npm run ios:release -- --no-watch`, wait for build 15 to show VALID, then
+  `node scripts/asc-submit-105.mjs --go`.)
 - 1.0.4, build 14. "What's New": `Fixes the app closing right after opening on
   iOS 27.` (The iOS 27 launch crash: build 13 still used the pre-iOS-13
   app-delegate window with no UIApplicationSceneManifest, which iOS 27 turns

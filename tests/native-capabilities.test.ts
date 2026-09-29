@@ -92,9 +92,12 @@ describe("iOS shell project wiring", () => {
     expect(plist).toContain("NSCameraUsageDescription");
     expect(plist).toContain("NSPhotoLibraryUsageDescription");
   });
-  it("entitlements carry associated domains + aps-environment and are wired into the build", () => {
+  it("entitlements carry aps-environment and NO associated domains, and are wired into the build", () => {
+    // No link may ever open the app (owner, 2026-09-29) — see
+    // tests/aasa-card-links.test.ts for the full rule.
     const ent = read("ios/App/App/App.entitlements");
-    expect(ent).toContain("applinks:swiftcard.me");
+    expect(ent).not.toContain("com.apple.developer.associated-domains");
+    expect(ent).not.toContain("applinks:");
     expect(ent).toContain("aps-environment");
     const pbx = read("ios/App/App.xcodeproj/project.pbxproj");
     expect(pbx).toContain("CODE_SIGN_ENTITLEMENTS = App/App.entitlements;");
@@ -126,8 +129,11 @@ describe("iOS shell project wiring", () => {
     // builds without a single warning from the toolchain.
     expect(sh).toMatch(/codesign -d --entitlements/);
     expect(sh).toMatch(/aps-environment/);
-    expect(sh).toMatch(/associated-domains/);
     expect(sh).toMatch(/group\.me\.swiftcard\.app/);
+    // Associated domains are now REFUSED, not required: a build that claims
+    // links would open other people's cards inside the app.
+    expect(sh).toMatch(/if grep -q 'associated-domains' <<<"\$ENTS"; then missing\+=/);
+    expect(sh).not.toMatch(/grep -q 'associated-domains' <<<"\$ENTS" \|\|/);
   });
 
   it("Release signs against the distribution profile with production APNs", () => {
@@ -140,7 +146,8 @@ describe("iOS shell project wiring", () => {
     // fails with DeviceTokenNotForTopic. Strictly worse than failing loudly.
     const rel = read("ios/App/App/AppRelease.entitlements");
     expect(rel).toContain("<string>production</string>");
-    expect(rel).toContain("applinks:swiftcard.me");
+    expect(rel).not.toContain("com.apple.developer.associated-domains");
+    expect(rel).not.toContain("applinks:");
     expect(rel).toContain("group.me.swiftcard.app");
   });
 

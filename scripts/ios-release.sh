@@ -194,7 +194,10 @@ ENTS="$(codesign -d --entitlements :- "$APP_BIN" 2>/dev/null || true)"
 missing=()
 grep -q 'aps-environment' <<<"$ENTS" || missing+=("aps-environment (push notifications)")
 grep -q 'production'      <<<"$ENTS" || missing+=("aps-environment=production (would register against SANDBOX APNs)")
-grep -q 'associated-domains' <<<"$ENTS" || missing+=("com.apple.developer.associated-domains (Universal Links)")
+# INVERTED (owner, 2026-09-29): the app must claim NO links. With associated
+# domains a phone routes any swiftcard.me link it has cached rules for into the
+# app instead of the browser. A build that carries them does not ship.
+if grep -q 'associated-domains' <<<"$ENTS"; then missing+=("NO com.apple.developer.associated-domains — links must open in the browser, never the app (remove applinks: from the entitlements)"); fi
 grep -q 'group.me.swiftcard.app' <<<"$ENTS" || missing+=("application-groups (home-screen widget)")
 
 WIDGET="$(find "$APP_BIN/PlugIns" -maxdepth 1 -name '*.appex' 2>/dev/null | head -1 || true)"

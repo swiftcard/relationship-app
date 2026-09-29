@@ -35,11 +35,11 @@ In Xcode → target **App** → *Signing & Capabilities*:
 1. **Team**: select your team. Note the 10-char **Team ID** (also at
    developer.apple.com → Membership).
 2. Bundle identifier stays `me.swiftcard.app`.
-3. **Associated Domains (`applinks:swiftcard.me`) and Push Notifications are
-   already wired** via `App/App.entitlements` + build settings — automatic
-   signing will register them on the App ID. Verify they appear under
-   Signing & Capabilities; if Xcode complains, press "+ Capability" for the
-   missing one (it will merge with the existing entitlements file).
+3. **Push Notifications is already wired** via `App/App.entitlements` + build
+   settings. **Do NOT add Associated Domains** (removed 2026-09-29): no
+   swiftcard.me link may ever open the app, and `scripts/ios-release.sh`
+   refuses to upload a build that carries it. If Xcode lists it under
+   Signing & Capabilities, delete it there.
 4. **+ Capability → Sign in with Apple** (the only one still added by hand).
 
 ## 3. Set the AASA Team ID (Universal Links)

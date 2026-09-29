@@ -111,6 +111,19 @@ describe("2 · a link that still reaches the app goes to the browser, never the 
     }
   });
 
+  it("the app claims NO domain at all, so iOS never offers it a link", () => {
+    // Owner, 2026-09-29: a SwiftCard or Swift Links link opened from a text or
+    // an Instagram bio must open in Safari/Chrome and "not be connected at all"
+    // to the app. An empty AASA was not enough — a phone keeps the association
+    // file it downloaded at install for days, so links still opened the app
+    // first. With no associated-domains entitlement iOS never consults it.
+    for (const f of ["ios/App/App/AppRelease.entitlements", "ios/App/App/App.entitlements"]) {
+      const s = readFileSync(f, "utf8");
+      expect(s, f).not.toContain("com.apple.developer.associated-domains");
+      expect(s, f).not.toContain("applinks:");
+    }
+  });
+
   it("a widget tap opens the dashboard — only for THIS phone's widget card", () => {
     // The widget's QR encodes the same ?source=widget address, so someone
     // else's widget QR is a card link and must go to the browser.
