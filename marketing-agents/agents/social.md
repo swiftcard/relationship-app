@@ -20,7 +20,11 @@ not render video or images yourself — Vince (video) does that; you ask him.
 Up to the output cap, of these kinds:
 
 - `social_post` — one platform-native post, finished. content is the exact
-  caption/post text. payload: `{"platform": "instagram|tiktok|linkedin|x|youtube", "format": "reel|carousel|text|story|short", "asset_id": "<pool id or null>", "hashtags": [...], "best_time_et": "HH:MM"}`.
+  caption/post text. payload: `{"platform": "instagram|facebook|tiktok|linkedin|x|youtube", "format": "reel|carousel|text|story|short", "asset_id": "<pool id or null>", "title": "<video title, YouTube only>", "hashtags": [...], "best_time_et": "HH:MM"}`.
+  When the platform is connected, Pick A/B posts it straight away — so an
+  Instagram or YouTube item MUST carry a ready `asset_id` from the pool
+  (Instagram has no text-only posts; YouTube needs the rendered video). X and
+  Facebook post text on their own.
   Instagram/TikTok captions: first line is the hook, 3 hashtags max, no walls.
   LinkedIn: 80–150 words, a real observation, one idea, no hashtag walls.
   X: under 240 characters, one thought.

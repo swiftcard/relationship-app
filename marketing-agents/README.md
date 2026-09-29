@@ -168,7 +168,7 @@ runs on your Max plan) **or** `gh secret set ANTHROPIC_API_KEY` (API billing).
 SEO, Security and Manager run with no LLM at all, so the system works today
 without it.
 
-**External accounts, only when you want that agent:** Sentry (Agent 8 — steps in MONITORING.md) · Higgsfield (paste video prompts) · Buffer or Later (connect IG/TikTok/YT/LinkedIn/X once; paste approved captions — we deliberately did NOT wire their APIs: drafts stay drafts) · Snyk optional (npm audit + Dependabot cover v1) · Google Search Console (already verified, sitemap submitted).
+**External accounts, only when you want that agent:** Sentry (Agent 8 — steps in MONITORING.md) · Higgsfield (API key) · X / Facebook+Instagram / YouTube / LinkedIn (one-click Connect in Settings — see Approve-to-execute below) · Snyk optional (npm audit + Dependabot cover v1) · Google Search Console (already verified, sitemap submitted).
 
 ## Claude Max vs API credits
 
@@ -185,19 +185,32 @@ Set one (or both — API key wins for triage, either works for agents).
 Approve is the send button. When a platform is connected (Vercel env vars),
 approving a pending item executes it immediately **as the owner**:
 
-| Connector | Fires on | Env vars |
+**Connecting an account (2026-09-28):** Agent Flow → Settings → Connections →
+**Connect**. The platform's own consent screen runs, and the tokens land
+encrypted in `agent_connections` (run `supabase/agent-connections.sql` once).
+The only env vars are the platform *apps* (client id + secret); the owner
+never pastes a token again. X and Google tokens refresh themselves; Meta page
+tokens don't expire; LinkedIn's 60-day member token shows its expiry date on
+the panel.
+
+| Connector | Fires on | Needs |
 |---|---|---|
-| LinkedIn | `generic`/`video_script`/`blog_post` items with platform `linkedin` → publishes a public post | `LINKEDIN_ACCESS_TOKEN` (OAuth, `w_member_social`) + `LINKEDIN_AUTHOR_URN` |
-| Higgsfield | `video_script` items → submits the prompt as a generation job (status link saved on the item) | `HIGGSFIELD_API_KEY_ID` + `HIGGSFIELD_API_KEY_SECRET` (+ optional `HIGGSFIELD_ENDPOINT`) |
-| Reddit | `reply_draft`/`outreach_draft` with platform `reddit` + a thread URL → posts the reply | `REDDIT_CLIENT_ID/SECRET/USERNAME/PASSWORD` (script app) |
+| X | `social_post`/`generic` with platform `x` → posts as the connected account (≤280 chars) | `X_CLIENT_ID` + `X_CLIENT_SECRET` (console.x.com app, OAuth 2.0, callback `/api/admin/connect/x/callback`), then Connect |
+| Facebook | platform `facebook` → text/link post, or photo/video when the item carries a ready asset | `META_APP_ID` + `META_APP_SECRET` (Business app, Facebook Login, callback `/api/admin/connect/meta/callback`), then Connect with the Page admin login. Optional `META_PAGE_ID` picks among several Pages |
+| Instagram | platform `instagram` → picture or reel from the creative pool (`payload.asset_id`); no text-only posts exist | same Meta connection; the IG Business account must be linked to the Page |
+| YouTube | platform `youtube` → resumable upload of the pool video; title from `payload.title`, description = content | `GOOGLE_CLIENT_ID/SECRET` (already set) + YouTube Data API enabled + callback `/api/admin/connect/youtube/callback` in the Google Cloud client, then Connect. Unaudited API projects get every upload forced PRIVATE |
+| LinkedIn | platform `linkedin` (`social_post`/`generic`/`video_script`/`blog_post`) → posts as the **SwiftCard Page** via `/rest/posts` | Connect (self-serve) stores the person; posting as the Page needs the Community Management API (`LINKEDIN_AGENT_SCOPES="openid profile w_member_social w_organization_social r_organization_admin"` once granted). Person-only connections are HELD unless `LINKEDIN_ALLOW_MEMBER_POSTS=1`. Legacy env fallback: `LINKEDIN_ACCESS_TOKEN` + `LINKEDIN_AUTHOR_URN` |
+| Higgsfield | `video_script`/`image_brief` items → submits the prompt as a generation job (lands in the creative pool) | `HIGGSFIELD_API_KEY_ID` + `HIGGSFIELD_API_KEY_SECRET` (+ optional `HIGGSFIELD_ENDPOINT`) |
+| Reddit | `reply_draft`/`outreach_draft` with platform `reddit` + a thread URL → posts the reply | `REDDIT_CLIENT_ID/SECRET/USERNAME/PASSWORD` (script app) — advised against, see policy note in agent-execute.ts |
 
 Executed items get status `posted` (with the live URL on the card); a failed
 execution falls back to `approved` + the classic Copy flow, never lost. The
 contract (pinned in tests): the posting code lives ONLY in
 `src/lib/agent-execute.ts`, is reachable ONLY from the admin items route
 behind `requireAdmin`, and fires ONLY on the owner's Approve of a pending
-item — agents remain structurally unable to post. IG/FB/X have no personal
-auto-posting API; those stay Approve & Copy.
+item — agents remain structurally unable to post. TikTok (its API forbids
+tools that post to your own account) and Nextdoor/Facebook groups stay
+Approve & Copy.
 
 ## Using the tab
 

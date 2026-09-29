@@ -252,7 +252,8 @@ describe("agent flow: approve-to-execute stays owner-gated", () => {
   const itemsRoute = read("src/app/api/admin/agents/items/route.ts");
 
   it("posting hosts live ONLY in agent-execute.ts, nowhere else in src or agents", () => {
-    const hosts = /ugcPosts|api\.higgsfield\.ai|oauth\.reddit\.com/;
+    // One path per platform, specific enough not to match ordinary code.
+    const hosts = /ugcPosts|\/rest\/posts|api\.higgsfield\.ai|oauth\.reddit\.com|\/2\/tweets|media_publish|\}\/feed`|\}\/photos`|upload\/youtube/;
     expect(exec).toMatch(hosts);
     const walk = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
       e.isDirectory() ? walk(`${dir}/${e.name}`) : /\.(ts|tsx|mjs)$/.test(e.name) ? [`${dir}/${e.name}`] : []);
@@ -275,12 +276,30 @@ describe("agent flow: approve-to-execute stays owner-gated", () => {
 
   it("every connector is env-gated and the client mirror lists the same connectors", () => {
     const client = read("src/app/admin/agent-flow/AgentFlowClient.tsx");
-    for (const id of ["linkedin", "higgsfield", "reddit"]) {
+    for (const id of ["linkedin", "x", "facebook", "instagram", "youtube", "higgsfield", "reddit"]) {
       expect(exec).toContain(`id: "${id}"`);
       expect(client).toContain(`id: "${id}"`);
     }
-    // ready() must consult env, never a hardcoded true.
+    // ready() must consult env or a stored connection, never a hardcoded true.
     expect(exec).not.toMatch(/ready: \(\) => true/);
+    expect(exec).not.toMatch(/ready: \([a-z]*\) => true/);
+  });
+
+  it("the owner's Connect flow is admin-gated and the callback checks state + browser binding", () => {
+    const start = read("src/app/api/admin/connect/[provider]/route.ts");
+    const cb = read("src/app/api/admin/connect/[provider]/callback/route.ts");
+    expect(start).toMatch(/requireAdmin/);
+    expect(cb).toMatch(/requireAdmin/);
+    expect(cb).toMatch(/verifyState\(state\) !== user\.id/);
+    expect(cb).toMatch(/stateBoundToBrowser/);
+    // Tokens are encrypted at rest and the client only ever sees a summary.
+    expect(read("src/lib/agent-connections.ts")).toMatch(/encryptToken\(c\.access_token\)/);
+    expect(read("src/app/admin/agent-flow/AgentFlowClient.tsx")).not.toMatch(/access_token/);
+  });
+
+  it("LinkedIn posts as the Page, never as a person by default (standing rule 2026-09-09)", () => {
+    expect(exec).toMatch(/org_urn \|\| process\.env\.LINKEDIN_ALLOW_MEMBER_POSTS === "1"/);
+    expect(exec).toMatch(/rest\/posts/);
   });
 });
 

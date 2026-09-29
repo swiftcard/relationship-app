@@ -4,6 +4,10 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { firstName } from "@/lib/agent-org";
 import { executeItem, type QueueItemLite } from "@/lib/agent-execute";
 
+// Approve can upload a rendered video to YouTube or wait for Instagram to
+// process a reel — well past the default function budget.
+export const maxDuration = 120;
+
 // Review-queue listing + actions. Item writes also append to
 // agent_action_history — the accountability ledger the History view reads.
 export async function GET(req: NextRequest) {

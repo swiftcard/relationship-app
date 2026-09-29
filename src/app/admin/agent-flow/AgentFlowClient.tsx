@@ -18,7 +18,8 @@ type RunRow = { id: string; agent_id: string; status: string; started_at: string
 type UsageWindow = { utilization: number; resets_at: string | null } | null;
 type PlanUsage = { source: "live" | "snapshot" | "none"; five_hour?: UsageWindow; seven_day?: UsageWindow; captured_at?: string };
 type Item = { id: string; agent_id: string; item_type: string; platform: string | null; target: string | null; target_url: string | null; title: string; content: string | null; context: string | null; status: string; payload: Record<string, unknown> | null; created_at: string };
-type Board = { ready: boolean; message?: string; settings: Settings[]; system: { paused: boolean; monthly_usage_cap_tokens?: number; digest_email: string; auto_pause_at: string | null; weekly_focus?: string | null }; latestRuns: Record<string, RunRow>; recentRuns: RunRow[]; pendingBy: Record<string, number>; pendingTotal: number; spendBy: Record<string, number>; dispatchConfigured: boolean; connectors?: Record<string, boolean>; tokensBy?: Record<string, number>; playbooks?: Playbook[]; brainReady?: boolean };
+type ConnSummary = { app: boolean; connected: boolean; account: string | null; connected_at: string | null; expires_at: string | null; note: string | null };
+type Board = { ready: boolean; message?: string; settings: Settings[]; system: { paused: boolean; monthly_usage_cap_tokens?: number; digest_email: string; auto_pause_at: string | null; weekly_focus?: string | null }; latestRuns: Record<string, RunRow>; recentRuns: RunRow[]; pendingBy: Record<string, number>; pendingTotal: number; spendBy: Record<string, number>; dispatchConfigured: boolean; connectors?: Record<string, boolean>; connections?: Record<string, ConnSummary>; tokensBy?: Record<string, number>; playbooks?: Playbook[]; brainReady?: boolean };
 
 /** 12,345 → "12.3k", 1,234,567 → "1.23M". */
 function fmtTok(n: number | undefined | null): string {
@@ -30,11 +31,26 @@ function fmtTok(n: number | undefined | null): string {
 
 // Mirrors src/lib/agent-execute.ts matching rules (armed-ness comes from the
 // board payload — the client never sees tokens). Kept in sync by tests.
+const platformOf = (i: Item) => String(i.platform ?? i.payload?.platform ?? "").toLowerCase().trim();
+const SOCIAL_KINDS = new Set(["social_post", "generic", "local_post"]);
 const CONNECTOR_RULES: Array<{ id: string; label: string; matches: (i: Item) => boolean }> = [
-  { id: "linkedin", label: "Post to LinkedIn", matches: (i) => i.platform === "linkedin" && ["generic", "video_script", "blog_post"].includes(i.item_type) },
-  { id: "higgsfield", label: "Send to Higgsfield", matches: (i) => i.item_type === "video_script" && i.platform !== "linkedin" },
-  { id: "reddit", label: "Reply on Reddit", matches: (i) => i.platform === "reddit" && ["reply_draft", "outreach_draft"].includes(i.item_type) && !!i.target_url },
+  { id: "linkedin", label: "Post to LinkedIn", matches: (i) => platformOf(i) === "linkedin" && (SOCIAL_KINDS.has(i.item_type) || ["video_script", "blog_post"].includes(i.item_type)) },
+  { id: "x", label: "Post to X", matches: (i) => ["x", "twitter"].includes(platformOf(i)) && SOCIAL_KINDS.has(i.item_type) },
+  { id: "facebook", label: "Post to Facebook", matches: (i) => ["facebook", "fb"].includes(platformOf(i)) && SOCIAL_KINDS.has(i.item_type) },
+  { id: "instagram", label: "Post to Instagram", matches: (i) => ["instagram", "ig"].includes(platformOf(i)) && SOCIAL_KINDS.has(i.item_type) },
+  { id: "youtube", label: "Upload to YouTube", matches: (i) => ["youtube", "youtube_shorts", "yt"].includes(platformOf(i)) && SOCIAL_KINDS.has(i.item_type) },
+  { id: "higgsfield", label: "Send to Higgsfield", matches: (i) => (i.item_type === "video_script" || i.item_type === "image_brief") && platformOf(i) !== "linkedin" },
+  { id: "reddit", label: "Reply on Reddit", matches: (i) => platformOf(i) === "reddit" && ["reply_draft", "outreach_draft"].includes(i.item_type) && !!i.target_url },
 ];
+// Accounts the owner connects with one click (OAuth, tokens encrypted
+// server-side). Facebook + Instagram share the one Meta connection.
+const OAUTH_PROVIDERS = [
+  { id: "x", name: "X", posts: "posts as the SwiftCard X account", env: "X_CLIENT_ID + X_CLIENT_SECRET" },
+  { id: "meta", name: "Facebook + Instagram", posts: "posts to the SwiftCard Page and its Instagram", env: "META_APP_ID + META_APP_SECRET" },
+  { id: "youtube", name: "YouTube", posts: "uploads rendered videos to the channel", env: "GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET" },
+  { id: "linkedin", name: "LinkedIn", posts: "posts as the SwiftCard Page", env: "LINKEDIN_CLIENT_ID + LINKEDIN_CLIENT_SECRET" },
+];
+const ENV_CONNECTORS = CONNECTOR_RULES.filter((c) => c.id === "higgsfield" || c.id === "reddit");
 /** Findings and reports are ACKNOWLEDGED, not executed — the green button files
  *  them as read. This used to be a hardcoded list of five item types, so every
  *  watchdog added in the 2026-09-08 second wave (Cara's card_finding, Lyn's
@@ -47,7 +63,6 @@ export function isAcknowledgeable(itemType: string): boolean {
 }
 
 const CONNECTOR_ENVS: Record<string, string> = {
-  linkedin: "LINKEDIN_ACCESS_TOKEN + LINKEDIN_AUTHOR_URN",
   higgsfield: "HIGGSFIELD_API_KEY_ID + HIGGSFIELD_API_KEY_SECRET",
   reddit: "REDDIT_CLIENT_ID + SECRET + USERNAME + PASSWORD",
 };
@@ -290,6 +305,26 @@ export default function AgentFlowClient() {
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 
   const say = (m: string) => { setToast(m); setTimeout(() => setToast(""), 4200); };
+  // Return leg of Settings → Connect: the callback lands on
+  // /admin/agent-flow?view=settings&connected=x:@handle (or &connect_error=…).
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const ok = q.get("connected");
+    const err = q.get("connect_error");
+    if (!ok && !err && !q.get("view")) return;
+    const t = setTimeout(() => {
+      if (q.get("view") === "settings") setView("settings");
+      if (ok) { setToast(`Connected ${ok.replace(":", " as ")} — Approve now posts there.`); setTimeout(() => setToast(""), 7000); }
+      if (err) { setToast(`Couldn't connect — ${err}`); setTimeout(() => setToast(""), 9000); }
+      window.history.replaceState(null, "", window.location.pathname);
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
+  const disconnect = async (provider: string) => {
+    await fetch(`/api/admin/connect/${provider}`, { method: "DELETE" }).catch(() => {});
+    say("Disconnected — Approve is back to the copy flow for that platform.");
+    setBoard((b) => b && b.connections ? { ...b, connections: { ...b.connections, [provider]: { ...b.connections[provider], connected: false, account: null, note: null } } } : b);
+  };
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
 
   // Claude-plan usage meter: on load + manual ↻ + every 60s.
@@ -1132,9 +1167,32 @@ export default function AgentFlowClient() {
           <p className="text-gray-500 text-xs">The levers. Everything takes effect on the next run — no deploys.</p>
           <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
             <p className="text-white text-sm font-semibold">Connections — Approve becomes the send button</p>
-            <p className="text-gray-500 text-xs mt-0.5 mb-2.5">When a platform is connected, approving an item posts it immediately as you. Not connected = the classic Approve &amp; Copy flow. Tokens live in Vercel env vars — nothing is stored in the browser.</p>
-            <div className="space-y-1.5">
-              {CONNECTOR_RULES.map((c) => {
+            <p className="text-gray-500 text-xs mt-0.5 mb-2.5">Connect an account once and approving an item posts it there immediately, as SwiftCard. Not connected = the classic Approve &amp; Copy flow. Tokens are encrypted server-side — nothing is stored in the browser.</p>
+            <div className="space-y-2">
+              {OAUTH_PROVIDERS.map((p) => {
+                const c = board.connections?.[p.id];
+                return (
+                  <div key={p.id} className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${c?.connected ? "bg-emerald-400" : "bg-gray-700"}`} />
+                    <span className="text-gray-200 font-semibold">{p.name}</span>
+                    <span className="text-gray-500">{p.posts}</span>
+                    {c?.connected ? (
+                      <span className="ml-auto flex flex-wrap items-center gap-2">
+                        <span className="text-emerald-400 font-semibold">{c.account ?? "Connected"} ✓</span>
+                        {c.expires_at && <span className="text-amber-400" title="This platform issues no refresh token — reconnect before then">until {new Date(c.expires_at).toLocaleDateString()}</span>}
+                        <a href={`/api/admin/connect/${p.id}`} className="text-gray-400 hover:text-white underline">reconnect</a>
+                        <button onClick={() => disconnect(p.id)} className="text-gray-500 hover:text-red-400 underline">disconnect</button>
+                      </span>
+                    ) : c?.app ? (
+                      <a href={`/api/admin/connect/${p.id}`} className="ml-auto bg-blue-600 hover:bg-blue-500 text-white font-bold px-3 py-1 rounded-full">Connect</a>
+                    ) : (
+                      <span className="text-gray-600 ml-auto">set <code className="text-gray-400">{p.env}</code> in Vercel, then Connect</span>
+                    )}
+                    {c?.note && <p className="w-full text-amber-500/90 text-[0.6875rem] pl-4">{c.note}</p>}
+                  </div>
+                );
+              })}
+              {ENV_CONNECTORS.map((c) => {
                 const on = !!board.connectors?.[c.id];
                 return (
                   <div key={c.id} className="flex flex-wrap items-center gap-2 text-xs">
@@ -1146,7 +1204,7 @@ export default function AgentFlowClient() {
                   </div>
                 );
               })}
-              <p className="text-gray-600 text-[0.6875rem] pt-1">Instagram, Facebook &amp; X don&apos;t allow personal auto-posting through their public APIs — those stay Approve &amp; Copy. Blog posts already publish themselves via the Publish button.</p>
+              <p className="text-gray-600 text-[0.6875rem] pt-1">Instagram needs a picture or video on the item (a ready asset from the creative pool); YouTube uploads the rendered video from the pool. TikTok forbids tools that post to your own account and Reddit bans automated promotion — those stay Approve &amp; Copy. Blog posts publish themselves via the Publish button.</p>
             </div>
           </div>
           <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">

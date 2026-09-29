@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { connectorStatus } from "@/lib/agent-execute";
+import { loadConnections, summarizeConnections } from "@/lib/agent-connections";
 import agentConfig from "../../../../../marketing-agents/config.json";
 
 // Every agent in config.json gets a settings row, even when the seed in
@@ -47,6 +48,7 @@ export async function GET() {
     const pendingBy: Record<string, number> = {};
     for (const q of pending.data ?? []) pendingBy[q.agent_id] = (pendingBy[q.agent_id] ?? 0) + 1;
     const spendBy: Record<string, number> = {};
+    const connections = await loadConnections();
     const tokensBy: Record<string, number> = {};
     for (const r of monthRuns.data ?? []) {
       spendBy[r.agent_id] = (spendBy[r.agent_id] ?? 0) + Number(r.usage_usd);
@@ -58,7 +60,8 @@ export async function GET() {
       latestRuns: latest, recentRuns: runs.data,
       pendingBy, pendingTotal: (pending.data ?? []).length, spendBy, tokensBy,
       dispatchConfigured: !!process.env.GITHUB_AGENTS_TOKEN,
-      connectors: connectorStatus(),
+      connectors: connectorStatus(connections),
+      connections: summarizeConnections(connections),
       playbooks,
       brainReady: !(settings.data ?? []).length || (settings.data ?? []).some((r) => "schedule_source" in r),
     });
