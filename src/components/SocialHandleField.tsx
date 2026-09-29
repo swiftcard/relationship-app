@@ -156,7 +156,9 @@ export default function SocialHandleField({
           spellCheck={false}
           placeholder="username"
           aria-label={`${spec.label} username or profile link`}
-          value={managed ? value : shown}
+          // `shown` for a managed value too: it sits after the same prefix,
+          // and the raw "@northbeamhomes" read "instagram.com/ @northbeamhomes".
+          value={shown}
           onChange={(e) => onChange(e.target.value)}
           onBlur={onBlur}
           readOnly={managed}

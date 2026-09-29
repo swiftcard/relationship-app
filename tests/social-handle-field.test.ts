@@ -68,7 +68,9 @@ describe("the box itself", () => {
 
   it("keeps the saved value untouched — only the display changes", () => {
     expect(src).toMatch(/onChange=\{\(e\) => onChange\(e\.target\.value\)\}/);
-    expect(src).toMatch(/value=\{managed \? value : shown\}/);
+    // The box always shows the tidied value — a managed (office) one too,
+    // which read "instagram.com/ @northbeamhomes" before (live check).
+    expect(src).toMatch(/value=\{shown\}/);
   });
 
   it("the focus ring is on the whole box, so the global outline cannot cut through it", () => {

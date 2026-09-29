@@ -199,6 +199,9 @@ describe("what the rows show and say", () => {
     const page = await mount(390, phoneCol(390), { managedInstagram: true });
     try {
       expect(await page.$eval('[data-social-row="instagram"] input', (i) => (i as HTMLInputElement).readOnly)).toBe(true);
+      // Saved as "@northwindpartners": shown without the @ after instagram.com/
+      // (it read "instagram.com/ @northbeamhomes" on the live member editor).
+      expect(await page.$eval('[data-social-row="instagram"] input', (i) => (i as HTMLInputElement).value)).toBe("northwindpartners");
       expect(await page.$eval('[data-social-row="instagram"] p', (p) => (p as HTMLElement).innerText)).toBe("Your page shows the company Instagram.");
       expect(await page.$('[data-social-row="instagram"] a')).toBeNull();
     } finally { await page.close(); }
