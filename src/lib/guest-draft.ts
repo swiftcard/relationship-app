@@ -70,12 +70,14 @@ function readStorage(key: string = GUEST_DRAFT_KEY): GuestDraft | null {
 const mems = new Map<string, GuestDraft | null>();
 const flushTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-function writeNow(draft: GuestDraft, key: string = GUEST_DRAFT_KEY): void {
-  if (!storageAvailable()) return;
+function writeNow(draft: GuestDraft, key: string = GUEST_DRAFT_KEY): boolean {
+  if (!storageAvailable()) return false;
   try {
     localStorage.setItem(key, JSON.stringify(draft));
+    return true;
   } catch {
     /* quota / private mode — the in-memory copy still carries the session */
+    return false;
   }
 }
 
@@ -94,11 +96,13 @@ export function draftStore(key: string) {
     mems.set(key, d);
     return d;
   };
-  const flush = (): void => {
+  /** Write the pending draft now. false = it did NOT reach storage, so a page
+   *  load would lose it (the LinkedIn photo hop checks this before leaving). */
+  const flush = (): boolean => {
     const t = flushTimers.get(key);
     if (t) { clearTimeout(t); flushTimers.delete(key); }
     const m = mems.get(key);
-    if (m) writeNow(m, key);
+    return m ? writeNow(m, key) : true;
   };
   const save = (partial: Partial<GuestDraft>): void => {
     const base: GuestDraft =

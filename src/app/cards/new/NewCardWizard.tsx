@@ -2105,12 +2105,18 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                 {/* Gravatar/web lookup works from the typed email pre-account;
                     a guest's Connect LinkedIn runs the one-shot guest OAuth
                     photo import and returns here via ?li_photo= (see the effect
-                    above) — their draft stays local the whole time. */}
+                    above) — their draft stays local the whole time. A signed-in
+                    builder with its own draft (canDraft) takes that same round
+                    trip: the draft is written first, and the hop is refused if
+                    it can't be. Only an Office member (no draft) still uses the
+                    popup that keeps this page alive. */}
                 <ProfilePhotoSuggest
                   linkedinEnabled={linkedinEnabled}
                   returnTo={guest ? "/cards/new" : "/cards/new?add=1"}
                   guest={guest}
                   email={email}
+                  photoReturn={canDraft}
+                  beforeLeave={() => drafts.flush()}
                   onConfirm={(url) => setHeadshotUrl(url)}
                 />
               </div>

@@ -81,6 +81,13 @@ async function openLinkedInConnect(href: string, opts: { guest: boolean; returnT
   window.location.href = href;
 }
 
+/** What to tell the user when a one-shot import came back without a photo. */
+function oneShotFailure(status: string | null): string | null {
+  if (status === "nophoto") return "Your LinkedIn profile doesn't have a photo to import. Upload one instead.";
+  if (status === "error") return "LinkedIn didn't finish connecting — try again, or upload a photo instead.";
+  return null;
+}
+
 // "Suggest my profile picture" — drops in next to the headshot uploader in the
 // card editors. Gathers photo candidates from every outlet we can reach for the
 // SIGNED-IN user's own identity:
@@ -109,6 +116,16 @@ type Props = {
   onConfirm: (photoUrl: string) => void;
   /** Same-origin path to return to after the LinkedIn consent screen. */
   returnTo: string;
+  /** The page keeps its own progress across a page load (the card wizard's
+   *  draft) and applies a returning ?li_photo= itself. Then a signed-in user
+   *  gets the SAME LinkedIn round trip a guest does: one hop in this tab (the
+   *  in-app sheet on iOS), the photo back in the URL. No popup, no session
+   *  hand-off, no second import step — every one of which broke on a phone at
+   *  some point (owner, 2026-09-29: "it fully glitched and just didn't work"). */
+  photoReturn?: boolean;
+  /** Persist the page's progress before the hop. Returning false (the save
+   *  failed — storage full or blocked) cancels it: leaving would lose the card. */
+  beforeLeave?: () => boolean;
 };
 
 type Candidate = {
@@ -127,9 +144,12 @@ type State =
   | { kind: "applying"; source: Candidate["source"] }
   | { kind: "error"; message: string };
 
-export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, returnTo, guest = false, email }: Props) {
+export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, returnTo, guest = false, email, photoReturn = false, beforeLeave }: Props) {
   const [state, setState] = useState<State>({ kind: "idle" });
   const [applied, setApplied] = useState(false);
+  // The one-shot photo import (guest=1 connect → ?li_photo=) instead of the
+  // account connect. Guests have no other option; photoReturn pages opt in.
+  const oneShot = guest || photoReturn;
 
   // ── The return leg from "Connect LinkedIn" ────────────────────────────────
   // The OAuth round trip lands the signed-in user back on this editor with
@@ -166,7 +186,7 @@ export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, return
   }
 
   useEffect(() => {
-    if (guest) return;
+    if (oneShot) return;
     // Inside the consent popup nothing should run: the relay page owns that
     // document and is about to close it.
     if (isLinkedInPopup()) return;
@@ -195,7 +215,22 @@ export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, return
   // message and the storage event arriving together import one photo.
   const pendingNonce = useRef<string | null>(null);
   useEffect(() => {
-    if (guest) return;
+    if (oneShot) {
+      // The iOS shell finishes a one-shot FAILURE in place (NativeAppBridge
+      // posts the status instead of reloading, since there is no photo to
+      // carry). Nothing listened here, so a failed import in the app looked
+      // exactly like the button doing nothing. Success always reloads with
+      // ?li_photo= and is applied by the page.
+      const onOneShotMessage = (e: MessageEvent) => {
+        if (e.origin !== window.location.origin) return;
+        const data = e.data as LinkedInRelayMessage | null;
+        if (!data || data.source !== LINKEDIN_MESSAGE) return;
+        const message = oneShotFailure(data.status);
+        if (message) setState({ kind: "error", message });
+      };
+      window.addEventListener("message", onOneShotMessage);
+      return () => window.removeEventListener("message", onOneShotMessage);
+    }
     function take(status: string | null) {
       pendingNonce.current = null;
       void finishLinkedInReturn(status);
@@ -234,14 +269,14 @@ export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, return
       document.removeEventListener("visibilitychange", onVisible);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- listener only needs the stable handler
-  }, [guest]);
+  }, [oneShot]);
 
-  // A GUEST's failed import. Success is applied by the builder (?li_photo=);
+  // A one-shot import's failure. Success is applied by the builder (?li_photo=);
   // a failure used to reopen the builder with nothing said, which looks like
   // the button did nothing. Read from the URL (the card builder leaves it
   // there) or from the hand-over the homepage builders make before stripping it.
   useEffect(() => {
-    if (!guest) return;
+    if (!oneShot) return;
     let status: string | null = null;
     const sp = new URLSearchParams(window.location.search);
     if (sp.get("integration") === "linkedin" && !sp.has("li_photo")) {
@@ -249,14 +284,11 @@ export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, return
       sp.delete("integration"); sp.delete("status");
       window.history.replaceState(null, "", `${window.location.pathname}${sp.size ? `?${sp}` : ""}${window.location.hash}`);
     }
-    status = status ?? takeGuestLinkedInStatus();
-    if (status !== "error" && status !== "nophoto") return;
-    const message = status === "nophoto"
-      ? "Your LinkedIn profile doesn't have a photo to import. Upload one instead."
-      : "LinkedIn didn't finish connecting — try again.";
+    const message = oneShotFailure(status ?? takeGuestLinkedInStatus());
+    if (!message) return;
     const t = setTimeout(() => setState({ kind: "error", message }), 0);
     return () => clearTimeout(t);
-  }, [guest]);
+  }, [oneShot]);
 
   /** One connect attempt: the nonce this page will accept a result for. */
   function startConnect(): string {
@@ -272,6 +304,19 @@ export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, return
   // consented photo into storage and returns it via ?li_photo= for the builder
   // to apply to the draft. Nothing is persisted server-side beyond the photo.
   const guestConnectHref = `/api/integrations/linkedin/connect?guest=1&next=${encodeURIComponent(returnTo)}`;
+  const connectHref = oneShot ? guestConnectHref : connectUrl;
+
+  /** Every LinkedIn button on this component goes through here. */
+  function connectLinkedIn(e?: { preventDefault(): void }) {
+    e?.preventDefault();
+    // The one-shot hop leaves this page. Never with the card unsaved: a failed
+    // save stops here, with the upload button right above as the way forward.
+    if (oneShot && beforeLeave && !beforeLeave()) {
+      setState({ kind: "error", message: "Couldn't save your card on this device to open LinkedIn — upload your photo above instead." });
+      return;
+    }
+    void openLinkedInConnect(connectHref, { guest: oneShot, returnTo, nonce: oneShot ? undefined : startConnect() });
+  }
 
   async function suggest() {
     setState({ kind: "loading" });
@@ -372,10 +417,15 @@ export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, return
               buries it behind a click + fetch round trip before the "Connect
               LinkedIn" button ever appears). Desktop already has the room to
               discover it via the button above, so this nudge is mobile-only.
-              Guests see it too — their Connect button routes through signup. */}
+              Guests see it too. The words are a real link: as plain text they
+              read as a button, and tapping them did nothing (2026-09-29). */}
           {linkedinEnabled && (
             <p className="lg:hidden text-[0.6875rem] text-gray-500 mt-1">
-              Tip: connect your LinkedIn and we&apos;ll pull your photo from there automatically.
+              Tip:{" "}
+              <a href={connectHref} onClick={connectLinkedIn} className="font-medium text-blue-700 hover:text-blue-800 underline underline-offset-2">
+                connect your LinkedIn
+              </a>{" "}
+              and we&apos;ll pull your photo from there automatically.
             </p>
           )}
         </>
@@ -439,8 +489,8 @@ export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, return
                 Also on LinkedIn? Connect to import your profile photo:
               </p>
               <a
-                href={guest ? guestConnectHref : connectUrl}
-                onClick={(e) => { e.preventDefault(); void openLinkedInConnect(guest ? guestConnectHref : connectUrl, { guest, returnTo, nonce: startConnect() }); }}
+                href={connectHref}
+                onClick={connectLinkedIn}
                 className="text-xs bg-[#0A66C2] hover:bg-[#0956a5] text-white font-semibold px-3 py-1.5 rounded-full transition-colors"
               >
                 Connect LinkedIn
@@ -451,8 +501,8 @@ export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, return
             <div className="mt-1 pt-2 border-t border-gray-800 flex items-center gap-3 flex-wrap">
               <p className="text-[0.6875rem] text-amber-300/90">Your LinkedIn permission expired.</p>
               <a
-                href={connectUrl}
-                onClick={(e) => { e.preventDefault(); void openLinkedInConnect(connectUrl, { guest: false, returnTo, nonce: startConnect() }); }}
+                href={connectHref}
+                onClick={connectLinkedIn}
                 className="text-xs bg-amber-500 hover:bg-amber-600 text-white font-semibold px-3 py-1.5 rounded-full transition-colors"
               >
                 Reconnect LinkedIn

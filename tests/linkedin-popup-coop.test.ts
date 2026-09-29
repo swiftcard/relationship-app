@@ -78,7 +78,10 @@ describe("the page that opened the popup picks the result up", () => {
   const suggest = read("src/components/ProfilePhotoSuggest.tsx");
 
   it("every Connect/Reconnect button starts a nonce'd attempt", () => {
-    expect(suggest.match(/nonce: startConnect\(\)/g)?.length).toBe(2);
+    // One entry point for every LinkedIn button; the account connect (popup)
+    // always carries a fresh nonce, the one-shot page hop needs none.
+    expect(suggest).toMatch(/nonce: oneShot \? undefined : startConnect\(\)/);
+    expect(suggest.match(/onClick=\{connectLinkedIn\}/g)?.length).toBeGreaterThanOrEqual(3);
     expect(suggest).toMatch(/popupConnectUrl\(href, opts\.returnTo, opts\.nonce\)/);
   });
 

@@ -37,7 +37,7 @@ describe("LinkedIn connect leaves the webview correctly on iOS", () => {
   it("never leaves the connect as a bare link on native", () => {
     // A plain <a href> is exactly the shape that produced the bug: the shell
     // sees a cross-origin 302 and hands the whole flow to Safari.
-    const anchors = suggest.match(/<a\b[^>]*connectUrl[^>]*>/gs) ?? [];
+    const anchors = suggest.match(/<a\b[^>]*connectHref[^>]*>/gs) ?? [];
     expect(anchors.length, "expected the connect anchors to still exist").toBeGreaterThan(0);
     for (const a of anchors) {
       expect(a, `connect anchor must intercept its click:\n${a}`).toMatch(/onClick=/);
@@ -137,9 +137,9 @@ describe("connecting from the headshot section auto-applies the photo", () => {
     expect(effect).toMatch(/void suggest\(\)/);
   });
 
-  it("guests are excluded — their photo returns via ?li_photo= to the builder", () => {
+  it("one-shot imports (guests, the card wizard) are excluded — their photo returns via ?li_photo= to the builder", () => {
     const effect = suggest.slice(suggest.indexOf("useEffect"), suggest.indexOf("async function suggest"));
-    expect(effect).toMatch(/if \(guest\) return/);
+    expect(effect).toMatch(/if \(oneShot\) return/);
     expect(read("src/app/cards/new/NewCardWizard.tsx")).toMatch(/li_photo/);
   });
 });
