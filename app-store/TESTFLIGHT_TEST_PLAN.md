@@ -47,7 +47,8 @@ Selling suppression (walk EVERY one)
 Core product
 - [ ] Card edit: photo upload (photo library permission prompt appears HERE,
       not at launch), logo upload, template change, social links, save.
-- [ ] Public card opens in-app via universal link (needs Team ID + AASA deploy).
+- [ ] A public card link (tapped in Messages / Notes, or "View Live Link") opens
+      in Safari, never inside the app.
 - [ ] "Report this card" link at the bottom of the public card opens the
       contact form pre-filled with the card URL.
 - [ ] Lead capture on own card → contact appears in Contacts.
@@ -82,8 +83,9 @@ Core product
       signed in: opens in Safari, NOT inside the app.
 - [ ] Account deletion end-to-end: survey → DELETE → password → signed out →
       /account-deleted state; log back in within window → reopen works.
-- [ ] Office: invite acceptance via emailed link (universal link opens app →
-      login → join), member card creation, admin views work; member CANNOT
+- [ ] Office: invite acceptance via emailed link (opens in Safari → sign in /
+      create account → join; then sign in to the app), member card creation,
+      admin views work; member CANNOT
       delete account (clear block message); owner deletion shows the
       team-consequence warning.
 

@@ -70,7 +70,8 @@ HOW TO TEST THE MAIN FLOWS
    email/password, Google, and Apple all work).
 2. Dashboard: the demo card is populated. Tap Share → QR / Wallet / share sheet.
 3. Open the public card: visit the demo card's link from the share sheet —
-   it opens inside the app via universal link. A "Report this card" link
+   it opens in Safari (card links never open inside the app; a public card
+   is what the people you share with see). A "Report this card" link
    sits at the bottom of every public card (our UGC reporting mechanism;
    reports go to hello@swiftcard.me and are handled within one business day;
    our admin console can take any reported card offline).

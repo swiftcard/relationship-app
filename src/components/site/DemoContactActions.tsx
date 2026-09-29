@@ -1,14 +1,13 @@
 // Call · Text · Email circles for the MARKETING replicas of the app
-// (DashboardDemo, /preview) — the look of components/ContactQuickActions,
-// without links: these are fictional people.
-
-// ── Contact row action button — mirrors components/ContactQuickActions ──────
-// A span, not a link: these are fictional people (no tel:/mailto: to nowhere).
-// The .sc-qa-* classes are the product's own, so the light theme darkens them
-// exactly as it does on the real Contacts page.
+// (DashboardDemo, /preview) — the look of components/ContactQuickActions.
+// Pictures, not links: these are fictional people (no tel:/mailto: to
+// nowhere), so each is a labelled image. The .sc-qa-* classes are the
+// product's own, so the light theme darkens them exactly as it does on the
+// real Contacts page.
 function ActionButton({ label, tone, children }: { label: string; tone: "call" | "text" | "email"; children: React.ReactNode }) {
   return (
     <span
+      role="img"
       title={label}
       aria-label={label}
       className={`sc-qa-${tone} flex items-center justify-center w-8 h-8 rounded-full border shrink-0`}

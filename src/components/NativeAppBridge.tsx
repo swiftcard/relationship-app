@@ -72,20 +72,41 @@ export default function NativeAppBridge() {
     // this frame, hand it to the browser, and put the app back on its
     // dashboard. Never in an iframe (the in-app previews embed these pages on
     // purpose) and never for ?embed renders.
+    //
+    // Checked NOW and again whenever a <meta> lands later. The marker is page
+    // metadata, which Next streams into the body AFTER the page resolves — on
+    // production it arrives ~20KB into the HTML, after the loading skeleton —
+    // and a client-side navigation adds it later still. A check made once on
+    // mount could run before it existed and never fire.
+    let bounced = false;
+    const bounceIfPublic = () => {
+      if (bounced || window.top !== window) return;
+      if (!document.querySelector(`meta[name="${PUBLIC_PAGE_META}"]`)) return;
+      if (new URLSearchParams(window.location.search).has("embed")) return;
+      bounced = true;
+      document.documentElement.style.visibility = "hidden";
+      const dest = window.location.pathname + window.location.search + window.location.hash;
+      import("@/lib/external-purchase")
+        .then(({ openLinkInDefaultBrowser }) => openLinkInDefaultBrowser(dest))
+        .catch(() => false)
+        .finally(() => window.location.replace("/dashboard"));
+    };
+    let publicWatch: MutationObserver | null = null;
     try {
-      if (
-        window.top === window &&
-        document.querySelector(`meta[name="${PUBLIC_PAGE_META}"]`) &&
-        !new URLSearchParams(window.location.search).has("embed")
-      ) {
-        document.documentElement.style.visibility = "hidden";
-        const dest = window.location.pathname + window.location.search + window.location.hash;
-        handedOff = { dest, at: Date.now() };
-        import("@/lib/external-purchase")
-          .then(({ openLinkInDefaultBrowser }) => openLinkInDefaultBrowser(dest))
-          .catch(() => false)
-          .finally(() => window.location.replace("/dashboard"));
-      }
+      bounceIfPublic();
+      // Native only (this whole effect is), and cheap: a tag-name test per
+      // inserted element, a lookup only when a <meta> actually arrives.
+      publicWatch = new MutationObserver((records) => {
+        for (const r of records) {
+          for (const n of r.addedNodes) {
+            if (n.nodeType === 1 && (n.nodeName === "META" || (n as Element).getElementsByTagName("meta").length)) {
+              bounceIfPublic();
+              return;
+            }
+          }
+        }
+      });
+      publicWatch.observe(document.documentElement, { childList: true, subtree: true });
     } catch { /* ignore */ }
 
     let removeListener: (() => void) | null = null;
@@ -225,7 +246,7 @@ export default function NativeAppBridge() {
         });
         if (cancelled) { handle.remove(); return; }
         removeListener = () => handle.remove();
-      } catch { /* plugin unavailable (older shell build) — universal links still open the app's last page */ }
+      } catch { /* plugin unavailable (older shell build) — nothing to listen for */ }
 
       // Push-notification taps: lib/apns.ts puts the in-app destination in the
       // payload's custom `url`; navigate there when the user opens one.
@@ -374,6 +395,7 @@ export default function NativeAppBridge() {
     return () => {
       cancelled = true;
       removeListener?.();
+      publicWatch?.disconnect();
     };
   }, []);
 

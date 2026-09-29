@@ -376,7 +376,7 @@ export default async function DashboardPage({
     { data: recentViews },
     locViewsRes,
     { data: linkTapRows },
-    { data: leads },
+    leadCounts,
     bellNotifRes,
     ownedOfficeRes,
     canViewOfficeAdminRes,
@@ -477,14 +477,21 @@ export default async function DashboardPage({
     // allCards.find(...) above, i.e. it is ALWAYS one of this user's own card
     // slugs (or "" when nothing is selected), so this cannot read another
     // account's leads.
-    getAdminSupabase()
-      .from("leads")
-      // Only `tags`: the dashboard lists no contacts since Quick Contacts
-      // went (2026-09-29). The rows are counted — real vs sample, locked vs
-      // visible — for the limit banners, the Traffic "Contacts" stat and the
-      // review prompts; /contacts is where they are listed.
-      .select("tags")
-      .eq("card_owner", activeUsername),
+    //
+    // COUNTS only: the dashboard lists no contacts since Quick Contacts went
+    // (2026-09-29) — the numbers feed the limit banners, the Traffic
+    // "Contacts" stat and the review prompts; /contacts lists them. Exact
+    // head counts, in parallel: no rows cross the wire, and no 1,000-row cap
+    // (reading rows to count them stopped at PostgREST's max-rows).
+    (async () => {
+      const count = () => getAdminSupabase().from("leads").select("id", { count: "exact", head: true }).eq("card_owner", activeUsername);
+      const [all, sample, locked] = await Promise.all([
+        count(),
+        count().contains("tags", ["demo"]),
+        count().contains("tags", [LOCKED_LEAD_TAG]),
+      ]);
+      return { total: all.count ?? 0, sample: sample.count ?? 0, locked: locked.count ?? 0 };
+    })(),
     // Notifications are read with the service role, always scoped to this
     // user_id: the table is not readable with a user's own session, so a Free
     // account can't pull the unredacted location text (lock-client-reads.sql).
@@ -670,16 +677,14 @@ export default async function DashboardPage({
       .slice(0, 8);
   }
 
-  const allLeads = leads ?? [];
   // Free plan: leads captured beyond the 5/month cap are tagged locked. The owner
   // sees only unlocked leads; the locked ones are counted for the upgrade banner
   // and hidden until they go Pro (upgrading makes isPro true → nothing hidden).
-  const isLocked = (l: { tags?: string[] | null }) => Array.isArray(l.tags) && l.tags.includes(LOCKED_LEAD_TAG);
-  const visibleLeads = isPro ? allLeads : allLeads.filter((l) => !isLocked(l));
+  const lockedCount = isPro ? 0 : leadCounts.locked;
   // Real contacts only — the sample contact every new account starts with is
-  // tagged "demo" and must not count as a milestone (FirstLeadNudge, RateUsBanner).
-  const realLeadCount = visibleLeads.filter((l) => !(Array.isArray(l.tags) && l.tags.includes("demo"))).length;
-  const lockedCount = isPro ? 0 : allLeads.length - visibleLeads.length;
+  // tagged "demo" and must not count as a milestone (FirstLeadNudge,
+  // RateUsBanner). The sample is never locked, so the two never overlap.
+  const realLeadCount = Math.max(0, leadCounts.total - leadCounts.sample - lockedCount);
 
   const monthlyLeadsUsed = readUsage(profile.customization).leads;
 

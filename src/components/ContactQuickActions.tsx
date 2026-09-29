@@ -23,9 +23,14 @@ import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 // shades; the light theme darkens them, since the original green and purple
 // were under 3:1 on white.
 
-/** Digits and a leading +, the same rule as ShareMyInfoButton's smsHref. */
-function dialable(phone: string): string {
-  return phone.replace(/[^\d+]/g, "");
+/**
+ * The number to dial and any extension. Digits and + only — the same rule as
+ * ShareMyInfoButton's smsHref — but an extension is split off FIRST: kept in,
+ * "555-0100 x12" became tel:555010012, a different (or invalid) number.
+ */
+function dialable(phone: string): { number: string; ext: string } {
+  const m = phone.match(/^(.*?)\s*(?:ext\.?|extension|x|#)\s*(\d+)\s*$/i);
+  return { number: (m ? m[1] : phone).replace(/[^\d+]/g, ""), ext: m ? m[2] : "" };
 }
 
 function stop(e: MouseEvent | KeyboardEvent) {
@@ -56,7 +61,9 @@ export default function ContactQuickActions({
   phone?: string | null;
   email?: string | null;
 }) {
-  const tel = dialable((phone ?? "").trim());
+  const { number, ext } = dialable((phone ?? "").trim());
+  // A bare "+" (or any value with no digit) is not a number to call.
+  const tel = /\d/.test(number) ? number : "";
   const mail = (email ?? "").trim();
   if (!tel && !mail) return null;
   const who = name.trim() || "contact";
@@ -66,7 +73,9 @@ export default function ContactQuickActions({
     // iPhone SE), where three full-size ones left the name ~68px.
     <div className="flex items-center gap-1.5 max-[359px]:gap-1 shrink-0" data-contact-actions="">
       {tel && (
-        <Action href={`tel:${tel}`} label={`Call ${who}`} tone="call">
+        // "," is the dialer's pause: it rings the number, then keys the
+        // extension. A text goes to the number alone.
+        <Action href={`tel:${tel}${ext ? `,${ext}` : ""}`} label={`Call ${who}`} tone="call">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-4 h-4" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
           </svg>

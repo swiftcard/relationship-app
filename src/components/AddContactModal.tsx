@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { scanBusinessCard, ProRequiredError, AiConsentRequiredError } from "@/lib/scan-card";
 import { PlanGate } from "@/components/PlanGate";
@@ -12,10 +11,9 @@ export default function AddContactModal({
 }: {
   /** Username of the card the contact should be attached to (the selected card). */
   cardOwner?: string;
-  /** Called with the new lead so a client list can insert it instantly (contacts page). */
-  onAdded?: (lead: unknown) => void;
-} = {}) {
-  const router = useRouter();
+  /** Called with the new lead so the Contacts list can insert it instantly. */
+  onAdded: (lead: unknown) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", company: "", notes: "", where_met: "" });
   const [saving, setSaving] = useState(false);
@@ -40,8 +38,8 @@ export default function AddContactModal({
   }
 
   // Scan a business card → auto-fill name/company/email/phone. The user still
-  // adds "where you met" and notes. Same robust helper as the dashboard scanner
-  // (compresses huge phone photos + times out so it never hangs).
+  // adds "where you met" and notes. lib/scan-card compresses huge phone photos
+  // and times out, so it never hangs.
   async function handleScan(file: File) {
     setScanState("scanning");
     setScanMsg("");
@@ -87,10 +85,8 @@ export default function AddContactModal({
       }
       setOpen(false);
       reset();
-      // On the contacts page, insert into the client list instantly; on the
-      // dashboard (no callback), refresh the server data.
-      if (onAdded) onAdded(data.lead);
-      else router.refresh();
+      // The Contacts list inserts it at once — no server round trip.
+      onAdded(data.lead);
     } catch {
       setError("Network error. Please try again.");
     }

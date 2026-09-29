@@ -144,11 +144,17 @@ describe("3 · a public card / Swift Links page is never a screen in the app", (
     expect(PUBLIC_PAGE_META).toBe("sc-public-page");
   });
 
+  // The behaviour itself — including a marker that streams in AFTER the bridge
+  // mounted — is exercised in a real browser by
+  // tests/render/public-page-guard.interactive.test.ts. This pins the wiring.
   it("the bridge hides it, hands it to the browser and returns to the dashboard", () => {
     expect(bridge).toMatch(/document\.querySelector\(`meta\[name="\$\{PUBLIC_PAGE_META\}"\]`\)/);
-    expect(bridge).toMatch(/window\.top === window/);
+    expect(bridge).toMatch(/window\.top !== window/);
     expect(bridge).toMatch(/document\.documentElement\.style\.visibility = "hidden"/);
     expect(bridge).toMatch(/\.finally\(\(\) => window\.location\.replace\("\/dashboard"\)\)/);
+    // Watches for the marker arriving later (streamed metadata, client nav).
+    expect(bridge).toMatch(/publicWatch = new MutationObserver/);
+    expect(bridge).toMatch(/publicWatch\?\.disconnect\(\)/);
   });
 
   // In the iOS shell a target="_blank" link goes to Capacitor's

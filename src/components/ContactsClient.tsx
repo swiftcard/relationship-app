@@ -950,18 +950,21 @@ export default function ContactsClient({
     const isOverdue = lead.follow_up_date && lead.follow_up_date.slice(0, 10) <= today;
     const unread = isUnread(lead);
     return (
+      // The row is a plain container: it holds controls of its own (Call /
+      // Text / Email, the read toggle), and a button wrapping other controls
+      // is one a screen reader flattens. The avatar + text ARE the button —
+      // the keyboard and screen-reader way in — and a click anywhere else on
+      // the row still opens the contact (the controls stop their own clicks).
       <div
         key={lead.id}
-        role="button"
-        tabIndex={0}
+        data-contact-row=""
         onClick={() => selectLead(lead)}
-        // Only keys aimed at the ROW itself. Enter/Space on a control inside it
-        // (Call/Text/Email, the read toggle) bubbled up here and opened the
-        // contact instead of doing what the control does.
-        onKeyDown={(e) => { if (e.target !== e.currentTarget) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectLead(lead); } }}
         className={`group w-full text-left px-4 py-3.5 border-b border-gray-800/50 transition-colors hover:bg-gray-900 cursor-pointer ${selected?.id === lead.id ? "bg-gray-900 border-l-2 border-l-blue-500" : ""}`}
       >
         <div className="flex items-start gap-3">
+          {/* No onClick of its own: the click bubbles to the row, so opening
+              the contact happens once, from one place. */}
+          <button type="button" className="flex items-start gap-3 flex-1 min-w-0 text-left rounded-lg">
           <div className="relative shrink-0 mt-0.5">
             <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white">
               {lead.name[0]?.toUpperCase() ?? "?"}
@@ -985,6 +988,7 @@ export default function ContactsClient({
               )}
             </div>
           </div>
+          </button>
           {/* Call · Text · Email in one tap (owner, 2026-09-29 — they came
               from the dashboard's Quick Contacts). Hidden per button when
               there is no number / no email. */}

@@ -33,6 +33,10 @@ const LEADS = [
   { ...base, id: "l-phone", name: "Sam Phoneonly", email: "", phone: "+1 212-555-0199", created_at: "2026-09-27T15:00:00Z" },
   { ...base, id: "l-email", name: "Erin Emailonly", email: "erin@example.com", phone: null, created_at: "2026-09-26T15:00:00Z" },
   { ...base, id: "l-none", name: "Nadia Nothing", email: "", phone: null, created_at: "2026-09-25T15:00:00Z" },
+  // An extension must not be glued onto the number ("555-0100 x12" was dialed
+  // as 555010012); a value with no digit at all is not a number.
+  { ...base, id: "l-ext", name: "Omar Extension", email: "", phone: "(415) 555-0100 ext. 12", created_at: "2026-09-24T15:00:00Z" },
+  { ...base, id: "l-plus", name: "Pat Plusonly", email: "", phone: "+", created_at: "2026-09-23T15:00:00Z" },
 ];
 
 let browser: Browser;
@@ -111,8 +115,8 @@ async function open(width: number, light: boolean): Promise<Page> {
   return page;
 }
 
-/** The list row (div[role=button]) for a contact. */
-const row = (p: Page, name: string) => p.locator('div[role="button"]', { hasText: name }).first();
+/** The list row for a contact (a plain container; its avatar + text are the button). */
+const row = (p: Page, name: string) => p.locator("[data-contact-row]", { hasText: name }).first();
 const detailOpen = (p: Page) => p.locator('[data-tour="contact-detail"]').count();
 
 const PHONES = [320, 375, 393];
@@ -126,7 +130,7 @@ describe.each([...PHONES, ...COMPUTERS].flatMap((w) => [[w, false], [w, true]] a
       try {
         if (width === 393 || width === 1280) await page.screenshot({ path: `node_modules/.cache/contact-rows-${width}${light ? "-light" : ""}.png` });
         const facts = await page.evaluate(() => {
-          const rows = [...document.querySelectorAll<HTMLElement>('div[role="button"]')].filter((r) => r.querySelector("p"));
+          const rows = [...document.querySelectorAll<HTMLElement>("[data-contact-row]")].filter((r) => r.querySelector("p"));
           return rows.map((r) => {
             const name = r.querySelector("p.text-sm") as HTMLElement;
             const actions = [...r.querySelectorAll<HTMLAnchorElement>("[data-contact-actions] a")];
@@ -151,6 +155,8 @@ describe.each([...PHONES, ...COMPUTERS].flatMap((w) => [[w, false], [w, true]] a
         expect(by["Sam Phoneonly"].links).toEqual([["Call Sam Phoneonly", "tel:+12125550199"], ["Text Sam Phoneonly", "sms:+12125550199"]]);
         expect(by["Erin Emailonly"].links).toEqual([["Email Erin Emailonly", "mailto:erin@example.com"]]);
         expect(by["Nadia Nothing"].links).toEqual([]);
+        expect(by["Omar Extension"].links).toEqual([["Call Omar Extension", "tel:4155550100,12"], ["Text Omar Extension", "sms:4155550100"]]);
+        expect(by["Pat Plusonly"].links).toEqual([]);
         for (const f of facts) {
           expect(f.overflow, `${f.name} row overflows`).toBeLessThanOrEqual(0);
           expect(f.outside, `${f.name} buttons spill out of the row`).toBe(false);
@@ -182,7 +188,7 @@ describe.each([...PHONES, ...COMPUTERS].flatMap((w) => [[w, false], [w, true]] a
             }
             return getComputedStyle(document.body).backgroundColor;
           };
-          const r = [...document.querySelectorAll<HTMLElement>('div[role="button"]')].find((x) => x.textContent?.includes("Jordan Rivera"))!;
+          const r = [...document.querySelectorAll<HTMLElement>("[data-contact-row]")].find((x) => x.textContent?.includes("Jordan Rivera"))!;
           return [...r.querySelectorAll<HTMLAnchorElement>("[data-contact-actions] a")].map((a) => {
             const L1 = lum(rgb(getComputedStyle(a).color)), L2 = lum(rgb(opaqueBg(a)));
             return [`${a.getAttribute("aria-label")} ${getComputedStyle(a).color} on ${opaqueBg(a)}`, (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05)] as [string, number];
@@ -211,7 +217,7 @@ describe.each([375, 1280])("using the buttons (%ipx)", (width) => {
     } finally { await page.context().close(); }
   });
 
-  it("Enter or Space on a button never opens the contact; Enter on the row still does", async () => {
+  it("Enter or Space on a button never opens the contact; Enter on the contact's own button does", async () => {
     const page = await open(width, false);
     try {
       const call = page.getByRole("link", { name: "Call Jordan Rivera" });
@@ -223,7 +229,10 @@ describe.each([375, 1280])("using the buttons (%ipx)", (width) => {
       await row(page, "Jordan Rivera").getByRole("button", { name: /Mark as (un)?read/ }).focus();
       await page.keyboard.press("Enter");
       expect(await detailOpen(page), "Enter on the read toggle opened the contact").toBe(0);
-      await row(page, "Jordan Rivera").focus();
+      // The row is not a button (it would wrap other controls); the avatar +
+      // text are — the one keyboard and screen-reader way to open the contact.
+      expect(await row(page, "Jordan Rivera").getAttribute("role")).toBeNull();
+      await row(page, "Jordan Rivera").locator("button").first().focus();
       await page.keyboard.press("Enter");
       await page.locator('[data-tour="contact-detail"]').first().waitFor({ timeout: 3000 });
     } finally { await page.context().close(); }

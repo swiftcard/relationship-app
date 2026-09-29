@@ -221,12 +221,14 @@ export default function NotificationBell({
   }
 
   // "Wrong person?" → Confirm. Optimistic like dismiss: the row goes at once
-  // and comes back if the request fails. The route unbinds the browser(s)
-  // from that contact and deletes this notification.
+  // and comes back — saying so — if the request fails. The route unbinds the
+  // browser(s) from that contact and deletes this notification.
   const [wrongAsked, setWrongAsked] = useState<string | null>(null);
+  const [wrongFailed, setWrongFailed] = useState<string | null>(null);
   async function markWrongPerson(n: Notification) {
     if (!n.lead_id || pendingIds.has(n.id)) return;
     setWrongAsked(null);
+    setWrongFailed(null);
     setPendingIds((s) => new Set(s).add(n.id));
     setNotifications((prev) => prev.filter((x) => x.id !== n.id));
     try {
@@ -240,6 +242,7 @@ export default function NotificationBell({
       setNotifications((prev) =>
         [...prev, n].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       );
+      setWrongFailed(n.id);
     } finally {
       setPendingIds((s) => { const x = new Set(s); x.delete(n.id); return x; });
     }
@@ -273,7 +276,10 @@ export default function NotificationBell({
   function handleOpen() {
     // Just open/close. Notifications stay UNREAD (and the badge stays) until the
     // user explicitly marks them read or dismisses them — opening no longer
-    // silently clears everything.
+    // silently clears everything. A half-finished "Wrong person?" (or its error)
+    // never greets someone who reopens the bell later.
+    setWrongAsked(null);
+    setWrongFailed(null);
     setOpen((v) => !v);
   }
 
@@ -382,6 +388,9 @@ export default function NotificationBell({
                               Wrong person?
                             </button>
                           )
+                        )}
+                        {wrongFailed === n.id && (
+                          <p role="status" className="mt-1 text-[0.6875rem] text-red-400">Couldn&apos;t do that just now — try again.</p>
                         )}
                         {/* Meta line: card tag + time — chip lives here so the
                             title keeps full width on narrow phones. */}

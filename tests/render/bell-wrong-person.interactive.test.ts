@@ -119,15 +119,23 @@ describe("Wrong person? in the bell", () => {
     } finally { await page.context().close(); }
   });
 
-  it("a failed request puts the row back", async () => {
+  it("a failed request puts the row back and says so; reopening the bell starts clean", async () => {
     const { page, posts } = await rig(500);
     try {
       await page.click(`${dialog} >> text=Wrong person?`);
       await page.click(`${dialog} >> button:has-text("Confirm")`);
-      await page.waitForFunction(() => document.body.textContent?.includes("Priya is back"), null, { timeout: 3000 });
-      await page.waitForTimeout(300);
+      await page.getByText("Couldn't do that just now — try again.").waitFor({ timeout: 3000 });
       expect(posts).toHaveLength(1);
       expect(await page.getByText("Priya is back").count()).toBe(1);
+      // Leave a Confirm half-open, close the bell, reopen it: no stale error,
+      // no half-finished Confirm.
+      await page.click(`${dialog} >> text=Wrong person?`);
+      await page.getByText("Not them? We'll stop recognising that device.").waitFor();
+      await page.click(`${dialog} button[aria-label="Close"]`);
+      await page.click('nav button[aria-label="Notifications"]');
+      await page.getByText("Priya is back").waitFor();
+      expect(await page.getByText("Couldn't do that just now — try again.").count()).toBe(0);
+      expect(await page.getByText("Not them? We'll stop recognising that device.").count()).toBe(0);
     } finally { await page.context().close(); }
   });
 
