@@ -767,8 +767,18 @@ export default async function DashboardPage({
         {/* mb-3 on mobile takes over the spacing the caption's own mb-3 gave
             it, so hiding the caption tightens the box without collaring the
             preview against the heading. */}
-        <div className="flex items-center justify-between mb-3 lg:mb-1">
-          <p className="text-gray-500 text-xs font-semibold uppercase tracking-wide">Your Card</p>
+        <div className="flex items-center justify-between gap-3 mb-3 lg:mb-1">
+          <p className="shrink-0 text-gray-500 text-xs font-semibold uppercase tracking-wide">Your Card</p>
+          {/* Phone only, like the tap target it describes (CardPreviewDownload's
+              lg:hidden button over the card). Here, across from the heading,
+              rather than under the card (owner, 2026-09-29) — it used to add a
+              whole line of empty space at the bottom of the box. */}
+          <p className="lg:hidden flex min-w-0 items-center justify-end gap-1.5 text-right text-balance text-gray-500 text-[0.6875rem] leading-tight">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5 shrink-0" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5V4a1 1 0 011-1h3.5M12.5 3H16a1 1 0 011 1v3.5M17 12.5V16a1 1 0 01-1 1h-3.5M7.5 17H4a1 1 0 01-1-1v-3.5" />
+            </svg>
+            Tap your card to show it full screen
+          </p>
         </div>
         {/* Desktop-only: on a phone the preview directly below says this by
             being the card, and the screen is too short to spend a line on it.

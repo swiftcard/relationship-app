@@ -137,19 +137,14 @@ export default function CardPreviewDownload({ data, template, username, previewU
           put a desktop control inside the mobile-positioned panel.
 
           Without previewUrl (no live card link yet) the download simply stays
-          at every width rather than leaving an empty slot. */}
-      <div className="mt-3">
-        {previewUrl && (
-          <p className="lg:hidden flex items-center justify-center gap-1.5 text-gray-500 text-[0.6875rem]">
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5 shrink-0" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5V4a1 1 0 011-1h3.5M12.5 3H16a1 1 0 011 1v3.5M17 12.5V16a1 1 0 01-1 1h-3.5M7.5 17H4a1 1 0 01-1-1v-3.5" />
-            </svg>
-            Tap your card to show it full screen
-          </p>
-        )}
-        <div className={previewUrl ? "hidden lg:block" : undefined}>
-          <DownloadCardButton cardRef={cardRef} filename={filename} compact shareUrl={previewUrl} />
-        </div>
+          at every width rather than leaving an empty slot.
+
+          The phone's "Tap your card to show it full screen" hint is NOT here:
+          it sits in the dashboard's "Your Card" heading row, right-aligned
+          (owner, 2026-09-29), so on a phone nothing follows the card and the
+          box ends at the card with no empty band underneath. */}
+      <div className={previewUrl ? "hidden lg:block mt-3" : "mt-3"}>
+        <DownloadCardButton cardRef={cardRef} filename={filename} compact shareUrl={previewUrl} />
       </div>
 
       {/* The QR printed on the card encodes data.cardUrl. Full screen it is
