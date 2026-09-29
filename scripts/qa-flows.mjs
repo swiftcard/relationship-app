@@ -339,13 +339,18 @@ FLOWS["add-contact"] = async () => {
     if (!(await opener.isVisible().catch(() => false))) { console.log("  – Add contact button not visible, skipping"); return; }
     await opener.click();
     await page.waitForTimeout(900);
-    const nameField = page.locator('input[placeholder="Sarah Williams"]').first();
+    // Find the fields by what they ARE (the modal's form, its first text input,
+    // its email input), not by placeholder copy. The email placeholder was
+    // reworded "sarah@example.com" → "sarah@acme.com" on 2026-09-24 and this
+    // flow timed out every night afterwards while the product worked fine.
+    const form = page.locator('form:has(button[type="submit"]:has-text("Add contact"))').first();
+    const nameField = form.locator('input:not([type]), input[type="text"]').first();
     if (!(await nameField.isVisible().catch(() => false))) { fail("add-contact", "the Add contact modal did not open"); return; }
 
     const who = `QA Contact ${stamp}`;
     await nameField.fill(who);
-    await page.fill('input[placeholder="sarah@example.com"]', `contact-${stamp}@swiftcard-test.invalid`);
-    const submit = page.locator('button[type="submit"]:has-text("Add contact")').first();
+    await form.locator('input[type="email"]').first().fill(`contact-${stamp}@swiftcard-test.invalid`);
+    const submit = form.locator('button[type="submit"]:has-text("Add contact")').first();
     const writes = await countWrites(page, "/api/", async () => {
       await submit.click();
       await submit.click({ force: true, timeout: 2000 }).catch(() => {});

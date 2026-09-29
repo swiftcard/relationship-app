@@ -101,8 +101,15 @@ of them is removed or quietly weakened.
 | `.github/workflows/nightly-qa.yml` | nightly 05:00 NY + after every production deploy | real Chromium against production: flows, every screen at both widths for Free/Pro/Office, Office admin + member, **analytics and notifications end to end** (`scripts/qa-prod-probe.mjs`) |
 | `.github/workflows/deploy-watchdog.yml` | on every deploy | error-rate spike → automatic rollback (needs the Sentry secrets) |
 | `ci.yml` + the tripwire tests (`one-notification-per-visit`, `view-visit-window`, `analytics-*`, `trial-eligibility`, `proxy-auth-hop`) | every push | the recurring bugs, pinned at source |
+| `.githooks/pre-push` (installed by `npm install` via `scripts/install-hooks.mjs`) | before every push leaves the machine | a type or lint error reaching `main`. CI was red for 26 pushes in Sept 2026 over one lint error nobody saw, and while red its Test job never ran. Pinned by `tests/push-guard.test.ts`. |
+| `.gitattributes` (`* text=auto eol=lf`) | every checkout | CRLF working copies. ~600 tests read source as strings; with `core.autocrlf=true` they failed locally and passed in CI, so red stopped meaning anything. Pinned by `tests/line-endings.test.ts`. |
+
+**A red CI run is a page, not a colour.** Read the failing step before pushing
+anything else — a red Lint step hides the Test step behind it.
 
 Both workflows keep ONE issue open while something is wrong (labels `uptime`,
 `nightly-qa`) and close it when it passes; GitHub emails the owner on open.
+`paint-check.yml` does the same for invisible content (one 🫥 issue, closed
+the first deploy the sweep passes).
 Every QA script reads secrets from the environment first and `.env.local`
 second, which is what lets CI run them — keep it that way.

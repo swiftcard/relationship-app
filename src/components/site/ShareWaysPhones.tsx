@@ -3,6 +3,7 @@
 import WalletPassFace, { type WalletPassCard } from "@/components/WalletPassFace";
 import PhoneFrame, { StatusBar, phoneScreenWidth } from "@/components/PhoneFrame";
 import CardScaler from "@/components/CardScaler";
+import InertPreview from "@/components/InertPreview";
 import ClassicPro from "@/components/card-templates/ClassicPro";
 import { SAMPLE_DATA, withoutSocials } from "@/components/card-templates/types";
 
@@ -159,18 +160,24 @@ export function ShareSheetScreen() {
           hit Share, dimmed the way iOS dims it. Before this the sheet floated
           over a bare white screen with a gradient button, which is the one
           thing a real screenshot never looks like. */}
+      {/* Both cards in this scene are PICTURES of Alex's card, not the card:
+          one sits under the dim, the other is a 36px thumbnail. ClassicPro
+          renders real tel:/mailto:/website links, so without `inert` they were
+          three tap targets buried under the dim overlay — the nightly QA sweep
+          reported them "covered" on m-home and d-home every night (issue #47).
+          A person who taps here wants the demo, not to phone Alex. */}
       <div className="relative flex-1 overflow-hidden">
         <div className="px-3 pt-2">
-          <div className="rounded-xl overflow-hidden shadow-sm">
+          <InertPreview className="rounded-xl overflow-hidden shadow-sm">
             <CardScaler><ClassicPro data={PAGE_CARD} /></CardScaler>
-          </div>
+          </InertPreview>
           <div className="mt-2.5 rounded-xl bg-white p-2.5" style={{ border: "1px solid #E4DDD4" }}>
             <p className="text-slate-900 font-bold text-[0.5625rem]">Save Alex&apos;s contact</p>
             <div className="mt-1.5 rounded-full py-1.5 text-center text-white text-[0.53125rem] font-bold" style={{ background: "#2563EB" }}>Save Contact</div>
           </div>
         </div>
         {/* the dim */}
-        <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.28)" }} />
+        <div className="absolute inset-0 pointer-events-none" aria-hidden="true" style={{ background: "rgba(0,0,0,0.28)" }} />
       </div>
 
       {/* the share sheet, slid up from the bottom */}
@@ -180,9 +187,9 @@ export function ShareSheetScreen() {
             being shared (here the card itself, not a letter tile) and closes
             with the X that iOS 16+ puts in this row. */}
         <div className="mx-2.5 mb-3 flex items-center gap-2.5 rounded-2xl bg-white p-2.5 shadow-sm">
-          <span className="w-9 h-[22px] rounded-[4px] overflow-hidden shrink-0 ring-1 ring-slate-200">
+          <InertPreview className="w-9 h-[22px] rounded-[4px] overflow-hidden shrink-0 ring-1 ring-slate-200">
             <CardScaler natural={360}><ClassicPro data={PAGE_CARD} /></CardScaler>
-          </span>
+          </InertPreview>
           <span className="min-w-0 flex-1">
             <span className="block text-slate-900 text-[0.6875rem] font-bold leading-tight truncate">Alex Morgan&apos;s SwiftCard</span>
             <span className="block text-slate-400 text-[0.5625rem] truncate">swiftcard.me/alexmorgan</span>

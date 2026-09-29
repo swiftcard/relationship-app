@@ -1,0 +1,37 @@
+# Line endings are not a preference here; they are a correctness issue.
+#
+# ~600 tests read source files as strings and assert on exact markup
+# ("{mode === \"signup\" && (\n          <PasswordField"). A working copy that
+# Git checked out with CRLF fails those tests locally while CI (Linux, LF)
+# passes — so a developer sees red that is not real, learns to ignore red, and
+# then misses the one that is. On 2026-09-28, 919 of 1,192 tracked text files
+# on the owner's PC were CRLF in the working tree and LF in the index, because
+# core.autocrlf=true rewrites every file on checkout.
+#
+# `eol=lf` here beats core.autocrlf on every machine: Git checks out LF and
+# commits LF, so the bytes a test reads are the bytes CI reads. Windows
+# editors, Node, and Next all handle LF. tests/line-endings.test.ts fails if a
+# CRLF file ever reaches the index anyway.
+* text=auto eol=lf
+
+# Binaries — never normalised, never diffed as text.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.icns binary
+*.pdf binary
+*.mp4 binary
+*.mov binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.zip binary
+*.jar binary
+*.gz binary
+*.p12 binary
+*.mobileprovision binary
+*.pkpass binary

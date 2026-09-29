@@ -72,6 +72,34 @@ jobs:
             printf 'Reproduce locally: `node scripts/site-invisible-sweep.mjs`\n\n'
             printf '🤖 Opened by the paint check.\n'
           } > body.md
-          gh issue create --title "🫥 Invisible content on production after ${SHA:0:7}" \
-            --body-file body.md --label "production,watchdog" \
-            || gh issue create --title "🫥 Invisible content on production after ${SHA:0:7}" --body-file body.md
+          # ONE open issue at a time. Until 2026-09-28 every failing deploy
+          # opened a fresh issue and nothing ever closed one, so 29 stale
+          # "Invisible content" issues from August sat open against a site
+          # that had been painting fine for seven weeks — and the list stopped
+          # meaning anything. Now: an open one gets a comment, else create.
+          existing=$(gh issue list --state open --search '"Invisible content on production" in:title' \
+            --json number,title --limit 50 \
+            | node -e 'const l=JSON.parse(require("fs").readFileSync(0,"utf8"));const i=l.find(i=>i.title.startsWith("🫥 Invisible content on production"));if(i)console.log(i.number)')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file body.md
+            echo "Still failing — commented on #$existing"
+          else
+            gh issue create --title "🫥 Invisible content on production after ${SHA:0:7}" \
+              --body-file body.md --label "production,watchdog" \
+              || gh issue create --title "🫥 Invisible content on production after ${SHA:0:7}" --body-file body.md
+          fi
+
+      - name: Close the invisible-content issues once the site paints again
+        if: steps.sweep.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.event.deployment.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          gh issue list --state open --search '"Invisible content on production" in:title' \
+            --json number,title --limit 100 \
+            | node -e 'const l=JSON.parse(require("fs").readFileSync(0,"utf8"));for(const i of l)if(i.title.startsWith("🫥 Invisible content on production"))console.log(i.number)' \
+            | while read -r n; do
+                gh issue close "$n" --comment "✅ Recovered — the paint check passed on \`${SHA:0:7}\`; nothing on the live site is invisible. Closed automatically by \`.github/workflows/paint-check.yml\`."
+                echo "Closed #$n"
+              done

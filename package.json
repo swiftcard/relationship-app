@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
+    "prepare": "node scripts/install-hooks.mjs",
     "test:render": "vitest run --config vitest.render.config.ts",
     "qa:sweep": "node scripts/qa-sweep.mjs",
     "qa:flows": "node scripts/qa-flows.mjs",

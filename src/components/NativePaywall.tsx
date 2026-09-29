@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { createBrowserClient } from "@supabase/ssr";
 import {
   canOfferIap,
   ensureIapConfigured,
@@ -87,6 +86,13 @@ async function resolveStatus(): Promise<IapStatus> {
   // is how the webhook maps the sub to a profile. Read from the LOCAL session
   // (no network): getUser() cost a server round trip on every mount, which is
   // why the button used to pop in late.
+  //
+  // Loaded here, not at the top of the file: this module is reached from
+  // PlanGate, which every editor and the homepage's mini builders render, so
+  // a static import shipped the whole Supabase client (~65KB compressed) to
+  // every marketing visitor. Only the iPhone shell ever gets past the
+  // detectNativeApp() check above, so only it pays for the download.
+  const { createBrowserClient } = await import("@supabase/ssr");
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

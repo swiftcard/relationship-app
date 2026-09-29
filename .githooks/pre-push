@@ -1,0 +1,20 @@
+#!/bin/sh
+# Runs before every `git push`: the two checks that CI runs first, on the
+# machine doing the pushing, so main cannot go red for a type error or a lint
+# error. (CI was red for four days in September 2026 over one misplaced
+# eslint-disable comment, and nobody noticed — see scripts/install-hooks.mjs.)
+#
+# Deliberately NOT the unit tests: 5,000 tests take minutes, and CI runs them
+# on every push anyway. This is the 60-second floor, not the ceiling.
+#
+# Bypass for a genuine emergency:  git push --no-verify
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+echo "pre-push: typecheck (npx tsc --noEmit)"
+npx tsc --noEmit
+
+echo "pre-push: lint (npx eslint)"
+npx eslint
+
+echo "pre-push: ok"

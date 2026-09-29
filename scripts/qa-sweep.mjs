@@ -156,7 +156,15 @@ const AUDIT = async () => {
   // which is the case worth waking somebody for.
   let covered = 0;
   const settle = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-  const inter = all.filter((el) => el.matches("button, a[href], [role='button'], input, select, textarea, [role='switch'], [role='tab']"));
+  // An `inert` subtree cannot be clicked, focused or tabbed into — that is the
+  // attribute's whole definition — so a link inside one is a picture of a
+  // link, not a control. InertPreview wraps every editor preview and the
+  // homepage's share-sheet mock this way, on purpose: a demo card's tel: row
+  // must not start a phone call. Auditing those as "covered controls" reported
+  // the mock's three rows under its dim overlay every night (issue #47).
+  const inter = all
+    .filter((el) => el.matches("button, a[href], [role='button'], input, select, textarea, [role='switch'], [role='tab']"))
+    .filter((el) => !el.closest("[inert]"));
   for (const el of inter) {
     // A collapsed <details> keeps a layout box in Chrome while showing nothing,
     // so its contents measured as real controls sitting wherever they WOULD be —
