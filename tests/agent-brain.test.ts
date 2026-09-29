@@ -98,7 +98,7 @@ describe("brain: two options in, one picked, and it goes out", () => {
     // Once resolved the item is approved — the connector posts it or it is
     // saved for the copy flow; a chosen blog post goes live in the same step.
     expect(itemsRoute).toMatch(/const action = chosen \? "approved" : requested/);
-    expect(itemsRoute).toMatch(/\(chosen && item\.item_type === "blog_post"\)/);
+    expect(itemsRoute).toMatch(/chosen && item\.item_type === "blog_post"/);
     // A two-option item can never be bulk-approved past the owner's pick.
     expect(itemsRoute).toMatch(/item\.item_type === "choice" && \(requested === "approved"/);
     expect(client).toMatch(/i\.status === "pending" && i\.item_type !== "choice"/);

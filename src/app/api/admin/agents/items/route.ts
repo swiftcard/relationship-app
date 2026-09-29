@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { firstName } from "@/lib/agent-org";
@@ -68,6 +69,35 @@ async function addCompetitor(admin: ReturnType<typeof getAdminSupabase>, payload
   }, { onConflict: "id" }).then(() => {}, () => {});
 }
 
+type BlogPostPayload = { slug?: string; title?: string; description?: string; keyword?: string; og_title?: string; content_md?: string };
+
+function slugifyTitle(title: string) {
+  return title.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
+}
+
+/**
+ * Writes the post live and reports whether it actually landed. A blog_post
+ * queue item must never be marked "published" unless this returns ok:true —
+ * that's what kept an approved post invisible on /blog with no error anywhere.
+ */
+async function publishBlogPost(admin: ReturnType<typeof getAdminSupabase>, payload: Record<string, unknown> | null | undefined, fallbackTitle: string, now: string) {
+  const post = (payload ?? {}) as BlogPostPayload;
+  const slug = (post.slug?.trim() || slugifyTitle(post.title ?? fallbackTitle)) || null;
+  if (!slug) return { ok: false as const, reason: "no slug and no title to derive one from" };
+  if (!post.content_md || !post.description) return { ok: false as const, reason: "post is missing content or a description" };
+  const { error } = await admin.from("agent_blog_posts").upsert({
+    slug, title: post.title ?? fallbackTitle, description: post.description,
+    keyword: post.keyword ?? null, og_title: post.og_title ?? post.title ?? fallbackTitle,
+    content_md: post.content_md, status: "published", published_at: now,
+  });
+  if (error) return { ok: false as const, reason: error.message };
+  await admin.from("agent_blog_topics").update({ status: "published" }).eq("slug", slug);
+  revalidatePath("/blog");
+  revalidatePath(`/blog/${slug}`);
+  revalidatePath("/sitemap.xml");
+  return { ok: true as const, slug };
+}
+
 export async function POST(req: NextRequest) {
   const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -116,7 +146,33 @@ export async function POST(req: NextRequest) {
       // history-only: downloading the list is worth recording, not a status change
     } else if (action === "approved" && item.status === "pending" && chosen && item.item_type === "blog_post") {
       // A chosen blog post goes live right away — that IS the publish step.
-      await admin.from("agent_queue_items").update({ status: "published", actioned_at: now }).eq("id", item.id);
+      // Only mark it published if the row actually landed in agent_blog_posts.
+      const result = await publishBlogPost(admin, item.payload, item.title, now);
+      if (result.ok) {
+        await admin.from("agent_queue_items").update({ status: "published", actioned_at: now }).eq("id", item.id);
+        // The option not taken is free to come back another day with a better angle.
+        const otherSlug = ((raw.payload as ChoicePayload | null)?.options ?? []).map((o) => (o.payload as { slug?: string } | undefined)?.slug).find((sl) => sl && sl !== result.slug);
+        if (otherSlug) await admin.from("agent_blog_topics").update({ status: "declined" }).eq("slug", otherSlug).neq("status", "published");
+      } else {
+        execFailed.push({ id: item.id, reason: result.reason });
+        await admin.from("agent_queue_items").update({ status: "approved", actioned_at: now }).eq("id", item.id);
+        await admin.from("agent_messages").insert({
+          from_id: "atlas", to_id: "owner", kind: "owner_out",
+          body: `⚠ Couldn't publish “${String(item.title).slice(0, 70)}” — ${result.reason}. It's saved as approved.`,
+        }).then(() => {}, () => {});
+      }
+    } else if (action === "published" && item.item_type === "blog_post") {
+      // Direct Publish on a blog_post item — same rule: no row, no "published".
+      const result = await publishBlogPost(admin, item.payload, item.title, now);
+      if (result.ok) {
+        await admin.from("agent_queue_items").update({ status: "published", actioned_at: now }).eq("id", item.id);
+      } else {
+        execFailed.push({ id: item.id, reason: result.reason });
+        await admin.from("agent_messages").insert({
+          from_id: "atlas", to_id: "owner", kind: "owner_out",
+          body: `⚠ Couldn't publish “${String(item.title).slice(0, 70)}” — ${result.reason}.`,
+        }).then(() => {}, () => {});
+      }
     } else if (action === "approved" && item.status === "pending") {
       const out = await executeItem(item as QueueItemLite);
       if (out.executed) {
@@ -147,21 +203,6 @@ export async function POST(req: NextRequest) {
       item_id: item.id, action: historyAction, actor_email: user.email,
       edit_before: after ? item.content : null, edit_after: after,
     });
-    // Blog publish: flip the post live on /blog from the queued payload. A
-    // chosen blog option publishes the same way, in the same step.
-    const goLive = (action === "published" && item.item_type === "blog_post") || (chosen && item.item_type === "blog_post");
-    if (goLive && item.payload?.slug) {
-      const post = item.payload as { slug: string; title: string; description: string; keyword?: string; og_title?: string; content_md: string };
-      await admin.from("agent_blog_posts").upsert({
-        slug: post.slug, title: post.title, description: post.description,
-        keyword: post.keyword ?? null, og_title: post.og_title ?? post.title,
-        content_md: post.content_md, status: "published", published_at: now,
-      });
-      await admin.from("agent_blog_topics").update({ status: "published" }).eq("slug", post.slug);
-      // The option not taken is free to come back another day with a better angle.
-      const otherSlug = ((raw.payload as ChoicePayload | null)?.options ?? []).map((o) => (o.payload as { slug?: string } | undefined)?.slug).find((sl) => sl && sl !== post.slug);
-      if (chosen && otherSlug) await admin.from("agent_blog_topics").update({ status: "declined" }).eq("slug", otherSlug).neq("status", "published");
-    }
   }
   // Comms log: one line per decision (not per item) so bulk actions read as
   // one order. Best-effort — a comms hiccup must not fail the action.
