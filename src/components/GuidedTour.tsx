@@ -146,6 +146,7 @@ export default function GuidedTour({
   const full = useRef<HTMLDivElement>(null);
   const ring = useRef<HTMLDivElement>(null);
   const holeCover = useRef<HTMLDivElement>(null);
+  const corners = useRef<HTMLDivElement>(null);
   const tip = useRef<HTMLDivElement>(null);
 
   // ── Persist index so a page navigation can resume the tour ────────────────
@@ -252,7 +253,7 @@ export default function GuidedTour({
     // Centered message (no anchor) — nothing to find.
     if (!cur.anchor) {
       targetRef.current = null;
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- forces a re-render to re-resolve the anchorless step
+      // Forces a re-render to re-resolve the anchorless step.
       forceTick((n) => n + 1);
       startLoop();
       return () => stopLoop();
@@ -369,6 +370,7 @@ export default function GuidedTour({
       [maskT, maskB, maskL, maskR].forEach((mm) => mm.current && (mm.current.style.opacity = "0"));
       if (ring.current) ring.current.style.opacity = "0";
       if (holeCover.current) holeCover.current.style.opacity = "0";
+      if (corners.current) corners.current.style.opacity = "0";
       if (tipEl) {
         tipEl.style.left = `${Math.round((W - m.tipW) / 2)}px`;
         tipEl.style.top = `${Math.round((H - m.tipH) / 2)}px`;
@@ -414,6 +416,16 @@ export default function GuidedTour({
       setBox(ring.current, x0, y0, hw, hh);
       ring.current.style.borderRadius = m.radius;
       ring.current.style.opacity = "1";
+    }
+    // Dim the hole's corners outside the ring's rounded shape. The four masks
+    // cut a SQUARE hole, so a round target (the help bubble, the bell) sat in
+    // a bright square with the round ring drawn inside it. Visual only — it
+    // never takes a tap, so clickable steps behave exactly as before.
+    if (corners.current) {
+      setBox(corners.current, x0, y0, hw, hh);
+      const shape = corners.current.firstElementChild as HTMLElement | null;
+      if (shape) shape.style.borderRadius = m.radius;
+      corners.current.style.opacity = "1";
     }
     // Click blocker over the hole — present unless this step invites a click
     // (clickToAdvance) or lets the visitor genuinely use the control (interactive).
@@ -524,6 +536,10 @@ export default function GuidedTour({
       ))}
       {/* Click blocker over the highlighted element (removed on click-to-advance steps) */}
       <div ref={holeCover} className="fixed z-[9998]" style={{ opacity: 0, background: "transparent" }} />
+      {/* The hole's corners, dimmed outside the ring's radius (see layout()). */}
+      <div ref={corners} className="fixed z-[9998] overflow-hidden" style={{ opacity: 0, pointerEvents: "none" }}>
+        <div className="absolute inset-0" style={{ boxShadow: "0 0 0 9999px rgba(3,7,18,0.74)" }} />
+      </div>
       {/* Spotlight ring */}
       <div
         ref={ring}

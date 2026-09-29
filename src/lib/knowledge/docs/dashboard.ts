@@ -74,7 +74,7 @@ export const dashboardDocs = defineDocs([
     audience: ["user"],
     triggers: ["tour", "walkthrough", "guided tour", "show me around", "replay tour", "take a tour"],
     answer:
-      "Right after you create your first card, the dashboard shows a \"Take a quick tour\" banner (it doesn't appear on later sign-ins). To replay it later, go to Settings → Help and referrals → \"Take a Tour\". It spotlights each part of the app across the dashboard, Links, Contacts and Settings, with Back / Next and a Skip option.",
+      "Right after you create your first card, the dashboard shows a \"Take a quick tour\" banner (it doesn't appear on later sign-ins). To replay it later, go to Settings → Help and referrals → \"Take a Tour\". It spotlights each part of the app across the dashboard, Links, Contacts and Settings, with Back / Next and a Skip option. Its second step, right after the welcome, points at the round blue chat bubble in the bottom-right corner (on the Dashboard, Contacts and Links pages): tap it and ask the assistant anything about using SwiftCard, so anyone who skips the rest of the tour still knows where help is. The last step points back to it.",
     detail:
       "Whether the tour has been taken is remembered per browser, so it can reappear on a new device and won't come back on the same one after a Skip. If a step seems to hang for a couple of seconds it's waiting for an element it can't find, and it will skip that step by itself. The Office admin console has its own separate \"Tour\" button.",
   },

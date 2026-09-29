@@ -127,6 +127,9 @@ export default function HelpWidget({ floating = false, area = "app", member = fa
             onClick={() => setOpen(true)}
             title={isAdmin ? "Chat with the Admin Console assistant" : "Chat with the SwiftCard assistant"}
             aria-label="Open chat assistant"
+            // The guided tour's second step points here, so someone who skips
+            // the rest of the tour still knows where help is (tour-steps).
+            data-tour="help-bubble"
             // sc-help-bubble: in the native shell, globals.css lifts this above
             // the floating tab-bar capsule (bottom-20 was tuned for the website's
             // bottom-0 bar and lands on the Settings tab once the capsule rises

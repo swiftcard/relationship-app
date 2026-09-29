@@ -105,6 +105,21 @@ const STEP_DEFS: TourStepDef[] = [
     body: "A quick lap around your dashboard. Use Next and Back, or Skip anytime — you can replay this from Settings.",
   },
 
+  // ── Where help lives — deliberately SECOND ───────────────────────────────
+  // Owner, 2026-09-29: the tour is long and some people skip it after a few
+  // steps. The one thing everybody should leave with is where to ask, so the
+  // assistant comes right after the welcome, before the tour of the screens.
+  // Not interactive: opening the chat mid-tour would put its panel over the
+  // tooltip. The dashboard renders this bubble on every plan (HelpWidget).
+  {
+    id: "help-bubble",
+    path: DASH,
+    anchor: "help-bubble",
+    title: "Questions? Ask here",
+    body: "Stuck on anything? Tap this chat bubble and ask — how to share your card, where a setting is, how contacts work. If you skip the rest of this tour, help is always right here.",
+    placement: "top",
+  },
+
   // ── Top navigation ────────────────────────────────────────────────────────
   {
     id: "nav-dashboard",
@@ -434,7 +449,7 @@ const STEP_DEFS: TourStepDef[] = [
     id: "finish",
     path: SETTINGS,
     title: "You're all set",
-    body: "That's the whole app. Now go share your card and watch your contacts roll in.",
+    body: "That's the whole app. Questions later? Tap the chat bubble in the corner of your dashboard. Now go share your card and watch your contacts roll in.",
   },
 ];
 
