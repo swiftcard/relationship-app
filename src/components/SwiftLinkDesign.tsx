@@ -242,7 +242,7 @@ function LookSwatch({
  * tell which of the three a page is by looking at it.
  *
  * Behaviour chosen so the control never hides the thing you came for:
- *   • The group holding the CURRENT look is the one open on arrival.
+ *   • All three start closed; you open the one you want (owner, 2026-09-29).
  *   • A closed group still shows its selection — the look's name and a swatch
  *     of its real surface — so you can read your current design without
  *     opening anything.
@@ -264,9 +264,11 @@ function LookPicker({
 }) {
   const selected = value ?? DEFAULT_SWIFTLINK_LOOK;
   const selectedLook = getLook(selected);
-  // Opens on the group you are already in. Not stored: reopening the editor
-  // should land you back on your own design, not on whatever you browsed last.
-  const [open, setOpen] = useState<LookFamily | null>(selectedLook.family);
+  // Every group starts CLOSED (owner, 2026-09-29): Solid used to open on its
+  // own — it holds the default look, so it was open for nearly everyone — and
+  // the owner wants people to pick Solid, Gradient or Glass themselves. The
+  // closed row still names the current look, so nothing is hidden.
+  const [open, setOpen] = useState<LookFamily | null>(null);
 
   return (
     <div className="rounded-xl border border-gray-800 overflow-hidden divide-y divide-gray-800">

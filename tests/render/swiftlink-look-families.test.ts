@@ -6,7 +6,7 @@ import { launchBrowser, appCss } from "./harness";
 
 import SwiftLinkProfile from "@/components/SwiftLinkProfile";
 import { SwiftLinkStyleControls } from "@/components/SwiftLinkDesign";
-import { LOOK_FAMILIES, looksInFamily, getLook } from "@/lib/swiftlink-looks";
+import { LOOK_FAMILIES, getLook } from "@/lib/swiftlink-looks";
 
 // ── The three Look families, measured in a real browser ────────────────────
 //
@@ -184,6 +184,7 @@ describe("the Look picker's three dropdowns", () => {
           rowCount: rows.length,
           open: rows.filter((r) => r.getAttribute("aria-expanded") === "true").map((r) => r.innerText.split("\n")[0].trim()),
           labels: rows.map((r) => r.innerText.split("\n")[0].trim()),
+          rowText: rows.map((r) => r.innerText),
           // Every blurb must be fully readable — no ellipsis on the row that
           // has the most explaining to do.
           clipped: rows.filter((r) => {
@@ -199,21 +200,32 @@ describe("the Look picker's three dropdowns", () => {
     }
   }
 
-  it("shows exactly one row per family, and opens the one holding the selection", async () => {
-    const solid = await pick({ value: {}, onChange: () => {} });
-    expect(solid.rowCount).toBe(LOOK_FAMILIES.length);
-    expect(solid.open).toEqual([getLook(undefined).family === "solid" ? "Solid" : ""]);
-
-    const glass = await pick({ value: { linkLook: "aurora" }, onChange: () => {} });
-    expect(glass.open).toEqual(["Glass"]);
-
-    const gradient = await pick({ value: { linkLook: "nebula" }, onChange: () => {} });
-    expect(gradient.open).toEqual(["Gradient"]);
+  // Owner, 2026-09-29: Solid opening on its own was unwanted — every group
+  // starts CLOSED and the person opens Solid, Gradient or Glass themselves.
+  // It used to open the group holding the selection, which for the default
+  // look meant Solid, for nearly everyone.
+  it("shows exactly one row per family, ALL closed on arrival, whatever look is selected", async () => {
+    for (const value of [{}, { linkLook: "aurora" }, { linkLook: "nebula" }, { linkLook: "ink" }]) {
+      const r = await pick({ value, onChange: () => {} });
+      expect(r.rowCount, JSON.stringify(value)).toBe(LOOK_FAMILIES.length);
+      expect(r.open, JSON.stringify(value)).toEqual([]);
+      // Closed means closed: no look swatches rendered until a group is opened.
+      expect(r.swatchCount, JSON.stringify(value)).toBe(0);
+    }
   }, 60_000);
 
-  it("renders only the open family's swatches, so the list is never a wall again", async () => {
-    const glass = await pick({ value: { linkLook: "aurora" }, onChange: () => {} });
-    expect(glass.swatchCount).toBe(looksInFamily("glass").length);
+  it("a closed group still names the current look, so nothing is hidden", async () => {
+    for (const [value, family] of [[{}, getLook(undefined).family], [{ linkLook: "aurora" }, "glass"], [{ linkLook: "nebula" }, "gradient"]] as const) {
+      const r = await pick({ value, onChange: () => {} });
+      const look = getLook((value as { linkLook?: string }).linkLook);
+      const i = LOOK_FAMILIES.findIndex((f) => f.id === family);
+      // Case-insensitive: the name is drawn with CSS `uppercase`, and
+      // innerText reports the transformed text.
+      const name = look.name.toLowerCase();
+      expect(r.rowText[i].toLowerCase(), JSON.stringify(value)).toContain(name);
+      // …and only on its own row.
+      r.rowText.forEach((t, j) => { if (j !== i) expect(t.toLowerCase(), `row ${j}`).not.toContain(name); });
+    }
   }, 60_000);
 
   it("never truncates a family's description, and stays inside the panel", async () => {
@@ -224,10 +236,11 @@ describe("the Look picker's three dropdowns", () => {
     }
   }, 60_000);
 
-  it("a Free session still opens on its own group with both free looks live", async () => {
+  it("a Free session starts closed too, and still sees all three groups", async () => {
     const r = await pick({ value: {}, onChange: () => {}, locked: true });
-    expect(r.open).toEqual(["Solid"]);
-    expect(r.swatchCount).toBe(looksInFamily("solid").length);
+    expect(r.open).toEqual([]);
+    expect(r.swatchCount).toBe(0);
+    expect(r.rowCount).toBe(LOOK_FAMILIES.length);
   }, 60_000);
 });
 
