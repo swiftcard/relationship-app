@@ -241,11 +241,12 @@ export async function GET(req: NextRequest) {
             ? unlockedLeadBody(String(top.row.body ?? ""))
             : String(top.row.body ?? ""),
         // The same screen the live push opens: one returning contact on Pro
-        // opens THAT contact; on Free (the name is withheld) the notification.
+        // opens THAT contact; on Free (the name is withheld) that card's
+        // dashboard, where the row waits in the bell.
         url: extra === 0 && top.category === "contact_return" && top.row.lead_id
           ? paid
             ? `${APP_URL}/contacts?${top.row.card_owner ? `card=${encodeURIComponent(String(top.row.card_owner))}&` : ""}lead=${encodeURIComponent(String(top.row.lead_id))}`
-            : `${APP_URL}/dashboard?${top.row.card_owner ? `card=${encodeURIComponent(String(top.row.card_owner))}&` : ""}view=notifications`
+            : `${APP_URL}/dashboard${top.row.card_owner ? `?card=${encodeURIComponent(String(top.row.card_owner))}` : ""}`
           : destinationFor(top.category, (top.row.card_owner as string | null) ?? null),
         // Name the card only when the whole night was about ONE card — "Card:
         // Work" over "Plus 3 more" would be wrong if the others were elsewhere.

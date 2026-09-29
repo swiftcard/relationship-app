@@ -252,10 +252,12 @@ describe("a browser holding the owner's pass", () => {
 });
 
 describe("the owner's own links are wired through the hop", () => {
-  it("dashboard 'View live' and 'See how it looks to them'", () => {
+  // "See how it looks to them" lived in Quick Contacts' empty state and went
+  // with it (2026-09-29); "View live" in My Cards is the dashboard's one now.
+  it("dashboard 'View live'", () => {
     const src = read("src/app/dashboard/page.tsx");
     expect(src).toMatch(/const liveHref = ownLiveHref\(user\.id, cardUrl, APP_URL\)/);
-    expect(src.match(/href=\{liveHref\}/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(src.match(/href=\{liveHref\}/g)?.length).toBeGreaterThanOrEqual(1);
   });
 
   it("Swift Links 'Open', the signature preview, profile and Office team list", () => {

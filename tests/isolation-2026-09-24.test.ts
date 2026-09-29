@@ -30,15 +30,15 @@ describe("notifications stay with their account and their card", () => {
     for (const u of updates) expect(u).toContain('.eq("user_id", userId)');
   });
 
-  it("a card's panel never falls back to every card's rows", () => {
+  // The per-card dashboard panel — the one list that could show card A's rows
+  // under card B — went with Quick Contacts (2026-09-29). What is left is the
+  // account-wide bell, so there is no card scope for a fallback to escape.
+  it("no card-scoped notification list is left to leak across cards", () => {
     const api = read("src/app/api/notifications/route.ts");
-    expect(api).toMatch(/if \(error && card\) \{\r?\n\s*return NextResponse\.json\(\[\]\);/);
-    expect(api).not.toMatch(/if \(error && card\) \{\s*\n\s*await db/);
+    expect(api).not.toMatch(/searchParams\.get\("card"\)|body\.card/);
     const dash = read("src/app/dashboard/page.tsx");
-    expect(dash).not.toContain("panelNotifications ??= fallback;");
-    expect(dash).toContain("key={activeUsername}");
-    const panel = read("src/components/NotificationsPanel.tsx");
-    expect(panel).toContain("if (cancelled) return;");
+    expect(dash).not.toMatch(/panelNotifications|NotificationsPanel/);
+    expect(dash).not.toMatch(/card_owner\.eq\.\$\{activeUsername/);
   });
 
   it("a returning contact opens under the card they were captured on", () => {

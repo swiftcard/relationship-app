@@ -56,8 +56,9 @@ describe("the bell never shows a Pro account a place blocked out", () => {
     expect(free.body).not.toContain("New York");
   });
 
-  it("the bell and the dashboard list replace rows whose words changed (an upgrade, a visit upgraded in place)", () => {
-    for (const f of ["src/components/NotificationBell.tsx", "src/components/NotificationsPanel.tsx"]) {
+  // The bell is the one list (the dashboard's went with Quick Contacts, 2026-09-29).
+  it("the bell replaces rows whose words changed (an upgrade, a visit upgraded in place)", () => {
+    for (const f of ["src/components/NotificationBell.tsx"]) {
       expect(read(f), f).toMatch(/\$\{n\.title\}:\$\{n\.body \?\? ""\}/);
     }
   });
@@ -98,7 +99,9 @@ describe("a paid account is never shown Free-plan copy", () => {
     expect(src).toMatch(/to earn a free month of Pro\./);
     expect(src).toMatch(/comes off your next bill/);
     expect(src).toMatch(/return \{ ok: true, monthsClaimed: after\.monthsClaimed, claimable: after\.claimable, kind \}/);
-    for (const f of ["src/components/NotificationsPanel.tsx", "src/components/ReferAFriend.tsx"]) {
+    // ReferAFriend (Settings and /grow) — the dashboard list's claim button
+    // went with Quick Contacts (2026-09-29).
+    for (const f of ["src/components/ReferAFriend.tsx"]) {
       expect(read(f), f).toMatch(/d\.kind === "credit"/);
     }
   });

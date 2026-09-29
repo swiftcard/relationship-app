@@ -5,6 +5,7 @@ import CardScaler from "@/components/CardScaler";
 import ClassicPro from "@/components/card-templates/ClassicPro";
 import { withoutSocials } from "@/components/card-templates/types";
 import type { CardData } from "@/components/card-templates/types";
+import DemoContactActions from "@/components/site/DemoContactActions";
 
 // Same demo identity as SAMPLE_DATA (card-templates/types.tsx) and every other
 // marketing demo (SwiftLinksPhone, SignatureDemo, TeamsDashboard) — one person,
@@ -24,9 +25,10 @@ const DEMO_CARD: CardData = withoutSocials({
 
 // Marketing-site replica of the real Pro /dashboard, inside a browser chrome.
 // Mirrors the real page's structure and styling exactly:
-//   • Traffic box full-width on top (Today / Week / Month / Locations)
-//   • Quick Contacts (Notifications / Contacts toggle) on the left
+//   • Traffic box on the left (Today / Week / Month / Locations)
 //   • "Your Card" preview + Share panel on the right
+// (Quick Contacts left the real dashboard on 2026-09-29 — its Call / Text /
+// Email buttons are on every Contacts row now, and so they are here.)
 // Purely presentational — all data is fictional; nothing is fetched.
 
 // ── Traffic data per range ───────────────────────────────────────────────────
@@ -44,32 +46,8 @@ const LOCATIONS = [
   { location: "London, UK", card: 38, link: 29 },
 ];
 
-// ── Quick Contacts data ──────────────────────────────────────────────────────
+// ── Contacts total (the Traffic box's "Contacts" stat) ────────────────────────
 const TOTAL_LEADS = 12;
-
-const LEADS = [
-  { id: "l1", name: "Sarah Chen", company: "Acme Realty", phone: true, email: true },
-  { id: "l2", name: "Marcus Webb", company: "Northgate Co.", phone: true, email: true },
-  { id: "l3", name: "Elena Diaz", company: "Brightpath Studio", phone: false, email: true },
-  { id: "l4", name: "Tom Farrell", company: "Farrell Development", phone: true, email: true },
-  { id: "l5", name: "Jordan Kim", company: "Kimco Partners", phone: true, email: false },
-];
-
-// Titles and bodies follow the shapes the product actually sends, so the demo
-// bell shows notifications a real owner would recognise:
-//   • new_lead        — lib: `New contact: {name}` / `{name} shared their info with you{source}.`
-//   • contact_saved   — card-event-notify.ts: `Contact saved` / `{name} saved your contact card{from}{near}.`
-//   • card_viewed     — card-event-notify.ts: `Card viewed`   / `{name} viewed {surface}{near}.`
-// The old list invented a "Weekly traffic report" notification that no code
-// path creates, and it quoted the "up 23%" trend stat that was removed from
-// the dashboard in d65b0d5 — advertising a feature twice over that isn't there.
-const NOTIFICATIONS = [
-  { id: "n1", title: "New contact: Sarah Chen", body: "Sarah Chen shared their info with you from your QR code.", ago: "2h ago", read: false },
-  { id: "n2", title: "Contact saved", body: "Someone saved your contact card from your QR code, near San Francisco, CA.", ago: "6h ago", read: false },
-  { id: "n3", title: "New contact: Marcus Webb", body: "Marcus Webb shared their info with you from your Swift Links page.", ago: "1d ago", read: false },
-  { id: "n4", title: "Card viewed", body: "Someone viewed your card, near Oakland, CA.", ago: "2d ago", read: true },
-  { id: "n5", title: "New contact: Tom Farrell", body: "Tom Farrell shared their info with you from your email signature.", ago: "3d ago", read: true },
-];
 
 // ── Traffic box — matches the real dashboard's Traffic section ───────────────
 function TrafficBox() {
@@ -77,7 +55,7 @@ function TrafficBox() {
   const d = range === "locations" ? null : TRAFFIC[range];
 
   return (
-    <div className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5 mb-5">
+    <div className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5 min-w-0">
       <div className="flex items-center justify-between mb-4">
         <p className="text-white font-semibold text-sm">Traffic</p>
         <div className="flex items-center bg-gray-800 rounded-lg p-0.5">
@@ -162,152 +140,6 @@ function TrafficBox() {
   );
 }
 
-// ── Contact row action button — mirrors QuickContactList's ActionButton ──────
-function ActionButton({ label, color, children }: { label: string; color: string; children: React.ReactNode }) {
-  return (
-    <span
-      title={label}
-      aria-label={label}
-      className="flex items-center justify-center w-9 h-9 rounded-full border transition-colors shrink-0"
-      style={{ borderColor: `${color}40`, background: `${color}14`, color }}
-    >
-      {children}
-    </span>
-  );
-}
-
-// ── Contacts view — mirrors QuickContactList rows ────────────────────────────
-function ContactsView() {
-  return (
-    <div className="space-y-2">
-      {LEADS.map((l) => (
-        <div key={l.id} className="flex items-center gap-3 bg-gray-900 border border-gray-800/80 rounded-2xl px-4 py-3">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-9 h-9 rounded-full bg-gray-800 border border-gray-700/60 flex items-center justify-center text-xs font-bold text-gray-300 shrink-0">
-              {l.name[0]}
-            </div>
-            <div className="min-w-0">
-              <p className="text-white text-sm font-semibold truncate">{l.name}</p>
-              <p className="text-gray-400 text-[0.6875rem] truncate">{l.company}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            {l.phone && (
-              <ActionButton label={`Call ${l.name}`} color="#22c55e">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-4 h-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
-                </svg>
-              </ActionButton>
-            )}
-            {l.phone && (
-              <ActionButton label={`Text ${l.name}`} color="#3b82f6">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-4 h-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
-                </svg>
-              </ActionButton>
-            )}
-            {l.email && (
-              <ActionButton label={`Email ${l.name}`} color="#a78bfa">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-4 h-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25H4.5a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5H4.5a2.25 2.25 0 00-2.25 2.25m19.5 0l-9.75 6.75L2.25 6.75" />
-                </svg>
-              </ActionButton>
-            )}
-          </div>
-        </div>
-      ))}
-      <span className="block w-full text-center text-xs font-semibold text-gray-400 border border-gray-800 rounded-full py-2.5">
-        Show more ({TOTAL_LEADS - LEADS.length} more)
-      </span>
-    </div>
-  );
-}
-
-// ── Notifications view — mirrors NotificationsPanel ──────────────────────────
-function NotificationsView() {
-  const unread = NOTIFICATIONS.filter((n) => !n.read).length;
-  return (
-    <div className="border border-gray-800 rounded-2xl overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-800 bg-gray-900/40">
-        <p className="text-xs text-gray-400">{unread} unread</p>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-blue-400">Mark all read</span>
-          <span className="text-xs text-gray-400">Clear read</span>
-        </div>
-      </div>
-      <div className="divide-y divide-gray-800">
-        {NOTIFICATIONS.map((n) => (
-          <div key={n.id} className={`flex items-start gap-3 px-4 py-3 ${n.read ? "" : "bg-blue-950/40"}`}>
-            <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${n.read ? "bg-gray-700" : "bg-blue-500"}`} />
-            <div className="min-w-0 flex-1">
-              <p className={`text-sm ${n.read ? "text-gray-300 font-medium" : "text-white font-semibold"}`}>{n.title}</p>
-              <p className="text-gray-400 text-xs mt-0.5 leading-relaxed">{n.body}</p>
-              <p className="text-gray-400 text-[0.6875rem] mt-1">{n.ago}</p>
-            </div>
-            <span
-              className={`shrink-0 text-[0.6875rem] font-medium px-2.5 py-1 rounded-lg border ${
-                n.read ? "border-gray-700 text-gray-400" : "border-blue-700 bg-blue-600/15 text-blue-300"
-              }`}
-            >
-              {n.read ? "Unread" : "Read"}
-            </span>
-            <span className="shrink-0 p-1 text-gray-400" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Quick Contacts section — mirrors the real dashboard's left column ────────
-function QuickContactsSection() {
-  const [view, setView] = useState<"notifications" | "list">("notifications");
-  return (
-    <div>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-baseline gap-2.5">
-          <h3 className="text-white font-semibold text-sm">Quick Contacts</h3>
-          <span className="text-white font-bold text-lg tabular-nums">{TOTAL_LEADS}</span>
-          <span className="text-gray-400 text-[0.6875rem] font-medium">Total leads</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1 bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">
-            <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
-            Add
-          </span>
-          <span className="text-xs text-gray-400 border border-gray-800 px-3 py-1.5 rounded-lg">Export</span>
-        </div>
-      </div>
-
-      {/* View toggle */}
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <div className="flex items-center bg-gray-800/80 rounded-lg p-0.5">
-          {([
-            { id: "notifications", label: "Notifications" },
-            { id: "list", label: "Contacts" },
-          ] as const).map((v) => (
-            <button
-              key={v.id}
-              onClick={() => setView(v.id)}
-              className={`text-xs font-medium px-3 py-1 rounded-md transition-colors ${view === v.id ? "bg-gray-700 text-white" : "text-gray-400 hover:text-gray-200"}`}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
-        <span className="ml-auto text-xs text-gray-400">View all in Contacts →</span>
-      </div>
-
-      {view === "notifications" ? <NotificationsView /> : <ContactsView />}
-    </div>
-  );
-}
-
 // ── Right column — Your Card preview + Share panel ───────────────────────────
 function CardSharePanel() {
   return (
@@ -363,17 +195,17 @@ function CardSharePanel() {
 
 // ── Contacts page replica — mirrors ContactsClient's list + detail shape ─────
 const DEMO_CONTACTS = [
-  { id: "c1", name: "Sarah Chen", company: "Acme Realty", status: "New Contact", statusCls: "bg-blue-950 text-blue-300", unread: true, last: "Loved the listing on Cole St — can we set up a viewing this weekend?" },
-  { id: "c2", name: "Marcus Webb", company: "Northgate Co.", status: "Touch", statusCls: "bg-amber-950 text-amber-300", unread: false, last: "Interested in the downtown condos — what's coming up?" },
-  { id: "c3", name: "Elena Diaz", company: "Brightpath Studio", status: "Touch", statusCls: "bg-amber-950 text-amber-300", unread: false, last: "Thanks for following up! Let's talk next week." },
-  { id: "c4", name: "Tom Farrell", company: "Farrell Development", status: "Dissolved", statusCls: "bg-gray-800 text-gray-400", unread: false, last: "Following up on the office space downtown — is it still available?" },
+  { id: "c1", name: "Sarah Chen", company: "Acme Realty", phone: true, email: true, status: "New Contact", statusCls: "bg-blue-950 text-blue-300", unread: true, last: "Loved the listing on Cole St — can we set up a viewing this weekend?" },
+  { id: "c2", name: "Marcus Webb", company: "Northgate Co.", phone: true, email: true, status: "Touch", statusCls: "bg-amber-950 text-amber-300", unread: false, last: "Interested in the downtown condos — what's coming up?" },
+  { id: "c3", name: "Elena Diaz", company: "Brightpath Studio", phone: false, email: true, status: "Touch", statusCls: "bg-amber-950 text-amber-300", unread: false, last: "Thanks for following up! Let's talk next week." },
+  { id: "c4", name: "Tom Farrell", company: "Farrell Development", phone: true, email: false, status: "Dissolved", statusCls: "bg-gray-800 text-gray-400", unread: false, last: "Following up on the office space downtown — is it still available?" },
 ];
 
 function ContactsPageView() {
   const [selectedId, setSelectedId] = useState(DEMO_CONTACTS[0].id);
   const selected = DEMO_CONTACTS.find((c) => c.id === selectedId) ?? DEMO_CONTACTS[0];
   return (
-    <div className="grid grid-cols-[220px_1fr] gap-4 h-[420px]">
+    <div className="grid grid-cols-[300px_1fr] gap-4 h-[420px]">
       {/* List */}
       <div className="border border-gray-800 rounded-2xl overflow-y-auto divide-y divide-gray-800">
         {DEMO_CONTACTS.map((c) => (
@@ -389,7 +221,8 @@ function ContactsPageView() {
               <p className="text-white text-xs font-semibold truncate">{c.name}</p>
               <p className="text-gray-400 text-[0.625rem] truncate">{c.company}</p>
             </div>
-            {c.unread && <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />}
+            <DemoContactActions name={c.name} phone={c.phone} email={c.email} />
+            <span className={`w-2 h-2 rounded-full shrink-0 ${c.unread ? "bg-blue-500" : "border border-gray-500"}`} />
           </button>
         ))}
       </div>
@@ -506,8 +339,8 @@ export default function DashboardDemo() {
           `.sc-app` once, plus `bg-gray-950` — the real dashboard's page
           background class, which the light remap turns into the app's cream.
           Without it the cards went light while the page behind them stayed the
-          dark browser-frame colour, leaving dark gutters and an unreadable
-          "Quick Contacts" heading. */}
+          dark browser-frame colour, leaving dark gutters and unreadable
+          headings. */}
       <div className="sc-app bg-gray-950">
       {/* Page tabs — the actual app nav (Dashboard / Contacts / Links) so
           visitors can click through the real pages, not just Dashboard. */}
@@ -526,12 +359,9 @@ export default function DashboardDemo() {
       <div className="p-4 sm:p-5">
         {tab === "dashboard" && (
           <>
-            {/* Traffic — full width, like the real /dashboard */}
-            <TrafficBox />
-
-            {/* Main: contacts + card panel (real page: lg:grid-cols-[1fr_300px]) */}
-            <div className="grid grid-cols-[1fr_260px] gap-5">
-              <QuickContactsSection />
+            {/* Traffic | card panel (real page: lg:grid-cols-[1fr_300px]) */}
+            <div className="grid grid-cols-[1fr_260px] gap-5 items-start">
+              <TrafficBox />
               <CardSharePanel />
             </div>
           </>

@@ -15,7 +15,9 @@ import { appCss, launchBrowser } from "./harness";
 // A source scan cannot see what a person sees when the bell opens: which row
 // the reminder hangs under, whether two asks end up on one screen, whether the
 // switch inside it actually asks the browser, whether it fits a 320px phone.
-// So this bundles the REAL NotificationBell, NotificationsPanel and PushNudge
+// So this bundles the REAL NotificationBell and PushNudge (the dashboard's own
+// notifications list was a third surface until it went with Quick Contacts,
+// 2026-09-29)
 // with esbuild, serves them from a fake https origin (so storage and a secure
 // context behave like the site), answers the API from here, and clicks.
 //
@@ -72,7 +74,6 @@ beforeAll(async () => {
     import { createRoot } from "react-dom/client";
     import { createElement as h, Fragment } from "react";
     import NotificationBell from "@/components/NotificationBell";
-    import NotificationsPanel from "@/components/NotificationsPanel";
     import PushNudge from "@/components/PushNudge";
     (window as any).__nav = [];
     (window as any).mount = (o: any) => {
@@ -80,8 +81,7 @@ beforeAll(async () => {
         h(Fragment, null,
           o.nudge ? h(PushNudge, { viewCount: o.viewCount ?? 0 }) : null,
           h("nav", { className: "sc-app flex justify-end p-2" },
-            h(NotificationBell, { initialNotifications: o.notifs, cardLabels: {}, activeCard: null })),
-          o.panel ? h("main", { className: "sc-app p-4" }, h(NotificationsPanel, { initial: o.notifs, leads: [] })) : null,
+            h(NotificationBell, { initialNotifications: o.notifs, cardLabels: {} })),
         ),
       );
     };
@@ -139,7 +139,6 @@ const MILESTONE: Notif = { id: uuid(4), type: "milestone_10", title: "10 views!"
 type Opts = {
   notifs: Notif[];
   nudge?: boolean;
-  panel?: boolean;
   width?: number;
   userAgent?: string;
   /** What the server answers a claim with. */
@@ -255,7 +254,7 @@ async function rig(o: Opts): Promise<Rig> {
   if (o.light) await page.evaluate(() => document.documentElement.setAttribute("data-sc-theme", "light"));
   await page.evaluate((opts) => {
     (window as unknown as { mount: (x: unknown) => void }).mount(opts);
-  }, { notifs: o.notifs, nudge: !!o.nudge, panel: !!o.panel, viewCount: 0 });
+  }, { notifs: o.notifs, nudge: !!o.nudge, viewCount: 0 });
 
   return {
     page,
@@ -474,35 +473,27 @@ describe("one ask on screen, never two", () => {
     }
   });
 
-  it("the list and the bell never both show it", async () => {
-    const r = await rig({ notifs: [LEAD], panel: true });
-    await r.page.waitForSelector("main [data-push-ask]");
+  it("in the bell, tapping the switch never also opens the contact", async () => {
+    const r = await rig({ notifs: [LEAD] });
     await openBell(r.page);
-    await settle(r.page);
-    expect(await reminders(r.page)).toBe(1);
-    expect(claims(r)).toHaveLength(1);
-    await r.page.context().close();
-  });
-
-  it("in the list, tapping the switch never also opens the contact", async () => {
-    const r = await rig({ notifs: [LEAD], panel: true });
-    await r.page.waitForSelector("main [data-push-ask]");
-    await r.page.click('main [data-push-ask] [role="switch"]');
-    await r.page.waitForSelector("main [data-push-ask] [role=status]");
+    await r.page.waitForSelector('[role="dialog"] [data-push-ask] [role="switch"]');
+    await r.page.click('[role="dialog"] [data-push-ask] [role="switch"]');
+    await r.page.waitForSelector('[role="dialog"] [data-push-ask] [role=status]');
     expect(r.subscribes).toBe(1);
     // The row's own text still opens the contact — the reminder did not break it.
     expect(await r.page.evaluate(() => (window as unknown as { __nav: string[] }).__nav)).toEqual([]);
-    await r.page.click("main >> text=New contact: Shantal Paul");
+    await r.page.click('[role="dialog"] >> text=New contact: Shantal Paul');
     expect(await r.page.evaluate(() => (window as unknown as { __nav: string[] }).__nav)).toEqual(["/contacts"]);
     await r.page.context().close();
   });
 
-  it("readable in the list on the light theme and the dark one", async () => {
+  it("readable in the bell on the light theme and the dark one", async () => {
     for (const light of [false, true]) {
-      const r = await rig({ notifs: [LEAD], panel: true, light });
-      await r.page.waitForSelector("main [data-push-ask] [role=switch]");
+      const r = await rig({ notifs: [LEAD], light });
+      await openBell(r.page);
+      await r.page.waitForSelector('[role="dialog"] [data-push-ask] [role=switch]');
       const ratio = await r.page.evaluate(() => {
-        const box = document.querySelector("main [data-push-ask]") as HTMLElement;
+        const box = document.querySelector('[role="dialog"] [data-push-ask]') as HTMLElement;
         const title = box.querySelector("p") as HTMLElement;
         const rgb = (c: string) => (c.match(/[\d.]+/g) ?? ["0", "0", "0"]).slice(0, 3).map(Number);
         const lum = ([r, g, b]: number[]) => {

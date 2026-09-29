@@ -81,8 +81,10 @@ const GUARDS: Guard[] = [
   { file: "src/components/GrowShare.tsx", patterns: [/native\s*\n?\s*\?/, /help more people discover SwiftCard/] },
   { file: "src/app/grow/page.tsx", patterns: [/<NativeHidden>/] },
   {
-    file: "src/components/NotificationsPanel.tsx",
-    patterns: [/isNative && n\.type === "referral_claim"/],
+    // The bell is the app's one notification list (the dashboard's went with
+    // Quick Contacts, 2026-09-29): referral claims never show in the app.
+    file: "src/components/NotificationBell.tsx",
+    patterns: [/\.filter\(\(n\) => n\.type !== "referral_claim" && !NATIVE_HIDDEN_TYPES\.has\(n\.type\)\)/],
   },
   {
     file: "src/components/HelpWidget.tsx",

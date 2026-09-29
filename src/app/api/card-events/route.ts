@@ -645,17 +645,17 @@ export async function POST(req: NextRequest) {
               // multi-card account could be the wrong one. A returning contact
               // opens THEIR contact, the same screen a new lead's push opens.
               // Pro only: on Free the name is the thing being withheld, and
-              // opening their contact would print it. A Free tap lands on the
-              // notification itself, where the name stays blurred.
+              // opening their contact would print it. A Free tap lands on this
+              // card's dashboard, where the row waits in the bell with the name
+              // still blurred (the dashboard's own notifications list went with
+              // Quick Contacts, 2026-09-29).
               url: returning && isPaidPlan(owner.plan as string | null)
                 // The contact lives under the card they were CAPTURED on,
                 // which may be another of this owner's cards: opening it
                 // under this card showed a contact missing from that card's
                 // list (isolation audit 2026-09-24).
                 ? `${APP_URL}/contacts?card=${encodeURIComponent(returning.cardOwner || card_owner_username)}&lead=${returning.leadId}`
-                : returning
-                  ? `${APP_URL}/dashboard?card=${encodeURIComponent(card_owner_username)}&view=notifications`
-                  : `${APP_URL}/dashboard?card=${encodeURIComponent(card_owner_username)}`,
+                : `${APP_URL}/dashboard?card=${encodeURIComponent(card_owner_username)}`,
             },
           });
           // Mirror this conversation notification to the owner's CRM. The CRM

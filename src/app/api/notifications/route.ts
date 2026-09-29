@@ -4,7 +4,7 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { isPaidUser, redactForPlan } from "@/lib/notification-privacy";
 import { hideForReader, notificationReader } from "@/lib/office-account-notifications";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -14,16 +14,14 @@ export async function GET(req: NextRequest) {
   // devtools. The session is used only to identify the user.
   const db = getAdminSupabase();
 
-  // No ?card= → ALL cards (the bell). ?card=X → that card only, plus legacy
-  // un-tagged/account-level notifications (the dashboard panel).
-  const card = (req.nextUrl.searchParams.get("card") || "").replace(/[^a-zA-Z0-9_-]/g, "");
-
+  // Every card's notifications — the bell is the one list (the dashboard's
+  // per-card panel, and the ?card= scope that served it, went with Quick
+  // Contacts on 2026-09-29).
   // lead_id (warm-lead-alerts.sql) lets a row about a known contact open THAT
   // contact instead of guessing from the name. Asked for first; without the
   // column the query below runs exactly as it always did.
   const scopedQuery = (cols: string) => {
-    let q = db.from("notifications").select(cols).eq("user_id", user.id);
-    if (card) q = q.or(`card_owner.eq.${card},card_owner.is.null`);
+    const q = db.from("notifications").select(cols).eq("user_id", user.id);
     // Unread first, then newest. With a plain created_at order, 20 recent READ
     // rows pushed every older unread one out of the window — it vanished from
     // the list AND from the badge, which only counts the rows it was handed.
@@ -33,15 +31,8 @@ export async function GET(req: NextRequest) {
   if (error) ({ data: scoped, error } = await scopedQuery("id, type, title, body, read, created_at, card_owner"));
   let data: Record<string, unknown>[] | null = scoped as unknown as Record<string, unknown>[] | null;
 
-  // If the card_owner column migration hasn't run yet, selecting/filtering on
-  // it errors and the bell would show nothing — fall back to the plain query.
-  // Never for a CARD-scoped read: an unscoped retry after ANY error (a timeout,
-  // not just a missing column) listed every card's rows in card B's panel.
-  // The column is live everywhere now; a scoped read that fails shows nothing
-  // rather than the wrong card (isolation audit 2026-09-24).
-  if (error && card) {
-    return NextResponse.json([]);
-  }
+  // If the card_owner column migration hasn't run yet, selecting it errors
+  // and the bell would show nothing — fall back to the plain query.
   if (error) {
     ({ data } = await db
       .from("notifications")
@@ -79,7 +70,7 @@ export async function PATCH(req: NextRequest) {
   // devtools. The session is used only to identify the user.
   const db = getAdminSupabase();
 
-  let body: { id?: string; read?: boolean; card?: string } = {};
+  let body: { id?: string; read?: boolean } = {};
   try { body = await req.json(); } catch { /* no body = mark all read */ }
 
   if (body.id) {
@@ -90,27 +81,19 @@ export async function PATCH(req: NextRequest) {
       .eq("user_id", user.id)
       .eq("id", body.id);
   } else {
-    // Mark all read. With { card } (the per-card dashboard panel) only that
-    // card's notifications + account-level ones are touched — never another
-    // card's. Without it (the bell) it's genuinely all cards.
-    const card = (body.card || "").replace(/[^a-zA-Z0-9_-]/g, "");
-    let q = db
+    // Mark all read — every card (the bell).
+    const { error } = await db
       .from("notifications")
       .update({ read: true })
       .eq("user_id", user.id)
       .eq("read", false);
-    if (card) q = q.or(`card_owner.eq.${card},card_owner.is.null`);
-    const { error } = await q;
-    // A failed card-scoped update is NOT retried unscoped: that marked every
-    // other card's rows read from card B's panel (isolation audit 2026-09-24).
     if (error) return NextResponse.json({ error: "Couldn't update notifications." }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });
 }
 
-// Dismiss notifications: { id } removes one, { read: true } clears all read
-// ones — card-scoped when { card } is given (the per-card panel).
+// Dismiss notifications: { id } removes one, { read: true } clears all read ones.
 export async function DELETE(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -121,18 +104,13 @@ export async function DELETE(req: NextRequest) {
   // devtools. The session is used only to identify the user.
   const db = getAdminSupabase();
 
-  let body: { id?: string; read?: boolean; card?: string } = {};
+  let body: { id?: string; read?: boolean } = {};
   try { body = await req.json(); } catch { /* ignore */ }
 
   if (body.id) {
     await db.from("notifications").delete().eq("user_id", user.id).eq("id", body.id);
   } else if (body.read) {
-    const card = (body.card || "").replace(/[^a-zA-Z0-9_-]/g, "");
-    let q = db.from("notifications").delete().eq("user_id", user.id).eq("read", true);
-    if (card) q = q.or(`card_owner.eq.${card},card_owner.is.null`);
-    const { error } = await q;
-    // Never retried unscoped: "Clear read" on card B deleted card A's rows
-    // whenever the scoped delete failed (isolation audit 2026-09-24).
+    const { error } = await db.from("notifications").delete().eq("user_id", user.id).eq("read", true);
     if (error) return NextResponse.json({ error: "Couldn't clear notifications." }, { status: 500 });
   }
 

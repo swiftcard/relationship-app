@@ -112,8 +112,6 @@ async function mount(width: number, props: Props, withUpsell: boolean): Promise<
     ({ p, up }) => {
       (window as unknown as { mount: (x: unknown) => void }).mount({
         ...(p as object),
-        view: "notifications",
-        sortBy: "newest",
         upsellText: up ? "Ready for a second card? Go unlimited with Pro." : null,
       });
     },

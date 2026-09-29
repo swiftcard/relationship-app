@@ -417,7 +417,7 @@ export async function POST(req: NextRequest) {
             body,
             // THE EXACT SCREEN: this contact's detail panel, not a dashboard
             // they then have to search. /contacts?lead= is the same deep link
-            // the in-app bell uses (NotificationsPanel, QuickContactList).
+            // the in-app bell uses (NotificationBell).
             url: insertedLead?.id
               ? `${APP_URL}/contacts?card=${encodeURIComponent(card_owner)}&lead=${insertedLead.id}`
               : `${APP_URL}/contacts?card=${encodeURIComponent(card_owner)}`,

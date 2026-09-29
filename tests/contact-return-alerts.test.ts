@@ -171,10 +171,15 @@ describe("a contact's name is Pro, decided on read", () => {
     expect(free.body).not.toContain("Priya");
   });
 
-  it("a Free push for a returning contact opens the notification, not the contact", () => {
+  // Lands on that card's dashboard, where the row waits in the bell with the
+  // name still blurred (the dashboard's own notifications list, which the URL
+  // used to name, went with Quick Contacts on 2026-09-29).
+  it("a Free push for a returning contact opens the card's dashboard, not the contact", () => {
     const src = readFileSync(join(process.cwd(), "src/app/api/card-events/route.ts"), "utf8");
     expect(src).toMatch(/url: returning && isPaidPlan\(owner\.plan/);
-    expect(src).toMatch(/&view=notifications/);
+    expect(src).toMatch(/: `\$\{APP_URL\}\/dashboard\?card=\$\{encodeURIComponent\(card_owner_username\)\}`,/);
+    expect(src).not.toMatch(/view=notifications/);
+    expect(readFileSync(join(process.cwd(), "src/app/api/push/catchup/route.ts"), "utf8")).not.toMatch(/view=notifications/);
   });
 
   it("the lock screen reads naturally without the name", () => {

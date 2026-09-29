@@ -13,7 +13,7 @@ export const contactsDocs = defineDocs([
       "who saved my card", "view contacts", "contact list", "find a contact", "search contacts",
     ],
     answer:
-      "\"Contacts\" in the top nav (or the Contacts tab in the mobile bottom bar) opens /contacts. It lists everyone captured by the card you currently have selected, with a search box that matches name, email, phone and company, and a sort dropdown offering Alphabetical, Recently Added, and Follow-up Date.",
+      "\"Contacts\" in the top nav (or the Contacts tab in the mobile bottom bar) opens /contacts. It lists everyone captured by the card you currently have selected, with a search box that matches name, email, phone and company, and a sort dropdown offering Alphabetical, Recently Added, and Follow-up Date. Every contact in the list has round Call (green), Text (blue) and Email (purple) buttons on the right that open the phone's dialer, Messages or mail app with their details filled in; a button only shows when the contact has that detail (no phone number, no Call or Text). The small dot at the far right of a row marks it read or unread (filled = unread). Tapping anywhere else on the row opens the contact.",
     detail:
       "Contacts are per card and there is deliberately no \"All cards\" option on this page — the grey line above the search box tells you which card you're looking at. To see another card's contacts, switch the selected card on the dashboard. A brand-new card comes with one seeded sample contact, \"Jordan Rivera\", so the screens aren't empty; it is not a real person and deleting it is safe.",
   },
@@ -26,7 +26,7 @@ export const contactsDocs = defineDocs([
       "new contact",
     ],
     answer:
-      "The blue \"Add contact\" button at the top of the Contacts list, or the same button in the dashboard's \"Quick Contacts\" header. The form asks for Full name (required), Email, Phone, Company, \"Where you met\" and Notes.",
+      "The blue \"Add contact\" button at the top of the Contacts list (it is only there — the dashboard no longer has one). The form asks for Full name (required), Email, Phone, Company, \"Where you met\" and Notes.",
     detail:
       "Contacts you add by hand are not marked unread, so they never show the blue dot — only shares through your card do. They count towards the Free monthly contact cap just like captured ones. The source badge shows \"Added by hand\".",
   },
@@ -105,7 +105,7 @@ export const contactsDocs = defineDocs([
     answer:
       "When someone you already have as a contact opens your card again, the notification names them (\"Priya re-opened your card\") and tapping it opens their contact. There is no per-contact switch for this any more: to stop a contact's phone alerts, mark them Not interested or Closed. Their visits still show in the bell and in their history. To stop returning-contact alerts for everyone, use the Returning contacts switch in Settings → Notifications and preferences.",
     detail:
-      "SwiftCard only recognises someone who shared their details with you from that phone or computer, or who opened a text or email SwiftCard sent them for you. If a named notification was about the wrong person, tap \"Wrong person?\" on it in the dashboard's Notifications list, then Confirm: that device is no longer tied to the contact, those visits come off their history, and the notification is removed. If two different people have shared their details from the same device (a shared iPad, say), SwiftCard names neither of them. Contacts marked Not interested or Closed never set off a phone alert. On the Free plan the name is blurred and the alert says \"A contact re-opened your card\"; where you met them still shows, but tapping the alert opens the Notifications list rather than the contact, and there is no \"Wrong person?\" on it.",
+      "SwiftCard only recognises someone who shared their details with you from that phone or computer, or who opened a text or email SwiftCard sent them for you. If a named notification was about the wrong person, tap \"Wrong person?\" on it in the notification bell, then Confirm: that device is no longer tied to the contact, those visits come off their history, and the notification is removed. If two different people have shared their details from the same device (a shared iPad, say), SwiftCard names neither of them. Contacts marked Not interested or Closed never set off a phone alert. On the Free plan the name is blurred and the alert says \"A contact re-opened your card\"; where you met them still shows, but tapping the alert opens the dashboard (the alert waits in the bell) rather than the contact, and there is no \"Wrong person?\" on it.",
   },
   {
     id: "follow-up-automations",
@@ -155,6 +155,6 @@ export const contactsDocs = defineDocs([
     answer:
       "On Free, contacts captured beyond {limit.leads} in a month are still captured and stored — they're just held back until the account is on a paid plan, with a banner telling you how many are waiting. Nothing is lost, and they all appear the moment the account is paid.",
     detail:
-      "When a Free account's last free contact of the month comes in, the bell says so once (\"That's {limit.leads} of {limit.leads} new contacts this month\") — never as a phone notification — so the next one being held back is not a surprise. Past the limit, the counter above Quick Contacts stays at \"{limit.leads}/{limit.leads} this month\" and adds how many are waiting (\"· 3 waiting\"). The visitor never sees a failure — their share always succeeds. The counter resets on the 1st and counts per account, so deleting a card or a contact doesn't reset it. The same holds after a downgrade: contacts are hidden, never deleted.",
+      "When a Free account's last free contact of the month comes in, the bell says so once (\"That's {limit.leads} of {limit.leads} new contacts this month\") — never as a phone notification — so the next one being held back is not a surprise. An amber banner on the dashboard counts the free contacts used as the limit gets close; at the limit it says all {limit.leads} are used, and once more arrive it says how many new contacts are locked this month. The visitor never sees a failure — their share always succeeds. The counter resets on the 1st and counts per account, so deleting a card or a contact doesn't reset it. The same holds after a downgrade: contacts are hidden, never deleted.",
   },
 ]);

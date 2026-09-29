@@ -51,7 +51,7 @@ export default function OfficeNotificationBell({
       // Nobody is looking: a backgrounded tab kept polling forever. The
       // visibility listener below polls the moment it comes back, so this
       // costs nothing but the requests nobody was waiting for. Same guard
-      // NotificationsPanel already uses.
+      // NotificationBell uses.
       if (document.visibilityState === "hidden") return;
       try {
         const res = await fetch("/api/office/notifications");

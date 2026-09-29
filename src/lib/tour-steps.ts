@@ -128,7 +128,7 @@ const STEP_DEFS: TourStepDef[] = [
     title: "Dashboard",
     // On a phone this spotlights the tab bar's "Home" tab, under a step titled
     // "Dashboard" — so the copy names both.
-    body: "Your home base — traffic, contacts, and card, all in one place. You're on it now. On a phone it's the Home tab.",
+    body: "Your home base — your cards, their traffic, and sharing, all in one place. You're on it now. On a phone it's the Home tab.",
     placement: "bottom",
   },
   {
@@ -136,8 +136,18 @@ const STEP_DEFS: TourStepDef[] = [
     path: DASH,
     anchor: "nav-contacts",
     title: "Contacts",
-    body: "Everyone who's shared their info — searchable, with full history. We'll open it shortly.",
+    // Quick Contacts left the dashboard (owner, 2026-09-29): its Call / Text /
+    // Email buttons are on every contact now, and Add contact lives only here
+    // — so this step names both. Not a step of their own: while the tour runs
+    // the Contacts page opens the sample contact, which on a phone covers the
+    // list those buttons are on.
+    body: "Everyone who's shared their info — searchable, with full history. Every contact has Call, Text and Email buttons, and Add contact covers people you meet offline (scan their business card to fill it in). We'll open it shortly.",
     placement: "bottom",
+    // The card scanner is Pro-only (api/scanner).
+    bodyFor: (ctx) =>
+      ctx.tier === "free"
+        ? "Everyone who's shared their info — searchable, with full history. Every contact has Call, Text and Email buttons, and Add contact covers people you meet offline. We'll open it shortly."
+        : "Everyone who's shared their info — searchable, with full history. Every contact has Call, Text and Email buttons, and Add contact covers people you meet offline (scan their business card to fill it in). We'll open it shortly.",
   },
   {
     id: "nav-links",
@@ -288,35 +298,6 @@ const STEP_DEFS: TourStepDef[] = [
         ? "Views of your card and Swift Links. Switch Today / Week / Month. Top locations unlock on Pro."
         : "Views of your card and Swift Links. Switch Today / Week / Month, or tap Locations for top places.",
   },
-  // ── Contacts on the dashboard ─────────────────────────────────────────────
-  {
-    id: "contact-views",
-    path: DASH,
-    anchor: "contact-views",
-    title: "Two quick views",
-    body: "Notifications shows the newest activity — tap one to jump straight to that contact. Contacts is your quick list.",
-    placement: "top",
-  },
-  {
-    id: "quick-contacts",
-    path: DASH,
-    anchor: "quick-contacts",
-    title: "Quick Contacts",
-    // The section opens on the Notifications view (the dashboard default), so
-    // the rows this used to describe as if they were on screen are one tap
-    // away — say where they are rather than pointing at a notifications list.
-    body: "Your people, right on the dashboard. Switch to Contacts for one row per person with Call, Text, and Email buttons — each opens your phone's own dialer, Messages, or mail app with their info filled in. Tap a name to open the full contact.",
-    placement: "top",
-  },
-  {
-    id: "add-contact",
-    path: DASH,
-    anchor: "add-contact",
-    title: "Add a contact",
-    body: "Met someone offline? Add them here — or scan their business card and it auto-fills. Card taps show up on their own.",
-    placement: "left",
-  },
-
   // ── Share page — Swift Links + the email signature ────────────────────────
   {
     id: "swift-links",
@@ -477,9 +458,9 @@ export function buildTourSteps(ctx: TourContext): TourStep[] {
   return STEP_DEFS.filter((d) => {
     // EVERY anchored step needs a card to exist. With none, /dashboard renders
     // a different tree entirely (no nav, no tab bar, no panels) and /share
-    // redirects away — so all 19 of them point at nothing, and the tour spends
-    // ~2.9s polling for each. Expressed as a rule about anchors rather than a
-    // flag repeated on 19 steps, so a step added later is covered by default
+    // redirects away — so every one of them points at nothing, and the tour
+    // spends ~2.9s polling for each. Expressed as a rule about anchors rather
+    // than a flag repeated on every step, so a step added later is covered by default
     // instead of quietly reintroducing the freeze.
     if (!ctx.hasCards && d.anchor) return false;
     return isVisible(d.vis, ctx);

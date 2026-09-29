@@ -63,8 +63,9 @@ describe("the way to the blurred part", () => {
     expect(c).toContain("See who and where");
   });
 
-  it("sits under both notification lists", () => {
-    expect(read("src/components/NotificationsPanel.tsx")).toContain("<SeeWhoLink");
+  // The bell is the one notification list since the dashboard's went with
+  // Quick Contacts (owner, 2026-09-29).
+  it("sits under the notification list", () => {
     expect(read("src/components/NotificationBell.tsx")).toContain("<SeeWhoLink");
   });
 });
@@ -78,16 +79,12 @@ describe("the app never shows selling or billing copy in a notification", () => 
     expect(NATIVE_HIDDEN_TYPES.has("personal_sub_reminder")).toBe(true);
   });
 
-  it("both lists apply the same rules — the top bell used to apply none", () => {
+  it("the bell applies the rules — it used to apply none", () => {
     const bell = read("src/components/NotificationBell.tsx");
     expect(bell).toMatch(/NATIVE_HIDDEN_TYPES\.has\(n\.type\)/);
     expect(bell).toMatch(/NATIVE_BODY_REMAP\[n\.type\]/);
     expect(bell).toMatch(/n\.type !== "referral_claim"/);
     expect(bell).toMatch(/useIsNativeApp\(\)/);
-    const panel = read("src/components/NotificationsPanel.tsx");
-    expect(panel).toMatch(/useIsNativeApp\(\)/);
-    expect(panel).toMatch(/NATIVE_HIDDEN_TYPES\.has\(n\.type\)/);
-    expect(panel).toMatch(/NATIVE_BODY_REMAP\[n\.type\]/);
   });
 });
 
@@ -156,10 +153,16 @@ describe("the bell's card chip only appears when it tells cards apart", () => {
 });
 
 describe("the Free contact meter never reads past its limit", () => {
+  // The capped "N/5 this month · N waiting" meter lived in the Quick Contacts
+  // header and went with it (owner, 2026-09-29). What is left is the amber
+  // banner, which prints the raw count ONLY in its near-limit branch — at the
+  // limit, or with contacts waiting, it names that instead — so it can never
+  // read "13/5".
   it("stops at 5/5 and names the rest as waiting", () => {
     const dash = code("src/app/dashboard/page.tsx");
-    expect(dash).toMatch(/\{Math\.min\(monthlyLeadsUsed, FREE_LIMIT\)\}\/\{FREE_LIMIT\} this month\{lockedCount > 0 \? ` · \$\{lockedCount\} waiting` : ""\}/);
-    expect(dash).not.toMatch(/\{monthlyLeadsUsed\}\/\{FREE_LIMIT\} this month</);
+    expect(dash).not.toMatch(/this month\{lockedCount > 0/);
+    expect(dash).toMatch(/\{lockedCount > 0\s*\? `\$\{lockedCount\} new lead\$\{lockedCount === 1 \? " is" : "s are"\} locked this month\.[^`]*`\s*: atLimit\s*\? `You've used your \$\{FREE_LIMIT\} free leads this month\.[^`]*`\s*: `\$\{monthlyLeadsUsed\}\/\$\{FREE_LIMIT\} free leads used this month`\}/);
+    expect(dash).toMatch(/lockedCount > 0 \|\| atLimit \? \(/);
   });
 });
 

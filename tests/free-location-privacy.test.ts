@@ -159,7 +159,7 @@ describe("nothing else has to remember", () => {
     const api = read("src/app/api/notifications/route.ts");
     expect(api).toMatch(/isPaidUser\(user\.id\)/);
     expect(api).toMatch(/redactForPlan\(data \?\? \[\], paid\)/);
-    expect(read("src/app/dashboard/page.tsx")).toMatch(/redactForPlan\(panelNotifications \?\? \[\], isPro\)/);
+    // The dashboard's bell (its per-card panel went with Quick Contacts, 2026-09-29).
     expect(read("src/app/dashboard/page.tsx")).toMatch(/redactForPlan\(bellNotifications \?\? \[\], isPro\)/);
   });
 

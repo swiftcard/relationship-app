@@ -71,7 +71,9 @@ describe("a team member is never shown notifications meant for someone else", ()
     expect(filtered).toBeGreaterThan(-1);
     expect(api.indexOf("return NextResponse.json(redactForPlan(data ?? [], paid));")).toBeGreaterThan(filtered);
     const dash = code("src/app/dashboard/page.tsx");
-    for (const list of ["panelNotifications", "bellNotifications"]) {
+    // The bell — the dashboard's one list since Quick Contacts (and its
+    // per-card panel) went on 2026-09-29.
+    for (const list of ["bellNotifications"]) {
       const hide = dash.indexOf(`${list} = hideForReader(${list} ?? [], notifReader);`);
       expect(hide).toBeGreaterThan(-1);
       expect(dash.indexOf(`${list} = redactForPlan(${list} ?? [], isPro);`)).toBeGreaterThan(hide);

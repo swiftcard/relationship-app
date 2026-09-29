@@ -32,7 +32,8 @@ observing the result over asserting from source.
   wallet pass, lead form; and deactivated/deleted/incomplete cards render safely
   (no 500).
 - **Dashboard:** card picker, Traffic box (Today/Week/Month/Locations tabs + bar
-  graph), Quick Contacts (Notifications/Contacts), notifications, share.
+  graph) beside the Your Card / Share panel, the notification bell (incl.
+  "Wrong person?"), share. Contacts: Call / Text / Email on every row.
 - **Settings** (per role): the 7 sections, email prefs, delete-account flow
   (reauth + typed confirm), sign out; sub-user restrictions actually enforced on
   routes/APIs, not just hidden.

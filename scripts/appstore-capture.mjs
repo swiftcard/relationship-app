@@ -347,7 +347,8 @@ try {
         created_at: new Date(Date.now() - 95 * 60000).toISOString() },
     ]) });
   }
-  // The dashboard's Quick Contacts → Notifications panel.
+  // The notification bell (the dashboard has no notifications list since
+  // Quick Contacts left it, 2026-09-29).
   const note = (type, title, body, minsAgo) => ({
     user_id: userId, card_owner: uname, type, title, body, read: false,
     created_at: new Date(Date.now() - minsAgo * 60000).toISOString(),

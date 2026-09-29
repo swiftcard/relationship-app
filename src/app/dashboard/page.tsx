@@ -9,9 +9,7 @@ import { canViewOfficeAdmin } from "@/lib/office-roles";
 import { locationAliases, type GeoAccuracy } from "@/lib/request-geo";
 import { locationLabel, groupAccuracy } from "@/lib/location-display";
 import SignOutButton from "@/components/SignOutButton";
-import CopyButton from "@/components/CopyButton";
 import NotificationBell from "@/components/NotificationBell";
-import NotificationsPanel from "@/components/NotificationsPanel";
 import MoreShareOptions from "@/components/MoreShareOptions";
 import CardPreviewDownload from "@/components/CardPreviewDownload";
 import { CardCaptureProvider } from "@/components/CardCaptureContext";
@@ -43,8 +41,6 @@ import type { CardLink } from "@/components/card-templates/types";
 import PushNudge from "@/components/PushNudge";
 import { hasWalletConfig } from "@/lib/wallet-config";
 import TrackEvent from "@/components/TrackEvent";
-import AddContactModal from "@/components/AddContactModal";
-import QuickContactList from "@/components/QuickContactList";
 import Link from "next/link";
 import MobileNavGate from "@/components/MobileNavGate";
 import HelpWidget from "@/components/HelpWidget";
@@ -80,12 +76,10 @@ function daysAgoISO(days: number) {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ upgraded?: string; sort?: string; view?: string; range?: string; card?: string; surface?: string; vrange?: string; welcome?: string; claim?: string }>;
+  searchParams: Promise<{ upgraded?: string; range?: string; card?: string; surface?: string; vrange?: string; welcome?: string; claim?: string }>;
 }) {
   const supabase = await createClient();
   const params = await searchParams;
-  const sortBy = params.sort ?? "newest";
-  const view = params.view ?? "notifications";
   const selectedCard = params.card ?? null;
   const viewsRange: "today" | "week" | "month" | "locations" =
     params.vrange === "week" || params.vrange === "month" || params.vrange === "locations" ? params.vrange : "today";
@@ -383,7 +377,6 @@ export default async function DashboardPage({
     locViewsRes,
     { data: linkTapRows },
     { data: leads },
-    panelNotifRes,
     bellNotifRes,
     ownedOfficeRes,
     canViewOfficeAdminRes,
@@ -486,27 +479,23 @@ export default async function DashboardPage({
     // account's leads.
     getAdminSupabase()
       .from("leads")
-      // Trimmed to columns this page actually renders (QuickContactList,
-      // NotificationsPanel, and the isLocked/tags check) — message, location,
-      // notes, status, source, follow_up_date were fetched but never used
-      // here (performance audit).
-      .select("id, name, email, phone, company, tags, created_at")
-      .eq("card_owner", activeUsername)
-      .order(
-        sortBy === "name-asc" || sortBy === "name-desc" ? "name" : "created_at",
-        { ascending: sortBy === "name-asc" || sortBy === "oldest" }
-      ),
+      // Only `tags`: the dashboard lists no contacts since Quick Contacts
+      // went (2026-09-29). The rows are counted — real vs sample, locked vs
+      // visible — for the limit banners, the Traffic "Contacts" stat and the
+      // review prompts; /contacts is where they are listed.
+      .select("tags")
+      .eq("card_owner", activeUsername),
     // Notifications are read with the service role, always scoped to this
     // user_id: the table is not readable with a user's own session, so a Free
     // account can't pull the unredacted location text (lock-client-reads.sql).
-    // Panel (bottom of dashboard): ONLY this card's activity (+ account-level
-    // ones like referral months, which have no card scope).
+    // Bell (top nav): EVERY card's notifications, each tagged with its card.
     // Unread first, then newest — matching /api/notifications. Ordering on
     // created_at alone let 20 recent read rows hide every older unread one
     // from both the list and the badge (the badge counts fetched rows).
-    getAdminSupabase().from("notifications").select("id, type, title, body, read, created_at, card_owner").eq("user_id", user.id).or(`card_owner.eq.${activeUsername.replace(/[^a-z0-9-]/gi, "")},card_owner.is.null`).order("read", { ascending: true }).order("created_at", { ascending: false }).limit(20),
-    // Bell (top nav): EVERY card's notifications, each tagged with its card.
-    getAdminSupabase().from("notifications").select("id, type, title, body, read, created_at, card_owner").eq("user_id", user.id).order("read", { ascending: true }).order("created_at", { ascending: false }).limit(20),
+    // lead_id, as /api/notifications sends it: a row about a known contact
+    // opens THAT contact and offers "Wrong person?" from the first paint, not
+    // only after the first poll.
+    getAdminSupabase().from("notifications").select("id, type, title, body, read, created_at, card_owner, lead_id").eq("user_id", user.id).order("read", { ascending: true }).order("created_at", { ascending: false }).limit(20),
     // Service-role client: the offices RLS policies are mutually recursive with
     // office_members, so a user-scoped read raises "infinite recursion detected
     // in policy for relation offices" once there's a row to evaluate. Still
@@ -520,14 +509,13 @@ export default async function DashboardPage({
     canViewOfficeAdmin(user.id, profile.plan),
   ]);
 
-  // If the notifications.card_owner column migration hasn't run yet, BOTH
-  // scoped queries above error and the panel/bell would silently show nothing
-  // (this exact failure hid real "shared their info" notifications). Fall back
-  // to the un-scoped query so notifications always appear.
-  type NotifRow = { id: string; type: string; title: string; body: string | null; read: boolean; created_at: string; card_owner?: string | null };
-  let panelNotifications: NotifRow[] | null = panelNotifRes.data;
+  // If a notifications column migration (card_owner, lead_id) hasn't run yet,
+  // the query above errors and the bell would silently show nothing (this
+  // exact failure hid real "shared their info" notifications). Fall back to
+  // the plain query so notifications always appear.
+  type NotifRow = { id: string; type: string; title: string; body: string | null; read: boolean; created_at: string; card_owner?: string | null; lead_id?: string | null };
   let bellNotifications: NotifRow[] | null = bellNotifRes.data;
-  if (panelNotifRes.error || bellNotifRes.error) {
+  if (bellNotifRes.error) {
     // Service role, scoped to this user: notifications are not readable with a
     // user's own session (supabase/lock-client-reads.sql).
     const { data: fallback } = await getAdminSupabase()
@@ -537,10 +525,7 @@ export default async function DashboardPage({
       .order("read", { ascending: true })
       .order("created_at", { ascending: false })
       .limit(20);
-    // The BELL is account-wide anyway. The per-card PANEL is not: an unscoped
-    // fallback put another card's rows under this card (isolation audit
-    // 2026-09-24), so a failed panel read shows nothing instead.
-    bellNotifications ??= fallback;
+    bellNotifications = fallback;
   }
   // A Free account never receives the place a view came from — the Locations
   // tab above is Pro, and this list used to say it in a sentence several times
@@ -555,9 +540,7 @@ export default async function DashboardPage({
       !!profile.stripe_subscription_id ||
       (profile.customization as { _planSource?: unknown } | null)?._planSource === "apple",
   };
-  panelNotifications = hideForReader(panelNotifications ?? [], notifReader);
   bellNotifications = hideForReader(bellNotifications ?? [], notifReader);
-  panelNotifications = redactForPlan(panelNotifications ?? [], isPro);
   bellNotifications = redactForPlan(bellNotifications ?? [], isPro);
 
   // Basic-panel "best day" (last 30 LOCAL days) — available to every plan.
@@ -913,7 +896,7 @@ export default async function DashboardPage({
             <span data-tour="nav-settings" className="hidden md:flex items-center"><SettingsLinkButton /></span>
             {!isOfficeMember && <span data-tour="nav-grow" className="flex items-center"><GrowLinkButton /></span>}
             <span data-tour="theme" className="flex items-center"><ThemeToggle /></span>
-            <span data-tour="notif-bell" className="flex items-center"><NotificationBell initialNotifications={bellNotifications ?? []} cardLabels={cardLabels} activeCard={activeUsername} /></span>
+            <span data-tour="notif-bell" className="flex items-center"><NotificationBell initialNotifications={bellNotifications ?? []} cardLabels={cardLabels} /></span>
           </div>
         </div>
       </nav>
@@ -1052,8 +1035,6 @@ export default async function DashboardPage({
                 allCards.map((c) => c.id as string),
                 (profile as { free_live_card_id?: string | null }).free_live_card_id,
               )}
-              view={view}
-              sortBy={sortBy}
               // No standing upsell under My Cards any more. The pitch lives
               // behind the Add card button, where someone has just asked for a
               // second card — see components/AddCardButton.
@@ -1146,130 +1127,6 @@ export default async function DashboardPage({
             </PlanGate>
           )}
 
-          {/* Traffic — SwiftCard & SwiftLink views (full width; Swift Links + Email signature moved to /share) */}
-          <div data-tour="traffic" className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5 mb-5">
-              {/* No "Traffic" heading on any device (owner, 2026-09-29). The
-                  range bar starts at the box's left edge: on a PHONE it runs
-                  the full width in four equal tabs; on a COMPUTER, where the
-                  box is ~940px wide and four equal tabs would be ~235px each,
-                  it keeps its compact size (owner's pick). lg: is the
-                  dashboard's own phone/computer split. */}
-              <div className="flex items-center mb-4">
-                <div className="grid grid-cols-4 w-full lg:flex lg:w-auto items-center bg-gray-800 rounded-lg p-0.5">
-                  {([
-                    { id: "today", label: "Today" },
-                    { id: "week", label: "Week" },
-                    { id: "month", label: "Month" },
-                    { id: "locations", label: "Locations" },
-                  ] as const).map((r) => (
-                    <Link key={r.id} scroll={false} href={`?vrange=${r.id}&view=${view}&sort=${sortBy}${selectedCard ? `&card=${selectedCard}` : ""}`}
-                      className={`text-[0.6875rem] min-[375px]:text-xs font-semibold px-0.5 py-1.5 lg:px-2.5 lg:py-1 rounded-md whitespace-nowrap transition-colors inline-flex items-center justify-center gap-0.5 lg:gap-1 ${viewsRange === r.id ? "bg-gray-700 text-white" : "text-gray-500 hover:text-gray-300"}`}>
-                      {r.label}
-                      {r.id === "locations" && !isPro && (
-                        // shrink-0: in a quarter-width phone tab a flex svg
-                        // otherwise squeezes to a dot. Below 360px (iPhone SE
-                        // 1st gen) there is no room for it beside "Locations",
-                        // so it steps aside; the tab still opens the Pro notice.
-                        <svg viewBox="0 0 20 20" fill="currentColor" className="max-[359px]:hidden w-2.5 h-2.5 lg:w-3 lg:h-3 shrink-0 opacity-70"><path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" /></svg>
-                      )}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-              {viewsRange === "locations" ? (
-                !isPro ? (
-                  <PlanGate
-                    feature="analytics-locations"
-                    nativeCopy="Pro feature — Detailed analytics are only available on the Pro plan"
-                  >
-                    <div className="bg-gray-800/40 border border-gray-800 rounded-xl px-4 py-6 text-center">
-                      <div className="w-10 h-10 rounded-full bg-blue-600/15 border border-blue-500/30 flex items-center justify-center mx-auto mb-3">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth={1.8} className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
-                      </div>
-                      <p className="text-white text-sm font-semibold">See where your views come from</p>
-                      <p className="text-gray-500 text-xs mt-1 mb-4 leading-relaxed max-w-[280px] mx-auto">Top locations are part of full analytics on Pro — see which cities are opening your card and links.</p>
-                      <Link href="/upgrade" className="inline-block text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-full transition-colors">Upgrade to Pro →</Link>
-                    </div>
-                  </PlanGate>
-                ) : topLocations.length > 0 ? (
-                  <div className="space-y-2">
-                    <p className="text-gray-500 text-[0.6875rem] mb-1">Top locations · all time</p>
-                    {topLocations.map((loc) => (
-                      <div key={loc.location} className="bg-gray-800/40 border border-gray-800 rounded-xl px-4 py-3">
-                        <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <p className="text-gray-100 text-sm font-semibold truncate">{loc.location}</p>
-                          <p className="text-white text-sm font-bold tabular-nums shrink-0">{loc.total.toLocaleString("en-US")} <span className="text-gray-500 font-medium text-[0.6875rem]">views</span></p>
-                        </div>
-                        <div className="flex items-center gap-4 text-[0.6875rem]">
-                          <span className="text-gray-500">SwiftCard <span className="text-gray-200 font-semibold tabular-nums">{loc.card.toLocaleString("en-US")}</span></span>
-                          <span className="text-gray-500">Swift Links <span className="text-gray-200 font-semibold tabular-nums">{loc.link.toLocaleString("en-US")}</span></span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="bg-gray-800/40 border border-gray-800 rounded-xl px-4 py-6 text-center">
-                    <p className="text-gray-400 text-sm">No location data yet</p>
-                    <p className="text-gray-600 text-[0.6875rem] mt-1">Cities appear here as people view your card and links.</p>
-                  </div>
-                )
-              ) : (
-                <div>
-                  {/* Stat tiles — side by side. The per-tile "▲ 23% this week"
-                      trend line was removed at the owner's request; the counts
-                      themselves are unchanged, and so is everything below. */}
-                  <div className="grid grid-cols-2 gap-3">
-                    {[
-                      { label: "SwiftCard views", value: swiftCardViews ?? 0 },
-                      { label: "Swift Link views", value: swiftLinkViews ?? 0 },
-                    ].map((m) => (
-                      <div key={m.label} className="bg-gray-800/40 border border-gray-800 rounded-xl px-4 py-3.5 min-w-0">
-                        <p className="text-gray-400 text-xs font-medium truncate">{m.label}</p>
-                        <p className="text-2xl font-bold text-white tabular-nums mt-0.5">{m.value.toLocaleString("en-US")}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Unique vs repeat for the same window — the split that
-                      tells an owner "5 people, and two of them came back",
-                      which raw totals can't. Only shown once there's data. */}
-                  {uniqueViewers > 0 && (
-                    <div className="flex items-center gap-4 mt-2 text-[0.6875rem]">
-                      <span className="text-gray-500">Unique viewers <span className="text-gray-200 font-semibold tabular-nums">{uniqueViewers.toLocaleString("en-US")}</span></span>
-                      <span className="text-gray-500">Repeat views <span className="text-gray-200 font-semibold tabular-nums">{repeatViews.toLocaleString("en-US")}</span></span>
-                    </div>
-                  )}
-
-                  {/* Time-series bar graph — one bar per hour (Today) or day
-                      (Week/Month), with a labeled time axis, baseline, and hover
-                      tooltips. Newest bucket highlighted. */}
-                  <TrafficChart
-                    buckets={trafficBuckets}
-                    range={viewsRange as "today" | "week" | "month"}
-                    max={maxBar}
-                    tz={ownerTz}
-                  />
-                </div>
-              )}
-              {/* Basic stats (every plan): contacts captured + link taps + best day.
-                  Link taps join the EXISTING footer line rather than becoming a
-                  new tile — the Traffic box's layout is render-tested, and one
-                  more stat does not justify moving it. Omitted entirely until
-                  there is one, so nothing claims a confident zero for a card
-                  whose links predate tracking. */}
-              <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-gray-800/70 text-[0.6875rem]">
-                <span className="text-gray-500">Contacts <span className="text-gray-200 font-semibold tabular-nums">{realLeadCount}</span></span>
-                {linkTaps > 0 && (
-                  <span className="text-gray-500">Link taps <span className="text-gray-200 font-semibold tabular-nums">{linkTaps.toLocaleString("en-US")}</span></span>
-                )}
-                {bestDay && bestDay.views > 0 ? (
-                  <span className="text-gray-500">Best day <span className="text-gray-200 font-semibold">{new Date(bestDay.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span> · {bestDay.views.toLocaleString("en-US")}</span>
-                ) : (
-                  <span className="text-gray-600">No views yet</span>
-                )}
-              </div>
-            </div>
-
           {/* Captures a pixel-perfect image of THIS card for its share-link
               preview (Open Graph). Invisible; regenerates when the card changes. */}
           <ShareCardCapture
@@ -1279,124 +1136,137 @@ export default async function DashboardPage({
             username={activeUsername}
           />
 
-          {/* Main: contacts + card panel */}
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5">
+          {/* Main: Traffic + card panel. Quick Contacts, which filled the left
+              column, was removed on 2026-09-29 (owner): contacts live on
+              /contacts, notifications in the bell. */}
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 lg:items-start">
 
-            {/* ── LEFT COLUMN ── */}
-            <div className="space-y-5 order-2 lg:order-none">
-
-              {/* Contacts section */}
-              <div data-tour="quick-contacts">
-                {/* Header */}
-                {/* flex-wrap, not a squashed single row. On a 375px phone with
-                    leads (so Export renders too) five items shared one line and
-                    every one of them broke mid-phrase: "Quick / Contacts",
-                    "Total / leads", and "Add / contact" wrapping INSIDE the blue
-                    button, which is what made it look twice its size. Wrapping
-                    the ROW instead gives two clean lines; nothing inside a
-                    control wraps. Desktop has the room, so it never wraps and is
-                    unchanged. */}
-                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-3">
-                  {/* Just the title. The count + "Total leads" label used to sit
-                      beside it and were removed on the owner's call (2026-08-11):
-                      the number duplicates what the list below already shows. */}
-                  <h2 className="text-white font-semibold text-sm whitespace-nowrap">Quick Contacts</h2>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {!isPro && (
-                      // Never "13/5": the meter stops at the limit, and the
-                      // contacts past it are named for what they are — saved,
-                      // waiting (the same count as the locked banner above).
-                      <p className="text-gray-600 text-xs hidden sm:block">
-                        {Math.min(monthlyLeadsUsed, FREE_LIMIT)}/{FREE_LIMIT} this month{lockedCount > 0 ? ` · ${lockedCount} waiting` : ""}
-                      </p>
-                    )}
-                    <span data-tour="add-contact" className="flex items-center"><AddContactModal cardOwner={activeUsername} /></span>
-                  </div>
-                </div>
-
-
-                {/* View toggle — Notifications / Contacts. Filtering, the pipeline,
-                    and status management live on the full Contacts page. */}
-                <div className="flex flex-wrap items-center gap-2 mb-4">
-                  <div data-tour="contact-views" className="flex items-center bg-gray-800/80 rounded-lg p-0.5">
-                    {[
-                      { id: "notifications", label: "Notifications" },
-                      { id: "list", label: "Contacts" },
-                    ].map((v) => (
-                      <Link key={v.id} scroll={false} href={`?view=${v.id}&sort=${sortBy}${selectedCard ? `&card=${selectedCard}` : ""}`}
-                        className={`text-xs font-medium px-3 py-1 rounded-md transition-colors ${view === v.id ? "bg-gray-700 text-white" : "text-gray-500 hover:text-gray-300"}`}>
-                        {v.label}
+            {/* ── LEFT COLUMN — Traffic: SwiftCard & SwiftLink views ──
+                Beside the card panel on a computer since Quick Contacts left the
+                dashboard (owner, 2026-09-29); last on a phone. mb-5 is the phone
+                gap, cancelled inside the grid (its gap-5 spaces it there).
+                min-w-0 so the chart never widens the 1fr column. */}
+            <div data-tour="traffic" className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5 mb-5 lg:mb-0 min-w-0">
+                {/* No "Traffic" heading on any device (owner, 2026-09-29). The
+                    range bar starts at the box's left edge: on a PHONE it runs
+                    the full width in four equal tabs; on a COMPUTER, where the
+                    box is ~620px wide and four equal tabs would be ~155px each,
+                    it keeps its compact size (owner's pick). lg: is the
+                    dashboard's own phone/computer split. */}
+                <div className="flex items-center mb-4">
+                  <div className="grid grid-cols-4 w-full lg:flex lg:w-auto items-center bg-gray-800 rounded-lg p-0.5">
+                    {([
+                      { id: "today", label: "Today" },
+                      { id: "week", label: "Week" },
+                      { id: "month", label: "Month" },
+                      { id: "locations", label: "Locations" },
+                    ] as const).map((r) => (
+                      <Link key={r.id} scroll={false} href={`?vrange=${r.id}${selectedCard ? `&card=${selectedCard}` : ""}`}
+                        className={`text-[0.6875rem] min-[375px]:text-xs font-semibold px-0.5 py-1.5 lg:px-2.5 lg:py-1 rounded-md whitespace-nowrap transition-colors inline-flex items-center justify-center gap-0.5 lg:gap-1 ${viewsRange === r.id ? "bg-gray-700 text-white" : "text-gray-500 hover:text-gray-300"}`}>
+                        {r.label}
+                        {r.id === "locations" && !isPro && (
+                          // shrink-0: in a quarter-width phone tab a flex svg
+                          // otherwise squeezes to a dot. Below 360px (iPhone SE
+                          // 1st gen) there is no room for it beside "Locations",
+                          // so it steps aside; the tab still opens the Pro notice.
+                          <svg viewBox="0 0 20 20" fill="currentColor" className="max-[359px]:hidden w-2.5 h-2.5 lg:w-3 lg:h-3 shrink-0 opacity-70"><path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" /></svg>
+                        )}
                       </Link>
                     ))}
                   </div>
-                  <Link href={`/contacts${selectedCard ? `?card=${selectedCard}` : ""}`} className="ml-auto text-xs text-gray-500 hover:text-white transition-colors">
-                    View all in Contacts →
-                  </Link>
                 </div>
-
-                {/* Lead list */}
-                {view === "notifications" ? (
-                  <NotificationsPanel
-                    // One panel per card: ?card= is a search param, so without
-                    // a key React kept card A's list under card B until the
-                    // next poll (isolation audit 2026-09-24).
-                    key={activeUsername}
-                    initial={(panelNotifications ?? []) as unknown as Parameters<typeof NotificationsPanel>[0]["initial"]}
-                    card={activeUsername}
-                    leads={visibleLeads.map((l) => ({ id: l.id as string, name: (l.name as string) || "" }))}
-                  />
-                ) : visibleLeads.length === 0 ? (
-                  <div className="border border-dashed border-gray-800 rounded-2xl p-8">
-                    <div className="text-center mb-6">
-                      <div className="w-10 h-10 bg-gray-800/60 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-5 h-5 text-gray-600">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
-                        </svg>
+                {viewsRange === "locations" ? (
+                  !isPro ? (
+                    <PlanGate
+                      feature="analytics-locations"
+                      nativeCopy="Pro feature — Detailed analytics are only available on the Pro plan"
+                    >
+                      <div className="bg-gray-800/40 border border-gray-800 rounded-xl px-4 py-6 text-center">
+                        <div className="w-10 h-10 rounded-full bg-blue-600/15 border border-blue-500/30 flex items-center justify-center mx-auto mb-3">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth={1.8} className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+                        </div>
+                        <p className="text-white text-sm font-semibold">See where your views come from</p>
+                        <p className="text-gray-500 text-xs mt-1 mb-4 leading-relaxed max-w-[280px] mx-auto">Top locations are part of full analytics on Pro — see which cities are opening your card and links.</p>
+                        <Link href="/upgrade" className="inline-block text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-full transition-colors">Upgrade to Pro →</Link>
                       </div>
-                      <p className="font-semibold text-gray-300 text-sm mb-1">Share your card to get your first contact</p>
-                      <p className="text-gray-600 text-xs mb-5">Send your link, show your QR code, or tap your NFC card — contacts appear here instantly.</p>
-                    </div>
+                    </PlanGate>
+                  ) : topLocations.length > 0 ? (
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2 bg-gray-800/60 border border-gray-700/60 rounded-xl px-3 py-2.5">
-                        <svg viewBox="0 0 16 16" fill="#3b82f6" className="w-3.5 h-3.5 shrink-0"><path d="M8 0C3.58 0 0 3.58 0 8s3.58 8 8 8 8-3.58 8-8S12.42 0 8 0zm1 11.93V13H7v-1.07A6.003 6.003 0 012.07 7H4v-.5h-.93A6.003 6.003 0 017 1.07V2h2v1.07A6.003 6.003 0 0113.93 6.5H12V7h1.93A6.003 6.003 0 019 11.93z"/></svg>
-                        <span className="text-blue-400 text-xs truncate flex-1">{cardUrl.replace("https://", "")}</span>
-                        <CopyButton text={cardUrl} />
-                      </div>
-                      {/* The headline says SHARE; this button used to say
-                          "Preview your card" and open the owner's own card in a
-                          tab — an action that cannot possibly produce the contact
-                          the copy just promised. The instruction and the only
-                          solid button now agree. */}
-                      <ShareButton
-                        url={cardUrl}
-                        text="Here's my card — save my details in one tap."
-                        label="Share your card"
-                        ownCard
-                      />
-                      <a
-                        href={liveHref}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block text-center text-gray-500 hover:text-gray-300 text-[0.6875rem] py-1 transition-colors"
-                      >
-                        See how it looks to them ↗
-                      </a>
+                      <p className="text-gray-500 text-[0.6875rem] mb-1">Top locations · all time</p>
+                      {topLocations.map((loc) => (
+                        <div key={loc.location} className="bg-gray-800/40 border border-gray-800 rounded-xl px-4 py-3">
+                          <div className="flex items-center justify-between gap-2 mb-1.5">
+                            <p className="text-gray-100 text-sm font-semibold truncate">{loc.location}</p>
+                            <p className="text-white text-sm font-bold tabular-nums shrink-0">{loc.total.toLocaleString("en-US")} <span className="text-gray-500 font-medium text-[0.6875rem]">views</span></p>
+                          </div>
+                          <div className="flex items-center gap-4 text-[0.6875rem]">
+                            <span className="text-gray-500">SwiftCard <span className="text-gray-200 font-semibold tabular-nums">{loc.card.toLocaleString("en-US")}</span></span>
+                            <span className="text-gray-500">Swift Links <span className="text-gray-200 font-semibold tabular-nums">{loc.link.toLocaleString("en-US")}</span></span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
+                  ) : (
+                    <div className="bg-gray-800/40 border border-gray-800 rounded-xl px-4 py-6 text-center">
+                      <p className="text-gray-400 text-sm">No location data yet</p>
+                      <p className="text-gray-600 text-[0.6875rem] mt-1">Cities appear here as people view your card and links.</p>
+                    </div>
+                  )
                 ) : (
-                  <QuickContactList
-                    leads={visibleLeads.map((l) => ({
-                      id: l.id as string,
-                      name: (l.name as string) || "Contact",
-                      email: (l.email as string) ?? "",
-                      phone: (l.phone as string | null) ?? null,
-                      company: (l.company as string | null) ?? null,
-                      created_at: l.created_at as string,
-                    }))}
-                    card={activeUsername}
-                  />
+                  <div>
+                    {/* Stat tiles — side by side. The per-tile "▲ 23% this week"
+                        trend line was removed at the owner's request; the counts
+                        themselves are unchanged, and so is everything below. */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { label: "SwiftCard views", value: swiftCardViews ?? 0 },
+                        { label: "Swift Link views", value: swiftLinkViews ?? 0 },
+                      ].map((m) => (
+                        <div key={m.label} className="bg-gray-800/40 border border-gray-800 rounded-xl px-4 py-3.5 min-w-0">
+                          <p className="text-gray-400 text-xs font-medium truncate">{m.label}</p>
+                          <p className="text-2xl font-bold text-white tabular-nums mt-0.5">{m.value.toLocaleString("en-US")}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Unique vs repeat for the same window — the split that
+                        tells an owner "5 people, and two of them came back",
+                        which raw totals can't. Only shown once there's data. */}
+                    {uniqueViewers > 0 && (
+                      <div className="flex items-center gap-4 mt-2 text-[0.6875rem]">
+                        <span className="text-gray-500">Unique viewers <span className="text-gray-200 font-semibold tabular-nums">{uniqueViewers.toLocaleString("en-US")}</span></span>
+                        <span className="text-gray-500">Repeat views <span className="text-gray-200 font-semibold tabular-nums">{repeatViews.toLocaleString("en-US")}</span></span>
+                      </div>
+                    )}
+
+                    {/* Time-series bar graph — one bar per hour (Today) or day
+                        (Week/Month), with a labeled time axis, baseline, and hover
+                        tooltips. Newest bucket highlighted. */}
+                    <TrafficChart
+                      buckets={trafficBuckets}
+                      range={viewsRange as "today" | "week" | "month"}
+                      max={maxBar}
+                      tz={ownerTz}
+                    />
+                  </div>
                 )}
-              </div>
+                {/* Basic stats (every plan): contacts captured + link taps + best day.
+                    Link taps join the EXISTING footer line rather than becoming a
+                    new tile — the Traffic box's layout is render-tested, and one
+                    more stat does not justify moving it. Omitted entirely until
+                    there is one, so nothing claims a confident zero for a card
+                    whose links predate tracking. */}
+                <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-gray-800/70 text-[0.6875rem]">
+                  <span className="text-gray-500">Contacts <span className="text-gray-200 font-semibold tabular-nums">{realLeadCount}</span></span>
+                  {linkTaps > 0 && (
+                    <span className="text-gray-500">Link taps <span className="text-gray-200 font-semibold tabular-nums">{linkTaps.toLocaleString("en-US")}</span></span>
+                  )}
+                  {bestDay && bestDay.views > 0 ? (
+                    <span className="text-gray-500">Best day <span className="text-gray-200 font-semibold">{new Date(bestDay.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span> · {bestDay.views.toLocaleString("en-US")}</span>
+                  ) : (
+                    <span className="text-gray-600">No views yet</span>
+                  )}
+                </div>
             </div>
 
             {/* ── RIGHT COLUMN — card panel (desktop; on mobile it's shown under My Cards) ── */}

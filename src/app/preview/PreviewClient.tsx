@@ -5,6 +5,7 @@ import SiteNav from "@/components/site/SiteNav";
 import PortalNavPreview, { type PortalTabId } from "@/components/site/PortalNavPreview";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import DemoContactActions from "@/components/site/DemoContactActions";
 import ShareButton from "@/components/ShareButton";
 import MoreShareOptions from "@/components/MoreShareOptions";
 import type { CardData } from "@/components/card-templates/types";
@@ -400,10 +401,13 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
           {cardSharePanel}
         </div>
 
-        {/* Traffic — full width, exactly like the real dashboard (Swift Links +
-            Swift Signature moved to the Links tab, mirroring their move to
-            /share in the real portal). */}
-        <div className="mb-5">
+        {/* Traffic | Your Card + Share, like the real dashboard since Quick
+            Contacts left it (2026-09-29): Traffic on the left, the card panel
+            beside it on a computer (on a phone the panel is above, under My
+            Cards). Swift Links + Swift Signature live on the Links tab,
+            mirroring /share in the real portal. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 lg:items-start">
+          <div className="min-w-0">
           <Box>
             {/* flex-wrap + gap: "Traffic" plus the four range pills need 287px
                 of a 280px box at 320px, which was the last 5px of sideways
@@ -473,6 +477,10 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
               <span className="text-gray-400">Best day <span className="text-gray-200 font-semibold">{card.bestDay.label}</span> · {card.bestDay.views}</span>
             </div>
           </Box>
+          </div>
+          <div className="hidden lg:flex lg:flex-col gap-4">
+            {cardSharePanel}
+          </div>
         </div>
 
         </>)}
@@ -542,10 +550,11 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
           </div>
         )}
 
-        {/* Main: contacts + card panel. On the Contacts tab the list takes the
-            full width, matching the real /contacts page. */}
-        {portalTab !== "links" && (
-        <div className={portalTab === "contacts" ? "grid grid-cols-1 gap-5" : "grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5"}>
+        {/* Contacts tab — the list takes the full width, matching the real
+            /contacts page. (It no longer shows on the Dashboard tab: the real
+            dashboard has no contact list since 2026-09-29.) */}
+        {portalTab === "contacts" && (
+        <div className="grid grid-cols-1 gap-5">
           {/* Contacts */}
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -583,6 +592,7 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
                         </div>
                         <p className="text-gray-300 text-xs truncate mt-0.5">{view === "Notifications" ? `Shared their contact with ${firstName}` : l.msg}</p>
                       </div>
+                      <DemoContactActions name={l.name} phone email />
                       <div className="flex flex-col items-end gap-1.5 shrink-0">
                         <span className="text-[0.625rem] font-semibold px-2 py-0.5 rounded-full" style={{ background: STATUS_STYLE[l.status].bg, color: STATUS_STYLE[l.status].text }}>{l.status}</span>
                         <div className="flex items-center gap-2">
@@ -631,12 +641,6 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
             )}
           </div>
 
-          {/* Right column (desktop): Your Card + Share — on mobile it's shown under My Cards */}
-          {portalTab !== "contacts" && (
-            <div className="hidden lg:flex lg:flex-col gap-4">
-              {cardSharePanel}
-            </div>
-          )}
         </div>
         )}
 

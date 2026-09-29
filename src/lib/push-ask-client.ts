@@ -2,29 +2,30 @@ import { useEffect, useSyncExternalStore } from "react";
 
 // ── One "turn on notifications" ask on screen at a time ──────────────────────
 //
-// Three things on the dashboard can ask: the box at the top (PushNudge), the
-// reminder under a row of the dashboard's notifications list, and the same
-// reminder inside the bell's dropdown. They can all be on screen at once — the
-// bell opens over the page — and three copies of one question is exactly the
-// spam the owner ruled out. So each surface says whether it WANTS to ask, and
-// the one with the highest rank gets to:
+// Two things on the dashboard can ask: the box at the top (PushNudge) and the
+// reminder under a row inside the bell's dropdown. They can both be on screen
+// at once — the bell opens over the page — and two copies of one question is
+// exactly the spam the owner ruled out. So each surface says whether it WANTS
+// to ask, and the one with the highest rank gets to:
 //
-//   nudge (the box) > panel (the list) > bell
+//   nudge (the box) > bell
 //
-// The box outranks the reminders because it is already there, already asking;
-// a reminder appearing beside it would be the second ask, not the first.
+// The box outranks the reminder because it is already there, already asking;
+// a reminder appearing beside it would be the second ask, not the first. (The
+// dashboard's notifications list was a third surface until it went with Quick
+// Contacts, 2026-09-29.)
 //
 // It also remembers, for this app session, what the server decided per
 // notification and whether the person just said "Don't ask again" or turned
-// push on — so a decision taken in the bell is honoured by the list a second
-// later without another round trip. The server (/api/push/ask) stays the
-// authority across devices and sessions.
+// push on — so a decision taken once is honoured a second later without
+// another round trip. The server (/api/push/ask) stays the authority across
+// devices and sessions.
 //
-// A module, not React context: the bell lives in the page header, the list in
-// the page body, and the box above both.
+// A module, not React context: the bell lives in the page header and the box
+// in the page body.
 
-export type AskSurface = "nudge" | "panel" | "bell";
-const RANK: Record<AskSurface, number> = { nudge: 3, panel: 2, bell: 1 };
+export type AskSurface = "nudge" | "bell";
+const RANK: Record<AskSurface, number> = { nudge: 3, bell: 1 };
 
 const wanting = new Set<AskSurface>();
 const decisions = new Map<string, boolean>();

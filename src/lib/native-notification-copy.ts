@@ -2,10 +2,9 @@
 //
 // Rows are written once, for every surface, and some carry web-only selling
 // or billing copy. App Review 3.1.1 allows none of that in the app, so the
-// app's two notification lists (NotificationsPanel on the dashboard, the
-// NotificationBell dropdown) swap or hide these rows at render time. One list
-// here so the two can never disagree. The stored row — and the web — are
-// unchanged.
+// app's notification list (the NotificationBell dropdown — the dashboard's own
+// list went with Quick Contacts, 2026-09-29) swaps or hides these rows at
+// render time. The stored row — and the web — are unchanged.
 
 /** A neutral body for rows whose stored body sells. */
 export const NATIVE_BODY_REMAP: Record<string, string> = {

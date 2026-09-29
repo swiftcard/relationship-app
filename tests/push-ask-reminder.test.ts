@@ -202,10 +202,11 @@ describe("the server is the authority", () => {
 });
 
 describe("one ask on screen, and every way of saying no is honoured", () => {
-  it("the box outranks the list, the list outranks the bell", () => {
-    expect(read("src/lib/push-ask-client.ts")).toMatch(/const RANK: Record<AskSurface, number> = \{ nudge: 3, panel: 2, bell: 1 \};/);
+  // Two surfaces since the dashboard's notifications list went with Quick
+  // Contacts (2026-09-29): the box, then the bell.
+  it("the box outranks the bell", () => {
+    expect(read("src/lib/push-ask-client.ts")).toMatch(/const RANK: Record<AskSurface, number> = \{ nudge: 3, bell: 1 \};/);
     expect(read("src/components/PushNudge.tsx")).toMatch(/useAskSlot\("nudge", visible\);/);
-    expect(read("src/components/NotificationsPanel.tsx")).toMatch(/usePushAsk\("panel", askId, true\)/);
     // The bell counts a reminder only when its dropdown is actually open.
     expect(read("src/components/NotificationBell.tsx")).toMatch(/usePushAsk\("bell", askId, open\)/);
   });
@@ -283,11 +284,11 @@ describe("one ask on screen, and every way of saying no is honoured", () => {
     expect(nudge).toContain("<EnablePushButton onDone={dismiss} />");
   });
 
-  it("the list's reminder is a sibling of the row, so a tap on the switch can never open the contact", () => {
-    const panel = read("src/components/NotificationsPanel.tsx");
-    const rowEnd = panel.indexOf("{n.id === askId && <PushAskCallout");
-    const clickable = panel.lastIndexOf("onClick={CONTACT_TYPES.has(n.type)", rowEnd);
-    const closeRow = panel.lastIndexOf("</div>", rowEnd);
+  it("the bell's reminder is a sibling of the row, so a tap on the switch can never open the contact", () => {
+    const bell = read("src/components/NotificationBell.tsx");
+    const rowEnd = bell.indexOf("{n.id === askId && <PushAskCallout");
+    const clickable = bell.lastIndexOf("onClick={CONTACT_TYPES.has(n.type)", rowEnd);
+    const closeRow = bell.lastIndexOf("</div>", rowEnd);
     expect(rowEnd).toBeGreaterThan(-1);
     expect(clickable).toBeGreaterThan(-1);
     expect(closeRow).toBeGreaterThan(clickable);

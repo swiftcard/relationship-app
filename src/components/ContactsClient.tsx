@@ -10,6 +10,7 @@ import { BlurredPlace } from "@/components/NotificationBody";
 import type { GeoAccuracy } from "@/lib/request-geo";
 import { CRON_HOUR_UTC } from "@/lib/cron-schedule";
 import AddContactModal from "@/components/AddContactModal";
+import ContactQuickActions from "@/components/ContactQuickActions";
 import ShareMyInfoButton, { type CardSigner } from "@/components/ShareMyInfoButton";
 import { PlanGate } from "@/components/PlanGate";
 import { AiDraftTag } from "@/components/AiConsentGate";
@@ -954,7 +955,10 @@ export default function ContactsClient({
         role="button"
         tabIndex={0}
         onClick={() => selectLead(lead)}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectLead(lead); } }}
+        // Only keys aimed at the ROW itself. Enter/Space on a control inside it
+        // (Call/Text/Email, the read toggle) bubbled up here and opened the
+        // contact instead of doing what the control does.
+        onKeyDown={(e) => { if (e.target !== e.currentTarget) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectLead(lead); } }}
         className={`group w-full text-left px-4 py-3.5 border-b border-gray-800/50 transition-colors hover:bg-gray-900 cursor-pointer ${selected?.id === lead.id ? "bg-gray-900 border-l-2 border-l-blue-500" : ""}`}
       >
         <div className="flex items-start gap-3">
@@ -981,6 +985,12 @@ export default function ContactsClient({
               )}
             </div>
           </div>
+          {/* Call · Text · Email in one tap (owner, 2026-09-29 — they came
+              from the dashboard's Quick Contacts). Hidden per button when
+              there is no number / no email. */}
+          <div className="self-center">
+            <ContactQuickActions name={lead.name} phone={lead.phone} email={lead.email} />
+          </div>
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); toggleRead(lead); }}
@@ -994,13 +1004,13 @@ export default function ContactsClient({
             // distinction the two colours exist to make.
             className={`shrink-0 self-center p-1.5 rounded-lg transition-colors ${unread ? "text-blue-400 hover:bg-blue-500/10" : "text-gray-500 hover:text-gray-300 hover:bg-gray-800"}`}
           >
-            {unread ? (
-              // filled envelope = unread
-              <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M1.5 8.67v8.58a3 3 0 003 3h15a3 3 0 003-3V8.67l-8.928 5.493a3 3 0 01-3.144 0L1.5 8.67z" /><path d="M22.5 6.908V6.75a3 3 0 00-3-3h-15a3 3 0 00-3 3v.158l9.714 5.978a1.5 1.5 0 001.572 0L22.5 6.908z" /></svg>
-            ) : (
-              // open envelope = read
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25H4.5a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5H4.5a2.25 2.25 0 00-2.25 2.25m19.5 0l-9.75 6.75L2.25 6.75" /></svg>
-            )}
+            {/* A dot, not an envelope: the Email button beside it is an
+                envelope, and two envelopes side by side read as the same
+                thing. Filled = unread, ring = read — the same dot the avatar
+                wears while unread. */}
+            <span aria-hidden="true" className="flex w-4 h-4 items-center justify-center">
+              <span className={`block w-2.5 h-2.5 rounded-full ${unread ? "bg-current" : "border-[1.5px] border-current"}`} />
+            </span>
           </button>
         </div>
       </div>
@@ -1010,7 +1020,7 @@ export default function ContactsClient({
   return (
     <div className="flex gap-0 lg:h-[calc(100vh-56px)]">
       {/* Left: contact list — full width on mobile, hidden once a contact is opened */}
-      <div className={`${selected ? "hidden lg:flex" : "flex"} w-full lg:w-80 xl:w-96 shrink-0 lg:border-r border-gray-800 flex-col lg:overflow-hidden`}>
+      <div className={`${selected ? "hidden lg:flex" : "flex"} w-full lg:w-96 shrink-0 lg:border-r border-gray-800 flex-col lg:overflow-hidden`}>
         {/* Search */}
         <div className="p-4 border-b border-gray-800 space-y-3">
           {/* Add contact — attaches to the currently-selected card */}

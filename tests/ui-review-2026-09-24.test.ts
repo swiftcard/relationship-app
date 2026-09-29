@@ -49,7 +49,9 @@ describe("nothing sits on the phone's tab bar or edge", () => {
   });
 
   it("the contact list's divider is a desktop column divider, not a line down the phone's edge", () => {
-    expect(read("src/components/ContactsClient.tsx")).toMatch(/w-full lg:w-80 xl:w-96 shrink-0 lg:border-r border-gray-800 flex-col/);
+    // 384px at every desktop width since each row carries Call/Text/Email
+    // (owner, 2026-09-29) — at 320px a name was cut to ~6 letters.
+    expect(read("src/components/ContactsClient.tsx")).toMatch(/w-full lg:w-96 shrink-0 lg:border-r border-gray-800 flex-col/);
   });
 
   it("Add contact's email example fits its half-width box", () => {

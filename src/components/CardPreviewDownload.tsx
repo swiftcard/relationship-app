@@ -79,7 +79,7 @@ export default function CardPreviewDownload({ data, template, username, previewU
         // RESERVE THE SPACE BEFORE THE CARD EXISTS. The templates are
         // dynamic(ssr:false), so on the server and until that chunk downloads
         // this box has no content — height resolved to 0 and everything below
-        // it (Share, Traffic, Quick Contacts) sat high, then jumped ~250–300px
+        // it (Share, Traffic) sat high, then jumped ~250–300px
         // the moment the card popped in. On the dashboard, the first screen of
         // the app, after the skeleton had already handed off.
         //

@@ -19,10 +19,12 @@ describe("notifications are read with the service role, scoped to the user", () 
     for (const q of queries) expect(q.slice(0, 260)).toContain('.eq("user_id", user.id)');
   });
 
-  it("the dashboard's bell and panel use the service role too", () => {
+  // The bell's read (+ its fallback below). The per-card panel's read went
+  // with Quick Contacts on 2026-09-29.
+  it("the dashboard's bell uses the service role too", () => {
     const d = code("src/app/dashboard/page.tsx");
     expect(d).not.toMatch(/supabase\s*\.from\("notifications"\)/);
-    expect(d.split('getAdminSupabase().from("notifications")').length - 1).toBe(2);
+    expect(d.split('getAdminSupabase().from("notifications")').length - 1).toBe(1);
   });
 
   it("the migration drops every client policy on the three tables", () => {

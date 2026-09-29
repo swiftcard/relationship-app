@@ -72,7 +72,7 @@ export function usePushAsk(surface: AskSurface, candidateId: string | null, visi
   };
 }
 
-export default function PushAskCallout({ ask, tone = "bell" }: { ask: PushAsk; tone?: "bell" | "panel" }) {
+export default function PushAskCallout({ ask }: { ask: PushAsk }) {
   if (!ask.show || !ask.id) return null;
   const id = ask.id;
   // Only ever rendered on the client (it needs the device's push state), so
@@ -85,7 +85,7 @@ export default function PushAskCallout({ ask, tone = "bell" }: { ask: PushAsk; t
   return (
     // Inset to the text column of the row above it (dot + gap), same colour as
     // an unread row, so it reads as part of that notification.
-    <div role="group" aria-label="Turn on push notifications" data-push-ask={ask.mode} className={`${tone === "panel" ? "bg-blue-950/40" : "bg-blue-950"} pl-9 pr-4 pt-1 pb-3.5`}>
+    <div role="group" aria-label="Turn on push notifications" data-push-ask={ask.mode} className="bg-blue-950 pl-9 pr-4 pt-1 pb-3.5">
       {ask.confirming ? (
         <p className="text-xs font-semibold text-emerald-400" role="status">
           You&apos;re set — notifications like this will reach your {device === "computer" ? "computer" : "phone"} now.

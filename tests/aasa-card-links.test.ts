@@ -159,6 +159,8 @@ describe("3 · a public card / Swift Links page is never a screen in the app", (
     const sig = readFileSync("src/components/EmailSignatureBox.tsx", "utf8");
     expect(sig.match(/<a href=\{previewHref \?\? cardUrl\} target="_blank"/g)?.length).toBe(2);
     const dash = readFileSync("src/app/dashboard/page.tsx", "utf8");
-    expect(dash.match(/href=\{liveHref\}\s*target="_blank"/g)?.length).toBeGreaterThanOrEqual(2);
+    // "View live" in My Cards. (The second one, "See how it looks to them",
+    // went with Quick Contacts on 2026-09-29.)
+    expect(dash.match(/href=\{liveHref\}\s*target="_blank"/g)?.length).toBeGreaterThanOrEqual(1);
   });
 });

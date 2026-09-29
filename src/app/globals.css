@@ -345,6 +345,33 @@ body {
   .sc-tap-sq { min-height: 44px; min-width: 44px; }
 }
 
+/* ── Contact quick actions (components/ContactQuickActions) ────────────────
+   Call / Text / Email circles on every Contacts row (owner, 2026-09-29).
+   Dark: the original Quick Contacts shades (colour at 25% for the ring, 8%
+   for the fill). Light: darker ink — #22c55e and #a78bfa are under 3:1 on
+   white. On touch, an invisible 42px hit area around each 36px circle:
+   they sit 6px apart (gap-1.5), so neighbours never overlap. */
+.sc-qa-call  { color: #22c55e; border-color: rgb(34 197 94 / 0.25);   background-color: rgb(34 197 94 / 0.08); }
+.sc-qa-text  { color: #3b82f6; border-color: rgb(59 130 246 / 0.25);  background-color: rgb(59 130 246 / 0.08); }
+.sc-qa-email { color: #a78bfa; border-color: rgb(167 139 250 / 0.25); background-color: rgb(167 139 250 / 0.08); }
+.sc-qa-call:hover  { background-color: rgb(34 197 94 / 0.16); }
+.sc-qa-text:hover  { background-color: rgb(59 130 246 / 0.16); }
+.sc-qa-email:hover { background-color: rgb(167 139 250 / 0.16); }
+[data-sc-theme="light"] .sc-qa-call  { color: #15803d; border-color: rgb(21 128 61 / 0.35);  background-color: rgb(21 128 61 / 0.07); }
+[data-sc-theme="light"] .sc-qa-text  { color: #1d4ed8; border-color: rgb(29 78 216 / 0.35);  background-color: rgb(29 78 216 / 0.07); }
+[data-sc-theme="light"] .sc-qa-email { color: #7c3aed; border-color: rgb(124 58 237 / 0.35); background-color: rgb(124 58 237 / 0.07); }
+[data-sc-theme="light"] .sc-qa-call:hover  { background-color: rgb(21 128 61 / 0.14); }
+[data-sc-theme="light"] .sc-qa-text:hover  { background-color: rgb(29 78 216 / 0.14); }
+[data-sc-theme="light"] .sc-qa-email:hover { background-color: rgb(124 58 237 / 0.14); }
+@media (pointer: coarse) {
+  .sc-qa::after { content: ""; position: absolute; inset: -3px; border-radius: 9999px; }
+}
+/* Under 360px the circles are 32px and 4px apart (ContactQuickActions), so the
+   hit area grows by 2px a side instead — still no overlap. */
+@media (pointer: coarse) and (max-width: 359px) {
+  .sc-qa::after { inset: -2px; }
+}
+
 /* ── Refined input focus (forms) ───────────────────────────────────────────── */
 .sc-input { transition: border-color var(--dur-med) var(--ease-out), box-shadow var(--dur-med) var(--ease-out), background-color var(--dur-med) var(--ease-out); }
 .sc-input:focus, .sc-input:focus-visible {

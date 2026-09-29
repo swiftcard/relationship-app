@@ -79,8 +79,6 @@ export default function MyCardsList({
   isPro,
   freeCardLimit,
   liveCardIds,
-  view,
-  sortBy,
   upsell,
 }: {
   cards: MyCard[];
@@ -89,8 +87,6 @@ export default function MyCardsList({
   freeCardLimit: number;
   /** On Free: the ids that serve publicly (lib/card-active pickFreeLiveCardIds). */
   liveCardIds?: string[];
-  view: string;
-  sortBy: string;
   /** The Free-plan "second card" upsell, rendered untouched after the rows. */
   upsell?: ReactNode;
 }) {
@@ -130,7 +126,7 @@ export default function MyCardsList({
           >
             <Link
               scroll={false}
-              href={`?card=${card.username}&view=${view}&sort=${sortBy}`}
+              href={`?card=${card.username}`}
               role="radio"
               aria-checked={isActive}
               // Picking a different card collapses the dropdown. Without this

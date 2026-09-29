@@ -100,7 +100,7 @@ async function mount(width: number, cards: Card[], active: string, containerWidt
   );
   await page.evaluate(
     (p) => (window as unknown as { mount: (x: unknown) => void }).mount(p),
-    { cards, activeUsername: active, isPro, freeCardLimit: 1, view: "notifications", sortBy: "newest" },
+    { cards, activeUsername: active, isPro, freeCardLimit: 1 },
   );
   await page.waitForSelector("[role=radiogroup]");
   // Mobile: open the dropdown so every row (and its Edit) is on screen.

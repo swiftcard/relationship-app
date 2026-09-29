@@ -41,29 +41,37 @@ describe("Wrong person?", () => {
     expect(src).toMatch(/from\("card_views"\)\.update\(\{ lead_id: null \}\)/);
   });
 
+  // In the bell since the dashboard's notifications list went with Quick
+  // Contacts (owner, 2026-09-29).
   it("is offered only on rows that name a returning contact", () => {
-    const panel = read("src/components/NotificationsPanel.tsx");
-    expect(panel).toMatch(/const NAMED_RETURN_TYPES = new Set\(\["contact_returned", "contact_engaged"\]\);/);
-    expect(panel).toMatch(/NAMED_RETURN_TYPES\.has\(n\.type\) && n\.lead_id &&/);
+    const bell = read("src/components/NotificationBell.tsx");
+    expect(bell).toMatch(/const NAMED_RETURN_TYPES = new Set\(\["contact_returned", "contact_engaged"\]\);/);
+    expect(bell).toMatch(/NAMED_RETURN_TYPES\.has\(n\.type\) && n\.lead_id &&/);
+    // Asks first, then POSTs with the notification id; the row comes back if
+    // the request fails.
+    expect(bell).toContain("fetch(`/api/leads/${encodeURIComponent(n.lead_id)}/wrong-person`");
+    expect(bell).toContain("body: JSON.stringify({ notificationId: n.id })");
+    expect(bell).toContain("Not them? We&apos;ll stop recognising that device.");
   });
 });
 
+// The bell is the feed now: the dashboard's per-card list went with Quick
+// Contacts (owner, 2026-09-29).
 describe("the feed", () => {
-  const panel = read("src/components/NotificationsPanel.tsx");
+  const bell = read("src/components/NotificationBell.tsx");
 
-  it("opens the contact by id, and falls back to the name match only for older rows", () => {
-    expect(panel).toMatch(/const match = n\.lead_id\s*\?\s*\{ id: n\.lead_id \}/);
-    expect(panel).toMatch(/"contact_returned", "contact_engaged"\]\);/);
+  it("opens the contact by id, else that card's contacts", () => {
+    expect(bell).toContain("if (n.lead_id) return `/contacts?${card ? `${card}&` : \"\"}lead=${encodeURIComponent(n.lead_id)}`;");
+    expect(bell).toMatch(/"contact_returned", "contact_engaged"\]\);/);
   });
 
-  it("blurs a Free account's contact names in titles, in the panel and the bell", () => {
-    expect(panel).toMatch(/<NotificationBody text=\{n\.title\} \/>/);
-    expect(read("src/components/NotificationBell.tsx")).toMatch(/<NotificationBody text=\{n\.title\} \/>/);
+  it("blurs a Free account's contact names in titles", () => {
+    expect(bell).toMatch(/<NotificationBody text=\{n\.title\} \/>/);
   });
 
-  it("refreshes every 10s while on screen, and not at all while hidden", () => {
-    expect(panel).toMatch(/setInterval\(poll, 10000\)/);
-    expect(panel).toMatch(/if \(document\.visibilityState === "hidden"\) return;/);
+  it("refreshes while on screen, and not at all while hidden", () => {
+    expect(bell).toMatch(/setInterval\(poll, 30000\)/);
+    expect(bell).toMatch(/if \(document\.visibilityState === "hidden"\) return;/);
   });
 
   it("the API hands back lead_id, and still works without the column", () => {

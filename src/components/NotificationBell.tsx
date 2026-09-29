@@ -24,10 +24,18 @@ type Notification = {
   lead_id?: string | null;
 };
 
-// Rows about a contact open Contacts, exactly as the dashboard list does
-// (NotificationsPanel CONTACT_TYPES): the contact itself when the row knows who
-// (lead_id — withheld on Free for a blurred name), else that card's contacts.
+// Rows about a contact open Contacts: the contact itself when the row knows
+// who (lead_id — withheld on Free for a blurred name), else that card's
+// contacts.
 const CONTACT_TYPES = new Set(["new_lead", "contact_saved", "card_viewed", "lead_reply", "contact_returned", "contact_engaged"]);
+
+// "X is back" rows about a KNOWN contact. Their device was matched to that
+// contact, and a match can be wrong (a shared laptop, a forwarded link), so
+// these rows carry "Wrong person?" (/api/leads/[id]/wrong-person). It lived in
+// the dashboard's Notifications list until that went with Quick Contacts
+// (owner, 2026-09-29) and moved here, the one list left. Only with a lead_id:
+// on Free a blurred name arrives without one, and there is nothing to unbind.
+const NAMED_RETURN_TYPES = new Set(["contact_returned", "contact_engaged"]);
 
 function contactHref(n: Notification): string {
   const card = n.card_owner ? `card=${encodeURIComponent(n.card_owner)}` : "";
@@ -48,15 +56,10 @@ function timeAgo(iso: string) {
 export default function NotificationBell({
   initialNotifications,
   cardLabels,
-  activeCard,
 }: {
   initialNotifications: Notification[];
   // username → display label, for the per-card tag on each notification.
   cardLabels?: Record<string, string>;
-  // The currently selected card's username. Without it, "View all
-  // notifications" lands a multi-card account on the card PICKER (the
-  // dashboard only auto-selects when there's exactly one card).
-  activeCard?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
@@ -94,8 +97,7 @@ export default function NotificationBell({
       if (openRef.current) return;
       // Nobody is looking: a backgrounded tab kept polling forever. The
       // visibility listener below polls the moment it comes back, so this
-      // costs nothing but the requests nobody was waiting for. Same guard
-      // NotificationsPanel already uses.
+      // costs nothing but the requests nobody was waiting for.
       if (document.visibilityState === "hidden") return;
       try {
         // The bell watches EVERY card (no ?card= scope) — activity on any card
@@ -106,7 +108,7 @@ export default function NotificationBell({
         setNotifications((prev) => {
           // Server truth wins whenever ANYTHING differs — id set, order, or a
           // read flag. The old guard only replaced state on NEW ids, so a
-          // "mark all read" done in the per-card panel (or on another device)
+          // "mark all read" done on another device
           // left this bell showing stale unread rows until the next genuinely
           // new notification arrived — reads seemed to "come back". The poll
           // only runs while the panel is closed, so no local optimistic
@@ -215,6 +217,31 @@ export default function NotificationBell({
       }
     } finally {
       setPendingIds((s) => { const n = new Set(s); n.delete(id); return n; });
+    }
+  }
+
+  // "Wrong person?" → Confirm. Optimistic like dismiss: the row goes at once
+  // and comes back if the request fails. The route unbinds the browser(s)
+  // from that contact and deletes this notification.
+  const [wrongAsked, setWrongAsked] = useState<string | null>(null);
+  async function markWrongPerson(n: Notification) {
+    if (!n.lead_id || pendingIds.has(n.id)) return;
+    setWrongAsked(null);
+    setPendingIds((s) => new Set(s).add(n.id));
+    setNotifications((prev) => prev.filter((x) => x.id !== n.id));
+    try {
+      const res = await fetch(`/api/leads/${encodeURIComponent(n.lead_id)}/wrong-person`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notificationId: n.id }),
+      });
+      if (!res.ok) throw new Error("failed");
+    } catch {
+      setNotifications((prev) =>
+        [...prev, n].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      );
+    } finally {
+      setPendingIds((s) => { const x = new Set(s); x.delete(n.id); return x; });
     }
   }
 
@@ -339,6 +366,23 @@ export default function NotificationBell({
                             out from the server, and this blurs what is left. */}
                         {n.body && <p className="text-gray-400 text-xs mt-0.5 leading-relaxed"><NotificationBody text={n.body} /></p>}
                         <SeeWhoLink text={`${n.title} ${n.body ?? ""}`} />
+                        {NAMED_RETURN_TYPES.has(n.type) && n.lead_id && (
+                          wrongAsked === n.id ? (
+                            <span className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5 text-[0.6875rem]">
+                              <span className="text-gray-400">Not them? We&apos;ll stop recognising that device.</span>
+                              <button type="button" onClick={(e) => { e.stopPropagation(); markWrongPerson(n); }} className="font-semibold text-blue-400 hover:text-blue-300">Confirm</button>
+                              <button type="button" onClick={(e) => { e.stopPropagation(); setWrongAsked(null); }} className="text-gray-500 hover:text-gray-300">Cancel</button>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setWrongAsked(n.id); }}
+                              className="mt-1.5 text-[0.6875rem] text-gray-500 hover:text-gray-300 underline underline-offset-2"
+                            >
+                              Wrong person?
+                            </button>
+                          )
+                        )}
                         {/* Meta line: card tag + time — chip lives here so the
                             title keeps full width on narrow phones. */}
                         <div className="flex items-center gap-2 mt-1 min-w-0">
@@ -388,15 +432,8 @@ export default function NotificationBell({
                 ))
               )}
             </div>
-
-            {/* Footer — jump to the full notifications list on the dashboard. */}
-            <a
-              href={activeCard ? `/dashboard?card=${encodeURIComponent(activeCard)}&view=notifications` : "/dashboard?view=notifications"}
-              onClick={() => setOpen(false)}
-              className="shrink-0 border-t border-gray-800 px-4 py-2.5 text-center text-xs font-semibold text-blue-400 hover:text-blue-300 hover:bg-gray-800/50 transition-colors"
-            >
-              View all notifications
-            </a>
+            {/* No "View all notifications" footer: the dashboard list it opened
+                went with Quick Contacts (owner, 2026-09-29) — this IS the list. */}
           </div>
         </>,
         document.body,

@@ -139,7 +139,7 @@ Flow presets live in `profiles.flow_settings.presets` (JSONB):
 | `/api/cards/[id]` | PATCH / GET | Update or fetch individual extra card |
 | `/api/leads` | POST | New lead from public card form |
 | `/api/leads/[id]` | PATCH / DELETE | Update lead fields / delete lead |
-| `/api/leads/manual` | POST | Manually add a contact from dashboard |
+| `/api/leads/manual` | POST | Manually add a contact from the Contacts page |
 | `/api/leads/export` | GET | CSV export |
 | `/api/ai/suggest-messages` | POST | Generate 3 AI follow-up messages via Haiku |
 | `/api/sms/send` | POST | Send Twilio SMS to a lead |
