@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   buildClaimInsert,
   sanitizeUsername,
@@ -151,8 +151,20 @@ async function freshStore(ls: ReturnType<typeof makeLocalStorage>) {
 describe("guest draft store", () => {
   let ls: ReturnType<typeof makeLocalStorage>;
   beforeEach(() => {
+    // saveDraft debounces its storage write by 400ms on a real setTimeout. A
+    // test that saved without flushing left that timer running, and under a
+    // busy full-suite run it fired during the NEXT test — writing the old
+    // draft into that test's fresh localStorage (the global is swapped per
+    // test), so "no draft → no consent" suddenly had a draft. Fake timers,
+    // cleared after each test, keep every test's writes its own. No test here
+    // waits on the debounce: each flushes explicitly.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     ls = makeLocalStorage();
     (globalThis as unknown as { localStorage: unknown }).localStorage = ls;
+  });
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
   });
 
   it("persists guest CARD edits as a payload snapshot", async () => {

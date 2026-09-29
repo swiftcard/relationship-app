@@ -8,15 +8,9 @@
 // already live for users without an app update. Claiming those here would be
 // padding, and a reviewer comparing notes to a diff would be right to wonder.
 import { asc, APP_ID } from "./lib/asc.mjs";
+import { WHATS_NEW } from "./lib/whats-new.mjs";
 
 const APPLY = process.argv.includes("--apply");
-
-// 1.0.5 / build 15 (2026-09-29). One native change since the live build 14:
-// the Associated Domains entitlement is gone, so no swiftcard.me link ever
-// opens inside the app. Nothing else in the binary changed. History lives in
-// docs/ios-review/APP-STORE-METADATA.md "## Version". Must match
-// scripts/asc-submit-105.mjs.
-const WHATS_NEW = `Links to SwiftCards and Swift Links now always open in your web browser, never inside the app.`;
 
 const vers = await asc("GET", `/apps/${APP_ID}/appStoreVersions?limit=5&fields[appStoreVersions]=versionString,appStoreState`);
 const v = (vers.data ?? []).find((x) => x.attributes.appStoreState === "PREPARE_FOR_SUBMISSION");

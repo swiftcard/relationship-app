@@ -1,29 +1,37 @@
-// Ship 1.0.5 (build 15) — links never open the app — with as few hands as
-// possible. Run AFTER `npm run ios:release -- --no-watch` has uploaded build 15
-// and App Store Connect shows it VALID (processing takes ~10 minutes).
+// Submit the release in flight — the version and build the Xcode project is
+// set to — with as few hands as possible. Run AFTER
+// `npm run ios:release -- --no-watch` has uploaded the build and App Store
+// Connect shows it VALID (processing takes ~10 minutes).
 //
-//   node scripts/asc-submit-105.mjs        # dry run: shows every state, changes nothing
-//   node scripts/asc-submit-105.mjs --go   # create 1.0.5 if needed, attach build 15,
-//                                          # write What's New, submit for review
+//   node scripts/asc-submit.mjs        # dry run: shows every state, changes nothing
+//   node scripts/asc-submit.mjs --go   # create the version if needed, attach the
+//                                      # build, write What's New, submit for review
 //
-// The one native change: the app no longer carries the Associated Domains
-// entitlement, so iOS never opens a swiftcard.me link (a SwiftCard, Swift Links
-// or Swift Signature someone sends you) inside the app — it opens in the
-// browser. Installing the update also makes iOS drop the old link rules it
-// cached with 1.0.4.
+// One script for every release. The version and build come from
+// ios/App/App.xcodeproj/project.pbxproj (MARKETING_VERSION /
+// CURRENT_PROJECT_VERSION, which must agree across every target), and the
+// What's New text from scripts/lib/whats-new.mjs — so a release is cut by
+// bumping the project and editing that one line, never by copying this file.
+// (It replaced per-release copies, asc-submit-104.mjs and asc-submit-105.mjs.)
 //
 // Idempotent: every step checks before it acts, so it can be re-run after a
 // partial failure. Refuses on any mismatch (wrong build, another submission
-// open). Release type is AFTER_APPROVAL.
-//
-// Owner, 2026-09-29: "You need to make sure this gets fixed ASAP."
+// open). Release type is AFTER_APPROVAL — live the moment Apple approves.
+import { readFileSync } from "node:fs";
 import { asc, APP_ID } from "./lib/asc.mjs";
+import { WHATS_NEW } from "./lib/whats-new.mjs";
 
-const WANT_VERSION = "1.0.5";
-const WANT_BUILD = "15";
+const pbx = readFileSync(new URL("../ios/App/App.xcodeproj/project.pbxproj", import.meta.url), "utf8");
+/** The one value every target is set to — refuses if two targets disagree. */
+function projectSetting(key) {
+  const values = [...new Set([...pbx.matchAll(new RegExp(`${key} = ([^;]+);`, "g"))].map((m) => m[1].trim()))];
+  if (values.length !== 1) throw new Error(`${key} is not the same on every target (${values.join(", ") || "none"}) — fix the Xcode project first`);
+  return values[0];
+}
+const WANT_VERSION = projectSetting("MARKETING_VERSION");
+const WANT_BUILD = projectSetting("CURRENT_PROJECT_VERSION");
 const GO = process.argv.includes("--go");
-// Must match scripts/asc-whats-new.mjs and APP-STORE-METADATA.md "## Version".
-const WHATS_NEW = "Links to SwiftCards and Swift Links now always open in your web browser, never inside the app.";
+console.log(`release in flight: ${WANT_VERSION} (build ${WANT_BUILD})`);
 
 const act = (msg) => console.log(GO ? `→ ${msg}` : `(dry) would ${msg}`);
 
@@ -77,7 +85,7 @@ if (v) {
     if (GO) await asc("PATCH", `/appStoreVersions/${v.id}/relationships/build`, { data: { type: "builds", id: b.id } });
   }
 
-  // ── 3. What's New + screenshots (carried over from 1.0.4 automatically) ────
+  // ── 3. What's New + screenshots (carried over from the previous version) ──
   const loc = await asc("GET", `/appStoreVersions/${v.id}/appStoreVersionLocalizations?fields[appStoreVersionLocalizations]=locale,whatsNew`);
   if (!loc.data?.length) throw new Error("the version has no localization — open it once in App Store Connect");
   for (const l of loc.data) {
@@ -126,4 +134,4 @@ const out = await asc("PATCH", `/reviewSubmissions/${subId}`, { data: { type: "r
 console.log("SUBMITTED:", out.data.attributes.state);
 const after = await asc("GET", `/appStoreVersions/${v.id}?fields[appStoreVersions]=appStoreState`);
 console.log("version state now:", after.data.attributes.appStoreState);
-console.log("\nNext: ask Apple for an expedited review (see the runbook §8) — until this is live, a card link can still open the app on a phone that cached the old rules.");
+console.log("\nNext: if this release fixes something users are hitting, ask Apple for an expedited review (see the runbook §8).");

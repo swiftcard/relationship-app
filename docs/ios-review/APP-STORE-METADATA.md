@@ -215,7 +215,9 @@ has the service-role key.
   Pinned by `tests/aasa-card-links.test.ts` and
   `tests/native-capabilities.test.ts`. Build on the Mac with
   `npm run ios:release -- --no-watch`, wait for build 15 to show VALID, then
-  `node scripts/asc-submit-105.mjs --go`.)
+  `node scripts/asc-submit.mjs --go` (one script for every release: it
+  reads the version and build from the Xcode project and the What's New from
+  `scripts/lib/whats-new.mjs`).)
 - 1.0.4, build 14. "What's New": `Fixes the app closing right after opening on
   iOS 27.` (The iOS 27 launch crash: build 13 still used the pre-iOS-13
   app-delegate window with no UIApplicationSceneManifest, which iOS 27 turns
@@ -227,7 +229,8 @@ has the service-role key.
   re-publish moved to the scene delegate. Pinned by
   `tests/ios-scene-lifecycle.test.ts`. Build on the Mac with
   `npm run ios:release -- --no-watch`, wait for build 14 to show VALID, then
-  `node scripts/asc-submit-104.mjs --go` — it creates 1.0.4 (release
+  `node scripts/asc-submit-104.mjs --go` (since folded into
+  `scripts/asc-submit.mjs`) — it creates 1.0.4 (release
   AFTER_APPROVAL), attaches the build, writes What's New and submits. Then
   request an expedited review. The launch screen is unchanged from 1.0.3 —
   the v3 screen from the owner's 2026-09-20 reference is already in the
@@ -246,7 +249,7 @@ has the service-role key.
   set, recaptured 2026-09-24 after Hot/Warm scoring, "Copy personal link" and
   the per-contact alert switch were removed from the app. Build 13 was
   originally staged as a 1.0.2 re-upload and never uploaded; 1.0.2 went live as
-  build 12. The "What's New" text in `scripts/asc-whats-new.mjs` tracks the
+  build 12. The "What's New" text (now `scripts/lib/whats-new.mjs`) tracks the
   CURRENT in-flight version, so it carries the 1.0.3 copy.)
 - 1.0.2, build 12 shipped 2026-09-11 and is live. "What's New": `This update is
   all about accessibility. • Larger Text: SwiftCard now follows your iPhone's

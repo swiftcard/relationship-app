@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { CardData } from "@/components/card-templates/types";
 import { withoutSocials } from "@/components/card-templates/types";
@@ -46,7 +46,6 @@ export default function CardPreviewDownload({ data, template, username, previewU
   const [scale, setScale] = useState(0);
   const [height, setHeight] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
-  const closeFullscreen = useCallback(() => setFullscreen(false), []);
   const Template = TEMPLATE_MAP[template] ?? ClassicPro;
   const filename = `swiftcard-${username}.png`;
   const shown = template === "custom" ? data : withoutSocials(data);
@@ -152,7 +151,7 @@ export default function CardPreviewDownload({ data, template, username, previewU
           other QR we show carries (lib/share-source) — otherwise each scan
           lands in Traffic as "Card link". */}
       {fullscreen && (
-        <CardFullscreen width={NATURAL} onClose={closeFullscreen}>
+        <CardFullscreen width={NATURAL} onClose={() => setFullscreen(false)}>
           <Template data={shown.cardUrl ? { ...shown, cardUrl: qrScanUrl(shown.cardUrl) } : shown} />
         </CardFullscreen>
       )}

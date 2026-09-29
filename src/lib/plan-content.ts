@@ -17,9 +17,10 @@ export const PLAN_DESCRIPTIONS = {
 // the more generous one and Pro looked like a shorter list for $4.99. Every
 // claim was true — the framing was just upside-down.
 //
-// The fix is framing, not gating: nothing moved between plans. Free's list now
-// LEADS WITH ITS CAPS (the numbers a real user hits in week one) and states the
-// badge plainly, and Pro's is one unlock per line so the value is countable.
+// The fix is framing, not gating: nothing moved between plans. Free's list
+// states its CAPS plainly (the numbers a real user hits in week one) and ends
+// on the SwiftCard note Pro removes, and Pro's is one unlock per line so the
+// value is countable.
 // Never pad these to win the comparison — if a claim isn't enforced in
 // PLAN_LIMITS / sanitizeCustomizationForPlan, it doesn't belong here.
 //

@@ -47,16 +47,12 @@ export default function CardFullscreen({
   const [cardH, setCardH] = useState(0);
 
   // The screen, re-read on every resize — turning a rotation-unlocked phone
-  // swaps the two sides, and the stage must follow.
+  // fires one and swaps the two sides, and the stage must follow.
   useEffect(() => {
     const read = () => setViewport({ w: window.innerWidth, h: window.innerHeight });
     read();
     window.addEventListener("resize", read);
-    window.addEventListener("orientationchange", read);
-    return () => {
-      window.removeEventListener("resize", read);
-      window.removeEventListener("orientationchange", read);
-    };
+    return () => window.removeEventListener("resize", read);
   }, []);
 
   // The card's own height at its natural width. Templates differ slightly,
@@ -100,14 +96,16 @@ export default function CardFullscreen({
     ? Math.max(0, Math.min((long - END_GAP * 2) / width, (short - SIDE_GAP * 2) / cardH))
     : 0;
 
-  if (typeof document === "undefined") return null;
-
+  // Only ever mounted after a tap, so document always exists here.
+  // touch-none + overscroll-none: iOS Safari scrolls the page BEHIND a fixed
+  // layer on a drag even with the root's overflow hidden; the layer itself
+  // refusing pans is what stops it. Taps (the ×) are unaffected.
   return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-label="Your card, full screen"
-      className="fixed inset-0 z-[10001] bg-black overflow-hidden"
+      className="fixed inset-0 z-[10001] bg-black overflow-hidden touch-none overscroll-none"
     >
       {/* The landscape stage: long side across, turned 90° on a portrait
           screen. Centred on the viewport, so the turn happens in place. */}

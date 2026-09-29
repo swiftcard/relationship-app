@@ -28,9 +28,10 @@ import Capacitor
 //     legs) → ApplicationDelegateProxy, which posts .capacitorOpenURL. The
 //     @capacitor/app plugin turns that into appUrlOpen, which NativeAppBridge
 //     listens on.
-//   • Universal Links (none since 2026-09-29: the AASA excludes every path,
-//     so no swiftcard.me link opens the app; kept for older cached AASAs) →
-//     ApplicationDelegateProxy, which posts .capacitorOpenUniversalLink.
+//   • Universal Links → ApplicationDelegateProxy, which posts
+//     .capacitorOpenUniversalLink. From 1.0.5 the app claims no domain (no
+//     Associated Domains entitlement), so iOS delivers none; this stays as the
+//     standard Capacitor forwarding, and 1.0.4 phones still route through it.
 //   • "did become active" → the Apple Watch re-publish that used to sit in
 //     applicationDidBecomeActive.
 // APNs registration callbacks stay on AppDelegate: those are still delivered
