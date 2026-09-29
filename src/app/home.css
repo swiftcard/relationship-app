@@ -281,3 +281,11 @@
   .hp-ai-arrow-spark { opacity: .6; }
   .hp-ai-slide { transition: none; }
 }
+
+/* /pricing, signed in: the plan-dependent parts (Pro price, Pro button, Office
+   button) wait for the account's answer instead of showing the new-customer
+   trial offer and then swapping it. data-sc-authed is set before paint by the
+   root boot script when a sign-in cookie exists; the page adds
+   data-acct-ready once it knows (or gives up). Signed out, or with no JS,
+   nothing here applies and the static page shows as-is. */
+html[data-sc-authed] [data-acct-gate]:not([data-acct-ready]) { visibility: hidden; }

@@ -142,6 +142,17 @@ export async function POST(req: NextRequest) {
         { status: 409 },
       );
     }
+    // ── Office without a Stripe subscription, buying Pro ─────────────────────
+    // (A grant, or set by hand.) The guard at the top only sees Stripe
+    // subscriptions, so this sold Pro as a new purchase, and the webhook then
+    // wrote plan = "pro" — swapping the account OUT of Office (owner,
+    // 2026-09-28). Office already includes all of Pro: nothing to sell.
+    if (profile.plan === "enterprise" && !profile.stripe_subscription_id && isPro) {
+      return NextResponse.json(
+        { error: "Your account is on Office, which already includes everything in Pro.", officeCoversPro: true },
+        { status: 409 },
+      );
+    }
     if (appleBacked && isOffice && body.acknowledgeApple !== true) {
       return NextResponse.json(
         {

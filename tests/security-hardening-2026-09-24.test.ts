@@ -214,7 +214,7 @@ describe("the two glitches the owner reported", () => {
   it("the light theme is put back if anything strips it off <html>", () => {
     const s = read("src/app/layout.tsx");
     expect(s).toContain("new MutationObserver(");
-    expect(s).toContain("attributeFilter:['class','data-sc-theme','data-sc-mac']");
+    expect(s).toContain("attributeFilter:['class','data-sc-theme','data-sc-mac',");
     expect(s).toContain("if(t!=='dark')d.setAttribute(a,'light');");
   });
   it("the loading skeleton's tab bar keeps the Admin tab", () => {

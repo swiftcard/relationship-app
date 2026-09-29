@@ -32,7 +32,7 @@ type Preview = {
 
 const RESUME_KEY = "sc_checkout_resume"; // set before bouncing to login → auto-continue on return
 
-export default function CheckoutClient({ trialEligible = true }: { trialEligible?: boolean }) {
+export default function CheckoutClient({ trialEligible = true, officeCoversPro = false }: { trialEligible?: boolean; officeCoversPro?: boolean }) {
   const params = useSearchParams();
   const plan: Plan = params.get("plan") === "office" ? "office" : "pro";
   const interval: Interval = params.get("interval") === "annual" ? "annual" : "monthly";
@@ -216,6 +216,32 @@ export default function CheckoutClient({ trialEligible = true }: { trialEligible
   // summary inside the shell.
   if (native) return null;
 
+  // On Office (not billed through Stripe) and asking for Pro: there is nothing
+  // to buy — Office includes all of Pro — and a Pro purchase would replace the
+  // Office plan. Say so instead of showing an order (see page.tsx).
+  if (officeCoversPro && plan === "pro") {
+    return (
+      <div className="w-full max-w-md">
+        <div className="flex items-center justify-center gap-2 mb-6">
+          <SwiftCardIcon size={26} />
+          <span className="text-white font-bold tracking-tight">SwiftCard</span>
+        </div>
+        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-6">
+          <h1 className="text-white text-xl font-bold mb-1">You&apos;re already on Office</h1>
+          <p className="text-gray-400 text-sm leading-relaxed">
+            Office includes everything in Pro, so there&apos;s nothing to buy. Buying Pro here would replace your Office plan.
+          </p>
+          <Link href="/dashboard" className="mt-5 block w-full text-center bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm py-3 rounded-full transition-colors">
+            Go to my dashboard →
+          </Link>
+          <Link href="/settings/flows?billing=1#billing" className="block text-center text-gray-500 hover:text-gray-300 text-xs mt-3 transition-colors">
+            Manage my plan in Billing
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-md">
       <div className="flex items-center justify-center gap-2 mb-6">
@@ -349,7 +375,12 @@ export default function CheckoutClient({ trialEligible = true }: { trialEligible
             : ", including that your subscription auto-renews until you cancel."}
         </p>
 
-        <Link href={trial ? "/pricing" : "/upgrade"} className="block text-center text-gray-500 hover:text-gray-300 text-xs mt-3 transition-colors">
+        {/* Back to the page the plan was picked on: /upgrade adds ?trial=0,
+            /pricing never does. Keyed on the resolved `trial`, an account that
+            had used its trial was sent from the public pricing page into
+            /upgrade — which forwards a paid account into its Billing
+            settings, so "Change plan" jumped into the app (owner, 2026-09-28). */}
+        <Link href={params.get("trial") === "0" ? "/upgrade" : "/pricing"} className="block text-center text-gray-500 hover:text-gray-300 text-xs mt-3 transition-colors">
           ← Change plan, billing, or seats
         </Link>
       </div>

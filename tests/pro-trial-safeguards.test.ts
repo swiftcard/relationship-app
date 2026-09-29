@@ -240,7 +240,7 @@ describe("every new account sees the plan step once", () => {
   });
 
   it("checkout never promises a trial the account is not eligible for", () => {
-    expect(read("src/app/checkout/page.tsx")).toContain("<CheckoutClient trialEligible={trialEligible} />");
+    expect(read("src/app/checkout/page.tsx")).toContain("<CheckoutClient trialEligible={trialEligible} ");
     expect(read("src/app/checkout/CheckoutClient.tsx")).toContain('params.get("trial") !== "0" && trialEligible');
   });
 });

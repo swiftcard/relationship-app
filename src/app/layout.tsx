@@ -145,6 +145,11 @@ export default function RootLayout({
               // decided here, before paint, or a dark-mode phone flashes black.
               // ForceLightTheme keeps it light across client-side navigation.
               "if(localStorage.getItem('sc_theme')!=='dark'||location.pathname.indexOf('/cards/new')===0)document.documentElement.setAttribute('data-sc-theme','light');" +
+              // A sign-in cookie exists → mark it before paint, so /pricing can
+              // hold its plan-dependent prices until it knows this account
+              // rather than flash the new-customer trial (see home.css). Only a
+              // cookie NAME is read; the check that counts is server-side.
+              "if(/(^|;\\s*)sb-[^=]*-auth-token/.test(document.cookie))document.documentElement.setAttribute('data-sc-authed','');" +
               // React 19 strips EVERY attribute off <html> when a hydration
               // mismatch makes it client-render the root, so the light theme
               // dropped to dark "at random" (owner, 2026-09-24: going back to
@@ -154,9 +159,9 @@ export default function RootLayout({
               // which write sc_theme first, keep working.
               "try{new MutationObserver(function(rs){var d=document.documentElement;for(var i=0;i<rs.length;i++){var a=rs[i].attributeName,o=rs[i].oldValue;" +
               "if(a==='class'){if(o&&/(^|\\s)native-app(\\s|$)/.test(o)&&!d.classList.contains('native-app'))d.classList.add('native-app');}" +
-              "else if(a==='data-sc-mac'){if(o!==null&&!d.hasAttribute(a))d.setAttribute(a,o);}" +
+              "else if(a==='data-sc-mac'||a==='data-sc-authed'){if(o!==null&&!d.hasAttribute(a))d.setAttribute(a,o);}" +
               "else if(a==='data-sc-theme'&&!d.hasAttribute(a)){var t=null;try{t=localStorage.getItem('sc_theme');}catch(e){}if(t!=='dark')d.setAttribute(a,'light');}}})" +
-              ".observe(document.documentElement,{attributes:true,attributeOldValue:true,attributeFilter:['class','data-sc-theme','data-sc-mac']});}catch(e){}" +
+              ".observe(document.documentElement,{attributes:true,attributeOldValue:true,attributeFilter:['class','data-sc-theme','data-sc-mac','data-sc-authed']});}catch(e){}" +
               // Detect the shell from window.webkit.messageHandlers.bridge, the
               // NATIVE message handler WKWebView installs before any page script
               // runs. window.Capacitor alone is not reliable here: it is created

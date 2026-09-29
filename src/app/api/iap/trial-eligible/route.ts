@@ -27,7 +27,7 @@ export async function GET() {
   }
   const { data: profile } = await getAdminSupabase()
     .from("profiles")
-    .select("stripe_customer_id")
+    .select("plan, stripe_customer_id, stripe_subscription_id, plan_expires_at, customization")
     .eq("id", user.id)
     .maybeSingle();
   const eligible = await isProTrialEligible(
@@ -35,5 +35,15 @@ export async function GET() {
     undefined,
     await trialHistoryFor(user.id, user.email),
   );
-  return NextResponse.json({ eligible }, { headers: { "Cache-Control": "no-store" } });
+  // The plan the account is on, for /pricing: an Office account must not be
+  // sold Pro as if it were new (buying it would swap Office for Pro), and a
+  // paying account's own plan reads "Your current plan", not a purchase.
+  // `onGrant` = free days that end on their own (no subscription, not Apple) —
+  // the same test /upgrade uses — so a granted Pro can still subscribe to keep it.
+  const plan = (profile?.plan as string | null) ?? "free";
+  const onGrant =
+    !!profile?.plan_expires_at &&
+    !profile?.stripe_subscription_id &&
+    (profile?.customization as { _planSource?: string } | null)?._planSource !== "apple";
+  return NextResponse.json({ eligible, plan, onGrant }, { headers: { "Cache-Control": "no-store" } });
 }

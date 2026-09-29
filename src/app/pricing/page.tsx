@@ -85,18 +85,41 @@ export default function PricingPage() {
   // An Office team member has nothing to buy — their seat is their plan, and
   // /upgrade and /checkout already send them home — so this page does too.
   const [trialOk, setTrialOk] = useState(true);
+  // The plan the signed-in account is already on. An Office account was sold
+  // Pro here as if it were a new customer — and paying would have swapped its
+  // Office for Pro. A paying account's own plan reads "Your current plan".
+  const [acctPlan, setAcctPlan] = useState<{ plan: string; onGrant: boolean } | null>(null);
+  // The page is static HTML that shows the trial offer (right for everyone
+  // signed out). For a signed-in visitor, the root boot script marks <html>
+  // data-sc-authed before paint and home.css keeps the [data-acct-gate] parts
+  // invisible until this answer lands — so an account that has had its trial
+  // never sees "Free for 14 days" flash and then turn into $4.99 (owner,
+  // 2026-09-28). `acctReady` releases them on any outcome, error included.
+  const [acctReady, setAcctReady] = useState(false);
   useEffect(() => {
     let cancelled = false;
+    // Never leave the prices hidden behind a slow network.
+    const giveUp = setTimeout(() => { if (!cancelled) setAcctReady(true); }, 4000);
     fetch("/api/iap/trial-eligible", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { eligible?: unknown; teamMember?: unknown } | null) => {
+      .then((d: { eligible?: unknown; teamMember?: unknown; plan?: unknown; onGrant?: unknown } | null) => {
         if (cancelled) return;
         if (d?.teamMember === true) { router.replace("/dashboard"); return; }
         if (d?.eligible === false) setTrialOk(false);
+        if (typeof d?.plan === "string") setAcctPlan({ plan: d.plan, onGrant: d.onGrant === true });
+        setAcctReady(true);
       })
-      .catch(() => {});
-    return () => { cancelled = true; };
+      .catch(() => { if (!cancelled) setAcctReady(true); });
+    return () => { cancelled = true; clearTimeout(giveUp); };
   }, [router]);
+  // Office includes all of Pro, so an Office account — however it got Office —
+  // has no Pro to buy. A Pro that PAYS (Stripe or Apple) is the current plan;
+  // granted free days are not, so that account can still subscribe to keep it.
+  const onOffice = acctPlan?.plan === "enterprise";
+  const onPaidOffice = onOffice && !acctPlan?.onGrant;
+  const onPaidPro = acctPlan?.plan === "pro" && !acctPlan.onGrant;
+  const gate = { "data-acct-gate": "", "data-acct-ready": acctReady ? "" : undefined };
+  const BILLING_HREF = "/settings/flows?billing=1#billing";
 
   // The plan buttons navigate away with a full page load, leaving `loading`
   // set. Back from the card builder restores this page from the back/forward
@@ -235,17 +258,27 @@ export default function PricingPage() {
                   price — the same branch PlanCards uses. "Free for your first
                   14 days" above a "billing starts today" button contradicted
                   itself. */}
-              {!trialOk ? (
+              <div {...gate}>
+              {!trialOk || onOffice || onPaidPro ? (
                 <div className="flex items-end gap-1"><span className="text-[2.6rem] font-bold text-white leading-none">{annual ? `$${PRO_ANNUAL}` : `$${PRO_MONTHLY}`}</span><span className="text-white/80 text-sm mb-1">/ {annual ? "year" : "month"}</span></div>
               ) : annual ? (
                 <ProTrialPrice price={`$${PRO_ANNUAL}`} period="year" note={`~$${money(PRO_ANNUAL / 12)}/mo · Save 10%`} />
               ) : (
                 <ProTrialPrice price={`$${PRO_MONTHLY}`} period="month" />
               )}
+              </div>
               <p className="text-white/80 text-sm mb-7 mt-4">{PLAN_DESCRIPTIONS.pro}</p>
               <ul className="space-y-2.5 mb-8 flex-1">
                 {features.pro.map((f) => (<li key={f} className="flex items-start gap-2.5 text-[0.84375rem] text-white"><Check pro />{f}</li>))}
               </ul>
+              <div {...gate}>
+              {onOffice || onPaidPro ? (
+                // Nothing to buy: the account is on Pro already, or on Office,
+                // which includes all of Pro. Plan changes live in Billing.
+                <Link href={BILLING_HREF} className="block w-full text-center bg-white hover:bg-white/90 text-[#2450d8] font-bold py-3.5 rounded-full transition-colors text-sm shadow-lg">
+                  {onOffice ? "Included in your Office plan" : "Your current plan"} · Manage →
+                </Link>
+              ) : (
               <button onClick={() => handleUpgrade("pro")} disabled={loading !== null} className="w-full bg-white hover:bg-white/90 disabled:opacity-50 text-[#2450d8] font-bold py-3.5 rounded-full transition-colors text-sm shadow-lg">
                 {/* Not "Start free →": the Free plan's own button two columns
                     left reads "Get started free →", and side by side the two
@@ -254,14 +287,18 @@ export default function PricingPage() {
                     incident this comes from. */}
                 {loading === "pro" ? "Loading…" : promoOnPro ? `Get Pro Plan · ${promo.discountLabel} →` : trialOk ? `Try Pro free for ${TRIAL_DAYS} days →` : "Get Pro →"}
               </button>
+              )}
               {/* Fine print keeps the ELIGIBILITY condition and the billing
                   terms; the callout above carries the offer. Checkout grants a
                   trial only to customers with no prior Stripe subscription, so
                   "for new customers" must survive here no matter how the
                   headline is worded (pinned by copy-truth.test.ts). */}
               <p className="text-white/70 text-[0.6875rem] text-center mt-2.5 leading-relaxed">
-                {trialOk ? <>{TRIAL_DAYS} days free for new customers · card required · renews automatically</> : <>Your account has had its free Pro period · billing starts today · renews automatically</>}
+                {onOffice ? <>Your account is on Office, which includes everything in Pro</>
+                  : onPaidPro ? <>Your account is on Pro · change or cancel it in Billing</>
+                  : trialOk ? <>{TRIAL_DAYS} days free for new customers · card required · renews automatically</> : <>Your account has had its free Pro period · billing starts today · renews automatically</>}
               </p>
+              </div>
               {checkoutErr && loading === null && (
                 <p className="text-center text-[0.75rem] font-semibold mt-2 rounded-lg py-2 px-3" style={{ background: "rgba(254,226,226,0.95)", color: "#b91c1c" }}>{checkoutErr}</p>
               )}
@@ -302,11 +339,21 @@ export default function PricingPage() {
             <ul className="space-y-2.5 mb-8 flex-1">
               {features.enterprise.map((f) => (<li key={f} className="flex items-start gap-2.5 text-[0.84375rem] text-slate-600"><Check />{f}</li>))}
             </ul>
+            <div {...gate}>
+            {onPaidOffice ? (
+              // Already paying for Office: seats and billing are changed in
+              // Billing, not by starting a second purchase.
+              <Link href={BILLING_HREF} className="block w-full text-center font-bold py-3.5 px-3 rounded-full text-sm leading-tight bg-blue-600 hover:bg-blue-500 text-white transition-colors break-words">
+                Your current plan · Manage seats →
+              </Link>
+            ) : (
             <button onClick={() => handleUpgrade("enterprise")} disabled={loading !== null} className="w-full font-bold py-3.5 px-3 rounded-full text-sm leading-tight bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white transition-colors break-words">
               {loading === "enterprise" ? "Loading…" : promoOnOffice ? `Get Office · ${promo.discountLabel} →` : `Get Office · ${annual
                 ? `${formatUsd(seatSubtotalCents(PLAN_PRICES.OFFICE_ANNUAL_PER_SEAT_CENTS, seats))}/yr`
                 : `${formatUsd(seatSubtotalCents(PLAN_PRICES.OFFICE_MONTHLY_PER_SEAT_CENTS, seats))}/mo`} →`}
             </button>
+            )}
+            </div>
           </div>
         </section>
 
