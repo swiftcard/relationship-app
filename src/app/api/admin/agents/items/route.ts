@@ -155,12 +155,21 @@ export async function POST(req: NextRequest) {
     // chosen blog option publishes the same way, in the same step.
     const goLive = (action === "published" && item.item_type === "blog_post") || (chosen && item.item_type === "blog_post");
     if (goLive && item.payload?.slug) {
-      const post = item.payload as { slug: string; title: string; description: string; keyword?: string; og_title?: string; content_md: string };
-      await admin.from("agent_blog_posts").upsert({
-        slug: post.slug, title: post.title, description: post.description,
+      const post = item.payload as { slug: string; title: string; description?: string; meta_description?: string; keyword?: string; og_title?: string; content_md?: string };
+      // Brain-written posts (a "choice" the owner picked) carry meta_description
+      // and keep the body in item.content, not description/content_md. Both
+      // columns are NOT NULL, so reading only the Blog Writer's shape made the
+      // insert fail silently while the queue said "published" (2026-09-28).
+      const { error: liveErr } = await admin.from("agent_blog_posts").upsert({
+        slug: post.slug, title: post.title, description: post.description ?? post.meta_description ?? "",
         keyword: post.keyword ?? null, og_title: post.og_title ?? post.title,
-        content_md: post.content_md, status: "published", published_at: now,
+        content_md: post.content_md ?? item.content, status: "published", published_at: now,
       });
+      if (liveErr) {
+        await admin.from("agent_queue_items").update({ status: "pending", actioned_at: now }).eq("id", item.id);
+        execFailed.push({ id: item.id, reason: `the post didn't reach /blog (${liveErr.message}); it's back in the queue` });
+        continue;
+      }
       await admin.from("agent_blog_topics").update({ status: "published" }).eq("slug", post.slug);
       // The option not taken is free to come back another day with a better angle.
       const otherSlug = ((raw.payload as ChoicePayload | null)?.options ?? []).map((o) => (o.payload as { slug?: string } | undefined)?.slug).find((sl) => sl && sl !== post.slug);
