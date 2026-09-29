@@ -8,6 +8,8 @@ import { opensInApp } from "@/lib/universal-links";
 
 /** The page a card link was shown on inside the app, when it could not go to the browser. */
 const CARD_ESCAPE_KEY = "sc_card_escape";
+/** The card this phone's home-screen widget shows — how a widget tap is told apart from a scanned QR. */
+const WIDGET_CARD_KEY = "sc_widget_card";
 /** The last card link handed to the browser — module scope, so it outlives an effect re-run. */
 let handedOff: { dest: string; at: number } | null = null;
 
@@ -171,11 +173,18 @@ export default function NativeAppBridge() {
               // widget tap always opens the app. That is the owner opening
               // their app — land on their dashboard with that card selected,
               // not on their public card with no way back.
-              if (u.searchParams.get("source") === "widget") {
-                const card = u.pathname.split("/").filter(Boolean).pop() ?? "";
-                window.location.replace(/^[a-z0-9][a-z0-9_-]{0,79}$/i.test(card)
-                  ? `/dashboard?card=${encodeURIComponent(card)}`
-                  : "/dashboard");
+              // Only THIS phone's widget card counts: the widget's QR encodes the
+              // same address, so someone else's widget QR scanned here is a
+              // card link like any other and goes to the browser below.
+              const card = u.pathname.split("/").filter(Boolean).pop() ?? "";
+              let widgetCard: string | null = null;
+              // Fallback: the dashboard's chosen card, which the widget shows,
+              // for a phone whose widget synced before this key existed.
+              try {
+                widgetCard = localStorage.getItem(WIDGET_CARD_KEY) ?? localStorage.getItem("swiftcard_active_card");
+              } catch { /* ignore */ }
+              if (u.searchParams.get("source") === "widget" && widgetCard && card === widgetCard) {
+                window.location.replace(`/dashboard?card=${encodeURIComponent(card)}`);
                 return;
               }
               // A card or Swift Links link. The app no longer claims these
@@ -330,12 +339,14 @@ export default function NativeAppBridge() {
               name: active.name || "My SwiftCard",
               company: active.company || "",
             });
+            try { localStorage.setItem(WIDGET_CARD_KEY, active.username); } catch { /* ignore */ }
           } else if (res.status === 401 || res.status === 403 || cards?.length === 0) {
             // Signed out, or the last card was deleted. Without this the widget
             // keeps rendering the previous account's QR on the home screen
             // indefinitely — including after sign-out on a shared or handed-on
             // device, and after the account itself is gone.
             await widgetBridge.clearCard();
+            try { localStorage.removeItem(WIDGET_CARD_KEY); } catch { /* ignore */ }
           }
         } catch (e) {
           // Offline is normal and fine; a native reject is not. Either way the
