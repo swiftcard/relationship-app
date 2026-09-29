@@ -40,9 +40,19 @@ export function providerAppConfigured(p: AgentProvider): boolean {
   switch (p) {
     case "x": return !!(process.env.X_CLIENT_ID && process.env.X_CLIENT_SECRET);
     case "meta": return !!(process.env.META_APP_ID && process.env.META_APP_SECRET);
-    case "youtube": return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+    // YouTube has its own OAuth client (a project under the hello@swiftcard.me
+    // Workspace, so the consent screen can be Internal and refresh tokens
+    // don't die after 7 days). Falls back to the sign-in client if unset.
+    case "youtube": return !!(youtubeClient().id && youtubeClient().secret);
     case "linkedin": return !!(process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET);
   }
+}
+
+export function youtubeClient(): { id: string | undefined; secret: string | undefined } {
+  return {
+    id: process.env.YOUTUBE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID,
+    secret: process.env.YOUTUBE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET,
+  };
 }
 
 export function isAgentProvider(p: string): p is AgentProvider {
@@ -123,7 +133,7 @@ export async function freshAccessToken(conn: AgentConnection): Promise<string | 
     res = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: conn.refresh_token, client_id: process.env.GOOGLE_CLIENT_ID!, client_secret: process.env.GOOGLE_CLIENT_SECRET! }),
+      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: conn.refresh_token, client_id: youtubeClient().id!, client_secret: youtubeClient().secret! }),
     });
   } else {
     return null;

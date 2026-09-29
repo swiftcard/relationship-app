@@ -47,7 +47,7 @@ const CONNECTOR_RULES: Array<{ id: string; label: string; matches: (i: Item) => 
 const OAUTH_PROVIDERS = [
   { id: "x", name: "X", posts: "posts as the SwiftCard X account", env: "X_CLIENT_ID + X_CLIENT_SECRET" },
   { id: "meta", name: "Facebook + Instagram", posts: "posts to the SwiftCard Page and its Instagram", env: "META_APP_ID + META_APP_SECRET" },
-  { id: "youtube", name: "YouTube", posts: "uploads rendered videos to the channel", env: "GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET" },
+  { id: "youtube", name: "YouTube", posts: "uploads rendered videos to the channel", env: "YOUTUBE_CLIENT_ID + YOUTUBE_CLIENT_SECRET" },
   { id: "linkedin", name: "LinkedIn", posts: "posts as the SwiftCard Page", env: "LINKEDIN_CLIENT_ID + LINKEDIN_CLIENT_SECRET" },
 ];
 const ENV_CONNECTORS = CONNECTOR_RULES.filter((c) => c.id === "higgsfield" || c.id === "reddit");

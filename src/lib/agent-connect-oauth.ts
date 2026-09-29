@@ -19,7 +19,7 @@
 //            then the connection stores the person and the connector holds
 //            posts — see summarizeConnections().
 
-import type { AgentProvider } from "@/lib/agent-connections";
+import { type AgentProvider, youtubeClient } from "@/lib/agent-connections";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 export const META_GRAPH = "https://graph.facebook.com/v26.0";
@@ -63,7 +63,7 @@ export function authorizeUrl(p: AgentProvider, state: string, codeChallenge?: st
       return `https://www.facebook.com/v26.0/dialog/oauth?${q}`;
     }
     case "youtube": {
-      const q = new URLSearchParams({ client_id: process.env.GOOGLE_CLIENT_ID!, redirect_uri, response_type: "code", scope: SCOPES.youtube, access_type: "offline", prompt: "consent", include_granted_scopes: "true", state });
+      const q = new URLSearchParams({ client_id: youtubeClient().id!, redirect_uri, response_type: "code", scope: SCOPES.youtube, access_type: "offline", prompt: "consent", include_granted_scopes: "true", state });
       return `https://accounts.google.com/o/oauth2/v2/auth?${q}`;
     }
     case "linkedin": {
@@ -99,7 +99,7 @@ export async function exchangeCode(p: AgentProvider, code: string, codeVerifier?
       return { access_token: long.access_token ?? String(short.access_token), refresh_token: null, expires_in: null, scope: null };
     }
     case "youtube": {
-      const j = await form("https://oauth2.googleapis.com/token", { grant_type: "authorization_code", code, redirect_uri, client_id: process.env.GOOGLE_CLIENT_ID!, client_secret: process.env.GOOGLE_CLIENT_SECRET! });
+      const j = await form("https://oauth2.googleapis.com/token", { grant_type: "authorization_code", code, redirect_uri, client_id: youtubeClient().id!, client_secret: youtubeClient().secret! });
       return { access_token: String(j.access_token), refresh_token: (j.refresh_token as string) ?? null, expires_in: Number(j.expires_in ?? 3600), scope: (j.scope as string) ?? null };
     }
     case "linkedin": {
