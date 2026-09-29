@@ -19,7 +19,7 @@
 //            then the connection stores the person and the connector holds
 //            posts — see summarizeConnections().
 
-import { type AgentProvider, youtubeClient } from "@/lib/agent-connections";
+import { type AgentProvider, linkedinClient, youtubeClient } from "@/lib/agent-connections";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 export const META_GRAPH = "https://graph.facebook.com/v26.0";
@@ -67,7 +67,7 @@ export function authorizeUrl(p: AgentProvider, state: string, codeChallenge?: st
       return `https://accounts.google.com/o/oauth2/v2/auth?${q}`;
     }
     case "linkedin": {
-      const q = new URLSearchParams({ response_type: "code", client_id: process.env.LINKEDIN_CLIENT_ID!, redirect_uri, scope: SCOPES.linkedin, state });
+      const q = new URLSearchParams({ response_type: "code", client_id: linkedinClient().id!, redirect_uri, scope: SCOPES.linkedin, state });
       return `https://www.linkedin.com/oauth/v2/authorization?${q}`;
     }
   }
@@ -103,7 +103,7 @@ export async function exchangeCode(p: AgentProvider, code: string, codeVerifier?
       return { access_token: String(j.access_token), refresh_token: (j.refresh_token as string) ?? null, expires_in: Number(j.expires_in ?? 3600), scope: (j.scope as string) ?? null };
     }
     case "linkedin": {
-      const j = await form("https://www.linkedin.com/oauth/v2/accessToken", { grant_type: "authorization_code", code, redirect_uri, client_id: process.env.LINKEDIN_CLIENT_ID!, client_secret: process.env.LINKEDIN_CLIENT_SECRET! });
+      const j = await form("https://www.linkedin.com/oauth/v2/accessToken", { grant_type: "authorization_code", code, redirect_uri, client_id: linkedinClient().id!, client_secret: linkedinClient().secret! });
       return { access_token: String(j.access_token), refresh_token: (j.refresh_token as string) ?? null, expires_in: Number(j.expires_in ?? 5184000), scope: (j.scope as string) ?? null };
     }
   }

@@ -44,7 +44,9 @@ export function providerAppConfigured(p: AgentProvider): boolean {
     // Workspace, so the consent screen can be Internal and refresh tokens
     // don't die after 7 days). Falls back to the sign-in client if unset.
     case "youtube": return !!(youtubeClient().id && youtubeClient().secret);
-    case "linkedin": return !!(process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET);
+    // The Agent Flow app is a separate LinkedIn app from the profile-photo
+    // import one (different Page, different products). Falls back to it.
+    case "linkedin": return !!(linkedinClient().id && linkedinClient().secret);
   }
 }
 
@@ -52,6 +54,13 @@ export function youtubeClient(): { id: string | undefined; secret: string | unde
   return {
     id: process.env.YOUTUBE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID,
     secret: process.env.YOUTUBE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET,
+  };
+}
+
+export function linkedinClient(): { id: string | undefined; secret: string | undefined } {
+  return {
+    id: process.env.LINKEDIN_AGENT_CLIENT_ID || process.env.LINKEDIN_CLIENT_ID,
+    secret: process.env.LINKEDIN_AGENT_CLIENT_SECRET || process.env.LINKEDIN_CLIENT_SECRET,
   };
 }
 
