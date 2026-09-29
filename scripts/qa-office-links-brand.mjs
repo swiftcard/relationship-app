@@ -457,17 +457,23 @@ async function memberSeesTheBrand() {
     // Not just "the word Company appears somewhere" — the page says "Company
     // logo" and "Company name" in other places, so that would pass on a page
     // with no pinned link at all. Ask the DOM which row the tag sits in.
+    // THE ROW, not the first box that happens to contain the label. The
+    // first match in document order is the whole links LIST (few children),
+    // so once the member's own × buttons gained aria-labels ("Remove …",
+    // 2026-09-29) this found the teammate's OWN remove button and reported it
+    // against the company row. Innermost element holding the label, then the
+    // row box around it. The FIRST match: the editor list comes before the
+    // live preview, which shows the same link name further down.
+    // (Inlined in each evaluate — no eval/new Function under the site's CSP.)
     const tagged = await page.evaluate((label) => {
-      const row = [...document.querySelectorAll("div,li")].find(
-        (el) => el.textContent?.includes(label) && el.children.length < 12,
-      );
+      const hits = [...document.querySelectorAll("p,span,div")].filter((el) => el.textContent?.trim() === label);
+      const row = hits[0]?.closest(".rounded-xl") ?? null;
       return !!row && /Company/i.test(row.textContent ?? "");
     }, BRAND.linkLabel);
     eq("the pinned link carries a Company tag of its own", tagged, true);
     const removable = await page.evaluate((label) => {
-      const row = [...document.querySelectorAll("div,li")].find(
-        (el) => el.textContent?.includes(label) && el.children.length < 12,
-      );
+      const hits = [...document.querySelectorAll("p,span,div")].filter((el) => el.textContent?.trim() === label);
+      const row = hits[0]?.closest(".rounded-xl") ?? null;
       return !!row?.querySelector('button[aria-label*="emove" i], button[title*="emove" i]');
     }, BRAND.linkLabel);
     eq("the teammate gets no remove button on a company link", removable, false);
@@ -609,7 +615,15 @@ async function memberScreensOnPhoneAndInApp() {
       if (sideways2 > 1) fail(`${name} public Swift Links`, `scrolls sideways by ${sideways2}px`);
       else pass(`${name} public Swift Links fits 390px`);
       const pub = await page.innerText("body");
-      eq(`${name}: public page carries the office bio`, pub.includes(BRAND.bio), true);
+      if (native) {
+        // Since 711b3911 a public card / Swift Links page is NEVER an app
+        // screen: NativeAppBridge hides it and hands it to the browser. So the
+        // app's webview must not be showing it — the office bio is checked on
+        // the phone-web pass, which is where this page is actually read.
+        eq(`${name}: the public page is not shown inside the app`, pub.includes(BRAND.bio), false);
+      } else {
+        eq(`${name}: public page carries the office bio`, pub.includes(BRAND.bio), true);
+      }
       await page.screenshot({ path: `${OUT}/member-links-${native ? "app" : "phone"}.png`, fullPage: true }).catch(() => {});
 
       if (errors.length) fail(`${name} teammate JS errors`, errors.join(" | "));
