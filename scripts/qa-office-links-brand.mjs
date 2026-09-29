@@ -332,13 +332,11 @@ async function adminSetsBrand() {
     await page.fill("#office-link-ig", BRAND.instagram);
 
     // Add the company link through the real add form.
-    const labelSel = 'input[placeholder*="Book" i], input[placeholder*="Label" i]';
-    await page.waitForSelector(labelSel, { timeout: 15000 });
-    const inputs = await page.$$(labelSel);
-    await inputs[0].fill(BRAND.linkLabel);
-    const urlSel = 'input[placeholder*="http" i], input[type="url"]';
-    const urls = await page.$$(urlSel);
-    await urls[urls.length - 1].fill(BRAND.linkUrl);
+    // By id (AddLinkForm idPrefix="office-link-new"): the boxes are labelled
+    // "Button text" / "Web address" now, and placeholders are examples.
+    await page.waitForSelector("#office-link-new-label", { timeout: 15000 });
+    await page.fill("#office-link-new-label", BRAND.linkLabel);
+    await page.fill("#office-link-new-url", BRAND.linkUrl);
     await page.click('button:has-text("Add company link")');
     await page.waitForTimeout(600);
     eq("the pinned link is listed after adding", (await page.innerText("body")).includes(BRAND.linkLabel), true);

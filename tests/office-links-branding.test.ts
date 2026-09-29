@@ -257,8 +257,10 @@ describe("the member is never shown a field the server will overwrite", () => {
   });
 
   it("Instagram is the ONE social that can be managed", () => {
-    expect(form).toMatch(/const managed = key === "instagram" && instagramManaged/);
-    expect(form).toMatch(/readOnly=\{managed\}/);
+    expect(form).toMatch(/const managed = spec\.key === "instagram" && instagramManaged/);
+    expect(form).toMatch(/managed=\{managed\}/);
+    // …and the shared row makes a managed value read-only.
+    expect(read("src/components/SocialHandleField.tsx")).toMatch(/readOnly=\{managed\}/);
   });
 });
 

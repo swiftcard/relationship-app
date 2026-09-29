@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import type { SketchSocials, SketchLink } from "./useProductSketch";
-import { socialInput, socialHint } from "@/lib/social-input";
+import { socialInput } from "@/lib/social-input";
 import { PLAN_LIMITS } from "@/lib/plan";
+import SocialHandleField from "@/components/SocialHandleField";
+import AddLinkForm from "@/components/AddLinkForm";
 
 // Small form primitives shared by the three homepage product builders, styled
 // to match the dark builder shell. Kept in one place so the card, SwiftLink and
@@ -40,11 +42,10 @@ export function TextArea({ label, hint, ...props }: { label: string; hint?: Reac
   );
 }
 
-// Same wording as the real builder and the card editor, from the one module
-// that decides it (lib/social-input): every box asks for just a username, and
-// the hint underneath shows the address it becomes. These used to mix a URL on
-// some rows with an @handle on others — the confusion the owner reported
-// 2026-09-15. The mini-builders keep their own subset and order.
+// The SAME row as the real builder and the card editor (SocialHandleField,
+// "site" tone): the platform icon, and a box that shows the start of the link
+// so the username obviously goes after it (owner, 2026-09-29). The
+// mini-builders keep their own subset and order.
 const MINI_SOCIAL_KEYS: (keyof SketchSocials)[] = ["linkedin", "instagram", "tiktok", "twitter", "facebook", "youtube"];
 const SOCIALS = MINI_SOCIAL_KEYS.map((k) => socialInput(k)!);
 
@@ -60,17 +61,20 @@ export function SocialFields({
 }) {
   const list = only ? SOCIALS.filter((s) => only.includes(s.key as keyof SketchSocials)) : SOCIALS;
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-3">
+      <div>
+        <span className="block text-white/55 text-[0.75rem] font-medium">Social profiles</span>
+        <p className="text-white/70 text-[0.6875rem] leading-snug mt-0.5">Type your username — or paste your profile link.</p>
+      </div>
       {list.map((s) => (
-        <div key={s.key}>
-          <Field
-            label={s.label}
-            placeholder={s.placeholder}
-            value={socials[s.key as keyof SketchSocials]}
-            onChange={(e) => onChange(s.key as keyof SketchSocials, e.target.value)}
-          />
-          <p className="text-white/40 text-[0.625rem] mt-1 leading-snug">{socialHint(s)}</p>
-        </div>
+        <SocialHandleField
+          key={s.key}
+          spec={s}
+          variant="site"
+          id={`mini-social-${s.key}`}
+          value={socials[s.key as keyof SketchSocials]}
+          onChange={(v) => onChange(s.key as keyof SketchSocials, v)}
+        />
       ))}
     </div>
   );
@@ -84,7 +88,7 @@ export function LinkButtons({
   links,
   onChange,
   label = "Link buttons",
-  hint = "Book a call, menu, portfolio — anything you want one tap away.",
+  hint = "Buttons on your page that open any website.",
 }: {
   links: SketchLink[];
   onChange: (links: SketchLink[]) => void;
@@ -150,54 +154,32 @@ export function LinkButtons({
         </div>
       )}
 
-      {/* Section headers — chapters for a long page, outside the list so one
-          can open the page's first section before any link exists. */}
-      <button
-        type="button"
-        onClick={() => onChange([...links, { label: "", url: "", kind: "header" }])}
-        className="block mb-2 text-[0.6875rem] font-semibold text-white/55 hover:text-white transition-colors"
-      >
-        + Add a section header
-      </button>
-
       {atLinkCap ? (
         <p className="text-[0.6875rem] text-white/50 bg-[#15171F] border border-white/10 rounded-xl px-3 py-2.5 leading-relaxed">
           Free includes {PLAN_LIMITS.FREE_MAX_LINKS} additional links. Pro unlocks unlimited additional links — you&apos;ll choose your plan before your page goes live.
         </p>
       ) : (
-        <div className="space-y-2">
-          <input
-            className={inputCls}
-            placeholder="Link name (e.g. Leave a review)"
-            value={draft.label}
-            onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))}
-          />
-          <input
-            className={inputCls}
-            placeholder="https://…"
-            value={draft.url}
-            onChange={(e) => setDraft((d) => ({ ...d, url: e.target.value }))}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
-          />
-          {(() => {
-            const readyToAdd = !!draft.label.trim() && !!draft.url.trim();
-            return (
-              <button
-                type="button"
-                onClick={add}
-                disabled={!readyToAdd}
-                className={`w-full text-xs font-semibold py-2.5 rounded-xl transition-colors ${
-                  readyToAdd
-                    ? "bg-blue-600 hover:bg-blue-500 text-white border border-blue-500"
-                    : "border border-dashed border-white/15 text-white/40 disabled:opacity-60"
-                }`}
-              >
-                + Add link
-              </button>
-            );
-          })()}
-        </div>
+        // The same form as the real builder (AddLinkForm): tappable ideas that
+        // show what a link is for, then "Button text" and "Web address".
+        <AddLinkForm
+          variant="site"
+          value={draft}
+          onChange={(d) => setDraft(d)}
+          onAdd={add}
+          addClass="bg-blue-600 hover:bg-blue-500 text-white border border-blue-500"
+          idPrefix="mini-link"
+        />
       )}
+
+      {/* Section headers — chapters for a long page. Last and quiet: an extra,
+          not the first thing to do. */}
+      <button
+        type="button"
+        onClick={() => onChange([...links, { label: "", url: "", kind: "header" }])}
+        className="block mt-2.5 text-[0.6875rem] font-semibold text-white/55 hover:text-white transition-colors"
+      >
+        + Add a section header
+      </button>
     </div>
   );
 }

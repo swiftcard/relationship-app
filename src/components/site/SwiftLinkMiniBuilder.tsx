@@ -131,7 +131,7 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
             value={sketch.bio}
             onChange={(e) => patch({ bio: e.target.value })}
             required
-            hint="AI follow-ups also read your bio, so the messages they write speak to what you do."
+            hint="Who you help and what you do — the first thing people read. AI follow-ups use it too."
             autoFocus
           />
           <SocialFields socials={sketch.socials} onChange={patchSocial} />
@@ -139,7 +139,7 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
             links={sketch.links}
             onChange={(links) => patch({ links })}
             label="Additional links"
-            hint="Add your links — can be a review page, recent video, listing, etc."
+            hint="Buttons on your page that open any website."
           />
         </div>
       ),

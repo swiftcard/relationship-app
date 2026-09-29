@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { SwiftLinkStyleControls, type SwiftLinkStyle } from "@/components/SwiftLinkDesign";
 import { PinnedLinkPreview } from "@/components/PinnedCardPreview";
 import { normalizeSocial, socialDestination } from "@/lib/social-url";
-import { socialHint, socialInput } from "@/lib/social-input";
+import { socialInput } from "@/lib/social-input";
+import SocialHandleField from "@/components/SocialHandleField";
+import AddLinkForm from "@/components/AddLinkForm";
 import SwiftLinkLivePreview from "@/components/SwiftLinkLivePreview";
 // From lib/office-link-design, NOT lib/office-brand: that module reaches for
 // the service-role database client, and importing a value from it here would
@@ -101,10 +103,16 @@ export default function OfficeLinksBranding({ office }: { office: OfficeRow }) {
   const [lockLinkDesign, setLockLinkDesign] = useState(office.brand_locks?.linkDesign === true);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
-  const readyToAdd = !!newLink.label.trim() && /^https?:\/\//i.test(newLink.url.trim());
+  // Same rule as every other link form (wizard, editor, homepage builder):
+  // both boxes filled is enough, and a bare address gets https:// added. This
+  // used to demand a typed "https://" — with the shared AddLinkForm the button
+  // would have lit up and then silently done nothing.
+  const readyToAdd = !!newLink.label.trim() && !!newLink.url.trim();
   function addLink() {
     if (!readyToAdd) return;
-    setLinks((prev) => [...prev, { label: newLink.label.trim(), url: newLink.url.trim() }]);
+    let url = newLink.url.trim();
+    if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+    setLinks((prev) => [...prev, { label: newLink.label.trim(), url }]);
     setNewLink({ label: "", url: "" });
   }
 
@@ -203,33 +211,19 @@ export default function OfficeLinksBranding({ office }: { office: OfficeRow }) {
             </div>
 
             <div>
-              <label htmlFor="office-link-ig" className="block text-xs font-medium text-gray-400 mb-1">Company Instagram</label>
-              <input
+              {/* The same row every teammate sees (SocialHandleField): the
+                  Instagram icon, and a box showing instagram.com/ so the
+                  username obviously goes after it. Just the username, like
+                  every other Instagram box in the product (owner, 2026-09-17). */}
+              <SocialHandleField
+                spec={{ ...socialInput("instagram")!, label: "Company Instagram" }}
                 id="office-link-ig"
                 value={instagram}
-                onChange={(e) => setInstagram(e.target.value)}
-                // Just the username, like every other Instagram box in the
-                // product (owner, 2026-09-17): the link is built for them.
+                onChange={setInstagram}
                 onBlur={() => setInstagram((v) => normalizeSocial(v, "instagram"))}
-                placeholder="yourcompany"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                className={inputCls}
               />
-              {instagram.trim() && socialDestination("instagram", instagram) ? (
-                <p className="text-gray-600 text-[0.6875rem] mt-1">
-                  Opens <span className="text-gray-400 font-medium break-all">{socialDestination("instagram", instagram)}</span>
-                </p>
-              ) : instagram.trim() ? (
-                <p className="text-red-400 text-[0.6875rem] mt-1">This won&rsquo;t open as a link — just the username, like <span className="font-medium">yourcompany</span></p>
-              ) : (
-                <p className="text-gray-600 text-[0.6875rem] mt-1">{socialHint(socialInput("instagram")!)}</p>
-              )}
               <p className="text-[0.625rem] text-gray-600 mt-1">
-                The only social the office sets — a Swift Links page has one Instagram button, so yours is
-                the one it shows. Each teammate&apos;s own handle is kept and comes back if you clear this.
-                LinkedIn, TikTok, X and the rest stay theirs either way.
+                Shows on everyone&apos;s page. Their own Instagram comes back if you clear this — other socials stay theirs.
               </p>
             </div>
 
@@ -296,32 +290,17 @@ export default function OfficeLinksBranding({ office }: { office: OfficeRow }) {
               >
                 + Add a section header
               </button>
-              <div className="space-y-2">
-                <input
-                  value={newLink.label}
-                  onChange={(e) => setNewLink((n) => ({ ...n, label: e.target.value }))}
-                  placeholder="Button name (e.g. Book a meeting)"
-                  className={inputCls}
-                />
-                <input
-                  value={newLink.url}
-                  onChange={(e) => setNewLink((n) => ({ ...n, url: e.target.value }))}
-                  placeholder="https://…"
-                  className={inputCls}
-                />
-                <button
-                  type="button"
-                  onClick={addLink}
-                  disabled={!readyToAdd}
-                  className={`w-full text-xs font-semibold py-2.5 rounded-xl transition-colors ${
-                    readyToAdd
-                      ? "bg-purple-600 hover:bg-purple-500 text-white"
-                      : "border border-dashed border-gray-700 text-gray-500"
-                  }`}
-                >
-                  + Add company link
-                </button>
-              </div>
+              {/* The same add form as every teammate's (AddLinkForm): ideas that
+                  show what a link is for, then "Button text" and "Web address". */}
+              <AddLinkForm
+                value={newLink}
+                onChange={setNewLink}
+                onAdd={addLink}
+                addLabel="+ Add company link"
+                addClass="bg-purple-600 hover:bg-purple-500 text-white"
+                ideas={["Book a meeting", "Leave a review", "See our listings", "Watch our video", "Shop now"]}
+                idPrefix="office-link-new"
+              />
             </div>
           </div>
         </Section>

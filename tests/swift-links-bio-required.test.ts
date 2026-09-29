@@ -12,7 +12,8 @@ const code = (p: string) => read(p).replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^
 const EDITOR = "src/app/cards/[id]/edit/CardEditForm.tsx";
 const WIZARD = "src/app/cards/new/NewCardWizard.tsx";
 const MINI = "src/components/site/SwiftLinkMiniBuilder.tsx";
-const AI_COPY = "AI follow-ups also read your bio";
+// One short line on every surface (owner, 2026-09-29: less to read).
+const AI_COPY = "AI follow-ups use it too";
 
 describe("senderAbout — what the AI is told the sender does", () => {
   it("leads with the card's Swift Links bio", () => {
@@ -42,16 +43,22 @@ describe("senderAbout — what the AI is told the sender does", () => {
 describe("the bio field, everywhere it is written", () => {
   it("editor: asterisk, AI copy, and Save sends a missing bio to the Socials tab", () => {
     const s = code(EDITOR);
-    expect(s).toMatch(/Swiftlinks bio\{!bioManaged && <span className="text-red-400[^"]*" aria-hidden="true">\*<\/span>\}/);
+    // The heading is the textarea's label and carries the asterisk
+    // (FormSection's required prop, pinned below).
+    expect(s).toMatch(/title="Bio"\s+labelFor="card-bio"\s+required=\{!bioManaged\}/);
     expect(s).toContain(AI_COPY);
-    expect(s).toMatch(/required=\{!bioManaged\}/);
+    expect(s).toMatch(/required=\{!bioManaged\}\s+aria-invalid/);
     const save = s.slice(s.indexOf("async function handleSave"), s.indexOf("setStatus(\"saving\")"));
     expect(save).toMatch(/if \(!bioManaged && !bio\.trim\(\)\) \{\s*setTab\("sharing"\)/);
   });
 
+  it("FormSection draws the asterisk the Bio heading asks for", () => {
+    expect(code("src/components/ui/FormSection.tsx")).toMatch(/required && <span className="text-red-400[^"]*" aria-hidden="true">\*<\/span>/);
+  });
+
   it("wizard: asterisk, AI copy, and every way forward checks the bio", () => {
     const s = code(WIZARD);
-    expect(s).toMatch(/Swift Links bio\{!bioManaged && <span className="text-red-400[^"]*" aria-hidden="true">\*<\/span>\}/);
+    expect(s).toMatch(/title="Bio"\s+labelFor="wizard-bio"\s+required=\{!bioManaged\}/);
     expect(s).toContain(AI_COPY);
     expect(s).not.toMatch(/Swift Links page\. All optional\./);
     expect(s).toMatch(/const bioRequiredMissing = !bioManaged && !bio\.trim\(\);/);
@@ -67,7 +74,7 @@ describe("the bio field, everywhere it is written", () => {
   it("homepage mini-builder: asterisk, AI copy, and Next waits for the bio", () => {
     const s = code(MINI);
     expect(s).toMatch(/canAdvance: sketch\.bio\.trim\(\)\.length > 0/);
-    expect(s).toMatch(/label="Bio"[\s\S]{0,200}required[\s\S]{0,40}hint="AI follow-ups also read your bio/);
+    expect(s).toMatch(/label="Bio"[\s\S]{0,200}required[\s\S]{0,40}hint="[^"]*AI follow-ups use it too/);
     expect(code("src/components/site/BuilderFields.tsx")).toMatch(/props\.required && <span className="text-red-400/);
   });
 });

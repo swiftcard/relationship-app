@@ -76,7 +76,9 @@ describe("Branding → Links", () => {
         locked: (document.querySelector('input[type="checkbox"]') as HTMLInputElement | null)?.checked ?? null,
       }));
       expect(vals.bio).toContain("commercial real estate");
-      expect(vals.ig).toBe("@northwindpartners");
+      // Saved as "@northwindpartners"; the box shows it after its
+      // "instagram.com/" prefix, without the @ (SocialHandleField, 2026-09-29).
+      expect(vals.ig).toBe("northwindpartners");
       expect(vals.locked).toBe(true);
     } finally { await page.close(); }
   });

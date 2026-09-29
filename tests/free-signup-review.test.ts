@@ -28,9 +28,13 @@ describe("step 1: the one required field", () => {
   });
 
   it("the Socials bio is named like everywhere else", () => {
-    // Followed by the required-field asterisk (swift-links-bio-required.test).
-    expect(w).toMatch(/>\s*Swift Links bio[<{]/);
-    expect(w).not.toMatch(/>\s*Swiftlinks bio[<{]/);
+    // "Bio" on every surface since 2026-09-29 (the wizard said "Swift Links
+    // bio", the editor "Swiftlinks bio"). The heading is the textarea's label,
+    // and FormSection adds the required asterisk (swift-links-bio-required).
+    expect(w).toMatch(/title="Bio"\s+labelFor="wizard-bio"\s+required=\{!bioManaged\}/);
+    const e = read("src/app/cards/[id]/edit/CardEditForm.tsx");
+    expect(e).toMatch(/title="Bio"\s+labelFor="card-bio"\s+required=\{!bioManaged\}/);
+    for (const s of [w, e]) expect(s).not.toMatch(/Swiftlinks bio|Swift Links bio\{/);
   });
 });
 

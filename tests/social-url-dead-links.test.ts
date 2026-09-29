@@ -98,11 +98,15 @@ describe("the editor shows the destination before it is saved", () => {
     expect(socialDestination("linkedin", "@")).toBeNull();
   });
 
-  it("both social editors render the destination, not just an Open link", () => {
-    for (const f of ["src/app/cards/[id]/edit/CardEditForm.tsx", "src/app/cards/new/NewCardWizard.tsx"]) {
+  it("every social editor renders the destination, not just an Open link", () => {
+    // One row component for all of them since 2026-09-29 (SocialHandleField):
+    // it prints where the value will open, and says so when it cannot link.
+    const row = readFileSync(join(process.cwd(), "src/components/SocialHandleField.tsx"), "utf8");
+    expect(row).toMatch(/socialDestination\(spec\.key, value\)/);
+    expect(row).toMatch(/won&rsquo;t open as a link/);
+    for (const f of ["src/app/cards/[id]/edit/CardEditForm.tsx", "src/app/cards/new/NewCardWizard.tsx", "src/components/site/BuilderFields.tsx", "src/components/OfficeLinksBranding.tsx"]) {
       const src = readFileSync(join(process.cwd(), f), "utf8");
-      expect(/socialDestination\(key, socials\[key\]\)/.test(src), `${f} must print where the field will open`).toBe(true);
-      expect(/won&rsquo;t open as a link/.test(src), `${f} must say so when the value cannot link at all`).toBe(true);
+      expect(src, `${f} must use the shared social row`).toMatch(/<SocialHandleField\b/);
     }
   });
 });

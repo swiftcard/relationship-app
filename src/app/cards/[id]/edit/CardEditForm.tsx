@@ -39,8 +39,11 @@ import AddressInput, { EMPTY_ADDRESS } from "@/components/AddressInput";
 import { withoutSocials } from "@/components/card-templates/types";
 import type { TemplateStyle } from "@/components/card-templates/shared";
 import type { CardAddress, CardData, CardLink, CardPhone, PhoneLabel, CustomLayout } from "@/components/card-templates/types";
-import { socialUrl, socialDestination, normalizeSocial } from "@/lib/social-url";
-import { SOCIAL_INPUTS, socialHint } from "@/lib/social-input";
+import { normalizeSocial } from "@/lib/social-url";
+import { SOCIAL_INPUTS } from "@/lib/social-input";
+import SocialHandleField from "@/components/SocialHandleField";
+import AddLinkForm from "@/components/AddLinkForm";
+import FormSection from "@/components/ui/FormSection";
 import LinkPreviewThumb from "@/components/LinkPreviewThumb";
 import CardUrlEditor from "@/components/CardUrlEditor";
 import { unitLine } from "@/lib/address-unit";
@@ -1143,123 +1146,78 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
         {/* ── SHARING (Swift Links page) ── */}
         {tab === "sharing" && (
           <div className="space-y-5">
-            <div className="flex items-start gap-2.5 rounded-xl border border-blue-800/40 bg-blue-950/30 px-3.5 py-3">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth={1.8} className="w-4 h-4 shrink-0 mt-0.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
-              </svg>
-              <p className="text-blue-200/90 text-xs leading-relaxed">These appear on your <strong>Swift Links</strong> page (your link-in-bio), not on the business card.</p>
-            </div>
+            <p className="text-gray-400 text-xs leading-relaxed">
+              These go on your <strong className="text-gray-200">Swift Links</strong> page — the page people open from your card.
+            </p>
 
-            {/* Swiftlinks bio */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label htmlFor="card-bio" className="block text-xs font-medium text-gray-400">
-                  Swiftlinks bio{!bioManaged && <span className="text-red-400 ml-0.5" aria-hidden="true">*</span>}
-                </label>
-                {/* The office can write one bio for the whole team. When it has,
-                    the field is read-only rather than editable-then-overwritten:
-                    the server replaces it on save, so an editable box here would
-                    quietly throw their words away. */}
-                {bioManaged
-                  ? <ManagedTag owner={org?.ownerInherited} />
-                  : <span className="text-[0.625rem] font-semibold text-blue-400">Tip: be descriptive</span>}
+            {/* Three boxed groups — Bio, Social profiles, Additional links —
+                instead of one long column (owner, 2026-09-29: "it looks like a
+                whole mishmash"). The shared pieces are FormSection,
+                SocialHandleField and AddLinkForm, the same ones the create-card
+                wizard, the homepage builder and Office Links branding use. */}
+            {/* Bio. The office can write one bio for the whole team. When it
+                has, the field is read-only rather than editable-then-overwritten:
+                the server replaces it on save, so an editable box here would
+                quietly throw their words away. */}
+            <FormSection
+              id="bio"
+              title="Bio"
+              labelFor="card-bio"
+              required={!bioManaged}
+              trailing={bioManaged ? <ManagedTag owner={org?.ownerInherited} /> : undefined}
+              note={bioManaged
+                ? "Your company writes one bio for the whole team. Yours is saved and comes back if they stop."
+                : "Who you help and what you do — the first thing people read. AI follow-ups use it too."}
+            >
+              <div>
+                <textarea
+                  id="card-bio"
+                  value={bioManaged ? (org?.linkBio ?? "") : bio}
+                  data-hydrate="bio"
+                  onChange={(e) => {
+                    setBio(e.target.value);
+                    if (bioMissing && e.target.value.trim()) { setBioMissing(false); setError(""); }
+                  }}
+                  readOnly={bioManaged}
+                  required={!bioManaged}
+                  aria-invalid={bioMissing || undefined}
+                  rows={3}
+                  placeholder="e.g. Austin realtor helping first-time buyers find their dream home — 10+ years, 200+ closings. Let's talk!"
+                  className={`${inputCls} resize-none ${bioManaged ? "opacity-70 cursor-default" : ""}${bioMissing ? " ring-2 ring-red-500/70 border-red-500" : ""}`}
+                />
+                {bioMissing && <p className="text-red-400 text-xs mt-1">Add a bio to save your card.</p>}
               </div>
-              <textarea
-                id="card-bio"
-                value={bioManaged ? (org?.linkBio ?? "") : bio}
-                data-hydrate="bio"
-                onChange={(e) => {
-                  setBio(e.target.value);
-                  if (bioMissing && e.target.value.trim()) { setBioMissing(false); setError(""); }
-                }}
-                readOnly={bioManaged}
-                required={!bioManaged}
-                aria-invalid={bioMissing || undefined}
-                rows={3}
-                placeholder="e.g. Austin realtor helping first-time buyers find their dream home — 10+ years, 200+ closings. Let's talk!"
-                className={`${inputCls} resize-none ${bioManaged ? "opacity-70 cursor-default" : ""}${bioMissing ? " ring-2 ring-red-500/70 border-red-500" : ""}`}
-              />
-              {bioMissing && <p className="text-red-400 text-xs mt-1">Add a bio to save your card.</p>}
-              {bioManaged ? (
-                <p className="text-gray-600 text-[0.6875rem] mt-1">
-                  Your company writes one bio for the whole team. Anything you had written is saved and
-                  comes back if they stop setting one. AI follow-ups also read this bio when they write your messages.
-                </p>
-              ) : (
-                <p className="text-gray-600 text-[0.6875rem] mt-1">
-                  Shows at the top of your Swift Links — the first thing visitors read. Say <strong className="text-gray-400">who you help, what you do, and why they should reach out</strong>. Descriptive bios get more taps. <strong className="text-gray-400">AI follow-ups also read your bio</strong>, so the messages they write speak to what you do.
-                </p>
-              )}
-            </div>
+            </FormSection>
 
-            {/* Social links (website lives on the Card info tab — it's card
-                information) */}
-            <div>
-              <p className="text-xs font-medium text-gray-400 mb-1">Social links</p>
-              <p className="text-gray-600 text-[0.6875rem] mb-3">Type your username for each one — we build the link. Pasting a full profile URL works too.</p>
-              <div className="space-y-3">
-                {SOCIALS.map(({ key, label: socialLabel, placeholder }) => {
+            {/* Social profiles (website lives on the Card info tab — it's card
+                information). Each box shows the start of its link, so "what do
+                I type?" is answered before anything is typed. */}
+            <FormSection id="socials" title="Social profiles" note="Type your username — or paste your profile link.">
+              <div className="space-y-3.5">
+                {SOCIALS.map((spec) => {
                   // Instagram is the ONE social an office can set. Every other
-                  // one stays the member's, by the owner's explicit rule.
-                  const managed = key === "instagram" && instagramManaged;
-                  const linked = socials[key].trim().length > 0;
+                  // one stays the member's, by the owner's explicit rule. A page
+                  // has ONE Instagram button, so the company's is the one it
+                  // shows — and the note says plainly that their own handle
+                  // still exists, or a greyed box holding someone else's handle
+                  // reads as "mine was deleted".
+                  const managed = spec.key === "instagram" && instagramManaged;
                   return (
-                    <div key={key}>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="block text-xs text-gray-500">
-                          {socialLabel}
-                          {managed && <span className="ml-1.5 align-middle"><ManagedTag owner={org?.ownerInherited} /></span>}
-                        </label>
-                        {linked && socialUrl(key, socials[key]) && (
-                          <a href={socialUrl(key, socials[key])!} target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-[0.625rem] font-semibold text-blue-400 hover:text-blue-300">
-                            <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3"><path fillRule="evenodd" d="M5.22 14.78a.75.75 0 001.06 0l7.22-7.22v5.69a.75.75 0 001.5 0v-7.5a.75.75 0 00-.75-.75h-7.5a.75.75 0 000 1.5h5.69l-7.22 7.22a.75.75 0 000 1.06z" clipRule="evenodd" /></svg>
-                            Open link
-                          </a>
-                        )}
-                      </div>
-                      <input
-                        type="text"
-                        placeholder={placeholder}
-                        value={managed ? (org?.linkInstagram ?? "") : socials[key]}
-                        onChange={(e) => setSocial(key, e.target.value)}
-                        onBlur={() => normalizeOnBlur(key)}
-                        readOnly={managed}
-                        className={`${inputCls} ${managed ? "opacity-70 cursor-default" : ""}`}
-                      />
-                      {/* Say where this will actually go. "Open link" above tells
-                          you nothing until you click it, and nobody clicks it
-                          while typing — so a wrong handle stayed invisible until
-                          a visitor hit the 404. This also surfaces the guesses:
-                          "John Doe" becomes linkedin.com/in/john-doe. */}
-                      {/* A page has ONE Instagram button, so the company's is
-                          the one it shows. Say plainly that their own handle
-                          still exists — a greyed-out box holding someone else's
-                          handle otherwise reads as "mine was deleted", which is
-                          exactly what used to happen. */}
-                      {managed ? (
-                        <p className="text-gray-600 text-[0.6875rem] mt-1">
-                          Your page shows the company Instagram. Your own handle is saved and comes back if
-                          your company stops setting one.
-                        </p>
-                      ) : linked && socialDestination(key, socials[key]) ? (
-                        <p className="text-gray-600 text-[0.6875rem] mt-1">
-                          Opens <span className="text-gray-400 font-medium break-all">{socialDestination(key, socials[key])}</span>
-                        </p>
-                      ) : linked ? (
-                        <p className="text-red-400 text-[0.6875rem] mt-1">
-                          This won&rsquo;t open as a link — just your username, like <span className="font-medium">{SOCIALS.find((x) => x.key === key)!.example}</span>
-                        </p>
-                      ) : (
-                        <p className="text-gray-600 text-[0.6875rem] mt-1">{socialHint(SOCIALS.find((x) => x.key === key)!)}</p>
-                      )}
-                    </div>
+                    <SocialHandleField
+                      key={spec.key}
+                      spec={spec}
+                      id={`card-social-${spec.key}`}
+                      value={managed ? (org?.linkInstagram ?? "") : socials[spec.key]}
+                      onChange={(v) => setSocial(spec.key, v)}
+                      onBlur={() => normalizeOnBlur(spec.key)}
+                      managed={managed}
+                      managedTag={<ManagedTag owner={org?.ownerInherited} />}
+                      managedNote="Your page shows the company Instagram. Yours is saved and comes back if they stop."
+                    />
                   );
                 })}
               </div>
-            </div>
-
-            <div className="h-px bg-gray-800" />
+            </FormSection>
 
             {/* Additional links.
 
@@ -1270,18 +1228,16 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                 and stays entirely theirs, which is the point: an office wants
                 its booking link on every page, not to stop a salesperson
                 linking their own calendar. */}
-            <div>
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <p className="text-xs font-medium text-gray-400">Additional links</p>
-                {!!officeLinks?.length && <ManagedTag owner={org?.ownerInherited} />}
-              </div>
-              <p className="text-gray-600 text-[0.6875rem] mb-3">
-                {officeLinks?.length
-                  ? "The first links below are your organization's and are on everyone's page. Add your own underneath — they're yours to change."
-                  : "Add your links — can be a review page, recent video, listing, etc."}
-              </p>
+            <FormSection
+              id="links"
+              title="Additional links"
+              trailing={officeLinks?.length ? <ManagedTag owner={org?.ownerInherited} /> : undefined}
+              note={officeLinks?.length
+                ? "Your company's links come first. Add your own below."
+                : "Buttons on your page that open any website."}
+            >
               {links.length > 0 && (
-                <div className="space-y-2 mb-2">
+                <div className="space-y-2">
                   {links.map((l, i) =>
                     l.kind === "header" ? (
                       // A section header — label only, editable in place.
@@ -1301,7 +1257,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                         {isOfficeRow(l) ? (
                           <span className="text-[0.5625rem] font-semibold uppercase tracking-wide text-purple-300 shrink-0">Company</span>
                         ) : (
-                          <button type="button" onClick={() => removeLink(i)} className="text-gray-600 hover:text-red-400 transition-colors text-lg leading-none shrink-0">×</button>
+                          <button type="button" onClick={() => removeLink(i)} aria-label="Remove section" className="text-gray-600 hover:text-red-400 transition-colors text-lg leading-none shrink-0">×</button>
                         )}
                       </div>
                     ) : (
@@ -1319,7 +1275,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                         {isOfficeRow(l) ? (
                           <span className="text-[0.5625rem] font-semibold uppercase tracking-wide text-purple-300 shrink-0">Company</span>
                         ) : (
-                          <button type="button" onClick={() => removeLink(i)} className="text-gray-600 hover:text-red-400 transition-colors text-lg leading-none shrink-0">×</button>
+                          <button type="button" onClick={() => removeLink(i)} aria-label={`Remove ${l.label}`} className="text-gray-600 hover:text-red-400 transition-colors text-lg leading-none shrink-0">×</button>
                         )}
                       </div>
                       {/* How the link LOOKS on the page (Featured / Grid /
@@ -1329,19 +1285,6 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                     ),
                   )}
                 </div>
-              )}
-              {/* Section headers — chapters for a long page. Pro, like the
-                  tile sizes: Free pages don't render them. OUTSIDE the
-                  links-exist wrapper so a header can open the page's first
-                  section before any link has been added. */}
-              {isPro && (
-                <button
-                  type="button"
-                  onClick={() => setLinks((prev) => [...prev, { label: "", url: "", kind: "header" as const }])}
-                  className="block mb-2 text-[0.6875rem] font-semibold text-gray-400 hover:text-gray-200 transition-colors"
-                >
-                  + Add a section header
-                </button>
               )}
               {atLinkCap ? (
                 <PlanGate
@@ -1353,41 +1296,23 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                   </p>
                 </PlanGate>
               ) : (
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    placeholder="Link name (e.g. Leave a review)"
-                    value={newLink.label}
-                    onChange={(e) => setNewLink((n) => ({ ...n, label: e.target.value }))}
-                    className={inputCls}
-                  />
-                  <input
-                    type="text"
-                    placeholder="https://…"
-                    value={newLink.url}
-                    onChange={(e) => setNewLink((n) => ({ ...n, url: e.target.value }))}
-                    className={inputCls}
-                  />
-                  {(() => {
-                    const readyToAdd = !!newLink.label.trim() && !!newLink.url.trim();
-                    return (
-                      <button
-                        type="button"
-                        onClick={addLink}
-                        disabled={!readyToAdd}
-                        className={`w-full text-xs font-semibold py-2.5 rounded-xl transition-colors ${
-                          readyToAdd
-                            ? "sc-btn-glow bg-blue-600 hover:bg-blue-500 text-white border border-blue-500"
-                            : "border border-dashed border-gray-700 text-gray-400 disabled:opacity-40"
-                        }`}
-                      >
-                        + Add link
-                      </button>
-                    );
-                  })()}
-                </div>
+                <AddLinkForm value={newLink} onChange={setNewLink} onAdd={addLink} idPrefix="card-link" />
               )}
-            </div>
+              {/* Section headers — chapters for a long page. Pro, like the
+                  tile sizes: Free pages don't render them. OUTSIDE the
+                  links-exist wrapper so a header can open the page's first
+                  section before any link has been added. Last and quiet: it is
+                  an extra, not the first thing to do. */}
+              {isPro && (
+                <button
+                  type="button"
+                  onClick={() => setLinks((prev) => [...prev, { label: "", url: "", kind: "header" as const }])}
+                  className="block text-[0.6875rem] font-semibold text-gray-400 hover:text-gray-200 transition-colors"
+                >
+                  + Add a section header
+                </button>
+              )}
+            </FormSection>
 
             {/* Mobile: the SWIFT LINKS preview, not the card one. This step
                 edits the bio, socials and link buttons — none of which appear on
