@@ -3,6 +3,8 @@
 // in-product plan chooser used during account creation (PlanCards, shown in the
 // card wizard's plan step and on /welcome). Keeping them here guarantees the
 // two screens always show the same plans, prices come from PLAN_PRICES.
+import { PLAN_LIMITS } from "./plan";
+import { META } from "./template-style-presets";
 
 export const PLAN_DESCRIPTIONS = {
   free: "Try it out, with limits.",
@@ -20,65 +22,86 @@ export const PLAN_DESCRIPTIONS = {
 // badge plainly, and Pro's is one unlock per line so the value is countable.
 // Never pad these to win the comparison — if a claim isn't enforced in
 // PLAN_LIMITS / sanitizeCustomizationForPlan, it doesn't belong here.
+//
+// Written for someone who has never used SwiftCard (owner, 2026-09-29: "What
+// do you mean, 5 new leads a month? Does that mean they're going to give us 5
+// new leads?"). So: the app's own words ("contacts", not "leads" — the tab is
+// called Contacts), every product name explained in the same line (Swift Links,
+// Swift Signature), and no bare jargon ("additional links", "sequences",
+// "CRM sync"). Every number comes from PLAN_LIMITS / META, so changing a limit
+// or adding a template updates /pricing, the plan chooser, /upgrade, the app
+// and the support assistants together.
+const cards = PLAN_LIMITS.FREE_CARD_LIMIT;
+const templates = Object.keys(META).length;
+
 export const PLAN_FEATURES = {
   free: [
-    "1 digital business card",
-    "5 new leads a month",
-    "2 additional links on your Swift Links page",
-    // "3 AI follow-up drafts a month" removed (owner, 2026-09-23): AI
-    // follow-ups are Pro-only, and nothing ever delivered that allowance.
-    "All 6 templates · QR, link & NFC",
-    "Swift Signature — your card in every email",
-    // Was "Contacts CRM + day-1 follow-up email". Nothing sends that: the only
-    // automated sender is hard-gated on isPaidPlan (reminders route), and no
-    // default sequence is seeded when a lead is captured — so a Free user was
-    // promised an automated follow-up they would never receive, on /pricing,
-    // the in-product plan chooser, the admin plan matrix and the support
-    // chatbot. This file's own rule is that unenforced claims don't belong in
-    // it.
-    "Contacts CRM to track every connection",
-    "One-tap “Share my info” back to any contact",
-    "Basic analytics: views, saves & best day",
-    // Name only. The badge renders as "Made with SwiftCard" in the card's
-    // save-contact flow and as "Made with swiftcard.me" in the Swift Links
-    // footer — both on every plan. What Pro actually removes is the SwiftCard
-    // PROMOS: the card page's "Create your card" viewer CTA and the follow-up
-    // emails' "Sent with SwiftCard" line (texts keep a bare "via SwiftCard"
-    // sender line on every plan). The bullets on both tiers now say exactly
-    // that and no more.
-    "Shows a “Made with SwiftCard” badge",
+    `${cards} digital business card${cards === 1 ? "" : "s"} — share it with a QR code, a link or an NFC tap`,
+    `All ${templates} card designs to choose from`,
+    // "5 new leads a month" read as SwiftCard handing out 5 leads. What it
+    // counts: people who share their details from your card, plus anyone you
+    // add by hand (api/leads + api/leads/manual share one monthly meter).
+    `Save up to ${PLAN_LIMITS.FREE_LEADS_PER_MONTH} new contacts a month — people who share their details from your card, or who you add yourself`,
+    // "2 additional links" meant nothing to someone who doesn't know what
+    // Swift Links is. Socials are uncapped; the cap is on the link buttons.
+    `Swift Links — your own link-in-bio page with all your socials, plus ${PLAN_LIMITS.FREE_MAX_LINKS} extra links (like your website or booking page)`,
+    "Swift Signature — turn your card into your email signature",
+    "Contacts CRM — one list of everyone you've met, with notes",
+    // Email follow-ups send on every plan (owner, 2026-09-11 — reminders route
+    // holds back only TEXT steps for Free). The owner switches them on per
+    // contact; nothing is sent automatically on capture, so the line says so.
+    // The wording is ready-made on Free; AI writes it on Pro.
+    "Automatic follow-up emails — switch them on for any contact",
+    "Send your card back to any contact in one tap",
+    // What the Free dashboard really shows (dashboard "Traffic" panel): card
+    // and Swift Links views, link taps, best day. There is no "saves" number.
+    "Basic stats — views of your card and Swift Links, link taps & your best day",
+    // The Swift Links footer and the "Sent with SwiftCard" email line — the
+    // two things Pro removes. The card page's own badge and "Create your free
+    // SwiftCard" button stay on every plan, so this does not promise that.
+    "A small SwiftCard note at the bottom of your emails and Swift Links page",
   ],
   pro: [
-    "Everything in Free — with the limits taken off:",
-    "Unlimited cards, leads & contacts",
-    "Unlimited AI follow-up drafts",
-    "Scan any business card — AI fills the contact in",
-    "Unlimited additional links on Swift Links",
-    "Social design — Looks for your Swift Links page: gradients, your own photo, styled icons, colors & fonts",
-    // "your exact colors & fonts" described what the FREE templates already do,
-    // and undersold the thing being charged for. The designer's actual claim is
-    // that a template is a starting point rather than a fixed choice.
-    "Custom card designer — eight Pro-only looks, or scan your printed card and we'll rebuild it",
-    // Not "your card page": the "Create your free SwiftCard" button is on every
-    // card, Pro included (owner request 2026-08-25, later than this line was
-    // first written). What Pro really drops is the "Made with swiftcard.me"
-    // line on Swift Links and the "Sent with SwiftCard" line in follow-ups.
-    "No SwiftCard promos in your follow-up emails or on your Swift Links page — they carry your brand, not ours",
-    "Automated follow-up sequences — email + text",
-    "Full analytics: who viewed, when & where",
-    "Premium Swift Links: video previews & featured tiles",
-    "CRM sync: Salesforce, GoHighLevel, Pipedrive, HubSpot, Google + Zapier & CSV",
+    "Everything in Free, with no limits:",
+    "Unlimited cards — one for every job or business",
+    "Unlimited new contacts every month",
+    "Unlimited extra links on your Swift Links page",
+    "Follow-ups by text message, not just email",
+    // generate-sequence: aiWritten only when paid. There is no other AI draft
+    // surface in the product, so this is the whole of the claim.
+    "AI writes your follow-up messages for each contact",
+    "Scan a paper business card — AI types the contact in for you",
+    // The designer since 2026-09-23 is "copy a card" or "AI design" (see
+    // CustomCardDesigner). The eight Looks it used to offer are gone.
+    "Custom card design — copy a card you like, or have AI design one",
+    "Premium card finishes, your own colors & a photo or video background",
+    "Every Swift Links look — gradients, glass, your own colors, fonts & background",
+    "Big featured links with photo or video previews on Swift Links",
+    // "Who" = known contacts named in alerts and the activity feed (blurred on
+    // Free); "where" = the Locations tab. Free already has the when.
+    "See who viewed your card and which cities your views come from",
+    // What Pro really drops: the "Made with swiftcard.me" footer on Swift Links
+    // and the "Sent with SwiftCard" email line. Texts keep "via SwiftCard".
+    "No SwiftCard note at the bottom of your emails or Swift Links page",
+    "Send contacts straight to Salesforce, HubSpot, GoHighLevel, Pipedrive, Google Contacts or Zapier — or download them as a spreadsheet",
   ],
   office: [
-    "Everything in Pro, for every person",
-    "One brand across every card — logo, contact info & design, set once",
-    "Lock the card design so every card stays on-brand",
-    "Passwordless invites — new hires sign in with Google or an email link and build their card in 2 minutes",
-    "Team dashboard: views, leads & activity per person",
-    "Every teammate's leads in one place — each account stays private to them",
-    "Add or remove people anytime — your bill updates itself",
-    "Admin controls: edit or switch off any card",
-    "Priority support",
+    "Everything in Pro, for every person on your team",
+    // lib/office-seats: used = owner + members + pending invites.
+    `Seats include you — ${PLAN_LIMITS.OFFICE_MIN_SEATS} seats is you plus ${PLAN_LIMITS.OFFICE_MIN_SEATS - 1} teammate${PLAN_LIMITS.OFFICE_MIN_SEATS === 2 ? "" : "s"}`,
+    "Set your logo, company details & card design once — every teammate's card uses them",
+    "Lock the design so every card stays on-brand",
+    "Invite teammates by email — they join with Google or an emailed link, no password to set up",
+    "See views, contacts & last activity for each person",
+    // Was "…each account stays private to them" — but the admin's Leads tab
+    // shows every teammate's contacts (name, email, phone) and exports them.
+    "Every contact your team collects, in one list you can export — and they stay when someone leaves",
+    // Was "your bill updates itself". Adding a seat is a prorated charge the
+    // admin confirms; removing one lowers the bill at the next renewal.
+    "Add seats anytime — you only pay for the rest of the billing period. Remove one and your bill drops at renewal",
+    "Take any teammate's card offline, or fix their details",
+    // "Priority support" removed (2026-09-29): nothing in the product routes
+    // Office requests differently, so it was a promise with nothing behind it.
   ],
 } as const;
 

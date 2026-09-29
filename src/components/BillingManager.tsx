@@ -375,7 +375,7 @@ export default function BillingManager() {
           {renewalLine ? `${renewalLine} · ` : ""}Renews {fmtDate(sub.currentPeriodEnd)}
         </p>
       )}
-      {!isPaid && <p className="text-xs text-gray-500 mb-4">Pro unlocks unlimited cards, analytics, custom design, and removes SwiftCard branding.</p>}
+      {!isPaid && <p className="text-xs text-gray-500 mb-4">Pro unlocks unlimited cards and contacts, text and AI-written follow-ups, custom card design, and full stats on who viewed your card.</p>}
 
       {sub.paymentFailed && (
         <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-3">

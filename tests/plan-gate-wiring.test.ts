@@ -56,7 +56,7 @@ const SITES: Site[] = [
   {
     file: "src/components/ContactsClient.tsx",
     web: ["Upgrade to Pro →"],
-    native: ["Pro feature — Automated follow-up sequences are only available on the Pro plan"],
+    native: ["Pro feature — Text follow-ups are only available on the Pro plan"],
   },
   {
     // The "second card" upsell LEFT this page (owner, 2026-09-11). It used to

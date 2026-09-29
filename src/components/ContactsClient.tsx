@@ -679,7 +679,7 @@ export default function ContactsClient({
       });
       const data = await res.json();
       if (res.status === 402 || data.error === "upgrade") {
-        setAiUpgrade(data.message || "Automated follow-up sequences are a Pro feature.");
+        setAiUpgrade(data.message || "Text follow-ups are a Pro feature. Email follow-ups are included on every plan.");
         setDraftItems(null);
         setDraftPreset(null);
         return;
@@ -1734,7 +1734,7 @@ export default function ContactsClient({
               {aiUpgrade && (
                 <PlanGate
                   feature="ai-sequences"
-                  nativeCopy="Pro feature — Automated follow-up sequences are only available on the Pro plan"
+                  nativeCopy="Pro feature — Text follow-ups are only available on the Pro plan"
                 >
                   <div className="border border-blue-800/40 bg-blue-950/40 rounded-xl py-4 px-4 text-center mt-3">
                     <p className="text-blue-200 text-sm">{aiUpgrade}</p>

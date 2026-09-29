@@ -13,7 +13,7 @@ import { ProTag } from "@/components/ui/DesignControls";
 // replaced — nothing is dragged any more and nothing starts blank.
 
 export const CUSTOM_DESIGN_BLURB =
-  "Eight looks you can't pick as a template — or photograph the card you already have and we'll rebuild it. Then show, hide, reorder and resize anything on it.";
+  "Photograph a card you like and AI rebuilds it with your details — or have AI design one for you. Then tap anything on it to move, resize or restyle it.";
 
 /**
  * The row's face: a slim full-width strip under the six thumbnails. As a

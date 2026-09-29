@@ -18,11 +18,12 @@ import { detectNativeApp } from "@/lib/platform";
 // Short, countable unlocks for the sheet — no prices, no numbers that could
 // drift from StoreKit.
 const PERKS = [
-  "Unlimited cards, leads & contacts",
-  "AI follow-up drafts and business-card scanning",
-  "Custom designer, colors and fonts",
-  "Detailed analytics — who viewed, where, when",
-  "No SwiftCard branding on your messages",
+  "Unlimited cards and new contacts",
+  "Follow-ups by text, with every message written by AI",
+  "Scan a paper business card — AI types it in for you",
+  "Custom card design, premium finishes, your own colors",
+  "See who viewed your card and which cities they're in",
+  "No SwiftCard note at the bottom of your emails or Swift Links",
 ];
 
 /**
