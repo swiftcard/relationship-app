@@ -89,7 +89,7 @@ const MANY = Array.from({ length: 7 }, (_, i) => card(i + 1, ["Work card", "Nadl
 const phoneBox = (w: number) => w - 82;
 const DESKTOP_BOX = 942;
 
-async function mount(width: number, cards: Card[], active: string, containerWidth?: number): Promise<Page> {
+async function mount(width: number, cards: Card[], active: string, containerWidth?: number, isPro = true): Promise<Page> {
   const css = await appCss();
   const page = await browser.newPage();
   await page.setViewportSize({ width, height: 1000 });
@@ -100,7 +100,7 @@ async function mount(width: number, cards: Card[], active: string, containerWidt
   );
   await page.evaluate(
     (p) => (window as unknown as { mount: (x: unknown) => void }).mount(p),
-    { cards, activeUsername: active, isPro: true, freeCardLimit: 1, view: "notifications", sortBy: "newest" },
+    { cards, activeUsername: active, isPro, freeCardLimit: 1, view: "notifications", sortBy: "newest" },
   );
   await page.waitForSelector("[role=radiogroup]");
   // Mobile: open the dropdown so every row (and its Edit) is on screen.
@@ -244,4 +244,43 @@ describe("every card row carries an Edit button that fits", () => {
       expect(hit).toBe("/cards/id3/edit");
     } finally { await page.close(); }
   });
+});
+
+// A Free account that came down from Pro: its extra cards carry the LINK OFF —
+// PRO ONLY badge. On the name line, beside the Edit pencil, the badge was the
+// thing that got cut ("LINK OFF — PRO…") on a phone (live check, 2026-09-29).
+// It now leads the second line, where the address is what gives way.
+describe("a downgraded Free account's LINK OFF badge", () => {
+  for (const [name, width, container] of [
+    ["phone 390", 390, phoneBox(390)],
+    ["phone 320", 320, phoneBox(320)],
+    ["computer", 1280, DESKTOP_BOX],
+  ] as const) {
+    it(`shows in full, beside a name shown in full, with no taller row — ${name}`, async () => {
+      const cards = [card(1, "Main card", "Sam Ortiz"), card(2, "Side card", "Sam Ortiz")];
+      const page = await mount(width, cards, "card1", container, false);
+      try {
+        const m = await page.$$eval("[role=radiogroup] > div", (rows) => rows.filter((r) => getComputedStyle(r).display !== "none").map((r) => {
+          const badge = Array.from(r.querySelectorAll("span")).find((x) => (x.textContent || "").trim() === "LINK OFF — PRO ONLY") as HTMLElement | undefined;
+          const title = r.querySelector("[role=radio] p") as HTMLElement;
+          const rr = r.getBoundingClientRect();
+          const br = badge?.getBoundingClientRect();
+          const edit = r.querySelector('a[href$="/edit"]')!.getBoundingClientRect();
+          return {
+            name: title.textContent?.trim(),
+            height: Math.round(rr.height),
+            badge: !!badge,
+            badgeWhole: badge ? badge.scrollWidth <= badge.clientWidth + 0.5 && br!.right <= edit.left + 0.5 : null,
+            nameWhole: title.scrollWidth <= title.clientWidth + 0.5,
+          };
+        }));
+        const off = m.find((x) => x.badge)!;
+        const on = m.find((x) => !x.badge)!;
+        expect(off, "the badge is missing").toBeTruthy();
+        expect(off.badgeWhole, "LINK OFF badge is cut or runs under Edit").toBe(true);
+        expect(off.nameWhole, "the name is cut").toBe(true);
+        expect(off.height, "the badge made its row taller").toBe(on.height);
+      } finally { await page.close(); }
+    });
+  }
 });

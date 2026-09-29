@@ -171,25 +171,32 @@ export default function MyCardsList({
               <div className="min-w-0 flex-1">
                 <p className="text-white text-sm font-medium truncate">
                   {card.label || card.name || card.username}
+                </p>
+                {/* The LINK OFF badge leads the SECOND line (shrink-0), and the
+                    address after it is what truncates. On the name line it was
+                    the badge that got cut ("LINK OFF — PRO…") once each row
+                    gained its Edit pencil, on a phone. leading-none keeps it
+                    inside the line's 16px, so the row is no taller. */}
+                <p className="text-gray-500 text-xs flex items-center gap-1.5 min-w-0">
                   {planInactive && (
                     <PlanGate
                       feature="link-off-badge"
                       nativeCopy="These links are only active on the Pro plan"
                       nativeContent={
-                        <span className="ml-2 text-[0.5625rem] font-bold px-1.5 py-0.5 rounded-full bg-amber-950/60 text-amber-400 border border-amber-800/50 align-middle" title="These links are only active on the Pro plan">
+                        <span className="shrink-0 leading-none text-[0.5625rem] font-bold px-1.5 py-0.5 rounded-full bg-amber-950/60 text-amber-400 border border-amber-800/50" title="These links are only active on the Pro plan">
                           LINK OFF — PRO ONLY
                         </span>
                       }
                     >
-                      <span className="ml-2 text-[0.5625rem] font-bold px-1.5 py-0.5 rounded-full bg-amber-950/60 text-amber-400 border border-amber-800/50 align-middle" title="This card's public link, QR and Swift Links are off on the Free plan — upgrade to Pro to reactivate them.">
+                      <span className="shrink-0 leading-none text-[0.5625rem] font-bold px-1.5 py-0.5 rounded-full bg-amber-950/60 text-amber-400 border border-amber-800/50" title="This card's public link, QR and Swift Links are off on the Free plan — upgrade to Pro to reactivate them.">
                         LINK OFF — PRO ONLY
                       </span>
                     </PlanGate>
                   )}
-                </p>
-                <p className="text-gray-500 text-xs truncate">
-                  /{card.username}
-                  {card.name ? ` · ${card.name}` : ""}
+                  <span className="truncate min-w-0">
+                    /{card.username}
+                    {card.name ? ` · ${card.name}` : ""}
+                  </span>
                 </p>
               </div>
               {/* Inside the Link on purpose — useLinkStatus reads the pending
