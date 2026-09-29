@@ -61,7 +61,7 @@ export type Sketch = {
   linkStyle: SwiftLinkStyle;
   socials: SketchSocials;
   links: SketchLink[];
-  /** Social design's "Show the 'View SwiftCard' button" switch. On by default. */
+  /** Social design's "Link to your business card" switch (the small "View SwiftCard" link). On by default. */
   showCardLink: boolean;
 };
 

@@ -1347,16 +1347,6 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                 pinned while every control below scrolls under it; tap it to see
                 the whole page. */}
             <PinnedLinkPreview undo={linkHistory}>{linkPreviewInner}</PinnedLinkPreview>
-            {/* The "View SwiftCard →" link at the bottom of the page — theirs to
-                keep or hide. A genuine on/off, so it is the shared Switch: the
-                whole row is the target rather than a 44x24 track, and it is the
-                same control as every other on/off in the editor. */}
-            <Switch
-              checked={showCardLinkBtn}
-              onChange={setShowCardLinkBtn}
-              label={"Show the “View SwiftCard” button"}
-              help="The small link at the bottom of your Swift Links page that opens your card."
-            />
             {/* The per-link "Link buttons" section edits the SAME links array
                 the office may have locked. Its controls render only when both
                 props are passed, so when the office holds the links they are
@@ -1400,6 +1390,17 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                 isLinkLocked={isOfficeRow}
               />
             )}
+            {/* Last, after the design steps, in plain words (owner, 2026-09-29:
+                nobody knew what "Show the 'View SwiftCard' button" meant, and it
+                sat above step 1). Same on/off, same wiring — the small
+                "View SwiftCard →" link at the bottom of the Swift Links page.
+                The shared Switch: the whole row is the target. */}
+            <Switch
+              checked={showCardLinkBtn}
+              onChange={setShowCardLinkBtn}
+              label="Link to your business card"
+              help="A small link at the bottom of your page that opens your card."
+            />
             {/* Same removal as the Card design tab above: the offer belongs
                 on Save Changes, not parked under the controls. */}
             {/* On DESKTOP the page preview renders in the pinned right column,

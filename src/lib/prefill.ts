@@ -59,7 +59,7 @@ export type CardPrefill = {
   /** The Compact link rows' style and colour, set under "Link buttons". */
   linkButtonStyle?: string;
   linkButtonColor?: string;
-  /** The "Show the 'View SwiftCard' button" switch, turned OFF. */
+  /** The "Link to your business card" switch (the "View SwiftCard" link), turned OFF. */
   hideCardLink?: boolean;
   /** The page header shape and what it shows. The mini-builder offers both
    *  (they are structural, so they are not Pro-gated and not upload-gated),

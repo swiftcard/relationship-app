@@ -2146,20 +2146,8 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
             <PinnedLinkPreview undo={linkHistory}>{linkPageEl}</PinnedLinkPreview>
             <div className="mb-1">
               <h1 className="text-2xl font-bold text-white">Social design</h1>
-              <p className="text-gray-400 text-sm mt-1">
-                Style your Swift Links page — the page where your bio, socials and links live.
-              </p>
+              <p className="text-gray-400 text-sm mt-1">How your Swift Links page looks.</p>
             </div>
-
-            {/* The "View SwiftCard →" link at the bottom of the page — theirs to
-                keep or hide. The shared Switch, identical to the editor's: one
-                on/off control for the whole product. */}
-            <Switch
-              checked={showCardLinkBtn}
-              onChange={setShowCardLinkBtn}
-              label={"Show the “View SwiftCard” button"}
-              help="The small link at the bottom of your Swift Links page that opens your card."
-            />
 
             {linkDesignLocked ? (
               // Mirrors the editor: the office holds this page's look, so the
@@ -2194,6 +2182,18 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                 canUpload
               />
             )}
+
+            {/* Last, after the design steps, in plain words (owner, 2026-09-29:
+                nobody knew what "Show the 'View SwiftCard' button" meant, and it
+                sat above step 1). Same on/off, same wiring — the small
+                "View SwiftCard →" link at the bottom of the Swift Links page.
+                The shared Switch, identical to the editor's. */}
+            <Switch
+              checked={showCardLinkBtn}
+              onChange={setShowCardLinkBtn}
+              label="Link to your business card"
+              help="A small link at the bottom of your page that opens your card."
+            />
             {!isPro && !designUnlocked && (
               <PlanGate
                 feature="colors-fonts"

@@ -123,7 +123,7 @@ function LinkMediaControl({
         <div className="flex flex-wrap items-center gap-1.5">
           {!canUpload && (
             <p className="text-[0.625rem] text-gray-500 leading-snug">
-              Shows the link&apos;s own preview image. Sign up to swap in your own photo or video.
+              Shows the link&apos;s own preview. Sign up to use your own photo or video.
             </p>
           )}
           {canUpload && (<>
@@ -151,8 +151,8 @@ function LinkMediaControl({
       {!error && canUpload && (
         <p className="text-[0.625rem] text-gray-600 mt-1.5 leading-snug">
           {media
-            ? "Shown centered and cropped to the tile — landscape (about 2:1) fits edge to edge."
-            : "Photos up to 5 MB, videos up to 25 MB (a few seconds, plays muted). Landscape fits best; other shapes are centered and cropped to the tile."}
+            ? "Cropped to fit the tile. Landscape fits best."
+            : "Photos up to 5 MB, videos up to 25 MB. Landscape fits best."}
         </p>
       )}
     </div>
@@ -196,7 +196,7 @@ export default function LinkButtonsControls({
   if (real.length === 0) {
     return (
       <p className="text-[0.6875rem] text-gray-500 bg-gray-950/40 border border-gray-800 rounded-lg px-3 py-2.5 leading-relaxed">
-        No additional links yet. Add them under Socials first, then choose how each one looks here.
+        No links yet — add them on the Socials step first.
       </p>
     );
   }
@@ -211,7 +211,7 @@ export default function LinkButtonsControls({
     <div className="space-y-2">
       {gridCount % 2 === 1 && (
         <p className="text-[0.625rem] text-blue-200 bg-blue-600/10 border border-blue-600/30 rounded-lg px-2.5 py-1.5 leading-snug">
-          Grid tiles show two per row. You have {gridCount} — the first one will show full width until you add or remove one.
+          Grid shows two per row — with {gridCount}, the first one is full width.
         </p>
       )}
       {links.map((l, i) => {
@@ -297,7 +297,7 @@ export default function LinkButtonsControls({
                   <span className="min-w-0">
                     <span className="block text-[0.6875rem] font-semibold text-gray-200">Blur</span>
                     <span className="block text-[0.625rem] text-gray-500 leading-snug">
-                      {size === "compact" ? "Frosted glass row — best over a background photo or video." : "A frosted band behind the title."}
+                      {size === "compact" ? "Frosted row — best over a photo or video." : "A frosted band behind the title."}
                     </span>
                   </span>
                   <span aria-hidden className={`relative w-9 h-5 rounded-full shrink-0 transition-colors ${on ? "bg-blue-600" : "bg-gray-600"}`}>

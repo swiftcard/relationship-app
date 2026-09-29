@@ -27,7 +27,10 @@ describe("the View SwiftCard button toggle", () => {
       // Both editors render the SHARED Switch now (2026-09-15) rather than each
       // hand-rolling a track and a knob. The label reads identically; it is a
       // prop instead of markup rather than a nested <span>.
-      expect(src).toContain("Show the “View SwiftCard” button");
+      // Plain words since 2026-09-29 — nobody knew what "Show the 'View
+      // SwiftCard' button" meant.
+      expect(src).toContain('label="Link to your business card"');
+      expect(src).not.toContain("Show the “View SwiftCard” button");
       expect(src).toMatch(/<Switch\b/);
       expect(src).toMatch(/showCardLinkBtn/);
     }
@@ -44,6 +47,16 @@ describe("the View SwiftCard button toggle", () => {
     expect(editor).toMatch(/hideCardLink: showCardLinkBtn \? null : true,/);
     // The editor initializes from the stored card, not a hardcoded default.
     expect(editor).toMatch(/useState\(card\.customization\?\.hideCardLink !== true\)/);
+  });
+
+  it("the switch comes LAST, after the design steps — not above step 1", () => {
+    for (const f of ["src/app/cards/new/NewCardWizard.tsx", "src/app/cards/[id]/edit/CardEditForm.tsx", "src/components/site/SwiftLinkMiniBuilder.tsx"]) {
+      const src = read(f);
+      const panel = src.indexOf("<SwiftLinkStyleControls");
+      const sw = src.indexOf('label="Link to your business card"');
+      expect(panel, `${f}: no design panel`).toBeGreaterThan(0);
+      expect(sw, `${f}: the card-link switch is back above the design steps`).toBeGreaterThan(panel);
+    }
   });
 
   it("the live preview reflects the toggle", () => {

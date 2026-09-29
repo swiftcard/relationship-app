@@ -153,21 +153,21 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
       // same per-link Featured / Grid / Compact picker and Standard / Solid /
       // Outline row styles the Social design tab has. Uploads work for a
       // visitor with no account too (guest uploads, api/upload).
-      // EXACTLY Social design (owner, 2026-09-16): the same "View SwiftCard"
-      // switch first, then the same shared panel.
+      // EXACTLY Social design (owner, 2026-09-16): the same shared panel, then
+      // the same card-link switch LAST, in plain words (2026-09-29).
       content: (
         <div className="space-y-4">
-          <Switch
-            checked={sketch.showCardLink}
-            onChange={(v) => patch({ showCardLink: v })}
-            label={"Show the “View SwiftCard” button"}
-            help="The small link at the bottom of your Swift Links page that opens your card."
-          />
           <SwiftLinkStyleControls
             value={sketch.linkStyle}
             onChange={patchLinkStyle}
             links={sketch.links}
             onLinksChange={(links) => patch({ links })}
+          />
+          <Switch
+            checked={sketch.showCardLink}
+            onChange={(v) => patch({ showCardLink: v })}
+            label="Link to your business card"
+            help="A small link at the bottom of your page that opens your card."
           />
         </div>
       ),

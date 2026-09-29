@@ -743,7 +743,7 @@ function PageBackgroundMedia({
       {error && <p className="text-[0.625rem] text-red-400 mt-1.5 leading-snug">{error}</p>}
       {!url && !error && (
         <p className="text-[0.625rem] text-gray-500 mt-1.5 leading-snug">
-          A photo or a short video fills the page behind everything. Portrait shots fit best. Photos up to 5 MB, videos up to 25 MB.
+          Portrait fits best. Photos up to 5 MB, videos up to 25 MB.
         </p>
       )}
 
@@ -767,7 +767,7 @@ function PageBackgroundMedia({
               onChange={(e) => onChange({ linkBgDim: normalizePageDim(e.target.value) })}
               className="w-full accent-blue-500 disabled:opacity-50"
             />
-            <p className="text-[0.625rem] text-gray-500 mt-0.5 leading-snug">Darker backgrounds make your name and links easier to read.</p>
+            <p className="text-[0.625rem] text-gray-500 mt-0.5 leading-snug">Darker makes your text easier to read.</p>
           </div>
 
           {/* "Blur" moved to each link under Link buttons (owner, 2026-09-17). */}
@@ -841,7 +841,7 @@ export function SwiftLinkStyleControls({
     {
       key: "header",
       label: "Page header",
-      help: "How your photo sits at the top — a full cover, a short banner, a compact circle, or no header at all.",
+      help: "How your photo sits at the top.",
       body: (
         <>
         <div className="grid grid-cols-2 gap-1.5">
@@ -878,7 +878,7 @@ export function SwiftLinkStyleControls({
         {/* What the header shows — hidden for "No header" (nothing to show). */}
         {normalizeHeroStyle(value.linkHeroStyle) !== "none" && (
           <div className="mt-2.5">
-            <p className="text-[0.625rem] text-gray-500 mb-1.5 leading-snug">Header shows — Auto uses your headshot, else your logo, else initials. Or upload your own photo or video.</p>
+            <p className="text-[0.625rem] text-gray-500 mb-1.5 leading-snug">Header shows</p>
             <div className="grid grid-cols-4 gap-1.5">
               {HERO_CONTENTS.filter((o) => o.id !== "custom").map((o) => {
                 const active = normalizeHeroContent(value.linkHeroContent) === o.id
@@ -908,7 +908,7 @@ export function SwiftLinkStyleControls({
     {
       key: "look",
       label: "Look",
-      help: "One tap sets the whole page — background, text, and button color, composed to read well together. Open a style below to see its designs.",
+      help: "One tap sets the whole page. Open a style to see its looks.",
       body: (
         <>
         {/* Picking a Look also clears the fine-tune background/text overrides:
@@ -916,7 +916,7 @@ export function SwiftLinkStyleControls({
             would make every Look "not work" until the user found and reset it. */}
         <LookPicker value={value.linkLook} onPick={(v) => onChange({ linkLook: v, linkBgColor: undefined, linkTextColor: undefined, linkButtonColor: undefined, linkAccentColor: undefined })} locked={locked} />
         {locked && (
-          <p className="text-[0.625rem] text-gray-500 mt-2 leading-snug">Paper and Onyx are included free — the rest of the library comes with Pro.</p>
+          <p className="text-[0.625rem] text-gray-500 mt-2 leading-snug">Paper and Onyx are free — the rest come with Pro.</p>
         )}
         </>
       ),
@@ -928,7 +928,7 @@ export function SwiftLinkStyleControls({
         <>
         <p className={`${rowLabel} mb-0.5`}>Page background{locked && <span className="ml-1.5 align-middle"><ProTag /></span>}</p>
         <p className="text-[0.625rem] text-gray-500 mb-1.5 leading-snug">
-          A colour, or a photo or video filling the whole page behind your links.
+          A color, or your own photo or video.
         </p>
         <SwatchRow
           presets={BG_PRESETS}
@@ -944,7 +944,7 @@ export function SwiftLinkStyleControls({
         {/* Tagged like Page background: a text colour is Pro on save
             (proLinkFeaturesInUse, "Your own colors and font"), so it says so. */}
         <p className={`${rowLabel} mb-0.5`}>Text color{locked && <span className="ml-1.5 align-middle"><ProTag /></span>}</p>
-        <p className="text-[0.625rem] text-gray-500 mb-1.5 leading-snug">Your name, bio and link labels.</p>
+        <p className="text-[0.625rem] text-gray-500 mb-1.5 leading-snug">Name, bio and link text.</p>
         <SwatchRow
           presets={TEXT_PRESETS}
           value={value.linkTextColor}
@@ -959,7 +959,7 @@ export function SwiftLinkStyleControls({
     {
       key: "font",
       label: "Font",
-      help: "Sets the typeface across your Swift Links page.",
+      help: "Typeface for the whole page.",
       // Any font but Default is Pro on save (proLinkFeaturesInUse).
       trailing: locked ? <ProTag /> : undefined,
       body: (
@@ -986,7 +986,7 @@ export function SwiftLinkStyleControls({
     {
       key: "icons",
       label: "Social icons",
-      help: "The shape and color of your social chips.",
+      help: "Shape and color of your social icons.",
       trailing: locked ? <ProTag /> : undefined,
       body: (
         <IconStyleControls
@@ -1003,7 +1003,7 @@ export function SwiftLinkStyleControls({
     {
       key: "connect",
       label: "Connect button",
-      help: "Your page's action color — the Connect button, and your social icons when they're set to Accent. Default uses your Look's own.",
+      help: "Your page's main button color.",
       trailing: locked ? <ProTag /> : undefined,
       body: (
         <SwatchRow
@@ -1020,14 +1020,14 @@ export function SwiftLinkStyleControls({
       ? [{
           key: "links",
           label: "Link buttons",
-          help: "Choose how each additional link appears. Featured and Grid show a big preview you can swap for your own photo or video; Compact is a slim row you can style.",
+          help: "How each of your links looks.",
           trailing: locked ? <ProTag /> : undefined,
           body: (
             <>
           <LinkButtonsControls links={links} onChange={onLinksChange} pageRowStyle={value.linkButtonStyle} pageGlass={!!value.linkGlass && !!value.linkBgMedia} canUpload={canUpload} isLocked={isLinkLocked} />
           {links.some((l) => l.kind !== "header" && (l.size ?? "grid") === "compact" && resolveRowStyle(l, value.linkButtonStyle) !== "tile") && (
             <div className="mt-2.5">
-              <p className="text-[0.625rem] text-gray-500 mb-1.5 leading-snug">Button color for Solid and Outline rows — leave Default to match your Connect button.</p>
+              <p className="text-[0.625rem] text-gray-500 mb-1.5 leading-snug">Color for Solid and Outline rows.</p>
               <SwatchRow
                 presets={ACCENT_PRESETS}
                 value={value.linkButtonColor}
