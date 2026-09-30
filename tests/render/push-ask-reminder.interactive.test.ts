@@ -108,6 +108,9 @@ beforeAll(async () => {
       "process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY": '"anon"',
       "process.env.NEXT_PUBLIC_APP_STORE_URL": '"https://apps.apple.com/app/id6798875872"',
       "process.env.NEXT_PUBLIC_APP_STORE_ID": "undefined",
+      // Read by lib/app-store's PLAY_STORE_URL (the Google Play badge). Next
+      // inlines it in a real build; a bare esbuild bundle has no `process`.
+      "process.env.NEXT_PUBLIC_PLAY_STORE_URL": "undefined",
     },
     alias: {
       "next/navigation": join(tmp, "nav-stub.tsx"),
