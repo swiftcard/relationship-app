@@ -207,9 +207,11 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-slate-800 font-semibold text-[0.9375rem] leading-snug">Build your own card</p>
-            <p className="text-slate-500 text-[0.8125rem] leading-snug mt-0.5">Takes 60 seconds · no signup</p>
+            <p className="text-slate-500 text-[0.8125rem] leading-snug mt-0.5">60 seconds · no signup</p>
           </div>
-          <svg viewBox="0 0 24 24" aria-hidden="true" className="w-5 h-5 shrink-0 text-slate-400 transition-all group-hover:text-[#2563EB] group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth={2.25}><path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          {/* Decorative; below 360px its room goes to the wording so both lines
+              stay single even in a wide fallback font. */}
+          <svg viewBox="0 0 24 24" aria-hidden="true" className="max-[359px]:hidden w-5 h-5 shrink-0 text-slate-400 transition-all group-hover:text-[#2563EB] group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth={2.25}><path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </div>
       </button>
 
