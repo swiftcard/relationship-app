@@ -14,6 +14,7 @@ import {
 import { TRIAL_DAYS } from "@/lib/plan";
 import { useIapOffer } from "@/lib/use-iap-price";
 import { detectNativeApp } from "@/lib/platform";
+import { PRO_CTA_CLASS } from "@/components/PlanTierCards";
 
 // Short, countable unlocks for the sheet — no prices, no numbers that could
 // drift from StoreKit.
@@ -140,9 +141,18 @@ export default function IapSubscribeButton({
   sublabel,
   onPurchased,
   onNeedsAccount,
+  period,
+  appearance = "pill",
 }: {
   className?: string;
   label?: string;
+  /** The billing period the caller is showing (the plan cards' Monthly /
+   *  Annual switch). The sheet opens with that product selected, so the
+   *  person buys what the card they tapped said. Omitted: annual, as before. */
+  period?: "monthly" | "annual";
+  /** "card": the plan cards' own white Pro button (PRO_CTA_CLASS), one line,
+   *  identical to the website's — instead of the compact aurora pill. */
+  appearance?: "pill" | "card";
   /** Small second line under the label; pass "" to hide. Omitted, it names
    *  the free trial only when StoreKit confirms this Apple ID gets one — it
    *  used to say "14-day free trial" to everyone, including accounts the sheet
@@ -166,6 +176,18 @@ export default function IapSubscribeButton({
   const needsAccount = status === "needs-account";
   if (status === "unavailable" || (needsAccount && !onNeedsAccount)) return null;
 
+  const onTap = () => (needsAccount ? onNeedsAccount!() : setOpen(true));
+  const sheet = open && !needsAccount && <PaywallSheet onClose={() => setOpen(false)} onPurchased={onPurchased} period={period} />;
+
+  if (appearance === "card") {
+    return (
+      <>
+        <button type="button" onClick={onTap} className={`${PRO_CTA_CLASS} ${className}`}>{label}</button>
+        {sheet}
+      </>
+    );
+  }
+
   return (
     <>
       {/* Compact aurora pill: gradient, spark, a slow glisten sweep and a soft
@@ -174,7 +196,7 @@ export default function IapSubscribeButton({
           pass `!w-full` and their own colors. */}
       <button
         type="button"
-        onClick={() => (needsAccount ? onNeedsAccount!() : setOpen(true))}
+        onClick={onTap}
         className={`sc-dark-sheet relative inline-flex flex-col items-center justify-center overflow-hidden rounded-full px-5 py-1.5 text-[0.8125rem] font-bold leading-tight text-white transition-[transform,box-shadow] duration-150 active:scale-[0.97] ${className}`}
         style={{ background: "var(--rd-aurora)", boxShadow: "0 8px 22px -10px rgba(37,99,235,0.85), inset 0 1px 0 rgba(255,255,255,0.28)" }}
       >
@@ -182,7 +204,7 @@ export default function IapSubscribeButton({
         {line && <span className="relative z-[4] text-[0.625rem] font-semibold text-white/85">{line}</span>}
         <span className="rd-glisten-sweep" aria-hidden="true" />
       </button>
-      {open && !needsAccount && <PaywallSheet onClose={() => setOpen(false)} onPurchased={onPurchased} />}
+      {sheet}
     </>
   );
 }
@@ -275,7 +297,7 @@ export function Spark({ className = "" }: { className?: string }) {
   );
 }
 
-function PaywallSheet({ onClose, onPurchased }: { onClose: () => void; onPurchased?: () => void }) {
+function PaywallSheet({ onClose, onPurchased, period }: { onClose: () => void; onPurchased?: () => void; period?: "monthly" | "annual" }) {
   const [packages, setPackages] = useState<IapPackage[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState<"purchase" | "restore" | null>(null);
@@ -287,11 +309,12 @@ function PaywallSheet({ onClose, onPurchased }: { onClose: () => void; onPurchas
       const pkgs = await getIapPackages();
       if (cancelled) return;
       setPackages(pkgs);
-      // Annual pre-selected: better deal for the user, better retention for us.
-      setSelected(pkgs.find((p) => p.period === "annual")?.identifier ?? pkgs[0]?.identifier ?? null);
+      // The period the card showed; otherwise annual (better deal for the
+      // user, better retention for us).
+      setSelected(pkgs.find((p) => p.period === (period ?? "annual"))?.identifier ?? pkgs[0]?.identifier ?? null);
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [period]);
 
   async function buy() {
     if (!selected || busy) return;

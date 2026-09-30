@@ -25,16 +25,25 @@ const PLAN_SURFACES = [
   "src/app/upgrade/UpgradeClient.tsx", // in-product Free → Pro
 ];
 
+// Since 2026-09-30 every surface draws the SAME Pro card (PlanTierCards) and,
+// on the web, the same price block inside it (ProWebPrice). The block itself
+// lives in two places: ProWebPrice (web prices) and NativePro (StoreKit's).
+const BLOCK_SOURCES = ["src/components/PlanTierCards.tsx", "src/components/PlanCards.tsx"];
+
 describe("every plan surface prices Pro with the Free-first block", () => {
   for (const f of PLAN_SURFACES) {
     const src = read(f);
-    it(`${f} renders ProTrialPrice`, () => {
-      expect(src).toMatch(/import ProTrialPrice from "@\/components\/ProTrialPrice"/);
-      expect(src).toMatch(/<ProTrialPrice/);
+    it(`${f} draws the shared Pro card with the shared web price`, () => {
+      expect(src).toMatch(/<ProPlanCard /);
+      expect(src).toMatch(/<ProWebPrice annual=\{annual\} trial=\{/);
     });
-    it(`${f} passes the REAL price into the block ("then …")`, () => {
+  }
+  for (const f of BLOCK_SOURCES) {
+    const src = read(f);
+    it(`${f} renders ProTrialPrice and passes the REAL price into it ("then …")`, () => {
       // The honesty half of the design: "Free" may never appear without the
       // actual price beside it. Every usage must supply `then`.
+      expect(src).toMatch(/import ProTrialPrice from "@\/components\/ProTrialPrice"/);
       expect(src).toMatch(/<ProTrialPrice[\s\S]{0,200}?price=/);
     });
   }
@@ -74,11 +83,14 @@ describe("the price block itself", () => {
 describe("the offer is never shown to someone who won't get it", () => {
   it("/upgrade gates the block on trialEligible", () => {
     const src = read("src/app/upgrade/UpgradeClient.tsx");
-    const block = src.indexOf("<ProTrialPrice");
     // An ex-subscriber is billed immediately (their href carries trial=0), so
     // showing them "Free for your first 14 days" is a promise checkout breaks.
-    expect(block).toBeGreaterThan(-1);
-    expect(src.slice(0, block)).toMatch(/\{trialEligible \? \($/m);
+    expect(src).toContain("<ProWebPrice annual={annual} trial={trialEligible} />");
+    // …and the shared block shows the plain price when trial is false.
+    const web = read("src/components/PlanTierCards.tsx");
+    const fn = web.slice(web.indexOf("export function ProWebPrice"));
+    expect(fn.indexOf("if (!trial)")).toBeGreaterThan(-1);
+    expect(fn.indexOf("if (!trial)")).toBeLessThan(fn.indexOf("<ProTrialPrice"));
   });
 
   it("the public surfaces keep the new-customers qualifier in the fine print", () => {
@@ -109,8 +121,10 @@ describe("any Pro plan card, present or future, uses the approved design", () =>
   const cardFiles = execSync('grep -rl "MOST POPULAR" src --include="*.tsx"', { cwd: root })
     .toString().trim().split("\n").filter(Boolean);
 
-  it("the Pro-card marker exists somewhere (tripwire sanity)", () => {
-    expect(cardFiles.length).toBeGreaterThanOrEqual(3);
+  it("the Pro-card marker exists in exactly one place (tripwire sanity)", () => {
+    // Every Pro card is PlanTierCards' ProPlanCard (2026-09-30). A second
+    // file with the badge is a hand-drawn Pro card — the drift this prevents.
+    expect(cardFiles.map((f) => f.replace(/\\/g, "/"))).toEqual(["src/components/PlanTierCards.tsx"]);
   });
 
   for (const f of cardFiles) {

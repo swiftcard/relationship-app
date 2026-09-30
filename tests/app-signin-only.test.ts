@@ -87,7 +87,8 @@ describe("the native /upgrade screen sells via IAP only", () => {
   it("gates on canOfferIap and shows StoreKit-priced paywall, never web prices", () => {
     const src = readFileSync("src/app/upgrade/UpgradeClient.tsx", "utf8");
     expect(src).toMatch(/canOfferIap/);
-    expect(src).toMatch(/IapSubscribeButton/);
+    // The app's Pro card (StoreKit prices, IapSubscribeButton inside).
+    expect(src).toMatch(/<NativeProUpgrade /);
     // The native branch must not interpolate any web price constant.
     const nativeBranch = src.slice(src.indexOf("if (native) {"), src.indexOf("return (", src.indexOf("if (native) {") + 20));
     expect(nativeBranch).not.toMatch(/PLAN_PRICES|proCents|money\(/);

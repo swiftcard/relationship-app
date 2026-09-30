@@ -167,7 +167,12 @@ describe("the purchase path is In-App Purchase, wired through PlanNotice", () =>
     }
     // It must be its OWN prop: onPaid is the web checkout hand-off and the
     // native branch may never be able to reach it (tests/wallet-hardening).
-    const nativeBranch = cards.slice(cards.indexOf("if (native) {"), cards.indexOf("</div>\n    );\n  }"));
+    // The native path is the `if (native)` hand-off plus everything from
+    // NativePlanChooser to the end of the file (the web render sits between).
+    const nativeBranch =
+      cards.slice(cards.indexOf("if (native) {"), cards.indexOf("{/* Monthly / annual toggle")) +
+      cards.slice(cards.indexOf("function NativePlanChooser("));
+    expect(cards.indexOf("function NativePlanChooser(")).toBeGreaterThan(-1);
     expect(nativeBranch).not.toMatch(/onPaid\(/);
   });
 

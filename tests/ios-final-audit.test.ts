@@ -22,7 +22,9 @@ describe("3.1.1 — /pricing and /upgrade never PAINT on native (render guard, n
     const s = read("src/app/upgrade/UpgradeClient.tsx");
     expect(s).toMatch(/useIsNativeApp/);
     expect(s).toMatch(/canOfferIap/);
-    expect(s).toMatch(/IapSubscribeButton/);
+    // The app's Pro card (StoreKit prices, IapSubscribeButton inside).
+    expect(s).toMatch(/<NativeProUpgrade /);
+    expect(read("src/components/PlanCards.tsx")).toMatch(/<IapSubscribeButton/);
     const nb = s.slice(s.indexOf("if (native) {"), s.indexOf("\n  return (", s.indexOf("if (native) {")));
     expect(nb, "native branch paints a web price or checkout link").not.toMatch(/PLAN_PRICES|proCents|officeTotal|money\(|\/checkout/);
   });

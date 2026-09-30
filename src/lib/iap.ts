@@ -36,6 +36,11 @@ export type IapPackage = {
   productId: string;
   /** Localized price straight from StoreKit — never hardcode around this. */
   priceString: string;
+  /** The same StoreKit price as a number, and its ISO currency. Used only to
+   *  work out what the annual plan costs per month and how much it saves —
+   *  arithmetic on Apple's own numbers, never a price typed here. */
+  price: number;
+  currencyCode: string;
   /** "monthly" | "annual" — resolved from the package type. */
   period: "monthly" | "annual";
   /** Localized intro-offer description when present (e.g. 14-day free trial). */
@@ -210,6 +215,8 @@ export async function getIapPackages(): Promise<IapPackage[]> {
         identifier: pkg.identifier,
         productId: pkg.product.identifier,
         priceString: pkg.product.priceString,
+        price: pkg.product.price,
+        currencyCode: pkg.product.currencyCode,
         period,
         introPriceString: pkg.product.introPrice?.priceString === "$0.00" || pkg.product.introPrice?.price === 0
           ? "free trial"

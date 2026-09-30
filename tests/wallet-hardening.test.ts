@@ -90,22 +90,30 @@ describe("in-app signup and first-card flow", () => {
     const src = read2("src/components/PlanCards.tsx");
     expect(src).toMatch(/function NativePro/);
     expect(src).toContain("useIapOffer()");
-    expect(src).toMatch(/<ProTrialPrice price=\{price\} period="month" \/>/);
-    expect(src).toMatch(/Free <span className="text-slate-\d00">Forever<\/span>/);
+    // StoreKit's price, for the period the Monthly / Annual switch shows.
+    expect(src).toMatch(/<ProTrialPrice price=\{price\} period=\{period\} note=\{note\} \/>/);
+    expect(src).toMatch(/const price = annual \? offer\.annual : offer\.monthly;/);
+    // The SAME cards, tabs and switch as the website (owner, 2026-09-30: the
+    // app stacked the plans in one column with no switch).
+    const chooser = src.slice(src.indexOf("function NativePlanChooser("), src.indexOf("export function NativeProUpgrade"));
+    expect(chooser).toMatch(/<BillingToggle/);
+    expect(chooser).toMatch(/<MobilePlanTabs/);
+    expect(chooser).toMatch(/<FreePlanCard/);
     // Office is Stripe-only with no IAP product, so natively it can be neither
     // SOLD nor QUOTED. Owner, 2026-09-18: the app's plan step must still offer
     // it ("what if I wanted to get an Office account?") — so the Office card
-    // renders (NativeOffice, under Free), and what stays forbidden is the
+    // renders (NativeOffice, after Free), and what stays forbidden is the
     // selling: no checkout hand-off and no price constant anywhere native.
-    // The native branch runs from `if (native) {` to where the WEB render
-    // begins (the monthly/annual toggle) — not to the end of the file.
-    const nativeBranch = src
-      .slice(src.indexOf("if (native) {"), src.indexOf("{/* Monthly / annual toggle"))
-      .replace(/\/\/.*$/gm, "");
-    expect(nativeBranch).toMatch(/<NativeOffice /);
-    expect(nativeBranch.indexOf("<NativeOffice ")).toBeGreaterThan(nativeBranch.indexOf("Forever")); // under Free
+    // The native path is the `if (native)` hand-off plus everything from
+    // NativePlanChooser to the end of the file (the web render sits between).
+    const nativeBranch = (
+      src.slice(src.indexOf("if (native) {"), src.indexOf("{/* Monthly / annual toggle")) +
+      src.slice(src.indexOf("function NativePlanChooser("))
+    ).replace(/\/\/.*$/gm, "");
+    expect(chooser).toMatch(/<NativeOffice /);
+    expect(chooser.indexOf("<NativeOffice ")).toBeGreaterThan(chooser.indexOf("<FreePlanCard")); // after Free
     expect(nativeBranch).not.toMatch(/onPaid\(/);
-    expect(nativeBranch).not.toMatch(/PLAN_PRICES|formatUsd|formatCents|seatSubtotalCents/);
+    expect(nativeBranch).not.toMatch(/PLAN_PRICES|formatUsd|formatCents|seatSubtotalCents|ProWebPrice|OfficeWebPrice|OfficeSeatPicker/);
     // No price constant may reach the native card.
     expect(read2("src/lib/use-iap-price.ts")).toMatch(/getIapPackages/);
   });

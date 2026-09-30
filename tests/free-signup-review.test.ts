@@ -98,10 +98,23 @@ describe("the two \"Your card is live!\" screens agree", () => {
 
 describe("Monthly / Annual on the Free tab", () => {
   it("hidden — space kept, so nothing jumps — on a phone with Free open; desktop unchanged", () => {
+    // `max-md:invisible`: phone width only, by CSS (right from first paint,
+    // before hydration), and visibility:hidden keeps the space. It also drops
+    // the switch from the accessibility tree, so no aria-hidden is needed.
+    expect(code("src/components/PlanTierCards.tsx")).toMatch(/\$\{hideOnPhone \? "max-md:invisible" : ""\}/);
     for (const f of ["src/components/PlanCards.tsx", "src/app/pricing/page.tsx"]) {
-      const c = code(f);
-      expect(c, f).toMatch(/\$\{isMobile && mobileTier === "free" \? "invisible" : ""\}/);
-      expect(c, f).toMatch(/aria-hidden=\{isMobile && mobileTier === "free" \? true : undefined\}/);
+      expect(code(f), f).toMatch(/hideOnPhone=\{mobileTier === "free"\}/);
+    }
+    // The app's chooser too.
+    expect(code("src/components/PlanCards.tsx")).toMatch(/hideOnPhone=\{tier === "free"\}/);
+  });
+
+  it("the plan cards that aren't the open tab are hidden at phone width by CSS, not a JS width check", () => {
+    // useIsMobile() is false until hydration, so a phone painted all three
+    // cards stacked and then snapped to the open one.
+    expect(code("src/components/PlanTierCards.tsx")).toMatch(/offTab \? "max-md:hidden" : ""/);
+    for (const f of ["src/components/PlanCards.tsx", "src/app/pricing/page.tsx", "src/app/upgrade/UpgradeClient.tsx"]) {
+      expect(code(f), f).not.toMatch(/useIsMobile|isMobile/);
     }
   });
 });

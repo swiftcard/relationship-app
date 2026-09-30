@@ -155,12 +155,18 @@ describe("a granted Office ends for the whole team", () => {
 describe("the Custom team-size box can be typed into", () => {
   // Clamping on every keystroke turned the "1" of "12" into 2 (→ "22"), so no
   // team of 10–19 could be typed on /pricing or the plan step.
-  for (const f of ["src/app/pricing/page.tsx", "src/components/PlanCards.tsx"]) {
-    it(`${f} clamps on blur, not per keystroke`, () => {
+  // One seat picker (PlanTierCards) for every surface that sells Office.
+  it("the shared seat picker clamps on blur, not per keystroke", () => {
+    const c = code("src/components/PlanTierCards.tsx");
+    expect(c).toContain("value={seatsDraft ?? seats}");
+    expect(c).toContain("onBlur={() => setSeatsDraft(null)}");
+    expect(c).not.toMatch(/Math\.max\(OFFICE_MIN_SEATS, Math\.floor\(Number\(e\.target\.value\)/);
+  });
+  for (const f of ["src/app/pricing/page.tsx", "src/components/PlanCards.tsx", "src/app/upgrade/UpgradeClient.tsx"]) {
+    it(`${f} uses the shared seat picker`, () => {
       const c = code(f);
-      expect(c).toContain("value={seatsDraft ?? seats}");
-      expect(c).toContain("onBlur={() => setSeatsDraft(null)}");
-      expect(c).not.toContain("setSeats(Math.max(OFFICE_MIN_SEATS, Math.floor(Number(e.target.value)");
+      expect(c).toContain("<OfficeSeatPicker seats={seats} onSeats={setSeats} />");
+      expect(c).not.toMatch(/type="number"/);
     });
   }
 });

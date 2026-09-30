@@ -8,38 +8,21 @@ import SiteNav from "@/components/site/SiteNav";
 import SiteFooter from "@/components/site/SiteFooter";
 import ScrollReveal from "@/components/ScrollReveal";
 import ScrollProgress from "@/components/ScrollProgress";
-import { PLAN_LIMITS, PLAN_PRICES, TRIAL_DAYS } from "@/lib/plan";
-import ProTrialPrice from "@/components/ProTrialPrice";
-import { PLAN_FEATURES, PLAN_DESCRIPTIONS, money } from "@/lib/plan-content";
+import { PLAN_LIMITS, TRIAL_DAYS } from "@/lib/plan";
 import { promoLabel, promoFitsPurchase, scopeLabel, type PromoRow } from "@/lib/promo";
-import { formatCents, formatUsd, seatSubtotalCents, perMonthCents } from "@/lib/currency";
-import { useIsMobile } from "@/lib/use-is-mobile";
 import MobilePlanTabs, { type PlanTier } from "@/components/MobilePlanTabs";
+import {
+  BillingToggle, FreePlanCard, ProPlanCard, ProWebPrice, OfficePlanCard, OfficeWebPrice, OfficeSeatPicker, officeTotalLabel,
+  PLAN_GRID_CLASS, FREE_CTA_CLASS, PRO_CTA_CLASS, PRO_CTA_LINK_CLASS, OFFICE_CTA_CLASS, OFFICE_CTA_LINK_CLASS, PRO_FINE_PRINT_CLASS,
+} from "@/components/PlanTierCards";
 import HomeHeadingReveal from "@/components/site/HomeHeadingReveal";
 import "@/app/home.css";
 
 
-// Display prices (USD) — sourced from PLAN_PRICES (src/lib/plan.ts), the same
-// constants the checkout route validates the real Stripe price against.
-const PRO_MONTHLY = PLAN_PRICES.PRO_MONTHLY_CENTS / 100;
-const PRO_ANNUAL = PLAN_PRICES.PRO_ANNUAL_CENTS / 100;
+// The cards themselves (and their prices, from PLAN_PRICES — the same
+// constants the checkout route validates the real Stripe price against) are
+// PlanTierCards, shared with every other plan chooser so none can drift.
 const OFFICE_MIN_SEATS = PLAN_LIMITS.OFFICE_MIN_SEATS;
-
-// Feature lists + descriptions come from the shared plan-content module so the
-// Pricing page and the in-product plan chooser never drift apart.
-const features = { free: PLAN_FEATURES.free, pro: PLAN_FEATURES.pro, enterprise: PLAN_FEATURES.office };
-
-// Homepage checklist style: a white tick in a brand-gradient dot. On the Pro
-// card (itself the gradient) the dot is translucent white instead.
-function Check({ pro }: { pro?: boolean }) {
-  return (
-    <span className="w-[18px] h-[18px] rounded-full flex items-center justify-center shrink-0 mt-px" style={{ background: pro ? "rgba(255,255,255,0.24)" : "var(--rd-aurora)" }}>
-      <svg viewBox="0 0 20 20" className="w-3 h-3" fill="none" stroke="#ffffff" strokeWidth={2.6}>
-        <path d="M4 10.5l4 4 8-9" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </span>
-  );
-}
 
 // No couponId here on purpose. The Stripe coupon id used to be handed to the
 // client, put in the URL, and passed to checkout unvalidated — so lifting one
@@ -68,14 +51,10 @@ export default function PricingPage() {
   // (every price + checkout CTA) paints in the shell for a frame before the
   // redirect commits (App Review 3.1.1). Hydration-safe: false on SSR/web.
   const native = useIsNativeApp();
-  const isMobile = useIsMobile();
   const [mobileTier, setMobileTier] = useState<PlanTier>("pro");
 
   const [annual, setAnnual] = useState(false);
   const [seats, setSeats] = useState<number>(OFFICE_MIN_SEATS);
-  // What is being TYPED in the Custom box, clamped only on blur. Clamping each
-  // keystroke turned the "1" of "12" into 2, so 10–19 could not be typed.
-  const [seatsDraft, setSeatsDraft] = useState<string | null>(null);
   const [loading, setLoading] = useState<"pro" | "enterprise" | null>(null);
   const [checkoutErr, setCheckoutErr] = useState<string | null>(null);
   const [promo, setPromo] = useState<PromoState>({ code: "", status: "idle", message: "" });
@@ -211,15 +190,7 @@ export default function PricingPage() {
             {/* Monthly / Annual toggle */}
             {/* Hidden (space kept) on a phone with the Free tab open, where it
                 changes nothing — same rule as PlanCards. */}
-            <div className={`mt-8 inline-flex items-center gap-4 rounded-full px-5 py-2.5 border border-slate-200 bg-slate-50 ${isMobile && mobileTier === "free" ? "invisible" : ""}`} aria-hidden={isMobile && mobileTier === "free" ? true : undefined} data-reveal="fade">
-              <span className={`text-sm font-medium transition-colors ${!annual ? "text-slate-900 font-bold" : "text-slate-600"}`}>Monthly</span>
-              <button onClick={() => setAnnual(!annual)} aria-label="Toggle annual billing" aria-pressed={annual} className="relative w-11 h-6 rounded-full transition-colors duration-200" style={{ background: annual ? "#2563EB" : "#cbd5e1" }}>
-                <div className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" style={{ transform: annual ? "translateX(22px)" : "translateX(2px)" }} />
-              </button>
-              <span className={`text-sm font-medium transition-colors ${annual ? "text-slate-900 font-bold" : "text-slate-600"}`}>
-                Annual <span className="ml-1 text-[0.625rem] font-black text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded-full">SAVE 10%</span>
-              </span>
-            </div>
+            <BillingToggle annual={annual} onToggle={() => setAnnual(!annual)} hideOnPhone={mobileTier === "free"} className="mt-8" reveal />
           </div>
         </section>
 
@@ -230,56 +201,25 @@ export default function PricingPage() {
         <div className="max-w-6xl mx-auto w-full px-5 sm:px-6">
           <MobilePlanTabs active={mobileTier} onChangeAction={setMobileTier} />
         </div>
-        <section className="max-w-6xl mx-auto w-full px-5 sm:px-6 pb-14 grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch md:pt-6">
-          {/* Free */}
-          <div data-reveal className={`${isMobile && mobileTier !== "free" ? "hidden" : ""} rounded-[28px] p-6 sm:p-8 flex flex-col bg-white border border-slate-200 shadow-[0_18px_40px_-24px_rgba(15,23,42,0.3)]`}>
-            {/* "Forever" inherits the heading's size/weight/font from this <p>;
-                the span overrides ONLY the color (slate-400 — the same light
-                gray this card already uses for "/ month"). */}
-            <p className="text-[1.4rem] font-extrabold tracking-tight text-slate-900 mb-3">Free <span className="text-slate-500">Forever</span></p>
-            <div className="flex items-end gap-1 mb-1"><span className="text-[2.6rem] font-bold text-slate-900 leading-none">$0</span><span className="text-slate-500 text-sm mb-1">/ month</span></div>
-            <p className="text-slate-500 text-sm mb-7 mt-2">{PLAN_DESCRIPTIONS.free}</p>
-            <ul className="space-y-2.5 mb-8 flex-1">
-              {features.free.map((f) => (<li key={f} className="flex items-start gap-2.5 text-[0.84375rem] text-slate-500"><Check />{f}</li>))}
-            </ul>
-            <Link href="/cards/new" className="w-full text-center font-bold py-3.5 rounded-full text-sm bg-white hover:bg-slate-50 text-slate-900 border border-slate-300 transition-colors">Get started free →</Link>
-          </div>
+        <section className={`max-w-6xl mx-auto w-full px-5 sm:px-6 pb-14 ${PLAN_GRID_CLASS}`}>
+          <FreePlanCard offTab={mobileTier !== "free"} reveal
+            cta={<Link href="/cards/new" className={FREE_CTA_CLASS}>Get started free →</Link>} />
 
-          {/* Pro — highlighted, glistening */}
-          <div data-reveal className={`${isMobile && mobileTier !== "pro" ? "hidden" : ""} relative rounded-[28px] p-6 sm:p-8 flex flex-col overflow-hidden md:-mt-6 md:mb-0 md:z-10 ring-1 ring-blue-500/20`} style={{ transitionDelay: "90ms", background: "var(--rd-aurora)", boxShadow: "0 40px 90px -30px rgba(37,99,235,0.6)" }}>
-            <div className="absolute inset-0 opacity-25" style={{ background: "radial-gradient(120% 90% at 20% -10%, rgba(255,255,255,0.6), transparent 55%)" }} />
-            <div className="absolute top-6 right-6 z-[4] bg-white/25 text-white text-[0.6875rem] font-bold px-3 py-1 rounded-full">MOST POPULAR</div>
-            <div className="relative z-[2] flex flex-col flex-1">
-              <p className="text-[1.4rem] font-extrabold tracking-tight text-black mb-3">Pro</p>
-              {/* "Free for your first 14 days, then $X" — owner-approved
-                  2026-08-19; the word Free IS the price block, the real price
-                  stated plainly under it. */}
-              {/* An account that has had its free Pro period sees the plain
-                  price — the same branch PlanCards uses. "Free for your first
-                  14 days" above a "billing starts today" button contradicted
-                  itself. */}
-              <div {...gate}>
-              {!trialOk || onOffice || onPaidPro ? (
-                <div className="flex items-end gap-1"><span className="text-[2.6rem] font-bold text-white leading-none">{annual ? `$${PRO_ANNUAL}` : `$${PRO_MONTHLY}`}</span><span className="text-white/80 text-sm mb-1">/ {annual ? "year" : "month"}</span></div>
-              ) : annual ? (
-                <ProTrialPrice price={`$${PRO_ANNUAL}`} period="year" note={`~$${money(PRO_ANNUAL / 12)}/mo · Save 10%`} />
-              ) : (
-                <ProTrialPrice price={`$${PRO_MONTHLY}`} period="month" />
-              )}
-              </div>
-              <p className="text-white/80 text-sm mb-7 mt-4">{PLAN_DESCRIPTIONS.pro}</p>
-              <ul className="space-y-2.5 mb-8 flex-1">
-                {features.pro.map((f) => (<li key={f} className="flex items-start gap-2.5 text-[0.84375rem] text-white"><Check pro />{f}</li>))}
-              </ul>
+          {/* An account that has had its free Pro period sees the plain
+              price — the same branch PlanCards uses. "Free for your first
+              14 days" above a "billing starts today" button contradicted
+              itself. */}
+          <ProPlanCard offTab={mobileTier !== "pro"} reveal
+            price={<div {...gate}><ProWebPrice annual={annual} trial={trialOk && !onOffice && !onPaidPro} /></div>}>
               <div {...gate}>
               {onOffice || onPaidPro ? (
                 // Nothing to buy: the account is on Pro already, or on Office,
                 // which includes all of Pro. Plan changes live in Billing.
-                <Link href={BILLING_HREF} className="block w-full text-center bg-white hover:bg-white/90 text-[#2450d8] font-bold py-3.5 rounded-full transition-colors text-sm shadow-lg">
+                <Link href={BILLING_HREF} className={PRO_CTA_LINK_CLASS}>
                   {onOffice ? "Included in your Office plan" : "Your current plan"} · Manage →
                 </Link>
               ) : (
-              <button onClick={() => handleUpgrade("pro")} disabled={loading !== null} className="w-full bg-white hover:bg-white/90 disabled:opacity-50 text-[#2450d8] font-bold py-3.5 rounded-full transition-colors text-sm shadow-lg">
+              <button onClick={() => handleUpgrade("pro")} disabled={loading !== null} className={PRO_CTA_CLASS}>
                 {/* Not "Start free →": the Free plan's own button two columns
                     left reads "Get started free →", and side by side the two
                     were indistinguishable — one genuinely free, one a
@@ -293,7 +233,7 @@ export default function PricingPage() {
                   trial only to customers with no prior Stripe subscription, so
                   "for new customers" must survive here no matter how the
                   headline is worded (pinned by copy-truth.test.ts). */}
-              <p className="text-white/70 text-[0.6875rem] text-center mt-2.5 leading-relaxed">
+              <p className={PRO_FINE_PRINT_CLASS}>
                 {onOffice ? <>Your account is on Office, which includes everything in Pro</>
                   : onPaidPro ? <>Your account is on Pro · change or cancel it in Billing</>
                   : trialOk ? <>{TRIAL_DAYS} days free for new customers · card required · renews automatically</> : <>Your account has had its free Pro period · billing starts today · renews automatically</>}
@@ -302,59 +242,25 @@ export default function PricingPage() {
               {checkoutErr && loading === null && (
                 <p className="text-center text-[0.75rem] font-semibold mt-2 rounded-lg py-2 px-3" style={{ background: "rgba(254,226,226,0.95)", color: "#b91c1c" }}>{checkoutErr}</p>
               )}
-            </div>
-          </div>
+          </ProPlanCard>
 
-          {/* Office */}
-          <div data-reveal style={{ transitionDelay: "180ms" }} className={`${isMobile && mobileTier !== "office" ? "hidden" : ""} rounded-[28px] p-6 sm:p-8 flex flex-col bg-white border border-slate-200 shadow-[0_18px_40px_-24px_rgba(15,23,42,0.3)]`}>
-            <div className="flex items-center gap-2 mb-3">
-              <p className="text-[1.4rem] font-extrabold tracking-tight text-slate-900">Office</p>
-              <span className="text-[0.625rem] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">FOR TEAMS</span>
-            </div>
-            <div className="mb-1">
-              <div className="flex items-end gap-1"><span className="text-[2.6rem] font-bold text-slate-900 leading-none">${annual ? formatCents(perMonthCents(PLAN_PRICES.OFFICE_ANNUAL_PER_SEAT_CENTS)) : formatCents(PLAN_PRICES.OFFICE_MONTHLY_PER_SEAT_CENTS)}</span><span className="text-slate-500 text-sm mb-1">/ mo per user</span></div>
-              <p className="text-blue-600 text-xs font-semibold mt-1.5">Minimum {OFFICE_MIN_SEATS} users{annual ? " · billed annually, save 10%" : ""}</p>
-              <p className="text-slate-800 font-bold text-[0.8125rem] mt-1">{seats} users → {annual
-                ? `${formatUsd(seatSubtotalCents(PLAN_PRICES.OFFICE_ANNUAL_PER_SEAT_CENTS, seats))}/yr`
-                : `${formatUsd(seatSubtotalCents(PLAN_PRICES.OFFICE_MONTHLY_PER_SEAT_CENTS, seats))}/mo`}</p>
-            </div>
-            <div className="mt-4 mb-6">
-              <label className="text-xs text-slate-600 font-medium block mb-2">Team size</label>
-              <div className="flex gap-2 flex-wrap">
-                {[2, 5, 10, 25, 50].map((n) => (
-                  <button key={n} onClick={() => setSeats(n)} className="px-3 py-1.5 rounded-full text-xs font-semibold transition-colors"
-                    style={{ background: seats === n ? "#2563EB" : "#f1f5f9", color: seats === n ? "#fff" : "#475569", border: seats === n ? "none" : "1px solid #e2e8f0" }}>{n} users</button>
-                ))}
-              </div>
-              <div className="mt-2 flex items-center gap-2">
-                <label htmlFor="office-seats" className="text-xs text-slate-500">Custom:</label>
-                <input id="office-seats" aria-label="Number of team seats" type="number" min={OFFICE_MIN_SEATS} value={seatsDraft ?? seats}
-                  onChange={(e) => { setSeatsDraft(e.target.value); const n = Math.floor(Number(e.target.value)); if (n >= OFFICE_MIN_SEATS) setSeats(n); }}
-                  onBlur={() => setSeatsDraft(null)}
-                  className="w-20 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 bg-white border border-slate-200 focus:outline-none" />
-                <span className="text-xs text-slate-500">users</span>
-              </div>
-              <p className="text-slate-500 text-[0.6875rem] mt-2">No cap on team size — add more seats anytime from your account as you grow.</p>
-            </div>
-            <ul className="space-y-2.5 mb-8 flex-1">
-              {features.enterprise.map((f) => (<li key={f} className="flex items-start gap-2.5 text-[0.84375rem] text-slate-600"><Check />{f}</li>))}
-            </ul>
+          <OfficePlanCard offTab={mobileTier !== "office"} reveal
+            price={<OfficeWebPrice annual={annual} seats={seats} />}
+            seatPicker={<OfficeSeatPicker seats={seats} onSeats={setSeats} />}>
             <div {...gate}>
             {onPaidOffice ? (
               // Already paying for Office: seats and billing are changed in
               // Billing, not by starting a second purchase.
-              <Link href={BILLING_HREF} className="block w-full text-center font-bold py-3.5 px-3 rounded-full text-sm leading-tight bg-blue-600 hover:bg-blue-500 text-white transition-colors break-words">
+              <Link href={BILLING_HREF} className={OFFICE_CTA_LINK_CLASS}>
                 Your current plan · Manage seats →
               </Link>
             ) : (
-            <button onClick={() => handleUpgrade("enterprise")} disabled={loading !== null} className="w-full font-bold py-3.5 px-3 rounded-full text-sm leading-tight bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white transition-colors break-words">
-              {loading === "enterprise" ? "Loading…" : promoOnOffice ? `Get Office · ${promo.discountLabel} →` : `Get Office · ${annual
-                ? `${formatUsd(seatSubtotalCents(PLAN_PRICES.OFFICE_ANNUAL_PER_SEAT_CENTS, seats))}/yr`
-                : `${formatUsd(seatSubtotalCents(PLAN_PRICES.OFFICE_MONTHLY_PER_SEAT_CENTS, seats))}/mo`} →`}
+            <button onClick={() => handleUpgrade("enterprise")} disabled={loading !== null} className={OFFICE_CTA_CLASS}>
+              {loading === "enterprise" ? "Loading…" : promoOnOffice ? `Get Office · ${promo.discountLabel} →` : `Get Office · ${officeTotalLabel(annual, seats)} →`}
             </button>
             )}
             </div>
-          </div>
+          </OfficePlanCard>
         </section>
 
         {/* Promo code — under the plans */}
