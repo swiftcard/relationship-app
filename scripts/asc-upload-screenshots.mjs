@@ -20,19 +20,35 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 import crypto from "node:crypto";
-import { asc, token } from "./lib/asc.mjs";
+import { APP_ID, asc, token } from "./lib/asc.mjs";
 
 // 1320 x 2868 is the 6.9-inch canonical size, and APP_IPHONE_67 is the display
 // type that now covers it — Apple folded 6.9" into the 6.7" slot rather than
 // adding a new one. Smaller iPhones auto-scale from this set.
-const DISPLAY_TYPE = "APP_IPHONE_67";
+// `--type APP_WATCH_ULTRA` (or any screenshotDisplayType) targets another slot;
+// the default remains the 6.9-inch iPhone set.
+const typeArg = process.argv.indexOf("--type");
+const DISPLAY_TYPE = typeArg > -1 ? process.argv[typeArg + 1] : "APP_IPHONE_67";
 // The en-US localization of the version in PREPARE_FOR_SUBMISSION. Apple
 // refuses screenshot edits on a released version, so this has to be the
 // unreleased one: 1.0.3 as of 2026-09-22 (1.0.2 was efacc7ef… — released with
 // the v4 set; 1.0.1 077d36d9…; 1.0.0 38667b78…). When a new version is
 // created, find its localization id and update this default.
-const LOCALIZATION = process.env.ASC_LOCALIZATION_ID || "a63321c5-ed5d-4743-b271-3364de201cdd";
-const dir = process.argv[2] || "app-store/screenshots/6.9-inch";
+// Without ASC_LOCALIZATION_ID, use the en-US localization of whichever
+// version is in PREPARE_FOR_SUBMISSION — the only one Apple lets us edit.
+async function inFlightLocalization() {
+  const vers = await asc("GET", `/apps/${APP_ID}/appStoreVersions?limit=5&fields[appStoreVersions]=versionString,appStoreState`);
+  const v = (vers.data ?? []).find((x) => x.attributes.appStoreState === "PREPARE_FOR_SUBMISSION");
+  if (!v) throw new Error("no version in PREPARE_FOR_SUBMISSION — create one first (node scripts/asc-submit.mjs --prepare)");
+  const loc = await asc("GET", `/appStoreVersions/${v.id}/appStoreVersionLocalizations?fields[appStoreVersionLocalizations]=locale`);
+  const en = (loc.data ?? []).find((l) => l.attributes.locale === "en-US") ?? loc.data?.[0];
+  if (!en) throw new Error(`version ${v.attributes.versionString} has no localization`);
+  console.log(`target: version ${v.attributes.versionString} (${v.attributes.appStoreState}), ${en.attributes.locale} localization ${en.id}`);
+  return en.id;
+}
+const LOCALIZATION = process.env.ASC_LOCALIZATION_ID || await inFlightLocalization();
+const positional = process.argv.slice(2).filter((a, i, arr) => !a.startsWith("--") && arr[i - 1] !== "--type");
+const dir = positional[0] || "app-store/screenshots/6.9-inch";
 
 const files = readdirSync(dir).filter((f) => f.toLowerCase().endsWith(".png")).sort();
 if (!files.length) {

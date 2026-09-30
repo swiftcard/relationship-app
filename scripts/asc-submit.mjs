@@ -6,6 +6,9 @@
 //   node scripts/asc-submit.mjs        # dry run: shows every state, changes nothing
 //   node scripts/asc-submit.mjs --go   # create the version if needed, attach the
 //                                      # build, write What's New, submit for review
+//   node scripts/asc-submit.mjs --prepare  # everything --go does EXCEPT the
+//                                      # submission — stage the version so
+//                                      # screenshots etc. can be added first
 //
 // One script for every release. The version and build come from
 // ios/App/App.xcodeproj/project.pbxproj (MARKETING_VERSION /
@@ -30,7 +33,8 @@ function projectSetting(key) {
 }
 const WANT_VERSION = projectSetting("MARKETING_VERSION");
 const WANT_BUILD = projectSetting("CURRENT_PROJECT_VERSION");
-const GO = process.argv.includes("--go");
+const PREPARE = process.argv.includes("--prepare");
+const GO = process.argv.includes("--go") || PREPARE;
 console.log(`release in flight: ${WANT_VERSION} (build ${WANT_BUILD})`);
 
 const act = (msg) => console.log(GO ? `→ ${msg}` : `(dry) would ${msg}`);
@@ -67,7 +71,7 @@ if (v && v.attributes.appStoreState !== "PREPARE_FOR_SUBMISSION") {
 // ── 2. The build ─────────────────────────────────────────────────────────────
 const builds = await asc("GET", `/builds?filter[app]=${APP_ID}&limit=5&sort=-uploadedDate&fields[builds]=version,processingState,expired`);
 const b = (builds.data ?? []).find((x) => x.attributes.version === WANT_BUILD);
-if (!b) throw new Error(`build ${WANT_BUILD} has not reached App Store Connect — run: npm run ios:release -- --no-watch`);
+if (!b) throw new Error(`build ${WANT_BUILD} has not reached App Store Connect — run: npm run ios:release`);
 console.log(`build ${WANT_BUILD}: ${b.attributes.processingState}${b.attributes.expired ? " (EXPIRED)" : ""}`);
 if (b.attributes.processingState !== "VALID") throw new Error(`build ${WANT_BUILD} is still ${b.attributes.processingState} — wait for VALID (about 10 minutes after upload) and re-run`);
 if (b.attributes.expired) throw new Error(`build ${WANT_BUILD} is expired`);
@@ -114,6 +118,7 @@ const open = (subs.data ?? []).filter((s) => !["COMPLETE", "CANCELING", "CANCELE
 if (open.some((s) => s.attributes.state !== "READY_FOR_REVIEW")) throw new Error("another submission is open — resolve it in App Store Connect first");
 
 if (!GO) { console.log("\ndry run — pass --go to do all of the above and submit"); process.exit(0); }
+if (PREPARE) { console.log("\n--prepare: version staged (build attached, What's New written) — NOT submitted. Re-run with --go to submit."); process.exit(0); }
 
 let subId = open.find((s) => s.attributes.state === "READY_FOR_REVIEW")?.id;
 if (!subId) {

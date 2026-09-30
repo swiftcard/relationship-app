@@ -202,8 +202,13 @@ composed from it. A listing refresh means steps 1–3 in order, on a machine tha
 has the service-role key.
 
 ## Version
-- 1.0.5, build 16. "What's New": `Links to SwiftCards and Swift Links now
-  always open in your web browser, never inside the app.` (The app no longer
+- 1.0.5, build 16. "What's New": `New: SwiftCard for Apple Watch. Your card's
+  QR code on your wrist, with a watch-face complication that opens it in one
+  tap. It follows the card you choose on your iPhone and works without your
+  phone nearby. Links to SwiftCards and Swift Links now always open in your
+  web browser, never inside the app.` (Two paragraphs in ASC.) Build 16 is the FIRST build that
+  embeds the Apple Watch app (`npm run ios:release`, no `--no-watch`; build 15
+  had it stripped and was never submitted). (The app no longer
   carries the Associated Domains entitlement — `ios/App/App/App.entitlements`
   and `AppRelease.entitlements` — so iOS never offers it a swiftcard.me link.
   Owner, 2026-09-29: a card or Swift Links link opened from a text or an
