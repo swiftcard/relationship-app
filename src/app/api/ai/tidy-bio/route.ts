@@ -38,7 +38,9 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as { text?: unknown };
     text = typeof body.text === "string" ? body.text.trim() : "";
   } catch { /* handled below */ }
-  if (!text || text.length > 3000) return NextResponse.json({ error: "bad_request" }, { status: 400 });
+  // Too little to shorten: the button only sends an About longer than a bio,
+  // and on a scrap of text the model invents a bio instead of rewriting one.
+  if (text.length < 120 || text.length > 3000) return NextResponse.json({ error: "bad_request" }, { status: 400 });
 
   if (!hasAiProvider()) return NextResponse.json({ error: "no_ai" }, { status: 503 });
   const bio = parseTidyBio(await aiComplete(tidyBioPrompt(text), { maxTokens: 200, json: true }));

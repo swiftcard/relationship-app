@@ -60,6 +60,8 @@ describe("the route", () => {
     expect(route).toMatch(/isRateLimited\(`tidy-bio:ip:\$\{clientIp\(req\)\}`/);
     expect(route).toMatch(/if \(isShellRequest\(req\)\) return/);
     expect(route).toMatch(/text\.length > 3000/);
+    // A scrap of text made the model invent a whole bio (seen on production).
+    expect(route).toMatch(/text\.length < 120/);
   });
 });
 
