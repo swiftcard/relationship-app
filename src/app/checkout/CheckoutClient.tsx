@@ -134,7 +134,8 @@ export default function CheckoutClient({ trialEligible = true, officeCoversPro =
         setErr("Your subscription couldn't be found. Continue to secure payment instead.");
         return;
       }
-      if (!res.ok) { setErr(data.error || "Couldn't change your plan. Please try again."); return; }
+      // message (the sentence) before error (the machine code) — see below.
+      if (!res.ok) { setErr(data.message || data.error || "Couldn't change your plan. Please try again."); return; }
       window.location.href = `/checkout/success?plan=${plan}`;
     } catch {
       setErr("Couldn't reach the server. Check your connection and try again.");
@@ -186,7 +187,12 @@ export default function CheckoutClient({ trialEligible = true, officeCoversPro =
         return;
       }
       if (data.url) { window.location.href = data.url; return; }
-      setErr(data.error || data.message || "Couldn't start checkout. Please try again.");
+      // `error` is the machine code, `message` the sentence for the reader
+      // (api/cards/route.ts:52 → {error:"limit", message:"Ready for a second
+      // card?…"}). This read them the wrong way round, so a rejected checkout
+      // could paint the literal word "limit" in the red box (audit 2026-09-29).
+      // NewCardWizard already gets the order right; these are the stragglers.
+      setErr(data.message || data.error || "Couldn't start checkout. Please try again.");
     } catch {
       setErr("Couldn't reach checkout. Check your connection and try again.");
     } finally {

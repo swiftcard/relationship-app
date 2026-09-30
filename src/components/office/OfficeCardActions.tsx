@@ -24,6 +24,15 @@ export default function OfficeCardActions({ card, appUrl }: { card: Card; appUrl
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [offline, setOffline] = useState(card.is_offline);
+  // Taking a teammate's card offline is destructive to everything they have
+  // handed out — the same shape as deleting a card, so it uses the same
+  // two-step in-page confirmation ManageCards uses, for the same reasons its
+  // comment records: a native confirm() is browser chrome that cannot show
+  // WHOSE card is about to go dark, is unstyled, truncates its second line on
+  // some phones, and on iOS can be suppressed outright by "block dialogs" —
+  // which would have taken the card offline with no prompt at all
+  // (audit 2026-09-29).
+  const [confirming, setConfirming] = useState(false);
   const [draft, setDraft] = useState({
     name: card.name ?? "",
     title: card.title ?? "",
@@ -58,15 +67,19 @@ export default function OfficeCardActions({ card, appUrl }: { card: Card; appUrl
     }
   }
 
-  async function toggleOffline() {
-    const next = !offline;
-    if (next && !confirm(`Take ${card.name || card.username}'s card offline?\n\nIts public page, QR code and links stop working. Nothing is deleted — their contacts and history are kept, and you can bring it back online any time.`)) {
-      return;
-    }
+  async function setOfflineTo(next: boolean) {
+    setConfirming(false);
     if (await patch({ is_offline: next })) {
       setOffline(next);
       router.refresh();
     }
+  }
+
+  // Bringing a card BACK online restores service and needs no confirmation;
+  // only taking it down does.
+  function toggleOffline() {
+    if (offline) { void setOfflineTo(false); return; }
+    setConfirming((c) => !c);
   }
 
   return (
@@ -97,9 +110,40 @@ export default function OfficeCardActions({ card, appUrl }: { card: Card; appUrl
               : "text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/15"
           }`}
         >
-          {offline ? "Bring back online" : "Take offline"}
+          {offline ? "Bring back online" : confirming ? "Cancel" : "Take offline"}
         </button>
       </div>
+
+      {/* Step two — named, so nobody switches off the wrong person's card. */}
+      {confirming && (
+        <div className="mt-3 rounded-2xl border border-red-500/25 bg-red-500/[0.05] px-4 py-3">
+          <p className="text-white text-xs font-semibold">
+            Take {card.name || card.username}&apos;s card offline?
+          </p>
+          <p className="text-gray-400 text-[0.6875rem] leading-relaxed mt-1">
+            Their public page, QR code, NFC card and wallet pass all stop working. Nothing is deleted —
+            their contacts and history are kept, and you can bring it back online any time.
+          </p>
+          <div className="flex flex-wrap gap-2 mt-3">
+            <button
+              type="button"
+              onClick={() => { void setOfflineTo(true); }}
+              disabled={busy}
+              className="flex-1 sm:flex-none min-w-[150px] bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+            >
+              {busy ? "Taking offline…" : "Yes, take it offline"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              disabled={busy}
+              className="flex-1 sm:flex-none min-w-[110px] border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+            >
+              Go back
+            </button>
+          </div>
+        </div>
+      )}
 
       {editing && (
         <div className="mt-4 bg-gray-900 border border-gray-800 rounded-2xl p-5">

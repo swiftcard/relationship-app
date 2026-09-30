@@ -23,22 +23,31 @@ import { SEEDED_VISITOR_PREFIX } from "@/lib/seeded-views";
 //      billing language is forbidden (App Review 3.1.1) — so no plan names, no
 //      referral months, no "unlock". Every action below is a feature the person
 //      already has on whatever plan they are on.
+//   3. Name a screen that does not exist. Five of these bodies used to send
+//      people to a traffic-SOURCE breakdown ("check your top source", "which
+//      source brings the most views") — TrafficChart has never rendered one;
+//      sources are computed only for the Office console. A sixth put the QR
+//      code on the Links tab, where there is no QR. Rule 2 above already says
+//      every action must be something the reader has; these were the same
+//      failure as the Locations one it was written for, so the rule now covers
+//      the screen as well as the plan. Before changing a body, open the screen
+//      it names (audit 2026-09-29).
 const MILESTONES: Record<number, { title: string; body: string }> = {
   5:     { title: "First 5 views!", body: "Add Swift Signature to your email footer — your card keeps working without you." },
-  10:    { title: "10 views — you're getting noticed!", body: "Your QR code is on the Links tab. Print it once and it keeps earning views." },
+  10:    { title: "10 views — you're getting noticed!", body: "Your QR code is on your dashboard, under Other ways to share. Print it once and it keeps earning views." },
   25:    { title: "25 views and climbing!", body: "Swift Links turns one link into everything you share — it's on the Links tab." },
   // Was "Check Locations on your dashboard…" — which breaks rule 2 directly
   // above it: Locations is a Pro tab, so on a Free account this cheerful note
   // sent people to a padlock. Every milestone has to name something the reader
   // already has, whatever they pay (2026-09-11).
   50:    { title: "50 views — on fire!", body: "Add your card to Apple Wallet — it rides on your phone, ready the second you meet someone." },
-  100:   { title: "100 views!", body: "Your traffic chart shows which source brings the most views. Lean into it." },
+  100:   { title: "100 views!", body: "Triple digits. Your best day so far is sitting in the traffic chart." },
   250:   { title: "250 views!", body: "Reach only counts once it becomes conversations — take a look at Contacts." },
-  500:   { title: "500 views!", body: "Most cards never see this. Check your top source and do more of it." },
-  1000:  { title: "1,000 views!", body: "Four digits. Your best day so far is sitting in the traffic chart." },
-  2500:  { title: "2,500 views!", body: "Your card is a channel now. Keep the sources that actually work." },
-  5000:  { title: "5,000 views!", body: "Still climbing. Worth checking which source got you here." },
-  10000: { title: "10,000 views!", body: "Ten. Thousand. Views. Take a bow — then check your top source." },
+  500:   { title: "500 views!", body: "Most cards never see this. Whatever you have been doing, keep doing it." },
+  1000:  { title: "1,000 views!", body: "Four digits. Unique viewers tells you how many people that really is." },
+  2500:  { title: "2,500 views!", body: "Your card is a channel now. Keep a QR code on everything you print." },
+  5000:  { title: "5,000 views!", body: "Still climbing. Your contacts are where all this turns into work." },
+  10000: { title: "10,000 views!", body: "Ten. Thousand. Views. Take a bow, then go and meet someone new." },
 };
 
 // Milestones from largest to smallest — the reached-but-unannounced scan

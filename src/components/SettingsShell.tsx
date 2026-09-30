@@ -112,7 +112,13 @@ export default function SettingsShell({
                 <span className={`shrink-0 ${openHere ? "text-blue-400" : "text-gray-600"}`}>{s.icon}</span>
                 <span className="flex-1 min-w-0">
                   <span className={`block text-sm font-semibold ${s.quiet && !openHere ? "text-gray-400" : "text-white"}`}>{s.label}</span>
-                  <span className="block text-gray-500 text-[0.6875rem] mt-0.5 truncate">{s.desc}</span>
+                  {/* line-clamp-2, not truncate. These descriptions are the only
+                      thing telling someone which of seven closed rows holds what
+                      they came for, and `truncate` is one line — so the two
+                      longest were cut mid-word ("…the tools your c…",
+                      "Deleting is perm…"), losing exactly the part that
+                      distinguishes them (audit 2026-09-29). */}
+                  <span className="block text-gray-500 text-[0.6875rem] mt-0.5 line-clamp-2">{s.desc}</span>
                 </span>
                 <svg
                   viewBox="0 0 24 24"

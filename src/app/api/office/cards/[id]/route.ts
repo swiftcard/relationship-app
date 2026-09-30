@@ -124,7 +124,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const { error } = await admin.from("cards").update(updates).eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // Every other error on this route is a sentence written for the admin
+  // ("That card isn't part of your team."). This one handed back Postgres's own
+  // text, which OfficeCardActions then printed verbatim — an admin could be
+  // shown a constraint name (audit 2026-09-29). The real message still reaches
+  // the server log.
+  if (error) {
+    console.error("[office/cards] update failed", error.message);
+    return NextResponse.json({ error: "Couldn't save that card. Please try again." }, { status: 500 });
+  }
 
   // An office admin editing an employee's card leaves the same two cached
   // artifacts stale that the employee's own save invalidates: the share-preview

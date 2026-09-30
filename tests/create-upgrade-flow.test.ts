@@ -57,9 +57,13 @@ describe("promo codes survive every path from /pricing to /checkout", () => {
 describe("a Free account at the card cap never enters the add-a-card builder", () => {
   const src = read("src/app/cards/new/page.tsx");
 
-  it("redirects to /upgrade before the builder renders", () => {
+  it("redirects to /upgrade before the builder renders, and says why", () => {
     const block = blockAfter(src, "cardCount >= PLAN_LIMITS.FREE_CARD_LIMIT");
-    expect(block).toContain('redirect("/upgrade")');
+    // ?from=card-limit is load-bearing, not decoration: /upgrade renders its
+    // explanation banner only for a known `from`, so without it this bounce was
+    // wordless — the person pressed a button and met a price grid with nothing
+    // saying what had happened (audit 2026-09-29).
+    expect(block).toContain('redirect("/upgrade?from=card-limit")');
   });
 
   it("exempts plan CTAs — they are on their way to pay, not to build for free", () => {

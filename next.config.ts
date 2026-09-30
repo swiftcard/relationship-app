@@ -80,6 +80,16 @@ const nextConfig: NextConfig = {
         destination: "/cards/new",
         permanent: false,
       },
+      // The settings hub lives at /settings/flows — a slug that names one of its
+      // seven sections rather than the page. Nothing in the product links to a
+      // bare /settings, but it is the obvious thing to type or to guess from the
+      // breadcrumb, and it 404'd (audit 2026-09-29). Not permanent: the hub may
+      // yet move to /settings itself, and a cached 308 would outlive the fix.
+      {
+        source: "/settings",
+        destination: "/settings/flows",
+        permanent: false,
+      },
     ];
   },
 };

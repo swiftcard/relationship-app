@@ -8,11 +8,25 @@ import { PlanGate } from "@/components/PlanGate";
 export default function AddContactModal({
   cardOwner,
   onAdded,
+  variant = "add",
 }: {
   /** Username of the card the contact should be attached to (the selected card). */
   cardOwner?: string;
   /** Called with the new lead so the Contacts list can insert it instantly. */
   onAdded: (lead: unknown) => void;
+  /**
+   * Which trigger to draw. Both open this same modal — the difference is the
+   * door people come through.
+   *
+   * "scan" exists because the business-card scanner had exactly ONE entry point
+   * in the entire product: this modal, reached by a button labelled "Add
+   * contact" under a subtitle that (until 2026-09-29) said "Manually add
+   * someone to your contacts". A headline Pro feature was invisible to anyone
+   * who did not already know it was there. Secondary styling on purpose:
+   * typing someone in is still the common case, so this sits beside the blue
+   * button rather than competing with it.
+   */
+  variant?: "add" | "scan";
 }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", company: "", notes: "", where_met: "" });
@@ -100,13 +114,22 @@ export default function AddContactModal({
         // whitespace-nowrap: in a narrow header row "Add contact" broke to two
         // lines INSIDE the button — which doubled its height and read as an
         // oversized blue block rather than a small action.
-        className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-colors whitespace-nowrap shrink-0"
-        style={{ background: "#1D4ED8", color: "#fff" }}
+        className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-colors whitespace-nowrap shrink-0 ${
+          variant === "scan" ? "border border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white" : ""
+        }`}
+        style={variant === "scan" ? undefined : { background: "#1D4ED8", color: "#fff" }}
       >
-        <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
-          <path d="M8 2a1 1 0 011 1v4h4a1 1 0 110 2H9v4a1 1 0 11-2 0V9H3a1 1 0 110-2h4V3a1 1 0 011-1z"/>
-        </svg>
-        Add contact
+        {variant === "scan" ? (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
+            <path d="M8 2a1 1 0 011 1v4h4a1 1 0 110 2H9v4a1 1 0 11-2 0V9H3a1 1 0 110-2h4V3a1 1 0 011-1z"/>
+          </svg>
+        )}
+        {variant === "scan" ? "Scan a card" : "Add contact"}
       </button>
 
       {open && (
@@ -120,10 +143,16 @@ export default function AddContactModal({
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
               <div>
                 <h2 className="text-white font-bold text-base">Add contact</h2>
-                <p className="text-gray-500 text-xs mt-0.5">Manually add someone to your contacts</p>
+                {/* Said "Manually add someone to your contacts" — directly above
+                    the camera button that scans a paper business card, which is
+                    the only way into the scanner in the whole product. The
+                    sentence told people the one thing this modal does is the one
+                    thing it does not only do (audit 2026-09-29). */}
+                <p className="text-gray-500 text-xs mt-0.5">Scan a business card, or type their details in</p>
               </div>
               <button
                 onClick={() => { setOpen(false); reset(); }}
+                aria-label="Close"
                 className="w-7 h-7 rounded-lg bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
               >
                 <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="w-3 h-3">

@@ -136,6 +136,13 @@ export default function SaveContactButton({
   // SMS opt-in. MUST default to false and MUST NOT gate submission — Twilio
   // A2P review requires the box be unchecked by default and optional.
   const [status, setStatus] = useState<"idle" | "loading" | "done">("idle");
+  // What went wrong with the share-back, in a sentence. Both failure paths used
+  // to end in a bare `setStatus("idle")`: pressing the button with an empty
+  // phone did NOTHING, forever, with no message and no outline, and a failed
+  // POST simply un-pressed it. This is a stranger, mid-handshake, on someone
+  // else's card — they get one impression of whether this works
+  // (audit 2026-09-29).
+  const [shareErr, setShareErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (!cardOwner) return;
@@ -293,7 +300,19 @@ export default function SaveContactButton({
 
   async function shareBack(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name.trim() || !form.phone.trim() || !cardOwner) return;
+    if (!form.name.trim()) {
+      setShareErr("Add your name so they know who shared.");
+      return;
+    }
+    if (!form.phone.trim()) {
+      setShareErr("Add a phone number so they can reach you.");
+      return;
+    }
+    if (!cardOwner) {
+      setShareErr("Couldn't send just now — please try again.");
+      return;
+    }
+    setShareErr(null);
     setStatus("loading");
 
     try {
@@ -316,8 +335,11 @@ export default function SaveContactButton({
       if (!res.ok) throw new Error("lead capture failed");
     } catch {
       // Don't mark as shared or advance the UI on a failed capture — the
-      // visitor's info would otherwise be silently lost.
+      // visitor's info would otherwise be silently lost. AND SAY SO: resetting
+      // to "idle" on its own just un-pressed the button, which reads as the app
+      // ignoring them rather than as something to try again.
       setStatus("idle");
+      setShareErr("Couldn't send that — check your connection and try again.");
       return;
     }
 
@@ -458,28 +480,48 @@ export default function SaveContactButton({
                   </button>
                 </div>
 
-                <form onSubmit={shareBack} className="space-y-3">
+                {/* method="post" for the same reason the sign-in form carries
+                    one: before hydration there is no submit handler, and the
+                    HTML default without a method is GET — which would put this
+                    visitor's name, phone and email in the URL and the history. */}
+                <form onSubmit={shareBack} method="post" className="space-y-3">
+                  <label htmlFor="sc-shareback-name" className="sr-only">Your name (required)</label>
                   <input
+                    id="sc-shareback-name"
                     type="text"
+                    required
+                    autoComplete="name"
+                    aria-invalid={shareErr?.startsWith("Add your name") || undefined}
                     placeholder="Your name *"
                     value={form.name}
-                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                    className="w-full bg-white border border-gray-200 text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors"
+                    onChange={(e) => { setForm((f) => ({ ...f, name: e.target.value })); if (shareErr) setShareErr(null); }}
+                    className={`w-full bg-white text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors border ${shareErr?.startsWith("Add your name") ? "border-red-400" : "border-gray-200"}`}
                   />
+                  <label htmlFor="sc-shareback-phone" className="sr-only">Your phone number (required)</label>
                   <input
+                    id="sc-shareback-phone"
                     type="tel"
+                    required
+                    autoComplete="tel"
+                    aria-invalid={shareErr?.startsWith("Add a phone") || undefined}
                     placeholder="Your phone *"
                     value={form.phone}
-                    onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                    className="w-full bg-white border border-gray-200 text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors"
+                    onChange={(e) => { setForm((f) => ({ ...f, phone: e.target.value })); if (shareErr) setShareErr(null); }}
+                    className={`w-full bg-white text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors border ${shareErr?.startsWith("Add a phone") ? "border-red-400" : "border-gray-200"}`}
                   />
+                  <label htmlFor="sc-shareback-email" className="sr-only">Your email (optional)</label>
                   <input
+                    id="sc-shareback-email"
                     type="email"
+                    autoComplete="email"
                     placeholder="Your email (optional)"
                     value={form.email}
                     onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                    className="w-full bg-white border border-gray-200 text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors"
+                    className="w-full bg-white text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors border border-gray-200"
                   />
+                  {shareErr && (
+                    <p role="alert" className="text-red-500 text-xs px-1">{shareErr}</p>
+                  )}
                   {/* Consent disclosure — submitting is the opt-in (text + email). */}
                   <button
                     type="submit"

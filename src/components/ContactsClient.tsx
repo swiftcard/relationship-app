@@ -336,10 +336,13 @@ export default function ContactsClient({
   // these fire from BOTH the list (delete) and the detail panel.
   const [notice, setNotice] = useState<string | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  function fail(message: string) {
+  // `ms` because the automation failures below are two sentences that tell the
+  // reader to go and do something; five seconds is not long enough to read one,
+  // let alone act on it.
+  function fail(message: string, ms = 5000) {
     setNotice(message);
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
-    noticeTimer.current = setTimeout(() => setNotice(null), 5000);
+    noticeTimer.current = setTimeout(() => setNotice(null), ms);
   }
 
   const selectSeq = useRef(0);
@@ -750,7 +753,7 @@ export default function ContactsClient({
     if (!ok) {
       // Keep the draft on screen so nothing is lost — the user can retry.
       setSeqSaving("idle");
-      alert("Couldn't save the automation — please try again.");
+      fail("Couldn't save the automation — please try again.");
       return;
     }
     setLeads((prev) => prev.map((l) => (l.id === selected.id ? { ...l, follow_up_sequence: payload } : l)));
@@ -776,13 +779,19 @@ export default function ContactsClient({
       tagsOk = await updateTags(selected.id, curTags.filter((t) => t !== pauseTag && t !== "flow-paused"));
     }
     if (!tagsOk) {
-      // alert() to match the save-failure path six lines up — this component
-      // has no inline error slot for the automation panel, and a silent failure
-      // here is precisely the bug being fixed.
-      alert(
+      // Was an alert(), on the reasoning that this component had no inline
+      // error slot for the automation panel. It does — `fail()` above, whose
+      // toast is position:fixed at z-50, so it clears the detail overlay and
+      // the bottom tab bar and is visible from this panel like any other. A
+      // native alert() blocks the whole page, is unstyled, truncates on some
+      // phones, and can be suppressed entirely by iOS "block dialogs" — which
+      // would have hidden exactly this warning (audit 2026-09-29; same
+      // reasoning ManageCards records for dropping confirm()).
+      fail(
         draftCh === "sms"
           ? "Your automation was saved, but we couldn't turn texting on for this contact. Open it and submit again — until then no texts will send."
           : "Your automation was saved, but we couldn't un-pause email for this contact. Open it and submit again.",
+        9000,
       );
       setSeqSaving("idle");
       return;
@@ -1034,6 +1043,18 @@ export default function ContactsClient({
                 ? `Showing /${cardFilter}`
                 : "All contacts"}
             </p>
+            <div className="flex items-center gap-2 shrink-0">
+            {/* The scanner's only door used to be inside the Add contact modal.
+                This is the same modal — it just says so from the outside. */}
+            <AddContactModal
+              variant="scan"
+              cardOwner={cardFilter !== "all" ? cardFilter : (primaryUsername || userCards[0]?.username)}
+              onAdded={(lead) => {
+                const l = lead as Lead;
+                setLeads((prev) => [l, ...prev]);
+                if (cardFilter !== "all" && l.card_owner && l.card_owner !== cardFilter) selectCard(l.card_owner);
+              }}
+            />
             <AddContactModal
               cardOwner={cardFilter !== "all" ? cardFilter : (primaryUsername || userCards[0]?.username)}
               onAdded={(lead) => {
@@ -1048,6 +1069,7 @@ export default function ContactsClient({
                 }
               }}
             />
+            </div>
           </div>
           <div className="relative">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1078,9 +1100,34 @@ export default function ContactsClient({
         {/* List */}
         <div className="flex-1 lg:overflow-y-auto pb-20 lg:pb-0">
           {filtered.length === 0 ? (
-            <div className="p-8 text-center text-gray-600 text-sm">
-              {search ? "No contacts match your search." : "No contacts yet."}
-            </div>
+            search ? (
+              <div className="p-8 text-center text-gray-600 text-sm">No contacts match your search.</div>
+            ) : (
+              /* "No contacts yet." — four words of grey in the middle of an
+                 otherwise empty screen — was the whole of this state, on the
+                 page a new account opens expecting to find out how any of this
+                 works. It said nothing about where contacts come from and
+                 offered nothing to do. The dashboard has carried the right
+                 pattern for this all along (audit 2026-09-29). */
+              <div className="px-6 py-10 text-center">
+                <div className="w-10 h-10 bg-gray-800/60 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-5 h-5 text-gray-600" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+                  </svg>
+                </div>
+                <p className="font-semibold text-gray-300 text-sm mb-1">No contacts yet</p>
+                <p className="text-gray-600 text-xs leading-relaxed max-w-xs mx-auto">
+                  They arrive on their own — anyone who taps &ldquo;Share your info&rdquo; on your card lands
+                  here straight away. You can also add someone yourself, or scan their business card.
+                </p>
+                <Link
+                  href={`/dashboard${cardFilter !== "all" ? `?card=${encodeURIComponent(cardFilter)}` : ""}`}
+                  className="sc-tap mt-5 inline-flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-500 px-5 py-2.5 text-xs font-semibold text-white transition-colors"
+                >
+                  Share your card
+                </Link>
+              </div>
+            )
           ) : (
             sortBy === "alpha" ? (
               letters.map((letter) => (

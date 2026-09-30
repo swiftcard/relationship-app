@@ -196,8 +196,11 @@ export default function UpgradeClient({ trialEligible }: { trialEligible: boolea
               ))}
             </div>
             <div className="mt-2 flex items-center gap-2">
-              <span className="text-xs text-gray-600">Custom:</span>
+              {/* See the note on the same control in PlanCards. */}
+              <label htmlFor="office-seats-upgrade" className="text-xs text-gray-600">Custom:</label>
               <input
+                id="office-seats-upgrade"
+                aria-label="Number of team seats"
                 type="number"
                 min={OFFICE_MIN_SEATS}
                 value={seats}

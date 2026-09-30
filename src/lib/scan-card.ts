@@ -12,9 +12,16 @@ export type ScannedCard = {
   website?: string;
 };
 
-/** 403 AI_CONSENT_REQUIRED — the user hasn't allowed (or has declined) AI. Not a paywall. */
+/** 403 AI_CONSENT_REQUIRED — the user hasn't allowed (or has declined) AI. Not a paywall.
+ *
+ *  The message names the SwiftCard APP on purpose. The standing AI switch lives
+ *  in Settings → Notifications and preferences, and AiConsentSetting renders
+ *  NOTHING on the web — the question is only ever asked inside the app, though a
+ *  decline made there is honoured everywhere server-side. So "turn them on in
+ *  Settings" sent a web user hunting for a switch that is not on their screen
+ *  (audit 2026-09-29). This sentence is true on both platforms. */
 export class AiConsentRequiredError extends Error {
-  constructor(message = "AI features are off. Turn them on in Settings to scan cards.") { super(message); this.name = "AiConsentRequiredError"; }
+  constructor(message = "AI features are off for your account. Turn them back on in the SwiftCard app, under Settings → Notifications and preferences.") { super(message); this.name = "AiConsentRequiredError"; }
 }
 
 export class ProRequiredError extends Error {

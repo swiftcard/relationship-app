@@ -45,8 +45,8 @@ export default function GuestGateModal() {
   if (!open) return null;
 
   const encoded = encodeURIComponent(next);
-  const signupHref = `/login?mode=signup&next=${encoded}&draft=1`;
-  const loginHref = `/login?next=${encoded}&draft=1`;
+  const signupHref = `/login?mode=signup&next=${encoded}`;
+  const loginHref = `/login?next=${encoded}`;
   const planParam = /[?&]plan=(office|pro)\b/.exec(next)?.[1];
   const pickedPlan = planParam === "office" ? "Office" : planParam === "pro" ? "Pro" : null;
 

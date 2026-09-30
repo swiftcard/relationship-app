@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { getVisitorId, getVisitorInfo, hasSharedWith, markSharedWith } from "@/lib/visitor";
 import { triggerSignupNudgeWhenVisible } from "@/lib/nudge";
 
-type Status = "idle" | "loading" | "done" | "error" | "limit";
+type Status = "idle" | "loading" | "done" | "error" | "offline";
 
 export default function LeadCaptureForm({
   cardOwner,
@@ -16,6 +16,11 @@ export default function LeadCaptureForm({
   const [status, setStatus] = useState<Status>("idle");
   const [alreadyShared, setAlreadyShared] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "", email: "", message: "" });
+  // Which required box is empty. Pressing "Share My Info" with a blank name or
+  // phone used to `return` silently, so the button simply did nothing — with
+  // no message, no outline and no focus move, on the one form whose whole job
+  // is to capture a stranger mid-handshake.
+  const [missing, setMissing] = useState<"name" | "phone" | null>(null);
   // SMS opt-in. MUST default to false and MUST NOT gate submission — Twilio
   // A2P review requires the box be unchecked by default and optional.
 
@@ -34,7 +39,17 @@ export default function LeadCaptureForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name.trim() || !form.phone.trim()) return;
+    if (!form.name.trim()) {
+      setMissing("name");
+      document.getElementById("sc-lead-name")?.focus();
+      return;
+    }
+    if (!form.phone.trim()) {
+      setMissing("phone");
+      document.getElementById("sc-lead-phone")?.focus();
+      return;
+    }
+    setMissing(null);
     setStatus("loading");
 
     let res: Response;
@@ -50,13 +65,19 @@ export default function LeadCaptureForm({
         }),
       });
     } catch {
-      setStatus("error");
+      setStatus("offline");
       return;
     }
 
-    if (res.status === 402) {
-      setStatus("limit");
-    } else if (res.ok) {
+    // NOTE: there is deliberately no cap branch here. /api/leads never rejects
+    // a share — a Free owner over their monthly limit still has the contact
+    // captured and stored, just flagged locked until they upgrade (see
+    // api/leads/route.ts). This used to read `if (res.status === 402)` and paint
+    // "Card at capacity — this person's card is full. Ask them to upgrade to
+    // SwiftCard Pro." at a visitor who was mid-handshake: it leaked the owner's
+    // plan to their own warm lead and blamed them for it. The endpoint has never
+    // returned 402, so it was also unreachable.
+    if (res.ok) {
       // Remember the share so nothing on this owner's pages asks again.
       markSharedWith(cardOwner, form);
       setStatus("done");
@@ -93,51 +114,83 @@ export default function LeadCaptureForm({
     );
   }
 
-  if (status === "limit") {
-    return (
-      <div className="text-center py-6">
-        <p className="text-slate-900 font-semibold">Card at capacity</p>
-        <p className="text-slate-500 text-sm mt-1">This person&apos;s card is full. Ask them to upgrade to SwiftCard Pro.</p>
-      </div>
-    );
-  }
-
   return (
-    <form onSubmit={handleSubmit} className="w-full space-y-3">
-      <input
-        type="text"
-        name="name"
-        placeholder="Your name *"
-        value={form.name}
-        onChange={handleChange}
-        className="w-full bg-white border border-gray-200 text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors shadow-sm"
-      />
-      <input
-        type="tel"
-        name="phone"
-        placeholder="Your phone number *"
-        value={form.phone}
-        onChange={handleChange}
-        className="w-full bg-white border border-gray-200 text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors shadow-sm"
-      />
-      <input
-        type="email"
-        name="email"
-        placeholder="Your email (optional)"
-        value={form.email}
-        onChange={handleChange}
-        className="w-full bg-white border border-gray-200 text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors shadow-sm"
-      />
-      <textarea
-        name="message"
-        placeholder="Quick message (optional)"
-        value={form.message}
-        onChange={handleChange}
-        rows={2}
-        className="w-full bg-white border border-gray-200 text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors shadow-sm resize-none"
-      />
-      {status === "error" && (
-        <p className="text-red-400 text-xs text-center">Something went wrong. Try again.</p>
+    // method="post": before React hydrates there is no submit handler, so the
+    // HTML default runs — and without a method that default is GET, which would
+    // put a visitor's name, phone and email into the URL, their history and the
+    // access log. Same rule the sign-in form follows for passwords.
+    <form onSubmit={handleSubmit} method="post" className="w-full space-y-3">
+      {/* The placeholders were the only labels these boxes had, and a
+          placeholder disappears the moment someone types. */}
+      <div>
+        <label htmlFor="sc-lead-name" className="sr-only">Your name (required)</label>
+        <input
+          id="sc-lead-name"
+          type="text"
+          name="name"
+          required
+          autoComplete="name"
+          aria-invalid={missing === "name" || undefined}
+          aria-describedby={missing === "name" ? "sc-lead-name-err" : undefined}
+          placeholder="Your name *"
+          value={form.name}
+          onChange={handleChange}
+          className={`w-full bg-white border text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors shadow-sm ${missing === "name" ? "border-red-400" : "border-gray-200"}`}
+        />
+        {missing === "name" && (
+          <p id="sc-lead-name-err" role="alert" className="text-red-500 text-xs mt-1.5 px-1">Add your name so they know who shared.</p>
+        )}
+      </div>
+      <div>
+        <label htmlFor="sc-lead-phone" className="sr-only">Your phone number (required)</label>
+        <input
+          id="sc-lead-phone"
+          type="tel"
+          name="phone"
+          required
+          autoComplete="tel"
+          aria-invalid={missing === "phone" || undefined}
+          aria-describedby={missing === "phone" ? "sc-lead-phone-err" : undefined}
+          placeholder="Your phone number *"
+          value={form.phone}
+          onChange={handleChange}
+          className={`w-full bg-white border text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors shadow-sm ${missing === "phone" ? "border-red-400" : "border-gray-200"}`}
+        />
+        {missing === "phone" && (
+          <p id="sc-lead-phone-err" role="alert" className="text-red-500 text-xs mt-1.5 px-1">Add a phone number so they can reach you.</p>
+        )}
+      </div>
+      <div>
+        <label htmlFor="sc-lead-email" className="sr-only">Your email (optional)</label>
+        <input
+          id="sc-lead-email"
+          type="email"
+          name="email"
+          autoComplete="email"
+          placeholder="Your email (optional)"
+          value={form.email}
+          onChange={handleChange}
+          className="w-full bg-white border text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors shadow-sm border-gray-200"
+        />
+      </div>
+      <div>
+        <label htmlFor="sc-lead-message" className="sr-only">Quick message (optional)</label>
+        <textarea
+          id="sc-lead-message"
+          name="message"
+          placeholder="Quick message (optional)"
+          value={form.message}
+          onChange={handleChange}
+          rows={2}
+          className="w-full bg-white border text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors shadow-sm border-gray-200 resize-none"
+        />
+      </div>
+      {(status === "error" || status === "offline") && (
+        <p role="alert" className="text-red-500 text-xs text-center">
+          {status === "offline"
+            ? "Couldn't send — check your connection and try again."
+            : "Something went wrong. Please try again."}
+        </p>
       )}
       {/* NO SMS consent box here any more (owner, 2026-09-20): "All you're
           asking the person to do is share their information back with the user,

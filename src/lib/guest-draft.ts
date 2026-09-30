@@ -228,7 +228,7 @@ function openGate(action: string): void {
     // Very old browsers without CustomEvent constructor — fall back to a direct
     // route so the flow never dead-ends.
     const next = encodeURIComponent(window.location.pathname + window.location.search);
-    window.location.href = `/login?next=${next}&draft=1`;
+    window.location.href = `/login?next=${next}`;
   }
 }
 

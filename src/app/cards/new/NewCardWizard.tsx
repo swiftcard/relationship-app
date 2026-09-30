@@ -1194,7 +1194,12 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
         // They're signed in and already hit a Free cap — send them to the
         // in-product upgrade screen, not the marketing page with its Free
         // column and trial offer.
-        router.push("/upgrade");
+        //
+        // ?from=card-limit so /upgrade can SAY SO. Without it this was a
+        // wordless jump: the person pressed "Create card", and the next thing
+        // they saw was a price grid with no sentence anywhere explaining what
+        // had just happened to the card they were making (audit 2026-09-29).
+        router.push("/upgrade?from=card-limit");
         return;
       }
       creatingRef.current = false; // allow retry
@@ -2237,9 +2242,18 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
             {/* The final row. Back is sized to its word and the save button takes
                 the rest on ONE line: at 390px the old 1:2 split squeezed "Save and
                 create your account →" into two cramped lines inside its pill
-                (owner, 2026-09-16: "looks very unprofessional"). */}
+                (owner, 2026-09-16: "looks very unprofessional").
+
+                BELOW 360px THAT FIX BECAME A CLIP. `whitespace-nowrap` with
+                `min-w-0` does not shrink text, it hides it: at 320px the row has
+                ~280px, Back takes ~88px, and "Save & create account →" needs
+                ~210px — so the arrow and part of the word went off the end of
+                the pill, on the button that creates the account. Wrapping is
+                unlovely; a primary action you cannot read is worse. Everything
+                at 360px and up is byte-identical to the owner's fix
+                (audit 2026-09-29). */}
             <div className="flex items-center gap-3 mt-1">
-              <button onClick={() => setStep(3)} className="shrink-0 border border-gray-700 text-gray-400 hover:border-gray-500 font-semibold px-5 py-3.5 rounded-full transition-colors text-sm">
+              <button onClick={() => setStep(3)} className="shrink-0 border border-gray-700 text-gray-400 hover:border-gray-500 font-semibold px-3.5 min-[360px]:px-5 py-3.5 rounded-full transition-colors text-sm">
                 ← Back
               </button>
               {/* ── A GUEST NEVER PICKS A PLAN HERE (2026-09-15) ──────────────
@@ -2271,7 +2285,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                   requireAuth("save", handleCreate, { forceGate: true });
                 }}
                 disabled={status === "loading"}
-                className="flex-1 min-w-0 whitespace-nowrap bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold px-4 py-3.5 rounded-full shadow-[0_8px_20px_-8px_rgba(37,99,235,0.6)] transition-colors text-[0.9375rem]"
+                className="flex-1 min-w-0 whitespace-normal min-[360px]:whitespace-nowrap bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold px-4 py-3.5 rounded-full shadow-[0_8px_20px_-8px_rgba(37,99,235,0.6)] transition-colors text-[0.9375rem]"
               >
                 {status === "loading" ? "Creating…"
                   : showAuthedFirstCardGate ? "Continue to plans →"

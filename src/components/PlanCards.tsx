@@ -236,8 +236,13 @@ export default function PlanCards({
               ))}
             </div>
             <div className="mt-2 flex items-center gap-2">
-              <span className="text-xs text-slate-400">Custom:</span>
-              <input type="number" min={OFFICE_MIN_SEATS} value={seatsDraft ?? seats}
+              {/* A bare number box with "Custom:" beside it as plain text has
+                  no accessible name at all — a screen reader announced an
+                  unlabelled spin button on the purchase screen. The identical
+                  control on /pricing has carried htmlFor + aria-label since it
+                  was written; these two copies never picked it up. */}
+              <label htmlFor="office-seats-plancards" className="text-xs text-slate-400">Custom:</label>
+              <input id="office-seats-plancards" aria-label="Number of team seats" type="number" min={OFFICE_MIN_SEATS} value={seatsDraft ?? seats}
                 onChange={(e) => { setSeatsDraft(e.target.value); const n = Math.floor(Number(e.target.value)); if (n >= OFFICE_MIN_SEATS) setSeats(n); }}
                 onBlur={() => setSeatsDraft(null)}
                 className="w-20 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 bg-white border border-slate-200 focus:outline-none" />

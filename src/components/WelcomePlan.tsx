@@ -158,8 +158,12 @@ export default function WelcomePlan({
       const res = await fetch("/api/account/choose-plan", { method: "POST" });
       if (res.status === 401) { window.location.href = "/login?next=/welcome"; return; }
       if (!res.ok) {
-        const { error: err } = await res.json().catch(() => ({ error: null }));
-        setError(err || "Couldn't save your plan. Please try again.");
+        const { error: err, message } = await res.json().catch(() => ({ error: null, message: null }));
+      // `error` is the MACHINE CODE in this codebase's convention and `message`
+      // is the sentence written for the reader (api/cards/route.ts:52 returns
+      // {error:"limit", message:"Ready for a second card?…"}). Read in the
+      // wrong order, a user is shown the literal word "limit" in a red box.
+        setError(message || err || "Couldn't save your plan. Please try again.");
         setLoading(null);
         return;
       }
@@ -185,8 +189,12 @@ export default function WelcomePlan({
       });
       if (res.status === 401) { window.location.href = "/login?next=/welcome"; return; }
       if (!res.ok) {
-        const { error: err } = await res.json().catch(() => ({ error: null }));
-        setError(err || "Couldn't start your free month. Please try again.");
+        const { error: err, message } = await res.json().catch(() => ({ error: null, message: null }));
+      // `error` is the MACHINE CODE in this codebase's convention and `message`
+      // is the sentence written for the reader (api/cards/route.ts:52 returns
+      // {error:"limit", message:"Ready for a second card?…"}). Read in the
+      // wrong order, a user is shown the literal word "limit" in a red box.
+        setError(message || err || "Couldn't start your free month. Please try again.");
         setLoading(null);
         return;
       }

@@ -33,7 +33,12 @@ export default async function LoginPage({
             <SwiftCardLogo size={32} />
           </div>
           <h1 className="text-2xl font-bold text-slate-900">
-            {initialMode === "signup" ? "Create your account" : "Welcome back"}
+            {/* Not "Welcome back": the other tab on this very screen is for
+                people who have never been here, and it is the tab a first-time
+                visitor arrives on from half the marketing CTAs. Greeting them as
+                a returning user is the first thing the product gets wrong about
+                them (audit 2026-09-29). */}
+            {initialMode === "signup" ? "Create your account" : "Sign in to SwiftCard"}
           </h1>
           <p className="text-slate-600 text-sm mt-2">
             {/* Only a team-invite link is an "invitation". Every other `next`
@@ -55,7 +60,10 @@ export default async function LoginPage({
               : isReferral && initialMode === "signup"
                 ? "A friend invited you — your first month of Pro is free."
                 : initialMode === "signup"
-                  ? "Free to start. Ready in 30 seconds."
+                  // 60, not 30: the homepage says 60 seconds in three places,
+                  // the dashboard's empty state says 60, and the invite page
+                  // says about 2 minutes. One number per promise.
+                  ? "Free to start. Ready in 60 seconds."
                   : "Sign in, or tap Get Started to build your card."}
           </p>
         </div>

@@ -74,14 +74,23 @@ export default async function UpgradePage({
   return (
     <main className="min-h-screen bg-gray-950 px-5 py-12">
       {/* Arriving from a blocked card claim is a jarring jump unless we say why —
-          and, crucially, that their card wasn't thrown away. */}
-      {from === "claim" && (
+          and, crucially, that their card wasn't thrown away.
+
+          `card-limit` is the same wall reached from the other side: a signed-in
+          Free account at the cap, bounced here either by the builder's create
+          call or by the guard on /cards/new?add=1. Both used to arrive with no
+          `from` at all, so this banner never rendered and the person met a price
+          grid with nothing explaining it (audit 2026-09-29). */}
+      {(from === "claim" || from === "card-limit") && (
         <div className="max-w-4xl mx-auto mb-6">
           <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 px-4 py-3.5">
-            <p className="text-amber-300 text-sm font-semibold">Your card is saved — Free covers one card</p>
+            <p className="text-amber-300 text-sm font-semibold">
+              {from === "claim" ? "Your card is saved — Free covers one card" : "Free covers one card"}
+            </p>
             <p className="text-amber-200/70 text-xs mt-0.5 leading-relaxed">
-              You already have a card on this account. Nothing was lost: the one you just built is still
-              here waiting, and it goes live as soon as you upgrade.
+              {from === "claim"
+                ? "You already have a card on this account. Nothing was lost: the one you just built is still here waiting, and it goes live as soon as you upgrade."
+                : "You already have a card on this account, and Free includes one. Upgrade and you can add as many as you like — nothing you have built is affected either way."}
             </p>
           </div>
         </div>

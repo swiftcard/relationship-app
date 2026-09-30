@@ -110,7 +110,9 @@ export default async function NewCardPage({
     user && sp.add === "1" && !authedPlan && !sp.postcheckout &&
     !isPro && cardCount >= PLAN_LIMITS.FREE_CARD_LIMIT
   ) {
-    redirect("/upgrade");
+    // Same as the wizard's own cap bounce: carry the reason so /upgrade can
+    // explain the jump rather than opening on a bare price grid.
+    redirect("/upgrade?from=card-limit");
   }
 
   // First-card design preview: an already-authed Free account building its

@@ -674,12 +674,24 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
         // org-managed field was changed) instead of a bare "Error".
         const json = await res.json().catch(() => ({} as { message?: string; error?: string; code?: string }));
         if (json.error === "view_only" || json.code === "CARD_VIEW_ONLY") setViewOnly(true);
-        if (typeof json.message === "string" && json.message) setError(json.message);
+        // A fallback sentence, always. Without one, a failure that carried no
+        // `message` left `error` empty and the ENTIRE report to the user was the
+        // button relabelling itself "Error — try again" — which does not say
+        // whether anything saved, whether to wait, or what to do differently
+        // (audit 2026-09-29).
+        setError(
+          typeof json.message === "string" && json.message
+            ? json.message
+            : "Couldn't save your changes. Please try again.",
+        );
         setStatus("error");
         setTimeout(() => setStatus("idle"), 2500);
       }
     } catch {
-      // Network failure — don't leave the button stuck on "Saving…".
+      // Network failure — don't leave the button stuck on "Saving…". Same
+      // wording the card builder uses for the same failure, so the two screens
+      // describe one problem the same way.
+      setError("Couldn't reach the server — check your connection and try again.");
       setStatus("error");
       setTimeout(() => setStatus("idle"), 2500);
     }
