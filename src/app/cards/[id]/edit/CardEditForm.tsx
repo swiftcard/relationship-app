@@ -201,7 +201,10 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
   // Content — card details. Org-managed fields initialize FROM the org so the
   // saved payload always matches the organization's current values, even if
   // this card hadn't been re-synced yet.
-  const [label, setLabel] = useState(orgCompany ?? (card.label || ""));
+  // A card saved without a nickname opens with its name in the box — the
+  // same fallback the dashboard shows as its label — so the required rule
+  // below never blocks saving an unrelated edit to an older card.
+  const [label, setLabel] = useState(orgCompany ?? (card.label?.trim() || card.name || ""));
   // Required wherever the box is shown (owner, 2026-09-30) — the same rule as
   // the create-card wizard. Not the primary card or an office member's.
   const nicknameInputRef = useRef<HTMLInputElement>(null);
