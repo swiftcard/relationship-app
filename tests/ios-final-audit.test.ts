@@ -112,7 +112,9 @@ describe("2.3.1 — native honesty notes on aspirational product pages", () => {
   });
   it("watch + wallet pages carry the in-app clarifier", () => {
     const s = read("src/app/products/[slug]/page.tsx");
-    expect(s).toMatch(/watchOS app is on our roadmap/);
+    // The note must stay true for every installed build: 1.0.5+ carries the
+    // watch app, older builds only have the Wallet pass.
+    expect(s).toMatch(/Apple Watch app comes with SwiftCard for iPhone, version 1\.0\.5 and later/);
     expect(s).toMatch(/NativeFeatureNote/);
   });
 });

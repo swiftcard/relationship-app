@@ -340,7 +340,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const nativeNote =
     slug === "watch" ? (
       <NativeFeatureNote>
-        How this works today: add your card to Apple Wallet on your iPhone and the pass — QR code included — syncs to the Wallet app on your Apple Watch. A dedicated watchOS app is on our roadmap and isn&apos;t part of this version.
+        The Apple Watch app comes with SwiftCard for iPhone, version 1.0.5 and later: once it&apos;s installed, open the Watch app on your iPhone and turn SwiftCard on under Available Apps. On an earlier version, add your card to Apple Wallet and the pass (QR code included) shows up in Wallet on your Apple Watch.
       </NativeFeatureNote>
     ) : slug === "wallet" ? (
       <NativeFeatureNote>
