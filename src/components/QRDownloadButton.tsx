@@ -2,10 +2,14 @@
 
 import { useRef } from "react";
 import { QRCodeCanvas } from "qrcode.react";
-import { detectNativeApp } from "@/lib/platform";
+import { detectNativeApp, useIsNativeApp } from "@/lib/platform";
 
 export default function QRDownloadButton({ url, compact = false }: { url: string; compact?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  // In the app the tap shares the card LINK (see download below), so the
+  // label must not promise a PNG. useIsNativeApp is false until after mount,
+  // so server HTML and first paint agree.
+  const native = useIsNativeApp();
 
   async function download() {
     // Native shell: a canvas data-URL download can't be saved by WKWebView, so
@@ -42,7 +46,7 @@ export default function QRDownloadButton({ url, compact = false }: { url: string
         }
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
-        Download QR (PNG)
+        {native ? "Share QR link" : "Download QR (PNG)"}
       </button>
     </>
   );

@@ -11,6 +11,8 @@ import { locationLabel, groupAccuracy } from "@/lib/location-display";
 import SignOutButton from "@/components/SignOutButton";
 import NotificationBell from "@/components/NotificationBell";
 import MoreShareOptions from "@/components/MoreShareOptions";
+import QRCodeModal from "@/components/QRCodeModal";
+import { qrScanUrl } from "@/lib/share-source";
 import CardPreviewDownload from "@/components/CardPreviewDownload";
 import { CardCaptureProvider } from "@/components/CardCaptureContext";
 import GuestDraftClaim from "@/components/GuestDraftClaim";
@@ -61,6 +63,7 @@ import { trialHistoryFor } from "@/lib/trial-ledger";
 import EventTagChip from "@/components/EventTagChip";
 import { activeEvent } from "@/lib/event-tag";
 import { ownLiveHref } from "@/lib/self-pass";
+import { ACTIVE_CARD_COOKIE } from "@/lib/active-card";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
@@ -80,7 +83,16 @@ export default async function DashboardPage({
 }) {
   const supabase = await createClient();
   const params = await searchParams;
-  const selectedCard = params.card ?? null;
+  // The remembered card (sc_active_card, written by CardSelectionPersist)
+  // stands in when the address carries no ?card=. Contacts and Links already
+  // did this; the dashboard did not, so a Pro account with two cards met the
+  // "Select a card" screen on every cold open of the app and every typed
+  // /dashboard — one more tap between "open SwiftCard" and "show my card".
+  // Only a card THIS account owns is honoured (the find() below), so a cookie
+  // left by a previous account on the device still lands on the picker.
+  const cookieStore = await cookies();
+  const cookieCard = cookieStore.get(ACTIVE_CARD_COOKIE)?.value ?? null;
+  const selectedCard = params.card ?? cookieCard;
   const viewsRange: "today" | "week" | "month" | "locations" =
     params.vrange === "week" || params.vrange === "month" || params.vrange === "locations" ? params.vrange : "today";
 
@@ -134,8 +146,9 @@ export default async function DashboardPage({
   const allCards = cards ?? [];
   const hasCards = allCards.length > 0;
 
-  // Active card: the explicitly-selected one. With exactly one card we auto-open it;
-  // with 2+ cards and none selected (e.g. right after login) the user must pick one.
+  // Active card: the explicitly-selected (or remembered) one. With exactly one
+  // card we auto-open it; with 2+ cards and nothing known (a first sign-in on
+  // this device) the user picks one.
   const activeCard =
     allCards.find((c) => c.username === selectedCard) ?? (allCards.length === 1 ? allCards[0] : null);
   const activeSource = activeCard ?? profile;
@@ -358,7 +371,7 @@ export default async function DashboardPage({
   // day using the tz the browser reported (sc_tz cookie); absent it (first
   // paint, cookies off), we fall back to UTC — same as the old behaviour, so no
   // regression. tzNow is a single "now" so every window below is consistent.
-  const ownerTz = safeTimeZone((await cookies()).get("sc_tz")?.value);
+  const ownerTz = safeTimeZone(cookieStore.get("sc_tz")?.value);
   const tzNow = new Date();
   // Days-back that yields the required number of LOCAL day buckets, today
   // included: month → 30 buckets (today + 29 prior), week → 7, today → 1.
@@ -728,6 +741,9 @@ export default async function DashboardPage({
   // so a downgraded card renders the standard one. Taking it from the same
   // place as the data is what stops the preview and the card disagreeing about
   // which template they are.
+  // For the QR popup's title, "Scan to connect with <name>" — read by the
+  // OTHER person, so it is the name on the card, not the account.
+  const ownerFirstName = String((activeSource as { name?: string | null }).name ?? "").trim().split(/\s+/)[0] || "me";
   const { data: cardData, template: activeTemplate } = buildCardData(activeSource, {
     appUrl: APP_URL,
     isPro,
@@ -790,13 +806,24 @@ export default async function DashboardPage({
         />
       </div>
 
-      {/* Share */}
+      {/* Share.
+
+          Show QR leads. Meeting someone is the product's most repeated
+          moment, and "open SwiftCard → show my QR" had no button of its own:
+          the only QR on a phone was the small one printed on the card, seen
+          by tapping the card and turning the phone sideways (that still
+          works; the tour still teaches it). This is the full-size QR, one
+          tap, titled for the person scanning it. Sending the link is the
+          quieter second option; everything else stays behind "Other ways to
+          share". (UX audit 2026-09-30.) */}
       <div data-tour="share" className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5 space-y-2">
+        <QRCodeModal url={qrScanUrl(cardUrl)} firstName={ownerFirstName} label="Show QR" variant="primary" />
         <ShareButton
           url={cardUrl}
           title="My SwiftCard"
           text="Save my contact and connect with me instantly."
-          label="Share"
+          label="Share link"
+          variant="ghost"
           ownCard
         />
         <MoreShareOptions url={cardUrl} walletUsername={walletEnabled ? activeUsername : undefined} />

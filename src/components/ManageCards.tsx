@@ -73,7 +73,9 @@ export default function ManageCards({
     }
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError(data.error || "Couldn't bring the card back online. Try again.");
+      // `message` is the sentence; `error` is a machine code and must never
+      // be shown as-is (a 402 printed the literal word "limit").
+      setError(data.message || "Couldn't bring the card back online. Try again.");
       setRestoringId(null);
       return;
     }
@@ -96,7 +98,7 @@ export default function ManageCards({
     }
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError(data.error || "Couldn't delete the card. Try again.");
+      setError(data.message || "Couldn't delete the card. Try again.");
       setDeletingId(null);
       return;
     }

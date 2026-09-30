@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import Link from "next/link";
 import { scanBusinessCard, ProRequiredError, AiConsentRequiredError } from "@/lib/scan-card";
 import { PlanGate } from "@/components/PlanGate";
@@ -36,6 +37,10 @@ export default function AddContactModal({
   const [scanState, setScanState] = useState<"idle" | "scanning" | "error" | "pro">("idle");
   const [scanMsg, setScanMsg] = useState("");
   const [scanned, setScanned] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // Escape closes (same as the × and the backdrop), focus lands in the modal
+  // and returns to "Add contact" afterwards.
+  useDialogA11y(open, () => { setOpen(false); reset(); }, panelRef);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function set(field: keyof typeof form, value: string) {
@@ -138,11 +143,11 @@ export default function AddContactModal({
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { setOpen(false); reset(); }} />
 
           {/* Modal */}
-          <div className="relative w-full max-w-md bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem)]">
+          <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="add-contact-title" className="relative w-full max-w-md bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem)]">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
               <div>
-                <h2 className="text-white font-bold text-base">Add contact</h2>
+                <h2 id="add-contact-title" className="text-white font-bold text-base">Add contact</h2>
                 {/* Said "Manually add someone to your contacts" — directly above
                     the camera button that scans a paper business card, which is
                     the only way into the scanner in the whole product. The
@@ -153,7 +158,9 @@ export default function AddContactModal({
               <button
                 onClick={() => { setOpen(false); reset(); }}
                 aria-label="Close"
-                className="w-7 h-7 rounded-lg bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+                // Same 28px square to look at; the padding around it makes the
+                // tap target 44px without moving anything.
+                className="w-7 h-7 -m-2 box-content p-2 rounded-lg bg-clip-content bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
               >
                 <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="w-3 h-3">
                   <path d="M1 1l10 10M11 1L1 11"/>

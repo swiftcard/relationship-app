@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import { GUEST_GATE_EVENT, markClaimConsent } from "@/lib/guest-draft";
 
 // The auth gate a guest hits when they try to Publish / Save / Share / QR /
@@ -32,15 +33,10 @@ export default function GuestGateModal() {
     return () => window.removeEventListener(GUEST_GATE_EVENT, onGate as EventListener);
   }, []);
 
-  // Close on Escape.
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
+  // Escape closes; focus moves onto the dialog when it opens (it used to stay
+  // behind the backdrop for a keyboard user) and back afterwards.
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialogA11y(open, () => setOpen(false), panelRef);
 
   if (!open) return null;
 
@@ -52,6 +48,7 @@ export default function GuestGateModal() {
 
   return (
     <div
+      ref={panelRef}
       className="fixed inset-0 z-[100] flex items-center justify-center px-5"
       role="dialog"
       aria-modal="true"

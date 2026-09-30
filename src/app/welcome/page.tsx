@@ -137,6 +137,7 @@ export default async function WelcomePage({
   return (
     <WelcomePlan
       cardSlug={cardSlug}
+      cardName={cardName}
       presetIntent={presetIntent}
       setupFor={setupFor}
       canceled={sp.canceled === "1"}

@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import EnablePushButton from "@/components/EnablePushButton";
+import ShareButton from "@/components/ShareButton";
+import QRCodeModal from "@/components/QRCodeModal";
+import CopyButton from "@/components/CopyButton";
+import { qrScanUrl } from "@/lib/share-source";
 import { GetTheAppCard } from "@/components/AppStoreBadge";
 import PlanCards, { type PaidPlan } from "@/components/PlanCards";
 import FreeDesignChoice from "@/components/FreeDesignChoice";
@@ -25,8 +29,11 @@ import PromoCodeBox, { usePromoCode } from "@/components/PromoCodeBox";
 // and an auto-started guided tour — everything a new account should get.
 const LANDING = "/dashboard?welcome=1&tour=1";
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
+
 export default function WelcomePlan({
   cardSlug,
+  cardName = "",
   designConverted = false,
   // What Free will change about the card they just built, in plain English,
   // computed server-side in welcome/page.tsx from the saved row (never from
@@ -40,6 +47,8 @@ export default function WelcomePlan({
   referralGift = false,
   initialTier = "pro",
 }: {
+  /** The name on the card, for the QR popup's "Scan to connect with <first name>". */
+  cardName?: string;
   /** Phone-width web: open the plan tabs on Office (sent by the app's Office card). */
   initialTier?: "pro" | "office";
   /** A friend's free month of Pro is waiting (referral sign-up). Offered as a
@@ -298,6 +307,11 @@ export default function WelcomePlan({
     if (last) void checkout(last.plan, last.annual, last.seats, { withoutPromo: true });
   };
 
+  // Routes are case-insensitive, so the pretty slug shown on screen is also
+  // the link that is shared and encoded in the QR.
+  const liveUrl = `${APP_URL}/${cardSlug ?? ""}`;
+  const ownerFirstName = cardName.trim().split(/\s+/)[0] || "me";
+
   return (
     <main className="sc-app min-h-screen bg-gray-950 px-5 py-12">
       <div className="max-w-6xl mx-auto">
@@ -308,12 +322,26 @@ export default function WelcomePlan({
               <svg className="w-7 h-7 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
             </div>
             <h1 className="text-white font-bold text-2xl sm:text-3xl">Your card is live!</h1>
-            {cardSlug && <p className="text-blue-400 text-sm mt-1.5 font-mono">swiftcard.me/{cardSlug}</p>}
+            {cardSlug && (
+              <div className="mt-2 inline-flex max-w-full items-center gap-2 bg-gray-800/60 border border-gray-700/60 rounded-xl pl-3 pr-1.5 py-1.5">
+                <span className="text-blue-400 text-sm font-mono truncate">swiftcard.me/{cardSlug}</span>
+                <CopyButton text={liveUrl} />
+              </div>
+            )}
             <p className="text-gray-400 text-sm mt-3">We also sent you an email with your link.</p>
+            {/* Share first — the card exists to be handed to people. The
+                notifications switch and the app offer follow (they used to
+                lead, before anyone had shared anything; audit 2026-09-30). */}
+            {cardSlug && (
+              <div className="mt-6 space-y-2 text-left">
+                <QRCodeModal url={qrScanUrl(liveUrl)} firstName={ownerFirstName} label="Show QR" variant="primary" />
+                <ShareButton url={liveUrl} title="My SwiftCard" text="Save my contact and connect with me instantly." label="Share link" variant="ghost" ownCard />
+              </div>
+            )}
             {/* One notifications control: it carries its own heading and, in an
                 iPhone browser, its own Add-to-Home-Screen guide. A second
                 "Turn on notifications" box above it said the same thing twice. */}
-            <div className="mt-8 mb-3"><EnablePushButton /></div>
+            <div className="mt-5 mb-3"><EnablePushButton /></div>
             <GetTheAppCard className="mt-3" />
             <button
               type="button"

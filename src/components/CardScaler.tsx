@@ -77,24 +77,49 @@ export default function CardScaler({ children, natural = DEFAULT_NATURAL }: { ch
     return () => { ro.disconnect(); clearTimeout(collapseTimer); };
   }, [NATURAL]);
 
+  // Before hydration the card used to be a zero-height, fully transparent box:
+  // scale and height both start at 0 and only exist once the effect above has
+  // measured. So on every public card view the hero was invisible until
+  // JavaScript ran, and Save Contact and everything under it jumped down
+  // ~200px when it appeared — a guaranteed layout shift on the page's most
+  // important element, and a blank cream page for anyone whose JS is slow or
+  // blocked (UX audit 2026-09-30). Two fixes, both in the server HTML:
+  //   • the outer box reserves the card's aspect ratio until it is measured,
+  //     so nothing below moves when the real height lands;
+  //   • the inline script right after it scales and reveals the card as soon
+  //     as the parser reaches it — one synchronous read of clientWidth, the
+  //     same arithmetic recompute() does — so the card is in the first paint.
+  //     React re-applies the measured values on hydration.
+  // suppressHydrationWarning: the script deliberately changes these style
+  // attributes before React hydrates; the effect overwrites them right after.
+  const boot = `(function(){var s=document.currentScript,o=s&&s.previousElementSibling;if(!o)return;var i=o.firstElementChild;if(!i)return;var w=o.clientWidth||${NATURAL},k=Math.min(1,w/${NATURAL});i.style.transform="scale("+k+")";i.style.opacity="1";o.style.height=i.offsetHeight*k+"px";})();`;
   return (
-    // contain:size — the inner card keeps a fixed LAYOUT width of 460px (the
-    // scale() transform is visual only), which would otherwise inflate any
-    // auto-sized grid/flex track holding a card to >=460px on phones and get
-    // it clipped. Size containment zeroes that intrinsic contribution; the
-    // explicit measured height keeps layout correct.
-    <div ref={outerRef} className="w-full" style={{ height: height || undefined, contain: "size" }}>
+    <>
+      {/* contain:size — the inner card keeps a fixed LAYOUT width of 460px
+          (the scale() transform is visual only), which would otherwise inflate
+          any auto-sized grid/flex track holding a card to >=460px on phones
+          and get it clipped. Size containment zeroes that intrinsic
+          contribution; the explicit measured height keeps layout correct. */}
       <div
-        ref={innerRef}
-        style={{
-          width: NATURAL,
-          transform: scale ? `scale(${scale})` : undefined,
-          transformOrigin: "top left",
-          opacity: scale ? 1 : 0,
-        }}
+        ref={outerRef}
+        className="w-full"
+        suppressHydrationWarning
+        style={{ height: height || undefined, aspectRatio: height ? undefined : `${NATURAL} / ${Math.round(NATURAL / 1.75)}`, contain: "size" }}
       >
-        {children}
+        <div
+          ref={innerRef}
+          suppressHydrationWarning
+          style={{
+            width: NATURAL,
+            transform: scale ? `scale(${scale})` : undefined,
+            transformOrigin: "top left",
+            opacity: scale ? 1 : 0,
+          }}
+        >
+          {children}
+        </div>
       </div>
-    </div>
+      <script dangerouslySetInnerHTML={{ __html: boot }} />
+    </>
   );
 }

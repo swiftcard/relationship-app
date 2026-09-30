@@ -645,7 +645,7 @@ export default function ProfileForm({ profile, linkedinEnabled = false }: { prof
         </PlanGate>
       )}
 
-      {status === "error" && <p className="text-red-500 text-xs text-center">Something went wrong.</p>}
+      {status === "error" && <p role="alert" className="text-red-500 text-xs text-center">Couldn&apos;t save your changes. Please try again.</p>}
 
       <button
         type="submit"

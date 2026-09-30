@@ -10,7 +10,10 @@ type Props = {
   title?: string;
   text?: string;
   label?: string;
-  variant?: "primary" | "secondary";
+  /** "ghost" is the dashboard's quiet outline, in Tailwind classes so the
+      light theme remaps it (the inline-styled "secondary" is for public and
+      marketing surfaces, whose colours never change). */
+  variant?: "primary" | "secondary" | "ghost";
   /**
    * The signed-in owner sharing their OWN card (the dashboard). Completed shares
    * then count toward the App Store rating moment — see lib/app-review.ts. Off
@@ -99,6 +102,7 @@ export default function ShareButton({
   }
 
   const isPrimary = variant === "primary";
+  const isGhost = variant === "ghost";
 
   if (status === "copied") {
     return (
@@ -156,11 +160,13 @@ export default function ShareButton({
   return (
     <button
       onClick={handleShare}
-      className="w-full flex items-center justify-center gap-2 font-semibold py-3 px-6 rounded-full transition-colors text-sm"
+      className={`w-full flex items-center justify-center gap-2 font-semibold py-3 px-6 rounded-full transition-colors text-sm${isGhost ? " bg-transparent border border-gray-700 text-gray-300 hover:text-white hover:bg-gray-800" : ""}`}
       style={
-        isPrimary
-          ? { background: "var(--sc-accent, #2563eb)", color: "var(--sc-accent-text, #fff)" }
-          : { background: "transparent", border: "1px solid #374151", color: "#d1d5db" }
+        isGhost
+          ? undefined
+          : isPrimary
+            ? { background: "var(--sc-accent, #2563eb)", color: "var(--sc-accent-text, #fff)" }
+            : { background: "transparent", border: "1px solid #374151", color: "#d1d5db" }
       }
     >
       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

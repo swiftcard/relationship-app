@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
+import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import { createPortal } from "react-dom";
 import { getVisitorId, getVisitorInfo, hasSharedWith, markSharedWith, hasSavedContact, markSavedContact } from "@/lib/visitor";
 import { triggerSignupNudge, triggerSignupNudgeWhenVisible } from "@/lib/nudge";
@@ -8,7 +10,10 @@ import {
   buildVCard, pickContactImage, contactInitials, CONTACT_INITIALS_BG, CONTACT_INITIALS_FG, type VCardPhoto,
 } from "@/lib/vcard";
 import { openFileViaSystemBrowser } from "@/lib/native-file";
-import { MiniQR } from "@/components/card-templates/MiniQR";
+// The QR popup is desktop-only (its button is hidden below md), yet the
+// encoder behind MiniQR shipped to every phone that opened a card. Loaded on
+// first open instead; phones never resolve it.
+const MiniQR = dynamic(() => import("@/components/card-templates/MiniQR").then((m) => m.MiniQR), { ssr: false });
 import MadeWithSwiftCard from "@/components/MadeWithSwiftCard";
 import { SCAN_SAVED_EVENT } from "@/lib/scan-saved-event";
 
@@ -108,6 +113,13 @@ function trackEvent(username: string, eventType: string, source: string) {
   }).catch(() => {});
 }
 
+/** iPhone, iPad (which reports itself as a Mac with touch) or Android. */
+function phoneLike(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return /Android|iPhone|iPad|iPod/i.test(ua) || (/Mac/.test(ua) && navigator.maxTouchPoints > 1);
+}
+
 export default function SaveContactButton({
   person,
   username,
@@ -115,6 +127,7 @@ export default function SaveContactButton({
   cardOwner,
   ownerFirstName,
   suppressTracking = false,
+  vcardHref,
 }: {
   person: Person;
   username?: string;
@@ -124,9 +137,19 @@ export default function SaveContactButton({
   /** True when the OWNER is viewing their own card — the download still works,
       but no activity event or analytics are recorded (self-noise). */
   suppressTracking?: boolean;
+  /** The server vCard for this card (/api/card/<slug>/vcard), when the page
+      knows the route will serve it. On the web the button then delivers THAT
+      file through a hidden iframe — exactly how a QR scan already delivers
+      the contact — so iPhone Safari opens its own "Add to Contacts" sheet
+      instead of dropping a .vcf into Files, and there is no headshot fetch
+      to wait through first. Absent → the file is built in the browser. */
+  vcardHref?: string;
 }) {
   const [saved, setSaved] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  // Why the save failed, in a sentence. The path had no catch at all: a
+  // thrown error escaped to the error reporter and the visitor saw nothing.
+  const [saveErr, setSaveErr] = useState<string | null>(null);
   const [showSheet, setShowSheet] = useState(false);
   // Desktop-only QR popup: on a computer you can't tap the card into your
   // phone, so the QR is the bridge — scan it and the card opens there.
@@ -143,6 +166,13 @@ export default function SaveContactButton({
   // else's card — they get one impression of whether this works
   // (audit 2026-09-29).
   const [shareErr, setShareErr] = useState<string | null>(null);
+  // Which required field the error is about — the outline and
+  // aria-describedby key off this, not off the sentence's first words.
+  const [shareMissing, setShareMissing] = useState<"name" | "phone" | null>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const phoneRef = useRef<HTMLInputElement>(null);
+  const qrRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!cardOwner) return;
@@ -196,6 +226,11 @@ export default function SaveContactButton({
     }
   }
 
+  // Both overlays: Escape closes, focus moves in (the sheet lands on the name
+  // box), and returns to the opener afterwards. Neither did any of that.
+  useDialogA11y(showSheet && status !== "done", closeSheet, sheetRef, nameRef);
+  useDialogA11y(showQr, closeQr, qrRef);
+
   async function downloadVCard() {
     // Guard against a double-tap while the headshot is still fetching — one save
     // per click, no duplicate downloads or duplicate activity entries.
@@ -206,6 +241,7 @@ export default function SaveContactButton({
     // appear (closeSheet / shareBack own that trigger). Firing it up front made
     // it collide with the share sheet.
     setDownloading(true);
+    setSaveErr(null);
     try {
     // Native shell: a Blob/anchor download no-ops in WKWebView. Hand the user
     // to the server vCard over the system browser sheet, where iOS shows the
@@ -220,6 +256,32 @@ export default function SaveContactButton({
       }
       if (cardOwner && !alreadyShared && !hasSharedWith(cardOwner)) {
         setTimeout(() => setShowSheet(true), 900);
+      }
+      return;
+    }
+    // A PHONE, with the server vCard available: hand it the same file a QR
+    // scan delivers, over a hidden iframe so this page keeps the viewport
+    // (navigating the top frame to a text/vcard URL strands Android Chrome on
+    // a blank tab — see ScanSaveContact). iOS shows its native "Add to
+    // Contacts" sheet on top, Android its download. Nothing to wait for
+    // first: the server embeds the photo itself. Phones only: a desktop
+    // browser may render an inline vCard as text inside the hidden frame and
+    // do nothing visible, whereas the download below is exactly what a
+    // computer expects.
+    if (vcardHref && phoneLike()) {
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.setAttribute("aria-hidden", "true");
+      iframe.src = vcardHref;
+      document.body.appendChild(iframe);
+      setTimeout(() => iframe.remove(), 20_000);
+      setSaved(true);
+      markSavedContact(cardOwner);
+      if (username && !suppressTracking) trackEvent(username, "downloaded_vcard", source);
+      if (cardOwner && !alreadyShared && !hasSharedWith(cardOwner)) {
+        setTimeout(() => setShowSheet(true), 900);
+      } else {
+        triggerSignupNudgeWhenVisible("vcard", 900);
       }
       return;
     }
@@ -271,7 +333,9 @@ export default function SaveContactButton({
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Not synchronously: some browsers have not started the transfer when
+    // click() returns, and revoking then aborts it.
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
 
     setSaved(true);
     markSavedContact(cardOwner);
@@ -293,6 +357,8 @@ export default function SaveContactButton({
       // a hidden page, invisibly. This waits for the visitor to return.
       triggerSignupNudgeWhenVisible("vcard", 900);
     }
+    } catch {
+      setSaveErr("Couldn't prepare the contact — please try again.");
     } finally {
       setDownloading(false);
     }
@@ -301,17 +367,22 @@ export default function SaveContactButton({
   async function shareBack(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name.trim()) {
+      setShareMissing("name");
       setShareErr("Add your name so they know who shared.");
+      nameRef.current?.focus();
       return;
     }
     if (!form.phone.trim()) {
+      setShareMissing("phone");
       setShareErr("Add a phone number so they can reach you.");
+      phoneRef.current?.focus();
       return;
     }
     if (!cardOwner) {
       setShareErr("Couldn't send just now — please try again.");
       return;
     }
+    setShareMissing(null);
     setShareErr(null);
     setStatus("loading");
 
@@ -370,10 +441,19 @@ export default function SaveContactButton({
             heights and visibly stop lining up the moment the contact saves. */}
         <button
           onClick={downloadVCard}
-          className={`flex-1 min-w-0 text-white font-semibold py-3 px-4 rounded-full transition-colors text-sm flex items-center justify-center gap-2 whitespace-nowrap ${saved ? "" : "active:bg-blue-800"}`}
+          disabled={downloading}
+          aria-busy={downloading || undefined}
+          className={`flex-1 min-w-0 text-white font-semibold py-3 px-4 rounded-full transition-colors text-sm flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-70 ${saved ? "" : "active:bg-blue-800"}`}
           style={{ background: saved ? "#16a34a" : "var(--sc-accent, #1D4ED8)" }}
         >
-          {saved ? (
+          {downloading ? (
+            // The browser-built file can wait up to 4s on the headshot; the
+            // button used to say nothing at all for that whole time.
+            <>
+              <span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" aria-hidden="true" />
+              Preparing…
+            </>
+          ) : saved ? (
             <>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -408,6 +488,9 @@ export default function SaveContactButton({
           Scan QR code
         </button>
       </div>
+      {saveErr && (
+        <p role="alert" className="text-red-500 text-xs text-center mt-2">{saveErr}</p>
+      )}
       {/* Once saved: the phone-confirm pointer, plus the "Made with SwiftCard —
           Get yours free" blurb right under the button. It used to be a blue
           "Create your free card" button here and the blurb lived at the very
@@ -419,7 +502,10 @@ export default function SaveContactButton({
           blurb's original white pill would have vanished. */}
       {saved && (
         <div className="mt-1.5 flex flex-col items-center gap-2.5">
-          <p className="text-center text-[0.6875rem]" style={{ color: "#94a3b8" }}>
+          {/* 12px slate-500 (was 11px #94a3b8 — 2.8:1 on white, the least
+              legible text on the page, carrying the one instruction a
+              first-time recipient needs). */}
+          <p className="text-center text-xs" style={{ color: "#64748b" }}>
             Save — then tap &ldquo;Create New Contact&rdquo;
           </p>
           <MadeWithSwiftCard
@@ -448,6 +534,10 @@ export default function SaveContactButton({
           onClick={(e) => e.target === e.currentTarget && closeSheet()}
         >
           <div
+            ref={sheetRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sc-shareback-title"
             className="w-full max-w-sm rounded-t-3xl md:rounded-3xl p-6 animate-slide-up md:animate-pop"
             style={{ background: "#FAF7F2", border: "1px solid #E4DDD4" }}
           >
@@ -464,7 +554,7 @@ export default function SaveContactButton({
               <>
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <p className="text-slate-900 font-bold text-base leading-snug">
+                    <p id="sc-shareback-title" className="text-slate-900 font-bold text-base leading-snug">
                       Let {ownerFirstName ?? "them"} have yours too
                     </p>
                     <p className="text-slate-500 text-sm mt-1">
@@ -472,8 +562,12 @@ export default function SaveContactButton({
                     </p>
                   </div>
                   <button
+                    type="button"
                     onClick={closeSheet}
-                    className="text-slate-400 hover:text-slate-600 transition-colors text-2xl leading-none shrink-0 ml-3"
+                    // 44px target on the one way out that isn't a form button
+                    // (it was the bare 24px glyph); the negative margins keep
+                    // the glyph exactly where it sat.
+                    className="w-11 h-11 -mr-3 -mt-3 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 hover:bg-black/5 transition-colors text-2xl leading-none shrink-0 ml-3"
                     aria-label="Close"
                   >
                     ×
@@ -487,27 +581,31 @@ export default function SaveContactButton({
                 <form onSubmit={shareBack} method="post" className="space-y-3">
                   <label htmlFor="sc-shareback-name" className="sr-only">Your name (required)</label>
                   <input
+                    ref={nameRef}
                     id="sc-shareback-name"
                     type="text"
                     required
                     autoComplete="name"
-                    aria-invalid={shareErr?.startsWith("Add your name") || undefined}
+                    aria-invalid={shareMissing === "name" || undefined}
+                    aria-describedby={shareErr ? "sc-shareback-err" : undefined}
                     placeholder="Your name *"
                     value={form.name}
-                    onChange={(e) => { setForm((f) => ({ ...f, name: e.target.value })); if (shareErr) setShareErr(null); }}
-                    className={`w-full bg-white text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors border ${shareErr?.startsWith("Add your name") ? "border-red-400" : "border-gray-200"}`}
+                    onChange={(e) => { setForm((f) => ({ ...f, name: e.target.value })); if (shareErr) { setShareErr(null); setShareMissing(null); } }}
+                    className={`w-full bg-white text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors border ${shareMissing === "name" ? "border-red-400" : "border-gray-200"}`}
                   />
                   <label htmlFor="sc-shareback-phone" className="sr-only">Your phone number (required)</label>
                   <input
+                    ref={phoneRef}
                     id="sc-shareback-phone"
                     type="tel"
                     required
                     autoComplete="tel"
-                    aria-invalid={shareErr?.startsWith("Add a phone") || undefined}
+                    aria-invalid={shareMissing === "phone" || undefined}
+                    aria-describedby={shareErr ? "sc-shareback-err" : undefined}
                     placeholder="Your phone *"
                     value={form.phone}
-                    onChange={(e) => { setForm((f) => ({ ...f, phone: e.target.value })); if (shareErr) setShareErr(null); }}
-                    className={`w-full bg-white text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors border ${shareErr?.startsWith("Add a phone") ? "border-red-400" : "border-gray-200"}`}
+                    onChange={(e) => { setForm((f) => ({ ...f, phone: e.target.value })); if (shareErr) { setShareErr(null); setShareMissing(null); } }}
+                    className={`w-full bg-white text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors border ${shareMissing === "phone" ? "border-red-400" : "border-gray-200"}`}
                   />
                   <label htmlFor="sc-shareback-email" className="sr-only">Your email (optional)</label>
                   <input
@@ -520,9 +618,8 @@ export default function SaveContactButton({
                     className="w-full bg-white text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors border border-gray-200"
                   />
                   {shareErr && (
-                    <p role="alert" className="text-red-500 text-xs px-1">{shareErr}</p>
+                    <p id="sc-shareback-err" role="alert" className="text-red-500 text-xs px-1">{shareErr}</p>
                   )}
-                  {/* Consent disclosure — submitting is the opt-in (text + email). */}
                   <button
                     type="submit"
                     disabled={status === "loading"}
@@ -534,7 +631,7 @@ export default function SaveContactButton({
                   <button
                     type="button"
                     onClick={closeSheet}
-                    className="w-full text-slate-400 text-sm py-1.5 hover:text-slate-600 transition-colors"
+                    className="w-full text-slate-400 text-sm py-3 hover:text-slate-600 transition-colors"
                   >
                     No thanks
                   </button>
@@ -559,6 +656,10 @@ export default function SaveContactButton({
           onClick={(e) => e.target === e.currentTarget && closeQr()}
         >
           <div
+            ref={qrRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sc-scanqr-title"
             className="w-full max-w-sm rounded-3xl p-6 max-h-[90vh] overflow-y-auto"
             style={{ background: "#FAF7F2", border: "1px solid #E4DDD4" }}
           >
@@ -566,7 +667,7 @@ export default function SaveContactButton({
                 preference). The backdrop still closes it, and Done carries the
                 same closeQr handler, so nothing about the exit flow changes. */}
             <div className="mb-4">
-              <p className="text-slate-900 font-bold text-base leading-snug">Scan to save {ownerFirstName ?? "this"} contact</p>
+              <p id="sc-scanqr-title" className="text-slate-900 font-bold text-base leading-snug">Scan to save {ownerFirstName ?? "this"} contact</p>
               <p className="text-slate-500 text-sm mt-1">
                 Point your phone camera at the code — the contact opens already filled in.
                 Tap <span className="text-slate-700 font-medium">Create New Contact</span> to save it,

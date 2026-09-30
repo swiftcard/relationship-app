@@ -8,6 +8,10 @@ import DashboardLink from "@/components/DashboardLink";
 import LogoSuggest from "@/components/LogoSuggest";
 import ProfilePhotoSuggest from "@/components/ProfilePhotoSuggest";
 import EnablePushButton from "@/components/EnablePushButton";
+import ShareButton from "@/components/ShareButton";
+import QRCodeModal from "@/components/QRCodeModal";
+import CopyButton from "@/components/CopyButton";
+import { qrScanUrl } from "@/lib/share-source";
 import { GetTheAppCard } from "@/components/AppStoreBadge";
 import CardScaler from "@/components/CardScaler";
 import { DEFAULT_PRESET, buildPreset } from "@/lib/custom-layout";
@@ -38,6 +42,8 @@ import { consumePrefill, hasSketchContent, PREFILL_STYLE_KEYS, PREFILL_LINK_STYL
 // Shared with the edit form + server so a social typed here connects to the
 // same URL everywhere (blur, save, guest-draft snapshot all normalize).
 import { normalizeSocial } from "@/lib/social-url";
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 import { track } from "@/lib/events";
 import { PLAN_LIMITS, PRO_CUSTOMIZATION_KEYS, LINK_STYLE_KEYS, LINK_STRUCTURAL_KEYS, convertCustomizationToFreeClosest, describeFreeDesignChanges, proLinkFeaturesInUse } from "@/lib/plan";
 import { SwiftLinkStyleControls, type SwiftLinkStyle } from "@/components/SwiftLinkDesign";
@@ -531,6 +537,11 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
   // lands on step 3 with the box outlined and focused. Two frames, so it runs
   // after the step change's own jump to the top.
   const bioRequiredMissing = !bioManaged && !bio.trim();
+  // Whether anything in the folded "Address & fax" row is set. The row's
+  // open/closed start is read ONCE at mount (a <details> that re-folds while
+  // someone types in it is worse than one that stays open).
+  const locationFilled = !!fax.trim() || Object.values(address).some((v) => typeof v === "string" && v.trim().length > 0);
+  const [locationStartOpen] = useState(() => locationFilled);
   const [bioMissing, setBioMissing] = useState(false);
   const [bioFocusTick, setBioFocusTick] = useState(0);
   useEffect(() => {
@@ -734,6 +745,10 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
   // What the visitor-facing link LOOKS like: "AaronLavi-MalveCapital". The
   // routes are case-insensitive, so this exact string is shareable.
   const prettyUsername = prettyCardSlug(name, company);
+  // The slug the live card actually got (the server may have de-duplicated
+  // it), shown and shared on the "Your card is live!" step.
+  const liveSlug = createdUsername ? (cardSlug(name, company) === createdUsername ? prettyUsername : createdUsername) : prettyUsername;
+  const liveUrl = `${APP_URL}/${createdUsername ?? cardSlug(name, company)}`;
   const cardLabel = nickname.trim() || name.trim();
 
   // Phone management (multiple numbers, each labeled + toggleable on the card).
@@ -1205,7 +1220,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
       creatingRef.current = false; // allow retry
       // `message` is the sentence; `error` is a machine code ("invalid",
       // "team_card_limit") that used to be shown to the person as-is.
-      setError(data.message || data.error || "Something went wrong.");
+      setError(data.message || data.error || "Couldn't create your card. Please try again.");
       setStatus("error");
       return;
     }
@@ -1388,6 +1403,9 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
               >
                 Continue your card
               </button>
+              {/* The consequence is read BEFORE the tap: it used to sit under
+                  both buttons, after the choice was already made. */}
+              <p className="text-gray-500 text-xs text-center">Starting a new card deletes the unfinished one.</p>
               <button
                 type="button"
                 onClick={startNewCard}
@@ -1396,7 +1414,6 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                 Start a new card
               </button>
             </div>
-            <p className="text-gray-500 text-xs mt-4 text-center">Starting a new card deletes the unfinished one.</p>
           </section>
         </div>
       </main>
@@ -1605,6 +1622,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                   maxLength={120}
                   value={name}
                   aria-invalid={nameMissing || undefined}
+                  aria-describedby={nameMissing && error ? "wizard-name-error" : undefined}
                   onChange={(e) => {
                     setName(e.target.value);
                     // The error sat under the Next button and stayed there after
@@ -1613,6 +1631,10 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                   }}
                   className={`${inputCls}${nameMissing ? " ring-2 ring-red-500/70 border-red-500" : ""}`}
                 />
+                {/* The sentence sits under the box it is about. It used to be
+                    rendered at the foot of the step, off screen exactly when
+                    the field had just been scrolled into view and focused. */}
+                {nameMissing && error && <p id="wizard-name-error" role="alert" className="text-red-400 text-xs mt-1">{error}</p>}
                 {/* A member has no company field, which is where this hint lives
                     for everyone else — so they never saw their card's address
                     until the card was already live. */}
@@ -1739,15 +1761,27 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
               )}
             </FormSection>
 
+            {/* Six optional boxes (five address lines and a fax) used to sit
+                fully open on the first screen a new person meets, between
+                "How people reach you" and the Next button. Folded, like the
+                photos on the design step: one row that says what is inside,
+                open only when something in it is already set. Native
+                <details>, so it works before hydration. */}
             {!org && (
               <FormSection id="location" title="Location" note="Optional.">
-                <AddressInput value={address} onChange={setAddress} />
-                <div>
-                  <label htmlFor="wizard-fax" className="block text-xs font-medium text-gray-400 mb-1.5">
-                    Fax number <span className="text-gray-600 font-normal">· shows on your card only</span>
-                  </label>
-                  <input id="wizard-fax" type="tel" placeholder="+1 (555) 000-0000" value={fax} onChange={(e) => setFax(e.target.value)} className={inputCls} />
-                </div>
+                <MoreOptions
+                  label="Address & fax"
+                  hint={locationFilled ? "Set — shown on your card" : "Add an address or fax to the card"}
+                  defaultOpen={locationStartOpen}
+                >
+                  <AddressInput value={address} onChange={setAddress} />
+                  <div>
+                    <label htmlFor="wizard-fax" className="block text-xs font-medium text-gray-400 mb-1.5">
+                      Fax number <span className="text-gray-600 font-normal">· shows on your card only</span>
+                    </label>
+                    <input id="wizard-fax" type="tel" placeholder="+1 (555) 000-0000" value={fax} onChange={(e) => setFax(e.target.value)} className={inputCls} />
+                  </div>
+                </MoreOptions>
               </FormSection>
             )}
 
@@ -1765,7 +1799,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                 anyone was still scrolling. */}
             <div className="lg:hidden">{livePreview}</div>
 
-            {error && <p className="text-red-400 text-sm">{error}</p>}
+            {error && !nameMissing && <p role="alert" className="text-red-400 text-sm">{error}</p>}
 
             <button onClick={goNextFrom1} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-full transition-colors text-sm mt-2">
               Next: Card design →
@@ -1778,7 +1812,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
           <div className="space-y-5">
             <div className="mb-1">
               <h1 className="text-2xl font-bold text-white">Socials</h1>
-              <p className="text-gray-400 text-sm mt-1">What goes on your Swift Links page — the page people open from your card.</p>
+              <p className="text-gray-400 text-sm mt-1">What goes on your Swift Links page — the page people open from your card. Only the bio is required.</p>
             </div>
 
             {/* Three boxed groups — Bio, Social profiles, Additional links —
@@ -1811,11 +1845,12 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                   readOnly={bioManaged}
                   required={!bioManaged}
                   aria-invalid={bioMissing || undefined}
+                  aria-describedby={bioMissing ? "wizard-bio-error" : undefined}
                   rows={3}
                   placeholder="e.g. Austin realtor helping first-time buyers find their dream home — 10+ years, 200+ closings. Let's talk!"
                   className={`w-full bg-gray-900 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors resize-none ${bioManaged ? "opacity-70 cursor-default" : ""}${bioMissing ? " ring-2 ring-red-500/70 border-red-500" : ""}`}
                 />
-                {bioMissing && <p className="text-red-400 text-xs mt-1">Add a bio to continue.</p>}
+                {bioMissing && <p id="wizard-bio-error" role="alert" className="text-red-400 text-xs mt-1">Add a bio to continue.</p>}
               </div>
             </FormSection>
 
@@ -1952,7 +1987,13 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
             </div>
             <div>
               <h1 className="text-2xl font-bold text-white">Your card is live!</h1>
-              <p className="text-blue-400 text-sm mt-1 font-mono">swiftcard.me/{createdUsername ? (cardSlug(name, company) === createdUsername ? prettyUsername : createdUsername) : prettyUsername}</p>
+              {/* The link with its own Copy — it used to be plain text, so the
+                  first thing a new owner wanted to do (send it to someone)
+                  meant selecting a URL by hand. */}
+              <div className="mt-2 inline-flex max-w-full items-center gap-2 bg-gray-800/60 border border-gray-700/60 rounded-xl pl-3 pr-1.5 py-1.5">
+                <span className="text-blue-400 text-sm font-mono truncate">swiftcard.me/{liveSlug}</span>
+                <CopyButton text={liveUrl} />
+              </div>
               {/* The account's first card is when "Your SwiftCard is live" goes
                   out (lib/welcome-email: once per account, card + plan) — the
                   same line the /welcome version of this screen shows. A later
@@ -1960,6 +2001,17 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
               {(isFirstCard || tourOnDone || postCheckout) && (
                 <p className="text-gray-400 text-sm mt-3">We also sent you an email with your link.</p>
               )}
+            </div>
+
+            {/* Share comes first. The card exists to be handed to people,
+                so the next action after "it's live" is to do that — QR for
+                the person in front of you, the share sheet for everyone
+                else. Notifications and the app follow; they used to come
+                first, before the owner had shared anything (audit
+                2026-09-30). */}
+            <div className="space-y-2 text-left">
+              <QRCodeModal url={qrScanUrl(liveUrl)} firstName={name.trim().split(/\s+/)[0] || "me"} label="Show QR" variant="primary" />
+              <ShareButton url={liveUrl} title="My SwiftCard" text="Save my contact and connect with me instantly." label="Share link" variant="ghost" ownCard />
             </div>
 
             <EnablePushButton />

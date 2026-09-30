@@ -9,7 +9,7 @@
 // where it belongs, and the two Swift Links tabs preview the LINKS PAGE rather
 // than the card — see the block above the return.
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import DashboardLink from "@/components/DashboardLink";
@@ -376,6 +376,31 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
   useUndoShortcut(tab === "linkdesign", linkHistory);
 
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  // ── Unsaved-changes guard ──────────────────────────────────────────────
+  // There is no autosave here (the builder has one; the editor saves on
+  // Save), and nothing stopped a reload, a closed tab or a tap on Cancel from
+  // dropping ten minutes of edits without a word (UX audit 2026-09-30).
+  // "Dirty" is: any typed input since mount (every text box and textarea
+  // bubbles an input event to the root), or a design step the undo history
+  // has recorded. Saving clears it (the histories are cleared on save, and
+  // typedRef is reset there too). While dirty:
+  //   • closing or reloading the tab gets the browser's own "leave page?"
+  //     prompt (beforeunload — the only hook there is for that);
+  //   • Cancel turns into an in-page "Discard changes?" with Keep editing /
+  //     Discard, the same two-step ManageCards uses — no window.confirm,
+  //     which would hang the automated flows.
+  const typedRef = useRef(false);
+  const [typed, setTyped] = useState(false);
+  const dirty = typed || cardHistory.canUndo || linkHistory.canUndo;
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  useEffect(() => {
+    if (!dirty || status === "saved") return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty, status]);
+  const noteTyped = () => { if (!typedRef.current) { typedRef.current = true; setTyped(true); } };
   const [error, setError] = useState("");
   // Set when the save is rejected because this is a non-primary card that is
   // view-only on Free (api/cards/[id] → error:"view_only" / code:"CARD_VIEW_ONLY").
@@ -654,6 +679,8 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
         // back to the last save.
         cardHistory.clear();
         linkHistory.clear();
+        typedRef.current = false;
+        setTyped(false);
         // A name/company change may have auto-renamed the card URL — follow the
         // slug the server reports, or ?card= selects a card that no longer exists.
         const okJson = await res.json().catch(() => ({} as { renamedTo?: string }));
@@ -793,7 +820,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
   const designerIsCanvas = tab === "design" && customSelected && isPro && !designLocked;
 
   return (
-    <div className={`grid gap-6 lg:items-start ${designerIsCanvas ? "" : "lg:grid-cols-[minmax(0,1fr)_340px]"}`}>
+    <div onInput={noteTyped} className={`grid gap-6 lg:items-start ${designerIsCanvas ? "" : "lg:grid-cols-[minmax(0,1fr)_340px]"}`}>
       {/* ── EDITOR (left on desktop; the whole page on mobile) ── */}
       <div className="min-w-0 order-2 lg:order-1">
         {/* Tabs */}
@@ -1438,10 +1465,29 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
         )}
 
         {/* Actions */}
+        {confirmDiscard && dirty && (
+          <div role="alert" className="mt-6 rounded-xl border border-amber-800/50 bg-amber-950/40 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-amber-200 text-sm font-medium">Discard your unsaved changes?</p>
+            <div className="flex items-center gap-2 shrink-0">
+              <button type="button" onClick={() => setConfirmDiscard(false)} className="text-sm font-semibold text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 px-4 py-2 rounded-full transition-colors">
+                Keep editing
+              </button>
+              <DashboardLink card={card.username} className="text-sm font-semibold text-white bg-red-600 hover:bg-red-500 px-4 py-2 rounded-full transition-colors">
+                Discard
+              </DashboardLink>
+            </div>
+          </div>
+        )}
         <div className="flex gap-3 mt-6">
-          <DashboardLink card={card.username} className="flex-1 text-center border border-gray-700 text-gray-400 hover:border-gray-500 font-semibold py-3 rounded-full transition-colors text-sm">
-            Cancel
-          </DashboardLink>
+          {dirty && !confirmDiscard ? (
+            <button type="button" onClick={() => setConfirmDiscard(true)} className="flex-1 text-center border border-gray-700 text-gray-400 hover:border-gray-500 font-semibold py-3 rounded-full transition-colors text-sm">
+              Cancel
+            </button>
+          ) : (
+            <DashboardLink card={card.username} className="flex-1 text-center border border-gray-700 text-gray-400 hover:border-gray-500 font-semibold py-3 rounded-full transition-colors text-sm">
+              Cancel
+            </DashboardLink>
+          )}
           <button
             onClick={() => handleSave()}
             disabled={status === "saving"}

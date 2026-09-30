@@ -8,6 +8,8 @@ import Link from "next/link";
 import DemoContactActions from "@/components/site/DemoContactActions";
 import ShareButton from "@/components/ShareButton";
 import MoreShareOptions from "@/components/MoreShareOptions";
+import QRCodeModal from "@/components/QRCodeModal";
+import { qrScanUrl } from "@/lib/share-source";
 import type { CardData } from "@/components/card-templates/types";
 import TrafficChart, { type TrafficBucket } from "@/components/TrafficChart";
 
@@ -319,8 +321,10 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
         </button>
         <button type="button" onClick={() => openDemo("card")} className="mt-3 w-full text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-full py-2.5 transition-colors">Preview SwiftCard →</button>
       </Box>
+      {/* The same share box the real dashboard shows: Show QR first. */}
       <Box className="space-y-2">
-        <ShareButton url={cardUrl} title="My SwiftCard" text="Save my contact and connect with me instantly." label="Share" />
+        <QRCodeModal url={qrScanUrl(cardUrl)} firstName={String(card.data.name ?? "").split(/\s+/)[0] || "me"} label="Show QR" variant="primary" />
+        <ShareButton url={cardUrl} title="My SwiftCard" text="Save my contact and connect with me instantly." label="Share link" variant="ghost" />
         <MoreShareOptions url={cardUrl} />
       </Box>
     </>

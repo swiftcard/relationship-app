@@ -51,8 +51,11 @@ const TEMPLATES: Record<string, React.ComponentType<{ data: CardData }>> = {
 // The numbered 1-2-3-4 badges are gone (owner redesign 2026-08-19): they read
 // as a form wizard, and the page now guides with hierarchy instead — the card
 // as the hero object, then plain bold headings on ambient-tinted surfaces.
+// A real <h2>, not a <p>: the page's only heading used to be the sr-only h1,
+// so a screen-reader user jumping by heading could not reach "Save …'s
+// contact" or "Share your info with …". Same classes, identical pixels.
 function SectionHeading({ children }: { children: React.ReactNode }) {
-  return <p className="text-slate-900 font-bold text-[0.9375rem] tracking-tight">{children}</p>;
+  return <h2 className="text-slate-900 font-bold text-[0.9375rem] tracking-tight">{children}</h2>;
 }
 
 export async function generateMetadata({
@@ -432,6 +435,11 @@ export default async function CardPage({
           cardOwner={profile.username}
           ownerFirstName={firstName}
           suppressTracking={isOwnerView}
+          // The server vCard (the one a QR scan already delivers) is offered
+          // whenever the route will serve it. The one case it will not is the
+          // owner previewing a card that is not live yet (no plan chosen):
+          // the button then builds the file in the browser as before.
+          vcardHref={awaitingPlan ? undefined : `/api/card/${encodeURIComponent(profile.username)}/vcard`}
         />
         {/* No Add to Apple Wallet here — not even for the owner viewing their
             own live card (owner decision 2026-08-10: the card page is the
@@ -454,7 +462,9 @@ export default async function CardPage({
                 blue-50: a cool tint fights the cream page. */}
             <a
               href={`/links/${profile.username}`}
-              className="shrink-0 text-[0.6875rem] font-medium text-slate-500 rounded-full px-2.5 py-1 bg-[#FAF7F2] hover:bg-[#EDE7DE] hover:text-slate-700 transition-colors"
+              // py-2 -my-1: a 32px tap target that still LOOKS like the same
+              // slim chip (it was 24px tall — under any touch guideline).
+              className="shrink-0 text-[0.6875rem] font-medium text-slate-500 rounded-full px-2.5 py-2 -my-1 inline-flex items-center bg-[#FAF7F2] hover:bg-[#EDE7DE] hover:text-slate-700 transition-colors"
               style={{ boxShadow: "inset 0 0 0 1px #EFE9E1" }}
             >
               View Swift Link page →

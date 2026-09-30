@@ -289,7 +289,7 @@ const STEP_DEFS: TourStepDef[] = [
     // arrange them differently (the phone shows the two downloads, the desktop
     // shows the QR picture above its download). Naming the CONTENTS rather than
     // the layout keeps this true on both without a hedge.
-    body: "Send it by link, QR, text, or email. Other ways to share also has the link, downloads for your card and QR, and NFC. Every share can land a new lead in your contacts.",
+    body: "Meeting someone? Tap Show QR and let them scan it. Share link sends your card by text, email or any app. Other ways to share has the link to copy, downloads for your card and QR, and NFC. Every share can land a new lead in your contacts.",
     placement: "right",
   },
 

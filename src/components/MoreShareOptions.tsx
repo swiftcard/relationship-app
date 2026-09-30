@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import QRCard from "@/components/QRCard";
 import QRDownloadButton from "@/components/QRDownloadButton";
 import CopyButton from "@/components/CopyButton";
@@ -23,6 +24,10 @@ import { qrScanUrl } from "@/lib/share-source";
  */
 export default function MoreShareOptions({ url, walletUsername }: { url: string; walletUsername?: string }) {
   const [open, setOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // Escape closes, focus lands inside, and returns to "Other ways to share"
+  // afterwards. The popup used to be reachable only by mouse.
+  useDialogA11y(open, () => setOpen(false), panelRef);
   const qrUrl = qrScanUrl(url);
   // null unless a card registered a capturable node next to us. /preview also
   // renders this modal and draws its card in an <iframe>, so there is nothing
@@ -44,10 +49,10 @@ export default function MoreShareOptions({ url, walletUsername }: { url: string;
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 pt-[max(1rem,calc(env(safe-area-inset-top)+0.5rem))] pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))]" style={{ background: "rgba(0,0,0,0.6)" }} onClick={(e) => e.target === e.currentTarget && setOpen(false)}>
-          <div className="w-full max-w-sm bg-gray-950 border border-gray-800 rounded-2xl p-5 max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem)] overflow-y-auto">
+          <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="share-options-title" className="w-full max-w-sm bg-gray-950 border border-gray-800 rounded-2xl p-5 max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem)] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <p className="text-white font-semibold text-sm">Share options</p>
-              <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="text-gray-500 hover:text-white text-xl leading-none">×</button>
+              <p id="share-options-title" className="text-white font-semibold text-sm">Share options</p>
+              <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="-mr-2 -mt-2 w-10 h-10 flex items-center justify-center rounded-full text-gray-500 hover:text-white hover:bg-gray-800 text-xl leading-none transition-colors">×</button>
             </div>
 
             {/* Copy link */}
