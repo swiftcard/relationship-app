@@ -188,23 +188,29 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
         style={{ transitionDelay: "350ms" }}
       >
         <p className="text-[0.84375rem] font-semibold mb-2 text-slate-500 group-hover:text-[#2563EB] transition-colors">Start from scratch</p>
-        {/* w-full + no aspect-ratio: previously `aspect-ratio:1.75` combined with
-            `min-h-[150px]` derived the WIDTH from the min-height (150×1.75 =
-            262px), blowing past the grid column on a phone and clipping the box
-            off the screen edge. Width now follows the column; height floors at
-            150px. `relative overflow-hidden` clips the glare sweep. */}
+        {/* Exactly the shape of the template cards beside it: w-full takes the
+            column's width and aspect 7/4 (CardScaler's 460-wide card at 1.75)
+            derives the height from it. Never add a min-height here — with an
+            aspect ratio, a min-height derives the WIDTH instead (150×1.75 =
+            262px) and pushes the box off a phone's edge. It used to be a
+            150px-min box, nearly twice a phone tile's height (owner,
+            2026-09-30: "one big box … looks really awkward"). The content is
+            sized to fit a 320px-wide phone's ~74px-tall tile.
+            `relative overflow-hidden` clips the glare sweep. */}
         <div
-          className="relative overflow-hidden w-full rounded-2xl flex flex-col items-center justify-center text-center gap-3 p-4 min-h-[150px] transition-all duration-200 group-hover:-translate-y-[3px]"
+          className="relative overflow-hidden w-full aspect-[7/4] rounded-2xl flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 px-3 transition-all duration-200 group-hover:-translate-y-[3px]"
           style={{ border: "2px dashed #C9BEA8", background: "rgba(37,99,235,0.03)" }}
         >
           {/* Glare sweep — the same shine the SwiftLink featured tiles use. */}
           <span className="rd-ll-shine" aria-hidden="true" />
-          <span className="w-12 h-12 rounded-full flex items-center justify-center text-white shadow-lg transition-transform group-hover:scale-110 shrink-0" style={{ background: "var(--rd-aurora)" }}>
-            <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
+          <span className="w-8 h-8 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-white shadow-lg transition-transform group-hover:scale-110 shrink-0" style={{ background: "var(--rd-aurora)" }}>
+            <svg viewBox="0 0 24 24" className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
           </span>
-          <div className="px-2">
-            <p className="text-slate-800 font-semibold text-[0.875rem] leading-tight">See how your card would look</p>
-            <p className="text-slate-500 text-[0.75rem] mt-1">Takes 60 seconds — no signup</p>
+          <div>
+            <p className="text-slate-800 font-semibold text-[0.8125rem] sm:text-[0.9375rem] leading-tight whitespace-nowrap">Build your card</p>
+            <p className="text-slate-500 text-[0.6875rem] sm:text-[0.75rem] leading-tight mt-0.5 whitespace-nowrap">
+              <span className="sm:hidden">60 sec</span><span className="hidden sm:inline">60 seconds</span> · no signup
+            </p>
           </div>
         </div>
       </button>

@@ -500,8 +500,13 @@ export default function Home() {
                 </NativeHidden>
               </div>
             </div>
-            {/* Phones and tablets: the same real card, rising out of the bottom of the panel. */}
-            <div className="lg:hidden relative mt-10 -mb-16 sm:-mb-24 h-[320px] overflow-hidden flex justify-center">
+            {/* Phones and tablets: the same real card, rising out of the bottom of the panel.
+                pt-6: the tilt lifts the phone's top-right corner above its own
+                box, and overflow-hidden (which crops the bottom into the panel
+                edge) sliced that corner off (owner, 2026-09-30). The height grows
+                by the same 24px and mt-10 became mt-4, so the gap above and
+                the bottom crop are both unchanged. */}
+            <div className="lg:hidden relative mt-4 -mb-16 sm:-mb-24 h-[344px] pt-6 overflow-hidden flex justify-center">
               <div className="rotate-[-3deg] origin-top"><HomeCardPhone width={250} /></div>
             </div>
           </div>
