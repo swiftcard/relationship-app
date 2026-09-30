@@ -179,39 +179,37 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
 
   return (
     <>
-      {/* The 6th grid tile */}
+      {/* The last grid item, after the six templates. Six templates fill three
+          full rows of the 2-column grid, so this sits on a row of its own:
+          col-span-2 makes it a short banner across that row. As a card-shaped
+          tile it was one big box with an empty hole beside it (owner,
+          2026-09-30: "one big box … looks really awkward"). */}
       <button
         type="button"
         onClick={() => { reset(); setStep(0); setOpen(true); }}
-        className="text-left outline-none group"
+        className="col-span-2 text-left outline-none group"
         data-reveal
         style={{ transitionDelay: "350ms" }}
       >
         <p className="text-[0.84375rem] font-semibold mb-2 text-slate-500 group-hover:text-[#2563EB] transition-colors">Start from scratch</p>
-        {/* Exactly the shape of the template cards beside it: w-full takes the
-            column's width and aspect 7/4 (CardScaler's 460-wide card at 1.75)
-            derives the height from it. Never add a min-height here — with an
-            aspect ratio, a min-height derives the WIDTH instead (150×1.75 =
-            262px) and pushes the box off a phone's edge. It used to be a
-            150px-min box, nearly twice a phone tile's height (owner,
-            2026-09-30: "one big box … looks really awkward"). The content is
-            sized to fit a 320px-wide phone's ~74px-tall tile.
-            `relative overflow-hidden` clips the glare sweep. */}
+        {/* Height comes from the padding, not an aspect ratio: it stays shorter
+            than a template card at every width. Wording wraps rather than
+            clips if a narrow phone runs out of room. `relative overflow-hidden`
+            clips the glare sweep. */}
         <div
-          className="relative overflow-hidden w-full aspect-[7/4] rounded-2xl flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 px-3 transition-all duration-200 group-hover:-translate-y-[3px]"
+          className="relative overflow-hidden w-full rounded-2xl flex items-center gap-3.5 sm:gap-4 px-4 py-3.5 sm:px-5 sm:py-4 transition-all duration-200 group-hover:-translate-y-[3px]"
           style={{ border: "2px dashed #C9BEA8", background: "rgba(37,99,235,0.03)" }}
         >
           {/* Glare sweep — the same shine the SwiftLink featured tiles use. */}
           <span className="rd-ll-shine" aria-hidden="true" />
-          <span className="w-8 h-8 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-white shadow-lg transition-transform group-hover:scale-110 shrink-0" style={{ background: "var(--rd-aurora)" }}>
-            <svg viewBox="0 0 24 24" className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
+          <span className="w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-white shadow-lg transition-transform group-hover:scale-110 shrink-0" style={{ background: "var(--rd-aurora)" }}>
+            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
           </span>
-          <div>
-            <p className="text-slate-800 font-semibold text-[0.8125rem] sm:text-[0.9375rem] leading-tight whitespace-nowrap">Build your card</p>
-            <p className="text-slate-500 text-[0.6875rem] sm:text-[0.75rem] leading-tight mt-0.5 whitespace-nowrap">
-              <span className="sm:hidden">60 sec</span><span className="hidden sm:inline">60 seconds</span> · no signup
-            </p>
+          <div className="min-w-0 flex-1">
+            <p className="text-slate-800 font-semibold text-[0.9375rem] leading-snug">Build your own card</p>
+            <p className="text-slate-500 text-[0.8125rem] leading-snug mt-0.5">Takes 60 seconds · no signup</p>
           </div>
+          <svg viewBox="0 0 24 24" aria-hidden="true" className="w-5 h-5 shrink-0 text-slate-400 transition-all group-hover:text-[#2563EB] group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth={2.25}><path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </div>
       </button>
 
