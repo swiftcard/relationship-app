@@ -50,13 +50,13 @@ beforeAll(async () => {
       return realFetch(input, init);
     }) as any;
 
-    function Harness({ canScan, canAiDesign }: { canScan: boolean; canAiDesign?: boolean }) {
+    function Harness({ canScan }: { canScan: boolean }) {
       const [layout, setLayout] = useState(normalizeCustomLayout(null));
       (window as any).layout = layout;
-      return h(CustomCardDesigner, { layout, data, onChange: setLayout, canScan, ...(canAiDesign === undefined ? {} : { canAiDesign }) });
+      return h(CustomCardDesigner, { layout, data, onChange: setLayout, canScan });
     }
-    (window as any).mount = (canScan: boolean, canAiDesign?: boolean) =>
-      createRoot(document.getElementById("root")!).render(h(Harness, { canScan, canAiDesign }));
+    (window as any).mount = (canScan: boolean) =>
+      createRoot(document.getElementById("root")!).render(h(Harness, { canScan }));
   `);
   const out = await build({
     entryPoints: [join(tmp, "entry.tsx")], bundle: true, write: false, format: "iife", jsx: "automatic",
@@ -67,12 +67,12 @@ beforeAll(async () => {
 }, 240_000);
 afterAll(async () => { await browser?.close(); rmSync(tmp, { recursive: true, force: true }); });
 
-async function mount(width: number, canScan = true, canAiDesign?: boolean): Promise<Page> {
+async function mount(width: number, canScan = true): Promise<Page> {
   const page = await browser.newPage({ viewport: { width, height: 900 } });
   page.on("pageerror", (e) => { throw new Error(`page error: ${e.message}`); });
   await page.setContent(`<style>${await appCss()}</style><body class="bg-gray-950" style="margin:0;padding:12px"><div id="root"></div></body>`);
   await page.addScriptTag({ content: bundle });
-  await page.evaluate(([c, a]) => (window as never as { mount: (c: boolean, a?: boolean) => void }).mount(c, a ?? undefined), [canScan, canAiDesign ?? null] as const);
+  await page.evaluate((c) => (window as never as { mount: (c: boolean) => void }).mount(c), canScan);
   await page.waitForSelector("text=Copy a card or template you like");
   return page;
 }
@@ -103,18 +103,10 @@ describe("the designer is Copy and AI design — nothing else", () => {
     await page.close();
   });
 
-  it("without Pro, both carry the PRO tag and neither opens", async () => {
-    const page = await mount(1280, false);
-    expect(await page.getByText("PRO", { exact: true }).count()).toBe(2);
-    await page.getByRole("button", { name: /AI design/ }).first().click({ force: true });
-    expect(await page.getByRole("dialog", { name: "AI design" }).count()).toBe(0);
-    await page.close();
-  });
-
   // Owner, 2026-09-30: building a FIRST card opens Custom design for AI design;
-  // "Copy a card or template you like" stays locked there.
+  // "Copy a card or template you like" stays locked there (canScan false).
   it("a first card: Copy is locked with its PRO tag, AI design opens and designs", async () => {
-    const page = await mount(1280, false, true);
+    const page = await mount(1280, false);
     expect(await page.getByText("PRO", { exact: true }).count()).toBe(1);
     expect(await page.locator(".sc-magic-frame").count()).toBe(1);
     const copy = page.getByRole("button", { name: /Copy a card or template you like/ });
@@ -128,7 +120,7 @@ describe("the designer is Copy and AI design — nothing else", () => {
   });
 
   it("a first card on a phone: fits 390px with Copy locked", async () => {
-    const page = await mount(390, false, true);
+    const page = await mount(390, false);
     expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
     await shot(page, "designer-first-card-390");
     await page.close();

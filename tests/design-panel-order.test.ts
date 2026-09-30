@@ -143,12 +143,12 @@ describe("Custom design is shown everywhere; open for Pro and Office, and for AI
   const page = read("src/app/cards/new/page.tsx");
 
   it("the builder opens it for a paying account, and for a first card's AI design", () => {
-    expect(src).toMatch(/const customDesignAvailable = isPro \|\| \(designUnlocked && firstCardAiDesign\);/);
+    expect(src).toMatch(/const customDesignAvailable = isPro \|\| firstCardAiDesign;/);
     // Only a REAL first card: no account yet, or an account with no card.
     expect(page).toMatch(/const firstCardAiDesign = !isPro && \(!user \|\| cardCount === 0\);/);
     expect(page).toMatch(/firstCardAiDesign=\{firstCardAiDesign\}/);
     // Copy stays paid; AI design opens with the designer.
-    expect(src).toMatch(/canScan=\{isPro\} canAiDesign=\{customDesignAvailable\}/);
+    expect(src).toMatch(/onChange=\{setCustomLayout\} canScan=\{isPro\} undo=\{cardHistory\}/);
     expect(src).toMatch(/customUnlocked=\{customDesignAvailable\}/);
     // The canvas, docked preview and step-2 canvas mode all read the same flag.
     expect(src).toMatch(/customSelected && customDesignAvailable \?/);

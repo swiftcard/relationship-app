@@ -40,17 +40,16 @@ export default function CustomCardDesigner({
   layout,
   data,
   onChange,
-  // Copying a layout and AI design both cost an AI call, so their routes
-  // require a session AND a paid plan. The wizard shows this whole designer to
-  // guests and to Free first-card users as a preview (designUnlocked), which
-  // would put buttons in front of people the routes answer 401/403 — so the
-  // caller says whether they are actually available and the buttons teach
-  // rather than break.
+  // Copying a card costs an image-model call, so its routes require a session
+  // AND a paid plan. The wizard also opens this designer for someone building
+  // their FIRST card (owner, 2026-09-30), who the Copy routes answer 401/403 —
+  // so the caller says whether Copy is available (canScan) and the button
+  // teaches rather than breaks.
+  //
+  // AI design is open wherever this designer is: it only renders for someone
+  // allowed into Custom design — Pro, Office, or a first card — and
+  // /api/design-generate lets exactly those through.
   canScan = true,
-  // AI design has its own door (owner, 2026-09-30): it also opens while
-  // someone builds their FIRST card, where Copy stays paid-only. Defaults to
-  // canScan, so every other caller gates the two together as before.
-  canAiDesign = canScan,
   teamBrand = false,
   undo: tabUndo,
 }: {
@@ -58,7 +57,6 @@ export default function CustomCardDesigner({
   data: CardData;
   onChange: (layout: CustomLayout) => void;
   canScan?: boolean;
-  canAiDesign?: boolean;
   /**
    * Designing the look a WHOLE TEAM inherits (Office Branding). A photo then
    * copies only the LAYOUT, as an editable design each member's card fills with
@@ -312,8 +310,7 @@ export default function CustomCardDesigner({
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         setAiError(
-          res.status === 401 ? "Sign in first — AI design needs an account."
-          : res.status === 403 ? ((j as { code?: string; message?: string }).code === "AI_CONSENT_REQUIRED" ? ((j as { message?: string }).message ?? "AI features are off. Turn them on in Settings.") : "AI design is a Pro feature.")
+          res.status === 403 ? ((j as { code?: string; message?: string }).code === "AI_CONSENT_REQUIRED" ? ((j as { message?: string }).message ?? "AI features are off. Turn them on in Settings.") : "AI design is a Pro feature.")
           : res.status === 429 ? "Too many designs just now — try again in a minute."
           : (j as { error?: string }).error === "no_ai" ? "AI design is unavailable right now."
           : "Couldn't design that just now. Try again.",
@@ -424,26 +421,23 @@ export default function CustomCardDesigner({
 
         {/* AI design — the second way in (owner, 2026-09-23). Dressed exactly
             like Copy above, so the two read as a pair: same frame, glow and
-            shine, and the PRO tag when it isn't available. Its own gate
-            (canAiDesign): a first card gets AI design with Copy locked. */}
+            shine. Always open here — see canScan above. */}
         <div className="relative">
-          {canAiDesign && !aiBusy && (
+          {!aiBusy && (
             <div className="sc-magic-halo absolute -inset-1 rounded-2xl bg-gradient-to-r from-violet-600/40 via-fuchsia-500/35 to-blue-600/40 blur-md pointer-events-none" aria-hidden="true" />
           )}
-          <div className={`relative rounded-xl p-[1.5px] ${canAiDesign ? "sc-magic-frame" : "bg-gray-800"}`}>
+          <div className="relative rounded-xl p-[1.5px] sc-magic-frame">
             <button
               type="button"
-              onClick={() => { if (canAiDesign) { setAiError(null); setAiOpen(true); } }}
-              disabled={aiBusy || scanning || !canAiDesign}
-              className={`relative overflow-hidden w-full rounded-[10.5px] px-3.5 py-3.5 text-left transition-colors ${
-                canAiDesign ? "bg-gray-950 hover:bg-gray-900 disabled:opacity-70" : "bg-gray-950/90 cursor-default"
-              }`}
+              onClick={() => { setAiError(null); setAiOpen(true); }}
+              disabled={aiBusy || scanning}
+              className="relative overflow-hidden w-full rounded-[10.5px] px-3.5 py-3.5 text-left transition-colors bg-gray-950 hover:bg-gray-900 disabled:opacity-70"
             >
-              {canAiDesign && !aiBusy && (
+              {!aiBusy && (
                 <span className="sc-magic-shine pointer-events-none absolute top-0 bottom-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/[0.07] to-transparent" aria-hidden="true" />
               )}
               <span className="flex items-center gap-3">
-                <span className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${canAiDesign ? "bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-[0_0_14px_rgba(168,85,247,0.45)]" : "bg-gray-800 text-gray-500"}`}>
+                <span className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-[0_0_14px_rgba(168,85,247,0.45)]">
                   {aiBusy ? (
                     <span className="block w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
                   ) : (
@@ -453,21 +447,16 @@ export default function CustomCardDesigner({
                   )}
                 </span>
                 <span className="min-w-0">
-                  <span className={`block text-[0.84375rem] font-semibold ${canAiDesign ? "text-white" : "text-gray-400"}`}>
+                  <span className="block text-[0.84375rem] font-semibold text-white">
                     {aiBusy ? "Designing your card…" : "AI design"}
-                    {canAiDesign && !aiBusy && (
+                    {!aiBusy && (
                       <span className="ml-1.5 text-[0.5625rem] font-bold px-1.5 py-0.5 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white align-middle tracking-wide">✨ NEW</span>
-                    )}
-                    {!canAiDesign && (
-                      <span className="ml-1.5 text-[0.5625rem] font-bold px-1.5 py-0.5 rounded-full bg-blue-600 text-white align-middle">PRO</span>
                     )}
                   </span>
                   <span className="block text-[0.6875rem] text-gray-400 leading-snug mt-0.5">
                     {teamBrand
                       ? "Pick colours and a theme — AI designs the team's card, and every teammate's card fills it with their own details."
-                      : canAiDesign
-                      ? "Pick your colours, a theme, and whether your headshot and logo go on it — AI designs your card. Then move, resize and restyle anything."
-                      : "On Pro, pick your colours and a theme and AI designs your card for you."}
+                      : "Pick your colours, a theme, and whether your headshot and logo go on it — AI designs your card. Then move, resize and restyle anything."}
                   </span>
                 </span>
               </span>
@@ -476,7 +465,7 @@ export default function CustomCardDesigner({
         </div>
 
         {/* Another from the same choices, or change them. */}
-        {brief && canAiDesign && (
+        {brief && (
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"

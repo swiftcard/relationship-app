@@ -4,7 +4,8 @@ import { createClient } from "@/lib/supabase-server";
 import { aiComplete, hasAiProvider } from "@/lib/ai";
 import { isPaidPlan } from "@/lib/plan";
 import { isRateLimited } from "@/lib/rate-limit";
-import { aiConsentBlock, aiConsentDeclinedResponse, aiConsentState } from "@/lib/ai-consent-server";
+import { aiConsentBlock, aiConsentDeclinedResponse } from "@/lib/ai-consent-server";
+import { aiConsentPermits, readAiConsent } from "@/lib/ai-consent";
 import { clientIp } from "@/lib/client-ip";
 import { isShellRequest } from "@/lib/shell-request";
 import {
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
     const admin = getAdminSupabase();
     const { data: profile } = await admin
       .from("profiles")
-      .select("plan")
+      .select("plan, customization")
       .eq("id", user.id)
       .single();
     if (isPaidPlan(profile?.plan)) {
@@ -77,9 +78,11 @@ export async function POST(request: NextRequest) {
           { status: 403 },
         );
       }
-      const consent = await aiConsentState(user.id, request);
+      // Consent from the profile already read (a failed read is "unset": the
+      // web proceeds, the app gets the engine — aiConsentBlock's own rule).
+      const consent = readAiConsent(profile?.customization);
       if (consent === "declined") return aiConsentDeclinedResponse();
-      useModel = consent === "permit";
+      useModel = aiConsentPermits(consent, isShellRequest(request));
       if (await isRateLimited(`design-generate:${user.id}`, 20, HOUR)) return tooFast();
     }
   }

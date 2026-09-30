@@ -320,16 +320,16 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
   // to be the one case left locked: isFirstCard is false for a plan entry, so
   // the Pro look was greyed out in the builder they were about to pay for.
   const designUnlocked = isPro || guest || isFirstCard || (!!presetPlan && !postCheckout);
-  // Custom design is part of that preview for AI DESIGN only (owner,
-  // 2026-09-30: "When someone creates a card we want to give them the option to
-  // do AI design so we should unlock Custom Design"). "Copy a card or template
-  // you like" stays paid — it is the expensive call — so inside the designer it
-  // shows its PRO tag and stays locked (canScan={isPro} below). Only a real
-  // first card counts: an account that already has one keeps the row locked
-  // (firstCardAiDesign, resolved by the page; the route checks the same).
-  // Choosing Free at the end turns the design into Classic Pro, exactly like
-  // every other Pro design choice in the preview (FreeDesignChoice).
-  const customDesignAvailable = isPro || (designUnlocked && firstCardAiDesign);
+  // Custom design opens for a paying account, and for a FIRST card for AI
+  // DESIGN only (owner, 2026-09-30: "When someone creates a card we want to give
+  // them the option to do AI design so we should unlock Custom Design"). "Copy a
+  // card or template you like" stays paid — it is the expensive call — so inside
+  // the designer it shows its PRO tag and stays locked (canScan={isPro} below).
+  // Only a real first card counts: an account that already has one keeps the
+  // row locked (firstCardAiDesign, resolved by the page; the route checks the
+  // same). Choosing Free at the end turns the design into Classic Pro, exactly
+  // like every other Pro design choice in the preview (FreeDesignChoice).
+  const customDesignAvailable = isPro || firstCardAiDesign;
   const showAuthedFirstCardGate = !guest && isFirstCard && !isPro && !presetPlan;
 
   // Step 1 — card details. Managed fields start (and stay) on the org's values;
@@ -2204,7 +2204,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                       needs a session and a paid plan. AI design opens with the
                       designer itself — /api/design-generate lets a first card
                       through. */}
-                  <CustomCardDesigner layout={customLayout} data={previewData} onChange={setCustomLayout} canScan={isPro} canAiDesign={customDesignAvailable} undo={cardHistory} />
+                  <CustomCardDesigner layout={customLayout} data={previewData} onChange={setCustomLayout} canScan={isPro} undo={cardHistory} />
                 </div>
               ) : null}
 

@@ -214,7 +214,7 @@ describe("the route's doors: paid, or a first card — Copy stays paid", () => {
 
   it("nobody the app hasn't asked about AI reaches the model — the engine answers alone", () => {
     expect(route).toMatch(/useModel = !isShellRequest\(request\);/);
-    expect(route).toMatch(/useModel = consent === "permit";/);
+    expect(route).toMatch(/useModel = aiConsentPermits\(consent, isShellRequest\(request\)\);/);
     const engine = route.indexOf("if (!useModel) return NextResponse.json({ layout: buildDesign(fallbackSpec(brief, avoid), ctx, brief) });");
     expect(engine).toBeGreaterThan(-1);
     expect(engine).toBeLessThan(route.indexOf("aiComplete("));
@@ -234,11 +234,11 @@ describe("the route's doors: paid, or a first card — Copy stays paid", () => {
     expect(route).toContain("designPrompt(brief, ctx, avoid)");
   });
 
-  it("the designer gates it on its own door — PRO-tagged and inert when closed; Copy keeps canScan", () => {
-    expect(designer).toContain('onClick={() => { if (canAiDesign) { setAiError(null); setAiOpen(true); } }}');
-    expect(designer).toContain('disabled={aiBusy || scanning || !canAiDesign}');
-    // Every other caller still gates the two together.
-    expect(designer).toContain("canAiDesign = canScan,");
+  it("the designer: AI design is open wherever the designer is; canScan gates Copy alone", () => {
+    expect(designer).toContain("onClick={() => { setAiError(null); setAiOpen(true); }}");
+    expect(designer).toContain("disabled={aiBusy || scanning}");
     expect(designer).toContain("onClick={() => { if (canScan) fileRef.current?.click(); }}");
+    // The route no longer answers 401, so the client has no message for it.
+    expect(designer).not.toContain("AI design needs an account");
   });
 });

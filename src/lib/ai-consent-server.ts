@@ -77,28 +77,11 @@ export async function aiConsentAllowsFor(userId: string, req: NextRequest): Prom
 }
 
 /**
- * Three-way form, for a surface that must tell "said no" from "not asked yet".
- *
- * AI design while building a FIRST card (/api/design-generate): the consent
- * dialog is deliberately never shown on /cards/new, so in the app every new
- * account is "unasked" there. A decline is refused like everywhere else; an
- * unasked shell request gets the design engine's own answer with no model call
- * — nothing leaves — instead of an error mid-setup.
+ * The 403 a declined account gets, for a route that reads consent from a
+ * profile it already loaded — AI design on a first card (/api/design-generate),
+ * where "not asked yet" in the app answers from the design engine instead of
+ * refusing, so only a decline needs this.
  */
-export async function aiConsentState(userId: string, req: NextRequest): Promise<"permit" | "declined" | "unasked"> {
-  const admin = getAdminSupabase();
-  const { data, error } = await admin
-    .from("profiles")
-    .select("customization")
-    .eq("id", userId)
-    .single();
-  if (error) return isShellRequest(req) ? "unasked" : "permit"; // same fail rule as above
-  const consent = readAiConsent(data?.customization);
-  if (consent === "declined") return "declined";
-  return aiConsentPermits(consent, isShellRequest(req)) ? "permit" : "unasked";
-}
-
-/** The 403 a declined account gets — exported for aiConsentState callers. */
 export function aiConsentDeclinedResponse(): NextResponse {
   return consentRequired("declined");
 }
