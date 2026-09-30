@@ -195,9 +195,10 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
         {/* Height comes from the padding, not an aspect ratio: it stays shorter
             than a template card at every width. Wording wraps rather than
             clips if a narrow phone runs out of room. `relative overflow-hidden`
-            clips the glare sweep. */}
+            clips the glare sweep. The button is outline-none, so keyboard
+            focus shows here as a ring, like the templates' focus outline. */}
         <div
-          className="relative overflow-hidden w-full rounded-2xl flex items-center gap-3.5 sm:gap-4 px-4 py-3.5 sm:px-5 sm:py-4 transition-all duration-200 group-hover:-translate-y-[3px]"
+          className="relative overflow-hidden w-full rounded-2xl flex items-center gap-3.5 sm:gap-4 px-4 py-3.5 sm:px-5 sm:py-4 transition-all duration-200 group-hover:-translate-y-[3px] group-focus-visible:-translate-y-[3px] group-focus-visible:ring-2 group-focus-visible:ring-[#2563EB] group-focus-visible:ring-offset-2"
           style={{ border: "2px dashed #C9BEA8", background: "rgba(37,99,235,0.03)" }}
         >
           {/* Glare sweep — the same shine the SwiftLink featured tiles use. */}

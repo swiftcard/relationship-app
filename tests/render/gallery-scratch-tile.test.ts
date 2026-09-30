@@ -122,6 +122,18 @@ describe("homepage gallery: Start from scratch tile", () => {
         expect(l.inside, `"${l.text}" spills out of the tile`).toBe(true);
       }
       expect(m.overflowX, "no sideways page scroll").toBeLessThanOrEqual(0);
+
+      // The button is outline-none: keyboard focus must still show (a ring).
+      const ring = await page.evaluate(async () => {
+        const tile = [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("Start from scratch"))!;
+        const shadow = () => getComputedStyle(tile.children[1]).boxShadow;
+        const before = shadow();
+        (tile as HTMLElement & { focus(o?: { focusVisible?: boolean }): void }).focus({ focusVisible: true });
+        await new Promise((r) => setTimeout(r, 250)); // past the 200ms transition
+        return { before, after: shadow(), focused: document.activeElement === tile };
+      });
+      expect(ring.focused).toBe(true);
+      expect(ring.after, "focus ring on keyboard focus").not.toBe(ring.before);
       await page.close();
     });
   }

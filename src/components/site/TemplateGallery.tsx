@@ -213,7 +213,8 @@ export default function TemplateGallery({ linkedinEnabled = false }: { linkedinE
             );
           })}
 
-          {/* 6th tile — build your own in 60 seconds */}
+          {/* After the six templates: "Start from scratch", a banner across
+              its own row (col-span-2 inside CardMiniBuilder). */}
           <CardMiniBuilder linkedinEnabled={linkedinEnabled} />
         </div>
       </div>
