@@ -38,6 +38,9 @@ type Sub = {
   cancelAtPeriodEnd: boolean;
   renewalCents: number | null;
   retentionUsed: boolean;
+  /** The 50%-off coupon can go on this subscription: active, monthly, and no
+      discount already on it (lib/retention-discount — the route refuses the rest). */
+  discountOfferable?: boolean;
   paymentFailed: boolean;
   hasStripeSubscription: boolean;
   hasCustomer: boolean;
@@ -760,7 +763,9 @@ function CancelModal({ sub, onClose, onDone }: {
   const canOfferPro = sub.plan === "office";
   // Not during a free trial: there is no invoice yet to take 50% off, and the
   // delete-account flow already holds this back for trials (retention route).
-  const canOfferDiscount = !sub.retentionUsed && !sub.trialEnd && PRICE_SENSITIVE_REASONS.includes(reason);
+  // Nor on an annual plan (a 3-month coupon lapses before a yearly renewal) or
+  // over a discount they already have — `discountOfferable` says so.
+  const canOfferDiscount = !sub.retentionUsed && !sub.trialEnd && sub.discountOfferable === true && PRICE_SENSITIVE_REASONS.includes(reason);
 
   const proCents = (sub.interval ?? "monthly") === "annual" ? PLAN_PRICES.PRO_ANNUAL_CENTS : PLAN_PRICES.PRO_MONTHLY_CENTS;
   const proLabel = `${formatUsd(proCents)}/${(sub.interval ?? "monthly") === "annual" ? "yr" : "mo"}`;

@@ -32,7 +32,7 @@ type Preview = {
 
 const RESUME_KEY = "sc_checkout_resume"; // set before bouncing to login → auto-continue on return
 
-export default function CheckoutClient({ trialEligible = true, officeCoversPro = false }: { trialEligible?: boolean; officeCoversPro?: boolean }) {
+export default function CheckoutClient({ trialEligible = true, officeCoversPro = false, giftUntil = null }: { trialEligible?: boolean; officeCoversPro?: boolean; giftUntil?: string | null }) {
   const params = useSearchParams();
   const plan: Plan = params.get("plan") === "office" ? "office" : "pro";
   const interval: Interval = params.get("interval") === "annual" ? "annual" : "monthly";
@@ -324,9 +324,13 @@ export default function CheckoutClient({ trialEligible = true, officeCoversPro =
             checkout session won't create. */}
         {!preview && plan === "pro" && (
           <p className="text-gray-500 text-[0.6875rem] mt-3 leading-relaxed">
-            {trial
-              ? `First-time subscribers start with a ${TRIAL_DAYS}-day free trial. Card required — billing begins automatically after the trial unless you cancel.`
-              : "Billing starts today and renews automatically until you cancel."}
+            {/* On the delete-flow gift: the session trials to the gift's own
+                end (api/stripe/checkout), so nothing is charged today. */}
+            {giftUntil
+              ? `Your free Pro carries on — nothing is charged today. Then ${formatUsd(subtotalCents)}/${per} from ${new Date(giftUntil).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}, unless you cancel before then. Card required.`
+              : trial
+                ? `First-time subscribers start with a ${TRIAL_DAYS}-day free trial. Card required — billing begins automatically after the trial unless you cancel.`
+                : "Billing starts today and renews automatically until you cancel."}
           </p>
         )}
         {plan === "office" && (
@@ -376,7 +380,7 @@ export default function CheckoutClient({ trialEligible = true, officeCoversPro =
           By continuing you agree to our{" "}
           <Link href="/terms" className="underline hover:text-gray-300">Terms</Link> and{" "}
           <Link href="/privacy" className="underline hover:text-gray-300">Privacy Policy</Link>
-          {plan === "pro" && trial
+          {plan === "pro" && (trial || giftUntil)
             ? ", including that your subscription auto-renews after any free trial until you cancel."
             : ", including that your subscription auto-renews until you cancel."}
         </p>

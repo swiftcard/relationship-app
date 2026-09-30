@@ -7,6 +7,7 @@ import {
   RETENTION_DISCOUNT_MONTHS,
   RETENTION_DISCOUNT_PERCENT,
   RETENTION_GRANT_DAYS,
+  giftEndLabel,
   keepStep,
   lossLines,
   offerStep,
@@ -103,6 +104,38 @@ describe("the offers are real, plan-specific, and different from each other", ()
     expect(k.action).toBeNull();
   });
 
+  it("the promotion card carries what's in it, and the Pro one names monthly", () => {
+    const free = offerStep("free", ALL, false)!;
+    expect(free.badge).toBeTruthy();
+    expect(free.bullets?.length).toBe(4);
+    expect(free.accept).toContain(String(RETENTION_GRANT_DAYS));
+    expect(free.decline).toMatch(/continue to delete/i);
+    // The server may shorten the gift after a trial — the card follows it.
+    const after = offerStep("free", { ...ALL, grantDays: 16 }, false)!;
+    expect(after.title).toContain("16 days");
+    expect(after.days).toBe(16);
+    const pro = offerStep("pro", ALL, false)!;
+    expect(pro.priceLine).toMatch(/\/month/);
+    expect(pro.body).toMatch(/monthly invoices/);
+  });
+
+  it("free Pro with nothing billing it is told it simply ends — no subscription talk", () => {
+    const k = keepStep("pro", NONE, "grant", "2026-10-30T12:00:00Z");
+    expect(k.title).toMatch(/ends on its own/i);
+    expect(k.body).toMatch(/October 30/);
+    expect(k.body).toMatch(/nothing is charged/i);
+    expect(k.body).not.toMatch(/subscription/i);
+    expect(k.action).toBeNull();
+    // Unknown date still reads as a sentence.
+    expect(keepStep("pro", NONE, "grant", null).body).toMatch(/^When it ends/);
+  });
+
+  it("the gift's end date label is the day the days run out", () => {
+    const now = Date.parse("2026-09-30T12:00:00Z");
+    expect(giftEndLabel(30, now)).toBe("Oct 30");
+    expect(giftEndLabel(16, now)).toBe("Oct 16");
+  });
+
   it("an Apple subscriber is told deleting does not stop their renewal", () => {
     const k = keepStep("pro", NONE, "apple");
     expect(k.body).toMatch(/auto-renew/i);
@@ -113,18 +146,20 @@ describe("the offers are real, plan-specific, and different from each other", ()
 
 describe("Apple 3.1.1 — no selling inside the shell", () => {
   it("the native offer never quotes a price", () => {
-    const nativeCopy = [offerStep("free", ALL, true)!.title, offerStep("free", ALL, true)!.body].join(" ");
+    const n = offerStep("free", ALL, true)!;
+    const nativeCopy = [n.badge, n.title, n.body, ...(n.bullets ?? []), n.priceLine ?? "", n.fineprint, n.accept, n.decline].join(" ");
     expect(nativeCopy).not.toMatch(/\$/);
-    expect(nativeCopy).not.toMatch(/\bmonth\b.*\$/);
+    expect(n.priceLine).toBeNull();
     // The web one does, because that is the whole point of the offer there.
-    expect(offerStep("free", ALL, false)!.body).toMatch(/\$/);
+    expect(offerStep("free", ALL, false)!.priceLine).toMatch(/\$\d+\.\d{2}\/month/);
   });
 
   it("a gift is still allowed on native — the days are the same", () => {
     const native = offerStep("free", ALL, true)!;
     expect(native.action).toBe("grant");
     expect(native.body).toContain(String(RETENTION_GRANT_DAYS));
-    expect(native.body).toMatch(/no card/i);
+    expect(native.fineprint).toMatch(/no card/i);
+    expect(native.days).toBe(RETENTION_GRANT_DAYS);
   });
 });
 
@@ -154,6 +189,18 @@ describe("Apple 5.1.1 — deletion is never trapped", () => {
     for (const copy of [offerStep("free", ALL, false)!, offerStep("pro", ALL, false)!, keepStep("free", ALL, null), keepStep("pro", ALL, "stripe")]) {
       expect(copy.decline.trim().length).toBeGreaterThan(0);
     }
+  });
+
+  it("the promotion is the step immediately before the typed DELETE (owner, 2026-09-30)", () => {
+    for (const plan of ["free", "pro"] as const) {
+      const steps = stepsFor(plan, ALL, false);
+      expect(steps).toEqual(["why", "detail", "keep", "loss", "offer", "confirm"]);
+    }
+    // Free on native still gets the gift (a gift is not a sale)…
+    expect(stepsFor("free", ALL, true)).toEqual(["why", "detail", "keep", "loss", "offer", "confirm"]);
+    // …Pro on native does not get the discount, and nobody gets an empty step.
+    expect(stepsFor("pro", ALL, true)).toEqual(["why", "detail", "keep", "loss", "confirm"]);
+    expect(stepsFor("free", NONE, false)).toEqual(["why", "detail", "keep", "loss", "confirm"]);
   });
 
   it("the progress label tells you how much is left", () => {
@@ -253,7 +300,63 @@ describe("the server is what decides eligibility", () => {
   });
 });
 
+describe("each promotion is once per PERSON, and billing honours it (owner, 2026-09-30)", () => {
+  const api = read("src/app/api/account/retention/route.ts");
+  const discount = read("src/app/api/stripe/subscription/discount/route.ts");
+  const checkout = read("src/app/api/stripe/checkout/route.ts");
+  const webhook = read("src/app/api/stripe/webhook/route.ts");
+
+  it("the gift is recorded as this person's free Pro in the same write", () => {
+    const block = api.slice(api.indexOf('if (action === "grant")'), api.indexOf('if (action === "discount")'));
+    expect(block.match(/\.update\(/g)).toHaveLength(1);
+    expect(block).toMatch(/pro_trial_started_at: now/);
+    // Purge-proof: no second gift, and no Stripe/Apple trial on a new account.
+    expect(block).toMatch(/ledgerAdd\("email_retention", user\.email\)/);
+    expect(block).toMatch(/ledgerAdd\("email_trial", user\.email\)/);
+  });
+
+  it("the 50% offer is only shown where the coupon works, for someone who never had it", () => {
+    expect(api).toMatch(/opts\.discountOk === true/);
+    expect(api).toMatch(/discountRefusalFor\(sub\)/);
+    expect(api).toMatch(/retentionDiscountTakenBy\(/);
+  });
+
+  it("the discount route refuses what it can't honour and records the person", () => {
+    expect(discount).toMatch(/retentionDiscountTakenBy\(accountEmail, fingerprint\)/);
+    expect(discount).toMatch(/discountRefusalFor\(sub\)/);
+    // Checked BEFORE the coupon goes on, recorded AFTER Stripe accepted it.
+    expect(discount.indexOf("discountRefusalFor(sub)")).toBeLessThan(discount.indexOf("subscriptions.update"));
+    expect(discount.indexOf("subscriptions.update")).toBeLessThan(discount.indexOf("recordRetentionDiscount("));
+  });
+
+  it("subscribing during the gift bills from the day it ends, with no trial on top", () => {
+    expect(checkout).toMatch(/retentionGiftEndsAt\(/);
+    expect(checkout).toMatch(/subscription_data: \{ trial_end: bridgeTrialEnd \}/);
+    expect(checkout).toMatch(/grant_bridge: "1"/);
+    // Part of the idempotency key, like every other session parameter.
+    expect(checkout).toMatch(/bridgeTrialEnd \?\? 0/);
+    // The repeat-card rule must not end the rest of a gift.
+    expect(webhook).toMatch(/const giftBridge = session\.metadata\?\.grant_bridge === "1"/);
+    expect(webhook).toMatch(/!redemptionForTrial && !giftBridge/);
+  });
+
+  it("the billing screen only shows the 50% offer when the route would apply it", () => {
+    const bm = read("src/components/BillingManager.tsx");
+    expect(bm).toMatch(/sub\.discountOfferable === true/);
+    expect(read("src/app/api/stripe/subscription/route.ts")).toMatch(/discountRefusalFor\(sub\) === null/);
+  });
+});
+
 describe("the dialog wires the sequence up", () => {
+  it("doesn't start counting steps until it knows whether there's a promotion", () => {
+    const ui = read("src/components/ManageAccount.tsx");
+    expect(ui).toMatch(/const \[ready, setReady\] = useState\(false\)/);
+    expect(ui).toMatch(/disabled=\{!ready\}/);
+    expect(ui).toMatch(/\{ready \? stepLabel : ""\}/);
+    // Bounded — a hung request can never hold deletion hostage.
+    expect(ui).toMatch(/ctrl\.abort\(\), 6000/);
+  });
+
   const ui = read("src/components/ManageAccount.tsx");
 
   it("renders every step from the shared script", () => {

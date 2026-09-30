@@ -6,6 +6,7 @@ import { getOfficeSubUserContext } from "@/lib/office-roles";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { isProTrialEligible } from "@/lib/trial-eligibility";
 import { trialHistoryFor } from "@/lib/trial-ledger";
+import { giftBridgeTrialEnd, retentionGiftEndsAt } from "@/lib/billing-state";
 
 // The single confirmation step between picking a plan and Stripe. It preserves
 // the exact selection (plan, interval, seats) in the URL so it survives login,
@@ -40,13 +41,17 @@ export default async function CheckoutPage({
   // the webhook would then have swapped the account from Office to Pro (owner,
   // 2026-09-28). A Stripe-billed Office still gets the priced "Switch to Pro".
   let officeCoversPro = false;
+  // On the delete-flow gift: the SAME rule the checkout API applies
+  // (lib/billing-state), so the summary says "free until {date}" exactly when
+  // the Stripe session will trial to that date — and never offers a trial on top.
+  let giftUntil: string | null = null;
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data: profile } = await getAdminSupabase()
         .from("profiles")
-        .select("plan, stripe_customer_id, stripe_subscription_id")
+        .select("plan, plan_expires_at, stripe_customer_id, stripe_subscription_id, customization")
         .eq("id", user.id)
         .maybeSingle();
       officeCoversPro = wanted !== "office" && profile?.plan === "enterprise" && !profile?.stripe_subscription_id;
@@ -55,6 +60,16 @@ export default async function CheckoutPage({
         undefined,
         await trialHistoryFor(user.id, user.email),
       );
+      const giftEndsAt = retentionGiftEndsAt({
+        plan: (profile?.plan as string | null) ?? null,
+        planExpiresAt: (profile?.plan_expires_at as string | null) ?? null,
+        hasSubscription: !!profile?.stripe_subscription_id,
+        customization: (profile?.customization as Record<string, unknown> | null) ?? null,
+      });
+      if (giftEndsAt) {
+        trialEligible = false;
+        if (giftBridgeTrialEnd(giftEndsAt)) giftUntil = giftEndsAt;
+      }
     }
   } catch {
     // Fail open, like the helper itself: the API still decides the session.
@@ -63,7 +78,7 @@ export default async function CheckoutPage({
   return (
     <main className="sc-app min-h-screen bg-gray-950 flex items-center justify-center px-5 py-12">
       <Suspense fallback={<div className="text-gray-500 text-sm">Loading…</div>}>
-        <CheckoutClient trialEligible={trialEligible} officeCoversPro={officeCoversPro} />
+        <CheckoutClient trialEligible={trialEligible} officeCoversPro={officeCoversPro} giftUntil={giftUntil} />
       </Suspense>
     </main>
   );

@@ -8,6 +8,7 @@ import { releaseDevice } from "@/lib/device-sign-out";
 import {
   reasonsFor,
   reasonById,
+  giftEndLabel,
   offerStep,
   keepStep,
   lossLines,
@@ -23,9 +24,10 @@ import {
 // Advanced account settings → Account ownership and deletion.
 //
 // Deletion is a SEQUENCE, not a switch (owner order 2026-09-04): ask why, ask
-// what would have fixed it, then make the two best offers this particular
-// account can actually be given, then show what deleting destroys in their own
-// numbers, and only then take the typed DELETE. Free and Pro get different
+// what would have fixed it, offer the save that costs nothing, show what
+// deleting destroys in their own numbers, then — the last thing before the
+// typed DELETE (owner order 2026-09-30) — the one promotion this account can
+// actually be given, once per person. Free and Pro get different
 // questions and different offers — see lib/retention.ts, which owns every word
 // of it so the copy is testable and the two plans can't drift into each other.
 //
@@ -34,6 +36,12 @@ import {
 // and no step can trap someone. Apple 3.1.1: inside the shell there are no
 // prices, no checkout and no links out — the copy for that comes from
 // retention.ts, which is handed `native`.
+/** "October 30" — the day the gift ends, from the date the server wrote. */
+function formatGiftEnd(iso: string): string {
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? new Date(t).toLocaleDateString("en-US", { month: "long", day: "numeric" }) : "";
+}
+
 export default function ManageAccount({ isPro, plan = "free", email = "", isOfficeOwner = false }: { isPro: boolean; plan?: string; email?: string; isOfficeOwner?: boolean }) {
   const native = useIsNativeApp();
   const [expanded, setExpanded] = useState(false);
@@ -55,6 +63,12 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
   // Set when an offer is accepted — the modal turns into a confirmation and
   // deletion is off the table for this visit.
   const [saved, setSaved] = useState<string | null>(null);
+  // The gift's real end date, as the server wrote it.
+  const [savedUntil, setSavedUntil] = useState<string | null>(null);
+  // The server has answered (or given up). The step list depends on the
+  // answer, so the sequence doesn't start counting until it is known — a fast
+  // click-through used to skip the promotion and turn "of 5" into "of 6".
+  const [ready, setReady] = useState(false);
 
   const retPlan: RetentionPlan = isPro || plan !== "free" ? "pro" : "free";
   // Free accounts get a QUIETER entry point (owner order 2026-09-14): the panel
@@ -71,7 +85,7 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
   const quietEntry = retPlan === "free";
   const steps = stepsFor(retPlan, elig, native);
   const offer = offerStep(retPlan, elig, native);
-  const keep = keepStep(retPlan, elig, source);
+  const keep = keepStep(retPlan, elig, source, facts?.proEndsAt ?? null);
   const picked = reasonById(retPlan, reason);
 
   const supabase = createBrowserClient(
@@ -87,6 +101,8 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
     setPassword("");
     setError("");
     setSaved(null);
+    setSavedUntil(null);
+    setReady(false);
     setModal(true);
     // Reauthentication is only possible when the account has a password
     // identity — a Google-only account has nothing to re-enter.
@@ -99,8 +115,11 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
     }
     // Offers and numbers. A failure here is silent on purpose: the sequence
     // still runs, just without offers it can't prove the account qualifies for.
+    // Bounded, so a hung request can never hold deletion hostage (5.1.1(v)).
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
     try {
-      const res = await fetch("/api/account/retention");
+      const res = await fetch("/api/account/retention", { signal: ctrl.signal });
       if (res.ok) {
         const d = await res.json();
         setElig(d.eligibility);
@@ -108,6 +127,8 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
         setFacts({ ...d.facts, isOfficeOwner });
       }
     } catch { /* offers stay off */ }
+    clearTimeout(timer);
+    setReady(true);
   }
 
   function goNext(from: StepId) {
@@ -120,6 +141,7 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
   // immediately: someone who takes an offer at step 3 and stays has still told
   // us why they nearly left, which is the most valuable answer in here.
   function continueFromWhy() {
+    if (!ready) return;
     if (!reason) {
       setError("Please pick a reason so we can improve.");
       return;
@@ -154,6 +176,7 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
         setLoading(false);
         return;
       }
+      setSavedUntil(typeof data.until === "string" ? data.until : null);
       setSaved(action);
       setLoading(false);
     } catch {
@@ -264,13 +287,16 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
             {saved ? (
               <>
                 <p className="text-white font-bold text-base mb-2">
-                  {saved === "grant" && "Pro is on — enjoy it"}
+                  {saved === "grant" && (savedUntil ? `Pro is on until ${formatGiftEnd(savedUntil)}` : "Pro is on — enjoy it")}
                   {saved === "discount" && "Discount applied"}
                   {saved === "downgrade" && "Pro is cancelled — nothing was deleted"}
                   {saved === "quiet" && "We'll stop emailing you"}
                 </p>
                 <p className="text-gray-400 text-sm mb-4 leading-relaxed">
                   {saved === "grant" && "Your account is on Pro now, free, and it ends on its own — there's nothing to cancel. Your card, your link and your contacts are exactly where you left them."}
+                  {/* Web only (3.1.1): subscribing is a purchase. The checkout
+                      bills from the day the gift ends, so saying so is true. */}
+                  {saved === "grant" && !native && savedUntil && ` Want to keep Pro after that? Subscribe any time — you won't be charged until ${formatGiftEnd(savedUntil)}.`}
                   {saved === "discount" && "It comes off your next invoices automatically. Nothing else changes — same account, same card, same everything."}
                   {saved === "downgrade" && "You won't be charged again. Pro stays on until the end of the period you've paid for, then you move to Free and choose which card stays live. Every contact you've collected stays here. Changed your mind? Keep Subscription is in Settings → Plan and billing."}
                   {saved === "quiet" && "Every SwiftCard email to you is off. Your card, your link and your contacts are untouched — come back whenever you want."}
@@ -281,7 +307,8 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
               </>
             ) : (
               <>
-                {stepLabel && <p className="text-gray-600 text-[0.6875rem] font-semibold tracking-wide uppercase mb-2">{stepLabel}</p>}
+                {/* Held back until the step count is known, so it never changes mid-flow. */}
+                <p className="text-gray-600 text-[0.6875rem] font-semibold tracking-wide uppercase mb-2 min-h-[1rem]">{ready ? stepLabel : ""}</p>
 
                 {/* 1 — why */}
                 {step === "why" && (
@@ -303,7 +330,7 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
                     {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
                     <div className="flex gap-2 mt-4">
                       <button type="button" onClick={() => setModal(false)} className={ghostBtn}>Cancel</button>
-                      <button type="button" onClick={continueFromWhy} className={primaryBtn}>Continue</button>
+                      <button type="button" onClick={continueFromWhy} disabled={!ready} className={primaryBtn}>{ready ? "Continue" : "One moment…"}</button>
                     </div>
                   </>
                 )}
@@ -327,29 +354,7 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
                   </>
                 )}
 
-                {/* 3 — the plan/money save */}
-                {step === "offer" && offer && (
-                  <>
-                    <p className="text-white font-bold text-base mb-2">{offer.title}</p>
-                    <p className="text-gray-400 text-sm mb-4 leading-relaxed">{offer.body}</p>
-                    {error && <p className="text-red-400 text-xs mb-2">{error}</p>}
-                    {offer.accept && offer.action && (
-                      <button
-                        type="button"
-                        onClick={() => acceptOffer(offer.action!)}
-                        disabled={loading}
-                        className="w-full text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 rounded-full py-2.5 transition-colors mb-2"
-                      >
-                        {loading ? "One moment…" : offer.accept}
-                      </button>
-                    )}
-                    <button type="button" onClick={() => goNext("offer")} className="w-full text-xs text-gray-500 hover:text-gray-300 py-1.5 transition-colors">
-                      {offer.decline}
-                    </button>
-                  </>
-                )}
-
-                {/* 4 — the save that costs nothing */}
+                {/* 3 — the save that costs nothing */}
                 {step === "keep" && (
                   <>
                     <p className="text-white font-bold text-base mb-2">{keep.title}</p>
@@ -371,7 +376,7 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
                   </>
                 )}
 
-                {/* 5 — what deleting actually destroys, in their numbers */}
+                {/* 4 — what deleting actually destroys, in their numbers */}
                 {step === "loss" && (
                   <>
                     <p className="text-white font-bold text-base mb-2">Here&apos;s what goes</p>
@@ -401,6 +406,57 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
                         Continue
                       </button>
                     </div>
+                  </>
+                )}
+
+                {/* 5 — the promotion, last thing before the typed DELETE. Once
+                    per person (the server decides); declining is a real button
+                    that carries straight on to the confirmation. */}
+                {step === "offer" && offer && (
+                  <>
+                    <div className="rounded-2xl border border-blue-500/30 bg-gradient-to-b from-blue-600/15 to-blue-600/0 p-4 mb-3">
+                      {offer.badge && (
+                        <span className="inline-block rounded-full bg-blue-600 text-white text-[0.625rem] font-bold uppercase tracking-wider px-2.5 py-1 mb-3">
+                          {offer.badge}
+                        </span>
+                      )}
+                      <p className="text-white font-bold text-lg leading-snug text-balance mb-1.5">{offer.title}</p>
+                      <p className="text-gray-400 text-sm leading-relaxed">{offer.body}</p>
+                      {offer.bullets && offer.bullets.length > 0 && (
+                        <ul className="mt-3 space-y-1.5">
+                          {offer.bullets.map((b) => (
+                            <li key={b} className="flex items-start gap-2 text-sm text-gray-300">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} aria-hidden="true" className="w-4 h-4 mt-0.5 shrink-0 text-blue-400">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                              </svg>
+                              {b}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {offer.priceLine && <p className="text-gray-500 text-xs mt-3">{offer.priceLine}</p>}
+                    </div>
+                    {offer.fineprint && (
+                      <p className="text-gray-500 text-xs text-center mb-3 leading-relaxed">
+                        {offer.fineprint}
+                        {/* Never split the date ("Oct" / "30") across lines. */}
+                        {offer.days ? <> <span className="whitespace-nowrap">Ends on its own on {giftEndLabel(offer.days)}.</span></> : null}
+                      </p>
+                    )}
+                    {error && <p className="text-red-400 text-xs mb-2 text-center">{error}</p>}
+                    {offer.accept && offer.action && (
+                      <button
+                        type="button"
+                        onClick={() => acceptOffer(offer.action!)}
+                        disabled={loading}
+                        className="w-full text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 rounded-full py-3 transition-colors mb-1.5"
+                      >
+                        {loading ? "One moment…" : offer.accept}
+                      </button>
+                    )}
+                    <button type="button" onClick={() => goNext("offer")} disabled={loading} className="w-full text-xs text-gray-500 hover:text-gray-300 py-2 transition-colors">
+                      {offer.decline}
+                    </button>
                   </>
                 )}
 

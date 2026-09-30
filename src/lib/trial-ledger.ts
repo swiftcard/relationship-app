@@ -14,14 +14,24 @@ import { normEmail } from "./referral-server";
 //   card            the Stripe card fingerprint a trial started on
 //   email_trial     the normalised account email a trial started on
 //   email_retention the email that took the delete-flow free days
+//   email_retention_discount / card_retention_discount
+//                   the email / card that took the 50%-off retention offer —
+//                   one per PERSON, not per account (owner, 2026-09-30)
 //
 // FAILS OPEN on a missing table or a read error: the ledger narrows who gets a
 // free trial, and an outage in it must never stop someone paying or signing up.
 
-export type LedgerKind = "card" | "email_trial" | "email_retention";
+export type LedgerKind =
+  | "card"
+  | "email_trial"
+  | "email_retention"
+  | "email_retention_discount"
+  | "card_retention_discount";
+
+const CARD_KINDS: readonly LedgerKind[] = ["card", "card_retention_discount"];
 
 export function ledgerKey(kind: LedgerKind, raw: string): string {
-  const value = kind === "card" ? raw.trim() : normEmail(raw);
+  const value = CARD_KINDS.includes(kind) ? raw.trim() : normEmail(raw);
   return createHash("sha256").update(`${kind}:${value}`).digest("hex");
 }
 

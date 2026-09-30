@@ -7,16 +7,22 @@
 //
 //   1. why      — the reason (required; the only required step)
 //   2. detail   — a follow-up that CHANGES with the reason they picked
-//   3. offer    — the money/plan save (Free: 30 days of Pro. Pro: 50% off 3 months)
-//   4. keep     — the no-money save (Free: go quiet. Pro: switch to Free instead)
-//   5. loss     — what deleting actually destroys, with their real numbers
+//   3. keep     — the no-money save (Free: go quiet. Pro: switch to Free instead)
+//   4. loss     — what deleting actually destroys, with their real numbers
+//   5. offer    — the promotion (Free: 30 days of Pro on us. Pro: 50% off 3 months)
 //   6. confirm  — password (when the account has one) + type DELETE
+//
+// The promotion is the LAST thing before the typed DELETE (owner order
+// 2026-09-30): it lands right after "Here's what goes", with the cost of
+// leaving on screen. Each promotion is once per PERSON, ever — the account
+// record and a purge-proof ledger (lib/trial-ledger) both remember it, so
+// nobody takes free Pro, deletes, signs up again and takes it again.
 //
 // APPLE 5.1.1(v). Deletion must stay reachable and completable in the app. So:
 // every step after the first carries a plain "Continue" that advances toward
 // deletion, no step can be answered wrongly into a dead end, and the offers are
-// declined by pressing Continue — never by hunting for a hidden link. Steps 3
-// and 4 are SKIPPED, not merely skippable, when the account isn't eligible for
+// declined by pressing Continue — never by hunting for a hidden link. The
+// promotion (step 5) is SKIPPED, not merely skippable, when the account isn't eligible for
 // what they offer (a second deletion attempt, an Apple-billed subscription, a
 // grant already taken), so nobody is walked through an offer we cannot honour.
 //
@@ -43,8 +49,12 @@ export const RETENTION_DISCOUNT_PERCENT = 50;
 export const RETENTION_DISCOUNT_MONTHS = 3;
 
 export type RetentionPlan = "free" | "pro";
-/** Who takes the money. Apple-billed accounts cannot be discounted by us. */
-export type PlanSource = "stripe" | "apple" | null;
+/**
+ * Who takes the money. Apple-billed accounts cannot be discounted by us.
+ * "grant" is free Pro with no subscription behind it (the delete-flow gift, a
+ * referral month): nobody is paying, and it ends on its own.
+ */
+export type PlanSource = "stripe" | "apple" | "grant" | null;
 
 export type StepId = "why" | "detail" | "offer" | "keep" | "loss" | "confirm";
 
@@ -186,6 +196,8 @@ export type AccountFacts = {
   /** ISO date the account was created, or null when unknown. */
   since: string | null;
   isOfficeOwner: boolean;
+  /** ISO end of free Pro with no subscription behind it (source "grant"). */
+  proEndsAt?: string | null;
 };
 
 export type OfferCopy = {
@@ -199,10 +211,27 @@ export type OfferCopy = {
   action: "grant" | "discount" | "downgrade" | "quiet" | null;
   /** Label on the button that declines and continues toward deletion. */
   decline: string;
+  /** The small pill above a promotion's headline ("Pro · on us"). */
+  badge?: string;
+  /** What the promotion actually contains, one line each. */
+  bullets?: string[];
+  /** Price context. NULL inside the iOS app (3.1.1) — never a "$" there. */
+  priceLine?: string | null;
+  /** The reassurance under the headline: what it costs and how it ends. */
+  fineprint?: string;
+  /** Free days the accept button starts — the card shows the date they end. */
+  days?: number;
 };
 
+const DAY_MS = 86_400_000;
+
+/** The date a gift accepted now would end on, e.g. "Oct 30". */
+export function giftEndLabel(days: number, nowMs: number = Date.now()): string {
+  return new Date(nowMs + days * DAY_MS).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 /**
- * Step 3 — the plan/money save.
+ * Step 5 — the promotion, the last step before the typed DELETE.
  *
  * Free + native reads exactly like Free + web minus the price: a gift is not a
  * sale, so the shell may offer the days, but never "$4.99/mo".
@@ -215,30 +244,42 @@ export function offerStep(plan: RetentionPlan, elig: Eligibility, native: boolea
     const days = elig.grantDays ?? RETENTION_GRANT_DAYS;
     const price = (PLAN_PRICES.PRO_MONTHLY_CENTS / 100).toFixed(2);
     return {
-      title: `Take ${days} days of Pro first — on us`,
-      body: native
-        ? `Before you delete anything: ${days} days of Pro, free, starting now. No card, nothing to cancel — it simply ends on its own. Unlimited cards and links, every contact unlocked, automatic follow-up, and the AI card scanner.`
-        : `Before you delete anything: ${days} days of Pro, free, starting now. No card required and nothing to cancel — it just ends on its own and you're back on Free. That's unlimited cards and links, every contact unlocked, automatic email and text follow-up, and the AI card scanner — normally $${price}/month.`,
-      accept: `Give me ${days} days of Pro`,
+      badge: "Pro · on us",
+      title: `Try Pro free for ${days} days — on us`,
+      body: `Before you delete anything, see what the full SwiftCard does for you. ${days} days of Pro, free, starting the moment you press the button — and it ends by itself.`,
+      bullets: native
+        ? ["Unlimited cards and links", "Every contact unlocked", "Automatic follow-up", "The AI card scanner"]
+        : ["Unlimited cards and links", "Every contact unlocked", "Automatic email and text follow-up", "The AI card scanner"],
+      // A gift is not a sale, so the shell may offer the days — never the tag.
+      priceLine: native ? null : `Normally $${price}/month`,
+      fineprint: "No card needed. Nothing to cancel.",
+      days,
+      accept: `Start my free ${days} days`,
       action: "grant",
-      decline: "No thanks, keep deleting",
+      decline: "No thanks, continue to delete",
     };
   }
   // Never inside the app: a discount on the WEB (Stripe) subscription is a
   // price offer for a purchase Apple doesn't process — App Review 3.1.1, and
   // the billing panel's own rule ("no retention offers on native").
   if (!elig.discount || native) return null;
+  const price = (PLAN_PRICES.PRO_MONTHLY_CENTS / 100).toFixed(2);
   return {
-    title: `Stay for ${RETENTION_DISCOUNT_PERCENT}% off the next ${RETENTION_DISCOUNT_MONTHS} months`,
-    body: `We'd rather cut the price than lose you. Press the button and ${RETENTION_DISCOUNT_PERCENT}% comes off your next ${RETENTION_DISCOUNT_MONTHS} invoices automatically — same account, same card, same everything, nothing else to do.`,
+    badge: `Pro · ${RETENTION_DISCOUNT_PERCENT}% off`,
+    title: `Stay for ${RETENTION_DISCOUNT_PERCENT}% off your next ${RETENTION_DISCOUNT_MONTHS} months`,
+    body: `We'd rather cut the price than lose you. Press the button and ${RETENTION_DISCOUNT_PERCENT}% comes off your next ${RETENTION_DISCOUNT_MONTHS} monthly invoices automatically — same account, same card, same everything, nothing else to do.`,
+    // Monthly subscriptions only (the server refuses annual — a 3-month coupon
+    // would lapse before a yearly renewal), so the monthly price is the right one.
+    priceLine: `${RETENTION_DISCOUNT_PERCENT}% off your $${price}/month plan for ${RETENTION_DISCOUNT_MONTHS} months`,
+    fineprint: "Same card. Cancel any time. One-time offer.",
     accept: `Apply ${RETENTION_DISCOUNT_PERCENT}% off`,
     action: "discount",
-    decline: "No thanks, keep deleting",
+    decline: "No thanks, continue to delete",
   };
 }
 
 /**
- * Step 4 — the save that costs nobody anything.
+ * Step 3 — the save that costs nobody anything.
  *
  * Free: the account goes quiet (every SwiftCard email off) but the card, the
  * link and the contacts stay alive. Deleting is not the only way to stop
@@ -247,7 +288,7 @@ export function offerStep(plan: RetentionPlan, elig: Eligibility, native: boolea
  * destroyed. Pro on Apple: same idea, but auto-renew is turned off in the
  * App Store, which is the ONLY place we may point them (3.1.1).
  */
-export function keepStep(plan: RetentionPlan, elig: Eligibility, source: PlanSource): OfferCopy {
+export function keepStep(plan: RetentionPlan, elig: Eligibility, source: PlanSource, proEndsAt?: string | null): OfferCopy {
   if (plan === "free") {
     return {
       title: "Or just make it go quiet",
@@ -255,6 +296,21 @@ export function keepStep(plan: RetentionPlan, elig: Eligibility, source: PlanSou
       accept: "Turn off all emails, keep my account",
       action: "quiet",
       decline: "No thanks, keep deleting",
+    };
+  }
+  // Free Pro with nothing behind it: there is no charge to stop and nothing to
+  // cancel — "your subscription can be cancelled" was untrue for these accounts.
+  if (source === "grant") {
+    const t = proEndsAt ? Date.parse(proEndsAt) : NaN;
+    const when = Number.isFinite(t)
+      ? `On ${new Date(t).toLocaleDateString("en-US", { month: "long", day: "numeric" })}`
+      : "When it ends";
+    return {
+      title: "Your free Pro ends on its own",
+      body: `${when} your account moves back to Free by itself — nothing is charged and nothing is deleted. You don't need to delete your account to stop anything.`,
+      accept: null,
+      action: null,
+      decline: "Continue with deletion",
     };
   }
   if (source === "apple") {
@@ -278,7 +334,7 @@ export function keepStep(plan: RetentionPlan, elig: Eligibility, source: PlanSou
 }
 
 /**
- * Step 5 — the honest list of what is destroyed, in their numbers.
+ * Step 4 — the honest list of what is destroyed, in their numbers.
  * Returned as lines so the component can render them without string surgery,
  * and so a test can assert we never claim a contact that isn't there.
  */
@@ -313,17 +369,17 @@ export function lossLines(plan: RetentionPlan, facts: AccountFacts): string[] {
 
 /**
  * The steps this particular account will actually walk through.
- * `why`, `detail`, `loss` and `confirm` are always present; the two offer steps
- * appear only when there is something real behind them.
+ * `why`, `detail`, `keep`, `loss` and `confirm` are always present; the
+ * promotion appears only when there is something real behind it, and always as
+ * the step immediately before the typed DELETE.
  */
 export function stepsFor(plan: RetentionPlan, elig: Eligibility, native: boolean): StepId[] {
-  const steps: StepId[] = ["why", "detail"];
-  if (offerStep(plan, elig, native)) steps.push("offer");
   // The Apple "keep" step is a disclosure with no button, and it is worth
   // showing: it is the only place we can tell an Apple subscriber that deleting
   // here does not stop their renewal.
-  steps.push("keep");
-  steps.push("loss", "confirm");
+  const steps: StepId[] = ["why", "detail", "keep", "loss"];
+  if (offerStep(plan, elig, native)) steps.push("offer");
+  steps.push("confirm");
   return steps;
 }
 

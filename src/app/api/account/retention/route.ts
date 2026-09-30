@@ -9,6 +9,8 @@ import { reportError } from "@/lib/report-error";
 import { alertRetention } from "@/lib/retention-alert";
 import { ledgerAdd, ledgerHas, trialHistoryFor } from "@/lib/trial-ledger";
 import { TRIAL_ENDS_KEY } from "@/lib/billing-state";
+import { getStripe } from "@/lib/stripe";
+import { discountRefusalFor, retentionDiscountTakenBy } from "@/lib/retention-discount";
 import {
   RETENTION_GRANT_DAYS,
   RETENTION_GRANT_DAYS_AFTER_TRIAL,
@@ -75,10 +77,14 @@ function planOf(plan: string | null | undefined): RetentionPlan {
   return isPaidPlan(plan) ? "pro" : "free";
 }
 
-function sourceOf(plan: string | null | undefined, cust: Cust, subId: string | null): PlanSource {
+function sourceOf(plan: string | null | undefined, cust: Cust, subId: string | null, planExpiresAt: string | null): PlanSource {
   if (!isPaidPlan(plan)) return null;
   if (isApplePaid(cust)) return "apple";
-  return subId ? "stripe" : null;
+  if (subId) return "stripe";
+  // Free Pro with an end date and nothing billing it (this flow's gift, a
+  // referral month). Office grants keep the generic wording — "your free Pro"
+  // would be the wrong plan's name.
+  return plan === "pro" && planExpiresAt ? "grant" : null;
 }
 
 const GRANT_MIN_ACCOUNT_AGE_MS = 14 * 24 * 60 * 60 * 1000;
@@ -106,6 +112,12 @@ function eligibilityOf(opts: {
   trialing?: boolean;
   /** auth.users.created_at — the free month is a save for real customers. */
   accountCreatedAt?: string | null;
+  /**
+   * The 50% offer checked against the live subscription and the person:
+   * null = not looked up (not an individual Stripe Pro), which offers nothing.
+   * See lib/retention-discount.
+   */
+  discountOk?: boolean | null;
 }): Eligibility {
   const { plan, rawPlan, source, rec, planExpiresAt, subId, retentionUsed } = opts;
   // An Office/enterprise subscription is a seat-billed team plan: its price is
@@ -131,9 +143,26 @@ function eligibilityOf(opts: {
     // there must close it here too.
     // Not during a free trial: there is no invoice yet to take 50% off, and
     // cancelling the trial (downgrade) is the honest save there.
-    discount: individualPro && !rec.discountedAt && retentionUsed !== true && !opts.trialing,
+    // And only where the coupon does what the offer says, for a person who has
+    // never had it on any account: active + monthly + no discount already on
+    // the subscription + not in the ledger (`discountOk`, fails closed).
+    discount: individualPro && !rec.discountedAt && retentionUsed !== true && !opts.trialing && opts.discountOk === true,
     downgrade: individualPro,
   };
+}
+
+// The 50% offer against the live subscription (active, monthly, no discount
+// already on it) and the person (never taken on any account). Asked only for an
+// individual Stripe Pro, so Free, Apple and Office never cost a Stripe call.
+// Any failure is "no offer" — never an offer we then can't apply.
+async function discountOkFor(subId: string, email: string | null | undefined, fingerprint: string | null): Promise<boolean> {
+  try {
+    const sub = await getStripe().subscriptions.retrieve(subId);
+    if (discountRefusalFor(sub)) return false;
+    return !(await retentionDiscountTakenBy(email, fingerprint));
+  } catch {
+    return false;
+  }
 }
 
 export async function GET() {
@@ -144,7 +173,7 @@ export async function GET() {
   const admin = getAdminSupabase();
   const { data: profile } = await admin
     .from("profiles")
-    .select("plan, plan_expires_at, stripe_subscription_id, customization, created_at")
+    .select("plan, plan_expires_at, stripe_subscription_id, payment_fingerprint, customization, created_at")
     .eq("id", user.id)
     .maybeSingle();
   if (!profile) return NextResponse.json({ error: "No account" }, { status: 404 });
@@ -152,17 +181,22 @@ export async function GET() {
   const cust = (profile.customization as Cust | null) ?? {};
   const plan = planOf(profile.plan as string | null);
   const subId = (profile.stripe_subscription_id as string | null) ?? null;
-  const source = sourceOf(profile.plan as string | null, cust, subId);
+  const planExpiresAt = (profile.plan_expires_at as string | null) ?? null;
+  const source = sourceOf(profile.plan as string | null, cust, subId, planExpiresAt);
   const elig = eligibilityOf({
     plan,
     rawPlan: (profile.plan as string | null) ?? null,
     source,
     rec: retentionOf(cust),
-    planExpiresAt: (profile.plan_expires_at as string | null) ?? null,
+    planExpiresAt,
     subId,
     retentionUsed: cust._retentionUsed,
     ...(await trialFactsFor(user.id, user.email, cust)),
     accountCreatedAt: user.created_at ?? null,
+    discountOk:
+      profile.plan === "pro" && source === "stripe" && subId
+        ? await discountOkFor(subId, user.email, (profile.payment_fingerprint as string | null) ?? null)
+        : null,
   });
 
   // Their own numbers for the "what you lose" step. Counted with head:true so
@@ -184,6 +218,8 @@ export async function GET() {
     // Filled in by the caller, which already resolves office context for the
     // page; kept in the type so the component has one shape to render.
     isOfficeOwner: false,
+    // When free Pro with nothing billing it ends — the keep step names the day.
+    proEndsAt: source === "grant" ? planExpiresAt : null,
   };
 
   return NextResponse.json({ plan, source, eligibility: elig, facts });
@@ -207,7 +243,7 @@ export async function POST(req: NextRequest) {
   const admin = getAdminSupabase();
   const { data: profile } = await admin
     .from("profiles")
-    .select("plan, plan_expires_at, stripe_subscription_id, customization")
+    .select("plan, plan_expires_at, stripe_subscription_id, payment_fingerprint, pro_trial_started_at, customization")
     .eq("id", user.id)
     .maybeSingle();
   if (!profile) return NextResponse.json({ error: "No account" }, { status: 404 });
@@ -216,17 +252,24 @@ export async function POST(req: NextRequest) {
   const rec = retentionOf(cust);
   const plan = planOf(profile.plan as string | null);
   const subId = (profile.stripe_subscription_id as string | null) ?? null;
-  const source = sourceOf(profile.plan as string | null, cust, subId);
+  const planExpiresAt = (profile.plan_expires_at as string | null) ?? null;
+  const source = sourceOf(profile.plan as string | null, cust, subId, planExpiresAt);
   const elig = eligibilityOf({
     plan,
     rawPlan: (profile.plan as string | null) ?? null,
     source,
     rec,
-    planExpiresAt: (profile.plan_expires_at as string | null) ?? null,
+    planExpiresAt,
     subId,
     retentionUsed: cust._retentionUsed,
     ...(await trialFactsFor(user.id, user.email, cust)),
     accountCreatedAt: user.created_at ?? null,
+    // Only the discount action needs the Stripe look-up; the discount route
+    // repeats every one of these checks before it touches the subscription.
+    discountOk:
+      action === "discount" && profile.plan === "pro" && source === "stripe" && subId
+        ? await discountOkFor(subId, user.email, (profile.payment_fingerprint as string | null) ?? null)
+        : null,
   });
 
   // The reason they gave at step 1-2, so an alert carries WHY, not just WHAT.
@@ -259,23 +302,34 @@ export async function POST(req: NextRequest) {
     if (!elig.grant) return NextResponse.json({ error: "This offer isn't available on your account." }, { status: 409 });
     const days = elig.grantDays ?? RETENTION_GRANT_DAYS;
     const expires = new Date(Date.now() + days * 86400000).toISOString();
+    const now = new Date().toISOString();
     // plan + expiry + the one-per-account flag in a SINGLE write: a partial
     // apply here would either give Pro with no record (repeatable) or record a
     // gift that was never given.
+    //
+    // The gift IS this person's free Pro period (owner, 2026-09-16: trial +
+    // gift = 30 days, never more). Stamping pro_trial_started_at in the same
+    // write is what makes that true everywhere else: Stripe checkout offers no
+    // 14-day trial on top, the iPhone app serves the no-trial offer, and a
+    // checkout started DURING the gift bills from the day it ends instead
+    // (lib/billing-state giftBridgeTrialEnd). Never overwrites an earlier stamp.
     const { error } = await admin
       .from("profiles")
       .update({
         plan: "pro",
         plan_expires_at: expires,
+        ...(profile.pro_trial_started_at ? {} : { pro_trial_started_at: now }),
         customization: {
           ...cust,
-          _retention: { ...rec, grantedAt: new Date().toISOString(), savedBy: "grant", savedAt: new Date().toISOString() },
+          _retention: { ...rec, grantedAt: now, savedBy: "grant", savedAt: now },
         },
       })
       .eq("id", user.id);
     if (error) return NextResponse.json({ error: "Couldn't start your free month. Please try again." }, { status: 500 });
-    // Once per PERSON: the account record above is gone after purge, this is not.
+    // Once per PERSON: the account record above is gone after purge, these are
+    // not — no second gift, and no Stripe or Apple trial on a new account.
     await ledgerAdd("email_retention", user.email);
+    await ledgerAdd("email_trial", user.email);
     await saved("grant");
     return NextResponse.json({ ok: true, days, until: expires });
   }

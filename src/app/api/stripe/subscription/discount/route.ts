@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server";
+import type Stripe from "stripe";
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { getStripe } from "@/lib/stripe";
+import { getAccountEmail } from "@/lib/account-email";
 import { officeSubUserBlockMessage, resolveBillingSubjectId } from "@/lib/office-roles";
+import {
+  discountRefusalFor,
+  discountRefusalMessage,
+  recordRetentionDiscount,
+  retentionDiscountTakenBy,
+} from "@/lib/retention-discount";
 
 // The one-time retention offer: 50% off for the next 3 months. Self-provisioning
 // so it works without any dashboard setup — we create a coupon with a fixed id
@@ -62,7 +70,7 @@ export async function POST() {
   const admin = getAdminSupabase();
   const { data: profile } = await admin
     .from("profiles")
-    .select("plan, stripe_subscription_id, customization")
+    .select("plan, email, stripe_subscription_id, payment_fingerprint, customization")
     .eq("id", subjectId)
     .single();
 
@@ -74,19 +82,43 @@ export async function POST() {
     return NextResponse.json({ error: "No active subscription to apply the discount to." }, { status: 400 });
   }
 
+  // Once per PERSON: the account flag above is gone after a purge; the email
+  // and card ledger is not (lib/retention-discount).
+  const accountEmail = await getAccountEmail(subjectId, (profile.email as string | null) ?? null);
+  const fingerprint = (profile.payment_fingerprint as string | null) ?? null;
+  if (await retentionDiscountTakenBy(accountEmail, fingerprint)) {
+    return NextResponse.json({ error: "This offer has already been used." }, { status: 409 });
+  }
+
+  // Only where the coupon does what the offer says — active, monthly, and not
+  // replacing a discount they already have (Stripe replaces the whole array).
+  const stripe = getStripe();
+  let sub: Stripe.Subscription;
+  try {
+    sub = await stripe.subscriptions.retrieve(profile.stripe_subscription_id as string);
+  } catch {
+    return NextResponse.json({ error: "Couldn't reach billing. Please try again." }, { status: 502 });
+  }
+  const refusal = discountRefusalFor(sub);
+  if (refusal) return NextResponse.json({ error: discountRefusalMessage(refusal) }, { status: 409 });
+
   const couponId = await ensureRetentionCoupon();
   if (!couponId) return NextResponse.json({ error: "Discount is temporarily unavailable. Please try again." }, { status: 502 });
 
   try {
     // Applying the discount also clears any pending cancellation — accepting the
     // offer means the customer is staying.
-    await getStripe().subscriptions.update(profile.stripe_subscription_id, {
+    await stripe.subscriptions.update(profile.stripe_subscription_id as string, {
       discounts: [{ coupon: couponId }],
       cancel_at_period_end: false,
+    }, {
+      // A double-tap (or the delete flow and Billing racing) applies it once.
+      idempotencyKey: `retention-discount:${profile.stripe_subscription_id}:${couponId}:${Math.floor(Date.now() / 60000)}`,
     });
   } catch {
     return NextResponse.json({ error: "Couldn't apply the discount. Please try again." }, { status: 502 });
   }
+  await recordRetentionDiscount(accountEmail, fingerprint);
 
   const nextCust: Record<string, unknown> = { ...cust, _retentionUsed: true };
   delete nextCust._cancelAtPeriodEnd;

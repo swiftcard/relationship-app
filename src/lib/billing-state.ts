@@ -42,6 +42,47 @@ export function formatBillingDate(iso: string | null | undefined): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+// ── Subscribing while the delete-flow gift is running ────────────────────────
+//
+// "Try Pro free for 30 days — on us" (lib/retention) is free Pro with no card.
+// Someone who likes it and subscribes on day 5 used to be charged on day 5 —
+// the 25 days they had been given were simply lost. Now the Stripe
+// subscription starts in a trial that ends the moment the gift does, so the
+// first charge lands on the day free Pro would have ended anyway.
+
+/** Stripe Checkout refuses a trial_end under 48 hours away; one hour of margin. */
+export const MIN_TRIAL_END_LEAD_MS = 49 * 60 * 60 * 1000;
+
+/**
+ * The ISO end of a delete-flow gift that is running right now, or null.
+ * Only the gift: plan "pro", no subscription, not Apple, a future expiry, and
+ * the grant recorded in customization._retention.
+ */
+export function retentionGiftEndsAt(
+  p: { plan: string | null | undefined; planExpiresAt: string | null | undefined; hasSubscription: boolean; customization: Record<string, unknown> | null | undefined },
+  nowMs: number = Date.now(),
+): string | null {
+  if (p.plan !== "pro" || p.hasSubscription || !p.planExpiresAt) return null;
+  const cust = p.customization ?? {};
+  if (cust._planSource === "apple") return null;
+  const granted = (cust._retention as { grantedAt?: unknown } | undefined)?.grantedAt;
+  if (typeof granted !== "string") return null;
+  const t = Date.parse(p.planExpiresAt);
+  return Number.isFinite(t) && t > nowMs ? new Date(t).toISOString() : null;
+}
+
+/**
+ * Unix seconds for subscription_data.trial_end so billing starts when the gift
+ * ends — or null when it ends too soon for Stripe to accept (then billing
+ * simply starts today; at most two free days are given up).
+ */
+export function giftBridgeTrialEnd(giftEndsAt: string | null | undefined, nowMs: number = Date.now()): number | null {
+  if (!giftEndsAt) return null;
+  const t = Date.parse(giftEndsAt);
+  if (!Number.isFinite(t) || t - nowMs < MIN_TRIAL_END_LEAD_MS) return null;
+  return Math.floor(t / 1000);
+}
+
 /** A Stripe subscription's trial end as ISO, only while it is actually trialing. */
 export function stripeTrialEndIso(sub: { status?: string | null; trial_end?: number | null }): string | null {
   if (sub.status !== "trialing" || !sub.trial_end) return null;

@@ -8,6 +8,8 @@ import { getOfficeSeatUsage } from "@/lib/office-seats";
 import type Stripe from "stripe";
 import { officeSubUserBlockMessage, getOfficeSubUserContext, roleHasCapability, resolveBillingSubjectId } from "@/lib/office-roles";
 import { stripeTrialEndIso } from "@/lib/billing-state";
+import { discountRefusalFor, retentionDiscountTakenBy } from "@/lib/retention-discount";
+import { getAccountEmail } from "@/lib/account-email";
 
 // GET /api/stripe/subscription — the read model the billing UI renders from.
 // Reads the profile, and (when there's a live Stripe subscription) the
@@ -50,7 +52,7 @@ export async function GET() {
   const admin = getAdminSupabase();
   const { data: profile } = await admin
     .from("profiles")
-    .select("plan, stripe_customer_id, stripe_subscription_id, plan_expires_at, customization")
+    .select("plan, email, stripe_customer_id, stripe_subscription_id, plan_expires_at, payment_fingerprint, customization")
     .eq("id", subjectId)
     .single();
 
@@ -86,6 +88,10 @@ export async function GET() {
     cancelAtPeriodEnd: false,
     renewalCents: null as number | null,
     retentionUsed: cust._retentionUsed === true,
+    // Whether the 50%-off offer can go on this subscription (lib/retention-
+    // discount): active, monthly, no discount already on it. False until the
+    // live subscription below says otherwise.
+    discountOfferable: false,
     paymentFailed: typeof cust._paymentFailedAt === "string",
     hasStripeSubscription: !!profile?.stripe_subscription_id,
     hasCustomer: !!profile?.stripe_customer_id,
@@ -111,6 +117,15 @@ export async function GET() {
     if (mapped) { base.plan = mapped.plan; base.interval = mapped.interval; }
     base.status = sub.status;
     base.trialEnd = stripeTrialEndIso(sub);
+    // …and this PERSON has never taken it, on any account (the route checks
+    // the same ledger — showing an offer it would refuse is a broken promise).
+    base.discountOfferable =
+      !base.retentionUsed &&
+      discountRefusalFor(sub) === null &&
+      !(await retentionDiscountTakenBy(
+        await getAccountEmail(subjectId, (profile.email as string | null) ?? null),
+        (profile.payment_fingerprint as string | null) ?? null,
+      ));
     base.cancelAtPeriodEnd = sub.cancel_at_period_end === true;
     base.currentPeriodEnd = periodEndUnix ? new Date(periodEndUnix * 1000).toISOString() : null;
     base.seats = mapped?.plan === "office" ? (item?.quantity ?? null) : null;

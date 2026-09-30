@@ -14,6 +14,7 @@ import { priceIdForPlan, type BillingInterval } from "@/lib/subscription";
 import { officeSubUserBlockMessage } from "@/lib/office-roles";
 import { isProTrialEligible } from "@/lib/trial-eligibility";
 import { trialHistoryFor } from "@/lib/trial-ledger";
+import { giftBridgeTrialEnd, retentionGiftEndsAt } from "@/lib/billing-state";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("email, username, plan, stripe_customer_id, stripe_subscription_id, customization")
+      .select("email, username, plan, plan_expires_at, stripe_customer_id, stripe_subscription_id, customization")
       .eq("id", user.id)
       .single();
 
@@ -313,6 +314,34 @@ export async function POST(req: NextRequest) {
       trialDays = Math.max(trialDays ?? 0, promoFreeDays);
     }
 
+    // ── Subscribing while the delete-flow gift is running ────────────────────
+    // "Try Pro free for 30 days — on us" (lib/retention) is this person's free
+    // Pro: no 14-day trial on top of it (the gift also stamps the trial marker,
+    // this covers gifts from before it did). And the days they were given are
+    // not lost by subscribing early — the subscription trials until the gift's
+    // own end, so the first charge lands the day free Pro would have ended.
+    // A promo code's free days still win when they reach further.
+    let bridgeTrialEnd: number | null = null;
+    const giftEndsAt = isPro
+      ? retentionGiftEndsAt({
+          plan: profile.plan as string | null,
+          planExpiresAt: (profile.plan_expires_at as string | null) ?? null,
+          hasSubscription: !!profile.stripe_subscription_id,
+          customization: profile.customization as Record<string, unknown> | null,
+        })
+      : null;
+    if (giftEndsAt) {
+      const bridge = giftBridgeTrialEnd(giftEndsAt);
+      const promoEnd = promoFreeDays ? Math.floor(Date.now() / 1000) + promoFreeDays * 86400 : 0;
+      if (bridge && bridge >= promoEnd) {
+        bridgeTrialEnd = bridge;
+        trialDays = undefined;
+      } else {
+        // Under 48h left (Stripe's floor for trial_end): billing starts today.
+        trialDays = promoFreeDays;
+      }
+    }
+
     // Verify the real Stripe Price still matches what /pricing shows before
     // charging anyone — catches a mispriced or archived Product in the dashboard.
     const expectedCents = EXPECTED_CENTS[priceId];
@@ -374,7 +403,9 @@ export async function POST(req: NextRequest) {
       // a trial checkout so billing starts automatically when the trial ends —
       // pinned explicitly so a future Stripe default change can't loosen it.
       payment_method_collection: "always",
-      ...(trialDays ? { subscription_data: { trial_period_days: trialDays } } : {}),
+      ...(bridgeTrialEnd
+        ? { subscription_data: { trial_end: bridgeTrialEnd } }
+        : trialDays ? { subscription_data: { trial_period_days: trialDays } } : {}),
       // Record the seat count so the webhook provisions the office reliably,
       // and the redemption so it can be marked spent on completion. Consumed
       // there rather than here on purpose: a customer who opens Checkout and
@@ -382,6 +413,9 @@ export async function POST(req: NextRequest) {
       metadata: {
         ...(isOffice ? { seats: String(quantity) } : {}),
         ...(promoRedemptionId ? { promo_redemption_id: promoRedemptionId } : {}),
+        // The webhook's repeat-card rule must not end this trial: it is the
+        // rest of a gift, not a new free period.
+        ...(bridgeTrialEnd ? { grant_bridge: "1" } : {}),
       },
       // ALWAYS through /checkout/success, carrying the caller's destination as
       // `next` and Stripe's session id. Stripe redirects the buyer here the
@@ -409,7 +443,7 @@ export async function POST(req: NextRequest) {
       // of a /welcome checkout (which sets its own success page) and pressing
       // "Continue" on /checkout within the minute showed a raw Stripe error
       // (2026-09-16 website audit).
-      idempotencyKey: `checkout:${user.id}:${priceId}:${quantity}:${createHash("sha256").update(JSON.stringify([successPath, trialDays ?? 0, couponId ?? "", promotionCodeId ?? "", promoRedemptionId ?? ""])).digest("hex").slice(0, 16)}:${Math.floor(Date.now() / 60000)}`,
+      idempotencyKey: `checkout:${user.id}:${priceId}:${quantity}:${createHash("sha256").update(JSON.stringify([successPath, trialDays ?? 0, bridgeTrialEnd ?? 0, couponId ?? "", promotionCodeId ?? "", promoRedemptionId ?? ""])).digest("hex").slice(0, 16)}:${Math.floor(Date.now() / 60000)}`,
     });
 
     // "Picked a plan" in the admin funnel, for a new account whose first

@@ -434,9 +434,13 @@ export async function POST(req: NextRequest) {
       // A promo code's free days are exempt (the owner issued that code on
       // purpose). Idempotent: a replay finds pro_trial_started_at already set
       // on this account (or the subscription no longer trialing) and skips.
+      // So is the rest of a delete-flow gift (checkout `grant_bridge`): that
+      // trial only moves the first charge to the day the free Pro they were
+      // already given ends — ending it here would bill them for gifted days.
       const redemptionForTrial = session.metadata?.promo_redemption_id;
+      const giftBridge = session.metadata?.grant_bridge === "1";
       const trialAccountEmail = trialEndsAt ? await getAccountEmail(userId, null) : null;
-      if (trialEndsAt && session.subscription && !redemptionForTrial) {
+      if (trialEndsAt && session.subscription && !redemptionForTrial && !giftBridge) {
         const { data: markerRow, error: markerErr } = await admin
           .from("profiles")
           .select("pro_trial_started_at")
