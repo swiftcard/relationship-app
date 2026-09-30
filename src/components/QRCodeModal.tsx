@@ -1,19 +1,18 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
+import { useDialogA11y } from "@/lib/use-dialog-a11y";
+import { useCardQrStyle } from "@/lib/use-card-qr-style";
 
-// qrcode.react only needs to load once a visitor actually opens this modal —
-// most card viewers never do, so this keeps it out of the public card page's
-// initial bundle (performance audit).
-const QRCodeSVG = dynamic(() => import("qrcode.react").then((m) => m.QRCodeSVG), { ssr: false });
+// The encoder only loads once someone opens the popup — most dashboard visits
+// never do — so it stays out of the initial bundle.
+const MiniQR = dynamic(() => import("@/components/card-templates/MiniQR").then((m) => m.MiniQR), { ssr: false });
 
 type Props = {
   url: string;
-  /** Whose card: the popup's title reads "Scan to connect with <firstName>",
-      written for the person holding up the OTHER phone. */
+  /** Whose card, for the dialog's spoken name only — nothing is printed. */
   firstName: string;
   /** Button text. */
   label?: string;
@@ -22,10 +21,18 @@ type Props = {
   variant?: "light" | "primary";
 };
 
+/**
+ * Show QR. The popup is the code and nothing else (owner, 2026-09-30): no
+ * title, no address under it, no panel around it — a dimmed screen with the
+ * QR tile in the middle, drawn in the same colours as the QR printed on the
+ * card on screen, so what the other person scans is exactly what the card
+ * carries. Tap anywhere outside it or press Escape to close.
+ */
 export default function QRCodeModal({ url, firstName, label = "Show QR Code", variant = "light" }: Props) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   useDialogA11y(open, () => setOpen(false), panelRef);
+  const qr = useCardQrStyle(open);
 
   return (
     <>
@@ -55,62 +62,26 @@ export default function QRCodeModal({ url, firstName, label = "Show QR Code", va
       {open && createPortal(
         <div
           className="fixed inset-0 z-[100] flex flex-col items-center justify-center p-6"
-          style={{ background: "rgba(0,0,0,0.85)" }}
+          style={{ background: "rgba(2, 6, 23, 0.88)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
           onClick={() => setOpen(false)}
         >
           <div
             ref={panelRef}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="qr-modal-title"
-            className="w-full max-w-sm rounded-3xl overflow-hidden flex flex-col items-center animate-pop"
-            style={{ background: "#0d1b3e" }}
+            aria-label={`${firstName}'s QR code — scan to open the card`}
+            tabIndex={-1}
+            className="animate-pop outline-none"
+            // The tile is the card's own QR, only larger: min(78vw, 360px) so a
+            // phone held across a table still reads it, and never wider than
+            // a hand can hold steady.
+            style={{ width: "min(78vw, 360px)", filter: "drop-shadow(0 24px 48px rgba(0,0,0,0.45))" }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="w-full flex items-center justify-between px-6 pt-5 pb-2">
-              <p id="qr-modal-title" className="text-white font-bold text-base">Scan to connect with {firstName}</p>
-              <button
-                onClick={() => setOpen(false)}
-                className="-mr-3 w-10 h-10 flex items-center justify-center rounded-full text-slate-400 hover:text-white hover:bg-white/10 text-2xl leading-none transition-colors"
-                aria-label="Close"
-              >
-                ×
-              </button>
-            </div>
-
-            {/* QR code — the hero. It fills the panel's width (up to 288px)
-                instead of a fixed 220px, so a phone held up across a table
-                scans from further away. Plain navy on white, error level M:
-                the highest-contrast QR the product draws. */}
-            <div className="bg-white rounded-2xl p-5 mx-6 my-4 shadow-xl w-[calc(100%-3rem)] max-w-[328px]">
-              <QRCodeSVG
-                value={url}
-                size={288}
-                bgColor="#ffffff"
-                fgColor="#0d1b3e"
-                level="M"
-                style={{ width: "100%", height: "auto", display: "block" }}
-              />
-            </div>
-
-            {/* URL */}
-            <p
-              className="text-sm font-medium pb-6 px-6 text-center"
-              style={{
-                background: "linear-gradient(to right, #60a5fa, #a78bfa)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-              }}
-            >
-              {/* The address as a person would type it — no scheme, and no
-                  ?source=qr_code tracking tag (that is for the scan, not for
-                  reading aloud). */}
-              {url.replace(/^https?:\/\//, "").replace(/[?#].*$/, "")}
-            </p>
+            <QRTile url={url} bg={qr.bg} fg={qr.fg} />
           </div>
 
-          {/* Tap to close hint — under the card, never pinned to the screen
+          {/* Tap to close hint — under the code, never pinned to the screen
               bottom where a tab bar or the home indicator sits. */}
           <p className="mt-4 rounded-full bg-[#0d1b3e] px-3 py-1 text-white/85 text-xs">Tap outside to close</p>
         </div>,
@@ -126,5 +97,23 @@ export default function QRCodeModal({ url, firstName, label = "Show QR Code", va
         @media (prefers-reduced-motion: reduce) { .animate-pop { animation: none; } }
       `}</style>
     </>
+  );
+}
+
+/** MiniQR sized by its container: it takes a pixel size, so this measures. */
+function QRTile({ url, bg, fg }: { url: string; bg: string; fg: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [px, setPx] = useState(0);
+  return (
+    <div
+      ref={(el) => {
+        ref.current = el;
+        if (el && el.clientWidth && el.clientWidth !== px) setPx(el.clientWidth);
+      }}
+      className="w-full"
+      style={{ aspectRatio: "1 / 1" }}
+    >
+      {px > 0 && <MiniQR size={px} bg={bg} fg={fg} url={url} />}
+    </div>
   );
 }

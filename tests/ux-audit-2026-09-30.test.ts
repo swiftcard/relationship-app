@@ -34,7 +34,11 @@ describe("returning user: open SwiftCard → show my QR", () => {
     expect(src).toMatch(/role="dialog"/);
     expect(src).toMatch(/aria-modal="true"/);
     expect(src).toMatch(/useDialogA11y\(open/);
-    expect(src, "the QR must fill the panel, not sit at a fixed 220px").toMatch(/style=\{\{ width: "100%", height: "auto"/);
+    // The popup is the code and nothing else: no title, no address, no panel.
+    expect(src).not.toMatch(/Scan to connect with/);
+    expect(src).not.toMatch(/url\.replace\(/);
+    expect(src).toMatch(/useCardQrStyle\(open\)/);
+    expect(src).toMatch(/width: "min\(78vw, 360px\)"/);
     expect(src).toMatch(/prefers-reduced-motion: reduce\) \{ \.animate-pop \{ animation: none/);
   });
 

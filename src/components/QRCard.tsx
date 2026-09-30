@@ -1,56 +1,22 @@
 "use client";
 
-import { QRCodeSVG } from "qrcode.react";
-import { SwiftCardIcon } from "@/components/SwiftCardLogo";
+import { MiniQR } from "@/components/card-templates/MiniQR";
+import { useCardQrStyle } from "@/lib/use-card-qr-style";
 
+/**
+ * The QR inside "Other ways to share" (desktop): the card's own code, same
+ * colours as the one printed on the card, on nothing but a soft shadow.
+ * The navy poster with a logo and a wave that used to frame it is gone —
+ * the code IS the design now (owner, 2026-09-30).
+ */
 export default function QRCard({ url }: { url: string }) {
+  const qr = useCardQrStyle();
   return (
-    <div className="relative w-full max-w-sm bg-[#0d1b3e] rounded-3xl overflow-hidden shadow-2xl px-8 py-10 flex flex-col items-center">
-
-      {/* Dot texture top-right */}
-      <div
-        className="absolute top-0 right-0 w-40 h-40 opacity-20"
-        style={{
-          backgroundImage: "radial-gradient(circle, #60a5fa 1px, transparent 1px)",
-          backgroundSize: "12px 12px",
-        }}
-      />
-
-      {/* SwiftCard icon */}
-      <div className="mb-8 z-10">
-        <SwiftCardIcon size={52} />
+    <div className="flex flex-col items-center py-2">
+      <div style={{ filter: "drop-shadow(0 12px 28px rgba(0,0,0,0.35))" }}>
+        <MiniQR size={240} bg={qr.bg} fg={qr.fg} url={url} />
       </div>
-
-      {/* QR code */}
-      <div className="bg-white rounded-3xl p-5 shadow-xl z-10">
-        <QRCodeSVG
-          value={url}
-          size={180}
-          bgColor="#ffffff"
-          fgColor="#0d1b3e"
-          level="M"
-        />
-      </div>
-
-      {/* Scan text — the URL itself is intentionally NOT shown here (the link
-          is already copyable in the CARD LINK field above; repeating the slug
-          under the QR just exposed a not-always-meaningful auto-generated
-          slug). */}
-      <p className="text-white text-xl font-bold mt-6 z-10">Scan to connect</p>
-
-      {/* Wave decoration */}
-      <div className="absolute bottom-0 left-0 w-full">
-        <svg viewBox="0 0 400 100" xmlns="http://www.w3.org/2000/svg" className="w-full">
-          <defs>
-            <linearGradient id="wave-dark" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.5" />
-              <stop offset="100%" stopColor="#a78bfa" stopOpacity="0.7" />
-            </linearGradient>
-          </defs>
-          <path d="M0,60 C80,20 160,80 240,50 C300,30 360,70 400,40 L400,100 L0,100 Z"
-            fill="url(#wave-dark)" />
-        </svg>
-      </div>
+      <p className="text-gray-400 text-xs font-medium mt-3">Scan to connect</p>
     </div>
   );
 }
