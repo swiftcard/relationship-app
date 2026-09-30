@@ -30,8 +30,14 @@ export function Field({
   );
 }
 
-export function TextArea({ label, hint, ...props }: { label: string; hint?: React.ReactNode } & React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return (
+export function TextArea({ label, hint, below, ...props }: {
+  label: string;
+  hint?: React.ReactNode;
+  /** Rendered under the field, OUTSIDE its <label> — for controls of its own
+   *  (a button inside a label would also focus the textarea). */
+  below?: React.ReactNode;
+} & React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const field = (
     <label className="block">
       <span className="block text-white/55 text-[0.75rem] font-medium mb-1.5">
         {label}{props.required && <span className="text-red-400 ml-0.5" aria-hidden="true">*</span>}
@@ -40,6 +46,7 @@ export function TextArea({ label, hint, ...props }: { label: string; hint?: Reac
       {hint && <span className="block text-white/70 text-[0.6875rem] mt-1.5 leading-snug">{hint}</span>}
     </label>
   );
+  return below ? <div>{field}{below}</div> : field;
 }
 
 // The SAME row as the real builder and the card editor (SocialHandleField,

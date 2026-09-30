@@ -147,6 +147,7 @@ export function aiConsentCopy(provider: string): {
       "A contact's name, company, where you met and your notes — plus your own name, title, company and About text — when AI writes a follow-up",
       "A card design you upload to rebuild, with your photo, logo and contact details on it",
       "Messages you type to the in-app assistant",
+      "LinkedIn About text you paste, when AI shortens it into your bio",
     ],
     // Deliberately does NOT claim anything about model training. Whether the
     // provider trains on API input depends on the plan we are on, and a

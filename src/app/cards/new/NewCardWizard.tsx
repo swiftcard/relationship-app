@@ -53,6 +53,7 @@ import SwiftLinkLivePreview from "@/components/SwiftLinkLivePreview";
 import PlanCards from "@/components/PlanCards";
 import FreeDesignChoice from "@/components/FreeDesignChoice";
 import GuestGateModal from "@/components/GuestGateModal";
+import LinkedInBioImport from "@/components/LinkedInBioImport";
 import ReferralGiftPanel from "@/components/ReferralGiftPanel";
 import ForceLightTheme from "@/components/ForceLightTheme";
 import { unitLine } from "@/lib/address-unit";
@@ -1868,6 +1869,12 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                   className={`w-full bg-gray-900 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors resize-none ${bioManaged ? "opacity-70 cursor-default" : ""}${bioMissing ? " ring-2 ring-red-500/70 border-red-500" : ""}`}
                 />
                 {bioMissing && <p id="wizard-bio-error" role="alert" className="text-red-400 text-xs mt-1">Add a bio to continue.</p>}
+                {!bioManaged && (
+                  <LinkedInBioImport
+                    currentBio={bio}
+                    onApply={(v) => { setBio(v); if (v.trim()) setBioMissing(false); }}
+                  />
+                )}
               </div>
             </FormSection>
 

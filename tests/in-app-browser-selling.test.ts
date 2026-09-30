@@ -78,6 +78,9 @@ describe("in-app browser sheets never open a selling surface", () => {
       // came from an off-site provider (Supabase OAuth, LinkedIn).
       const safe =
         /["'`]\/api\//.test(window) ||
+        // A literal https URL on another host (LinkedIn's own profile page for
+        // "Use LinkedIn bio") — never a swiftcard.me page.
+        /["'`]https:\/\/(?!(?:www\.)?swiftcard\.me)[a-z0-9.-]+\//i.test(window) ||
         /data\.url|provider|oauth|authUrl/i.test(window);
 
       if (!safe) offenders.push(rel);
