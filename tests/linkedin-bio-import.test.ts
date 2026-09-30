@@ -47,6 +47,18 @@ describe("the component", () => {
     expect(code).toMatch(/return local;/);
   });
 
+  it("never strands the panel on \"Shortening…\" when the paste cleans down to nothing", () => {
+    expect(code).toMatch(/if \(!bio\) \{\s*setEmpty\(true\);\s*setState\("open"\);/);
+  });
+
+  it("Undo only shows while the box still holds what it put in — never over the user's own edits", () => {
+    expect(code).toMatch(/fill && currentBio === fill\.applied &&/);
+  });
+
+  it("drops an in-flight shortening when it unmounts", () => {
+    expect(code).toMatch(/useEffect\(\(\) => \(\) => \{\s*cancelled\.current = true;\s*abort\.current\?\.abort\(\);/);
+  });
+
   it("stays a paste — it never asks LinkedIn for the About", () => {
     expect(code).not.toMatch(/api\.linkedin\.com|\/api\/integrations\/linkedin/);
   });
@@ -62,6 +74,9 @@ describe("the route", () => {
     expect(route).toMatch(/text\.length > 3000/);
     // A scrap of text made the model invent a whole bio (seen on production).
     expect(route).toMatch(/text\.length < 120/);
+    // A request refused for free must not spend the caller's allowance.
+    expect(route.indexOf("text.length < 120")).toBeLessThan(route.indexOf("isRateLimited("));
+    expect(route.indexOf("hasAiProvider()")).toBeLessThan(route.indexOf("isRateLimited("));
   });
 });
 
@@ -86,6 +101,10 @@ describe("tidyBioLocally", () => {
     const out = tidyBioLocally("word ".repeat(120));
     expect(out.length).toBeLessThanOrEqual(301);
     expect(out).toMatch(/word…$/);
+  });
+
+  it("a paste of only hashtags or bullets cleans to nothing", () => {
+    expect(tidyBioLocally("#sales #growth\n•\n")).toBe("");
   });
 
   it("a short paste skips the AI entirely", () => {

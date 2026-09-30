@@ -26,7 +26,7 @@ export function tidyBioLocally(raw: string): string {
     .map((l) =>
       l
         .replace(/(^|\s)#[\p{L}\p{N}_]+/gu, "$1") // hashtags
-        .replace(/^\s*[•●▪◦\-*–—]\s+/, "") // bullets
+        .replace(/^\s*[•●▪◦\-*–—](?:\s+|$)/, "") // bullets
         .replace(/[ \t]+/g, " ")
         .trim(),
     )

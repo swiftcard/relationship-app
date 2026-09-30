@@ -22,17 +22,8 @@ const TEN_MIN = 10 * 60 * 1000;
 const tooFast = () => NextResponse.json({ error: "too_fast" }, { status: 429 });
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (user) {
-    const consentBlocked = await aiConsentBlock(user.id, req);
-    if (consentBlocked) return consentBlocked;
-    if (await isRateLimited(`tidy-bio:${user.id}`, 10, TEN_MIN)) return tooFast();
-  } else {
-    if (await isRateLimited(`tidy-bio:ip:${clientIp(req)}`, 10, TEN_MIN)) return tooFast();
-    if (isShellRequest(req)) return NextResponse.json({ error: "no_ai" }, { status: 503 });
-  }
-
+  // Everything that can refuse for free goes first, so a bad request or a
+  // server without AI never spends someone's allowance.
   let text = "";
   try {
     const body = (await req.json()) as { text?: unknown };
@@ -41,8 +32,19 @@ export async function POST(req: NextRequest) {
   // Too little to shorten: the button only sends an About longer than a bio,
   // and on a scrap of text the model invents a bio instead of rewriting one.
   if (text.length < 120 || text.length > 3000) return NextResponse.json({ error: "bad_request" }, { status: 400 });
-
   if (!hasAiProvider()) return NextResponse.json({ error: "no_ai" }, { status: 503 });
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (user) {
+    const consentBlocked = await aiConsentBlock(user.id, req);
+    if (consentBlocked) return consentBlocked;
+    if (await isRateLimited(`tidy-bio:${user.id}`, 10, TEN_MIN)) return tooFast();
+  } else {
+    if (isShellRequest(req)) return NextResponse.json({ error: "no_ai" }, { status: 503 });
+    if (await isRateLimited(`tidy-bio:ip:${clientIp(req)}`, 10, TEN_MIN)) return tooFast();
+  }
+
   const bio = parseTidyBio(await aiComplete(tidyBioPrompt(text), { maxTokens: 200, json: true }));
   if (!bio) return NextResponse.json({ error: "no_ai" }, { status: 503 });
   return NextResponse.json({ bio });

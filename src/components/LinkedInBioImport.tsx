@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { detectNativeApp } from "@/lib/platform";
 import { LINKEDIN_ABOUT_MAX, LINKEDIN_BIO_SHORT, tidyBioLocally } from "@/lib/linkedin-bio";
 
@@ -53,12 +53,20 @@ function LinkedInGlyph({ className }: { className: string }) {
 export default function LinkedInBioImport({ onApply, currentBio, tone = "app" }: Props) {
   const [state, setState] = useState<State>("idle");
   const [pasted, setPasted] = useState("");
-  // The bio before the last fill, for Undo. null = nothing to undo.
-  const [before, setBefore] = useState<string | null>(null);
+  // The last fill, for Undo: what the box held before, and what we put in.
+  const [fill, setFill] = useState<{ before: string; applied: string } | null>(null);
+  // The paste cleaned down to nothing (only hashtags or bullets).
+  const [empty, setEmpty] = useState(false);
   const abort = useRef<AbortController | null>(null);
-  // Set by Cancel: a shortening already in flight must not fill the box.
+  // Set by Cancel or unmount: a shortening in flight must not fill the box.
   const cancelled = useRef(false);
   const site = tone === "site";
+
+  // Leaving the step (or closing the builder) mid-shortening drops the request.
+  useEffect(() => () => {
+    cancelled.current = true;
+    abort.current?.abort();
+  }, []);
 
   async function shorten(text: string): Promise<string> {
     const local = tidyBioLocally(text);
@@ -90,8 +98,13 @@ export default function LinkedInBioImport({ onApply, currentBio, tone = "app" }:
     setState("working");
     const bio = await shorten(text);
     // Cancelled while it worked — leave the box alone.
-    if (cancelled.current || !bio) return;
-    setBefore(currentBio);
+    if (cancelled.current) return;
+    if (!bio) {
+      setEmpty(true);
+      setState("open");
+      return;
+    }
+    setFill({ before: currentBio, applied: bio });
     onApply(bio);
     setPasted("");
     setState("idle");
@@ -101,13 +114,14 @@ export default function LinkedInBioImport({ onApply, currentBio, tone = "app" }:
     cancelled.current = true;
     abort.current?.abort();
     setPasted("");
+    setEmpty(false);
     setState("idle");
   }
 
   function undo() {
-    if (before === null) return;
-    onApply(before);
-    setBefore(null);
+    if (!fill) return;
+    onApply(fill.before);
+    setFill(null);
   }
 
   const muted = site ? "text-white/60" : "text-gray-400";
@@ -116,11 +130,13 @@ export default function LinkedInBioImport({ onApply, currentBio, tone = "app" }:
   if (state === "idle") {
     return (
       <div className="mt-2">
-        <button type="button" onClick={() => { setBefore(null); setState("open"); }} className={linkBtn}>
+        <button type="button" onClick={() => { setFill(null); setState("open"); }} className={linkBtn}>
           <LinkedInGlyph className="w-3.5 h-3.5" />
           Use LinkedIn bio
         </button>
-        {before !== null && (
+        {/* Only while the box still holds what we put in: once they have edited
+            it, Undo would throw their edits away. */}
+        {fill && currentBio === fill.applied && (
           <p className="text-[0.6875rem] text-emerald-400 mt-1" role="status">
             Bio filled from LinkedIn — edit it any way you like.{" "}
             <button type="button" onClick={undo} className="font-medium text-blue-400 hover:text-blue-300 underline underline-offset-2">
@@ -157,7 +173,7 @@ export default function LinkedInBioImport({ onApply, currentBio, tone = "app" }:
       <textarea
         aria-label="Your LinkedIn About"
         value={pasted}
-        onChange={(e) => setPasted(e.target.value)}
+        onChange={(e) => { setPasted(e.target.value); setEmpty(false); }}
         maxLength={LINKEDIN_ABOUT_MAX}
         rows={4}
         autoFocus
@@ -169,6 +185,11 @@ export default function LinkedInBioImport({ onApply, currentBio, tone = "app" }:
             : "bg-gray-900 border border-gray-700 text-white placeholder-gray-600"
         }`}
       />
+      {empty && (
+        <p className="mt-1 text-[0.6875rem] text-red-400" role="status">
+          There&apos;s no text to use there — paste the words of your About section.
+        </p>
+      )}
       <div className="mt-2 flex items-center gap-3">
         <button
           type="button"
@@ -181,7 +202,7 @@ export default function LinkedInBioImport({ onApply, currentBio, tone = "app" }:
         <button type="button" onClick={cancel} className={`text-[0.6875rem] ${site ? "text-white/50 hover:text-white/80" : "text-gray-500 hover:text-gray-300"}`}>
           Cancel
         </button>
-        {pasted.trim().length > LINKEDIN_BIO_SHORT && !working && (
+        {!working && tidyBioLocally(pasted).length > LINKEDIN_BIO_SHORT && (
           <span className={`ml-auto text-[0.625rem] ${muted}`}>We&apos;ll shorten it to fit.</span>
         )}
       </div>
