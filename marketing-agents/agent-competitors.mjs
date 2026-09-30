@@ -17,6 +17,7 @@ import { readFileSync } from "node:fs";
 import { safeMain, sb, extractJson, standDownIfUsageExhausted } from "./lib/agentkit.mjs";
 import { askClaude, ensurePlaybook, playbookBlock, recentWorkBlock, ownerChatBlock, queueChoice } from "./lib/brain.mjs";
 import { focusBlock } from "./lib/insights.mjs";
+import { chatterBlock } from "./lib/radar.mjs";
 import { nyWeekday } from "./lib/schedule.mjs";
 
 const config = JSON.parse(readFileSync(new URL("./config.json", import.meta.url), "utf8"));
@@ -121,6 +122,9 @@ await safeMain("competitors", async (run) => {
     playbookBlock(playbook),
     await recentWorkBlock("competitors"),
     await ownerChatBlock("competitors"),
+    // What real people said about the tracked competitors this week (the
+    // Radar) — read-only intel; it costs nothing until Cleo wakes anyway.
+    await chatterBlock(),
     `\n---\nSWIFTCARD'S OWN PRICING for comparison: read https://swiftcard.me/pricing before judging whether a competitor move matters.`,
     changeBlock,
     sweepBlock,

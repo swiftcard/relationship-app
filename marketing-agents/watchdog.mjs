@@ -28,6 +28,7 @@ import { DETECTORS, blindnessFindings } from "./lib/detectors.mjs";
 import { SERVICING_INTERVAL_MIN, FIXER_ELIGIBLE, FINDING_ITEM_TYPE } from "./lib/detectors-servicing.mjs";
 import { isDue } from "./lib/schedule.mjs";
 import { pollMediaPool } from "./lib/media-pool.mjs";
+import { radarTick } from "./lib/radar.mjs";
 
 const config = JSON.parse(readFileSync(new URL("./config.json", import.meta.url), "utf8"));
 const TICK_SEC = Number(process.env.WATCHDOG_TICK_SEC || 60);
@@ -54,15 +55,16 @@ const DEEP_PASS_MS = { layout: 24 * 60 * 60 * 1000 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const stamp = () => new Date().toISOString().slice(11, 19);
 
-/** Wake an agent's LLM workflow to investigate a finding it just detected. */
-async function dispatchAgent(agentId, reason) {
+/** Wake an agent's LLM workflow to investigate a finding it just detected
+ *  (trigger "watchdog"), or to answer conversations the Radar found ("radar"). */
+async function dispatchAgent(agentId, reason, trigger = "watchdog") {
   const wf = config.agents[agentId]?.workflow;
   if (!wf) return false;
   if (!process.env.GH_TOKEN) { console.log(`  ! GH_TOKEN missing — cannot wake ${agentId}`); return false; }
   const res = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/${wf}/dispatches`, {
     method: "POST",
     headers: { Authorization: `Bearer ${process.env.GH_TOKEN}`, Accept: "application/vnd.github+json" },
-    body: JSON.stringify({ ref: "main", inputs: { trigger: "watchdog" } }),
+    body: JSON.stringify({ ref: "main", inputs: { trigger } }),
   });
   console.log(`  → woke ${agentId} (${wf}) status ${res.status}: ${reason}`);
   return res.status === 204;
@@ -206,6 +208,13 @@ async function tick() {
   if (media && (media.ready || media.failed)) {
     console.log(`${stamp()} media pool: ${media.ready} ready, ${media.failed} failed, ${media.stillPending} pending`);
   }
+
+  // The Radar (owner order 2026-09-30): scan Reddit, Telegram, Hacker News,
+  // the news feeds and the rest for conversations about us, our topic and
+  // our competitors — code only, on its own interval inside this loop — and
+  // wake the agent whose thread it is. Like the detectors: nothing is spent
+  // listening; the model runs only when there is something real to answer.
+  await radarTick({ dispatch: dispatchAgent }).catch((e) => console.log(`${stamp()} radar error: ${String(e?.message ?? e).slice(0, 200)}`));
   return "continue";
 }
 

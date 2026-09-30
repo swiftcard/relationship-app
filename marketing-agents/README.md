@@ -46,6 +46,40 @@ agent added to `config.json` after the seed gets its `agent_settings` row
 created automatically — by the tab on first load and by the runner on first
 run — starting rested, so a new agent is never invisible or uncontrollable.
 
+## The Radar (lib/radar.mjs) — owner order 2026-09-30
+
+"All our agents and bots work for us in terms of marketing when we scan
+Reddit, Telegram and all relevant websites." The Radar is the listening
+layer: **code** scans public feeds every 15 minutes inside the always-on
+watchdog loop (no tokens), files every relevant post as a *signal*
+(`agent_radar_signals`), routes it to the agent whose thread it is, and
+wakes that agent (trigger `radar`). The agent reads the actual thread and
+hands the owner two finished replies, as always. **The Radar only reads —
+it never posts, replies, joins or DMs anywhere.**
+
+| Source | How | Needs |
+|---|---|---|
+| Reddit | official read API (app-only OAuth) or the public Atom search feed | `REDDIT_CLIENT_ID/SECRET` for the API (free script app); without them the public feed, rate-limited |
+| Telegram | public channel previews (`t.me/s/<channel>`) + every group a SwiftCard bot is in (`getUpdates`) | `TELEGRAM_BOT_TOKEN` for groups (bot privacy mode OFF, bot added to the group); channels need nothing |
+| Hacker News | Algolia search API | nothing |
+| News / RSS | Google News + Bing News queries by default; any RSS/Atom feed | nothing |
+| App Store | competitors' newest reviews (public RSS); 1–2★ = the billing/cancel complaints that are our wedge | nothing (uses `agent_competitors.app_store`) |
+| YouTube | fresh videos on the topic → creators for Ivy | `YOUTUBE_API_KEY` |
+
+Routing: brand mention → Zoe (`mentions`); question / recommendation on
+Reddit → Zoe, elsewhere → Wes (`forums`); competitor + complaint word → Ava
+(`outreach`); news → Piper (`pr`); YouTube → Ivy (`influencer`); neutral
+competitor chatter and App Store complaints → Cleo as read-only intel
+(`chatterBlock`). Each listening agent gets a `LIVE RADAR SIGNALS` block at
+the top of its prompt and returns the signal's id in `signal_id`; the owner's
+Pick/Neither on the reply marks the signal handled/dismissed.
+
+Owner surface: **Agent Flow → 📡 Radar** (signals, sources, Scan now, wake
+an agent on its signals) and **Settings → Radar** (keywords, subreddits,
+Telegram channels, feeds, complaint words, add/remove sources). Schema:
+`supabase/agent-radar.sql`. Tests: `tests/agent-radar.test.ts` (parsers,
+classifier, routing, and the no-LLM / no-posting pins).
+
 ## The company (org.json)
 
 Every agent is a named employee; `org.json` is the single org chart the tab,

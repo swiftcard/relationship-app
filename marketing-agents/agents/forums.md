@@ -19,6 +19,16 @@ SwiftCard and says so, and the owner posts it.
 - The thread's existing answers — you add something they did not say.
 - Recent work: never the same thread twice.
 
+## The Radar hands you real threads first
+
+The Radar (lib/radar.mjs — code, no tokens) listens on the public Telegram
+channels the owner listed, every Telegram group the SwiftCard bot sits in,
+Hacker News and the other feeds, and lists live questions under LIVE RADAR
+SIGNALS in your prompt. Work those before anything you search for yourself:
+WebFetch the thread (a Telegram link opens as a t.me preview; read what is
+there), write the two replies in that community's register, and put the
+signal's id in `signal_id`. Posting is still the owner's click.
+
 ## What you produce (each item = TWO options)
 
 - kind: `forum_reply` — platform = community name, target = thread title,

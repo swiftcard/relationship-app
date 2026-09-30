@@ -17,6 +17,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { safeMain, parseClaudeJson, extractJson, standDownIfUsageExhausted, standDownForUsage, sb } from "./lib/agentkit.mjs";
 import { dataBlock, focusBlock, teamOutputBlock } from "./lib/insights.mjs";
+import { radarBlock, markSignalQueued } from "./lib/radar.mjs";
 import {
   ensurePlaybook, playbookBlock, recentWorkBlock, intelBlock, openRequests, openRequestsBlock, ownerChatBlock,
   TWO_OPTIONS_RULES, OPTIONS_JSON_SHAPE, PERSONAL_RULES, PERSONAL_AGENTS, queueChoice, soundsHuman, isPersonal, fileRequest, CAN_REQUEST,
@@ -118,6 +119,10 @@ await safeMain(agentId, async (run) => {
     // Standing orders from the company chat ("@jake focus on realtors this
     // week") shape every run until the owner says otherwise.
     await ownerChatBlock(agentId),
+    // The Radar's live signals (lib/radar.mjs): real threads code found on
+    // Reddit, Telegram, Hacker News and the news feeds — worked before
+    // anything the agent would search for itself. "" for everyone else.
+    await radarBlock(agentId),
     // Jake must not write a second page for a keyword the site already covers —
     // two thin pages competing for one query is worse than one good page
     // (Google picks one and dilutes both). Handing him the live slug list is
@@ -189,8 +194,8 @@ await safeMain(agentId, async (run) => {
         if (!check.ok) { robotic++; console.log(`discarded (generic: ${check.why}): ${it.title}`); continue; }
       }
       single++;
-      const { result } = await run.addItem(it);
-      if (result === "added") added++;
+      const { result, id: singleId } = await run.addItem(it);
+      if (result === "added") { added++; await markSignalQueued(it.signal_id ?? it.payload?.signal_id, singleId); }
       if (result === "duplicate") dup++;
       if (result === "cap") break;
       continue;
@@ -199,6 +204,8 @@ await safeMain(agentId, async (run) => {
     robotic += out.robotic ?? 0;
     if (out.result === "added") {
       added++;
+      // A reply written for a Radar signal closes that signal (→ queued).
+      await markSignalQueued(it.signal_id, out.id);
       for (const r of Array.isArray(it.requests) ? it.requests.slice(0, 2) : []) {
         if (!canAsk.includes(r?.to)) continue;
         if (await fileRequest({ from_agent: agentId, to_agent: r.to, kind: r.kind, brief: r.brief, for_item: out.id })) asked++;

@@ -1,0 +1,41 @@
+name: "Radar: scan now (Reddit · Telegram · HN · news · App Store · YouTube)"
+# The Radar normally runs INSIDE the always-on watchdog loop
+# (agent-watchdog.yml → marketing-agents/watchdog.mjs → lib/radar.mjs) every
+# 15 minutes while the office is open. This workflow is the "Scan now"
+# button on Agent Flow → Radar: one full pass, then it wakes the agents that
+# have something to answer, exactly as the loop would.
+#
+# Code only — no model, no tokens. It reads public feeds and writes
+# agent_radar_* rows. It never posts, replies, joins or DMs anywhere.
+on:
+  workflow_dispatch:
+    inputs:
+      trigger:
+        description: "manual | scan_now"
+        default: "manual"
+concurrency:
+  group: agent-radar
+  cancel-in-progress: false
+permissions:
+  actions: write
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - name: Scan
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional eyes. Without them: Reddit reads the public feed (rate-
+          # limited), Telegram reads public channels only, YouTube is off.
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: node marketing-agents/radar.mjs

@@ -348,6 +348,7 @@ export const OPTIONS_JSON_SHAPE = `Return ONLY a JSON array (no prose before or 
 {"kind": "<item_type from the instructions>", "title": "<what this item is, 6-12 words>", "platform": "...", "target": "...", "target_url": "...", "dedupe_key": "<stable: platform:handle, thread URL, topic slug, or date+angle>",
  "research": "<2-4 lines: what you found today and why this item now>",
  "request_id": "<only if this answers a request listed above>",
+ "signal_id": "<only if this answers a LIVE RADAR SIGNAL listed above — its signal_id, verbatim>",
  "options": [
    {"label": "A", "headline": "<the angle in one line>", "content": "<the COMPLETE finished text/post/script/email, ready as-is>", "why_this": "<one line>", "personal_hook": "<when the item is aimed at one specific person: the verbatim 3-12 word detail from THEIR post/bio/review this draft hinges on; omit otherwise>", "payload": { <type-specific extras from the instructions> }},
    {"label": "B", "headline": "...", "content": "...", "why_this": "...", "personal_hook": "...", "payload": { }}
@@ -402,7 +403,7 @@ export async function queueChoice(run, it, { personFacing = false, personal = fa
     target: it.target ?? null,
     target_url: it.target_url ?? null,
     dedupe_key: it.dedupe_key ?? null,
-    payload: { kind, options, research: it.research ?? null, request_id: it.request_id ?? null },
+    payload: { kind, options, research: it.research ?? null, request_id: it.request_id ?? null, signal_id: it.signal_id ?? null },
   });
   if (out.result === "added" && it.request_id) await fulfilRequest(it.request_id, out.id);
   return { ...out, robotic };

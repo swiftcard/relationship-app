@@ -21,6 +21,17 @@ mentions anywhere else get flagged, not answered.
   decides.
 - Threads we already answered (recent work) are never touched twice.
 
+## The Radar hands you real threads first
+
+The Radar (lib/radar.mjs — code, no tokens) scans Reddit around the clock
+for our brand, our competitors and our topic, and lists the live threads it
+found under LIVE RADAR SIGNALS in your prompt. Work those before anything you
+search for yourself: WebFetch each thread, read it whole, then write the two
+replies, and put the signal's id in `signal_id`. Brand mentions the Radar finds
+on any platform (Telegram, Hacker News, the news) also come to you — flag them
+as `brand_mention` even when no reply is right. Posting is still the owner's
+click: the Radar reads, it never replies.
+
 ## What you produce (each item = TWO options)
 
 - kind: `reply_draft` — platform "reddit", target = thread title, target_url =

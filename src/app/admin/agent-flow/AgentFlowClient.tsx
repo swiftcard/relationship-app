@@ -253,7 +253,20 @@ type Msg = { id: string; from_id: string; to_id: string; kind: string; body: str
 // The company group chat (agent_chat / agent_chat_orders — supabase/agent-chat.sql).
 type ChatMsg = { id: string; from_id: string; kind: "message" | "reply" | "system"; body: string; mentions: string[] | null; reply_to: string | null; run_id: string | null; payload: Record<string, unknown> | null; created_at: string };
 type ChatOrder = { id: string; message_id: string; responder: string; status: "waiting" | "working" | "done" | "failed"; reply_id: string | null; run_id: string | null; error: string | null };
-type View = "agents" | "chat" | "chart" | "comms" | "queue" | "history" | "settings";
+// The Radar (agent_radar_* — supabase/agent-radar.sql): real posts found by
+// code on Reddit, Telegram, Hacker News, the news feeds, competitors' App
+// Store reviews and YouTube, each routed to the agent whose thread it is.
+type RadarSignal = { id: string; source_id: string | null; platform: string; url: string | null; title: string | null; body: string | null; author: string | null; community: string | null; posted_at: string | null; found_at: string; intent: string; matched: string[] | null; score: number; engagement: Record<string, number> | null; assigned_agent: string | null; status: string; item_id: string | null };
+type RadarSource = { id: string; kind: string; target: string; label: string | null; active: boolean; state: Record<string, unknown> | null; last_scanned_at: string | null; last_error: string | null; found_total: number };
+type RadarConfig = { keywords: string[]; brand: string[]; competitors: string[]; ask_words: string[]; complaint_words: string[]; subreddits: string[]; telegram_channels: string[]; feeds: { label: string; url: string }[]; hn_queries: string[]; youtube_queries: string[]; interval_min: number; wake_score: number; overridden: string[] };
+type RadarData = { ready: boolean; message?: string; signals: RadarSignal[]; sources: RadarSource[]; counts: Record<string, number>; config: RadarConfig; dispatchConfigured: boolean };
+const INTENT_LABEL: Record<string, string> = { brand: "mentions SwiftCard", competitor_complaint: "competitor complaint", ask: "asking for a recommendation", competitor: "competitor mentioned", topic: "on our topic", press: "press coverage", creator: "creator video" };
+const INTENT_COLOR: Record<string, string> = { brand: "border-sky-700 text-sky-300 bg-sky-950/30", competitor_complaint: "border-amber-700 text-amber-300 bg-amber-950/30", ask: "border-emerald-700 text-emerald-300 bg-emerald-950/30", competitor: "border-gray-700 text-gray-400", topic: "border-gray-700 text-gray-400", press: "border-violet-700 text-violet-300 bg-violet-950/30", creator: "border-pink-700 text-pink-300 bg-pink-950/30" };
+const PLATFORM_ICON: Record<string, string> = { reddit: "👽 Reddit", telegram: "✈️ Telegram", hn: "🟧 Hacker News", news: "📰 News", appstore: "🍎 App Store", youtube: "▶️ YouTube", web: "🌐 Web" };
+const SOURCE_KIND_LABEL: Record<string, string> = { reddit_search: "Reddit search", reddit_sub: "Subreddit", telegram_channel: "Telegram channel", telegram_bot: "Telegram bot (groups)", hn: "Hacker News", rss: "News / RSS feed", appstore_reviews: "App Store reviews", youtube: "YouTube" };
+const RADAR_AGENT_IDS = ["mentions", "forums", "outreach", "influencer", "pr", "competitors"];
+const REMOVABLE_SOURCE_KINDS = new Set(["reddit_sub", "telegram_channel", "rss", "appstore_reviews"]);
+type View = "agents" | "chat" | "chart" | "comms" | "queue" | "radar" | "history" | "settings";
 type TourStep = { view?: View; target?: string; title: string; body: string };
 const TOUR: TourStep[] = [
   { title: "Welcome to Agent Flow", body: "Your workforce. Press Start to OPEN the office — nothing runs yet; every team waits at rest. Wake a team and its agents start working on their own rhythms — a few pieces of content a day, watchdogs every few hours — until you Rest the team, press Pause, your auto-stop time hits, or the monthly token budget stops it. Nothing is ever sent to another platform without you." },
@@ -265,6 +278,7 @@ const TOUR: TourStep[] = [
   { view: "chat", target: "chat", title: "Chat — talk to your company", body: "One group chat with you and every agent. Type @Jake, @Rex, @marketing or @everyone and tell them what to do, ask for a report, or say what's broken — each person you mention takes a turn (a real run) and answers you here. Leads delegate to their team; watchdogs can queue a fix (a draft PR, never merged). No @ at all and Atlas takes it. Everything an agent produces still lands in your Review queue for your call." },
   { view: "agents", target: "agentrow", title: "One worker, one row", body: "Each row: what they do, whether they're working right now (a live timer counts), when their next shift starts, and their last result. 'Run once' fires them immediately regardless of schedule; the Active toggle benches them; ▾ log is their full diary." },
   { view: "queue", target: "tabs", title: "The Review queue", body: "Everything your agents produce waits here for your call. The badge on the tab shows how many. Approving never posts anything anywhere — you stay the sender." },
+  { view: "radar", target: "radar", title: "The Radar — what people are saying", body: "Code scans Reddit, Telegram, Hacker News, the news feeds, competitors' App Store reviews and YouTube every 15 minutes while the office is open — no tokens. Every real post about SwiftCard, a competitor, or someone asking for a digital business card lands here, routed to the agent whose thread it is, and that agent wakes to write you two replies. The Radar only reads; you still post." },
   { view: "queue", target: "checkbox", title: "Handling a pile at once", body: "Tick several items (or Select all shown) and a bar appears to approve or reject them together. Approve = 'good, mine to use'. Reject = filed away forever, nothing deleted." },
   { view: "history", target: "historylist", title: "History", body: "Every decision you've made, as sentences. For outreach you sent, record 'Got a reply' or 'Converted' here — that's how you learn which agents earn their keep." },
   { view: "settings", target: "settingslist", title: "Settings", body: "Per agent: on/off, items per run, token budget per run, and their working rhythm. The monthly cap at the top is the hard ceiling — agents stop rather than pass it (logged in comms and the evening report; no email)." },
@@ -326,6 +340,30 @@ export default function AgentFlowClient() {
     setBoard((b) => b && b.connections ? { ...b, connections: { ...b.connections, [provider]: { ...b.connections[provider], connected: false, account: null, note: null } } } : b);
   };
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+
+  // ── The Radar (its tab + the Settings card). Loads when opened, refreshes every 60s. ──
+  const [radar, setRadar] = useState<RadarData | null>(null);
+  const [radarStatus, setRadarStatus] = useState("new");
+  const [radarAgent, setRadarAgent] = useState("");
+  const [radarBusy, setRadarBusy] = useState(false);
+  const [newSource, setNewSource] = useState<{ kind: string; target: string; label: string }>({ kind: "reddit_sub", target: "", label: "" });
+  const loadRadar = useCallback(async () => {
+    const q = new URLSearchParams({ status: radarStatus });
+    if (radarAgent) q.set("agent", radarAgent);
+    const d = await fetch(`/api/admin/agents/radar?${q}`).then((r) => r.json()).catch(() => null);
+    if (d) setRadar(d);
+  }, [radarStatus, radarAgent]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on open + the 60s refresh, same pattern as the board loader
+  useEffect(() => { if (view !== "radar" && view !== "settings") return; loadRadar(); const t = setInterval(loadRadar, 60000); return () => clearInterval(t); }, [view, loadRadar]);
+  const radarPost = async (body: Record<string, unknown>, note?: string) => {
+    setRadarBusy(true);
+    const r = await fetch("/api/admin/agents/radar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((x) => x.json()).catch(() => null);
+    setRadarBusy(false);
+    if (!r?.ok) { say(`⚠ ${r?.error ?? "That didn't save — try again."}`); return false; }
+    if (note) say(note);
+    loadRadar();
+    return true;
+  };
 
   // Claude-plan usage meter: on load + manual ↻ + every 60s.
   const loadUsage = useCallback(async () => {
@@ -682,9 +720,9 @@ export default function AgentFlowClient() {
       {/* ── View tabs ── */}
       <div data-aftour="tabs" className="flex flex-wrap items-center gap-1">
         <button onClick={() => setTourStep(0)} className="px-3 py-1.5 rounded-full text-xs font-semibold text-blue-300 bg-blue-950/40 border border-blue-800/50 hover:bg-blue-900/40 whitespace-nowrap transition-colors">✦ Take a tour</button>
-        {([["agents", "Agents"], ["chat", "💬 Chat"], ["chart", "Org chart"], ["comms", "Comms"], ["queue", "Review queue"], ["history", "History"], ["settings", "Settings"]] as const).map(([v, label]) => (
+        {([["agents", "Agents"], ["chat", "💬 Chat"], ["chart", "Org chart"], ["comms", "Comms"], ["queue", "Review queue"], ["radar", "📡 Radar"], ["history", "History"], ["settings", "Settings"]] as const).map(([v, label]) => (
           <button key={v} onClick={() => setView(v)} className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${view === v ? "bg-gray-700 text-white" : "text-gray-500 hover:text-gray-300"}`}>
-            {label}{v === "queue" && board.pendingTotal > 0 ? ` (${board.pendingTotal})` : ""}
+            {label}{v === "queue" && board.pendingTotal > 0 ? ` (${board.pendingTotal})` : ""}{v === "radar" && (radar?.counts?.new ?? 0) > 0 ? ` (${radar!.counts.new})` : ""}
             {v === "chat" && chatUnread > 0 && <span className="ml-1.5 inline-block min-w-[18px] px-1 rounded-full bg-sky-500 text-white text-[0.625rem] font-bold text-center align-middle">{chatUnread}</span>}
           </button>
         ))}
@@ -1034,6 +1072,7 @@ export default function AgentFlowClient() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-[0.625rem] font-bold uppercase tracking-wide text-blue-400">{AGENT_NAMES[it.agent_id] ?? it.agent_id}</span>
                       <span className="text-[0.625rem] text-gray-600">{TYPE_LABEL[it.item_type] ?? it.item_type}{it.platform ? ` · ${it.platform}` : ""} · {ago(it.created_at)}</span>
+                      {it.payload?.signal_id ? <span className="text-[0.625rem] px-1.5 py-0.5 rounded-full border border-sky-800 text-sky-300 bg-sky-950/30" title="A real thread the Radar found — this is the reply to it">📡 Radar</span> : null}
                     </div>
                     <p className="text-white text-sm font-semibold mt-1">{it.title}</p>
                     {it.target_url && <a href={it.target_url} target="_blank" rel="noreferrer" className="text-xs text-blue-400 hover:underline break-all">{it.target_url}</a>}
@@ -1140,6 +1179,84 @@ export default function AgentFlowClient() {
         </>
       )}
 
+      {view === "radar" && (
+        <div className="space-y-3">
+          <div data-aftour="radar" className="rounded-2xl border border-gray-800 bg-gray-900 p-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex-1 min-w-[240px]">
+                <p className="text-white font-bold">📡 Radar — what people are saying right now</p>
+                <p className="text-gray-500 text-xs mt-0.5">Code scans Reddit, Telegram, Hacker News, the news feeds, competitors&apos; App Store reviews and YouTube every {radar?.config?.interval_min ?? 15} minutes while the office is open — no tokens. Each hit is routed to the agent whose thread it is (Zoe for Reddit, Wes for forums &amp; Telegram, Ava for competitor complaints, Ivy for creators, Piper for press) and that agent wakes to write you two replies. The Radar only reads — nothing is ever posted from here.</p>
+              </div>
+              <button onClick={() => radarPost({ action: "scan_now" }, "Scanning now — new signals land here within a few minutes.")} disabled={radarBusy || !open} title={open ? "Run one full scan right now" : "Open the office first (Start)"} className="text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-full whitespace-nowrap">Scan now</button>
+            </div>
+            {radar && !radar.ready && <p className="text-amber-400 text-xs mt-2">{radar.message}</p>}
+            {radar?.ready && (
+              <div className="flex flex-wrap gap-2 mt-3 text-[0.6875rem]">
+                {([["new", "new"], ["queued", "with an agent"], ["handled", "handled"], ["noted", "intel"], ["dismissed", "dismissed"], ["expired", "expired"]] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => setRadarStatus(k)} className={`px-2.5 py-1 rounded-full border ${radarStatus === k ? "border-blue-500 text-white bg-blue-950/40" : "border-gray-800 text-gray-400 hover:text-gray-200"}`}>{l} <span className="text-gray-500">{radar.counts?.[k] ?? 0}</span></button>
+                ))}
+                <select value={radarAgent} onChange={(e) => setRadarAgent(e.target.value)} className="bg-gray-900 border border-gray-800 text-gray-300 rounded-lg px-2 py-1 ml-auto">
+                  <option value="">every agent</option>
+                  {RADAR_AGENT_IDS.map((id) => <option key={id} value={id}>{AGENT_NAMES[id] ?? id}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+          {radar?.ready && (
+            <details className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+              <summary className="text-sm text-gray-300 cursor-pointer select-none">Sources — {radar.sources.filter((s) => s.active).length} listening{radar.sources.some((s) => s.active && s.last_error) ? <span className="text-amber-400"> · {radar.sources.filter((s) => s.active && s.last_error).length} need attention</span> : null}</summary>
+              <div className="mt-2 space-y-1">
+                {radar.sources.map((s) => (
+                  <div key={s.id} className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${!s.active ? "bg-gray-700" : s.last_error ? "bg-amber-400" : s.last_scanned_at ? "bg-emerald-400" : "bg-gray-600"}`} />
+                    <span className="text-gray-200">{s.label ?? s.id}</span>
+                    <span className="text-gray-600">{SOURCE_KIND_LABEL[s.kind] ?? s.kind}{s.last_scanned_at ? ` · scanned ${ago(s.last_scanned_at)}` : " · not scanned yet"} · {s.found_total} found</span>
+                    {s.last_error && <p className="w-full text-amber-500/90 text-[0.6875rem] pl-4">{s.last_error}</p>}
+                  </div>
+                ))}
+                <p className="text-gray-600 text-[0.6875rem] pt-1">Add or remove sources and edit the keywords in Settings → Radar.</p>
+              </div>
+            </details>
+          )}
+          {radar?.ready && radar.signals.length === 0 && (
+            <div className="rounded-2xl border border-gray-800 bg-gray-900 p-8 text-center">
+              <p className="text-gray-300 font-semibold">Nothing {radarStatus === "new" ? "new" : radarStatus} on the Radar.</p>
+              <p className="text-gray-500 text-sm mt-1.5">{open ? "It scans while the office is open and a listening agent (Zoe, Wes, Ava, Ivy or Piper) is awake." : <>Press <button onClick={() => control("start_all")} className="text-blue-400 underline">Start All</button> and wake Sasha&apos;s team — the Radar listens from then on.</>}</p>
+            </div>
+          )}
+          <div className="space-y-2">
+            {(radar?.signals ?? []).map((s) => {
+              const eng = s.engagement ?? {};
+              const engText = [eng.ups ? `${eng.ups}↑` : "", eng.points ? `${eng.points} pts` : "", eng.comments ? `${eng.comments} comments` : "", eng.views ? `${eng.views} views` : ""].filter(Boolean).join(" · ");
+              return (
+              <div key={s.id} className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+                <div className="flex flex-wrap items-start gap-2">
+                  <div className="flex-1 min-w-[220px]">
+                    <div className="flex flex-wrap items-center gap-2 text-[0.625rem]">
+                      <span className="font-bold uppercase tracking-wide text-gray-300">{PLATFORM_ICON[s.platform] ?? s.platform}</span>
+                      {s.community && <span className="text-gray-500">{s.community}</span>}
+                      <span className={`px-1.5 py-0.5 rounded-full border ${INTENT_COLOR[s.intent] ?? "border-gray-700 text-gray-400"}`}>{INTENT_LABEL[s.intent] ?? s.intent}</span>
+                      <span className="text-gray-600">score {s.score}{engText ? ` · ${engText}` : ""} · {s.posted_at ? `posted ${ago(s.posted_at)}` : `found ${ago(s.found_at)}`}</span>
+                    </div>
+                    <p className="text-white text-sm font-semibold mt-1">{s.title || "(no title)"}</p>
+                    {s.url && <a href={s.url} target="_blank" rel="noreferrer" className="text-xs text-blue-400 hover:underline break-all">{s.url}</a>}
+                    {s.body && <p className="text-gray-400 text-xs mt-1.5 whitespace-pre-wrap max-h-24 overflow-hidden">{s.body}</p>}
+                    <p className="text-[0.625rem] text-gray-600 mt-1.5">matched: {(s.matched ?? []).join(", ") || "—"}{s.author ? ` · by ${s.author}` : ""} · for {s.assigned_agent ? (AGENT_NAMES[s.assigned_agent] ?? s.assigned_agent) : "—"}{s.item_id ? <> · <button onClick={() => { setView("queue"); setFilterAgent(s.assigned_agent ?? ""); setFilterType(""); setFilterStatus(s.status === "handled" ? "approved" : "pending"); }} className="text-blue-400 hover:underline">open the reply in the queue →</button></> : null}</p>
+                  </div>
+                  <div className="flex flex-col gap-1.5 shrink-0">
+                    {s.status === "new" && s.assigned_agent && s.assigned_agent !== "competitors" && (
+                      <button onClick={() => radarPost({ action: "wake", agent_id: s.assigned_agent }, `${firstName(s.assigned_agent!)} is on it — two replies land in the queue in a few minutes.`)} disabled={radarBusy || !radar?.dispatchConfigured} title="Wakes the agent now on everything new the Radar has for them" className="text-xs bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold px-3 py-1.5 rounded-full whitespace-nowrap">Ask {firstName(s.assigned_agent)} for two replies</button>
+                    )}
+                    {(s.status === "new" || s.status === "noted" || s.status === "expired") && <button onClick={() => radarPost({ action: "dismiss", ids: [s.id] })} className="text-xs text-red-400 hover:text-red-300 px-3 py-1">Dismiss</button>}
+                    {(s.status === "dismissed" || s.status === "expired") && <button onClick={() => radarPost({ action: "restore", ids: [s.id] })} className="text-xs text-gray-400 hover:text-white px-3 py-1">{s.status === "expired" ? "Bring back" : "Restore"}</button>}
+                  </div>
+                </div>
+              </div>
+            ); })}
+          </div>
+        </div>
+      )}
+
       {view === "history" && (
         <div data-aftour="historylist" className="space-y-1.5">
           <p className="text-gray-500 text-xs">Every decision you&apos;ve made, newest first. Record outcomes on sent outreach — that&apos;s how you learn which agents earn their keep.</p>
@@ -1206,6 +1323,55 @@ export default function AgentFlowClient() {
               })}
               <p className="text-gray-600 text-[0.6875rem] pt-1">Instagram needs a picture or video on the item (a ready asset from the creative pool); YouTube uploads the rendered video from the pool. TikTok forbids tools that post to your own account and Reddit bans automated promotion — those stay Approve &amp; Copy. Blog posts publish themselves via the Publish button.</p>
             </div>
+          </div>
+          <div className="rounded-xl border border-gray-800 bg-gray-900 p-4 space-y-3">
+            <div>
+              <p className="text-white text-sm font-semibold">📡 Radar — what we listen for</p>
+              <p className="text-gray-500 text-xs mt-0.5">The words and places the Radar scans, one per line. Saves when you click away; the next scan uses it. Empty a box to go back to the defaults.</p>
+            </div>
+            {radar?.ready ? (
+              <>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {([["keywords", "Topic keywords", "digital business card"], ["subreddits", "Subreddits", "realtors"], ["telegram_channels", "Public Telegram channels (@name)", "channelname"], ["complaint_words", "Complaint words (next to a competitor's name = a warm lead for Ava)", "refund"]] as const).map(([k, label, ph]) => (
+                    <label key={k} className="block text-xs text-gray-400">
+                      {label}{radar.config.overridden.includes(k) ? <span className="text-sky-400"> · yours</span> : <span className="text-gray-600"> · defaults</span>}
+                      <textarea rows={5} defaultValue={radar.config[k].join("\n")} placeholder={ph} onBlur={(e) => radarPost({ config: { [k]: e.target.value } }, "Saved — the next scan listens for it.")} className="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-xs font-mono" />
+                    </label>
+                  ))}
+                  <label className="block text-xs text-gray-400 md:col-span-2">
+                    News / RSS feeds — one per line as <code className="text-gray-300">Label | https://…</code> (Google Alerts feeds, competitor blogs, industry news){radar.config.overridden.includes("feeds") ? <span className="text-sky-400"> · yours</span> : <span className="text-gray-600"> · defaults</span>}
+                    <textarea rows={4} defaultValue={radar.config.feeds.map((f) => `${f.label} | ${f.url}`).join("\n")} onBlur={(e) => radarPost({ config: { feeds: e.target.value } }, "Feeds saved.")} className="mt-1 w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-white text-xs font-mono" />
+                  </label>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400">
+                  <label className="flex items-center gap-1.5">scan every <input type="number" min={5} max={240} defaultValue={radar.config.interval_min} onBlur={(e) => radarPost({ config: { interval_min: Number(e.target.value) } })} className="w-16 bg-gray-950 border border-gray-700 rounded px-1.5 py-1 text-white" /> min</label>
+                  <label className="flex items-center gap-1.5" title="A signal at or above this score wakes its agent at once; lower ones wait for the agent's normal shift">wake an agent at score ≥ <input type="number" min={0} max={100} defaultValue={radar.config.wake_score} onBlur={(e) => radarPost({ config: { wake_score: Number(e.target.value) } })} className="w-16 bg-gray-950 border border-gray-700 rounded px-1.5 py-1 text-white" /></label>
+                </div>
+                <div>
+                  <p className="text-gray-300 text-xs font-semibold">Sources</p>
+                  <div className="mt-1.5 space-y-1">
+                    {radar.sources.map((s) => (
+                      <div key={s.id} className="flex flex-wrap items-center gap-2 text-xs">
+                        <input type="checkbox" checked={s.active} onChange={(e) => radarPost({ source: { id: s.id, active: e.target.checked } })} className="accent-blue-600" />
+                        <span className={s.active ? "text-gray-200" : "text-gray-500"}>{s.label ?? s.id}</span>
+                        <span className="text-gray-600">{SOURCE_KIND_LABEL[s.kind] ?? s.kind}</span>
+                        {s.last_error && <span className="text-amber-500/90 text-[0.6875rem]">· {s.last_error}</span>}
+                        {REMOVABLE_SOURCE_KINDS.has(s.kind) && <button onClick={() => radarPost({ remove_source: s.id }, "Removed.")} className="ml-auto text-gray-600 hover:text-red-400 underline">remove</button>}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 mt-2 text-xs">
+                    <select value={newSource.kind} onChange={(e) => setNewSource({ ...newSource, kind: e.target.value })} className="bg-gray-950 border border-gray-700 rounded px-1.5 py-1 text-white">
+                      <option value="reddit_sub">Subreddit</option><option value="telegram_channel">Telegram channel</option><option value="rss">News / RSS feed</option><option value="appstore_reviews">App Store reviews (a competitor)</option>
+                    </select>
+                    <input value={newSource.target} onChange={(e) => setNewSource({ ...newSource, target: e.target.value })} placeholder={newSource.kind === "reddit_sub" ? "r/realtors" : newSource.kind === "telegram_channel" ? "@channel or t.me/channel" : newSource.kind === "rss" ? "https://…/feed.xml" : "App Store URL or id"} className="flex-1 min-w-[200px] bg-gray-950 border border-gray-700 rounded px-2 py-1 text-white" />
+                    {newSource.kind !== "reddit_sub" && newSource.kind !== "telegram_channel" && <input value={newSource.label} onChange={(e) => setNewSource({ ...newSource, label: e.target.value })} placeholder="label" className="w-36 bg-gray-950 border border-gray-700 rounded px-2 py-1 text-white" />}
+                    <button onClick={async () => { if (await radarPost({ source: newSource }, "Added — it is read on the next scan.")) setNewSource({ ...newSource, target: "", label: "" }); }} disabled={radarBusy || !newSource.target.trim()} className="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white px-3 py-1 rounded-full">Add source</button>
+                  </div>
+                  <p className="text-gray-600 text-[0.6875rem] mt-2">Telegram groups: create a bot with @BotFather, send it <code className="text-gray-400">/setprivacy</code> → Disable, add the bot to the groups you want scanned, and set <code className="text-gray-400">TELEGRAM_BOT_TOKEN</code> as a GitHub repo secret — the &quot;groups the SwiftCard bot is in&quot; source then reads them. Public channels need nothing. Reddit reads the public feed until <code className="text-gray-400">REDDIT_CLIENT_ID</code> + <code className="text-gray-400">REDDIT_CLIENT_SECRET</code> (a free script app) are set; YouTube needs <code className="text-gray-400">YOUTUBE_API_KEY</code>. The Radar only reads — every reply is still your click.</p>
+                </div>
+              </>
+            ) : <p className="text-amber-400 text-xs">{radar?.message ?? "Loading…"}</p>}
           </div>
           <div className="rounded-xl border border-gray-800 bg-gray-900 p-4">
             <p className="text-white text-sm font-semibold">This week&apos;s focus</p>

@@ -259,6 +259,10 @@ describe("agent flow: approve-to-execute stays owner-gated", () => {
       e.isDirectory() ? walk(`${dir}/${e.name}`) : /\.(ts|tsx|mjs)$/.test(e.name) ? [`${dir}/${e.name}`] : []);
     for (const f of [...walk("src"), ...walk("marketing-agents")]) {
       if (f === "src/lib/agent-execute.ts") continue;
+      // The Radar READS Reddit through oauth.reddit.com (search + new
+      // listings, app-only token). Its own pin (tests/agent-radar) proves it
+      // never touches a comment/submit endpoint and writes agent_radar_* only.
+      if (f === "marketing-agents/lib/radar.mjs") { expect(read(f)).not.toMatch(/api\/comment|api\/submit|ugcPosts|\/2\/tweets|media_publish/); continue; }
       expect(read(f), `${f} contains a posting host — only agent-execute.ts may`).not.toMatch(hosts);
     }
   });

@@ -20,6 +20,18 @@ conference with a stack of cards".
   say — you must add something, not repeat.
 - Recent work: never the same person or thread twice.
 
+## The Radar hands you the people complaining about a competitor
+
+The Radar (lib/radar.mjs — code, no tokens) finds people saying a competitor
+charged them, would not cancel, broke, or let them down — on Reddit, Telegram,
+Hacker News and elsewhere — and lists them under LIVE RADAR SIGNALS in your
+prompt. These are your best conversations: work them before anything you
+search for yourself. WebFetch the post, quote the specific thing that went
+wrong as the `personal_hook`, lead with genuine help (how to actually cancel /
+get the refund), and let SwiftCard enter only where it honestly fits — the
+transparent price, the 14-day trial, cancellation that Apple owns in two taps.
+Put the signal's id in `signal_id`. Never gloat about a competitor.
+
 ## What you produce (each item = TWO options)
 
 - kind: `outreach_draft` — platform, target (name + handle), target_url (the

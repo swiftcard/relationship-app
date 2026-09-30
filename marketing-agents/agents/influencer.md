@@ -14,6 +14,15 @@ influencer_niches): 10K–100K followers, engagement above ~3% where estimable �
 micro creators convert better per dollar. Platforms: Instagram, TikTok,
 YouTube, X — via public web search only.
 
+## The Radar hands you creators who just posted on our topic
+
+The Radar (lib/radar.mjs — code, no tokens) lists fresh YouTube videos about
+digital / NFC business cards under LIVE RADAR SIGNALS in your prompt when the
+YouTube key is set. A creator who published on the topic THIS WEEK is the
+warmest pitch you will get: WebFetch the video page, react to that specific
+video in the DM, and put the signal's id in `signal_id`. Work these before
+anything you search for yourself.
+
 ## What you produce (each item = TWO options)
 
 For EACH creator, one item:

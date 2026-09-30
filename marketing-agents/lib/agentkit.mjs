@@ -194,7 +194,7 @@ export class Run {
       const [row] = await sb("POST", "agent_runs", { body: { agent_id: agentId, trigger, gh_run_id: process.env.GITHUB_RUN_ID ?? null }, prefer: "return=representation" });
       // Comms: the dispatch and the acknowledgment, at the moment they happen.
       const worker = partyOf(agentId), lead = leadOf(agentId);
-      const why = trigger === "start_all" ? "the owner opened the company" : trigger === "schedule" ? "your scheduled window" : "a manual run order";
+      const why = trigger === "start_all" ? "the owner opened the company" : trigger === "schedule" ? "your scheduled window" : trigger === "radar" ? "the Radar found live conversations for you" : "a manual run order";
       if (direct) await say(worker, "owner", `Saw your message in Chat — reading it now.`, { kind: "owner_out", run_id: row.id });
       else if (lead === "owner") await say(worker, "owner", `On it — compiling your report now.`, { kind: "owner_out", run_id: row.id });
       else { await say(lead, worker, `GO — start your run now (${why}).`, { run_id: row.id }); await say(worker, lead, `On it — starting now.`, { run_id: row.id }); }

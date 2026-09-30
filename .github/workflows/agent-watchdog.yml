@@ -70,6 +70,13 @@ jobs:
           VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
           # Dana's RLS probe needs the PUBLIC anon key (it is public by design).
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          # The Radar's optional eyes (lib/radar.mjs). Without them: Reddit
+          # reads the public feed (rate-limited), Telegram reads public
+          # channels only, YouTube stays off — each source row says so.
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
         run: |
           set -o pipefail
           node marketing-agents/watchdog.mjs | tee watchdog.log

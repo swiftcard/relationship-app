@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 const ITEM_ACTIONS = new Set(["approved", "rejected", "edited", "contacted", "replied", "converted", "acknowledged", "published", "csv_downloaded", "pending", "choose"]);
 
 type ChoiceOption = { label?: string; headline?: string; content?: string; why_this?: string; payload?: Record<string, unknown> };
-type ChoicePayload = { kind?: string; options?: ChoiceOption[]; research?: string; request_id?: string | null };
+type ChoicePayload = { kind?: string; options?: ChoiceOption[]; research?: string; request_id?: string | null; signal_id?: string | null };
 
 /**
  * The brain queues every piece of work as ONE item with TWO finished options
@@ -56,6 +56,9 @@ function resolveChoice(item: QueueItemLite, optionIndex: number) {
       options: options.map((o) => ({ label: o.label, headline: o.headline, why_this: o.why_this })),
       research: p.research ?? null,
       request_id: p.request_id ?? null,
+      // The Radar signal this reply answers (lib/radar.mjs) — carried through
+      // so the pick marks that signal handled.
+      signal_id: p.signal_id ?? null,
     },
   };
 }
@@ -151,6 +154,13 @@ export async function POST(req: NextRequest) {
       item_id: item.id, action: historyAction, actor_email: user.email,
       edit_before: after ? item.content : null, edit_after: after,
     });
+    // A reply written for a Radar signal: the owner's call on the item is the
+    // call on the signal too (picked/approved → handled, Neither → dismissed).
+    const signalId = (item.payload as Record<string, unknown> | null)?.signal_id;
+    if (typeof signalId === "string" && signalId) {
+      const signalStatus = action === "rejected" ? "dismissed" : ["approved", "published", "contacted", "acknowledged"].includes(action) ? "handled" : null;
+      if (signalStatus) await admin.from("agent_radar_signals").update({ status: signalStatus, item_id: item.id }).eq("id", signalId).then(() => {}, () => {});
+    }
     // Blog publish: flip the post live on /blog from the queued payload. A
     // chosen blog option publishes the same way, in the same step.
     const goLive = (action === "published" && item.item_type === "blog_post") || (chosen && item.item_type === "blog_post");

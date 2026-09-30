@@ -1,5 +1,5 @@
 {
-  "_comment": "Central agent config. enable/caps/schedules ALSO live in the agent_settings table (editable from the Agent Flow tab without a deploy) — the DB wins at runtime; these are the seed values and the target lists the prompts consume.",
+  "_comment": "Central agent config. enable/caps/schedules ALSO live in the agent_settings table (editable from the Agent Flow tab without a deploy) \u2014 the DB wins at runtime; these are the seed values and the target lists the prompts consume.",
   "digest_email": "hello@swiftcard.me",
   "monthly_usage_cap_usd": 25,
   "agents": {
@@ -235,7 +235,7 @@
       "default_schedule": "daily@08:30"
     },
     "upsell": {
-      "name": "Free → Pro Upsell",
+      "name": "Free \u2192 Pro Upsell",
       "mode": "draft_only",
       "workflow": "agent-upsell.yml",
       "output_cap": 3,
@@ -462,6 +462,124 @@
       "SaaSHub",
       "Slant",
       "TrustRadius"
+    ]
+  },
+  "radar": {
+    "_comment": "The Radar (2026-09-30): code-only listening across Reddit, Telegram, Hacker News, news feeds, competitor App Store reviews and YouTube. Owner overrides live in agent_system.radar (Settings \u2192 Radar); these are the defaults. Reading is all it does \u2014 posting stays with the owner.",
+    "interval_min": 15,
+    "wake_cooldown_min": 120,
+    "wake_score": 50,
+    "expire_hours": 72,
+    "keywords": [
+      "digital business card",
+      "digital business cards",
+      "nfc business cards",
+      "nfc business card",
+      "business card app",
+      "qr code business card",
+      "qr business card",
+      "virtual business card",
+      "electronic business card",
+      "smart business card",
+      "vcard app",
+      "share my contact info",
+      "contact sharing app",
+      "link in bio for realtors",
+      "tap to share contact",
+      "business cards still worth it",
+      "paper business cards"
+    ],
+    "ask_words": [
+      "recommend",
+      "recommendation",
+      "which one",
+      "what do you use",
+      "what are you using",
+      "anyone use",
+      "anyone using",
+      "anyone tried",
+      "worth it",
+      "vs",
+      "versus",
+      "alternative",
+      "alternatives",
+      "looking for",
+      "suggest",
+      "best "
+    ],
+    "complaint_words": [
+      "cancel",
+      "cancelled",
+      "canceled",
+      "refund",
+      "charged",
+      "charge",
+      "renewal",
+      "renewed",
+      "auto-renew",
+      "scam",
+      "rip off",
+      "ripoff",
+      "terrible",
+      "worst",
+      "awful",
+      "no support",
+      "support won't",
+      "unsubscribe",
+      "stopped working",
+      "doesn't work",
+      "does not work",
+      "broken",
+      "disappointed",
+      "switching from",
+      "switched from",
+      "frustrated",
+      "hidden fee",
+      "hidden fees"
+    ],
+    "subreddits": [
+      "realtors",
+      "RealEstate",
+      "sales",
+      "smallbusiness",
+      "Entrepreneur",
+      "Contractor",
+      "HVAC",
+      "Plumbing",
+      "digitalnomad",
+      "consulting",
+      "startups",
+      "marketing",
+      "Insurance",
+      "loanoriginators",
+      "photography",
+      "freelance",
+      "nfc",
+      "popl"
+    ],
+    "telegram_channels": [],
+    "feeds": [
+      {
+        "label": "Google News \u00b7 digital business card",
+        "url": "https://news.google.com/rss/search?q=%22digital+business+card%22&hl=en-US&gl=US&ceid=US:en"
+      },
+      {
+        "label": "Google News \u00b7 NFC business card",
+        "url": "https://news.google.com/rss/search?q=%22nfc+business+card%22&hl=en-US&gl=US&ceid=US:en"
+      },
+      {
+        "label": "Bing News \u00b7 digital business card",
+        "url": "https://www.bing.com/news/search?q=%22digital+business+card%22&format=rss"
+      }
+    ],
+    "hn_queries": [
+      "digital business card",
+      "business card app",
+      "nfc business card"
+    ],
+    "youtube_queries": [
+      "digital business card",
+      "nfc business card review"
     ]
   }
 }
