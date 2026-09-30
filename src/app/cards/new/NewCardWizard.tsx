@@ -536,6 +536,21 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
   // Step 1's one required field, flagged in place when Next finds it empty.
   const nameInputRef = useRef<HTMLInputElement>(null);
   const [nameMissing, setNameMissing] = useState(false);
+  // The card nickname is required too (owner, 2026-09-30), for everyone who
+  // is shown the box. An office member never is: their nickname is the
+  // company name, set by the organization.
+  const nicknameInputRef = useRef<HTMLInputElement>(null);
+  const [nicknameMissing, setNicknameMissing] = useState(false);
+  const nicknameRequiredMissing = !org && !nickname.trim();
+  function flagNickname() {
+    setError("Card nickname is required.");
+    setNicknameMissing(true);
+      // Two frames: on another step or tab the box isn't mounted yet.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        nicknameInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        nicknameInputRef.current?.focus({ preventScroll: true });
+      }));
+  }
   // Step 3's one required field: the Swift Links bio (the AI follow-ups write
   // from it — lib/sender-about). An office-set bio fills it on its own. Next on
   // Socials, the final save and a create from any gate all check it; a miss
@@ -807,6 +822,10 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
       setNameMissing(true);
       nameInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       nameInputRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (nicknameRequiredMissing) {
+      flagNickname();
       return;
     }
     if (!username) {
@@ -1128,6 +1147,11 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
     if (!name.trim() || !username) {
       setStep(1);
       setError("Full name is required.");
+      return;
+    }
+    if (nicknameRequiredMissing) {
+      setStep(1);
+      flagNickname();
       return;
     }
     if (!requireBio()) return;
@@ -1527,7 +1551,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
               <h1 className="text-2xl font-bold text-white">New card</h1>
               {/* The required rule lives here now, in the heading — it was a
                   separate blue banner, one more box to read before any field. */}
-              <p className="text-gray-400 text-sm mt-1">Start with the basics — only your name is required.</p>
+              <p className="text-gray-400 text-sm mt-1">{org ? "Start with the basics — only your name is required." : "Start with the basics — only your name and a card nickname are required."}</p>
               {/* Say so when we bring a draft back, otherwise a pre-filled form
                   after a reload reads as a glitch rather than a save. */}
               {restored && (
@@ -1793,8 +1817,21 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
             {/* Last: it never appears on the card — it only names the card on
                 the dashboard, so it is the least important thing to fill in. */}
             {!org && (
-              <FormSection id="nickname" title="Card nickname" labelFor="wizard-nickname" note="Only you see this — it names the card on your dashboard.">
-                <input id="wizard-nickname" type="text" placeholder="e.g. Sales Card" value={nickname} onChange={(e) => setNickname(e.target.value)} className={inputCls} />
+              <FormSection id="nickname" title="Card nickname" required labelFor="wizard-nickname" note="Only you see this — it names the card on your dashboard.">
+                <input
+                  id="wizard-nickname"
+                  ref={nicknameInputRef}
+                  type="text"
+                  placeholder="e.g. Sales Card"
+                  value={nickname}
+                  aria-required="true"
+                  aria-invalid={nicknameMissing || undefined}
+                  onChange={(e) => {
+                    setNickname(e.target.value);
+                    if (nicknameMissing && e.target.value.trim()) { setNicknameMissing(false); setError(""); }
+                  }}
+                  className={`${inputCls}${nicknameMissing ? " ring-2 ring-red-500/70 border-red-500" : ""}`}
+                />
               </FormSection>
             )}
 

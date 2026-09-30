@@ -202,6 +202,10 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
   // saved payload always matches the organization's current values, even if
   // this card hadn't been re-synced yet.
   const [label, setLabel] = useState(orgCompany ?? (card.label || ""));
+  // Required wherever the box is shown (owner, 2026-09-30) — the same rule as
+  // the create-card wizard. Not the primary card or an office member's.
+  const nicknameInputRef = useRef<HTMLInputElement>(null);
+  const [nicknameMissing, setNicknameMissing] = useState(false);
   const [name, setName] = useState(card.name || "");
   const [company, setCompany] = useState(orgCompany ?? (card.company || ""));
   const [title, setTitle] = useState(card.title || "");
@@ -562,6 +566,18 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
       setTab("content");
       setError("Full name is required.");
       setProBlock(null);
+      return;
+    }
+    if (!isPrimary && !org && !label.trim()) {
+      setTab("content");
+      setError("Card nickname is required.");
+      setNicknameMissing(true);
+      setProBlock(null);
+      // Two frames: on another step or tab the box isn't mounted yet.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        nicknameInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        nicknameInputRef.current?.focus({ preventScroll: true });
+      }));
       return;
     }
     // An office-set bio fills the page on its own (bioManaged); otherwise the
@@ -1038,8 +1054,21 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                 the dashboard. Not for the primary card (it saves through
                 /api/profile, which has no label) or an office member. */}
             {!isPrimary && !org && (
-              <FormSection id="nickname" title="Card nickname" labelFor="card-nickname" note="Only you see this — it names the card on your dashboard.">
-                <input id="card-nickname" type="text" placeholder="e.g. Sales Card" value={label} onChange={(e) => setLabel(e.target.value)} className={inputCls} />
+              <FormSection id="nickname" title="Card nickname" required labelFor="card-nickname" note="Only you see this — it names the card on your dashboard.">
+                <input
+                  id="card-nickname"
+                  ref={nicknameInputRef}
+                  type="text"
+                  placeholder="e.g. Sales Card"
+                  value={label}
+                  aria-required="true"
+                  aria-invalid={nicknameMissing || undefined}
+                  onChange={(e) => {
+                    setLabel(e.target.value);
+                    if (nicknameMissing && e.target.value.trim()) { setNicknameMissing(false); setError(""); }
+                  }}
+                  className={`${inputCls}${nicknameMissing ? " ring-2 ring-red-500/70 border-red-500" : ""}`}
+                />
               </FormSection>
             )}
 
