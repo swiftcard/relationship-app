@@ -28,7 +28,7 @@ import { DETECTORS, blindnessFindings } from "./lib/detectors.mjs";
 import { SERVICING_INTERVAL_MIN, FIXER_ELIGIBLE, FINDING_ITEM_TYPE } from "./lib/detectors-servicing.mjs";
 import { isDue } from "./lib/schedule.mjs";
 import { pollMediaPool } from "./lib/media-pool.mjs";
-import { radarTick } from "./lib/radar.mjs";
+import { radarTick, RADAR_AGENTS } from "./lib/radar.mjs";
 
 const config = JSON.parse(readFileSync(new URL("./config.json", import.meta.url), "utf8"));
 const TICK_SEC = Number(process.env.WATCHDOG_TICK_SEC || 60);
@@ -143,7 +143,16 @@ async function tick() {
     params: `agent_id=in.(${WATCHDOGS.join(",")})&select=agent_id,enabled,paused`,
   });
   const onDuty = (rows ?? []).filter((r) => r.enabled && !r.paused).map((r) => r.agent_id);
-  if (!onDuty.length) { console.log(`${stamp()} no watchdog is Active — standing down.`); return "stop"; }
+  // The Radar (lib/radar.mjs) ticks inside this loop too, so the loop stays
+  // up while a listening agent (Zoe, Wes, Ava, Ivy, Piper) is awake even
+  // when every watchdog is unticked — on 2026-09-30 the office opened with
+  // no watchdog Active and the loop stood down before the Radar ever ran.
+  const listeners = await sb("GET", "agent_settings", {
+    params: `agent_id=in.(${RADAR_AGENTS.join(",")})&enabled=is.true&paused=is.false&select=agent_id`,
+  }).catch(() => []);
+  const listening = (listeners ?? []).length > 0;
+  if (!onDuty.length && !listening) { console.log(`${stamp()} no watchdog is Active and no listening agent is awake — standing down.`); return "stop"; }
+  if (!onDuty.length) console.log(`${stamp()} no watchdog is Active — staying up for the Radar only.`);
 
   for (const agentId of onDuty) {
     if (!probeDue(agentId)) continue;
