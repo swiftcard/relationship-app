@@ -20,7 +20,6 @@ import ProRequiredDialog from "@/components/ProRequiredDialog";
 import ImageUpload from "@/components/ImageUpload";
 import LogoSuggest from "@/components/LogoSuggest";
 import ProfilePhotoSuggest from "@/components/ProfilePhotoSuggest";
-import LinkedInBioImport from "@/components/LinkedInBioImport";
 import CardScaler from "@/components/CardScaler";
 import { DEFAULT_PRESET, buildPreset } from "@/lib/custom-layout";
 import InertPreview from "@/components/InertPreview";
@@ -1241,12 +1240,6 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                   className={`${inputCls} resize-none ${bioManaged ? "opacity-70 cursor-default" : ""}${bioMissing ? " ring-2 ring-red-500/70 border-red-500" : ""}`}
                 />
                 {bioMissing && <p className="text-red-400 text-xs mt-1">Add a bio to save your card.</p>}
-                {!bioManaged && (
-                  <LinkedInBioImport
-                    currentBio={bio}
-                    onApply={(v) => { setBio(v); if (v.trim()) { setBioMissing(false); setError(""); } }}
-                  />
-                )}
               </div>
             </FormSection>
 

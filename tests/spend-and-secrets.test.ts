@@ -60,8 +60,6 @@ describe("outbound-spend endpoints are capped", () => {
     // Image GENERATION — an order of magnitude dearer per call than a vision
     // read, which is why its own limit is the tightest of the four.
     "src/app/api/design-transfer/route.ts",
-    // "Use LinkedIn bio" — one short completion per pasted About.
-    "src/app/api/ai/tidy-bio/route.ts",
   ];
 
   it.each(SPEND)("%s rate-limits per user", (f) => {

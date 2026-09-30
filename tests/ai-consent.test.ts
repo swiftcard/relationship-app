@@ -56,7 +56,6 @@ describe("(c) the AI notice discloses, names, and asks", () => {
     expect(what).toMatch(/business card/);
     expect(what).toMatch(/notes/);
     expect(what).toMatch(/assistant/);
-    expect(what).toMatch(/linkedin about/);
   });
 
   it("offers a real choice, not just an acknowledgement", () => {
@@ -104,7 +103,6 @@ describe("declining actually stops the data leaving", () => {
     ["src/app/api/leads/[id]/generate-sequence/route.ts", "req"],
     ["src/app/api/scan-design/route.ts", "request"],
     ["src/app/api/design-transfer/route.ts", "request"],
-    ["src/app/api/ai/tidy-bio/route.ts", "req"],
   ])("%s guards with the platform-aware block (passes the request)", (route, param) => {
     // The request argument is what makes the guard platform-aware — a call
     // without it can't apply the stricter in-app rule.

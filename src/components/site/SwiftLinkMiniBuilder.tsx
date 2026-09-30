@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import ImageUpload from "@/components/ImageUpload";
 import ProfilePhotoSuggest from "@/components/ProfilePhotoSuggest";
-import LinkedInBioImport from "@/components/LinkedInBioImport";
 import { SwiftLinkStyleControls } from "@/components/SwiftLinkDesign";
 import SwiftLinkLivePreview from "@/components/SwiftLinkLivePreview";
 import { LinkPageViewport, FullSizeOverlay } from "@/components/PinnedCardPreview";
@@ -134,7 +133,6 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
             required
             hint="Who you help and what you do — the first thing people read. AI follow-ups use it too."
             autoFocus
-            below={<LinkedInBioImport tone="site" currentBio={sketch.bio} onApply={(v) => patch({ bio: v })} />}
           />
           <SocialFields socials={sketch.socials} onChange={patchSocial} />
           <LinkButtons

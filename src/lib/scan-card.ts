@@ -56,7 +56,7 @@ export async function scanBusinessCard(file: File): Promise<ScannedCard> {
   }
 }
 
-export async function compressToBase64(file: File): Promise<{ base64: string; mediaType: string }> {
+async function compressToBase64(file: File): Promise<{ base64: string; mediaType: string }> {
   const dataUrl = await readAsDataURL(file);
   try {
     const img = await loadImage(dataUrl);

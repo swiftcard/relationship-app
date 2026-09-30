@@ -8,7 +8,6 @@ import DashboardLink from "@/components/DashboardLink";
 import LogoSuggest from "@/components/LogoSuggest";
 import ProfilePhotoSuggest from "@/components/ProfilePhotoSuggest";
 import EnablePushButton from "@/components/EnablePushButton";
-import ProfileImportButton from "@/components/ProfileImportButton";
 import ShareButton from "@/components/ShareButton";
 import QRCodeModal from "@/components/QRCodeModal";
 import CopyButton from "@/components/CopyButton";
@@ -53,7 +52,6 @@ import SwiftLinkLivePreview from "@/components/SwiftLinkLivePreview";
 import PlanCards from "@/components/PlanCards";
 import FreeDesignChoice from "@/components/FreeDesignChoice";
 import GuestGateModal from "@/components/GuestGateModal";
-import LinkedInBioImport from "@/components/LinkedInBioImport";
 import ReferralGiftPanel from "@/components/ReferralGiftPanel";
 import ForceLightTheme from "@/components/ForceLightTheme";
 import { unitLine } from "@/lib/address-unit";
@@ -1539,22 +1537,6 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
               )}
             </div>
 
-            {/* The no-typing path: a screenshot of their LinkedIn profile fills
-                the boxes below. A team member's company half is set by the
-                organization, so only their own fields are taken there. */}
-            <ProfileImportButton
-              guest={guest}
-              onImport={(f) => {
-                if (f.name) { setName(f.name); setNameMissing(false); setError(""); }
-                if (f.title) setTitle(f.title);
-                if (!org) {
-                  if (f.company) setCompany(f.company);
-                  if (f.website) setWebsite(f.website);
-                  if (f.city || f.state) setAddress((a) => ({ ...a, city: f.city ?? a.city, state: f.state ?? a.state }));
-                }
-              }}
-            />
-
             {/* Explicit autofill — the form stays empty unless the visitor
                 chooses to pull in what they sketched on the homepage. */}
             {pendingPrefill && (
@@ -1874,12 +1856,6 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                   className={`w-full bg-gray-900 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors resize-none ${bioManaged ? "opacity-70 cursor-default" : ""}${bioMissing ? " ring-2 ring-red-500/70 border-red-500" : ""}`}
                 />
                 {bioMissing && <p id="wizard-bio-error" role="alert" className="text-red-400 text-xs mt-1">Add a bio to continue.</p>}
-                {!bioManaged && (
-                  <LinkedInBioImport
-                    currentBio={bio}
-                    onApply={(v) => { setBio(v); if (v.trim()) setBioMissing(false); }}
-                  />
-                )}
               </div>
             </FormSection>
 
