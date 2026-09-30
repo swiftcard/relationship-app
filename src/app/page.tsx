@@ -482,7 +482,12 @@ export default function Home() {
             <div className="hp-final-rings hidden md:block" aria-hidden="true"><span /><span /><span /><span /></div>
             {/* A real SwiftCard, rising out of the panel. */}
             <div className="hp-final-phone hidden lg:block"><HomeCardPhone /></div>
-            <div className="relative max-w-2xl">
+            {/* lg: the text column stops 22rem short of the panel's right edge,
+                where the absolute phone sits. Without the cap, at 1024-1200px
+                the 42rem column ran under the phone — the headline and
+                "cancel anytime" printed across the card. From ~1280px the full
+                42rem fits, so wide screens are unchanged. */}
+            <div className="relative max-w-2xl lg:max-w-[min(42rem,calc(100%_-_22rem))]">
               <h2 className="rd-display text-white text-[clamp(2.4rem,5.5vw,4.4rem)]">
                 Be the one they remember.
               </h2>
