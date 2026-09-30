@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "512742021987",
+    "project_id": "swiftcard-2cc87",
+    "storage_bucket": "swiftcard-2cc87.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:512742021987:android:e196d4a8712d0205189156",
+        "android_client_info": {
+          "package_name": "me.swiftcard.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJWwRFI2rXTee17bta9nuZFdwL5n2wDL4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
