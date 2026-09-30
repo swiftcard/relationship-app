@@ -28,7 +28,9 @@ describe("radar: listening is code — no model, no tokens, no posting", () => {
   });
   it("runs inside the always-on loop and wakes agents the way findings do", () => {
     const loop = read("marketing-agents/watchdog.mjs");
-    expect(loop).toMatch(/import \{ radarTick \} from "\.\/lib\/radar\.mjs"/);
+    expect(loop).toMatch(/import \{ radarTick, RADAR_AGENTS \} from "\.\/lib\/radar\.mjs"/);
+    // …and stays up for the Radar alone when every watchdog is unticked.
+    expect(loop).toMatch(/if \(!onDuty\.length && !listening\)/);
     expect(loop).toMatch(/await radarTick\(\{ dispatch: dispatchAgent \}\)/);
     expect(loop).toMatch(/async function dispatchAgent\(agentId, reason, trigger = "watchdog"\)/);
     // The watchdog pause gate still comes first — a closed office scans nothing.
