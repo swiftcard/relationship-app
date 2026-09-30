@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import { useIsNativeApp } from "@/lib/platform";
+import { useIsNativeApp, useNativePlatform } from "@/lib/platform";
 import GoogleSignInButton from "@/components/GoogleSignInButton";
 import PasswordField from "@/components/PasswordField";
 import { safeNextPath } from "@/lib/safe-next";
@@ -107,6 +107,10 @@ export default function LoginForm({
   // not having filled in a field they were never asked to fill in.
   const emailRef = useRef<HTMLInputElement>(null);
   const native = useIsNativeApp();
+  // Guideline 4.8 is an APPLE rule. On Android it buys nothing and costs the
+  // only one-tap sign-in the app has, so the coupling below is iOS-only.
+  const androidApp = useNativePlatform() === "android";
+  const socialInApp = androidApp || APPLE_SIGNIN_ENABLED;
 
   // Surface a failed OAuth round-trip (auth/callback redirects here with
   // ?error=oauth) or a sign-in attempt for an email with no account
@@ -503,8 +507,13 @@ export default function LoginForm({
           turning a kill switch meant to prevent a 2.1 into a guaranteed 4.8 on
           the next submission. With both hidden, native falls back to
           email/password, which owes Apple nothing. Web is unaffected. */}
+      {/* ANDROID: not gated on the Apple switch. The paragraph above is App
+          Review 4.8, which applies to the App Store and nowhere else — pairing
+          Google to it on Android would mean the Apple kill switch silently
+          removes Google sign-in from the Android app, leaving email/password
+          as the only way in for no reason at all. */}
       {native ? (
-        APPLE_SIGNIN_ENABLED && (
+        socialInApp && (
           <button
             type="button"
             onClick={handleGoogle}
@@ -556,7 +565,7 @@ export default function LoginForm({
       {/* Only when a one-tap button is actually above it — native with the
           Apple kill switch off shows neither, and a lone "or" heading the
           form would read as a rendering glitch. */}
-      {(!native || APPLE_SIGNIN_ENABLED) && (
+      {(!native || socialInApp) && (
         <div className="flex items-center gap-3">
           <div className="flex-1 h-px bg-[#E4DDD4]" />
           <span className="text-slate-600 text-xs">or</span>

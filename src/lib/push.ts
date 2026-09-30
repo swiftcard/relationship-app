@@ -1,6 +1,7 @@
 import webpush from "web-push";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { isApnsEndpoint, sendApnsDetailed } from "@/lib/apns";
+import { isFcmEndpoint, sendFcmDetailed } from "@/lib/fcm";
 import { reportError as reportServerError } from "@/lib/report-error";
 import { assertSafeUrl } from "@/lib/safe-fetch";
 import { isPaidPlan } from "@/lib/plan";
@@ -239,7 +240,14 @@ export async function sendPushToUser(userId: string, payload: {
   // APNs; browser subscriptions keep going through web-push. Both prune their
   // dead endpoints the same way.
   const apnsSubs = subs.filter((s) => isApnsEndpoint(s.endpoint));
-  const webSubs = subs.filter((s) => !isApnsEndpoint(s.endpoint));
+  const fcmSubs = subs.filter((s) => isFcmEndpoint(s.endpoint));
+  // EVERYTHING ELSE is a browser subscription. This filter has to name every
+  // native prefix explicitly: it used to read `!isApnsEndpoint(...)` alone,
+  // which would hand an Android "fcm:<token>" row to web-push, whose job is to
+  // POST to the endpoint AS A URL. That is not a crash — it is one
+  // "blocked-endpoint" line in the failure list and a notification nobody ever
+  // receives, so Android push would appear to work and silently never arrive.
+  const webSubs = subs.filter((s) => !isApnsEndpoint(s.endpoint) && !isFcmEndpoint(s.endpoint));
 
   // Every send resolves to whether it REACHED a device. The old accounting
   // counted any settled promise as delivered, so an APNs rejection — including
@@ -261,6 +269,25 @@ export async function sendPushToUser(userId: string, payload: {
         failures.push(`apns ${r.result} ${r.status} ${r.reason}`.trim());
         return false;
       }).catch((e) => { failures.push(`apns threw ${e instanceof Error ? e.message : String(e)}`); return false; })
+    );
+  }
+
+  // Android. Same accounting and same pruning rule as APNs above: only a real
+  // delivery counts as true, and only an explicit "this device is gone" is
+  // allowed to delete the row. Android gets `webPayload`, not `apnsPayload`:
+  // there is no subtitle line on Android, so the card/team line has to lead the
+  // body or it is lost.
+  for (const sub of fcmSubs) {
+    sends.push(
+      sendFcmDetailed(sub.endpoint, webPayload).then(async (r) => {
+        if (r.result === "sent") return true;
+        if (r.result === "gone") {
+          await admin.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
+          return false;
+        }
+        failures.push(`fcm ${r.result} ${r.status} ${r.reason}`.trim());
+        return false;
+      }).catch((e) => { failures.push(`fcm threw ${e instanceof Error ? e.message : String(e)}`); return false; })
     );
   }
 

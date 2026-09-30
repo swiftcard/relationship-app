@@ -15,13 +15,18 @@
 // Apple's automatic rating sheet is a different thing entirely and never starts
 // from a tap — see lib/app-review.ts.
 
-import { useIsNativeApp } from "@/lib/platform";
+import { useIsAndroidApp, useIsNativeApp } from "@/lib/platform";
 import { APP_STORE_LISTING_URL, APP_STORE_WRITE_REVIEW_URL } from "@/lib/app-store";
 
 export default function RateUsCard() {
   const native = useIsNativeApp();
+  // Both of these are apps.apple.com links. In the Android app they would send
+  // someone to review an app they are not using and cannot have installed.
+  // There is no Play listing to point at yet, so show nothing rather than
+  // something wrong; this comes back when the app is on Play.
+  const androidApp = useIsAndroidApp();
   const href = native ? APP_STORE_WRITE_REVIEW_URL : APP_STORE_LISTING_URL;
-  if (!href) return null;
+  if (!href || androidApp) return null;
 
   return (
     <div className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5">

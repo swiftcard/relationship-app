@@ -12,10 +12,11 @@ import { assertSafeUrl } from "@/lib/safe-fetch";
 // else's requires the endpoint itself to have leaked — but validate shape AND
 // destination: the server later POSTs to this URL via web-push, so an
 // unchecked https host is a blind-SSRF primitive into internal services.
-// Returns true only for an apns: token or a public-internet https URL.
+// Returns true only for a native device token (apns: on iOS, fcm: on
+// Android — neither is ever fetched as a URL) or a public-internet https URL.
 async function isSafePushEndpoint(endpoint: unknown): Promise<boolean> {
   if (typeof endpoint !== "string" || endpoint.length > 1024) return false;
-  if (endpoint.startsWith("apns:")) return endpoint.length > 20;
+  if (endpoint.startsWith("apns:") || endpoint.startsWith("fcm:")) return endpoint.length > 20;
   let url: URL;
   try {
     url = new URL(endpoint);

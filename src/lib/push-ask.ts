@@ -187,11 +187,14 @@ export function stopPushAsk(ledger: PushAskLedger): PushAskLedger | null {
 
 /**
  * Does this account already get what this side would ask for?
- *   app — a phone registered through the app (an "apns:" endpoint);
+ *   app — a phone registered through the app (an "apns:" endpoint on iOS,
+ *         "fcm:" on Android);
  *   web — ANY device at all.
  */
 export function pushAlreadyOn(endpoints: string[], platform: AskPlatform): boolean {
-  return platform === "app" ? endpoints.some((e) => e.startsWith("apns:")) : endpoints.length > 0;
+  return platform === "app"
+    ? endpoints.some((e) => e.startsWith("apns:") || e.startsWith("fcm:"))
+    : endpoints.length > 0;
 }
 
 /** Which device the reminder is on — it decides both the words and the button. */

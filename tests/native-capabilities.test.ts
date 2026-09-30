@@ -391,9 +391,15 @@ describe("native share + Wallet hand-off", () => {
     expect(src).toMatch(/detectNativeApp\(\)/);
     expect(src).toMatch(/@capacitor\/browser/);
   });
-  it("EnablePushButton registers APNs tokens through the shared subscribe route", () => {
+  it("EnablePushButton registers native tokens through the shared subscribe route", () => {
     const src = read("src/components/EnablePushButton.tsx");
-    expect(src).toMatch(/apns:\$\{result\.token\}/);
+    // The prefix is CHOSEN, not hardcoded: "apns:" on iOS, "fcm:" on Android.
+    // It used to be the literal "apns:", which on Android filed a Firebase
+    // token as an Apple one — lib/push.ts then posted it to Apple, Apple
+    // rejected it, and the row was pruned as a dead device. Android push would
+    // have been silently impossible. See lib/push-device.ts.
+    expect(src).toMatch(/\$\{nativePushPrefix\(\)\}\$\{result\.token\}/);
+    expect(src).toMatch(/nativePushPrefix/);
     expect(src).toMatch(/@capacitor\/push-notifications/);
   });
 });

@@ -65,6 +65,25 @@ export const SPLASH_V2_TOKEN = "SwiftCardSplash/2";
 // carries its own token and every older build keeps what it shipped with.
 export const SPLASH_V3_TOKEN = "SwiftCardSplash/3";
 
+/**
+ * The Android shell announces itself with this instead of a SwiftCardSplash
+ * token, and gets NO web splash overlay at all.
+ *
+ * Every markup file here exists to be pixel-identical to a compiled-in iOS
+ * LAUNCH IMAGE at frame 0, so the handoff from native to web is invisible.
+ * Android has no launch image: its launch screen is the system SplashScreen
+ * API, a background colour with a centred icon, which none of this markup
+ * resembles. Worse, the version ladder below falls through to v1 for any UA
+ * with no token — so an Android build would be handed markup-v1to3.html, whose
+ * frame 0 is the old navy square icon, and every cold open would visibly jump.
+ *
+ * Nothing is lost by bailing: NativeAppBridge calls SplashScreen.hide() on
+ * mount regardless, which is the same backstop every page without this markup
+ * already relies on. When an Android animation is built it gets its own token
+ * and its own file, and never joins the iOS ladder.
+ */
+export const SPLASH_ANDROID_TOKEN = "SwiftCardAndroid/";
+
 // Read once per server process, not once per request: this is ~52KB of inlined
 // artwork and a synchronous disk read has no business in the request path.
 // WHICH FILE EACH INSTALLED BUILD GETS.
@@ -109,6 +128,9 @@ export default async function NativeSplash() {
   // miss here is bandwidth (~52KB), never a replay.
 
   const ua = h.get("user-agent") ?? "";
+  // Android: no overlay, and crucially BEFORE the version ladder below, which
+  // would otherwise read "no splash token" as "the oldest iOS build".
+  if (ua.includes(SPLASH_ANDROID_TOKEN)) return null;
   const version = ua.includes(SPLASH_V3_TOKEN) ? 3 : ua.includes(SPLASH_V2_TOKEN) ? 2 : 1;
   return <div suppressHydrationWarning dangerouslySetInnerHTML={{ __html: splashMarkup(version) }} />;
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 /**
- * Native-platform detection for the SwiftCard Capacitor iOS shell.
+ * Native-platform detection for the SwiftCard Capacitor shells (iOS and Android).
  *
  * ABSOLUTE RULE for this file: on the web (and during any server render) every
  * export here must resolve to `false`. It only becomes `true` when our bundle is
@@ -17,8 +17,8 @@ import { useEffect, useState } from "react";
  * 55 kB of the Capacitor runtime into the JavaScript of every page on the
  * WEBSITE, where the answer is always false, for a single boolean.
  *
- * The two signals below are exactly what @capacitor/core reads internally
- * (getPlatformId), and they are the same two the root layout's `sc-boot` script
+ * The raw signals below are exactly what @capacitor/core reads internally
+ * (getPlatformId), and they are the same ones the root layout's `sc-boot` script
  * already tests before first paint — which also documents why the RAW check is
  * the more reliable of the two: `window.Capacitor` is created by Capacitor's
  * own injected bundle, so testing only that is a race against our own script,
@@ -30,7 +30,12 @@ import { useEffect, useState } from "react";
  */
 type CapacitorGlobal = {
   webkit?: { messageHandlers?: Record<string, unknown> };
-  Capacitor?: { isNativePlatform?: () => boolean; isNative?: boolean };
+  androidBridge?: unknown;
+  Capacitor?: {
+    isNativePlatform?: () => boolean;
+    isNative?: boolean;
+    getPlatform?: () => string;
+  };
 };
 
 export function detectNativeApp(): boolean {
@@ -39,6 +44,14 @@ export function detectNativeApp(): boolean {
     const w = window as unknown as CapacitorGlobal;
     // The native message handler WKWebView installs before any page script.
     if (w.webkit?.messageHandlers?.bridge) return true;
+    // The Android mirror of it. @capacitor/core reads exactly these two, in
+    // this order (getPlatformId), and both are installed by the native side
+    // before the first page script runs — unlike window.Capacitor, which our
+    // own bundle races. Without this line an Android build answers this
+    // question from window.Capacitor alone, which is the race the comment
+    // above describes; on iOS losing it flashed the marketing hero and leaked
+    // a login sheet.
+    if (w.androidBridge) return true;
     const c = w.Capacitor;
     if (!c) return false;
     return typeof c.isNativePlatform === "function" ? c.isNativePlatform() : !!c.isNative;
@@ -119,4 +132,54 @@ export function useIsIosAppOnMac(): boolean {
     setOnMac(detectIosAppOnMac());
   }, []);
   return onMac;
+}
+
+/**
+ * WHICH shell — for the handful of branches that are genuinely per-platform:
+ * the store a purchase goes through, the push endpoint prefix, the "open
+ * device settings" deep link, and the Apple-only sign-in button.
+ *
+ * Returns null on the web, during SSR, and for any shell whose platform
+ * cannot be read. Every caller must treat null as "not this platform", never
+ * as a default, so a detection failure can only ever hide a platform-specific
+ * feature — never show the wrong one.
+ *
+ * Deliberately separate from {@link detectNativeApp} rather than replacing it:
+ * that function must keep answering "yes" for a shell that exposes only
+ * window.Capacitor with no getPlatform, which is exactly what
+ * tests/native-detection.test.ts plants.
+ */
+export function detectNativePlatform(): "ios" | "android" | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const w = window as unknown as CapacitorGlobal;
+    if (w.webkit?.messageHandlers?.bridge) return "ios";
+    if (w.androidBridge) return "android";
+    const p = w.Capacitor?.getPlatform?.();
+    return p === "android" ? "android" : p === "ios" ? "ios" : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Hydration-safe hook — null until after mount, like {@link useIsNativeApp}. */
+export function useNativePlatform(): "ios" | "android" | null {
+  const [platform, setPlatform] = useState<"ios" | "android" | null>(null);
+  useEffect(() => {
+    // Same hydration reasoning as useIsNativeApp: the answer only exists on
+    // window, so reading it during render would disagree with the server.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration-safe by design
+    setPlatform(detectNativePlatform());
+  }, []);
+  return platform;
+}
+
+/** True only in the Android shell. False on web, on SSR and on iOS. */
+export function useIsAndroidApp(): boolean {
+  return useNativePlatform() === "android";
+}
+
+/** True only in the iOS shell. False on web, on SSR and on Android. */
+export function useIsIosApp(): boolean {
+  return useNativePlatform() === "ios";
 }

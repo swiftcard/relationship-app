@@ -1,6 +1,6 @@
 "use client";
 
-import { detectNativeApp, useIsIosAppOnMac } from "@/lib/platform";
+import { detectNativeApp, useIsAndroidApp, useIsIosAppOnMac } from "@/lib/platform";
 
 // "Add to Apple Wallet" download button. On the web it's a plain link to the
 // pass route — the browser hands the .pkpass to Apple Wallet on iPhone/Mac.
@@ -20,6 +20,13 @@ export default function AddToWalletButton({ username, className = "" }: { userna
   // true and point at the thing that DOES work, rather than hiding the feature
   // as if it never existed.
   const onMac = useIsIosAppOnMac();
+  // IN THE ANDROID APP there is no Apple Wallet and no Google Wallet pass (the
+  // knowledge base says so to anyone who asks). Left alone, this rendered "Add
+  // to Apple Wallet" inside an Android app and handed Chrome a .pkpass, which
+  // downloads as a file nothing on the device can open — a dead end dressed up
+  // as a feature. Scoped to the APP, not to Android browsers, so nothing about
+  // the website changes.
+  const androidApp = useIsAndroidApp();
 
   async function handleNativeOpen(e: React.MouseEvent<HTMLAnchorElement>) {
     if (!detectNativeApp()) return; // web: normal link navigation
@@ -33,6 +40,8 @@ export default function AddToWalletButton({ username, className = "" }: { userna
       window.location.href = href;
     }
   }
+
+  if (androidApp) return null;
 
   if (onMac) {
     return (

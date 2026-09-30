@@ -158,7 +158,11 @@ export default function RootLayout({
               // saved choice is not dark, so ThemeToggle/ForceLightTheme,
               // which write sc_theme first, keep working.
               "try{new MutationObserver(function(rs){var d=document.documentElement;for(var i=0;i<rs.length;i++){var a=rs[i].attributeName,o=rs[i].oldValue;" +
-              "if(a==='class'){if(o&&/(^|\\s)native-app(\\s|$)/.test(o)&&!d.classList.contains('native-app'))d.classList.add('native-app');}" +
+              "if(a==='class'){if(o&&/(^|\\s)native-app(\\s|$)/.test(o)&&!d.classList.contains('native-app'))d.classList.add('native-app');" +
+              // native-android carries the Android inset CSS; if React strips it
+              // and nothing puts it back, the glass chrome drops under the status
+              // bar "at random" — the same failure the light theme had.
+              "if(o&&/(^|\\s)native-android(\\s|$)/.test(o)&&!d.classList.contains('native-android'))d.classList.add('native-android');}" +
               "else if(a==='data-sc-mac'||a==='data-sc-authed'){if(o!==null&&!d.hasAttribute(a))d.setAttribute(a,o);}" +
               "else if(a==='data-sc-theme'&&!d.hasAttribute(a)){var t=null;try{t=localStorage.getItem('sc_theme');}catch(e){}if(t!=='dark')d.setAttribute(a,'light');}}})" +
               ".observe(document.documentElement,{attributes:true,attributeOldValue:true,attributeFilter:['class','data-sc-theme','data-sc-mac','data-sc-authed']});}catch(e){}" +
@@ -172,9 +176,18 @@ export default function RootLayout({
               // uses internally (getPlatformId). Capacitor is still checked as a
               // fallback for any future shell that exposes only that.
               "var W=window.webkit&&window.webkit.messageHandlers;" +
+              // The Android mirror of the WKWebView handler, installed by the
+              // native side before any page script for the same reason. On
+              // Android window.Capacitor alone IS the race described above,
+              // because there is no second early signal to fall back on.
+              "var A=window.androidBridge;" +
               "var C=window.Capacitor;" +
-              "if((W&&W.bridge)||(C&&(C.isNativePlatform?C.isNativePlatform():C.isNative))){" +
+              "if((W&&W.bridge)||A||(C&&(C.isNativePlatform?C.isNativePlatform():C.isNative))){" +
               "document.documentElement.classList.add('native-app');" +
+              // Which shell, before paint, for the CSS that differs. Android
+              // gets its safe-area insets from MainActivity rather than from
+              // env(), which reports 0 in an Android WebView.
+              "if(A&&!(W&&W.bridge))document.documentElement.classList.add('native-android');" +
               // Mark the shell for the SERVER: src/proxy.ts redirects "/" before
               // any homepage HTML is sent when it sees this cookie (or the
               // SwiftCardApp UA of future builds). The client redirect below

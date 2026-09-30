@@ -160,10 +160,14 @@ describe("full-screen overlays clear the status bar", () => {
   it("globals.css insets that bar only in the native shell", () => {
     const css = code(read("src/app/globals.css"));
     const rule = css.slice(css.indexOf("html.native-app .sc-overlay-topbar"));
-    expect(rule).toMatch(/padding-top:\s*env\(safe-area-inset-top\)/);
+    // The inset is read through a custom property whose FALLBACK is the same
+    // env() — so on iOS and the web the computed value is unchanged, while
+    // MainActivity.java can override it on Android, where env() reports 0
+    // under a status bar the page is genuinely drawn beneath.
+    expect(rule).toMatch(/padding-top:\s*var\(--sc-inset-top, env\(safe-area-inset-top\)\)/);
     // Border-box: without a matching height bump the padding eats the bar's
     // 48px and pushes the button back out of reach.
-    expect(rule).toMatch(/height:\s*calc\(3rem \+ env\(safe-area-inset-top\)\)/);
+    expect(rule).toMatch(/height:\s*calc\(3rem \+ var\(--sc-inset-top, env\(safe-area-inset-top\)\)\)/);
   });
 });
 

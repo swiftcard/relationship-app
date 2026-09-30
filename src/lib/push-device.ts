@@ -13,7 +13,22 @@
 //
 // Everything here is best-effort and must never block sign-out or navigation.
 
-import { detectNativeApp } from "@/lib/platform";
+import { detectNativeApp, detectNativePlatform } from "@/lib/platform";
+
+/**
+ * The namespace this device's native token is stored under.
+ *
+ * lib/push.ts routes on exactly these two prefixes and hands everything else
+ * to web-push, which POSTs to the endpoint as a URL — so a token filed under
+ * the wrong one is not an error anywhere, just a notification that never
+ * arrives. iOS keeps "apns:" it has always had; Android must be "fcm:".
+ *
+ * Falls back to "apns:" only where the platform cannot be read at all, which
+ * on a device that reached this code means iOS.
+ */
+export function nativePushPrefix(): "apns:" | "fcm:" {
+  return detectNativePlatform() === "android" ? "fcm:" : "apns:";
+}
 
 const APNS_ENDPOINT_KEY = "swiftcard_apns_endpoint";
 // Set when an unbind could not reach the server; retried on the next load.

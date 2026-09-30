@@ -29,7 +29,7 @@
 //    would look compliant while being exactly the violation that got us
 //    rejected, and it would ship to storefronts where the link is not allowed.
 
-import { detectNativeApp } from "@/lib/platform";
+import { detectNativeApp, detectNativePlatform } from "@/lib/platform";
 
 type ExternalPurchasePlugin = {
   open: (options: { url: string }) => Promise<{ opened: boolean }>;
@@ -52,7 +52,14 @@ function plugin(): ExternalPurchasePlugin | undefined {
  * rendering a button and hoping — see the fail-closed note above.
  */
 export function canOfferExternalPurchase(): boolean {
-  return detectNativeApp() && !!plugin();
+  // iOS ONLY, DELIBERATELY. Everything above is Guideline 3.1.1 — an Apple
+  // rule, answering an Apple rejection, allowed by an Apple carve-out for the
+  // US storefront. Google has no equivalent rule and no equivalent permission:
+  // an in-app link to a web checkout is what Play calls steering. The Android
+  // app therefore sells nothing and offers no purchase link at all, which is
+  // also why lib/iap.ts returns early there. Pinned by
+  // tests/android-no-selling.test.ts.
+  return detectNativePlatform() === "ios" && !!plugin();
 }
 
 /**
@@ -121,7 +128,18 @@ export async function openExternalPurchase(path?: string): Promise<boolean> {
  * would look compliant while being the exact thing that got 1.0.0 (7) rejected.
  */
 export function canOpenInDefaultBrowser(): boolean {
-  return canOfferExternalPurchase();
+  // NOT the same question as canOfferExternalPurchase above, though it used to
+  // share its answer. That one asks "may this platform show a purchase link?",
+  // which is an Apple-storefront question and false on Android. This one asks
+  // "can a page be handed OUT of the app?", which every shell must be able to
+  // do — and while the two shared an answer, Android said false, so
+  // NativeAppBridge hid the public card page, replaced to /dashboard and
+  // opened nothing. The link was silently swallowed.
+  //
+  // Both platforms now answer it the same way, through their own native
+  // plugin: UIApplication.open on iOS, ACTION_VIEW on Android. Still fails
+  // closed — no plugin, no tappable link.
+  return detectNativeApp() && !!plugin();
 }
 
 /** Open a swiftcard.me page in the default browser. False = nothing happened. */

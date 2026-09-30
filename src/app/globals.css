@@ -1229,13 +1229,31 @@ html.native-app .sc-site-footer { display: none !important; }
    browser and in portrait, so nothing else moves. */
 @media (orientation: landscape) {
   html.native-app body {
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
+    padding-left: var(--sc-inset-left, env(safe-area-inset-left));
+    padding-right: var(--sc-inset-right, env(safe-area-inset-right));
   }
 }
 
 /* Those pages pad their top for the fixed marketing header that is now gone. */
-html.native-app body:has(.sc-site-nav) main { padding-top: env(safe-area-inset-top); }
+/* SAFE-AREA INSETS, AND WHY THEY ARE INDIRECTED.
+   On iOS env() is authoritative and these defaults simply pass it through, so
+   nothing about the iPhone app or the website changes.
+   In an Android WebView env(safe-area-inset-*) commonly computes to 0 even
+   while the page IS drawn under the status bar and gesture pill — and from
+   targetSdk 35 Android forces edge-to-edge, so the glass header would sit
+   behind the clock with no padding at all. The real numbers only exist on the
+   native side, so MainActivity reads the window insets and writes them onto
+   <html> as these same custom properties, where an inline style outranks this
+   rule. Same shape as the iOS contentInset fix: let the page own the canvas,
+   and hand it the one number it cannot work out for itself. */
+html.native-app {
+  --sc-inset-top: env(safe-area-inset-top);
+  --sc-inset-bottom: env(safe-area-inset-bottom);
+  --sc-inset-left: env(safe-area-inset-left);
+  --sc-inset-right: env(safe-area-inset-right);
+}
+
+html.native-app body:has(.sc-site-nav) main { padding-top: var(--sc-inset-top, env(safe-area-inset-top)); }
 
 /* Long-press on content should not raise the web text-selection callout; the
    app's own copy/share affordances handle that. Inputs and anything explicitly
@@ -1248,7 +1266,7 @@ html.native-app :not(input):not(textarea):not([contenteditable]):not(.sc-selecta
 html.native-app body {
   /* Content clears the taller (safe-area-padded) chrome; fixed elements are
      unaffected by body padding, so nav alignment is preserved. */
-  padding-top: env(safe-area-inset-top);
+  padding-top: var(--sc-inset-top, env(safe-area-inset-top));
   -webkit-tap-highlight-color: transparent;
   /* THE WHITE BAR UNDER THE CLOCK. `body` above sets
      `background: var(--background)`, and --background follows the OS
@@ -1274,7 +1292,7 @@ html.native-app .sc-tabbar {
 html.native-app .sc-app.fixed {
   /* Hug the notch: the bar itself extends into the status-bar area. */
   top: 0 !important;
-  padding-top: calc(env(safe-area-inset-top) + 2px);
+  padding-top: calc(var(--sc-inset-top, env(safe-area-inset-top)) + 2px);
   /* Specular top edge + soft float, like .glassEffect() */
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 32px rgba(0, 0, 0, 0.35);
 }
@@ -1291,8 +1309,8 @@ html.native-app .sc-tabbar {
    while stuck; its own translucent background then paints the strip. */
 html.native-app .sc-office-header {
   top: 0;
-  padding-top: env(safe-area-inset-top);
-  margin-top: calc(-1 * env(safe-area-inset-top));
+  padding-top: var(--sc-inset-top, env(safe-area-inset-top));
+  margin-top: calc(-1 * var(--sc-inset-top, env(safe-area-inset-top)));
 }
 
 /* A full-screen overlay's own top bar (contact detail). The overlay is
@@ -1305,8 +1323,8 @@ html.native-app .sc-office-header {
    Height is restated because Tailwind's h-12 is border-box: padding alone would
    push the button out of a fixed 48px instead of growing the bar. */
 html.native-app .sc-overlay-topbar {
-  padding-top: env(safe-area-inset-top);
-  height: calc(3rem + env(safe-area-inset-top));
+  padding-top: var(--sc-inset-top, env(safe-area-inset-top));
+  height: calc(3rem + var(--sc-inset-top, env(safe-area-inset-top)));
 }
 /* Light theme: warm glass instead of dark */
 html.native-app[data-sc-theme="light"] .sc-app.fixed,
@@ -1364,7 +1382,7 @@ html.native-app .sc-tabbar {
   right: 12px !important;
   /* +2, was +10 then +6: user feedback — sit as low as possible while the
      safe-area inset still keeps it fully above the home indicator. */
-  bottom: calc(env(safe-area-inset-bottom) + 2px) !important;
+  bottom: calc(var(--sc-inset-bottom, env(safe-area-inset-bottom)) + 2px) !important;
   padding-bottom: 0 !important; /* inset replaces the inline safe-area pad */
   border-radius: 28px;
   border-width: 1px !important;
@@ -1376,7 +1394,7 @@ html.native-app body:has(.sc-tabbar) main {
   scroll-padding-bottom: 96px;
 }
 html.native-app body:has(.sc-tabbar) {
-  padding-bottom: calc(env(safe-area-inset-bottom) + 84px);
+  padding-bottom: calc(var(--sc-inset-bottom, env(safe-area-inset-bottom)) + 84px);
 }
 /* The floating help bubble must clear the capsule too. Its own bottom-20
    (80px) was tuned for the WEBSITE's bottom-0 tab bar; once the capsule is
@@ -1388,13 +1406,13 @@ html.native-app body:has(.sc-tabbar) {
     /* +76, tracks the capsule: its top is inset+69 (bottom inset+2 + 67px
        bar), so the bubble keeps the same ~7px gap it had before the capsule
        was lowered — per user, proximity to the bar must not change. */
-    bottom: calc(env(safe-area-inset-bottom) + 76px);
+    bottom: calc(var(--sc-inset-bottom, env(safe-area-inset-bottom)) + 76px);
   }
 }
 /* The OPEN chat panel overlays the capsule by design, but its input row must
    still clear the home indicator, or the send button sits under it. */
 html.native-app .sc-help-panel {
-  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  bottom: calc(var(--sc-inset-bottom, env(safe-area-inset-bottom)) + 16px);
 }
 
 /* ── Pages must not scroll when their content fits ────────────────────────
@@ -1406,10 +1424,10 @@ html.native-app .sc-help-panel {
    "content fits" means "document fits": short pages become genuinely still,
    long pages scroll exactly as before. */
 html.native-app main.min-h-screen {
-  min-height: calc(100dvh - env(safe-area-inset-top));
+  min-height: calc(100dvh - var(--sc-inset-top, env(safe-area-inset-top)));
 }
 html.native-app body:has(.sc-tabbar) main.min-h-screen {
-  min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 84px);
+  min-height: calc(100dvh - var(--sc-inset-top, env(safe-area-inset-top)) - var(--sc-inset-bottom, env(safe-area-inset-bottom)) - 84px);
 }
 
 /* ── No top accent stripe in the shell ────────────────────────────────────

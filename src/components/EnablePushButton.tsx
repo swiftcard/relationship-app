@@ -5,7 +5,8 @@
 // the subscription so the server can send contact alerts + view milestones.
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { detectNativeApp } from "@/lib/platform";
+import { detectNativeApp, detectNativePlatform } from "@/lib/platform";
+import { nativePushPrefix } from "@/lib/push-device";
 import { notePushOn, stopAsk } from "@/lib/push-ask-client";
 
 type State = "loading" | "unsupported" | "ios-install" | "native" | "denied" | "subscribed" | "idle" | "working" | "error";
@@ -19,7 +20,8 @@ type State = "loading" | "unsupported" | "ios-install" | "native" | "denied" | "
 // "Add to Home Screen" guidance is impossible there (no Safari share button) —
 // showing it inside a native app reads as broken (App Review 2.1). When the
 // shell ships the PushNotifications plugin, native gets REAL APNs push (the
-// toggle below registers the device token as an "apns:<token>" endpoint and
+// toggle below registers the device token as an "apns:<token>" endpoint on
+// iOS ("fcm:<token>" on Android) and
 // lib/apns.ts delivers). A plugin-less shell build falls back to a quiet,
 // honest not-available state with NO instructions. Web is byte-identical.
 function nativePushAvailable(): boolean {
@@ -267,6 +269,25 @@ export function usePushState(): [State, () => Promise<boolean>, FailReason, Rech
         handles.push(await PushNotifications.addListener("registrationError", (e) =>
           done({ error: String((e as { error?: unknown })?.error ?? "registration failed") })));
 
+        // ANDROID ONLY, AND MANDATORY. Android 8+ drops any notification
+        // naming a channel that does not exist — silently, with the send
+        // reported as delivered. The id must stay byte-identical to
+        // FCM_CHANNEL_ID in lib/fcm.ts, which is what the server puts on every
+        // message; tests/android-push-routing.test.ts pins the pair.
+        // importance 4 = IMPORTANCE_HIGH, which is what makes a banner appear
+        // over the app instead of a silent row in the shade — the Android
+        // equivalent of the iOS presentationOptions in capacitor.config.ts.
+        if (detectNativePlatform() === "android") {
+          try {
+            await PushNotifications.createChannel({
+              id: "swiftcard-alerts",
+              name: "Card activity",
+              description: "New leads, card views and team news",
+              importance: 4,
+              visibility: 1,
+            });
+          } catch { /* an existing channel is not an error */ }
+        }
         await PushNotifications.register();
 
         const timeout = new Promise<{ token?: string; error?: string }>((resolve) =>
@@ -284,7 +305,7 @@ export function usePushState(): [State, () => Promise<boolean>, FailReason, Rech
           return false;
         }
 
-        const endpoint = `apns:${result.token}`;
+        const endpoint = `${nativePushPrefix()}${result.token}`;
         // The endpoint this device held before, if the token rotated (OS
         // upgrade, restore from backup). The server deletes it, so one phone
         // never keeps two live rows and buzzing twice for every event.

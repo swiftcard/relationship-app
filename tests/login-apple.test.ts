@@ -68,12 +68,17 @@ describe("Item 9 — Apple handler mirrors Google, on native and on the web", ()
   // exists to prevent a 2.1 into a guaranteed 4.8 on the next submission.
   // Native then falls back to email/password, which owes Apple nothing.
   it("the kill switch hides native Google too, or it manufactures a 4.8", () => {
-    // the native branch opens with the same gate that guards Apple
-    expect(src).toMatch(/\{native \?\s*\(?\s*APPLE_SIGNIN_ENABLED && \(/);
-    // and the native Google button lives inside it
+    // The gate is now named, because it is no longer the same on both shells.
+    expect(src).toMatch(/\{native \?\s*\(?\s*socialInApp && \(/);
+    // On iOS it still resolves to APPLE_SIGNIN_ENABLED alone, which IS the
+    // 4.8 coupling this test exists to protect: androidApp is false there, so
+    // the Apple kill switch still takes Google down with it.
+    expect(src).toMatch(/const socialInApp = androidApp \|\| APPLE_SIGNIN_ENABLED;/);
+    expect(src).toMatch(/const androidApp = useNativePlatform\(\) === "android";/);
+    // and the native Google button lives inside that gate
     const nativeBranch = src.slice(src.indexOf("{native ?"), src.indexOf("<GoogleSignInButton"));
     expect(nativeBranch).toContain("Continue with Google");
-    expect(nativeBranch).toContain("APPLE_SIGNIN_ENABLED");
+    expect(nativeBranch).toContain("socialInApp");
   });
 
   it("web is untouched by that gate — GoogleSignInButton always renders there", () => {

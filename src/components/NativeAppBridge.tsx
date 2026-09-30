@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 import { safeNextPath } from "@/lib/safe-next";
-import { detectNativeApp } from "@/lib/platform";
+import { detectNativeApp, detectNativePlatform } from "@/lib/platform";
+import { nativePushPrefix } from "@/lib/push-device";
 import { LINKEDIN_MESSAGE } from "@/lib/linkedin-popup";
 import { PUBLIC_PAGE_META } from "@/lib/universal-links";
 import { ACTIVE_CARD_EVENT } from "@/lib/active-card";
@@ -31,6 +32,49 @@ let handedOff: { dest: string; at: number } | null = null;
  * bundle; on web the effect returns before any import happens.
  */
 export default function NativeAppBridge() {
+  // ── Android hardware back ──────────────────────────────────────────────
+  //
+  // iOS has no such button, so nothing here ever runs on an iPhone.
+  //
+  // ⚠️ REGISTERING THIS LISTENER TURNS OFF CAPACITOR'S OWN BACK HANDLING
+  // COMPLETELY. There is no "handled / not handled" return value to fall
+  // through on, so whatever this function forgets simply stops working —
+  // which is why the exit case is spelled out rather than left implied. A
+  // handler that only called history.back() would make the app impossible to
+  // leave from its first screen.
+  //
+  // MINIMIZE, NEVER exitApp(). Exiting kills the process, so the next open is
+  // a full cold start: a new webview, the site fetched again, the splash held
+  // for seconds. Minimising leaves the app warm in Recents, which is what
+  // pressing back on a home screen does on every other Android app.
+  useEffect(() => {
+    if (detectNativePlatform() !== "android") return;
+    let cancelled = false;
+    let remove: (() => void) | null = null;
+    (async () => {
+      try {
+        const { App } = await import("@capacitor/app");
+        const handle = await App.addListener("backButton", ({ canGoBack }) => {
+          // An open sheet or dialog closes first — the same thing the hardware
+          // back button does everywhere else on Android, and the app's own
+          // dialogs already close on Escape (use-dialog-a11y).
+          if (document.querySelector('[aria-modal="true"], [role="dialog"]')) {
+            document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+            return;
+          }
+          if (canGoBack && window.history.length > 1) {
+            window.history.back();
+            return;
+          }
+          void App.minimizeApp();
+        });
+        if (cancelled) { void handle.remove(); return; }
+        remove = () => { void handle.remove(); };
+      } catch { /* no plugin: Capacitor keeps its default behaviour */ }
+    })();
+    return () => { cancelled = true; remove?.(); };
+  }, []);
+
   useEffect(() => {
     if (!detectNativeApp()) return;
 
@@ -149,7 +193,12 @@ export default function NativeAppBridge() {
 
       if (!widgetBridge) {
         // Means the plugin was not registered natively — see MainViewController.
-        console.warn("[widget] WidgetBridge plugin unavailable; home-screen widget will not update");
+        // Not a fault on Android: no home-screen widget has been built there,
+        // so the plugin is absent BY DESIGN and warning about it every launch
+        // trains everyone to ignore a console that should mean something.
+        if (detectNativePlatform() !== "android") {
+          console.warn("[widget] WidgetBridge plugin unavailable; home-screen widget will not update");
+        }
       } else {
         try {
           const res = await fetch("/api/cards", { credentials: "include" });
@@ -378,7 +427,7 @@ export default function NativeAppBridge() {
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.user?.id && session.user.id === pushUid) {
               const regHandle = await PushNotifications.addListener("registration", (t) => {
-                const endpoint = `apns:${t.value}`;
+                const endpoint = `${nativePushPrefix()}${t.value}`;
                 // A rotated token must retire the row it replaces, or this
                 // phone keeps two live subscriptions and every notification
                 // arrives twice (see /api/push/subscribe).

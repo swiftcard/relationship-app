@@ -24,7 +24,7 @@
 // profile row, and what makes a purchase on iPhone unlock the same account on
 // the web — the cross-platform access 3.1.3(b) is actually about.
 
-import { detectNativeApp } from "@/lib/platform";
+import { detectNativeApp, detectNativePlatform } from "@/lib/platform";
 
 import { IAP_ENTITLEMENT } from "@/lib/iap-shared";
 export { IAP_ENTITLEMENT, IAP_PRODUCT_MONTHLY, IAP_PRODUCT_ANNUAL } from "@/lib/iap-shared";
@@ -87,6 +87,21 @@ async function plugin(): Promise<{ P: PurchasesPlugin } | null> {
 }
 async function loadPlugin(): Promise<{ P: PurchasesPlugin } | null> {
   if (!detectNativeApp()) return null;
+  // ANDROID SELLS NOTHING, AND THAT IS THE DESIGN, NOT A FAULT.
+  //
+  // There are no Play Billing products and no Google RevenueCat key, so the
+  // paywall's neutral "not available here" state is the intended outcome and
+  // must be reached SILENTLY. Without this branch the next line fires
+  // reportIapFailure("env", ...) — a POST to /api/client-error — on every
+  // paywall mount on every Android device, for ever, about a decision we made
+  // on purpose. Returning before it also stops the SDK being configured with
+  // an Apple key on a Google device, which is its own kind of wrong.
+  //
+  // When Play Billing is switched on this becomes a key selection rather than
+  // a return: a NEXT_PUBLIC_RC_GOOGLE_API_KEY chosen by platform, Play
+  // products in RevenueCat, and a "google" plan source alongside "apple" in
+  // lib/iap-entitlement.ts. Pinned meanwhile by tests/android-no-selling.test.ts.
+  if (detectNativePlatform() === "android") return null;
   if (!process.env.NEXT_PUBLIC_RC_APPLE_API_KEY) {
     reportIapFailure("env", "NEXT_PUBLIC_RC_APPLE_API_KEY missing from bundle");
     return null;
@@ -309,6 +324,11 @@ export async function restoreIap(): Promise<boolean> {
  */
 export async function manageIapSubscription(): Promise<void> {
   if (!detectNativeApp()) return;
+  // Nothing on Android was ever bought through a store, so there is no store
+  // subscription page to send anyone to. An Android user's Pro came from the
+  // website or from an iPhone, and is managed where it was bought. Sending
+  // them to Apple's subscriptions page would be actively misleading.
+  if (detectNativePlatform() === "android") return;
   const ext = (window as unknown as {
     Capacitor?: { Plugins?: { ExternalPurchase?: { open: (o: { url: string }) => Promise<unknown> } } };
   }).Capacitor?.Plugins?.ExternalPurchase;

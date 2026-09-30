@@ -77,6 +77,33 @@ const config: CapacitorConfig = {
     // (cap sync), unlike the CSS fix which ships with the site.
     backgroundColor: "#030712",
   },
+  android: {
+    // MUST contain the exact token "SwiftCardApp". src/lib/shell-request.ts,
+    // src/lib/native-request.ts and src/proxy.ts all decide "is this the
+    // shell?" server-side on that substring, and everything keyed off it —
+    // the "/"→/dashboard redirect, the /pricing suppression, the stricter
+    // AI-consent gate — is dead without it. Unlike every iOS build to date,
+    // Android carries the token on its very FIRST request, so the server-side
+    // redirect works before the sc_shell cookie is ever planted.
+    //
+    // Deliberately NO "SwiftCardSplash/N" token here. That token means "my
+    // compiled-in launch image is frame 0 of web animation N", and it is only
+    // true on iOS, where the launch image is a full-bleed PNG. Android's
+    // launch screen is the system SplashScreen API — a background colour with
+    // a centred icon — which no existing markup matches. Worse, NativeSplash's
+    // version ladder falls through to markup-v1to3.html when it sees no token,
+    // so an Android build would be served the iOS v1→v3 transition and jump
+    // visibly at handoff. NativeSplash bails on SwiftCardAndroid/ instead.
+    appendUserAgent: "SwiftCardApp SwiftCardAndroid/1",
+    // The native canvas behind the webview, same reasoning as iOS: dark is the
+    // shell's default theme, and a dark flash under a light theme is far less
+    // jarring than a white one under the dark theme.
+    backgroundColor: "#030712",
+    // Below this the WebView predates the CSS and JS the app is built on, and
+    // the failure mode is a blank white screen with no explanation. Chrome 100
+    // is April 2022; anything older gets Capacitor's readable upgrade notice.
+    minWebViewVersion: 100,
+  },
   plugins: {
     // The cold-open screen. Without this the shell showed the bare webview
     // canvas (a black rectangle) from launch until the remote dashboard
