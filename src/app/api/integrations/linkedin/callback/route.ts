@@ -4,6 +4,7 @@ import { encryptToken } from "@/lib/token-crypto";
 import { verifyState, stateBoundToBrowser, oauthBindCookieName } from "@/lib/oauth-state";
 import { safeNextPath } from "@/lib/safe-next";
 import { exchangeLinkedInCode, fetchLinkedInProfile, GUEST_STATE, isLinkedInEnabled } from "@/lib/sync-linkedin";
+import { fetchLinkedInPhoto } from "@/lib/linkedin-photo";
 
 export const runtime = "nodejs";
 
@@ -90,15 +91,11 @@ export async function GET(request: NextRequest) {
     const profile = await fetchLinkedInProfile(tokens.access_token);
     if (!profile?.picture) return DONE("nophoto");
     try {
-      // Same download/cap/re-encode pipeline as every other photo import.
-      const imgRes = await fetch(profile.picture, { redirect: "follow", signal: AbortSignal.timeout(8000) });
-      if (!imgRes.ok) throw new Error(`source ${imgRes.status}`);
-      const ct = imgRes.headers.get("content-type") ?? "";
-      if (!ct.startsWith("image/")) throw new Error("not an image");
-      const bytes = Buffer.from(await imgRes.arrayBuffer());
-      if (bytes.byteLength > 5 * 1024 * 1024) throw new Error("too large");
-      const sharp = (await import("sharp")).default;
-      const body = await sharp(bytes).rotate().resize(1000, 1000, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
+      // Largest rendition LinkedIn will give, enhanced if it is only the
+      // thumbnail — see lib/linkedin-photo.
+      const photo = await fetchLinkedInPhoto(profile.picture);
+      if (!photo) throw new Error("source unavailable");
+      const body = photo.body;
 
       const admin = getAdminSupabase();
       const path = `guest-linkedin/${crypto.randomUUID()}.jpg`;

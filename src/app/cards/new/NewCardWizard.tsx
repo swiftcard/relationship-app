@@ -8,6 +8,7 @@ import DashboardLink from "@/components/DashboardLink";
 import LogoSuggest from "@/components/LogoSuggest";
 import ProfilePhotoSuggest from "@/components/ProfilePhotoSuggest";
 import EnablePushButton from "@/components/EnablePushButton";
+import ProfileImportButton from "@/components/ProfileImportButton";
 import ShareButton from "@/components/ShareButton";
 import QRCodeModal from "@/components/QRCodeModal";
 import CopyButton from "@/components/CopyButton";
@@ -1531,6 +1532,22 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                 </p>
               )}
             </div>
+
+            {/* The no-typing path: a screenshot of their LinkedIn profile fills
+                the boxes below. A team member's company half is set by the
+                organization, so only their own fields are taken there. */}
+            <ProfileImportButton
+              guest={guest}
+              onImport={(f) => {
+                if (f.name) { setName(f.name); setNameMissing(false); setError(""); }
+                if (f.title) setTitle(f.title);
+                if (!org) {
+                  if (f.company) setCompany(f.company);
+                  if (f.website) setWebsite(f.website);
+                  if (f.city || f.state) setAddress((a) => ({ ...a, city: f.city ?? a.city, state: f.state ?? a.state }));
+                }
+              }}
+            />
 
             {/* Explicit autofill — the form stays empty unless the visitor
                 chooses to pull in what they sketched on the homepage. */}

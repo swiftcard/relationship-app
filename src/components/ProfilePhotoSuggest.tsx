@@ -147,6 +147,7 @@ type State =
 export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, returnTo, guest = false, email, photoReturn = false, beforeLeave }: Props) {
   const [state, setState] = useState<State>({ kind: "idle" });
   const [applied, setApplied] = useState(false);
+  const [smallNote, setSmallNote] = useState(false);
   // The one-shot photo import (guest=1 connect → ?li_photo=) instead of the
   // account connect. Guests have no other option; photoReturn pages opt in.
   const oneShot = guest || photoReturn;
@@ -386,13 +387,17 @@ export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, return
             // store into yet); it rides in the draft and is uploaded at claim.
             body: JSON.stringify({ source: c.source, ...(guest && email ? { email } : {}) }),
           });
-      const data = await res.json().catch(() => ({} as { url?: string }));
+      const data = await res.json().catch(() => ({} as { url?: string; small?: boolean }));
       if (!res.ok || !data.url) {
         setState({ kind: "error", message: "Couldn't import that photo — try another, or upload it manually." });
         return;
       }
       onConfirm(data.url);
       setApplied(true);
+      // LinkedIn only had the thumbnail (we asked for the larger sizes first
+      // and sharpened what came back). Say so, once, instead of letting the
+      // owner discover it on the card.
+      setSmallNote(data.small === true);
       setState({ kind: "idle" });
     } catch {
       setState({ kind: "error", message: "Couldn't import that photo — try another, or upload it manually." });
@@ -434,6 +439,11 @@ export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, return
       {applied && state.kind === "idle" && (
         <p className="text-[0.6875rem] text-emerald-400 mt-1">
           Headshot added — it&apos;s saved when you save your card. Not right? Upload your own above.
+        </p>
+      )}
+      {applied && smallNote && state.kind === "idle" && (
+        <p className="text-[0.6875rem] text-amber-400 mt-1">
+          LinkedIn only shares a small version of your photo, so we sharpened it — a photo from your phone will look crisper. Tap Adjust above to reframe it.
         </p>
       )}
 

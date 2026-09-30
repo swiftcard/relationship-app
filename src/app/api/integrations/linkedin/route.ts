@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { decryptToken } from "@/lib/token-crypto";
 import { fetchLinkedInProfile, isLinkedInEnabled } from "@/lib/sync-linkedin";
+import { fetchLinkedInPhoto } from "@/lib/linkedin-photo";
 
 export const runtime = "nodejs";
 
@@ -89,21 +90,12 @@ export async function POST() {
     return NextResponse.json({ error: "no_photo" }, { status: 404 });
   }
 
-  // Download from LinkedIn's CDN (https-validated upstream), cap the size, and
-  // re-encode exactly like a manual photo upload so the stored file is ours.
-  let body: Buffer;
-  try {
-    const res = await fetch(profile.picture);
-    if (!res.ok) throw new Error(`cdn ${res.status}`);
-    const ct = res.headers.get("content-type") ?? "";
-    if (!ct.startsWith("image/")) throw new Error("not an image");
-    const bytes = Buffer.from(await res.arrayBuffer());
-    if (bytes.byteLength > 5 * 1024 * 1024) throw new Error("too large");
-    const sharp = (await import("sharp")).default;
-    body = await sharp(bytes).rotate().resize(1000, 1000, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
-  } catch {
-    return NextResponse.json({ error: "fetch_failed" }, { status: 502 });
-  }
+  // Download the largest rendition LinkedIn's CDN will give (https-validated
+  // upstream), enhance it if only the thumbnail came back, and re-encode
+  // exactly like a manual photo upload so the stored file is ours.
+  const photo = await fetchLinkedInPhoto(profile.picture);
+  if (!photo) return NextResponse.json({ error: "fetch_failed" }, { status: 502 });
+  const body = photo.body;
 
   const path = `${user.id}/photo-linkedin-${Date.now()}.jpg`;
   const { error: uploadError } = await admin.storage
@@ -113,8 +105,9 @@ export async function POST() {
 
   const { data: { publicUrl } } = admin.storage.from("card-uploads").getPublicUrl(path);
   // Deferred like the manual uploader — the caller persists it on card save,
-  // after the user's explicit confirmation.
-  return NextResponse.json({ url: publicUrl });
+  // after the user's explicit confirmation. `small` tells the UI the best
+  // LinkedIn had was a thumbnail, so it can suggest a sharper upload.
+  return NextResponse.json({ url: publicUrl, small: photo.wasSmall });
 }
 
 // DELETE /api/integrations/linkedin → disconnect (revoke our stored tokens).

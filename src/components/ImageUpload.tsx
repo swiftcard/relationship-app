@@ -159,6 +159,27 @@ export default function ImageUpload({ field, currentUrl, label, hint, shape = "s
     }
   }
 
+  // Re-open the crop tool on the photo that is already applied — a LinkedIn
+  // or Google import lands without ever passing through it, so until now the
+  // only way to reframe one was to find the file and upload it again. The
+  // image is pulled as a blob first: react-image-crop draws it on a canvas,
+  // which a cross-origin <img> would taint (our storage answers CORS).
+  async function adjustCurrent() {
+    if (!preview || uploadStatus === "uploading") return;
+    try {
+      const res = await fetch(preview, { mode: "cors" });
+      if (!res.ok) throw new Error("fetch");
+      const blob = await res.blob();
+      if (rawSrc) URL.revokeObjectURL(rawSrc);
+      setRawSrc(URL.createObjectURL(blob));
+      setErrorMsg("");
+      setUploadStatus("idle");
+    } catch {
+      setErrorMsg("Couldn't open that photo to adjust — upload it again instead.");
+      setUploadStatus("error");
+    }
+  }
+
   async function handleRemove() {
     // Persisted images (account photo/logo, or a saved card logo) are cleared
     // server-side. Guest images were never uploaded, so just clear locally.
@@ -246,6 +267,15 @@ export default function ImageUpload({ field, currentUrl, label, hint, shape = "s
               >
                 {uploadStatus === "uploading" ? "Uploading…" : preview ? "Change" : "Upload"}
               </button>
+              {preview && uploadStatus !== "uploading" && (
+                <button
+                  type="button"
+                  onClick={adjustCurrent}
+                  className="text-xs font-medium text-blue-700 hover:text-blue-800 transition-colors"
+                >
+                  Adjust
+                </button>
+              )}
               {preview && uploadStatus !== "uploading" && (
                 <button
                   type="button"
