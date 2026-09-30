@@ -105,8 +105,9 @@ describe("Monthly / Annual on the Free tab", () => {
     for (const f of ["src/components/PlanCards.tsx", "src/app/pricing/page.tsx"]) {
       expect(code(f), f).toMatch(/hideOnPhone=\{mobileTier === "free"\}/);
     }
-    // The app's chooser too.
-    expect(code("src/components/PlanCards.tsx")).toMatch(/hideOnPhone=\{tier === "free"\}/);
+    // The app's chooser has no switch at all: Apple's sheet asks (owner,
+    // 2026-09-30) — tests/plan-cards-single-source.test.ts.
+    expect(code("src/components/PlanCards.tsx")).not.toMatch(/hideOnPhone=\{tier === "free"\}/);
   });
 
   it("the plan cards that aren't the open tab are hidden at phone width by CSS, not a JS width check", () => {

@@ -10,8 +10,9 @@ import { TRIAL_DAYS, PLAN_PRICES } from "@/lib/plan";
 // THE PLAN STEP, AS A PERSON SEES IT — web and iPhone app, phone and desktop.
 //
 // Owner, 2026-09-30, after signing up in the app: no Free / Pro / Office tabs
-// (scroll to find Free and Office), no Monthly / Annual choice, and a Pro card
-// that didn't look like the website's. The real PlanCards is mounted in
+// (scroll to find Free and Office) and a Pro card that didn't look like the
+// website's. Later that day: no Monthly / Annual switch in the app (Apple's
+// sheet asks), and a place to type a promo code. The real PlanCards is mounted in
 // Chromium with the app's real CSS, inside .sc-app like /welcome, and what is
 // asserted is what is on screen: which card shows, which tab is on, what the
 // Pro card says, whether anything spills off a 390px phone.
@@ -79,15 +80,17 @@ beforeAll(async () => {
 afterAll(async () => { await browser?.close(); if (tmp) rmSync(tmp, { recursive: true, force: true }); });
 
 // StoreKit's answer for a new Apple ID in the US storefront.
-const STOREKIT = { status: "ready", monthly: "$4.99", annual: "$54.00", trial: true, annualPerMonth: "$4.50", annualSavePct: 10 };
-/** The annual Pro price each surface should show: PLAN_PRICES on the web, StoreKit's in the app. */
-const annualPrice = (native: boolean) => (native ? STOREKIT.annual : `$${PLAN_PRICES.PRO_ANNUAL_CENTS / 100}`);
+const STOREKIT = { status: "ready", monthly: "$4.99", trial: true };
 const esc = (s: string) => s.replace(/[$.]/g, "\\$&");
 
-async function open(o: { width: number; native?: boolean; light?: boolean; trialEligible?: boolean; offer?: object }): Promise<Page> {
+async function open(o: { width: number; native?: boolean; light?: boolean; trialEligible?: boolean; offer?: object; promoCheck?: { status: number; body: object } }): Promise<Page> {
   const ctx = await browser.newContext({ viewport: { width: o.width, height: 900 } });
   const page = await ctx.newPage();
   await page.route(`${ORIGIN}/api/**`, (r) => r.fulfill({ status: 200, contentType: "application/json", body: '{"eligible":true}' }));
+  if (o.promoCheck) {
+    const { status, body } = o.promoCheck;
+    await page.route(`${ORIGIN}/api/promo/check`, (r) => r.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) }));
+  }
   await page.route(`${ORIGIN}/`, (r) => r.fulfill({
     status: 200, contentType: "text/html",
     body: `<!doctype html><html${o.light ? ' data-sc-theme="light"' : ""}><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style></head>
@@ -96,11 +99,13 @@ async function open(o: { width: number; native?: boolean; light?: boolean; trial
   await page.addInitScript((offer) => { (window as unknown as { __offer: unknown }).__offer = offer; }, o.offer ?? STOREKIT);
   if (o.native) {
     // The shell: WKWebView's bridge, plus the ExternalPurchase plugin that
-    // lets Office leave for the default browser.
+    // lets Office and a promo code leave for the default browser (recorded).
     await page.addInitScript(() => {
       const w = window as unknown as Record<string, unknown>;
+      const opened: string[] = [];
+      w.__opened = opened;
       w.webkit = { messageHandlers: { bridge: {} } };
-      w.Capacitor = { isNativePlatform: () => true, Plugins: { ExternalPurchase: { open: async () => ({ opened: true }) } } };
+      w.Capacitor = { isNativePlatform: () => true, Plugins: { ExternalPurchase: { open: async (a: { url: string }) => { opened.push(a.url); return { opened: true }; } } } };
     });
   }
   await page.goto(`${ORIGIN}/`);
@@ -145,12 +150,13 @@ for (const native of [false, true]) {
   const who = native ? "iPhone app" : "website";
 
   describe(`${who}, phone (390px)`, () => {
-    it("opens on the Pro tab with the Monthly / Annual switch — Free and Office one tap away, no scrolling", async () => {
+    it(`opens on the Pro tab ${native ? "with no" : "with the"} Monthly / Annual switch — Free and Office one tap away, no scrolling`, async () => {
       const page = await open({ width: 390, native });
       try {
         const s = await snapshot(page);
         expect(s.tabs).toEqual([{ label: "Free", on: false }, { label: "Pro", on: true }, { label: "Office", on: false }]);
-        expect(s.toggleShown).toBe(true);
+        // The app has none: tapping Pro opens Apple's sheet, which asks.
+        expect(s.toggleShown).toBe(!native);
         expect(s.proShown).toBe(true);
         expect(s.freeShown).toBe(false);
         expect(s.officeShown).toBe(false);
@@ -159,7 +165,7 @@ for (const native of [false, true]) {
         await tab(page, "Free");
         const f = await snapshot(page);
         expect(f.freeShown && !f.proShown && !f.officeShown).toBe(true);
-        expect(f.toggleShown, "the switch changes nothing on the Free tab").toBe(false);
+        expect(f.toggleShown, "no switch on the Free tab, where it changes nothing").toBe(false);
 
         await tab(page, "Office");
         const o = await snapshot(page);
@@ -177,10 +183,11 @@ for (const native of [false, true]) {
         expect(m.proText).toMatch(/then \$4\.99 \/ month · cancel anytime/);
         expect(m.proText).toContain(`Try Pro free for ${TRIAL_DAYS} days →`);
         expect(m.proText).toContain("MOST POPULAR");
+        if (native) return; // annual is offered in Apple's sheet in the app
 
         await page.click('button[aria-label="Toggle annual billing"]');
         const a = await snapshot(page);
-        expect(a.proText).toMatch(new RegExp(`then ${esc(annualPrice(native))} / year · cancel anytime`));
+        expect(a.proText).toMatch(new RegExp(`then ${esc(`$${PLAN_PRICES.PRO_ANNUAL_CENTS / 100}`)} / year · cancel anytime`));
         expect(a.proText).toMatch(/~\$4\.50\/mo · Save 10%/);
         expect(a.bodyText).toContain("SAVE 10%");
       } finally { await page.context().close(); }
@@ -211,22 +218,73 @@ for (const native of [false, true]) {
 }
 
 describe("what only the app does", () => {
-  it("nothing moves when StoreKit answers: the price keeps its space, the switch keeps its width", async () => {
-    // StoreKit still answering: no prices, no trial answer, no badge yet.
-    const loading = { status: "loading", monthly: null, annual: null, trial: null, annualPerMonth: null, annualSavePct: null };
+  it("nothing moves when StoreKit answers: the price keeps its space", async () => {
+    // StoreKit still answering: no price, no trial answer yet.
+    const loading = { status: "loading", monthly: null, trial: null };
     const measure = (page: Page) => page.evaluate(() => {
       const pro = [...document.querySelectorAll("div.rounded-\\[28px\\]")].find((d) => d.querySelector("p")?.textContent === "Pro")!;
       const desc = [...pro.querySelectorAll("p")].find((p) => p.textContent === "Everything, unlimited.")!;
-      const toggle = document.querySelector('button[aria-label="Toggle annual billing"]')!.parentElement!;
-      return { descTop: desc.getBoundingClientRect().top - pro.getBoundingClientRect().top, toggleWidth: toggle.getBoundingClientRect().width };
+      return desc.getBoundingClientRect().top - pro.getBoundingClientRect().top;
     });
     const a = await open({ width: 390, native: true, offer: loading });
     const b = await open({ width: 390, native: true });
     try {
       const [before, after] = [await measure(a), await measure(b)];
-      expect(Math.abs(before.descTop - after.descTop), "the Pro card's text jumped when the price arrived").toBeLessThan(1);
-      expect(Math.abs(before.toggleWidth - after.toggleWidth), "the switch changed width when the badge arrived").toBeLessThan(1);
+      expect(Math.abs(before - after), "the Pro card's text jumped when the price arrived").toBeLessThan(1);
     } finally { await a.context().close(); await b.context().close(); }
+  });
+
+  it("a promo code is checked in the app and opens swiftcard.me with the code filled in", async () => {
+    const page = await open({
+      width: 390, native: true,
+      promoCheck: { status: 200, body: { ok: true, code: "SAVE30", label: "30% off", detail: "This code is for Pro, billed monthly. Choose that plan below." } },
+    });
+    try {
+      await page.getByRole("button", { name: "Have a promo code?" }).click();
+      await page.getByLabel("Promo code").fill("save30");
+      await page.getByRole("button", { name: "Apply" }).click();
+      await page.getByText("✓ SAVE30 — 30% off").waitFor({ timeout: 5_000 });
+      const body = await page.evaluate(() => document.body.innerText);
+      // The website's chooser says "below"; in the app the plan is picked on the site.
+      expect(body).toContain("This code is for Pro, billed monthly.");
+      expect(body).not.toContain("Choose that plan below");
+      expect(body).toContain("Opens swiftcard.me in your browser with the code filled in.");
+      await page.getByRole("button", { name: "Use it on swiftcard.me →" }).click();
+      await page.waitForFunction(() => (window as unknown as { __opened: string[] }).__opened.length > 0);
+      const opened = await page.evaluate(() => (window as unknown as { __opened: string[] }).__opened);
+      expect(opened).toEqual(["https://swiftcard.me/welcome?promo=SAVE30&src=ios_link"]);
+      expect((await snapshot(page)).overflowX).toBeLessThanOrEqual(0);
+    } finally { await page.context().close(); }
+  });
+
+  it("a free-time code is switched on at swiftcard.me, never in the app", async () => {
+    const page = await open({
+      width: 390, native: true,
+      promoCheck: { status: 422, body: { error: "This code switches Pro on for free — no payment needed.", grant: true } },
+    });
+    try {
+      await page.getByRole("button", { name: "Have a promo code?" }).click();
+      await page.getByLabel("Promo code").fill("TESTER");
+      await page.getByRole("button", { name: "Apply" }).click();
+      await page.getByRole("button", { name: "Switch it on at swiftcard.me →" }).waitFor({ timeout: 5_000 });
+      expect(await page.getByRole("button", { name: "Switch it on", exact: true }).count()).toBe(0);
+    } finally { await page.context().close(); }
+  });
+
+  it("a code that doesn't exist says so and offers another try", async () => {
+    const page = await open({
+      width: 390, native: true,
+      promoCheck: { status: 422, body: { error: "That code isn't valid. Check the spelling — it may also have ended." } },
+    });
+    try {
+      await page.getByRole("button", { name: "Have a promo code?" }).click();
+      await page.getByLabel("Promo code").fill("NOPE");
+      await page.getByRole("button", { name: "Apply" }).click();
+      await page.getByText("NOPE: That code isn't valid.", { exact: false }).waitFor({ timeout: 5_000 });
+      expect(await page.getByRole("button", { name: /swiftcard\.me/ }).count()).toBe(0);
+      await page.getByRole("button", { name: "Try another code" }).click();
+      await page.getByLabel("Promo code").waitFor();
+    } finally { await page.context().close(); }
   });
 
   it("Office carries no price and leaves for swiftcard.me; no web price anywhere", async () => {

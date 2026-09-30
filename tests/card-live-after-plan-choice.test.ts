@@ -91,8 +91,11 @@ describe("choosing a plan opens the cards immediately and sends the email", () =
     // Before the plan: "Your account is ready … your card goes live".
     expect(src).toMatch(/>Your account is ready</);
     expect(src).toMatch(/your card goes live/);
-    // "Your card is live!" exists only inside the post-plan setup step.
-    const live = src.indexOf(">Your card is live!<");
+    // "Your card is live!" exists only inside the post-plan setup step (and
+    // only when there is a card: a plan bought from the app's builder before
+    // its card was saved reads "You're all set!").
+    expect(src).toMatch(/\{cardSlug \? "Your card is live!" : "You're all set!"\}/);
+    const live = src.indexOf('{cardSlug ? "Your card is live!"');
     const setupStart = src.indexOf("{setupNext !== null ? (");
     const planStep = src.indexOf(">Your account is ready<");
     expect(live).toBeGreaterThan(setupStart);

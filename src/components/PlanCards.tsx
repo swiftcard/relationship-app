@@ -7,8 +7,9 @@ import { PLAN_LIMITS, TRIAL_DAYS } from "@/lib/plan";
 import { PLAN_DESCRIPTIONS } from "@/lib/plan-content";
 import ProTrialPrice from "@/components/ProTrialPrice";
 import IapSubscribeButton from "@/components/NativePaywall";
-import { useIapOffer, type IapOffer } from "@/lib/use-iap-price";
+import { useIapOffer } from "@/lib/use-iap-price";
 import { canOfferExternalPurchase, openExternalPurchase } from "@/lib/external-purchase";
+import PromoCodeBox, { usePromoCode } from "@/components/PromoCodeBox";
 import {
   BillingToggle, FreePlanCard, ProPlanCard, ProWebPrice, OfficePlanCard, OfficeWebPrice, OfficeSeatPicker, officeTotalLabel,
   PLAN_GRID_CLASS, FREE_CTA_CLASS, PRO_CTA_CLASS, OFFICE_CTA_CLASS, PRO_FINE_PRINT_CLASS, OFFICE_FINE_PRINT_CLASS,
@@ -17,18 +18,19 @@ import {
 // The in-product plan chooser used during account creation — the card wizard's
 // plan step and the /welcome step, on the web AND in the iPhone app. It draws
 // the SAME cards as the public Pricing page (PlanTierCards), with the same
-// Free / Pro / Office tabs on a phone (opening on Pro) and the same Monthly /
-// Annual switch. It stays presentational — it reports the choice via onFree /
-// onPaid and the parent runs signup/checkout.
+// Free / Pro / Office tabs on a phone (opening on Pro); on the web, the same
+// Monthly / Annual switch. It stays presentational — it reports the choice
+// via onFree / onPaid and the parent runs signup/checkout.
 
 const OFFICE_MIN_SEATS = PLAN_LIMITS.OFFICE_MIN_SEATS;
 
 export type PaidPlan = "pro" | "office";
 
 type PlanCardsProps = {
-  /** Native only: the Office button really did open the default browser. The
-   *  caller uses it to re-check the plan when the person comes back. */
-  onLeftForOffice?: () => void;
+  /** Native only: the Office button or the promo code's "Use it on
+   *  swiftcard.me" really did open the default browser. The caller uses it to
+   *  re-check the plan when the person comes back — they may have paid there. */
+  onLeftForWebsite?: () => void;
   /** Phone width: which plan tab is open first. "office" for someone the
    *  app's Office card sent here (NATIVE_OFFICE_PATH) — they came for Office,
    *  so they should not land on Pro and have to find the tab. */
@@ -66,7 +68,7 @@ export default function PlanCards({
   onCreateAccountForPro,
   trialEligible = true,
   initialTier = "pro",
-  onLeftForOffice,
+  onLeftForWebsite,
 }: PlanCardsProps) {
   const [annual, setAnnual] = useState(false);
   const [seats, setSeats] = useState<number>(OFFICE_MIN_SEATS);
@@ -74,9 +76,9 @@ export default function PlanCards({
   const native = useIsNativeApp();
   const [mobileTier, setMobileTier] = useState<PlanTier>(initialTier);
 
-  // NATIVE (App Store 3.1.1 / 3.1.2): the same cards, tabs and switch as the
-  // website, with the selling done Apple's way — see NativePlanChooser. No
-  // web price, no checkout hand-off (onPaid) ever reaches it.
+  // NATIVE (App Store 3.1.1 / 3.1.2): the same cards and tabs as the website,
+  // with the selling done Apple's way — see NativePlanChooser. No web price,
+  // no checkout hand-off (onPaid) ever reaches it.
   if (native) {
     return (
       <NativePlanChooser
@@ -87,7 +89,7 @@ export default function PlanCards({
         initialTier={initialTier}
         onIapPurchased={onIapPurchased}
         onCreateAccountForPro={onCreateAccountForPro}
-        onLeftForOffice={onLeftForOffice}
+        onLeftForWebsite={onLeftForWebsite}
       />
     );
   }
@@ -149,21 +151,24 @@ export default function PlanCards({
 }
 
 /**
- * The iPhone app's plan step: the website's layout, tab for tab — Monthly /
- * Annual switch, Free / Pro / Office tabs opening on Pro, the same three
- * cards. Owner, 2026-09-30: the app stacked Pro, Free and Office in one long
- * column (scroll to find Free or Office), had no Monthly / Annual choice, and
- * drew its own Pro card.
+ * The iPhone app's plan step: the website's layout, tab for tab — Free / Pro /
+ * Office tabs opening on Pro, the same three cards. Owner, 2026-09-30: the app
+ * stacked Pro, Free and Office in one long column (scroll to find Free or
+ * Office) and drew its own Pro card.
+ *
+ * No Monthly / Annual switch (owner, 2026-09-30, later): tapping Pro opens
+ * Apple's sheet, which offers both periods anyway, so the card shows the
+ * monthly price — as the website does until someone flips its switch.
  *
  * What differs is only what App Review requires:
  *   • Pro's prices are StoreKit's (useIapOffer) — never PLAN_PRICES — so the
  *     app can never show a number that differs from the App Store's (3.1.2).
- *     The SAVE badge and the annual per-month line are worked out from
- *     StoreKit's own numbers, and absent until they are known.
  *   • Office (NativeOffice) is per-seat and Stripe-billed with no IAP product,
  *     so the app can neither sell it nor quote it: no price, no seat picker,
  *     one button that leaves the app for the default browser. A shell that
  *     cannot leave the app has no Office card and so no Office tab.
+ *   • A promo code (NativePromoCode) is checked here and used on swiftcard.me,
+ *     through the same link-out as Office — never redeemed in the app.
  */
 function NativePlanChooser({
   onFree,
@@ -173,7 +178,7 @@ function NativePlanChooser({
   initialTier,
   onIapPurchased,
   onCreateAccountForPro,
-  onLeftForOffice,
+  onLeftForWebsite,
 }: {
   onFree: () => void;
   busy: "free" | PaidPlan | null;
@@ -182,26 +187,15 @@ function NativePlanChooser({
   initialTier: PlanTier;
   onIapPurchased?: () => void;
   onCreateAccountForPro?: () => void;
-  onLeftForOffice?: () => void;
+  onLeftForWebsite?: () => void;
 }) {
-  const [annual, setAnnual] = useState(false);
   const [mobileTier, setMobileTier] = useState<PlanTier>(initialTier);
-  const offer = useIapOffer();
   const canLinkOut = useCanLinkOut();
   // No Office card → no Office tab, and never a tab left open on nothing.
   const tier: PlanTier = !canLinkOut && mobileTier === "office" ? "pro" : mobileTier;
 
   return (
     <div>
-      <div className="flex justify-center mb-8">
-        <BillingToggle
-          annual={annual}
-          onToggle={() => setAnnual(!annual)}
-          hideOnPhone={tier === "free"}
-          {...appSaveBadge(offer)}
-        />
-      </div>
-
       <MobilePlanTabs active={tier} onChangeAction={setMobileTier} tiers={canLinkOut ? undefined : ["free", "pro"]} />
 
       <div className={canLinkOut ? PLAN_GRID_CLASS : "grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch md:pt-6 max-w-3xl mx-auto"}>
@@ -215,68 +209,55 @@ function NativePlanChooser({
         />
         <NativePro
           offTab={tier !== "pro"}
-          annual={annual}
-          offer={offer}
           trialEligible={trialEligible}
           onPurchased={onIapPurchased}
           onNeedsAccount={onCreateAccountForPro}
         />
-        <NativeOffice offTab={tier !== "office"} disabled={busy !== null} onLeft={onLeftForOffice} />
+        <NativeOffice offTab={tier !== "office"} disabled={busy !== null} onLeft={onLeftForWebsite} />
       </div>
+
+      {/* Under the plans, where the website's plan step has its box. */}
+      {canLinkOut && <NativePromoCode className="max-w-md mx-auto mt-6 text-center" onLeft={onLeftForWebsite} />}
     </div>
   );
 }
 
-/** The app's SAVE badge: what annual saves by StoreKit's own prices, absent
- *  when it saves nothing, and its space held while StoreKit is answering. */
-function appSaveBadge(offer: IapOffer) {
-  return { saveBadge: offer.annualSavePct ? `SAVE ${offer.annualSavePct}%` : null, badgePending: offer.status === "loading" };
-}
-
 /**
- * The app's Pro card on its own, with the Monthly / Annual switch — for
- * /upgrade, where the person is already on Free and Pro is the one thing to
- * buy. The same card as the plan step, so the app has one Pro design.
+ * The app's Pro card on its own — for /upgrade, where the person is already on
+ * Free and Pro is the one thing to buy. The same card as the plan step, so the
+ * app has one Pro design.
  */
 export function NativeProUpgrade({ trialEligible }: { trialEligible: boolean }) {
-  const [annual, setAnnual] = useState(false);
-  const offer = useIapOffer();
   return (
-    <div>
-      <div className="flex justify-center mb-8">
-        <BillingToggle annual={annual} onToggle={() => setAnnual(!annual)} {...appSaveBadge(offer)} />
-      </div>
-      {/* md:pt-6 absorbs the card's raised-Pro offset (md:-mt-6), as the
-          plan grids do — on an iPad it otherwise rides up into the switch. */}
-      <div className="max-w-md mx-auto md:pt-6">
-        <NativePro annual={annual} offer={offer} trialEligible={trialEligible} />
-      </div>
+    // md:pt-6 absorbs the card's raised-Pro offset (md:-mt-6), as the plan
+    // grids do — on an iPad it otherwise rides up into the heading.
+    <div className="max-w-md mx-auto md:pt-6">
+      <NativePro trialEligible={trialEligible} />
     </div>
   );
 }
 
 /**
- * The native Pro card: the website's Pro card, priced by StoreKit for the
- * period the switch shows. While StoreKit is still answering the price block
- * keeps its space (so nothing jumps); when products are unavailable it is
- * simply absent — the card never guesses a number.
+ * The native Pro card: the website's Pro card, priced by StoreKit — the same
+ * "Free for your first 14 days, then $4.99 / month" block and "Try Pro free
+ * for 14 days →" button when Apple confirms the trial, the plain price and
+ * "Get Pro →" when it won't (as the website shows an account that already had
+ * its trial). While StoreKit is still answering the price block keeps its
+ * space (so nothing jumps); when products are unavailable it is simply absent
+ * — the card never guesses a number.
  *
- * The CTA is always there. Signed in it opens the In-App Purchase sheet on
- * the period the card shows; signed out it starts account creation, and
- * /welcome then offers the purchase. It used to render nothing at all when
- * signed out, leaving a Pro card with a feature list and no way to buy —
- * which is the shape of the 3.1.1 rejection.
+ * The CTA is always there. Signed in it opens the In-App Purchase sheet on the
+ * monthly plan the card shows (annual is one tap away in the sheet); signed
+ * out it starts account creation, and /welcome then offers the purchase. It
+ * used to render nothing at all when signed out, leaving a Pro card with a
+ * feature list and no way to buy — which is the shape of the 3.1.1 rejection.
  */
 function NativePro({
-  annual,
-  offer,
   trialEligible,
   onPurchased,
   onNeedsAccount,
   offTab,
 }: {
-  annual: boolean;
-  offer: IapOffer;
   /** The caller's account-level answer (false: already had a free Pro period,
    *  or a friend's free month is on offer instead — WelcomePlan's offerTrial).
    *  Ignoring it showed "Start my free month" and "Try Pro free for 14 days"
@@ -288,16 +269,13 @@ function NativePro({
   onNeedsAccount?: () => void;
   offTab?: boolean;
 }) {
-  const price = annual ? offer.annual : offer.monthly;
-  const period = annual ? "year" : "month";
+  const offer = useIapOffer();
+  const price = offer.monthly;
   // Only promise the trial once StoreKit has confirmed one for this Apple ID
   // AND the account may have it. `trial` is null while StoreKit is still
   // answering, and the button used to read "Try Pro free for 14 days" in
   // exactly that state — then Apple's sheet said Subscribe.
   const offersTrial = offer.trial === true && trialEligible !== false;
-  const note = annual && offer.annualPerMonth
-    ? `~${offer.annualPerMonth}/mo${offer.annualSavePct ? ` · Save ${offer.annualSavePct}%` : ""}`
-    : undefined;
 
   const priceBlock =
     offer.status === "loading" ? (
@@ -305,19 +283,16 @@ function NativePro({
       // card does not move when StoreKit answers. Hand-sized bars came out
       // 8px short. visibility:hidden keeps it out of the accessibility tree.
       <div aria-hidden="true" className="relative">
-        <div className="invisible"><ProTrialPrice price="—" period={period} /></div>
+        <div className="invisible"><ProTrialPrice price="—" period="month" /></div>
         <div className="absolute inset-0 flex flex-col justify-between py-0.5">
           <div className="h-[2.4rem] w-28 rounded-xl bg-white/20 animate-pulse" />
           <div className="h-4 w-48 rounded-md bg-white/15 animate-pulse" />
         </div>
       </div>
     ) : !price ? null : offersTrial ? (
-      <ProTrialPrice price={price} period={period} note={note} />
+      <ProTrialPrice price={price} period="month" />
     ) : (
-      <div>
-        <div className="flex items-end gap-1"><span className="text-[2.6rem] font-bold text-white leading-none">{price}</span><span className="text-white/80 text-sm mb-1">/ {period}</span></div>
-        {note && <p className="text-white/60 text-xs mt-1">{note}</p>}
-      </div>
+      <div className="flex items-end gap-1"><span className="text-[2.6rem] font-bold text-white leading-none">{price}</span><span className="text-white/80 text-sm mb-1">/ month</span></div>
     );
 
   return (
@@ -325,7 +300,7 @@ function NativePro({
       <IapSubscribeButton
         appearance="card"
         className={PRO_CTA_CLASS}
-        period={annual ? "annual" : "monthly"}
+        period="monthly"
         label={offersTrial ? `Try Pro free for ${TRIAL_DAYS} days →` : "Get Pro →"}
         onPurchased={onPurchased}
         onNeedsAccount={onNeedsAccount}
@@ -336,6 +311,40 @@ function NativePro({
           : "Renews automatically · cancel anytime in your Apple account"}
       </p>
     </ProPlanCard>
+  );
+}
+
+/**
+ * "Have a promo code?" in the app (owner, 2026-09-30). Pro is bought through
+ * Apple in here, and Apple takes no Stripe code — nor may the app switch a
+ * paid plan on with a code of its own (3.1.1). So the code is CHECKED here,
+ * with the website's own box and rules, and USED on swiftcard.me: "Use it on
+ * swiftcard.me" opens /welcome in the default browser with the code already
+ * in its box, where it applies to Stripe checkout (or switches a free-time
+ * code on) exactly as on the website. Same link-out, and the same
+ * fail-closed rule, as the Office card: only rendered when the shell can open
+ * the default browser.
+ */
+function NativePromoCode({ onLeft, className }: { onLeft?: () => void; className?: string }) {
+  const promo = usePromoCode({ plan: null, interval: null });
+  const [leaving, setLeaving] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  async function openOnWebsite(code: string) {
+    setFailed(false);
+    setLeaving(true);
+    const opened = await openExternalPurchase(`/welcome?promo=${encodeURIComponent(code)}`);
+    setLeaving(false);
+    if (opened) onLeft?.();
+    else setFailed(true);
+  }
+
+  return (
+    <PromoCodeBox
+      className={className}
+      promo={promo}
+      website={{ open: (code) => { void openOnWebsite(code); }, busy: leaving, failed }}
+    />
   );
 }
 

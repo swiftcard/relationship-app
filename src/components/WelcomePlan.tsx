@@ -41,6 +41,7 @@ export default function WelcomePlan({
   // Pro — and an empty list is the whole reason `chooseFree` has a fast path.
   proDesignChanges = [],
   presetIntent = null,
+  presetPromo = null,
   setupFor = null,
   canceled = false,
   trialEligible = true,
@@ -64,6 +65,10 @@ export default function WelcomePlan({
   cardSlug: string | null;
   /** A paid plan picked on /pricing, carried in the URL through signup. */
   presetIntent?: PlanIntent | null;
+  /** A promo code in the link with no plan picked yet — the iPhone app's
+   *  "Use it on swiftcard.me" (PlanCards NativePromoCode). It opens in the
+   *  chooser's box, already checked. */
+  presetPromo?: string | null;
   designConverted?: boolean;
   proDesignChanges?: string[];
 }) {
@@ -117,15 +122,15 @@ export default function WelcomePlan({
     return () => window.removeEventListener("pageshow", onShow);
   }, []);
 
-  // NATIVE: the Office card sends people OUT to swiftcard.me to set up their
-  // team (PlanCards NativeOffice). When they come back the plan may be settled
-  // — re-ask the server, which sends a paid account on to its dashboard instead
+  // NATIVE: the Office card and the promo code's "Use it on swiftcard.me" send
+  // people OUT to swiftcard.me (PlanCards). When they come back the plan may
+  // be settled — re-ask the server, which sends a paid account on to its dashboard instead
   // of leaving them on a chooser for a choice they have already made. Only
   // after that button was actually used: an Apple purchase sheet must never be
   // able to trigger this and race the "Your card is live!" step.
-  const leftForOffice = useRef(false);
+  const leftForWebsite = useRef(false);
   useEffect(() => {
-    const onReturn = () => { if (leftForOffice.current && document.visibilityState === "visible") router.refresh(); };
+    const onReturn = () => { if (leftForWebsite.current && document.visibilityState === "visible") router.refresh(); };
     document.addEventListener("visibilitychange", onReturn);
     return () => document.removeEventListener("visibilitychange", onReturn);
   }, [router]);
@@ -236,7 +241,7 @@ export default function WelcomePlan({
   const promo = usePromoCode({
     plan: paidIntent?.plan === "office" ? "office" : paidIntent ? "pro" : null,
     interval: paidIntent ? (paidIntent.annual ? "annual" : "monthly") : null,
-    initialCode: paidIntent?.promo ?? null,
+    initialCode: paidIntent?.promo ?? presetPromo,
   });
   // The last plan pressed, so "Continue without the code" retries exactly it.
   const lastCheckout = useRef<{ plan: PaidPlan; annual: boolean; seats: number } | null>(null);
@@ -321,14 +326,19 @@ export default function WelcomePlan({
             <div className="w-14 h-14 rounded-full bg-green-900/40 border border-green-700/40 flex items-center justify-center mx-auto mb-4">
               <svg className="w-7 h-7 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
             </div>
-            <h1 className="text-white font-bold text-2xl sm:text-3xl">Your card is live!</h1>
+            {/* No card yet: the plan was bought here, on swiftcard.me, from the
+                app's builder (its "Use it on swiftcard.me" or Office button),
+                and the app saves the card when they go back to it. */}
+            <h1 className="text-white font-bold text-2xl sm:text-3xl">{cardSlug ? "Your card is live!" : "You're all set!"}</h1>
             {cardSlug && (
               <div className="mt-2 inline-flex max-w-full items-center gap-2 bg-gray-800/60 border border-gray-700/60 rounded-xl pl-3 pr-1.5 py-1.5">
                 <span className="text-blue-400 text-sm font-mono truncate">swiftcard.me/{cardSlug}</span>
                 <CopyButton text={liveUrl} />
               </div>
             )}
-            <p className="text-gray-400 text-sm mt-3">We also sent you an email with your link.</p>
+            <p className="text-gray-400 text-sm mt-3">
+              {cardSlug ? "We also sent you an email with your link." : "Your plan is on. Finish your card in the SwiftCard app, or from your dashboard here."}
+            </p>
             {/* Share first — the card exists to be handed to people. The
                 notifications switch and the app offer follow (they used to
                 lead, before anyone had shared anything; audit 2026-09-30). */}
@@ -451,7 +461,7 @@ export default function WelcomePlan({
               </p>
             )}
             {giftPanel}
-            <PlanCards onFree={chooseFree} onPaid={checkout} busy={loading} onIapPurchased={goFree} freeLabel="Continue with Free →" trialEligible={offerTrial} initialTier={initialTier} onLeftForOffice={() => { leftForOffice.current = true; }} />
+            <PlanCards onFree={chooseFree} onPaid={checkout} busy={loading} onIapPurchased={goFree} freeLabel="Continue with Free →" trialEligible={offerTrial} initialTier={initialTier} onLeftForWebsite={() => { leftForWebsite.current = true; }} />
             {/* Under the plans, like /pricing — the code rides along with
                 whichever paid card is pressed. Web only: the app sells
                 through the App Store, where codes are Apple's (3.1.1). */}

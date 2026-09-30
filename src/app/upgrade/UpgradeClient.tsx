@@ -32,8 +32,8 @@ export default function UpgradeClient({ trialEligible }: { trialEligible: boolea
   // Native app (IAP live, 2026-08-27): /upgrade shows a REAL In-App Purchase
   // screen instead of bouncing to the dashboard. It renders no web price
   // anywhere — the only prices a shell user ever sees come from StoreKit
-  // (3.1.2): the app's Pro card (NativeProUpgrade), the same card and
-  // Monthly / Annual switch as the app's plan step.
+  // (3.1.2): the app's Pro card (NativeProUpgrade), the same card as the
+  // app's plan step.
   //
   // This used to redirect to /dashboard whenever canOfferIap() was false, on
   // the reasoning that an upgrade page with no way to upgrade is a dead end.

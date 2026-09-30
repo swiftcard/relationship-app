@@ -147,9 +147,10 @@ export default function IapSubscribeButton({
 }: {
   className?: string;
   label?: string;
-  /** The billing period the caller is showing (the plan cards' Monthly /
-   *  Annual switch). The sheet opens with that product selected, so the
-   *  person buys what the card they tapped said. Omitted: annual, as before. */
+  /** The billing period the caller is showing (the app's Pro card: monthly).
+   *  The sheet opens with that product selected, so the person buys what the
+   *  card they tapped said, and the other period is one tap away in the
+   *  sheet. Omitted: annual, as before. */
   period?: "monthly" | "annual";
   /** "card": a plain one-line button wearing only the caller's className (the
    *  plan cards pass PRO_CTA_CLASS, the website's Pro button) — instead of the

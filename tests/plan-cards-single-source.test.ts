@@ -56,30 +56,57 @@ describe("the iPhone app's plan step is the website's layout", () => {
     expect(chooser.length).toBeGreaterThan(200);
   });
 
-  it("has the Monthly / Annual switch, the tabs, and opens on the caller's tier (Pro by default)", () => {
-    expect(chooser).toMatch(/<BillingToggle/);
+  it("has the tabs and opens on the caller's tier (Pro by default)", () => {
     expect(chooser).toMatch(/<MobilePlanTabs active=\{tier\}/);
     expect(chooser).toMatch(/useState<PlanTier>\(initialTier\)/);
     expect(src).toMatch(/initialTier = "pro",/);
   });
 
-  it("the switch drives the price AND the product the Apple sheet opens on", () => {
-    expect(chooser).toMatch(/annual=\{annual\}/);
+  // Owner, 2026-09-30 (later): "why did you add a monthly and yearly toggle
+  // there? It comes up anyways when a user taps on the plan" — Apple's sheet
+  // offers both periods. So no switch in the app: the card shows the monthly
+  // price and the sheet opens on monthly, annual one tap away inside it.
+  it("has no Monthly / Annual switch; the card is monthly and so is the sheet it opens", () => {
+    expect(chooser).not.toMatch(/<BillingToggle|annual/);
+    expect(src.slice(src.indexOf("export function NativeProUpgrade"), src.indexOf("function NativePro("))).not.toMatch(/<BillingToggle/);
     const pro = src.slice(src.indexOf("function NativePro("));
-    expect(pro).toMatch(/const price = annual \? offer\.annual : offer\.monthly;/);
-    expect(pro).toMatch(/period=\{annual \? "annual" : "monthly"\}/);
+    expect(pro).toMatch(/const price = offer\.monthly;/);
+    expect(pro).toMatch(/period="monthly"/);
     expect(pro).toMatch(/appearance="card"/);
     const paywall = code("src/components/NativePaywall.tsx");
     expect(paywall).toMatch(/p\.period === \(period \?\? "annual"\)/);
   });
 
-  it("the app's SAVE badge and per-month line come from StoreKit, never a typed number", () => {
-    expect(chooser).toMatch(/\{\.\.\.appSaveBadge\(offer\)\}/);
-    expect(src).toMatch(/saveBadge: offer\.annualSavePct \? `SAVE \$\{offer\.annualSavePct\}%` : null, badgePending: offer\.status === "loading"/);
+  it("the app's price comes from StoreKit, never a typed number", () => {
     const hook = code("src/lib/use-iap-price.ts");
-    expect(hook).toMatch(/annual\.price \/ \(monthly\.price \* 12\)/);
-    expect(hook).toMatch(/currency: annual\.currencyCode/);
+    expect(hook).toMatch(/p\.period === "monthly"\)\?\.priceString/);
     expect(hook).not.toMatch(/PLAN_PRICES|\$\d/);
+  });
+
+  // Owner, 2026-09-30: "if they have a promo code they don't have anywhere to
+  // put the promo code". The app sells Pro through Apple, which takes no Stripe
+  // code and forbids unlocking a plan with the app's own (3.1.1) — so the code
+  // is checked here and USED on swiftcard.me, through the Office link-out.
+  it("has a promo box that checks the code in the app and uses it on swiftcard.me", () => {
+    expect(chooser).toMatch(/\{canLinkOut && <NativePromoCode /);
+    const box = src.slice(src.indexOf("function NativePromoCode("));
+    expect(box).toMatch(/usePromoCode\(\{ plan: null, interval: null \}\)/);
+    expect(box).toMatch(/openExternalPurchase\(`\/welcome\?promo=\$\{encodeURIComponent\(code\)\}`\)/);
+    expect(box).toMatch(/if \(opened\) onLeft\?\.\(\);\s*else setFailed\(true\);/);
+    const promoBox = code("src/components/PromoCodeBox.tsx");
+    // Nothing is redeemed in the app: a free-time code goes to the website too.
+    expect(promoBox).toMatch(/\{state\.grant && !website && \(/);
+    expect(promoBox).toMatch(/label="Use it on swiftcard\.me →"/);
+    expect(promoBox).toMatch(/label="Switch it on at swiftcard\.me →"/);
+    // /welcome opens with the code already in its box.
+    expect(code("src/components/WelcomePlan.tsx")).toMatch(/initialCode: paidIntent\?\.promo \?\? presetPromo,/);
+    expect(code("src/app/welcome/page.tsx")).toMatch(/presetPromo=\{!presetIntent && typeof sp\.promo === "string"/);
+  });
+
+  it("coming back from paying on swiftcard.me finishes the first card as Pro", () => {
+    const wizard = code("src/app/cards/new/NewCardWizard.tsx");
+    expect(wizard).toMatch(/onLeftForWebsite=\{\(\) => \{ leftForWebsite\.current = true; \}\}/);
+    expect(wizard).toMatch(/if \(!leftForWebsite\.current \|\| !isPaidPlan\(data\?\.plan\)\) return;\s*leftForWebsite\.current = false;\s*setShowPlan\(false\);\s*handleCreate\(undefined, undefined, false, true\);/);
   });
 
   it("no Office card means no Office tab — never a tab open on nothing", () => {

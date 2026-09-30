@@ -139,6 +139,7 @@ export default async function WelcomePage({
       cardSlug={cardSlug}
       cardName={cardName}
       presetIntent={presetIntent}
+      presetPromo={!presetIntent && typeof sp.promo === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(sp.promo) ? sp.promo : null}
       setupFor={setupFor}
       canceled={sp.canceled === "1"}
       trialEligible={trialEligible}

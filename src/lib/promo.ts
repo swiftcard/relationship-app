@@ -21,6 +21,11 @@
 // entered in the SwiftCard promo box on /pricing, which round-trips through
 // /api/promo/redeem. Money-off codes work in both places.
 
+/** Added to a scoped code's detail when it is checked before a plan is picked
+ *  (lib/promo-check). The app's box (PromoCodeBox `website`) drops it: there
+ *  the plan is picked on swiftcard.me, not below. */
+export const PICK_PLAN_BELOW = "Choose that plan below.";
+
 export const FREE_PERIODS = [
   { days: 7, label: "One week" },
   { days: 14, label: "Two weeks" },

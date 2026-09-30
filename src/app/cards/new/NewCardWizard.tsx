@@ -45,7 +45,7 @@ import { normalizeSocial } from "@/lib/social-url";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 import { track } from "@/lib/events";
-import { PLAN_LIMITS, PRO_CUSTOMIZATION_KEYS, LINK_STYLE_KEYS, LINK_STRUCTURAL_KEYS, convertCustomizationToFreeClosest, describeFreeDesignChanges, proLinkFeaturesInUse } from "@/lib/plan";
+import { PLAN_LIMITS, isPaidPlan, PRO_CUSTOMIZATION_KEYS, LINK_STYLE_KEYS, LINK_STRUCTURAL_KEYS, convertCustomizationToFreeClosest, describeFreeDesignChanges, proLinkFeaturesInUse } from "@/lib/plan";
 import { SwiftLinkStyleControls, type SwiftLinkStyle } from "@/components/SwiftLinkDesign";
 import { MoreOptions, Segmented, Switch } from "@/components/ui/DesignControls";
 import SwiftLinkLivePreview from "@/components/SwiftLinkLivePreview";
@@ -741,6 +741,28 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
     setShowPlan(false);
     handleCreate({ plan, annual, seats });
   }
+
+  // NATIVE: the plan gate's Office button and a promo code's "Use it on
+  // swiftcard.me" open swiftcard.me in the default browser, where they may pay
+  // before this card exists. Coming back to the app, ask the server for the
+  // plan: paid now → save the card exactly as designed, the path an in-app
+  // purchase takes. Only after one of those buttons was actually used. No
+  // dependency list: the listener must call THIS render's handleCreate, not
+  // the first render's (which would save an empty form).
+  const leftForWebsite = useRef(false);
+  useEffect(() => {
+    const onReturn = async () => {
+      if (!leftForWebsite.current || document.visibilityState !== "visible") return;
+      const res = await fetch("/api/iap/trial-eligible", { cache: "no-store" }).catch(() => null);
+      const data = res?.ok ? ((await res.json().catch(() => null)) as { plan?: string } | null) : null;
+      if (!leftForWebsite.current || !isPaidPlan(data?.plan)) return;
+      leftForWebsite.current = false;
+      setShowPlan(false);
+      handleCreate(undefined, undefined, false, true);
+    };
+    document.addEventListener("visibilitychange", onReturn);
+    return () => document.removeEventListener("visibilitychange", onReturn);
+  });
 
   // "Start my free month of Pro" in the builder's plan gate: save the card as
   // designed (it is about to be Pro), then start the month exactly as /welcome
@@ -2479,6 +2501,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                 // Native IAP: the entitlement is synced before this fires, so the
                 // server keeps the Pro design; no checkout hop, straight to save.
                 onIapPurchased={() => { setShowPlan(false); handleCreate(undefined, undefined, false, true); }}
+                onLeftForWebsite={() => { leftForWebsite.current = true; }}
                 // onCreateAccountForPro is gone: it only ever existed for a
                 // guest on native, and a guest no longer sees this gate at all.
               />

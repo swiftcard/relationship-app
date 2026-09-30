@@ -3,7 +3,7 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { getStripe } from "@/lib/stripe";
 import { isPaidPlan } from "@/lib/plan";
 import {
-  durationLabel, isFreeDays, isGrantCode, promoFitsPurchase, promoLabel, promoScopeMessage, type PromoRow,
+  PICK_PLAN_BELOW, durationLabel, isFreeDays, isGrantCode, promoFitsPurchase, promoLabel, promoScopeMessage, type PromoRow,
 } from "@/lib/promo";
 
 // ── Does this code apply to THIS purchase, for THIS account? ────────────────
@@ -111,7 +111,7 @@ export async function checkPromoForPurchase(input: {
     ok: true, source: "swiftcard", promo, redemption, freeDays, couponId,
     label: promoLabel(promo),
     detail: !input.purchase && scoped
-      ? `${promoScopeMessage(promo)} Choose that plan below.`
+      ? `${promoScopeMessage(promo)} ${PICK_PLAN_BELOW}`
       : freeTime ? "Free days are added before your first payment." : durationLabel(promo),
   };
 }

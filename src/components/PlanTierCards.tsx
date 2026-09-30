@@ -50,9 +50,6 @@ export const OFFICE_CTA_LINK_CLASS = "block w-full text-center font-bold py-3.5 
 export const PRO_FINE_PRINT_CLASS = "text-white/70 text-[0.6875rem] text-center mt-2.5 leading-relaxed";
 export const OFFICE_FINE_PRINT_CLASS = "text-slate-500 text-[0.6875rem] text-center mt-2.5 leading-relaxed";
 
-/** What annual saves on the web (PLAN_PRICES: $54 vs 12 × $4.99). */
-const WEB_SAVE_BADGE = "SAVE 10%";
-
 /** The three cards' grid. md:pt-6 makes room for Pro sitting higher. */
 export const PLAN_GRID_CLASS = "grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch md:pt-6";
 
@@ -65,20 +62,12 @@ export const PLAN_GRID_CLASS = "grid grid-cols-1 md:grid-cols-3 gap-5 items-stre
 export function BillingToggle({
   annual,
   onToggle,
-  saveBadge = WEB_SAVE_BADGE,
-  badgePending = false,
   hideOnPhone = false,
   className = "",
   reveal = false,
 }: {
   annual: boolean;
   onToggle: () => void;
-  /** null hides the badge — the app shows it only once StoreKit's own
-   *  prices say what annual saves. */
-  saveBadge?: string | null;
-  /** The badge isn't known yet (StoreKit still answering): hold its width,
-   *  invisibly, so the switch doesn't widen and shift when it arrives. */
-  badgePending?: boolean;
   hideOnPhone?: boolean;
   className?: string;
   /** /pricing's scroll-in fade. Only pages that mount ScrollReveal may set
@@ -92,7 +81,8 @@ export function BillingToggle({
         <div className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" style={{ transform: annual ? "translateX(22px)" : "translateX(2px)" }} />
       </button>
       <span className={`text-sm font-medium transition-colors ${annual ? "text-slate-900 font-bold" : "text-slate-600"}`}>
-        Annual{(saveBadge || badgePending) && <> <span className={`ml-1 text-[0.625rem] font-black text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded-full ${saveBadge ? "" : "invisible"}`}>{saveBadge || WEB_SAVE_BADGE}</span></>}
+        {/* What annual saves on the web (PLAN_PRICES: $54 vs 12 × $4.99). */}
+        Annual <span className="ml-1 text-[0.625rem] font-black text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded-full">SAVE 10%</span>
       </span>
     </div>
   );

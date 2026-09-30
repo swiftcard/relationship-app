@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { PICK_PLAN_BELOW } from "@/lib/promo";
 
 // ── "Have a promo code?" ─────────────────────────────────────────────────────
 // THE one promo box, shown wherever a Pro or Office purchase starts on the web:
-// the order page (/checkout) and the new account's plan step (/welcome). Every
+// the order page (/checkout) and the new account's plan step (/welcome) — and
+// in the iPhone app's plan step, which checks the code here and sends it to
+// /welcome on swiftcard.me to be used (the `website` prop). Every
 // code is entered here and applied by /api/stripe/checkout — Stripe's own
 // "Add promotion code" field is off, because it could only ever take money-off
 // codes and a free-time code typed there was always "invalid" (owner report
@@ -122,38 +125,52 @@ export default function PromoCodeBox({
   promo,
   busy = false,
   onContinueWithoutCode,
+  website,
   className = "",
 }: {
   promo: PromoCode;
   /** The purchase is in flight — "Continue without the code" waits. */
   busy?: boolean;
-  /** Retry the purchase with no code, after a refusal at checkout. */
-  onContinueWithoutCode: () => void;
+  /** Retry the purchase with no code, after a refusal at checkout. Not needed
+   *  in the app, where nothing is bought through this box. */
+  onContinueWithoutCode?: () => void;
+  /** The iPhone app (PlanCards' NativePromoCode): the code is used on
+   *  swiftcard.me, not here — an applied code gets "Use it on swiftcard.me",
+   *  a free-time code "Switch it on at swiftcard.me", and nothing is redeemed
+   *  in the app itself (3.1.1). */
+  website?: PromoWebsiteHandOff;
   className?: string;
 }) {
   const { state, open, setOpen, input, setInput, apply, remove, switchOnGrant, granting } = promo;
+  // "Choose that plan below" is the website's chooser talking; in the app the
+  // plan is chosen on swiftcard.me.
+  const detail = state.status !== "applied" ? "" : website ? state.detail.replace(` ${PICK_PLAN_BELOW}`, "") : state.detail;
   return (
     <div className={className}>
       {state.status === "applied" ? (
-        <div className="flex items-start justify-between gap-3 rounded-xl border border-green-500/30 bg-green-500/10 px-3.5 py-2.5 text-left">
-          <div className="min-w-0">
-            <p className="text-green-300 text-xs font-semibold">✓ {state.code} — {state.label}</p>
-            {state.detail && <p className="text-emerald-200 text-[0.6875rem] mt-0.5">{/^[A-Z]/.test(state.detail) ? state.detail : `Off ${state.detail}.`}</p>}
+        <>
+          <div className="flex items-start justify-between gap-3 rounded-xl border border-green-500/30 bg-green-500/10 px-3.5 py-2.5 text-left">
+            <div className="min-w-0">
+              <p className="text-green-300 text-xs font-semibold">✓ {state.code} — {state.label}</p>
+              {detail && <p className="text-emerald-200 text-[0.6875rem] mt-0.5">{/^[A-Z]/.test(detail) ? detail : `Off ${detail}.`}</p>}
+            </div>
+            <button type="button" onClick={remove} className="shrink-0 text-[0.6875rem] text-gray-400 hover:text-white underline">Remove</button>
           </div>
-          <button type="button" onClick={remove} className="shrink-0 text-[0.6875rem] text-gray-400 hover:text-white underline">Remove</button>
-        </div>
+          {website && <WebsiteHandOff code={state.code} label="Use it on swiftcard.me →" website={website} />}
+        </>
       ) : state.status === "refused" ? (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-left">
           <p className="text-amber-300 text-xs font-semibold">{state.code}: {state.message}</p>
+          {state.grant && website && <WebsiteHandOff code={state.code} label="Switch it on at swiftcard.me →" website={website} />}
           <div className="mt-2 flex flex-wrap gap-2">
-            {state.grant && (
+            {state.grant && !website && (
               <button type="button" onClick={() => switchOnGrant(state.code)} disabled={granting}
                 className="text-[0.6875rem] font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 px-3 py-1.5 rounded-full">
                 {granting ? "Switching it on…" : "Switch it on"}
               </button>
             )}
             {state.atCheckout ? (
-              <button type="button" onClick={() => { remove(); onContinueWithoutCode(); }} disabled={busy}
+              <button type="button" onClick={() => { remove(); onContinueWithoutCode?.(); }} disabled={busy}
                 className="text-[0.6875rem] font-semibold text-white bg-gray-800 border border-gray-700 hover:bg-gray-700 disabled:opacity-50 px-3 py-1.5 rounded-full">
                 Continue without the code
               </button>
@@ -202,6 +219,31 @@ export default function PromoCodeBox({
           Have a promo code?
         </button>
       )}
+    </div>
+  );
+}
+
+export type PromoWebsiteHandOff = {
+  /** Open swiftcard.me in the default browser with this code. */
+  open: (code: string) => void;
+  /** Opening now. */
+  busy: boolean;
+  /** The browser didn't open. */
+  failed: boolean;
+};
+
+function WebsiteHandOff({ code, label, website }: { code: string; label: string; website: PromoWebsiteHandOff }) {
+  return (
+    <div className="mt-3 text-center">
+      <button type="button" onClick={() => website.open(code)} disabled={website.busy}
+        className="w-full rounded-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 px-4 py-2.5 text-sm font-semibold text-white transition-colors">
+        {website.busy ? "Opening swiftcard.me…" : label}
+      </button>
+      <p className="mt-2 text-[0.6875rem] leading-relaxed text-gray-500" role={website.failed ? "alert" : undefined}>
+        {website.failed
+          ? "Couldn't open your browser. Go to swiftcard.me, sign in with this account and enter the code there."
+          : "Opens swiftcard.me in your browser with the code filled in. Sign in there with this account to use it."}
+      </p>
     </div>
   );
 }

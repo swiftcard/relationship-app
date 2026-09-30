@@ -90,13 +90,14 @@ describe("in-app signup and first-card flow", () => {
     const src = read2("src/components/PlanCards.tsx");
     expect(src).toMatch(/function NativePro/);
     expect(src).toContain("useIapOffer()");
-    // StoreKit's price, for the period the Monthly / Annual switch shows.
-    expect(src).toMatch(/<ProTrialPrice price=\{price\} period=\{period\} note=\{note\} \/>/);
-    expect(src).toMatch(/const price = annual \? offer\.annual : offer\.monthly;/);
-    // The SAME cards, tabs and switch as the website (owner, 2026-09-30: the
-    // app stacked the plans in one column with no switch).
+    // StoreKit's monthly price — Apple's sheet offers annual with its own.
+    expect(src).toMatch(/<ProTrialPrice price=\{price\} period="month" \/>/);
+    expect(src).toMatch(/const price = offer\.monthly;/);
+    // The SAME cards and tabs as the website (owner, 2026-09-30: the app
+    // stacked the plans in one column). No Monthly / Annual switch: Apple's
+    // sheet asks that (owner, later the same day).
     const chooser = src.slice(src.indexOf("function NativePlanChooser("), src.indexOf("export function NativeProUpgrade"));
-    expect(chooser).toMatch(/<BillingToggle/);
+    expect(chooser).not.toMatch(/<BillingToggle/);
     expect(chooser).toMatch(/<MobilePlanTabs/);
     expect(chooser).toMatch(/<FreePlanCard/);
     // Office is Stripe-only with no IAP product, so natively it can be neither
@@ -147,9 +148,10 @@ describe("in-app signup and first-card flow", () => {
     expect(page).toMatch(/redirect\(`\/login\?next=\$\{encodeURIComponent\(back\)\}`\)/);
     expect(page).toMatch(/initialTier=\{officeTier \? "office" : "pro"\}/);
     // Back in the app, the plan is re-checked — but only after the Office
-    // button was really used, so a StoreKit sheet can never trigger it.
+    // button (or a promo code's "Use it on swiftcard.me") was really used, so
+    // a StoreKit sheet can never trigger it.
     const welcome = read2("src/components/WelcomePlan.tsx");
-    expect(welcome).toMatch(/leftForOffice\.current && document\.visibilityState === "visible"\) router\.refresh\(\)/);
+    expect(welcome).toMatch(/leftForWebsite\.current && document\.visibilityState === "visible"\) router\.refresh\(\)/);
   });
 });
 
