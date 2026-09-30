@@ -240,6 +240,18 @@ describe("home-screen QR widget wiring", () => {
     expect(bridge).toMatch(/setCard\(/);
     expect(bridge).toMatch(/source=widget/);
   });
+  it("bridge re-syncs the widget + watch when the active card changes, not only on mount", () => {
+    // A dashboard card switch is a client-side navigation: NativeAppBridge
+    // (root layout) never remounts, so without this the iOS widget and the
+    // Apple Watch kept the previous card until the app was relaunched.
+    const bridge = read("src/components/NativeAppBridge.tsx");
+    const persist = read("src/components/CardSelectionPersist.tsx");
+    expect(bridge).toMatch(/window\.addEventListener\(ACTIVE_CARD_EVENT, onActiveCard\)/);
+    expect(bridge).toMatch(/window\.removeEventListener\(ACTIVE_CARD_EVENT, onActiveCard\)/);
+    expect(bridge).toMatch(/const syncWidgetCard = async \(\) =>/);
+    expect(persist).toMatch(/window\.dispatchEvent\(new Event\(ACTIVE_CARD_EVENT\)\)/);
+    expect(read("src/lib/active-card.ts")).toContain('ACTIVE_CARD_EVENT = "swiftcard:active-card"');
+  });
   // Regression guard for the bug this replaced: @capacitor/preferences' `group`
   // option is only a key prefix on UserDefaults.standard, which lives in the
   // app's own container. A widget extension cannot read it, so routing the card

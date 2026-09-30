@@ -225,12 +225,17 @@ final class WatchSessionBridge: NSObject, WCSessionDelegate {
         var packed = [UInt8](repeating: 0, count: (width * height + 7) / 8)
         for y in 0..<height {
             for x in 0..<width {
-                // CoreGraphics' origin is bottom-left and the watch draws
-                // top-down, so the rows are flipped here. A QR code is not
-                // symmetrical — its three finder squares sit in three specific
-                // corners — and getting this wrong yields a grid that looks
-                // perfectly plausible and scans as nothing.
-                let value = pixels[(height - 1 - y) * width + x]
+                // NOT flipped. CoreGraphics' drawing origin is bottom-left,
+                // but the bytes of a bitmap context are stored top row first,
+                // so `pixels[0]` is already the top-left module. An earlier
+                // version flipped the rows here and shipped a vertically
+                // MIRRORED code: a QR's three finder squares sit top-left,
+                // top-right and bottom-left, and the mirror put the empty
+                // corner top-right. Most scanners (iOS Camera, Vision, ZXing)
+                // tolerate a mirror, which is why it looked fine — some do
+                // not. Verified 2026-09-30 by decoding the grid AND checking
+                // which corner has no finder; see SHELL-RUNBOOK §6c.
+                let value = pixels[y * width + x]
                 guard value < 128 else { continue }   // dark module
                 let index = y * width + x
                 packed[index / 8] |= (1 << (7 - UInt8(index % 8)))

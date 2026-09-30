@@ -1,6 +1,6 @@
 "use client";
 import { useEffect } from "react";
-import { ACTIVE_CARD_KEY, ACTIVE_CARD_COOKIE, ACTIVE_CARD_COOKIE_MAX_AGE } from "@/lib/active-card";
+import { ACTIVE_CARD_KEY, ACTIVE_CARD_COOKIE, ACTIVE_CARD_COOKIE_MAX_AGE, ACTIVE_CARD_EVENT } from "@/lib/active-card";
 
 /**
  * Persists the currently-selected card so other pages can default to it.
@@ -24,6 +24,13 @@ export default function CardSelectionPersist({ selectedCard }: { selectedCard: s
     }
     try {
       document.cookie = `${ACTIVE_CARD_COOKIE}=${encodeURIComponent(selectedCard)}; path=/; max-age=${ACTIVE_CARD_COOKIE_MAX_AGE}; samesite=lax`;
+    } catch {
+      /* ignore */
+    }
+    // Tell the native bridge (iOS widget + Apple Watch) the active card moved.
+    // Same-document only: the `storage` event never fires in the tab that wrote.
+    try {
+      window.dispatchEvent(new Event(ACTIVE_CARD_EVENT));
     } catch {
       /* ignore */
     }

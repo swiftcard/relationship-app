@@ -38,8 +38,11 @@ describe("tap routing actually navigates", () => {
   });
 
   it("registers the tap listener BEFORE the network-bound widget sync — cold-start taps race the boot", () => {
-    expect(bridge.indexOf("pushNotificationActionPerformed"))
-      .toBeLessThan(bridge.indexOf("Home-screen QR widget data sync"));
+    // The sync lives in syncWidgetCard() (defined above the boot sequence so the
+    // card-switch event can reuse it); what matters is where it is CALLED.
+    const call = bridge.indexOf("await syncWidgetCard()");
+    expect(call).toBeGreaterThan(-1);
+    expect(bridge.indexOf("pushNotificationActionPerformed")).toBeLessThan(call);
   });
 });
 

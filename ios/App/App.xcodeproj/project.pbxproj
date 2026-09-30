@@ -31,6 +31,8 @@
 		BB0000000000000000000022 /* WatchCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000000C /* WatchCard.swift */; };
 		BB0000000000000000000023 /* WatchCardStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000000D /* WatchCardStore.swift */; };
 		BB0000000000000000000024 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000010 /* Assets.xcassets */; };
+		BB0000000000000000000025 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000011 /* PrivacyInfo.xcprivacy */; };
+		CC0000000000000000000025 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = CC000000000000000000000B /* PrivacyInfo.xcprivacy */; };
 		BB0000000000000000000031 /* SwiftCardWatchWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = CC0000000000000000000002 /* SwiftCardWatchWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		CC0000000000000000000020 /* SwiftCardWatchWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000000000000000000000A /* SwiftCardWatchWidget.swift */; };
 		CC0000000000000000000022 /* WatchCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB000000000000000000000C /* WatchCard.swift */; };
@@ -91,6 +93,8 @@
 		BB000000000000000000000E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		BB000000000000000000000F /* SwiftCardWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SwiftCardWatch.entitlements; sourceTree = "<group>"; };
 		BB0000000000000000000010 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		BB0000000000000000000011 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		CC000000000000000000000B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		CC0000000000000000000002 /* SwiftCardWatchWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SwiftCardWatchWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		CC000000000000000000000A /* SwiftCardWatchWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftCardWatchWidget.swift; sourceTree = "<group>"; };
 		CC000000000000000000000E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -231,6 +235,7 @@
 				BB000000000000000000000D /* WatchCardStore.swift */,
 				BB0000000000000000000010 /* Assets.xcassets */,
 				BB000000000000000000000E /* Info.plist */,
+				BB0000000000000000000011 /* PrivacyInfo.xcprivacy */,
 				BB000000000000000000000F /* SwiftCardWatch.entitlements */,
 			);
 			path = SwiftCardWatch;
@@ -241,6 +246,7 @@
 			children = (
 				CC000000000000000000000A /* SwiftCardWatchWidget.swift */,
 				CC000000000000000000000E /* Info.plist */,
+				CC000000000000000000000B /* PrivacyInfo.xcprivacy */,
 				CC000000000000000000000F /* SwiftCardWatchWidget.entitlements */,
 			);
 			path = SwiftCardWatchWidget;
@@ -406,6 +412,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BB0000000000000000000024 /* Assets.xcassets in Resources */,
+				BB0000000000000000000025 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -413,6 +420,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CC0000000000000000000025 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -793,7 +801,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0.5;
-				PRODUCT_BUNDLE_IDENTIFIER = me.swiftcard.app.watchkitapp.complication;
+				PRODUCT_BUNDLE_IDENTIFIER = me.swiftcard.app.watchkitapp.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -822,7 +830,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0.5;
-				PRODUCT_BUNDLE_IDENTIFIER = me.swiftcard.app.watchkitapp.complication;
+				PRODUCT_BUNDLE_IDENTIFIER = me.swiftcard.app.watchkitapp.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;

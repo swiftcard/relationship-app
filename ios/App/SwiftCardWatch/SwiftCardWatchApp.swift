@@ -25,5 +25,17 @@ struct SwiftCardWatchApp: App {
             ContentView()
                 .environmentObject(store)
         }
+        // Lets watchOS launch this app IN THE BACKGROUND when the phone's
+        // application context arrives while the app is closed. The store is
+        // created above and activates the session on launch, so the delivery
+        // itself needs no code here — but without this declaration the card
+        // sat undelivered until the next foreground launch, and the
+        // complication kept showing the previous card (or "No card yet" on a
+        // fresh install) until then. The short wait gives the session time to
+        // hand the context to WatchCardStore, which persists it and reloads
+        // the complication, before the system suspends us again.
+        .backgroundTask(.watchConnectivity) {
+            try? await Task.sleep(for: .seconds(2))
+        }
     }
 }

@@ -29,7 +29,7 @@
 		     profile here or -exportArchive stops at the last step. -->
 		<key>me.swiftcard.app.watchkitapp</key>
 		<string>SwiftCard Watch App Store</string>
-		<key>me.swiftcard.app.watchkitapp.complication</key>
+		<key>me.swiftcard.app.watchkitapp.widget</key>
 		<string>SwiftCard Watch Complication App Store</string>
 	</dict>
 	<!-- dSYMs, so native crashes can be symbolicated. -->

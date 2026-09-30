@@ -122,11 +122,12 @@ cd "$ROOT/ios/App"
 
 # ── --no-watch: archive from a project copy that does not build the watch ────
 # The watch targets are signed MANUALLY against "SwiftCard Watch App Store" and
-# "SwiftCard Watch Complication App Store", and those profiles do not exist yet
-# (the complication bundle id is still refused by Apple — see
-# docs/ios-review/SHELL-RUNBOOK.md §6c). Building the App scheme pulls both
-# watch targets in through the App target's dependency + "Embed Watch Content"
-# phase, so the archive dies at GatherProvisioningInputs before compiling a line.
+# "SwiftCard Watch Complication App Store". Both exist since 2026-09-30 (the
+# complication bundle id had to become …watchkitapp.widget — Apple refuses
+# ".complication" — and the App Group must be assigned in the portal; see
+# docs/ios-review/SHELL-RUNBOOK.md §6c). The flag remains for a release that
+# deliberately ships without the watch: building the App scheme pulls both watch
+# targets in through the App target's dependency + "Embed Watch Content" phase.
 #
 # Rather than editing project.pbxproj in the shared working tree (several
 # sessions commit from it), archive from a SIBLING COPY of the .xcodeproj with

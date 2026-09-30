@@ -99,12 +99,17 @@ final class WatchCardStore: NSObject, ObservableObject, WCSessionDelegate {
     /// unreachable `sendMessage` just errors — and only when we have nothing,
     /// because the application context covers every other case for free.
     private func requestCardIfNeeded() {
-        guard card == nil, WCSession.default.isReachable else { return }
-        WCSession.default.sendMessage(
-            ["request": "card"],
-            replyHandler: { [weak self] reply in self?.apply(context: reply) },
-            errorHandler: { _ in /* phone went away mid-flight — cache stands */ }
-        )
+        // `card` is written on the main queue by apply(); the delegate
+        // callbacks that call this arrive on WatchConnectivity's own queue.
+        // Hop to main before reading it so the check and the write never race.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.card == nil, WCSession.default.isReachable else { return }
+            WCSession.default.sendMessage(
+                ["request": "card"],
+                replyHandler: { [weak self] reply in self?.apply(context: reply) },
+                errorHandler: { _ in /* phone went away mid-flight — cache stands */ }
+            )
+        }
     }
 
     // MARK: - WCSessionDelegate

@@ -5,6 +5,7 @@ import { safeNextPath } from "@/lib/safe-next";
 import { detectNativeApp } from "@/lib/platform";
 import { LINKEDIN_MESSAGE } from "@/lib/linkedin-popup";
 import { PUBLIC_PAGE_META } from "@/lib/universal-links";
+import { ACTIVE_CARD_EVENT } from "@/lib/active-card";
 
 /** The card this phone's home-screen widget shows — how a widget tap is told apart from a scanned QR. */
 const WIDGET_CARD_KEY = "sc_widget_card";
@@ -111,6 +112,83 @@ export default function NativeAppBridge() {
 
     let removeListener: (() => void) | null = null;
     let cancelled = false;
+
+    // ── Home-screen QR widget + Apple Watch data sync ─────────────────────
+    // Runs once on mount and again whenever CardSelectionPersist reports a
+    // card switch (ACTIVE_CARD_EVENT). Before the event existed this only ran
+    // on a full document load, so switching cards on the dashboard left the
+    // widget and the watch on the previous card until the app was relaunched.
+    const syncWidgetCard = async () => {
+      if (cancelled) return;
+      // Hand the signed-in user's active card to the SwiftCardWidget extension
+      // via the WidgetBridge native plugin (ios/App/App/WidgetBridge.swift),
+      // which writes the shared App Group suite and reloads the timeline.
+      //
+      // ⚠️ Do NOT switch this back to @capacitor/preferences: that plugin's
+      // `group` option is only a key prefix on UserDefaults.standard, which
+      // lives in the app's own container and is unreadable from a widget
+      // extension — the widget would sit on its empty state forever.
+      //
+      // Honors the dashboard's active-card choice when one is stored.
+      //
+      // Failures are logged rather than swallowed. The only visible output of
+      // this block is the widget itself, so a silent skip is indistinguishable
+      // from "working" during device testing — which is how the Preferences
+      // version above went unnoticed for weeks. Capacitor forwards console
+      // output to the Xcode/simctl console, so these lines are visible there.
+      const widgetBridge = (window as unknown as {
+        Capacitor?: {
+          Plugins?: {
+            WidgetBridge?: {
+              setCard: (o: Record<string, string>) => Promise<void>;
+              clearCard: () => Promise<void>;
+            };
+          };
+        };
+      }).Capacitor?.Plugins?.WidgetBridge;
+
+      if (!widgetBridge) {
+        // Means the plugin was not registered natively — see MainViewController.
+        console.warn("[widget] WidgetBridge plugin unavailable; home-screen widget will not update");
+      } else {
+        try {
+          const res = await fetch("/api/cards", { credentials: "include" });
+          const cards = res.ok
+            ? ((await res.json()) as { cards?: Array<{ username?: string; name?: string; company?: string }> }).cards
+            : undefined;
+
+          let active = cards?.length ? cards[0] : undefined;
+          if (active) {
+            try {
+              const chosen = localStorage.getItem("swiftcard_active_card");
+              active = cards!.find((c) => c.username === chosen) ?? active;
+            } catch { /* default to first card */ }
+          }
+
+          if (active?.username) {
+            await widgetBridge.setCard({
+              url: `https://swiftcard.me/${active.username}?source=widget`,
+              name: active.name || "My SwiftCard",
+              company: active.company || "",
+            });
+            try { localStorage.setItem(WIDGET_CARD_KEY, active.username); } catch { /* ignore */ }
+          } else if (res.status === 401 || res.status === 403 || cards?.length === 0) {
+            // Signed out, or the last card was deleted. Without this the widget
+            // keeps rendering the previous account's QR on the home screen
+            // indefinitely — including after sign-out on a shared or handed-on
+            // device, and after the account itself is gone.
+            await widgetBridge.clearCard();
+            try { localStorage.removeItem(WIDGET_CARD_KEY); } catch { /* ignore */ }
+          }
+        } catch (e) {
+          // Offline is normal and fine; a native reject is not. Either way the
+          // widget keeps its last data, but say so instead of vanishing.
+          console.warn("[widget] sync failed:", e);
+        }
+      }
+    };
+    const onActiveCard = () => { void syncWidgetCard(); };
+    window.addEventListener(ACTIVE_CARD_EVENT, onActiveCard);
 
     (async () => {
       try {
@@ -322,79 +400,13 @@ export default function NativeAppBridge() {
         } catch { /* refresh is best-effort — enable button remains the fallback */ }
       } catch { /* push plugin absent — fine */ }
 
-      // ── Home-screen QR widget data sync ─────────────────────────────────
-      // Hand the signed-in user's active card to the SwiftCardWidget extension
-      // via the WidgetBridge native plugin (ios/App/App/WidgetBridge.swift),
-      // which writes the shared App Group suite and reloads the timeline.
-      //
-      // ⚠️ Do NOT switch this back to @capacitor/preferences: that plugin's
-      // `group` option is only a key prefix on UserDefaults.standard, which
-      // lives in the app's own container and is unreadable from a widget
-      // extension — the widget would sit on its empty state forever.
-      //
-      // Honors the dashboard's active-card choice when one is stored.
-      //
-      // Failures are logged rather than swallowed. The only visible output of
-      // this block is the widget itself, so a silent skip is indistinguishable
-      // from "working" during device testing — which is how the Preferences
-      // version above went unnoticed for weeks. Capacitor forwards console
-      // output to the Xcode/simctl console, so these lines are visible there.
-      const widgetBridge = (window as unknown as {
-        Capacitor?: {
-          Plugins?: {
-            WidgetBridge?: {
-              setCard: (o: Record<string, string>) => Promise<void>;
-              clearCard: () => Promise<void>;
-            };
-          };
-        };
-      }).Capacitor?.Plugins?.WidgetBridge;
-
-      if (!widgetBridge) {
-        // Means the plugin was not registered natively — see MainViewController.
-        console.warn("[widget] WidgetBridge plugin unavailable; home-screen widget will not update");
-      } else {
-        try {
-          const res = await fetch("/api/cards", { credentials: "include" });
-          const cards = res.ok
-            ? ((await res.json()) as { cards?: Array<{ username?: string; name?: string; company?: string }> }).cards
-            : undefined;
-
-          let active = cards?.length ? cards[0] : undefined;
-          if (active) {
-            try {
-              const chosen = localStorage.getItem("swiftcard_active_card");
-              active = cards!.find((c) => c.username === chosen) ?? active;
-            } catch { /* default to first card */ }
-          }
-
-          if (active?.username) {
-            await widgetBridge.setCard({
-              url: `https://swiftcard.me/${active.username}?source=widget`,
-              name: active.name || "My SwiftCard",
-              company: active.company || "",
-            });
-            try { localStorage.setItem(WIDGET_CARD_KEY, active.username); } catch { /* ignore */ }
-          } else if (res.status === 401 || res.status === 403 || cards?.length === 0) {
-            // Signed out, or the last card was deleted. Without this the widget
-            // keeps rendering the previous account's QR on the home screen
-            // indefinitely — including after sign-out on a shared or handed-on
-            // device, and after the account itself is gone.
-            await widgetBridge.clearCard();
-            try { localStorage.removeItem(WIDGET_CARD_KEY); } catch { /* ignore */ }
-          }
-        } catch (e) {
-          // Offline is normal and fine; a native reject is not. Either way the
-          // widget keeps its last data, but say so instead of vanishing.
-          console.warn("[widget] sync failed:", e);
-        }
-      }
-
+      await syncWidgetCard();
     })();
 
     return () => {
       cancelled = true;
       removeListener?.();
+      window.removeEventListener(ACTIVE_CARD_EVENT, onActiveCard);
       publicWatch?.disconnect();
     };
   }, []);

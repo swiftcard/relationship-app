@@ -39,7 +39,7 @@ const code = (s: string) =>
 
 const APP_GROUP = "group.me.swiftcard.app";
 const WATCH_BUNDLE = "me.swiftcard.app.watchkitapp";
-const COMPLICATION_BUNDLE = "me.swiftcard.app.watchkitapp.complication";
+const COMPLICATION_BUNDLE = "me.swiftcard.app.watchkitapp.widget";
 
 describe("the watch targets are in the Xcode project, not just on disk", () => {
   const proj = read("ios/App/App.xcodeproj/project.pbxproj");
@@ -147,6 +147,21 @@ describe("the watch app declares itself correctly to watchOS", () => {
     expect(read("ios/App/SwiftCardWatchWidget/SwiftCardWatchWidget.entitlements")).toContain(APP_GROUP);
   });
 
+  it("both watch bundles ship a privacy manifest — UserDefaults is a required-reason API", () => {
+    // The phone app and the phone widget declare it; a nested bundle without
+    // one draws ITMS-91053 at upload. Both must also be in the Resources phase
+    // or the file sits in the repo and never reaches the bundle.
+    const proj = read("ios/App/App.xcodeproj/project.pbxproj");
+    for (const dir of ["SwiftCardWatch", "SwiftCardWatchWidget"]) {
+      const m = read(`ios/App/${dir}/PrivacyInfo.xcprivacy`);
+      expect(m).toContain("NSPrivacyAccessedAPICategoryUserDefaults");
+      expect(m).toContain("<string>1C8F.1</string>");
+      expect(m).toContain("<key>NSPrivacyTracking</key>\n\t<false/>");
+    }
+    expect(proj).toContain("BB0000000000000000000025 /* PrivacyInfo.xcprivacy in Resources */,");
+    expect(proj).toContain("CC0000000000000000000025 /* PrivacyInfo.xcprivacy in Resources */,");
+  });
+
   it("ships an app icon — watchOS will not install without one", () => {
     expect(existsSync(join(root, "ios/App/SwiftCardWatch/Assets.xcassets/AppIcon.appiconset/Contents.json"))).toBe(true);
     expect(read("ios/App/SwiftCardWatch/Assets.xcassets/AppIcon.appiconset/Contents.json"))
@@ -241,10 +256,14 @@ describe("the QR is encoded on the phone because watchOS cannot do it", () => {
     expect(card).toMatch(/\(byte >> \(7 - UInt8\(index % 8\)\)\) & 1 == 1/);
   });
 
-  it("the phone flips rows for the watch's top-down origin", () => {
-    // CoreGraphics draws from the bottom left. A QR has finder squares in three
-    // specific corners, so an unflipped grid is silently unreadable.
-    expect(bridge).toContain("pixels[(height - 1 - y) * width + x]");
+  it("the phone does NOT flip rows — a bitmap context is already top-down", () => {
+    // CoreGraphics DRAWS from the bottom left, but the bytes of a bitmap
+    // context are stored top row first. The first version flipped the rows
+    // and shipped a vertically mirrored QR; it "scanned" only because most
+    // decoders tolerate a mirror. Proven by decoding the grid and checking the
+    // corner with no finder pattern (must be bottom-right).
+    expect(bridge).toContain("pixels[y * width + x]");
+    expect(bridge).not.toContain("pixels[(height - 1 - y)");
   });
 
   it("the grid is optional, so an older cached card still shows something", () => {

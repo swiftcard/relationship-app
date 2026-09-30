@@ -179,7 +179,7 @@ once the app is opened signed-in.
 | Target | Bundle id | What it is |
 |---|---|---|
 | `SwiftCardWatch` | `me.swiftcard.app.watchkitapp` | The watch app. Full-screen QR of the active card. |
-| `SwiftCardWatchWidgetExtension` | `me.swiftcard.app.watchkitapp.complication` | Watch-face complication, one tap into the app. |
+| `SwiftCardWatchWidgetExtension` | `me.swiftcard.app.watchkitapp.widget` | Watch-face complication, one tap into the app. (Was `…watchkitapp.complication` until 2026-09-30: Apple refuses that identifier outright — `POST /bundleIds` → 409 "not available" — so it was renamed; `.widget` registered as XWFSNLGT52.) |
 
 Nesting inside the shipped `.ipa`:
 
@@ -206,6 +206,26 @@ single latest-value slot delivered in the background, which is exactly what
 "the current card" is. It is re-published on app launch, on every foreground,
 and whenever the watch pairs or installs the app.
 
+### ⚠️ The grid is NOT row-flipped (2026-09-30)
+
+`qrMatrix` draws the CGImage into a bitmap `CGContext` and reads the bytes.
+CoreGraphics *draws* with a bottom-left origin, but the **bytes of a bitmap
+context are stored top row first**, so `pixels[0]` is already the top-left
+module. The first version flipped the rows "for the watch's top-down origin"
+and shipped a vertically MIRRORED code — finder squares top-left, bottom-left
+and bottom-RIGHT instead of top-right. It looked perfect and it even scanned,
+because iOS Camera, Vision and ZXing all tolerate a mirror; some readers do
+not. Proven by running the exact encoder on macOS: with the flip the corner
+with no finder pattern is top-right; without it, bottom-right. Then on the
+paired simulators: the watch screenshot's grid matched the correct encoding
+1225/1225 modules and the mirrored one only 771/1225.
+
+**How to verify a QR change from now on:** decode is not enough (decoders
+forgive mirrors). Sample the grid out of a `simctl io … screenshot` and compare
+it module-by-module with `CIFilter.qrCodeGenerator()`'s own output for the
+same string, or at minimum check that the corner WITHOUT a finder square is
+bottom-right. `tests/apple-watch.test.ts` pins the no-flip line.
+
 ### ⚠️ watchOS has no CoreImage
 
 `CIFilter.qrCodeGenerator()` does not exist on watchOS — a watch target that
@@ -215,18 +235,38 @@ PHONE encodes the QR into a grid of black/white modules
 rectangles in a SwiftUI `Canvas`. That is sharper than an upscaled bitmap and
 smaller to send. `tests/apple-watch.test.ts` fails if anyone moves it back.
 
+### Provisioning (done 2026-09-30, one portal step still owed)
+
+`node scripts/asc-provision.mjs` is idempotent now: it registers any missing
+bundle id, switches App Groups on for EVERY id (the original run died on a
+malformed capability call — the API rejects `settings.key = "APP_GROUPS"` —
+which is exactly why `…watchkitapp` sat registered with no App Groups for
+three weeks), creates only the profiles that are missing (`--recreate` remints
+all four), and installs them into `~/Library/MobileDevice/Provisioning
+Profiles/`. Both watch profiles exist: "SwiftCard Watch App Store" and
+"SwiftCard Watch Complication App Store".
+
+**The one thing the API cannot do: put `group.me.swiftcard.app` INTO the App
+Groups capability.** The public API only switches the capability on; which
+groups it contains is set in the developer portal, and Xcode's own path needs
+an Apple ID session, not our key. Until that is done the two watch profiles
+carry an EMPTY groups array and a signed archive fails at the watch app.
+Portal step (account holder / admin, ~1 minute):
+developer.apple.com → Identifiers → "SwiftCard Watch App" and "SwiftCard Watch
+Complication" → App Groups → Configure → tick `group.me.swiftcard.app` → Save.
+Then `node scripts/asc-provision.mjs` again — it detects the empty array and
+re-mints those two profiles, and refuses (exit 2) with this instruction while
+the array is still empty.
+
 ### Owner steps before the next submission
 
-Nothing here is needed to keep developing; all of it is needed to SHIP.
-
-1. `node scripts/asc-provision.mjs` — it now registers the two new bundle ids
-   (with App Groups) if they are missing, and mints all four App Store
-   profiles. Note this DELETES and recreates the existing profiles by name,
-   which is normal and is the documented fix for capability changes.
+1. The App Groups portal step above.
 2. In App Store Connect the watch app rides along with the iPhone app — there
    is no separate submission — but the listing gains an **Apple Watch**
-   screenshot slot. Apple requires at least one 410×502 screenshot to show the
-   app on watch. There is no such screenshot in `app-store/` yet.
+   screenshot slot. `app-store/screenshots/watch-422x514/01-qr-alex-chen.png`
+   is a real capture from the Apple Watch Ultra 3 simulator (422×514 is the
+   Ultra slot; ASC scales it for the smaller watches). Its QR encodes the
+   reviewer persona's card URL and was grid-verified against the encoder.
 3. On device: iPhone Watch app → Available Apps → install SwiftCard, then add
    the "My SwiftCard" complication to a face.
 
@@ -249,17 +289,42 @@ xcrun simctl launch booted me.swiftcard.app.watchkitapp
 ```
 
 With no paired iPhone the app shows its empty state after a 3-second timeout.
-To see a real card, write one into the app's defaults first:
+
+### The real test: paired simulators (verified 2026-09-30)
+
+WatchConnectivity works between a paired iPhone and watch simulator, so the
+whole phone→watch path can be exercised without a device or a login:
 
 ```bash
-xcrun simctl spawn booted defaults write me.swiftcard.app.watchkitapp \
-  watch_card -string '{"url":"…","name":"…","company":"…","qrWidth":35,"qrBits":"…"}'
+PHONE=<iPhone 17 Pro udid>; WATCH=<Apple Watch Ultra 3 udid>   # simctl list devices
+xcrun simctl pair $WATCH $PHONE && xcrun simctl boot $PHONE && xcrun simctl boot $WATCH
+xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+  -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+  -derivedDataPath ios/build/sim build          # do NOT pass CODE_SIGNING_ALLOWED=NO:
+                                                # unsigned sim builds have no App Group
+APP=ios/build/sim/Build/Products/Debug-iphonesimulator/App.app
+xcrun simctl install $PHONE "$APP"              # the watch app rides along; if
+xcrun simctl install $WATCH "$APP/Watch/SwiftCardWatch.app"   # not, install it directly
+xcrun simctl launch $PHONE me.swiftcard.app; sleep 12   # let the web layer settle —
+   # signed out it hits /api/cards → 401 → clearCard(), which is the sign-out path
+G=$(xcrun simctl get_app_container $PHONE me.swiftcard.app groups | awk '{print $2}')
+xcrun simctl spawn $PHONE defaults write "$G/Library/Preferences/group.me.swiftcard.app" \
+  widget_card -string '{"url":"https://swiftcard.me/<slug>?source=widget","name":"…","company":"…"}'
+   # MUST go through `simctl spawn` — a host-side `defaults write` bypasses the
+   # simulator's cfprefsd and the app never sees it
+xcrun simctl launch $PHONE com.apple.Preferences; xcrun simctl launch $PHONE me.swiftcard.app
+   # background + foreground = sceneDidBecomeActive → publishCurrentCard()
+xcrun simctl io $WATCH screenshot watch.png
 ```
 
-`qrBits` comes from `WatchSessionBridge.qrMatrix`. The QR in a
-`xcrun simctl io booted screenshot` scans back to the card URL with any QR
-reader — that is the real check, because a mirrored or inverted grid still
-looks perfectly like a QR code.
+Confirm the publish carried the card in the phone log (`size: 346`, not `21`):
+`xcrun simctl spawn $PHONE log show --last 1m --predicate 'process == "App" AND
+eventMessage CONTAINS "updateApplicationContext:error:]_block_invoke size"'`.
+Verified this way: cold first launch → empty state; card arrives live while
+the watch app is running; card survives the phone app being killed (cache);
+deleting the slot + foregrounding the phone → 21-byte context → watch clears.
+Then compare the screenshot's grid with the encoder's output (see the
+row-flip note above) — do not stop at "it scans".
 
 ## 7. Build, run, verify
 

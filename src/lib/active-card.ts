@@ -23,3 +23,12 @@ export const ACTIVE_CARD_COOKIE = "sc_active_card";
 
 /** One year, matching how long the localStorage copy effectively persists. */
 export const ACTIVE_CARD_COOKIE_MAX_AGE = 31536000;
+
+/**
+ * Window event fired by CardSelectionPersist after the selection changes.
+ * NativeAppBridge listens for it and re-syncs the iOS home-screen widget and
+ * the Apple Watch, which otherwise only learn the active card on a full page
+ * load — a client-side card switch on the dashboard never remounted them, so
+ * the wrist kept showing the previous card until the app was relaunched.
+ */
+export const ACTIVE_CARD_EVENT = "swiftcard:active-card";
