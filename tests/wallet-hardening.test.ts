@@ -130,7 +130,7 @@ describe("in-app signup and first-card flow", () => {
     expect(code).not.toMatch(/<a |href=|window\.open|Browser\.open|router\.push/);
     // A shell that cannot leave the app renders NO Office card.
     expect(code).toMatch(/if \(!canLinkOut\) return null;/);
-    expect(code).toMatch(/setCanLinkOut\(canOfferExternalPurchase\(\)\)/);
+    expect(code).toMatch(/useState\(canOfferExternalPurchase\)/);
     // No price, no seat maths, no Stripe, no web checkout hand-off.
     expect(code).not.toMatch(/\$\d|PLAN_PRICES|formatUsd|formatCents|seatSubtotalCents|onPaid|stripe/i);
   });

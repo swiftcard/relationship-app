@@ -84,7 +84,7 @@ const STOREKIT = { status: "ready", monthly: "$4.99", annual: "$54.00", trial: t
 const annualPrice = (native: boolean) => (native ? STOREKIT.annual : `$${PLAN_PRICES.PRO_ANNUAL_CENTS / 100}`);
 const esc = (s: string) => s.replace(/[$.]/g, "\\$&");
 
-async function open(o: { width: number; native?: boolean; light?: boolean; trialEligible?: boolean }): Promise<Page> {
+async function open(o: { width: number; native?: boolean; light?: boolean; trialEligible?: boolean; offer?: object }): Promise<Page> {
   const ctx = await browser.newContext({ viewport: { width: o.width, height: 900 } });
   const page = await ctx.newPage();
   await page.route(`${ORIGIN}/api/**`, (r) => r.fulfill({ status: 200, contentType: "application/json", body: '{"eligible":true}' }));
@@ -93,7 +93,7 @@ async function open(o: { width: number; native?: boolean; light?: boolean; trial
     body: `<!doctype html><html${o.light ? ' data-sc-theme="light"' : ""}><head><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style></head>
            <body><div id="root"></div><script>${bundle}</script></body></html>`,
   }));
-  await page.addInitScript((offer) => { (window as unknown as { __offer: unknown }).__offer = offer; }, STOREKIT);
+  await page.addInitScript((offer) => { (window as unknown as { __offer: unknown }).__offer = offer; }, o.offer ?? STOREKIT);
   if (o.native) {
     // The shell: WKWebView's bridge, plus the ExternalPurchase plugin that
     // lets Office leave for the default browser.
@@ -211,6 +211,24 @@ for (const native of [false, true]) {
 }
 
 describe("what only the app does", () => {
+  it("nothing moves when StoreKit answers: the price keeps its space, the switch keeps its width", async () => {
+    // StoreKit still answering: no prices, no trial answer, no badge yet.
+    const loading = { status: "loading", monthly: null, annual: null, trial: null, annualPerMonth: null, annualSavePct: null };
+    const measure = (page: Page) => page.evaluate(() => {
+      const pro = [...document.querySelectorAll("div.rounded-\\[28px\\]")].find((d) => d.querySelector("p")?.textContent === "Pro")!;
+      const desc = [...pro.querySelectorAll("p")].find((p) => p.textContent === "Everything, unlimited.")!;
+      const toggle = document.querySelector('button[aria-label="Toggle annual billing"]')!.parentElement!;
+      return { descTop: desc.getBoundingClientRect().top - pro.getBoundingClientRect().top, toggleWidth: toggle.getBoundingClientRect().width };
+    });
+    const a = await open({ width: 390, native: true, offer: loading });
+    const b = await open({ width: 390, native: true });
+    try {
+      const [before, after] = [await measure(a), await measure(b)];
+      expect(Math.abs(before.descTop - after.descTop), "the Pro card's text jumped when the price arrived").toBeLessThan(1);
+      expect(Math.abs(before.toggleWidth - after.toggleWidth), "the switch changed width when the badge arrived").toBeLessThan(1);
+    } finally { await a.context().close(); await b.context().close(); }
+  });
+
   it("Office carries no price and leaves for swiftcard.me; no web price anywhere", async () => {
     const page = await open({ width: 390, native: true });
     try {

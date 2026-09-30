@@ -29,7 +29,7 @@ const tierClass = (offTab?: boolean) => (offTab ? "max-md:hidden" : "");
 
 /** Homepage checklist style: a white tick in a brand-gradient dot. On the Pro
  *  card (itself the gradient) the dot is translucent white instead. */
-export function PlanCheck({ pro }: { pro?: boolean }) {
+function PlanCheck({ pro }: { pro?: boolean }) {
   return (
     <span className="w-[18px] h-[18px] rounded-full flex items-center justify-center shrink-0 mt-px" style={{ background: pro ? "rgba(255,255,255,0.24)" : "var(--rd-aurora)" }}>
       <svg viewBox="0 0 20 20" className="w-3 h-3" fill="none" stroke="#ffffff" strokeWidth={2.6}>
@@ -40,7 +40,8 @@ export function PlanCheck({ pro }: { pro?: boolean }) {
 }
 
 // The buttons, by plan. Exported so a button rendered elsewhere (the app's
-// In-App Purchase button) wears exactly the same class.
+// In-App Purchase button, given PRO_CTA_CLASS by PlanCards) wears exactly the
+// same class.
 export const FREE_CTA_CLASS = "w-full text-center font-bold py-3.5 rounded-full text-sm bg-white hover:bg-slate-50 disabled:opacity-50 text-slate-900 border border-slate-300 transition-colors";
 export const PRO_CTA_CLASS = "w-full bg-white hover:bg-white/90 disabled:opacity-50 text-[#2450d8] font-bold py-3.5 rounded-full transition-colors text-sm shadow-lg";
 export const PRO_CTA_LINK_CLASS = "block w-full text-center bg-white hover:bg-white/90 text-[#2450d8] font-bold py-3.5 rounded-full transition-colors text-sm shadow-lg";
@@ -48,6 +49,9 @@ export const OFFICE_CTA_CLASS = "w-full font-bold py-3.5 px-3 rounded-full text-
 export const OFFICE_CTA_LINK_CLASS = "block w-full text-center font-bold py-3.5 px-3 rounded-full text-sm leading-tight bg-blue-600 hover:bg-blue-500 text-white transition-colors break-words";
 export const PRO_FINE_PRINT_CLASS = "text-white/70 text-[0.6875rem] text-center mt-2.5 leading-relaxed";
 export const OFFICE_FINE_PRINT_CLASS = "text-slate-500 text-[0.6875rem] text-center mt-2.5 leading-relaxed";
+
+/** What annual saves on the web (PLAN_PRICES: $54 vs 12 × $4.99). */
+const WEB_SAVE_BADGE = "SAVE 10%";
 
 /** The three cards' grid. md:pt-6 makes room for Pro sitting higher. */
 export const PLAN_GRID_CLASS = "grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch md:pt-6";
@@ -61,7 +65,8 @@ export const PLAN_GRID_CLASS = "grid grid-cols-1 md:grid-cols-3 gap-5 items-stre
 export function BillingToggle({
   annual,
   onToggle,
-  saveBadge = "SAVE 10%",
+  saveBadge = WEB_SAVE_BADGE,
+  badgePending = false,
   hideOnPhone = false,
   className = "",
   reveal = false,
@@ -71,6 +76,9 @@ export function BillingToggle({
   /** null hides the badge — the app shows it only once StoreKit's own
    *  prices say what annual saves. */
   saveBadge?: string | null;
+  /** The badge isn't known yet (StoreKit still answering): hold its width,
+   *  invisibly, so the switch doesn't widen and shift when it arrives. */
+  badgePending?: boolean;
   hideOnPhone?: boolean;
   className?: string;
   /** /pricing's scroll-in fade. Only pages that mount ScrollReveal may set
@@ -84,7 +92,7 @@ export function BillingToggle({
         <div className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200" style={{ transform: annual ? "translateX(22px)" : "translateX(2px)" }} />
       </button>
       <span className={`text-sm font-medium transition-colors ${annual ? "text-slate-900 font-bold" : "text-slate-600"}`}>
-        Annual{saveBadge && <> <span className="ml-1 text-[0.625rem] font-black text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded-full">{saveBadge}</span></>}
+        Annual{(saveBadge || badgePending) && <> <span className={`ml-1 text-[0.625rem] font-black text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded-full ${saveBadge ? "" : "invisible"}`}>{saveBadge || WEB_SAVE_BADGE}</span></>}
       </span>
     </div>
   );

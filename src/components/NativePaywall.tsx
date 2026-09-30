@@ -14,7 +14,6 @@ import {
 import { TRIAL_DAYS } from "@/lib/plan";
 import { useIapOffer } from "@/lib/use-iap-price";
 import { detectNativeApp } from "@/lib/platform";
-import { PRO_CTA_CLASS } from "@/components/PlanTierCards";
 
 // Short, countable unlocks for the sheet — no prices, no numbers that could
 // drift from StoreKit.
@@ -118,9 +117,11 @@ async function resolveStatus(): Promise<IapStatus> {
   return "ready";
 }
 
-/** Shared mount logic: resolves once, re-checks after a signed-out result. */
-function useIapStatus(): IapStatus {
-  const [status, setStatus] = useState<IapStatus>("unavailable");
+/** Shared mount logic: resolves once, re-checks after a signed-out result.
+ *  "pending" until then — every caller treats it as "not ready", and the
+ *  plan card's button holds its place with it instead of popping in. */
+function useIapStatus(): IapStatus | "pending" {
+  const [status, setStatus] = useState<IapStatus | "pending">("pending");
   useEffect(() => {
     let cancelled = false;
     if (!statusOnce) statusOnce = resolveStatus();
@@ -150,8 +151,10 @@ export default function IapSubscribeButton({
    *  Annual switch). The sheet opens with that product selected, so the
    *  person buys what the card they tapped said. Omitted: annual, as before. */
   period?: "monthly" | "annual";
-  /** "card": the plan cards' own white Pro button (PRO_CTA_CLASS), one line,
-   *  identical to the website's — instead of the compact aurora pill. */
+  /** "card": a plain one-line button wearing only the caller's className (the
+   *  plan cards pass PRO_CTA_CLASS, the website's Pro button) — instead of the
+   *  compact aurora pill. While the sign-in check is still running it is
+   *  drawn disabled, so the card never grows a button a moment late. */
   appearance?: "pill" | "card";
   /** Small second line under the label; pass "" to hide. Omitted, it names
    *  the free trial only when StoreKit confirms this Apple ID gets one — it
@@ -170,11 +173,12 @@ export default function IapSubscribeButton({
 }) {
   const status = useIapStatus();
   const [open, setOpen] = useState(false);
-  const { trial } = useIapOffer();
-  const line = sublabel ?? (trial === true ? `${TRIAL_DAYS}-day free trial` : "");
 
+  if (status === "pending" && appearance === "card") {
+    return <button type="button" disabled aria-busy="true" className={className}>{label}</button>;
+  }
   const needsAccount = status === "needs-account";
-  if (status === "unavailable" || (needsAccount && !onNeedsAccount)) return null;
+  if (status === "pending" || status === "unavailable" || (needsAccount && !onNeedsAccount)) return null;
 
   const onTap = () => (needsAccount ? onNeedsAccount!() : setOpen(true));
   const sheet = open && !needsAccount && <PaywallSheet onClose={() => setOpen(false)} onPurchased={onPurchased} period={period} />;
@@ -182,7 +186,7 @@ export default function IapSubscribeButton({
   if (appearance === "card") {
     return (
       <>
-        <button type="button" onClick={onTap} className={`${PRO_CTA_CLASS} ${className}`}>{label}</button>
+        <button type="button" onClick={onTap} className={className}>{label}</button>
         {sheet}
       </>
     );
@@ -201,12 +205,21 @@ export default function IapSubscribeButton({
         style={{ background: "var(--rd-aurora)", boxShadow: "0 8px 22px -10px rgba(37,99,235,0.85), inset 0 1px 0 rgba(255,255,255,0.28)" }}
       >
         <span className="relative z-[4]">{label}</span>
-        {line && <span className="relative z-[4] text-[0.625rem] font-semibold text-white/85">{line}</span>}
+        {sublabel === undefined ? <TrialLine /> : sublabel && <span className="relative z-[4] text-[0.625rem] font-semibold text-white/85">{sublabel}</span>}
         <span className="rd-glisten-sweep" aria-hidden="true" />
       </button>
       {sheet}
     </>
   );
+}
+
+/** The pill's default second line: the free trial, named only when StoreKit
+ *  confirms this Apple ID gets one. Its own component so the StoreKit read
+ *  runs only where the line is actually drawn. */
+function TrialLine() {
+  const { trial } = useIapOffer();
+  if (trial !== true) return null;
+  return <span className="relative z-[4] text-[0.625rem] font-semibold text-white/85">{TRIAL_DAYS}-day free trial</span>;
 }
 
 /**

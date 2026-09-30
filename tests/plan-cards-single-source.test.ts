@@ -74,7 +74,8 @@ describe("the iPhone app's plan step is the website's layout", () => {
   });
 
   it("the app's SAVE badge and per-month line come from StoreKit, never a typed number", () => {
-    expect(chooser).toMatch(/saveBadge=\{offer\.annualSavePct \? `SAVE \$\{offer\.annualSavePct\}%` : null\}/);
+    expect(chooser).toMatch(/\{\.\.\.appSaveBadge\(offer\)\}/);
+    expect(src).toMatch(/saveBadge: offer\.annualSavePct \? `SAVE \$\{offer\.annualSavePct\}%` : null, badgePending: offer\.status === "loading"/);
     const hook = code("src/lib/use-iap-price.ts");
     expect(hook).toMatch(/annual\.price \/ \(monthly\.price \* 12\)/);
     expect(hook).toMatch(/currency: annual\.currencyCode/);
@@ -84,6 +85,28 @@ describe("the iPhone app's plan step is the website's layout", () => {
   it("no Office card means no Office tab — never a tab open on nothing", () => {
     expect(chooser).toMatch(/const tier: PlanTier = !canLinkOut && mobileTier === "office" \? "pro" : mobileTier;/);
     expect(chooser).toMatch(/tiers=\{canLinkOut \? undefined : \["free", "pro"\]\}/);
+  });
+});
+
+describe("the app's purchase button", () => {
+  const paywall = code("src/components/NativePaywall.tsx");
+
+  it("does not pull the plan cards into every page that shows a Pro gate", () => {
+    // NativePaywall is reached from PlanGate on every editor and the homepage
+    // mini builders; the card's class comes in from PlanCards instead.
+    expect(paywall).not.toMatch(/PlanTierCards/);
+    expect(code("src/components/PlanCards.tsx")).toMatch(/appearance="card"\s+className=\{PRO_CTA_CLASS\}/);
+  });
+
+  it("holds its place while the sign-in check runs, instead of popping in", () => {
+    expect(paywall).toMatch(/useState<IapStatus \| "pending">\("pending"\)/);
+    expect(paywall).toMatch(/if \(status === "pending" && appearance === "card"\) \{\s*return <button type="button" disabled aria-busy="true"/);
+  });
+
+  it("reads StoreKit for the pill's trial line only where that line is drawn", () => {
+    const button = paywall.slice(paywall.indexOf("export default function IapSubscribeButton"), paywall.indexOf("function TrialLine"));
+    expect(button).not.toMatch(/useIapOffer\(/);
+    expect(paywall.slice(paywall.indexOf("function TrialLine"))).toMatch(/useIapOffer\(\)/);
   });
 });
 

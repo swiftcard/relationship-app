@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useIsNativeApp } from "@/lib/platform";
 import MobilePlanTabs, { type PlanTier } from "@/components/MobilePlanTabs";
 import { PLAN_LIMITS, TRIAL_DAYS } from "@/lib/plan";
@@ -198,7 +198,7 @@ function NativePlanChooser({
           annual={annual}
           onToggle={() => setAnnual(!annual)}
           hideOnPhone={tier === "free"}
-          saveBadge={offer.annualSavePct ? `SAVE ${offer.annualSavePct}%` : null}
+          {...appSaveBadge(offer)}
         />
       </div>
 
@@ -227,21 +227,29 @@ function NativePlanChooser({
   );
 }
 
+/** The app's SAVE badge: what annual saves by StoreKit's own prices, absent
+ *  when it saves nothing, and its space held while StoreKit is answering. */
+function appSaveBadge(offer: IapOffer) {
+  return { saveBadge: offer.annualSavePct ? `SAVE ${offer.annualSavePct}%` : null, badgePending: offer.status === "loading" };
+}
+
 /**
  * The app's Pro card on its own, with the Monthly / Annual switch — for
  * /upgrade, where the person is already on Free and Pro is the one thing to
  * buy. The same card as the plan step, so the app has one Pro design.
  */
-export function NativeProUpgrade({ trialEligible, onPurchased }: { trialEligible: boolean; onPurchased?: () => void }) {
+export function NativeProUpgrade({ trialEligible }: { trialEligible: boolean }) {
   const [annual, setAnnual] = useState(false);
   const offer = useIapOffer();
   return (
     <div>
       <div className="flex justify-center mb-8">
-        <BillingToggle annual={annual} onToggle={() => setAnnual(!annual)} saveBadge={offer.annualSavePct ? `SAVE ${offer.annualSavePct}%` : null} />
+        <BillingToggle annual={annual} onToggle={() => setAnnual(!annual)} {...appSaveBadge(offer)} />
       </div>
-      <div className="max-w-md mx-auto">
-        <NativePro annual={annual} offer={offer} trialEligible={trialEligible} onPurchased={onPurchased} />
+      {/* md:pt-6 absorbs the card's raised-Pro offset (md:-mt-6), as the
+          plan grids do — on an iPad it otherwise rides up into the switch. */}
+      <div className="max-w-md mx-auto md:pt-6">
+        <NativePro annual={annual} offer={offer} trialEligible={trialEligible} />
       </div>
     </div>
   );
@@ -293,9 +301,15 @@ function NativePro({
 
   const priceBlock =
     offer.status === "loading" ? (
-      <div aria-hidden="true">
-        <div className="h-[2.6rem] w-28 rounded-xl bg-white/20 animate-pulse" />
-        <div className="mt-2.5 h-4 w-48 rounded-md bg-white/15 animate-pulse" />
+      // Sized BY the real block (an invisible copy, no number in it), so the
+      // card does not move when StoreKit answers. Hand-sized bars came out
+      // 8px short. visibility:hidden keeps it out of the accessibility tree.
+      <div aria-hidden="true" className="relative">
+        <div className="invisible"><ProTrialPrice price="—" period={period} /></div>
+        <div className="absolute inset-0 flex flex-col justify-between py-0.5">
+          <div className="h-[2.4rem] w-28 rounded-xl bg-white/20 animate-pulse" />
+          <div className="h-4 w-48 rounded-md bg-white/15 animate-pulse" />
+        </div>
       </div>
     ) : !price ? null : offersTrial ? (
       <ProTrialPrice price={price} period={period} note={note} />
@@ -310,6 +324,7 @@ function NativePro({
     <ProPlanCard offTab={offTab} price={priceBlock}>
       <IapSubscribeButton
         appearance="card"
+        className={PRO_CTA_CLASS}
         period={annual ? "annual" : "monthly"}
         label={offersTrial ? `Try Pro free for ${TRIAL_DAYS} days →` : "Get Pro →"}
         onPurchased={onPurchased}
@@ -374,13 +389,12 @@ function NativeOffice({ disabled, onLeft, offTab }: { disabled: boolean; onLeft?
 }
 
 /** Whether this shell can open the default browser (Office's only way in).
- *  Read after mount: the plugin is window-only, so deciding during render
- *  would disagree with the server HTML. */
+ *  Read once, during the first render. That is safe only because every
+ *  caller sits behind PlanCards' `if (native)` — false on the server and on
+ *  the hydration render — so these components are never server-rendered
+ *  and there is no server HTML to disagree with. Reading it in an effect
+ *  instead drew one frame with no Office card and no Office tab. */
 function useCanLinkOut(): boolean {
-  const [canLinkOut, setCanLinkOut] = useState(false);
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- window-only value, hydration-safe by design
-    setCanLinkOut(canOfferExternalPurchase());
-  }, []);
+  const [canLinkOut] = useState(canOfferExternalPurchase);
   return canLinkOut;
 }
