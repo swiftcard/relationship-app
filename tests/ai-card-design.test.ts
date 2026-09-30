@@ -179,16 +179,52 @@ describe("Try another", () => {
   });
 });
 
-describe("the route has the same doors as Copy", () => {
+describe("the route's doors: paid, or a first card — Copy stays paid", () => {
   const route = readFileSync(join(process.cwd(), "src/app/api/design-generate/route.ts"), "utf8");
   const designer = readFileSync(join(process.cwd(), "src/components/CustomCardDesigner.tsx"), "utf8");
 
-  it("a session, the AI notice, a paid plan and a rate limit — before any model call", () => {
+  it("a paid account: the AI notice, a paid plan and a rate limit — before any model call", () => {
     const call = route.indexOf("aiComplete(");
-    for (const gate of ["auth.getUser()", "aiConsentBlock(user.id, request)", "isPaidPlan(profile?.plan)", "isRateLimited(`design-generate:${user.id}`"]) {
+    for (const gate of ["auth.getUser()", "aiConsentBlock(user.id, request)", "isPaidPlan(profile?.plan)", "isRateLimited(`design-generate:${user.id}`, 40"]) {
       const at = route.indexOf(gate);
       expect(at, gate).toBeGreaterThan(-1);
       expect(at, gate).toBeLessThan(call);
+    }
+  });
+
+  it("Free only while building the FIRST card — any card on the account and it is Pro-only", () => {
+    const call = route.indexOf("aiComplete(");
+    const count = route.indexOf('from("cards").select("*", { count: "exact", head: true }).eq("user_id", user.id)');
+    const refuse = route.indexOf('code: "AI_DESIGN_PRO_ONLY"');
+    expect(count).toBeGreaterThan(-1);
+    expect(refuse).toBeGreaterThan(count);
+    expect(route).toMatch(/if \(\(count \?\? 0\) > 0\) \{/);
+    expect(refuse).toBeLessThan(call);
+    // A decline is refused; a Free first card has its own, tighter limit.
+    expect(route.indexOf('if (consent === "declined") return aiConsentDeclinedResponse();')).toBeLessThan(call);
+    expect(route.indexOf("isRateLimited(`design-generate:${user.id}`, 20")).toBeLessThan(call);
+  });
+
+  it("a visitor with no account yet: rate-limited per IP before any model call", () => {
+    const call = route.indexOf("aiComplete(");
+    const ip = route.indexOf("isRateLimited(`design-generate:ip:${clientIp(request)}`, 15");
+    expect(ip).toBeGreaterThan(-1);
+    expect(ip).toBeLessThan(call);
+  });
+
+  it("nobody the app hasn't asked about AI reaches the model — the engine answers alone", () => {
+    expect(route).toMatch(/useModel = !isShellRequest\(request\);/);
+    expect(route).toMatch(/useModel = consent === "permit";/);
+    const engine = route.indexOf("if (!useModel) return NextResponse.json({ layout: buildDesign(fallbackSpec(brief, avoid), ctx, brief) });");
+    expect(engine).toBeGreaterThan(-1);
+    expect(engine).toBeLessThan(route.indexOf("aiComplete("));
+  });
+
+  it("Copy's routes are untouched: still a session and a paid plan", () => {
+    for (const f of ["src/app/api/design-transfer/route.ts", "src/app/api/scan-design/route.ts"]) {
+      const src = readFileSync(join(process.cwd(), f), "utf8");
+      expect(src, f).toContain("isPaidPlan(");
+      expect(src, f).not.toContain("clientIp(");
     }
   });
 
@@ -198,8 +234,11 @@ describe("the route has the same doors as Copy", () => {
     expect(route).toContain("designPrompt(brief, ctx, avoid)");
   });
 
-  it("the designer shows it on the same terms as Copy: PRO-tagged and inert without a paid session", () => {
-    expect(designer).toContain('onClick={() => { if (canScan) { setAiError(null); setAiOpen(true); } }}');
-    expect(designer).toContain('disabled={aiBusy || scanning || !canScan}');
+  it("the designer gates it on its own door — PRO-tagged and inert when closed; Copy keeps canScan", () => {
+    expect(designer).toContain('onClick={() => { if (canAiDesign) { setAiError(null); setAiOpen(true); } }}');
+    expect(designer).toContain('disabled={aiBusy || scanning || !canAiDesign}');
+    // Every other caller still gates the two together.
+    expect(designer).toContain("canAiDesign = canScan,");
+    expect(designer).toContain("onClick={() => { if (canScan) fileRef.current?.click(); }}");
   });
 });

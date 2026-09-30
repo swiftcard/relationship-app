@@ -22,6 +22,7 @@ const Wizard = NewCardWizard as ComponentType<{
   trialEligible?: boolean;
   referralGift?: boolean;
   tourOnDone?: boolean;
+  firstCardAiDesign?: boolean;
   appUrl?: string;
   walletEnabled?: boolean;
   org?: OrgManaged | null;
@@ -130,6 +131,12 @@ export default async function NewCardPage({
   // live!" screen sent them to a dashboard with no tour. Kept separate so the
   // design gate stays Free-only.
   const tourOnDone = !!user && authedAdd && !authedPlan && cardCount === 0;
+  // Custom design → AI design opens while someone builds their FIRST card:
+  // a signed-out visitor, or a signed-in account with no card yet (owner,
+  // 2026-09-30). /api/design-generate applies the same rule server-side. An
+  // account that already has a card — e.g. a returning Free user going through
+  // Get Started — keeps the row locked.
+  const firstCardAiDesign = !isPro && (!user || cardCount === 0);
 
   // Office SUB-USER adding a card to their account: the company half of the
   // card (nickname, company, logo, website, office phone, fax, address) is
@@ -207,6 +214,7 @@ export default async function NewCardPage({
         trialEligible={trialEligible}
         referralGift={referralGift}
         tourOnDone={tourOnDone}
+        firstCardAiDesign={firstCardAiDesign}
         appUrl={process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me"}
         walletEnabled={hasWalletConfig()}
         org={org}

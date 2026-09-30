@@ -169,7 +169,7 @@ function linkStyleOf(l: CardLink) {
   return { k: linkKeyOf(l), size: l.size, rowStyle: l.rowStyle, glass: l.glass, media: l.media };
 }
 
-export default function NewCardWizard({ isPro, guest = false, isFirstCard = false, trialEligible = true, referralGift = false, tourOnDone = false, org = null, linkedinEnabled = false, draftOwner = null }: {
+export default function NewCardWizard({ isPro, guest = false, isFirstCard = false, trialEligible = true, referralGift = false, tourOnDone = false, firstCardAiDesign = false, org = null, linkedinEnabled = false, draftOwner = null }: {
   isPro: boolean;
   /** A friend's free month is waiting (server-resolved): offered in the plan gate. */
   referralGift?: boolean;
@@ -183,6 +183,9 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
   /** This is the account's first card (any plan) — hand off to the dashboard
    *  with the guided tour. Distinct from isFirstCard, the Free design gate. */
   tourOnDone?: boolean;
+  /** No card on the account yet (or no account yet): Custom design opens for
+   *  AI design while this first card is built. Copy stays paid-only. */
+  firstCardAiDesign?: boolean;
   /** Absolute origin for the share link/QR — passed in so a preview deploy
    *  shares its own URL rather than hardcoding production. */
   appUrl?: string;
@@ -317,14 +320,16 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
   // to be the one case left locked: isFirstCard is false for a plan entry, so
   // the Pro look was greyed out in the builder they were about to pay for.
   const designUnlocked = isPro || guest || isFirstCard || (!!presetPlan && !postCheckout);
-  // …but Custom design is NOT part of that preview, for anyone. It opens only
-  // for an account that pays — Pro or Office (owner, 2026-09-18: "The only
-  // time someone can ever access custom design is in the actual dashboard if
-  // they pay for the Pro or Office plan"). Everyone else — a guest in Get
-  // Started, a Free account's first card — sees the row, locked, with its
-  // small PRO tag. (Before this, a guest had no row at all and a Free first
-  // card could open the designer as a preview.)
-  const customDesignAvailable = isPro;
+  // Custom design is part of that preview for AI DESIGN only (owner,
+  // 2026-09-30: "When someone creates a card we want to give them the option to
+  // do AI design so we should unlock Custom Design"). "Copy a card or template
+  // you like" stays paid — it is the expensive call — so inside the designer it
+  // shows its PRO tag and stays locked (canScan={isPro} below). Only a real
+  // first card counts: an account that already has one keeps the row locked
+  // (firstCardAiDesign, resolved by the page; the route checks the same).
+  // Choosing Free at the end turns the design into Classic Pro, exactly like
+  // every other Pro design choice in the preview (FreeDesignChoice).
+  const customDesignAvailable = isPro || (designUnlocked && firstCardAiDesign);
   const showAuthedFirstCardGate = !guest && isFirstCard && !isPro && !presetPlan;
 
   // Step 1 — card details. Managed fields start (and stay) on the org's values;
@@ -2195,10 +2200,11 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                   the inline preview rather than sitting above a second copy. */}
               {customSelected && customDesignAvailable ? (
                 <div>
-                  {/* canScan={isPro}, NOT designUnlocked: the designer is shown
-                      to guests and Free first-card users as a preview, but
-                      /api/scan-design needs a session and a paid plan. */}
-                  <CustomCardDesigner layout={customLayout} data={previewData} onChange={setCustomLayout} canScan={isPro} undo={cardHistory} />
+                  {/* canScan={isPro}: Copy (/api/design-transfer, /api/scan-design)
+                      needs a session and a paid plan. AI design opens with the
+                      designer itself — /api/design-generate lets a first card
+                      through. */}
+                  <CustomCardDesigner layout={customLayout} data={previewData} onChange={setCustomLayout} canScan={isPro} canAiDesign={customDesignAvailable} undo={cardHistory} />
                 </div>
               ) : null}
 

@@ -132,12 +132,23 @@ describe("every social box asks for the same thing", () => {
 // but I want it to be locked. The only time someone can ever access custom
 // design is in the actual dashboard if they pay for the Pro or Office plan."
 // So: the row is everywhere, and it opens only for Pro and Office.
-describe("Custom design is shown everywhere and opens only for Pro and Office", () => {
+//
+// Owner, 2026-09-30, once AI design existed: "When someone creates a card we
+// want to give them the option to do AI design so we should unlock Custom
+// Design … 'Copy a recorder template' stays locked but AI design will work."
+// So a FIRST card opens the row too — for AI design only; Copy stays paid.
+describe("Custom design is shown everywhere; open for Pro and Office, and for AI design on a first card", () => {
   const src = read(WIZARD);
   const picker = read("src/components/card-templates/TemplatePicker.tsx");
+  const page = read("src/app/cards/new/page.tsx");
 
-  it("the builder opens it only for a paying account — not a guest, not a Free first card", () => {
-    expect(src).toMatch(/const customDesignAvailable = isPro;/);
+  it("the builder opens it for a paying account, and for a first card's AI design", () => {
+    expect(src).toMatch(/const customDesignAvailable = isPro \|\| \(designUnlocked && firstCardAiDesign\);/);
+    // Only a REAL first card: no account yet, or an account with no card.
+    expect(page).toMatch(/const firstCardAiDesign = !isPro && \(!user \|\| cardCount === 0\);/);
+    expect(page).toMatch(/firstCardAiDesign=\{firstCardAiDesign\}/);
+    // Copy stays paid; AI design opens with the designer.
+    expect(src).toMatch(/canScan=\{isPro\} canAiDesign=\{customDesignAvailable\}/);
     expect(src).toMatch(/customUnlocked=\{customDesignAvailable\}/);
     // The canvas, docked preview and step-2 canvas mode all read the same flag.
     expect(src).toMatch(/customSelected && customDesignAvailable \?/);

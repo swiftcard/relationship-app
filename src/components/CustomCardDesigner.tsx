@@ -47,6 +47,10 @@ export default function CustomCardDesigner({
   // caller says whether they are actually available and the buttons teach
   // rather than break.
   canScan = true,
+  // AI design has its own door (owner, 2026-09-30): it also opens while
+  // someone builds their FIRST card, where Copy stays paid-only. Defaults to
+  // canScan, so every other caller gates the two together as before.
+  canAiDesign = canScan,
   teamBrand = false,
   undo: tabUndo,
 }: {
@@ -54,6 +58,7 @@ export default function CustomCardDesigner({
   data: CardData;
   onChange: (layout: CustomLayout) => void;
   canScan?: boolean;
+  canAiDesign?: boolean;
   /**
    * Designing the look a WHOLE TEAM inherits (Office Branding). A photo then
    * copies only the LAYOUT, as an editable design each member's card fills with
@@ -419,25 +424,26 @@ export default function CustomCardDesigner({
 
         {/* AI design — the second way in (owner, 2026-09-23). Dressed exactly
             like Copy above, so the two read as a pair: same frame, glow and
-            shine, same gating and PRO tag when it isn't available. */}
+            shine, and the PRO tag when it isn't available. Its own gate
+            (canAiDesign): a first card gets AI design with Copy locked. */}
         <div className="relative">
-          {canScan && !aiBusy && (
+          {canAiDesign && !aiBusy && (
             <div className="sc-magic-halo absolute -inset-1 rounded-2xl bg-gradient-to-r from-violet-600/40 via-fuchsia-500/35 to-blue-600/40 blur-md pointer-events-none" aria-hidden="true" />
           )}
-          <div className={`relative rounded-xl p-[1.5px] ${canScan ? "sc-magic-frame" : "bg-gray-800"}`}>
+          <div className={`relative rounded-xl p-[1.5px] ${canAiDesign ? "sc-magic-frame" : "bg-gray-800"}`}>
             <button
               type="button"
-              onClick={() => { if (canScan) { setAiError(null); setAiOpen(true); } }}
-              disabled={aiBusy || scanning || !canScan}
+              onClick={() => { if (canAiDesign) { setAiError(null); setAiOpen(true); } }}
+              disabled={aiBusy || scanning || !canAiDesign}
               className={`relative overflow-hidden w-full rounded-[10.5px] px-3.5 py-3.5 text-left transition-colors ${
-                canScan ? "bg-gray-950 hover:bg-gray-900 disabled:opacity-70" : "bg-gray-950/90 cursor-default"
+                canAiDesign ? "bg-gray-950 hover:bg-gray-900 disabled:opacity-70" : "bg-gray-950/90 cursor-default"
               }`}
             >
-              {canScan && !aiBusy && (
+              {canAiDesign && !aiBusy && (
                 <span className="sc-magic-shine pointer-events-none absolute top-0 bottom-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/[0.07] to-transparent" aria-hidden="true" />
               )}
               <span className="flex items-center gap-3">
-                <span className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${canScan ? "bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-[0_0_14px_rgba(168,85,247,0.45)]" : "bg-gray-800 text-gray-500"}`}>
+                <span className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${canAiDesign ? "bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white shadow-[0_0_14px_rgba(168,85,247,0.45)]" : "bg-gray-800 text-gray-500"}`}>
                   {aiBusy ? (
                     <span className="block w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
                   ) : (
@@ -447,19 +453,19 @@ export default function CustomCardDesigner({
                   )}
                 </span>
                 <span className="min-w-0">
-                  <span className={`block text-[0.84375rem] font-semibold ${canScan ? "text-white" : "text-gray-400"}`}>
+                  <span className={`block text-[0.84375rem] font-semibold ${canAiDesign ? "text-white" : "text-gray-400"}`}>
                     {aiBusy ? "Designing your card…" : "AI design"}
-                    {canScan && !aiBusy && (
+                    {canAiDesign && !aiBusy && (
                       <span className="ml-1.5 text-[0.5625rem] font-bold px-1.5 py-0.5 rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white align-middle tracking-wide">✨ NEW</span>
                     )}
-                    {!canScan && (
+                    {!canAiDesign && (
                       <span className="ml-1.5 text-[0.5625rem] font-bold px-1.5 py-0.5 rounded-full bg-blue-600 text-white align-middle">PRO</span>
                     )}
                   </span>
                   <span className="block text-[0.6875rem] text-gray-400 leading-snug mt-0.5">
                     {teamBrand
                       ? "Pick colours and a theme — AI designs the team's card, and every teammate's card fills it with their own details."
-                      : canScan
+                      : canAiDesign
                       ? "Pick your colours, a theme, and whether your headshot and logo go on it — AI designs your card. Then move, resize and restyle anything."
                       : "On Pro, pick your colours and a theme and AI designs your card for you."}
                   </span>
@@ -470,7 +476,7 @@ export default function CustomCardDesigner({
         </div>
 
         {/* Another from the same choices, or change them. */}
-        {brief && canScan && (
+        {brief && canAiDesign && (
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -641,7 +647,10 @@ export default function CustomCardDesigner({
             <p className="text-[0.75rem] text-gray-400 leading-snug">
               {norm.faceImage && !teamBrand
                 ? "Your card is the exact design you approved. Remove it above to go back to your own design, or use AI design for a new one."
-                : "Use AI design or copy a card you like — then tap anything on your card to move it, resize it or change its font and colour."}
+                : canScan
+                ? "Use AI design or copy a card you like — then tap anything on your card to move it, resize it or change its font and colour."
+                // Copy is locked here (a first card) — never point at it.
+                : "Use AI design — then tap anything on your card to move it, resize it or change its font and colour."}
             </p>
           </div>
         </>
