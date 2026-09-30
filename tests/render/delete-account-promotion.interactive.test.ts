@@ -144,7 +144,7 @@ describe("Free: 30 days of Pro on us, the last thing before DELETE", () => {
           const text = await modal(page).innerText();
           expect(text).toMatch(/Pro · on us/i);
           for (const b of ["Unlimited cards and links", "Every contact unlocked", "The AI card scanner"]) expect(text).toContain(b);
-          expect(text).toMatch(/No card needed\. Nothing to cancel\. Ends on its own on [A-Z][a-z]{2} \d{1,2}\./);
+          expect(text).toMatch(/No card needed\. Nothing to cancel\. Ends on its own on [A-Z][a-z]+ \d{1,2}\./);
           expect(text).toMatch(/Normally \$\d+\.\d{2}\/month/);
           // The end date is read as one thing — never "Oct" / "30" on two lines.
           const dateLines = await modal(page).locator("span.whitespace-nowrap").evaluate((s) =>

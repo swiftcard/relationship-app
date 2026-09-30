@@ -106,6 +106,15 @@ export async function GET() {
     return NextResponse.json(base);
   }
 
+  // Has this PERSON already had the 50% offer, on any account? Started now so
+  // it runs alongside the Stripe call below rather than after it; skipped when
+  // the account flag already answers it. Never rejects (the ledger fails open).
+  const discountTaken: Promise<boolean> = base.retentionUsed
+    ? Promise.resolve(true)
+    : getAccountEmail(subjectId, (profile.email as string | null) ?? null)
+        .then((email) => retentionDiscountTakenBy(email, (profile.payment_fingerprint as string | null) ?? null))
+        .catch(() => true);
+
   // Pull the live subscription so period-end / cancel-scheduled / seats are exact.
   try {
     const sub = (await getStripe().subscriptions.retrieve(profile.stripe_subscription_id)) as Stripe.Subscription;
@@ -119,13 +128,7 @@ export async function GET() {
     base.trialEnd = stripeTrialEndIso(sub);
     // …and this PERSON has never taken it, on any account (the route checks
     // the same ledger — showing an offer it would refuse is a broken promise).
-    base.discountOfferable =
-      !base.retentionUsed &&
-      discountRefusalFor(sub) === null &&
-      !(await retentionDiscountTakenBy(
-        await getAccountEmail(subjectId, (profile.email as string | null) ?? null),
-        (profile.payment_fingerprint as string | null) ?? null,
-      ));
+    base.discountOfferable = discountRefusalFor(sub) === null && !(await discountTaken);
     base.cancelAtPeriodEnd = sub.cancel_at_period_end === true;
     base.currentPeriodEnd = periodEndUnix ? new Date(periodEndUnix * 1000).toISOString() : null;
     base.seats = mapped?.plan === "office" ? (item?.quantity ?? null) : null;

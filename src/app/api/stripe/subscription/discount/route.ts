@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import type Stripe from "stripe";
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { getStripe } from "@/lib/stripe";
@@ -83,21 +82,18 @@ export async function POST() {
   }
 
   // Once per PERSON: the account flag above is gone after a purge; the email
-  // and card ledger is not (lib/retention-discount).
-  const accountEmail = await getAccountEmail(subjectId, (profile.email as string | null) ?? null);
+  // and card ledger is not (lib/retention-discount). And only where the coupon
+  // does what the offer says — active, monthly, and not replacing a discount
+  // they already have (Stripe replaces the whole array). Both asked at once.
   const fingerprint = (profile.payment_fingerprint as string | null) ?? null;
+  const stripe = getStripe();
+  const [accountEmail, sub] = await Promise.all([
+    getAccountEmail(subjectId, (profile.email as string | null) ?? null),
+    stripe.subscriptions.retrieve(profile.stripe_subscription_id as string).catch(() => null),
+  ]);
+  if (!sub) return NextResponse.json({ error: "Couldn't reach billing. Please try again." }, { status: 502 });
   if (await retentionDiscountTakenBy(accountEmail, fingerprint)) {
     return NextResponse.json({ error: "This offer has already been used." }, { status: 409 });
-  }
-
-  // Only where the coupon does what the offer says — active, monthly, and not
-  // replacing a discount they already have (Stripe replaces the whole array).
-  const stripe = getStripe();
-  let sub: Stripe.Subscription;
-  try {
-    sub = await stripe.subscriptions.retrieve(profile.stripe_subscription_id as string);
-  } catch {
-    return NextResponse.json({ error: "Couldn't reach billing. Please try again." }, { status: 502 });
   }
   const refusal = discountRefusalFor(sub);
   if (refusal) return NextResponse.json({ error: discountRefusalMessage(refusal) }, { status: 409 });

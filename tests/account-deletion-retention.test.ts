@@ -7,6 +7,7 @@ import {
   RETENTION_DISCOUNT_MONTHS,
   RETENTION_DISCOUNT_PERCENT,
   RETENTION_GRANT_DAYS,
+  dayLabel,
   giftEndLabel,
   keepStep,
   lossLines,
@@ -132,8 +133,11 @@ describe("the offers are real, plan-specific, and different from each other", ()
 
   it("the gift's end date label is the day the days run out", () => {
     const now = Date.parse("2026-09-30T12:00:00Z");
-    expect(giftEndLabel(30, now)).toBe("Oct 30");
-    expect(giftEndLabel(16, now)).toBe("Oct 16");
+    expect(giftEndLabel(30, now)).toBe("October 30");
+    expect(giftEndLabel(16, now)).toBe("October 16");
+    // One format for every date in the flow, and nothing for a non-date.
+    expect(dayLabel("2026-10-30T12:00:00Z")).toBe("October 30");
+    expect(dayLabel("not a date")).toBe("");
   });
 
   it("an Apple subscriber is told deleting does not stop their renewal", () => {
@@ -355,6 +359,21 @@ describe("the dialog wires the sequence up", () => {
     expect(ui).toMatch(/\{ready \? stepLabel : ""\}/);
     // Bounded — a hung request can never hold deletion hostage.
     expect(ui).toMatch(/ctrl\.abort\(\), 6000/);
+    // The password check and the offers load side by side, not one after the other.
+    expect(ui).toMatch(/await Promise\.all\(\[/);
+    // A close-and-reopen can't receive the first opening's answer, and
+    // nothing from the last opening is offered again.
+    expect(ui).toMatch(/const seq = \+\+openSeq\.current/);
+    expect(ui).toMatch(/setElig\(\{ grant: false, discount: false, downgrade: false \}\)/);
+  });
+
+  it("asks Stripe once per action, and only when it could change the answer", () => {
+    const api = read("src/app/api/account/retention/route.ts");
+    // GET: never for Free/Apple/Office/used/trialling, and in parallel.
+    expect(api).toMatch(/const discountWorthChecking =/);
+    expect(api).toMatch(/await Promise\.all\(\[\s*trialFactsFor/);
+    // POST: the discount route makes the checks — no second Stripe call here.
+    expect(api).toMatch(/discountOk: action === "discount" \? true : null/);
   });
 
   const ui = read("src/components/ManageAccount.tsx");

@@ -325,9 +325,12 @@ export default function CheckoutClient({ trialEligible = true, officeCoversPro =
         {!preview && plan === "pro" && (
           <p className="text-gray-500 text-[0.6875rem] mt-3 leading-relaxed">
             {/* On the delete-flow gift: the session trials to the gift's own
-                end (api/stripe/checkout), so nothing is charged today. */}
+                end (api/stripe/checkout), so nothing is charged today. The
+                date waits for the quote check (client-only): formatted on the
+                server it would be the server's time zone, and a different day
+                for an evening reader would be a hydration mismatch. */}
             {giftUntil
-              ? `Your free Pro carries on — nothing is charged today. Then ${formatUsd(subtotalCents)}/${per} from ${new Date(giftUntil).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}, unless you cancel before then. Card required.`
+              ? `Your free Pro carries on — nothing is charged today. Then ${formatUsd(subtotalCents)}/${per} ${previewLoading ? "when it ends" : `from ${new Date(giftUntil).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`}, unless you cancel before then. Card required.`
               : trial
                 ? `First-time subscribers start with a ${TRIAL_DAYS}-day free trial. Card required — billing begins automatically after the trial unless you cancel.`
                 : "Billing starts today and renews automatically until you cancel."}

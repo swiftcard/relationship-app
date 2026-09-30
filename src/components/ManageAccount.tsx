@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useIsNativeApp } from "@/lib/platform";
 import { createBrowserClient } from "@supabase/ssr";
 import DownloadLink from "@/components/DownloadLink";
@@ -8,6 +8,7 @@ import { releaseDevice } from "@/lib/device-sign-out";
 import {
   reasonsFor,
   reasonById,
+  dayLabel,
   giftEndLabel,
   offerStep,
   keepStep,
@@ -36,12 +37,6 @@ import {
 // and no step can trap someone. Apple 3.1.1: inside the shell there are no
 // prices, no checkout and no links out — the copy for that comes from
 // retention.ts, which is handed `native`.
-/** "October 30" — the day the gift ends, from the date the server wrote. */
-function formatGiftEnd(iso: string): string {
-  const t = Date.parse(iso);
-  return Number.isFinite(t) ? new Date(t).toLocaleDateString("en-US", { month: "long", day: "numeric" }) : "";
-}
-
 export default function ManageAccount({ isPro, plan = "free", email = "", isOfficeOwner = false }: { isPro: boolean; plan?: string; email?: string; isOfficeOwner?: boolean }) {
   const native = useIsNativeApp();
   const [expanded, setExpanded] = useState(false);
@@ -69,6 +64,9 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
   // answer, so the sequence doesn't start counting until it is known — a fast
   // click-through used to skip the promotion and turn "of 5" into "of 6".
   const [ready, setReady] = useState(false);
+  // Which opening of the dialog is current: a close-and-reopen must not let
+  // the first opening's late answer land in the second.
+  const openSeq = useRef(0);
 
   const retPlan: RetentionPlan = isPro || plan !== "free" ? "pro" : "free";
   // Free accounts get a QUIETER entry point (owner order 2026-09-14): the panel
@@ -103,32 +101,50 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
     setSaved(null);
     setSavedUntil(null);
     setReady(false);
+    // Nothing carried over from the last opening: an offer taken then must not
+    // be shown again if this opening's answer never arrives.
+    setElig({ grant: false, discount: false, downgrade: false });
+    setSource(null);
+    setFacts(null);
     setModal(true);
-    // Reauthentication is only possible when the account has a password
-    // identity — a Google-only account has nothing to re-enter.
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const hasPassword = !!user?.identities?.some((i) => i.provider === "email");
-      setNeedsPassword(hasPassword);
-    } catch {
-      setNeedsPassword(false);
-    }
-    // Offers and numbers. A failure here is silent on purpose: the sequence
-    // still runs, just without offers it can't prove the account qualifies for.
-    // Bounded, so a hung request can never hold deletion hostage (5.1.1(v)).
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 6000);
-    try {
-      const res = await fetch("/api/account/retention", { signal: ctrl.signal });
-      if (res.ok) {
-        const d = await res.json();
-        setElig(d.eligibility);
-        setSource(d.source ?? null);
-        setFacts({ ...d.facts, isOfficeOwner });
-      }
-    } catch { /* offers stay off */ }
-    clearTimeout(timer);
-    setReady(true);
+    const seq = ++openSeq.current;
+    const current = () => seq === openSeq.current;
+    // The two look-ups are independent, so they run side by side — the
+    // dialog is usable after the slower of the two, not the sum of both.
+    await Promise.all([
+      // Reauthentication is only possible when the account has a password
+      // identity — a Google-only account has nothing to re-enter.
+      (async () => {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (current()) setNeedsPassword(!!user?.identities?.some((i) => i.provider === "email"));
+        } catch {
+          if (current()) setNeedsPassword(false);
+        }
+      })(),
+      // Offers and numbers. A failure here is silent on purpose: the sequence
+      // still runs, just without offers it can't prove the account qualifies
+      // for. Bounded, so a hung request can never hold deletion hostage (5.1.1(v)).
+      (async () => {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 6000);
+        try {
+          const res = await fetch("/api/account/retention", { signal: ctrl.signal });
+          if (res.ok) {
+            const d = await res.json();
+            if (!current()) return;
+            setElig(d.eligibility);
+            setSource(d.source ?? null);
+            setFacts({ ...d.facts, isOfficeOwner });
+          }
+        } catch {
+          /* offers stay off */
+        } finally {
+          clearTimeout(timer);
+        }
+      })(),
+    ]);
+    if (current()) setReady(true);
   }
 
   function goNext(from: StepId) {
@@ -138,7 +154,7 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
   }
 
   // Step 1 → 2. The reason is the one thing we insist on, and it is recorded
-  // immediately: someone who takes an offer at step 3 and stays has still told
+  // immediately: someone who takes the promotion and stays has still told
   // us why they nearly left, which is the most valuable answer in here.
   function continueFromWhy() {
     if (!ready) return;
@@ -287,7 +303,7 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
             {saved ? (
               <>
                 <p className="text-white font-bold text-base mb-2">
-                  {saved === "grant" && (savedUntil ? `Pro is on until ${formatGiftEnd(savedUntil)}` : "Pro is on — enjoy it")}
+                  {saved === "grant" && (savedUntil ? `Pro is on until ${dayLabel(savedUntil)}` : "Pro is on — enjoy it")}
                   {saved === "discount" && "Discount applied"}
                   {saved === "downgrade" && "Pro is cancelled — nothing was deleted"}
                   {saved === "quiet" && "We'll stop emailing you"}
@@ -296,7 +312,7 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
                   {saved === "grant" && "Your account is on Pro now, free, and it ends on its own — there's nothing to cancel. Your card, your link and your contacts are exactly where you left them."}
                   {/* Web only (3.1.1): subscribing is a purchase. The checkout
                       bills from the day the gift ends, so saying so is true. */}
-                  {saved === "grant" && !native && savedUntil && ` Want to keep Pro after that? Subscribe any time — you won't be charged until ${formatGiftEnd(savedUntil)}.`}
+                  {saved === "grant" && !native && savedUntil && ` Want to keep Pro after that? Subscribe any time — you won't be charged until ${dayLabel(savedUntil)}.`}
                   {saved === "discount" && "It comes off your next invoices automatically. Nothing else changes — same account, same card, same everything."}
                   {saved === "downgrade" && "You won't be charged again. Pro stays on until the end of the period you've paid for, then you move to Free and choose which card stays live. Every contact you've collected stays here. Changed your mind? Keep Subscription is in Settings → Plan and billing."}
                   {saved === "quiet" && "Every SwiftCard email to you is off. Your card, your link and your contacts are untouched — come back whenever you want."}

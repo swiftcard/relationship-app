@@ -22,8 +22,8 @@
 // every step after the first carries a plain "Continue" that advances toward
 // deletion, no step can be answered wrongly into a dead end, and the offers are
 // declined by pressing Continue — never by hunting for a hidden link. The
-// promotion (step 5) is SKIPPED, not merely skippable, when the account isn't eligible for
-// what they offer (a second deletion attempt, an Apple-billed subscription, a
+// promotion (step 5) is SKIPPED, not merely skippable, when the account isn't
+// eligible for it (a second deletion attempt, an Apple-billed subscription, a
 // grant already taken), so nobody is walked through an offer we cannot honour.
 //
 // APPLE 3.1.1. Inside the shell we may not sell, link out to a purchase, or
@@ -225,9 +225,20 @@ export type OfferCopy = {
 
 const DAY_MS = 86_400_000;
 
-/** The date a gift accepted now would end on, e.g. "Oct 30". */
+/**
+ * "October 30" — how every date in this flow is written, so the promotion,
+ * the confirmation and the keep step never disagree. Client-rendered only
+ * (the dialog opens on a tap), so the reader's own time zone is the one used.
+ * Empty for anything that isn't a date.
+ */
+export function dayLabel(when: string | number): string {
+  const t = typeof when === "number" ? when : Date.parse(when);
+  return Number.isFinite(t) ? new Date(t).toLocaleDateString("en-US", { month: "long", day: "numeric" }) : "";
+}
+
+/** The day a gift accepted now would end on. */
 export function giftEndLabel(days: number, nowMs: number = Date.now()): string {
-  return new Date(nowMs + days * DAY_MS).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return dayLabel(nowMs + days * DAY_MS);
 }
 
 /**
@@ -301,10 +312,8 @@ export function keepStep(plan: RetentionPlan, elig: Eligibility, source: PlanSou
   // Free Pro with nothing behind it: there is no charge to stop and nothing to
   // cancel — "your subscription can be cancelled" was untrue for these accounts.
   if (source === "grant") {
-    const t = proEndsAt ? Date.parse(proEndsAt) : NaN;
-    const when = Number.isFinite(t)
-      ? `On ${new Date(t).toLocaleDateString("en-US", { month: "long", day: "numeric" })}`
-      : "When it ends";
+    const day = proEndsAt ? dayLabel(proEndsAt) : "";
+    const when = day ? `On ${day}` : "When it ends";
     return {
       title: "Your free Pro ends on its own",
       body: `${when} your account moves back to Free by itself — nothing is charged and nothing is deleted. You don't need to delete your account to stop anything.`,

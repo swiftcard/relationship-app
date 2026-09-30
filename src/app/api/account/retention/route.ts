@@ -152,9 +152,8 @@ function eligibilityOf(opts: {
 }
 
 // The 50% offer against the live subscription (active, monthly, no discount
-// already on it) and the person (never taken on any account). Asked only for an
-// individual Stripe Pro, so Free, Apple and Office never cost a Stripe call.
-// Any failure is "no offer" — never an offer we then can't apply.
+// already on it) and the person (never taken on any account). Any failure is
+// "no offer" — never an offer we then can't apply.
 async function discountOkFor(subId: string, email: string | null | undefined, fingerprint: string | null): Promise<boolean> {
   try {
     const sub = await getStripe().subscriptions.retrieve(subId);
@@ -183,20 +182,31 @@ export async function GET() {
   const subId = (profile.stripe_subscription_id as string | null) ?? null;
   const planExpiresAt = (profile.plan_expires_at as string | null) ?? null;
   const source = sourceOf(profile.plan as string | null, cust, subId, planExpiresAt);
+  const rec = retentionOf(cust);
+  // Stripe is asked only when nothing free has already ruled the 50% out (an
+  // individual Stripe Pro, never discounted, not trialling) — so Free, Apple,
+  // Office and repeat visits never cost a Stripe call — and alongside the trial
+  // look-up rather than after it.
+  const discountWorthChecking =
+    profile.plan === "pro" && source === "stripe" && !!subId &&
+    !rec.discountedAt && cust._retentionUsed !== true && typeof cust[TRIAL_ENDS_KEY] !== "string";
+  const [trialFacts, discountOk] = await Promise.all([
+    trialFactsFor(user.id, user.email, cust),
+    discountWorthChecking
+      ? discountOkFor(subId as string, user.email, (profile.payment_fingerprint as string | null) ?? null)
+      : null,
+  ]);
   const elig = eligibilityOf({
     plan,
     rawPlan: (profile.plan as string | null) ?? null,
     source,
-    rec: retentionOf(cust),
+    rec,
     planExpiresAt,
     subId,
     retentionUsed: cust._retentionUsed,
-    ...(await trialFactsFor(user.id, user.email, cust)),
+    ...trialFacts,
     accountCreatedAt: user.created_at ?? null,
-    discountOk:
-      profile.plan === "pro" && source === "stripe" && subId
-        ? await discountOkFor(subId, user.email, (profile.payment_fingerprint as string | null) ?? null)
-        : null,
+    discountOk,
   });
 
   // Their own numbers for the "what you lose" step. Counted with head:true so
@@ -243,7 +253,7 @@ export async function POST(req: NextRequest) {
   const admin = getAdminSupabase();
   const { data: profile } = await admin
     .from("profiles")
-    .select("plan, plan_expires_at, stripe_subscription_id, payment_fingerprint, pro_trial_started_at, customization")
+    .select("plan, plan_expires_at, stripe_subscription_id, pro_trial_started_at, customization")
     .eq("id", user.id)
     .maybeSingle();
   if (!profile) return NextResponse.json({ error: "No account" }, { status: 404 });
@@ -264,12 +274,10 @@ export async function POST(req: NextRequest) {
     retentionUsed: cust._retentionUsed,
     ...(await trialFactsFor(user.id, user.email, cust)),
     accountCreatedAt: user.created_at ?? null,
-    // Only the discount action needs the Stripe look-up; the discount route
-    // repeats every one of these checks before it touches the subscription.
-    discountOk:
-      action === "discount" && profile.plan === "pro" && source === "stripe" && subId
-        ? await discountOkFor(subId, user.email, (profile.payment_fingerprint as string | null) ?? null)
-        : null,
+    // The subscription and once-per-person checks belong to the discount route,
+    // which makes them itself right before applying the coupon — asking Stripe
+    // here as well would only double the wait on "Apply 50% off".
+    discountOk: action === "discount" ? true : null,
   });
 
   // The reason they gave at step 1-2, so an alert carries WHY, not just WHAT.
