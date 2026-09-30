@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import { APP_STORE_URL } from "@/lib/app-store";
 import { useIsNativeApp } from "@/lib/platform";
-import AppStoreBadge, { AppleGlyph } from "@/components/AppStoreBadge";
+import AppStoreBadge, { AppleGlyph, GooglePlayBadge } from "@/components/AppStoreBadge";
 
 export default function AppStorePopup({ trigger }: { trigger: boolean }) {
   const [open, setOpen] = useState(false);
@@ -51,8 +51,9 @@ export default function AppStorePopup({ trigger }: { trigger: boolean }) {
         {/* The shared badge — the header's look, white words on dark glass,
             with its shine (owner, 2026-09-18). It used to be a hand-made white
             pill, the one App Store button on the site that looked different. */}
-        <div className="flex justify-center mb-2.5">
+        <div className="flex flex-wrap justify-center gap-2.5 mb-2.5">
           <AppStoreBadge onClick={close} />
+          <GooglePlayBadge />
         </div>
         <button onClick={close} className="w-full text-gray-500 hover:text-gray-300 text-sm py-2 transition-colors">
           Continue on the web

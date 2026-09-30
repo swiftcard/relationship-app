@@ -38,6 +38,7 @@ export default function SiteFooterMini({ extra = [] }: { extra?: Extra[] }) {
           {extra.map((l) => (
             <Link key={l.href} href={l.href} className="py-1 hover:text-slate-900 transition-colors">{l.label}</Link>
           ))}
+          <Link href="/about" className="py-1 hover:text-slate-900 transition-colors">About</Link>
           <Link href="/contact" className="py-1 hover:text-slate-900 transition-colors">Contact Us</Link>
           <Link href="/privacy" className="py-1 hover:text-slate-900 transition-colors">Privacy</Link>
           <Link href="/terms" className="py-1 hover:text-slate-900 transition-colors">Terms</Link>

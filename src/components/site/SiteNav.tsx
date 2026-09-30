@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { SwiftCardIcon } from "@/components/SwiftCardLogo";
-import AppStoreBadge from "@/components/AppStoreBadge";
+import AppStoreBadge, { GooglePlayBadge } from "@/components/AppStoreBadge";
 import { trackCta } from "@/lib/events";
 import { useIsNativeApp } from "@/lib/platform";
 import { resetMarketingSketch } from "@/lib/guest-reset";
@@ -202,6 +202,7 @@ export default function SiteNav() {
                 inside 64px. Ahead of Log in, behind Get started free — signing
                 up keeps the last and strongest slot. */}
             <AppStoreBadge size="sm" />
+            <GooglePlayBadge size="sm" />
             <Link href="/login" className="px-3.5 py-2 text-[0.875rem] font-medium text-white/75 hover:text-white transition-colors">Log in</Link>
             <Link href="/cards/new" className="rd-btn rd-btn-primary text-[0.875rem] px-4 py-2">Get started free</Link>
           </div>

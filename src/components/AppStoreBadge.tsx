@@ -1,4 +1,4 @@
-import { APP_STORE_URL } from "@/lib/app-store";
+import { APP_STORE_URL, PLAY_STORE_URL } from "@/lib/app-store";
 import NativeHidden from "@/components/NativeHidden";
 
 // ── The one "Download on the App Store" badge ────────────────────────────────
@@ -98,6 +98,48 @@ export default function AppStoreBadge({
   );
 }
 
+/** Google Play's four-colour play mark, sized like AppleGlyph. */
+function PlayGlyph({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={`${className ?? ""} shrink-0`}>
+      <path fill="#00D7FE" d="M3.6 1.8c-.3.3-.4.8-.4 1.4v17.6c0 .6.1 1.1.4 1.4l.1.1L13.5 12.5v-.2L3.7 1.7z" />
+      <path fill="#FFCE00" d="M16.8 15.8l-3.3-3.3v-.2l3.3-3.3.1.1 3.9 2.2c1.1.6 1.1 1.7 0 2.3l-3.9 2.2z" />
+      <path fill="#FF3A44" d="M16.9 15.7l-3.4-3.3L3.6 22.3c.4.4 1 .4 1.7.1l11.6-6.7" />
+      <path fill="#00F076" d="M16.9 9.1L5.3 2.5c-.7-.4-1.3-.3-1.7.1l9.9 9.9z" />
+    </svg>
+  );
+}
+
+/**
+ * "Get it on Google Play" — the App Store badge's twin: same sizes, same dark
+ * pill (.sc-appstore-badge), so the pair reads as one row wherever both sit.
+ * Renders nothing until PLAY_STORE_URL is set (lib/app-store.ts), and never
+ * inside the iOS shell: an Android download button in an iPhone app is noise
+ * at best and an App Review 2.3.10 flag at worst.
+ */
+export function GooglePlayBadge({ size = "sm", className = "" }: { size?: Size; className?: string }) {
+  if (!PLAY_STORE_URL) return null;
+  const s = SIZES[size];
+  return (
+    <NativeHidden>
+      <a
+        href={PLAY_STORE_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Get it on Google Play"
+        className={`sc-appstore-badge relative overflow-hidden inline-flex items-center ${s.gap} ${s.radius} ${s.pad} transition-colors ${className}`}
+      >
+        <PlayGlyph className={s.glyph} />
+        <span className="leading-tight">
+          <span className={`sc-asb-top block uppercase ${s.top}`}>Get it on{" "}</span>
+          <span className={`sc-asb-main block font-semibold ${s.main} tracking-tight`}>Google&nbsp;Play</span>
+        </span>
+        <span className="rd-appstore-shine" aria-hidden="true" />
+      </a>
+    </NativeHidden>
+  );
+}
+
 /**
  * The "you just made a card — now get the app" block.
  *
@@ -116,19 +158,20 @@ export default function AppStoreBadge({
  * NativeHidden because inside the app itself this is nonsense.
  */
 export function GetTheAppCard({ className = "" }: { className?: string }) {
-  if (!APP_STORE_URL) return null;
+  if (!APP_STORE_URL && !PLAY_STORE_URL) return null;
   return (
     <NativeHidden>
       <div className={`rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-center ${className}`}>
-        <p className="text-sm font-semibold text-gray-100">Get SwiftCard on iPhone</p>
+        <p className="text-sm font-semibold text-gray-100">{PLAY_STORE_URL ? "Get the SwiftCard app" : "Get SwiftCard on iPhone"}</p>
         <p className="mx-auto mt-1.5 max-w-xs text-xs leading-relaxed text-gray-400">
           Share your card with a tap, keep it in Apple Wallet, and see who viewed it — right from your phone.
         </p>
-        <div className="mt-3.5 flex justify-center">
+        <div className="mt-3.5 flex flex-wrap justify-center gap-2.5">
           {/* The header's badge, like every other one. Its colours are fixed
               (globals.css .sc-appstore-badge), so it reads on this card's
               light AND dark screens (/welcome, the builder). */}
           <AppStoreBadge />
+          <GooglePlayBadge />
         </div>
       </div>
     </NativeHidden>

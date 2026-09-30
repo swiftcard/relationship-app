@@ -95,3 +95,15 @@ export function appStoreEmailBlock(lead: string): string {
       </a>
     </div>`;
 }
+
+// ── Google Play ─────────────────────────────────────────────────────────────
+// Same self-activating contract as APP_STORE_URL: null until
+// NEXT_PUBLIC_PLAY_STORE_URL is set, and every Google Play badge renders
+// nothing while it is null. There is no Android project in this repo and no
+// Play listing to point at yet, so the badge ships dark rather than as a dead
+// link. Only a real listing URL is accepted
+// (https://play.google.com/store/apps/details?id=<package>); anything else is
+// ignored instead of being baked into a button.
+export const PLAY_STORE_URL: string | null =
+  process.env.NEXT_PUBLIC_PLAY_STORE_URL?.trim().match(/^https:\/\/play\.google\.com\/store\/apps\/details\?id=[\w.]+.*$/)?.[0] ??
+  null;

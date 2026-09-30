@@ -202,7 +202,7 @@ composed from it. A listing refresh means steps 1–3 in order, on a machine tha
 has the service-role key.
 
 ## Version
-- 1.0.5, build 15. "What's New": `Links to SwiftCards and Swift Links now
+- 1.0.5, build 16. "What's New": `Links to SwiftCards and Swift Links now
   always open in your web browser, never inside the app.` (The app no longer
   carries the Associated Domains entitlement — `ios/App/App/App.entitlements`
   and `AppRelease.entitlements` — so iOS never offers it a swiftcard.me link.

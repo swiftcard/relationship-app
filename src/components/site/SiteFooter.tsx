@@ -2,7 +2,7 @@ import Link from "next/link";
 import { SwiftCardIcon } from "@/components/SwiftCardLogo";
 import SalesChat from "@/components/site/SalesChat";
 import NativeHidden from "@/components/NativeHidden";
-import AppStoreBadge from "@/components/AppStoreBadge";
+import AppStoreBadge, { GooglePlayBadge } from "@/components/AppStoreBadge";
 import RateUsLink from "@/components/RateUsLink";
 
 // Marketing footer — real routes only, no invented content.
@@ -49,6 +49,7 @@ const COLS: { title: string; links: { label: string; href: string }[] }[] = [
       { label: "Preview", href: "/preview" },
       { label: "Templates", href: "/templates" },
       { label: "Why SwiftCard", href: "/testimonials" },
+      { label: "About", href: "/about" },
       { label: "Company", href: "/company" },
       { label: "Press", href: "/press" },
       { label: "Contact Us", href: "/contact" },
@@ -102,6 +103,7 @@ export default function SiteFooter({ light = false }: { light?: boolean }) {
                 see it, and the whole footer is already hidden in the shell. */}
             <div className="mt-4 flex flex-wrap items-center gap-2.5">
               <AppStoreBadge size="sm" />
+              <GooglePlayBadge size="sm" />
               {/* A second button beside the badge, not a grey line under it
                   (owner, 2026-09-22: "it should be easier to find"). Same
                   radius and height as the sm badge so the pair reads as one

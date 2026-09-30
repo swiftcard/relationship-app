@@ -7,7 +7,7 @@ import HeroClaim from "@/components/site/HeroClaim";
 import HeroShareWord from "@/components/site/HeroShareWord";
 import { ShareScene, SaveScene, LeadScene } from "@/components/site/HowItWorksScenes";
 import HomeCardPhone from "@/components/site/HomeCardPhone";
-import AppStoreBadge from "@/components/AppStoreBadge";
+import AppStoreBadge, { GooglePlayBadge } from "@/components/AppStoreBadge";
 import HeroShowcase from "@/components/site/HeroShowcase";
 import SiteFooter from "@/components/site/SiteFooter";
 import ScrollReveal from "@/components/ScrollReveal";
@@ -184,6 +184,7 @@ export default function Home() {
                   </span>
                 </Link>
                 <AppStoreBadge size="lg" className="lg:hidden" />
+                <GooglePlayBadge size="lg" className="lg:hidden" />
                 <div className="hp-ring">
                   <HeroClaim />
                 </div>

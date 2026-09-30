@@ -617,7 +617,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = NHK8FA2RR2;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
@@ -645,7 +645,7 @@
 				CODE_SIGN_ENTITLEMENTS = App/AppRelease.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = NHK8FA2RR2;
 				PROVISIONING_PROFILE_SPECIFIER = "SwiftCard App Store";
 				INFOPLIST_FILE = App/Info.plist;
@@ -668,7 +668,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = SwiftCardWidget/SwiftCardWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = NHK8FA2RR2;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SwiftCardWidget/Info.plist;
@@ -698,7 +698,7 @@
 				CODE_SIGN_ENTITLEMENTS = SwiftCardWidget/SwiftCardWidget.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = NHK8FA2RR2;
 				PROVISIONING_PROFILE_SPECIFIER = "SwiftCard Widget App Store";
 				GENERATE_INFOPLIST_FILE = NO;
@@ -725,7 +725,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = SwiftCardWatch/SwiftCardWatch.entitlements;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = NHK8FA2RR2;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SwiftCardWatch/Info.plist;
@@ -755,7 +755,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = SwiftCardWatch/SwiftCardWatch.entitlements;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = NHK8FA2RR2;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SwiftCardWatch/Info.plist;
@@ -783,7 +783,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = SwiftCardWatchWidget/SwiftCardWatchWidget.entitlements;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = NHK8FA2RR2;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SwiftCardWatchWidget/Info.plist;
@@ -812,7 +812,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = SwiftCardWatchWidget/SwiftCardWatchWidget.entitlements;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEVELOPMENT_TEAM = NHK8FA2RR2;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SwiftCardWatchWidget/Info.plist;

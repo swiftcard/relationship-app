@@ -17,9 +17,9 @@ import EnablePushButton from "@/components/EnablePushButton";
 import HelpWidget from "@/components/HelpWidget";
 import TakeTourButton from "@/components/TakeTourButton";
 import NativeHidden from "@/components/NativeHidden";
-import { APP_STORE_URL, APP_STORE_WRITE_REVIEW_URL } from "@/lib/app-store";
+import { APP_STORE_URL, APP_STORE_WRITE_REVIEW_URL, PLAY_STORE_URL } from "@/lib/app-store";
 import RateUsLink from "@/components/RateUsLink";
-import AppStoreBadge from "@/components/AppStoreBadge";
+import AppStoreBadge, { GooglePlayBadge } from "@/components/AppStoreBadge";
 import { SwiftCardIcon } from "@/components/SwiftCardLogo";
 import DashboardLink from "@/components/DashboardLink";
 import GrowLinkButton from "@/components/GrowLinkButton";
@@ -422,16 +422,19 @@ export default async function FlowSettingsPage({
               review), for EVERY plan including office sub-users — a durable
               home for "get the app" once the popup/banner moments have
               passed. Web only: inside the shell they already have the app. */}
-          {APP_STORE_URL && (
+          {(APP_STORE_URL || PLAY_STORE_URL) && (
             <NativeHidden>
               <div className="bg-gray-900 border border-gray-800 rounded-2xl px-5 py-4 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-white text-sm font-semibold">Get the iPhone app</p>
+                  <p className="text-white text-sm font-semibold">{PLAY_STORE_URL ? "Get the app" : "Get the iPhone app"}</p>
                   <p className="text-gray-500 text-xs mt-0.5">Your card, QR code and new contacts — right in your pocket.</p>
                 </div>
                 {/* The shared badge — the header's look (owner, 2026-09-18),
                     not the blue "App Store" chip that stood here. */}
-                <AppStoreBadge className="shrink-0" />
+                <div className="flex flex-wrap items-center justify-end gap-2.5 shrink-0">
+                  <AppStoreBadge />
+                  <GooglePlayBadge />
+                </div>
               </div>
             </NativeHidden>
           )}
