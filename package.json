@@ -19,6 +19,7 @@
     "ios:sync": "cap sync ios",
     "ios:sim": "bash scripts/ios-sim.sh",
     "ios:release": "bash scripts/ios-release.sh",
+    "android:release": "bash scripts/android-release.sh",
     "ios:screenshots": "bash scripts/ios-screenshots.sh",
     "android:sync": "cap sync android",
     "android:sim": "bash scripts/android-sim.sh"
