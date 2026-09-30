@@ -489,6 +489,80 @@ export default function LoginForm({
       </div>
       )}
 
+      {/* WEB: Google Identity Services (ID-token flow) — keeps the raw
+          *.supabase.co domain out of Google's account chooser. NATIVE: the
+          Capacitor iOS shell keeps its existing OAuth-redirect flow untouched.
+          `native` is false on the server and first client render, so web always
+          gets the GIS button with no hydration mismatch; native flips to the
+          old button after mount (and GoogleSignInButton is a hard no-op in
+          native regardless). */}
+      {/* ⚠️ On native, Google is gated on APPLE_SIGNIN_ENABLED too. Guideline
+          4.8 is about the *combination*: offering a third-party social login
+          in-app obliges an equivalent private option. Hiding only the Apple
+          button when the provider breaks would leave Google standing alone —
+          turning a kill switch meant to prevent a 2.1 into a guaranteed 4.8 on
+          the next submission. With both hidden, native falls back to
+          email/password, which owes Apple nothing. Web is unaffected. */}
+      {native ? (
+        APPLE_SIGNIN_ENABLED && (
+          <button
+            type="button"
+            onClick={handleGoogle}
+            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-900 font-semibold py-3 px-6 rounded-full transition-colors text-sm"
+          >
+            <svg viewBox="0 0 24 24" className="w-5 h-5" xmlns="http://www.w3.org/2000/svg">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            Continue with Google
+          </button>
+        )
+      ) : (
+        <GoogleSignInButton redirectTo={redirectTo} oneTap intent={mode} loginHint={lockedEmail} />
+      )}
+
+      {/* Sign in with Apple — in the app (Apple requires it alongside other
+          social logins in-app) AND on the website (2026-09-22): an account
+          made in the app with Apple has no password, so without it the web —
+          where Office is bought — was a locked door for it.
+
+          Also gated on APPLE_SIGNIN_ENABLED. This used to render on platform
+          alone, while the Supabase Apple provider was not enabled on the
+          project — so every tap failed with an error toast, next to a Google
+          button that worked. A permanently dead sign-in control is an App
+          Review 2.1 rejection on its own, and Apple's own 4.8 rule is about
+          OFFERING Sign in with Apple, which a button that cannot sign anyone
+          in does not do.
+
+          Same shape as the Wallet/APNs gates: inert until configured. Enable
+          the provider in Supabase, then set NEXT_PUBLIC_APPLE_SIGNIN_ENABLED=1
+          in Vercel and REDEPLOY — env changes only take effect on a new build.
+          Until then, hidden beats broken. */}
+      {APPLE_SIGNIN_ENABLED && (
+        <button
+          type="button"
+          onClick={handleApple}
+          className="w-full flex items-center justify-center gap-3 bg-black hover:bg-gray-900 text-white font-semibold py-3 px-6 rounded-full transition-colors text-sm mt-3"
+        >
+          <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor" aria-hidden="true">
+            <path d="M16.365 1.43c0 1.14-.42 2.2-1.13 3-.77.88-2.02 1.56-3.06 1.48-.13-1.1.42-2.28 1.09-3.02.76-.86 2.09-1.48 3.1-1.46zM20.5 17.2c-.55 1.27-.81 1.84-1.52 2.96-.99 1.57-2.39 3.52-4.12 3.53-1.54.01-1.94-1-4.03-.99-2.09.01-2.53 1.01-4.07.99-1.73-.02-3.05-1.78-4.04-3.35C-.02 16.9-.34 12.03 1.35 9.5c1.19-1.8 3.07-2.85 4.83-2.85 1.8 0 2.93 1.01 4.42 1.01 1.44 0 2.32-1.01 4.4-1.01 1.57 0 3.23.86 4.42 2.34-3.88 2.13-3.25 7.67 1.08 9.21z" />
+          </svg>
+          Continue with Apple
+        </button>
+      )}
+
+      {/* Only when a one-tap button is actually above it — native with the
+          Apple kill switch off shows neither, and a lone "or" heading the
+          form would read as a rendering glitch. */}
+      {(!native || APPLE_SIGNIN_ENABLED) && (
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-[#E4DDD4]" />
+          <span className="text-slate-600 text-xs">or</span>
+          <div className="flex-1 h-px bg-[#E4DDD4]" />
+        </div>
+      )}
 
       {/* method="post" is the pre-hydration backstop, not decoration.
           handleSubmit calls preventDefault, so once React has attached itself
@@ -679,80 +753,6 @@ export default function LoginForm({
           </p>
         )}
       </form>
-
-
-
-      <div className="flex items-center gap-3">
-        <div className="flex-1 h-px bg-[#E4DDD4]" />
-        <span className="text-slate-600 text-xs">or</span>
-        <div className="flex-1 h-px bg-[#E4DDD4]" />
-      </div>
-
-      {/* WEB: Google Identity Services (ID-token flow) — keeps the raw
-          *.supabase.co domain out of Google's account chooser. NATIVE: the
-          Capacitor iOS shell keeps its existing OAuth-redirect flow untouched.
-          `native` is false on the server and first client render, so web always
-          gets the GIS button with no hydration mismatch; native flips to the
-          old button after mount (and GoogleSignInButton is a hard no-op in
-          native regardless). */}
-      {/* ⚠️ On native, Google is gated on APPLE_SIGNIN_ENABLED too. Guideline
-          4.8 is about the *combination*: offering a third-party social login
-          in-app obliges an equivalent private option. Hiding only the Apple
-          button when the provider breaks would leave Google standing alone —
-          turning a kill switch meant to prevent a 2.1 into a guaranteed 4.8 on
-          the next submission. With both hidden, native falls back to
-          email/password, which owes Apple nothing. Web is unaffected. */}
-      {native ? (
-        APPLE_SIGNIN_ENABLED && (
-          <button
-            type="button"
-            onClick={handleGoogle}
-            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-900 font-semibold py-3 px-6 rounded-full transition-colors text-sm"
-          >
-            <svg viewBox="0 0 24 24" className="w-5 h-5" xmlns="http://www.w3.org/2000/svg">
-              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-            </svg>
-            Continue with Google
-          </button>
-        )
-      ) : (
-        <GoogleSignInButton redirectTo={redirectTo} oneTap intent={mode} loginHint={lockedEmail} />
-      )}
-
-      {/* Sign in with Apple — in the app (Apple requires it alongside other
-          social logins in-app) AND on the website (2026-09-22): an account
-          made in the app with Apple has no password, so without it the web —
-          where Office is bought — was a locked door for it.
-
-          Also gated on APPLE_SIGNIN_ENABLED. This used to render on platform
-          alone, while the Supabase Apple provider was not enabled on the
-          project — so every tap failed with an error toast, next to a Google
-          button that worked. A permanently dead sign-in control is an App
-          Review 2.1 rejection on its own, and Apple's own 4.8 rule is about
-          OFFERING Sign in with Apple, which a button that cannot sign anyone
-          in does not do.
-
-          Same shape as the Wallet/APNs gates: inert until configured. Enable
-          the provider in Supabase, then set NEXT_PUBLIC_APPLE_SIGNIN_ENABLED=1
-          in Vercel and REDEPLOY — env changes only take effect on a new build.
-          Until then, hidden beats broken. */}
-      {APPLE_SIGNIN_ENABLED && (
-        <button
-          type="button"
-          onClick={handleApple}
-          className="w-full flex items-center justify-center gap-3 bg-black hover:bg-gray-900 text-white font-semibold py-3 px-6 rounded-full transition-colors text-sm mt-3"
-        >
-          <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor" aria-hidden="true">
-            <path d="M16.365 1.43c0 1.14-.42 2.2-1.13 3-.77.88-2.02 1.56-3.06 1.48-.13-1.1.42-2.28 1.09-3.02.76-.86 2.09-1.48 3.1-1.46zM20.5 17.2c-.55 1.27-.81 1.84-1.52 2.96-.99 1.57-2.39 3.52-4.12 3.53-1.54.01-1.94-1-4.03-.99-2.09.01-2.53 1.01-4.07.99-1.73-.02-3.05-1.78-4.04-3.35C-.02 16.9-.34 12.03 1.35 9.5c1.19-1.8 3.07-2.85 4.83-2.85 1.8 0 2.93 1.01 4.42 1.01 1.44 0 2.32-1.01 4.4-1.01 1.57 0 3.23.86 4.42 2.34-3.88 2.13-3.25 7.67 1.08 9.21z" />
-          </svg>
-          Continue with Apple
-        </button>
-      )}
-
-
     </div>
   );
 }
