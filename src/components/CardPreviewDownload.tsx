@@ -145,10 +145,9 @@ export default function CardPreviewDownload({ data, template, username, previewU
           Without previewUrl (no live card link yet) the download simply stays
           at every width rather than leaving an empty slot.
 
-          The phone's "Tap your card to show it full screen" hint is NOT here:
-          it sits in the dashboard's "Your Card" heading row, right-aligned
-          (owner, 2026-09-29), so on a phone nothing follows the card and the
-          box ends at the card with no empty band underneath. */}
+          On a phone nothing follows the card, so the box ends at the card
+          with no empty band underneath. There is no "tap to show it full
+          screen" hint anywhere (owner, 2026-09-30) — the tour teaches it. */}
       <div className={previewUrl ? "hidden lg:block mt-3" : "mt-3"}>
         <DownloadCardButton cardRef={cardRef} filename={filename} compact shareUrl={previewUrl} />
       </div>
