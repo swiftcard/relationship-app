@@ -428,7 +428,7 @@ export default function Home() {
               <div className="mt-6 flex items-start gap-3 rounded-2xl border border-slate-200 bg-[#F5F7FB] p-4 max-w-[440px]">
                 <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="#2563EB" strokeWidth={1.8}><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" strokeLinecap="round" /></svg>
                 <p className="text-slate-500 text-[0.84375rem] leading-relaxed">
-                  <span className="font-semibold text-slate-800">On the roadmap.</span>{" "}Today you can add your card to Apple Wallet and reach it from your Watch. A dedicated native watchOS app is in development — we&apos;ll only ship it once it&apos;s fully approved by Apple.
+                  <span className="font-semibold text-slate-800">Available now.</span>{" "}The native SwiftCard app for Apple Watch shows your QR code full screen, one tap from your watch face. It comes free with the iPhone app.
                 </p>
               </div>
             </div>
