@@ -1,7 +1,18 @@
+import { PLAY_STORE_URL } from "@/lib/app-store";
 import { defineDocs } from "../types";
 
 // The public site: what a visitor can reach without an account, and the honest
 // answers to the questions visitors actually ask before signing up.
+
+// The Android answer flips with the same switch that lights the Google Play
+// badges (NEXT_PUBLIC_PLAY_STORE_URL), so the assistant can never promise an
+// app nobody can download, nor deny one that is live.
+const ANDROID_ANSWER = PLAY_STORE_URL
+  ? " The Android app is live on Google Play too (search \"SwiftCard: Business Card\"), and nobody needs an app to receive your card either way."
+  : " There's no Android app yet — Android users just use the browser, and nobody needs an app to receive your card either way.";
+const ANDROID_DETAIL = PLAY_STORE_URL
+  ? ` The Android app is on Google Play at ${PLAY_STORE_URL}, published by Swift Card Inc.; the site shows a Get it on Google Play badge beside the App Store one.`
+  : " If an Android user asks: no Play Store app and no date to promise — the browser is the answer there.";
 
 export const marketingDocs = defineDocs([
   {
@@ -92,9 +103,9 @@ export const marketingDocs = defineDocs([
       "is there an app", "mobile app", "play store",
     ],
     answer:
-      "Yes — the iPhone app is live on the App Store. There's a Download on the App Store button in the site footer on every page, with a \"Rate us on the App Store\" link beside it, and on a computer there's a download button in the header next to Log in. The short link swiftcard.me/review also goes straight to the App Store review screen (best opened on an iPhone, iPad or Mac; on other computers it opens the App Store web page). It's free to download, and everything also still works in the browser on any phone. There's no Android app yet — Android users just use the browser, and nobody needs an app to receive your card either way.",
+      "Yes — the iPhone app is live on the App Store. There's a Download on the App Store button in the site footer on every page, with a \"Rate us on the App Store\" link beside it, and on a computer there's a download button in the header next to Log in. The short link swiftcard.me/review also goes straight to the App Store review screen (best opened on an iPhone, iPad or Mac; on other computers it opens the App Store web page). It's free to download, and everything also still works in the browser on any phone." + ANDROID_ANSWER,
     detail:
-      "The listing is https://apps.apple.com/app/id6798875872, published by Swift Card Inc. Point people at a badge rather than reading the URL aloud: the site header carries one on a computer (just left of Log in — it isn't in the phone header, where there's no room), the footer has one on every page (that's the one to point a phone user at), and you're offered the app again on the \"Your card is live!\" screen right after you create a card. On a phone the homepage also shows one right beside \"See how it works\" (on a computer that spot has none — the header badge covers it). Signed in on the web, there's one more in Settings → \"Help and referrals\" (just \"Help\" on an Office account), in the \"Get the iPhone app\" row. Every one of these is the same dark button with white \"Download on the App Store\" lettering. The app needs iOS 15 or later. If an Android user asks: no Play Store app and no date to promise — the browser is the answer there.",
+      "The listing is https://apps.apple.com/app/id6798875872, published by Swift Card Inc. Point people at a badge rather than reading the URL aloud: the site header carries one on a computer (just left of Log in — it isn't in the phone header, where there's no room), the footer has one on every page (that's the one to point a phone user at), and you're offered the app again on the \"Your card is live!\" screen right after you create a card. On a phone the homepage also shows one right beside \"See how it works\" (on a computer that spot has none — the header badge covers it). Signed in on the web, there's one more in Settings → \"Help and referrals\" (just \"Help\" on an Office account), in the \"Get the iPhone app\" row. Every one of these is the same dark button with white \"Download on the App Store\" lettering. The app needs iOS 15 or later." + ANDROID_DETAIL,
   },
   {
     id: "privacy-and-data",
