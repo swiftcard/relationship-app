@@ -32,7 +32,7 @@ launch image as the iPhone app.
 
 ## Store listing
 
-**App name** (30): `SwiftCard: Digital Business Card`
+**App name** (30): `SwiftCard: Business Card` (same as the App Store; "SwiftCard: Digital Business Card" is 32 and Play refuses it)
 
 **Short description** (80):
 ```
