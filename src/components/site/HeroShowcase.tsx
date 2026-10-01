@@ -10,7 +10,7 @@ import LocalBusiness from "@/components/card-templates/LocalBusiness";
 import LuxuryMinimal from "@/components/card-templates/LuxuryMinimal";
 import LogoFirst from "@/components/card-templates/LogoFirst";
 import type { CardData } from "@/components/card-templates/types";
-import { getLook, hexAlpha, fallbackTile, type SwiftLinkLook } from "@/lib/swiftlink-looks";
+import { getLook, hexAlpha, fallbackTile, washGradient, type SwiftLinkLook } from "@/lib/swiftlink-looks";
 import PlatformIcon from "@/components/PlatformIcon";
 import { SwiftCardIcon } from "@/components/SwiftCardLogo";
 import PhoneFrame from "@/components/PhoneFrame";
@@ -49,6 +49,8 @@ type Persona = {
   bio: string;
   /** Subject line of the email the Swift Signature sits in. */
   subject: string;
+  /** The reply itself, two or three short lines above the sign-off. */
+  message: string;
   accent: string;
   socials: BrandSocial[];
   /** The page's ONE featured tile - full width, the thing they most want tapped. */
@@ -94,6 +96,7 @@ const PERSONAS: Persona[] = [
     subtitle: "Realtor® · Harbor & Vine Realty", accent: "#6D28D9",
     bio: "Helping Bay Area families find home for 12 years. 200+ closings and counting.",
     subject: "Re: 12 Harbor Lane — Saturday showing",
+    message: "Saturday at 11 works. I'll meet you out front, and I'll bring the disclosures and the HOA packet.",
     data: p({
       name: "Maya Castillo", title: "Realtor®", company: "Harbor & Vine Realty",
       phone: "(415) 555-0132", email: "maya@harborvine.com", website: "harborvine.com",
@@ -113,6 +116,7 @@ const PERSONAS: Persona[] = [
     subtitle: "Licensed & insured · Austin, TX", accent: "#B45309",
     bio: "Licensed master electrician. Same-week service, upfront pricing, 5-star rated.",
     subject: "Re: Your panel upgrade quote",
+    message: "Your quote is attached: 200A panel, permit and inspection included. I can start Tuesday morning.",
     data: p({
       name: "Ray Delgado", title: "Master Electrician", company: "Delgado Electric",
       phone: "(512) 555-0177", email: "ray@delgadoelectric.com", website: "delgadoelectric.com",
@@ -132,9 +136,10 @@ const PERSONAS: Persona[] = [
     subtitle: "Insurance Advisor · Beacon Mutual", accent: "#2F6F8F",
     bio: "Coverage that actually fits your life — home, auto, and everything in between.",
     subject: "Re: Your coverage review",
+    message: "Bundling home and auto lowers your premium and your deductible. Want to go over it Thursday?",
     data: p({
       name: "Dana Whitfield", title: "Insurance Advisor", company: "Beacon Mutual",
-      phone: "(303) 555-0149", email: "dana@beaconmutual.com", website: "beaconmutual.com",
+      phone: "(303) 555-0149", email: "dana@beaconins.com", website: "beaconins.com",
       cardUrl: "swiftcard.me/danawhitfield", photoUrl: "/showcase/dana.jpg",
       // "Sea Glass": frosted navy panel, pale ink, bright info surface.
       customization: { accentColor: "#2F6F8F", bgColor: "linear-gradient(160deg, #1c3a5e 0%, #2f6f8f 100%)", textColor: "#f2fbff", surfaceColor: "#f8fafc", finish: "frosted" },
@@ -151,6 +156,7 @@ const PERSONAS: Persona[] = [
     subtitle: "Private Banker · Meridian Private Bank", accent: "#8C6D3F",
     bio: "Discreet wealth management for founders, families, and funds.",
     subject: "Re: Q3 portfolio review",
+    message: "Your Q3 summary is attached. Happy to walk through the rebalancing whenever suits you.",
     data: p({
       name: "Preston Cole", title: "Private Banker", company: "Meridian Private Bank",
       phone: "(212) 555-0186", email: "pcole@meridianpb.com", website: "meridianpb.com",
@@ -170,6 +176,7 @@ const PERSONAS: Persona[] = [
     subtitle: "Managing Partner · Adler & Grant LLP", accent: "#5B8DEF",
     bio: "Trial-tested counsel for businesses and the people who run them.",
     subject: "Re: Your consultation on Thursday",
+    message: "Confirmed for Thursday at 10. Please bring the signed engagement letter and any notices you've received.",
     data: p({
       name: "Simone Adler", title: "Managing Partner", company: "Adler & Grant LLP",
       phone: "(646) 555-0121", email: "sadler@adlergrant.law", website: "adlergrant.law",
@@ -189,6 +196,7 @@ const PERSONAS: Persona[] = [
     subtitle: "Sales Manager · Marchetti Motors", accent: "#DC2626",
     bio: "Your guy for new & certified pre-owned. No games, just great deals.",
     subject: "Re: Your test drive this weekend",
+    message: "The blue one is reserved for you Saturday. It'll be detailed and waiting out front at 10.",
     data: p({
       name: "Tony Marchetti", title: "Sales Manager", company: "Marchetti Motors",
       phone: "(702) 555-0166", email: "tony@marchettimotors.com", website: "marchettimotors.com",
@@ -213,6 +221,7 @@ const VERTICAL_PERSONAS: Persona[] = [
     subtitle: "Senior Loan Officer · Summit Home Loans", accent: "#0F766E",
     bio: "From pre-approval to clear-to-close — I keep buyers, agents, and files moving.",
     subject: "Re: Your pre-approval letter",
+    message: "Great news, you're pre-approved! The letter is attached, so send it along with your offer.",
     data: p({
       name: "Marcus Webb", title: "Senior Loan Officer", company: "Summit Home Loans",
       phone: "(214) 555-0198", email: "marcus@summithl.com", website: "summithl.com",
@@ -231,6 +240,7 @@ const VERTICAL_PERSONAS: Persona[] = [
     subtitle: "Wedding & Portrait Photographer", accent: "#BE123C",
     bio: "Weddings, portraits, and brand shoots — natural light, real moments.",
     subject: "Re: Your gallery is ready",
+    message: "Your gallery is live! Every favorite downloads in full resolution, with no watermark.",
     data: p({
       name: "Lena Brooks", title: "Photographer", company: "Lena Brooks Photography",
       phone: "(503) 555-0143", email: "hello@lenabrooks.photo", website: "lenabrooks.photo",
@@ -249,6 +259,7 @@ const VERTICAL_PERSONAS: Persona[] = [
     subtitle: "Master Stylist · Fade District Studio", accent: "#7C3AED",
     bio: "Cuts, color, and fades by appointment. Walk out sharp, every time.",
     subject: "Re: Saturday 2:00 confirmed",
+    message: "You're all set for Saturday at 2. Running late? Just reply and I'll move things around.",
     data: p({
       name: "Zoe Okafor", title: "Master Stylist", company: "Fade District Studio",
       phone: "(404) 555-0169", email: "zoe@fadedistrict.com", website: "fadedistrict.com",
@@ -267,6 +278,11 @@ const VERTICAL_PERSONAS: Persona[] = [
 export const ALL_PERSONAS: Persona[] = [...PERSONAS, ...VERTICAL_PERSONAS];
 
 const ROTATE_MS = 4600;
+
+/** The stage's own width. 724, not 692: the extra 32px is the clear gap
+ *  between the centre phone and the signature panel. Callers that size a box
+ *  around the stage read it from here rather than retyping it. */
+export const STAGE_W = 724;
 
 // The Swift Links page's natural column width — the mini renders the page at
 // this width and scales the whole thing down as one unit, so every proportion
@@ -298,43 +314,70 @@ function Verified({ size = 22 }: { size?: number }) {
 const phoneScreenWash = (accent: string) =>
   `linear-gradient(180deg, ${hexAlpha(accent, 0.14)} 0%, rgba(250,247,242,0) 46%), #FAF7F2`;
 
+// The live page's hero → sheet blend (SwiftLinkProfile): an eased ramp over
+// the hero's lower 55% that reaches the sheet colour at 72% and holds it, and
+// for GLASS looks a mask that dissolves the photo into the wash instead. The
+// mini used to end its hero on a short linear fade under a sheet with rounded
+// top corners — a visible card edge across the photo that the real page
+// dropped on 2026-09-02. Same numbers as the live page, so they match.
+const HERO_FADE_STOPS: Array<[number, number]> = [
+  [0, 0], [10, 0.04], [20, 0.12], [30, 0.25], [40, 0.4], [50, 0.56], [58, 0.7], [65, 0.83], [69, 0.94], [72, 1], [100, 1],
+];
+const HERO_DISSOLVE =
+  "linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 38%, rgba(0,0,0,0.88) 52%, rgba(0,0,0,0.6) 66%, rgba(0,0,0,0.28) 80%, rgba(0,0,0,0) 92%, rgba(0,0,0,0) 100%)";
+
 function MiniLinks({ persona }: { persona: Persona }) {
   const L = persona.look;
   const text = L.text;
   const first = persona.data.name.split(" ")[0];
-  const sheetBg = L.sheetTo ? `linear-gradient(180deg, ${L.sheet} 0%, ${L.sheetTo} 100%)` : L.sheet;
+  // Glass looks: a colour wash fills the page and the sheet is frosted glass
+  // over it, ramped in over its first 64px so its top edge never shows.
+  const wash = washGradient(L);
+  const sheetMeet = wash ? hexAlpha(L.sheet, L.frost ?? 0.7) : L.sheet;
+  const sheetBg = wash
+    ? `linear-gradient(180deg, ${hexAlpha(L.sheet, 0)} 0px, ${sheetMeet} 64px)`
+    : L.sheetTo ? `linear-gradient(180deg, ${L.sheet} 0%, ${L.sheetTo} 100%)` : L.sheet;
+  const heroFade = `linear-gradient(180deg, ${HERO_FADE_STOPS.map(([stop, a]) => `${hexAlpha(L.sheet, a)} ${stop}%`).join(", ")})`;
   return (
-    <div style={{ width: LINKS_W, height: LINKS_H }} className="overflow-hidden rounded-[16px]">
+    <div style={{ width: LINKS_W, height: LINKS_H }} className="overflow-hidden">
       <div
-        className="origin-top-left flex flex-col"
-        style={{ width: LINKS_NATURAL_W, height: LINKS_NATURAL_H, transform: `scale(${LINKS_SCALE})` }}
+        className="relative origin-top-left flex flex-col"
+        style={{ width: LINKS_NATURAL_W, height: LINKS_NATURAL_H, transform: `scale(${LINKS_SCALE})`, background: L.sheet }}
       >
+        {wash && <div aria-hidden className="absolute inset-0" style={{ background: wash }} />}
         {/* Hero — headshot cropped full-bleed, or the company logo shown whole
-            on the page's gradient, exactly the live fallback order. */}
-        <div className="relative w-full h-[430px] shrink-0 overflow-hidden">
+            on the page's gradient, exactly the live fallback order. Square,
+            like the live cover hero at a phone's width. */}
+        <div
+          className="relative w-full aspect-square shrink-0 overflow-hidden"
+          style={wash ? { maskImage: HERO_DISSOLVE, WebkitMaskImage: HERO_DISSOLVE } : undefined}
+        >
           {persona.data.photoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={persona.data.photoUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
           ) : (
             <div
-              className="absolute inset-0 flex items-center justify-center p-[18%] pb-[136px]"
+              className="absolute inset-0 flex items-center justify-center p-[16%] pb-[160px]"
               // Derived from the page's own Look (2026-09-17). It used to be a
               // fixed indigo ramp, so an amber electrician or a gilt banker got
               // a purple header that belonged to neither of them.
+              // p-[16%] pb-[160px] is the live page's own padding: it keeps a
+              // wordmark above the long fade below, which half-erased the
+              // banker's "MERIDIAN" at the old pb-[136px].
               style={{ background: `linear-gradient(160deg, ${hexAlpha(L.accent, 0.92)} 0%, ${hexAlpha(L.accent, 0.55)} 55%, ${L.sheet} 100%)` }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={persona.data.logoUrl!} alt="" className="max-w-full max-h-full w-auto h-auto object-contain" />
             </div>
           )}
-          <div
-            className="absolute inset-x-0 bottom-0 h-32"
-            style={{ background: `linear-gradient(180deg, ${hexAlpha(L.sheet, 0)} 0%, ${L.sheet} 100%)` }}
-          />
+          {!wash && <div className="absolute inset-x-0 bottom-0 h-[55%]" style={{ background: heroFade }} />}
         </div>
 
-        {/* Sheet */}
-        <div className="relative -mt-10 rounded-t-[30px] px-4 pt-7 pb-9 text-center flex-1" style={{ background: sheetBg }}>
+        {/* Sheet — squared top, the exact colour the fade ends on, so the
+            content emerges from the photo with no seam. No backdrop blur:
+            behind it is only the wash, already a smooth gradient, and a blur
+            inside a drifting layer would repaint every frame for nothing. */}
+        <div className="relative -mt-10 px-4 pt-7 pb-9 text-center flex-1" style={{ background: sheetBg }}>
           <div className="flex items-start justify-center gap-1.5 px-2">
             <h3 className="font-extrabold" style={{ fontSize: 32, letterSpacing: "0.25px", lineHeight: 1.15, color: text }}>
               {persona.data.name}
@@ -427,49 +470,61 @@ function MiniSignature({ persona }: { persona: Persona }) {
   const { Template } = persona;
   const first = persona.data.name.split(" ")[0];
   return (
-    <div className="w-[200px] rounded-[18px] overflow-hidden bg-white flex flex-col">
-      {/* The mail app's own window bar (owner, 2026-09-17: "make it look
-          really real") — the signature is something you receive in a mail
-          client, so it arrives in one instead of on a bare white slab. */}
-      <div className="flex items-center gap-1.5 px-2.5 h-[18px] bg-[#F5F7FB] border-b border-slate-200/80" aria-hidden="true">
-        <span className="w-[5px] h-[5px] rounded-full bg-[#ff5f57]" />
-        <span className="w-[5px] h-[5px] rounded-full bg-[#febc2e]" />
-        <span className="w-[5px] h-[5px] rounded-full bg-[#28c840]" />
-        <span className="ml-1 text-[0.4375rem] font-semibold text-slate-400 tracking-wide">Inbox</span>
+    // Owner, 2026-10-01: "much clearer and much more realistic". So: a real
+    // mail client's message view with real words in it (it used to be grey
+    // placeholder bars and 7px labels), every line set at a size you can read
+    // on the stage, and the signature exactly as EmailSignatureBox builds it —
+    // the card image with a bold blue "Contact me" link under it, nothing else.
+    <div className="w-[212px] rounded-[14px] overflow-hidden bg-white flex flex-col">
+      {/* The mail app's window bar: traffic lights, then the message actions. */}
+      <div className="flex items-center gap-[5px] px-3 h-[24px] bg-[#F6F6F8] border-b border-black/[0.07]" aria-hidden="true">
+        <span className="w-[7px] h-[7px] rounded-full bg-[#ff5f57] ring-[0.5px] ring-black/10" />
+        <span className="w-[7px] h-[7px] rounded-full bg-[#febc2e] ring-[0.5px] ring-black/10" />
+        <span className="w-[7px] h-[7px] rounded-full bg-[#28c840] ring-[0.5px] ring-black/10" />
+        <span className="ml-auto flex items-center gap-[9px] text-slate-400">
+          {[
+            "M4 7h16M5 7v11a2 2 0 002 2h10a2 2 0 002-2V7M4 4h16v3H4zM10 11h4",
+            "M5 7h14M10 11v6M14 11v6M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12M9 7V4h6v3",
+            "M10 9L5 13l5 4M5 13h9a5 5 0 015 5v1",
+            "M14 9l5 4-5 4M19 13h-9a5 5 0 00-5 5v1",
+          ].map((d) => (
+            <svg key={d} viewBox="0 0 24 24" className="w-[10px] h-[10px]" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>
+          ))}
+        </span>
       </div>
-      {/* message header — sender, subject, timestamp */}
-      <div className="px-3.5 pt-3 pb-2 border-b border-slate-100">
-        <div className="flex items-center gap-2">
+      {/* Message header: subject first, then sender, recipient and time —
+          the order every desktop mail client reads in. */}
+      <div className="px-3.5 pt-2.5 pb-2.5 border-b border-slate-100">
+        <p className="text-[0.71875rem] font-bold text-slate-900 leading-tight truncate">{persona.subject}</p>
+        <div className="mt-2 flex items-center gap-2">
           {persona.data.photoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={persona.data.photoUrl} alt="" className="w-[22px] h-[22px] rounded-full object-cover shrink-0" />
+            <img src={persona.data.photoUrl} alt="" className="w-[24px] h-[24px] rounded-full object-cover shrink-0" />
           ) : (
-            <span className="w-[22px] h-[22px] rounded-full grid place-items-center text-[0.5rem] font-black text-white shrink-0" style={{ background: persona.accent }}>
+            <span className="w-[24px] h-[24px] rounded-full grid place-items-center text-[0.5625rem] font-bold text-white shrink-0" style={{ background: persona.accent }}>
               {persona.data.initials}
             </span>
           )}
-          <span className="min-w-0">
-            <span className="block text-[0.59375rem] font-bold text-slate-900 leading-tight truncate">{persona.data.name}</span>
-            <span className="block text-[0.5rem] text-slate-500 leading-tight truncate">to me · 9:41 AM</span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-baseline justify-between gap-2">
+              <span className="text-[0.65625rem] font-semibold text-slate-900 leading-tight truncate">{persona.data.name}</span>
+              <span className="shrink-0 text-[0.5625rem] text-slate-400 leading-tight">9:41 AM</span>
+            </span>
+            <span className="block text-[0.5625rem] text-slate-500 leading-tight truncate">To: me</span>
           </span>
         </div>
-        <p className="mt-1.5 text-[0.5625rem] font-semibold text-slate-700 truncate">{persona.subject}</p>
       </div>
-      {/* body + sign-off */}
-      <div className="px-3.5 pt-2.5">
-        <div className="space-y-1.5" aria-hidden="true">
-          <div className="h-[5px] w-full rounded-full bg-slate-200/80" />
-          <div className="h-[5px] w-10/12 rounded-full bg-slate-200/80" />
-          <div className="h-[5px] w-6/12 rounded-full bg-slate-200/80" />
-        </div>
-        <p className="mt-2.5 text-[0.625rem] text-slate-600 leading-snug">{persona.signoff}</p>
-        <p className="text-[0.6875rem] font-bold text-slate-900 leading-snug">{first}</p>
-        <div className="mt-2 rounded-lg overflow-hidden ring-1 ring-slate-200">
+      {/* The reply, the sign-off, then the Swift Signature itself. */}
+      <div className="px-3.5 pt-2.5 pb-3">
+        <p className="text-[0.625rem] text-slate-700 leading-[1.5]">{persona.message}</p>
+        <p className="mt-2 text-[0.625rem] text-slate-700 leading-[1.4]">{persona.signoff}</p>
+        <p className="text-[0.625rem] text-slate-700 leading-[1.4]">{first}</p>
+        <div className="mt-2 rounded-[7px] overflow-hidden shadow-[0_1px_3px_rgba(15,23,42,0.14)]">
           <CardScaler>
             <Template data={persona.data} />
           </CardScaler>
         </div>
-        <p className="mt-1.5 pb-3 text-[0.46875rem] text-slate-500 text-center">Swift Signature · tap to open card</p>
+        <p className="mt-1.5 text-[0.625rem] font-bold leading-none" style={{ color: "#2563eb" }}>Contact me</p>
       </div>
     </div>
   );
@@ -481,9 +536,50 @@ function MiniSignature({ persona }: { persona: Persona }) {
 // the Share-your-info form, and the Swift Links box (bio, website capsule,
 // brand discs). The share-this-card section and CTA don't fit and are the
 // page's least-identifying pieces.
-const PHONE_NATURAL_W = 390;
-const PHONE_NATURAL_H = 876;
-const PHONE_SCALE = 0.66;
+// 375 × 0.70 = 262.5, the 280px frame's own screen width: the page fills the
+// glass edge to edge, as it does on a real phone, and every line is 6% larger
+// than at the old 390 × 0.66 (owner, 2026-10-01: "much clearer").
+const PHONE_NATURAL_W = 375;
+const PHONE_NATURAL_H = 800;
+const PHONE_SCALE = 0.7;
+
+/** Safari's compact address bar, floating over the bottom of the page. It is
+ *  what tells a visitor this phone is showing a LINK someone opened — the
+ *  SwiftCard link — and not an app screen. Static: it belongs to the browser,
+ *  so it stays put while the page inside crossfades between people. */
+function SafariBar() {
+  return (
+    // The toolbar is its own frosted strip across the full width, as Safari
+    // draws it — page content stops at its top edge instead of peeking out
+    // between the pill and the home indicator.
+    <div
+      className="absolute inset-x-0 bottom-0 z-[27] h-[58px] pointer-events-none"
+      aria-hidden="true"
+      style={{
+        background: "rgba(247,245,241,0.94)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+        boxShadow: "inset 0 0.5px 0 rgba(15,23,42,0.10)",
+      }}
+    >
+      <div
+        className="absolute left-[12px] right-[12px] top-[8px] h-[30px] rounded-full flex items-center px-3 bg-white"
+        style={{ boxShadow: "0 0 0 0.5px rgba(15,23,42,0.09), 0 1px 3px rgba(15,23,42,0.08)" }}
+      >
+        <span className="text-[0.625rem] font-semibold text-slate-800 leading-none tracking-[-0.02em]">
+          <span className="text-[0.5rem]">A</span>A
+        </span>
+        <span className="flex-1 flex items-center justify-center gap-[3px] text-[0.6875rem] font-medium text-slate-900 leading-none">
+          <svg viewBox="0 0 24 24" className="w-[8px] h-[8px] text-slate-500" fill="currentColor"><path d="M7 10V7a5 5 0 0110 0v3h1a1 1 0 011 1v9a1 1 0 01-1 1H6a1 1 0 01-1-1v-9a1 1 0 011-1h1zm2 0h6V7a3 3 0 00-6 0v3z" /></svg>
+          swiftcard.me
+        </span>
+        <svg viewBox="0 0 24 24" className="w-[11px] h-[11px] text-slate-800" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 12a8 8 0 11-2.34-5.66M20 4v5h-5" />
+        </svg>
+      </div>
+    </div>
+  );
+}
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return <p className="text-slate-900 font-bold text-[0.9375rem] tracking-tight">{children}</p>;
@@ -573,7 +669,7 @@ function PhoneCard({ persona }: { persona: Persona }) {
  *  hero and the static per-industry showcase on /for/<industry>. */
 function Stage({ persona, entered, preload }: { persona: Persona; entered: boolean; preload: Persona[] }) {
   return (
-    <div className="relative w-[692px] h-[680px] select-none pointer-events-none" aria-label={`Example SwiftCard: ${persona.job}`}>
+    <div className="relative h-[680px] select-none pointer-events-none" style={{ width: STAGE_W }} aria-label={`Example SwiftCard: ${persona.job}`}>
       {/* Every persona's photo/logo, loaded once up front — panels remount on
           each swap, and without this the hero flashes empty for the first
           cycle while the next image fetches. */}
@@ -606,7 +702,7 @@ function Stage({ persona, entered, preload }: { persona: Persona; entered: boole
           // straight. Depth on this stage is carried by four cues (scale,
           // angle, shadow, air — see the note below); the phone gives up the
           // angle and keeps the other three, and the flanking panels still sit
-          // at -2.4° and +2.1°, so the group does not read as flat.
+          // at -2° and +1.6°, so the group does not read as flat.
           //
           // 0 and not a tiny value: PhoneFrame treats a falsy tilt as "no
           // transform at all" rather than rotate(0deg), so the phone is not
@@ -618,6 +714,7 @@ function Stage({ persona, entered, preload }: { persona: Persona; entered: boole
           <div key={persona.key + "-phone"} className={`sc-hs-fade w-full h-full ${entered ? "" : "sc-hs-hidden"}`}>
             <PhoneCard persona={persona} />
           </div>
+          <SafariBar />
         </PhoneFrame>
       </div>
 
@@ -632,10 +729,11 @@ function Stage({ persona, entered, preload }: { persona: Persona; entered: boole
             • SHADOW    — far = wide, soft and weak; near = tighter and darker;
                           the phone (PhoneFrame) darkest of all. Distance is
                           mostly read from how hard a shadow is.
-            • AIR       — the far panel loses a little saturation and contrast,
-                          which is what distance does to colour. Deliberately
-                          NOT blur: the owner's standing order is that every
-                          panel stays legible, and a blurred one does not.
+          There used to be a fifth, AIR: the far phone desaturated and lowered
+          in contrast. Dropped 2026-10-01 — the owner asked for all three to be
+          "much clearer", and a washed-out screen is the opposite. The angles
+          came down too (-2.4° → -2°, +2.1° → +1.6°): small text on a tilt
+          is rasterised soft, and these panels are mostly small text.
           The static depth transform has to live on its own element because the
           drift keyframes animate `transform` — one element cannot hold both. */}
 
@@ -653,7 +751,7 @@ function Stage({ persona, entered, preload }: { persona: Persona; entered: boole
         // 0.945 its right edge slipped under the centre phone — the owner’s
         // standing rule is that nothing hides under it. Smaller also reads as
         // further away, which is the point of this panel.
-        style={{ transform: "rotate(-2.4deg) scale(0.9)", transformOrigin: "left center", filter: "saturate(0.94) contrast(0.975)" }}
+        style={{ transform: "rotate(-2deg) scale(0.9)", transformOrigin: "left center" }}
       >
         {/* The shadow the device casts on the surface it rests on. */}
         <span className="sc-hs-ground" style={{ left: "6%", right: "6%", bottom: -14, height: 26 }} aria-hidden="true" />
@@ -674,13 +772,17 @@ function Stage({ persona, entered, preload }: { persona: Persona; entered: boole
         </div>
       </div>
 
-      {/* RIGHT flanker — Swift Signature, nearest the viewer, sits low. */}
+      {/* RIGHT flanker — Swift Signature, nearest the viewer, sits low.
+          Clear of the phone (owner, 2026-10-01: it was "touching behind the
+          phone" — its left edge sat on the phone's power button). The stage
+          is STAGE_W wide so that this panel, pinned to the right, starts 22px
+          past the phone's right edge with nothing tucked under anything. */}
       <div
         className="absolute right-0 bottom-[70px] z-10"
-        style={{ transform: "rotate(2.1deg)", transformOrigin: "right center" }}
+        style={{ transform: "rotate(1.6deg)", transformOrigin: "right center" }}
       >
         <span className="sc-hs-ground" style={{ left: "8%", right: "8%", bottom: -12, height: 22 }} aria-hidden="true" />
-        <div className="rounded-[18px] shadow-[0_18px_38px_-12px_rgba(8,10,18,0.5),0_3px_8px_-2px_rgba(8,10,18,0.32)] ring-1 ring-black/5 sc-hs-drift" style={{ animationDelay: "1.4s", animationDuration: "5.1s" }}>
+        <div className="rounded-[14px] shadow-[0_18px_38px_-12px_rgba(8,10,18,0.5),0_3px_8px_-2px_rgba(8,10,18,0.32)] ring-1 ring-black/5 sc-hs-drift" style={{ animationDelay: "1.4s", animationDuration: "5.1s" }}>
           <div key={persona.key + "-sig"} className={`sc-hs-slide-r ${entered ? "" : "sc-hs-hidden-r"}`}>
             <MiniSignature persona={persona} />
           </div>
@@ -741,12 +843,12 @@ export default function HeroShowcase() {
 }
 
 /** One persona, standing still — the /for/<industry> hero. `scale` draws the
- *  692×680 stage smaller while keeping its layout box the scaled size. */
+ *  STAGE_W×680 stage smaller while keeping its layout box the scaled size. */
 export function PersonaShowcase({ personaKey, scale = 1 }: { personaKey: string; scale?: number }) {
   const persona = ALL_PERSONAS.find((pp) => pp.key === personaKey);
   if (!persona) return null;
   return (
-    <div style={{ width: Math.round(692 * scale), height: Math.round(680 * scale) }}>
+    <div style={{ width: Math.round(STAGE_W * scale), height: Math.round(680 * scale) }}>
       <div className="origin-top-left" style={{ transform: `scale(${scale})` }}>
         <Stage persona={persona} entered preload={[persona]} />
       </div>

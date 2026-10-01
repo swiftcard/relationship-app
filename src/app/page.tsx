@@ -194,12 +194,29 @@ export default function Home() {
                 professions, each shown as card, Swift Links and Signature.
                 Desktop only. The outer box is the SCALED size — transform
                 doesn't shrink layout. */}
-            <div className="hidden xl:flex justify-end shrink-0 xl:-mr-8 2xl:-mr-12" data-reveal>
-              <div style={{ width: Math.round(692 * 0.92), height: Math.round(680 * 0.92) }}>
-                {/* Short laptop screens shrink the stage a step further so its
-                    bottom panel never falls under the fold. */}
-                <style>{`@media (max-height: 780px) { .sc-heroshow { transform: scale(0.84) !important; } }`}</style>
-                <div className="sc-heroshow origin-top-left" style={{ transform: "scale(0.92)" }}>
+            <div className="sc-heroshow-col hidden xl:flex justify-end shrink-0" data-reveal>
+              {/* One scale, --hs, sizes the box AND the stage inside it, so the
+                  box is always exactly what is drawn. 724 × 680 is the stage
+                  (HeroShowcase's STAGE_W — a client module, so its constant
+                  can't be imported into this server file). The tiers keep the
+                  text column at ≥560px, where the feature list's two columns
+                  still fit on one line each, and keep the stage inside the
+                  viewport at 1280 (it used to run 8px past it):
+                    1280+  0.90, 12px into the gutter
+                    1440+  0.94, 48px
+                    1600+  1.00, 96px, on screens tall enough to hold it.
+                  Short laptop screens step down to 0.84 so the bottom panel
+                  never falls under the fold. */}
+              <style>{`
+                .sc-heroshow-col { --hs: 0.9; margin-right: -12px; }
+                @media (min-width: 1440px) { .sc-heroshow-col { --hs: 0.94; margin-right: -48px; } }
+                @media (min-width: 1600px) and (min-height: 900px) { .sc-heroshow-col { --hs: 1; margin-right: -96px; } }
+                @media (max-height: 780px) { .sc-heroshow-col { --hs: 0.84; } }
+                .sc-heroshow-box { width: calc(724px * var(--hs)); height: calc(680px * var(--hs)); }
+                .sc-heroshow { transform: scale(var(--hs)); }
+              `}</style>
+              <div className="sc-heroshow-box">
+                <div className="sc-heroshow origin-top-left">
                   <HeroShowcase />
                 </div>
               </div>
