@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="true"
@@ -72,6 +73,10 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- The Android app sells nothing (purchases are iOS/web only), but the
+         RevenueCat Capacitor plugin declares Play Billing. Strip it so the
+         release doesn't advertise in-app purchases to Play review. -->
+    <uses-permission android:name="com.android.vending.BILLING" tools:node="remove" />
     <!-- Android 13+ requires a RUNTIME grant before any notification can be
          posted; without this declaration PushNotifications.requestPermissions()
          resolves "denied" on every modern device and push is silently dead. -->
