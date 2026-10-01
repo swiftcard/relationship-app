@@ -43,7 +43,7 @@ Share your business card by QR, NFC or link. Capture every contact you meet.
 - nothing iPhone-only (Apple Wallet, the home-screen widget, the Apple Watch),
 - no prices, no Pro plan and no purchase wording, because the Android app sells
   nothing and Play's payments policy forbids pointing to outside payment, and
-- no push-notification claim until FCM is live (see Open items).
+- push notifications are live on Android since 2026-10-01 (FCM configured in production), so the card-view notification is claimed; "verified delivery on a real device" is still not claimed anywhere.
 
 ```
 SwiftCard turns your business card into a link. Share it with a QR code, an NFC card or a text. The other person opens it on their phone and saves you in one tap. No app needed on their end.
@@ -63,7 +63,7 @@ CAPTURE EVERY CONTACT
 When someone opens your card, they can share their name, email and phone back to you. Everyone lands in your Contacts with notes, tags and follow-up status. A simple CRM built for real-world networking.
 
 SEE WHO'S LOOKING
-See how many people opened your card, where they were, and which day was your best.
+Get a notification the moment someone views your card. See how many people opened it, where they were, and which day was your best.
 
 WORKS WITH YOUR CRM
 Send every new contact to HubSpot, Salesforce, HighLevel, Pipedrive or Google Contacts automatically, or connect anything else with Zapier.
@@ -126,7 +126,7 @@ differ from Apple's, so this is the translation.
 | App activity → App interactions (card-view analytics) | Yes | Required | Analytics, App functionality |
 | App info and performance | **No** (no crash SDK; Firebase Analytics is OFF) | | |
 | Location | **No.** Card-view places come from IP geolocation on the server, never the device | | |
-| Device or other IDs | **No.** The FCM push token, once push is live, is used only to deliver notifications | | |
+| Device or other IDs (FCM push token) | Yes | Required | App functionality (delivering notifications) |
 | Financial info | **No** (no purchases in the Android app) | | |
 
 Do **not** declare Analytics under Firebase: the Firebase project
@@ -145,7 +145,7 @@ The app contains no purchases.
 
 The Play reviewer may test for policy 4.3-style "webview wrapper" rejection.
 The native parts to name if asked: the native splash, the Android share sheet,
-the hand-off of card links to the browser, and push notifications once FCM is
+the hand-off of card links to the browser, and push notifications (FCM, live since 2026-10-01).
 live.
 
 ## Open items (Menash's)
@@ -154,7 +154,7 @@ live.
    hello@swiftcard.me, as an **Organization** (Swift Card Inc.). Needs a D-U-N-S
    number. A personal account would first have to run a 12-tester, 14-day
    closed test before production.
-2. **FCM server credential.** The swiftcard.me Google Cloud org blocks
+2. ~~**FCM server credential.**~~ DONE 2026-10-01 (key for swiftcard-2cc87 only; org policy overridden per-project). The swiftcard.me Google Cloud org blocks
    service-account key creation, so `FIREBASE_PROJECT_ID`,
    `FIREBASE_CLIENT_EMAIL` and `FIREBASE_PRIVATE_KEY` don't exist on Vercel and
    Android push sends nothing (`src/lib/fcm.ts` returns not_configured). Lift
