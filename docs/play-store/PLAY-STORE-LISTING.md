@@ -146,7 +146,6 @@ The app contains no purchases.
 The Play reviewer may test for policy 4.3-style "webview wrapper" rejection.
 The native parts to name if asked: the native splash, the Android share sheet,
 the hand-off of card links to the browser, and push notifications (FCM, live since 2026-10-01).
-live.
 
 ## Open items (Menash's)
 
