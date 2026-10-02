@@ -54,10 +54,24 @@ export const SIGNUP_SOURCES = [
 ] as const;
 /** Landing pages generate their own: /for/<industry> → for_<slug>, /compare/<rival> → alt_<slug>. */
 const LANDING_SOURCE = /^(for|alt)_[a-z0-9_]{1,48}$/;
-export type SignupSource = (typeof SIGNUP_SOURCES)[number] | `for_${string}` | `alt_${string}`;
+// Social campaigns: a platform prefix + where on that platform the link lives.
+// ig_bio, ig_dm, ig_ad, ig_creator_<handle>, ig_p_<post> (one per Instagram
+// post, so the admin can see WHICH Reel brought the signups). Until 2026-10-02
+// nothing social was accepted here, so every signup from Instagram was
+// recorded as "direct" and no post could be told from another.
+export const CAMPAIGN_PLATFORMS = { ig: "Instagram", fb: "Facebook", li: "LinkedIn", tt: "TikTok", yt: "YouTube", pin: "Pinterest", rd: "Reddit" } as const;
+const CAMPAIGN_SOURCE = /^(ig|fb|li|tt|yt|pin|rd)_[a-z0-9_]{1,48}$/;
+export type SignupSource =
+  | (typeof SIGNUP_SOURCES)[number]
+  | `for_${string}` | `alt_${string}`
+  | `${keyof typeof CAMPAIGN_PLATFORMS}_${string}`;
+
+export function isCampaignSource(s: string | null | undefined): boolean {
+  return !!s && CAMPAIGN_SOURCE.test(s);
+}
 
 export function isSignupSource(s: string | null | undefined): s is SignupSource {
-  return !!s && ((SIGNUP_SOURCES as readonly string[]).includes(s) || LANDING_SOURCE.test(s));
+  return !!s && ((SIGNUP_SOURCES as readonly string[]).includes(s) || LANDING_SOURCE.test(s) || CAMPAIGN_SOURCE.test(s));
 }
 
 // Only a real referral (a friend sharing their /r/CODE link) grants a free month.

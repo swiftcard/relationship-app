@@ -166,7 +166,10 @@ export function classify(text, list, { title = null } = {}) {
   return { intent, matched: [...new Set([...brand, ...competitors, ...topic.slice(0, 3), ...complaint.slice(0, 2), ...asks.slice(0, 2)])] };
 }
 
-const INTENT_BASE = { brand: 90, competitor_complaint: 75, ask: 70, press: 55, creator: 50, competitor: 40, topic: 30 };
+// prospect = a fresh Instagram post under a hashtag new professionals use
+// (#newrealtor, #justlicensed): nobody asked about us, but it is the moment
+// they need a card. 45 + freshness, so only a post from the last day wakes Ava.
+const INTENT_BASE = { brand: 90, competitor_complaint: 75, ask: 70, press: 55, creator: 50, prospect: 45, competitor: 40, topic: 30 };
 /** 0-100. Intent carries it; engagement and freshness nudge it. */
 export function scoreSignal({ intent, engagement = {}, posted_at }) {
   let s = INTENT_BASE[intent] ?? 30;
@@ -182,6 +185,7 @@ export function scoreSignal({ intent, engagement = {}, posted_at }) {
 /** Which agent owns a signal. */
 export function routeAgent(platform, intent) {
   if (intent === "creator") return "influencer";
+  if (intent === "prospect") return "outreach";
   if (intent === "press") return "pr";
   if (intent === "competitor") return "competitors";
   if (intent === "competitor_complaint") return platform === "appstore" ? "competitors" : "outreach";
@@ -203,6 +207,7 @@ export async function ensureSources(list) {
     { id: "hn:search", kind: "hn", target: list.hn_queries.join(" | "), label: "Hacker News · keyword search" },
     ...list.feeds.map((f) => ({ id: `rss:${sha(f.url).slice(0, 10)}`, kind: "rss", target: f.url, label: f.label ?? f.url })),
     { id: "youtube:search", kind: "youtube", target: list.youtube_queries.join(" | "), label: "YouTube · new videos on the topic" },
+    { id: "instagram:hashtags", kind: "instagram_hashtag", target: "hashtags", label: "Instagram · new posts under our hashtags" },
   ];
   let competitors = [];
   try { competitors = (await sb("GET", "agent_competitors", { params: "active=is.true&app_store=not.is.null&select=id,name,app_store" })) ?? []; } catch { competitors = []; }
@@ -474,9 +479,33 @@ async function readYouTube(queries) {
   return { posts, error: null };
 }
 
+/** Fresh Instagram posts under the hashtags new professionals use. Instagram
+ *  only answers the SwiftCard account's own connection, and that token lives
+ *  encrypted on the site — so the site reads the hashtags (GET only) and the
+ *  Radar reads the site. The hashtag list is Agent Flow → Settings → Instagram
+ *  bot. Nothing here, or there, writes to Instagram. */
+export function postsFromInstagram(json) {
+  let j; try { j = JSON.parse(json); } catch { return { posts: [], error: "unreadable reply" }; }
+  const posts = (Array.isArray(j?.posts) ? j.posts : []).filter((p) => p?.external_id && String(p.body ?? "").trim().length >= 20).map((p) => ({
+    external_id: String(p.external_id), url: p.url ?? null,
+    title: String(p.title ?? "").slice(0, 300), body: String(p.body ?? "").slice(0, BODY_CHARS),
+    author: null, community: p.community ?? "Instagram", posted_at: isoOrNull(p.posted_at),
+    engagement: { ups: Number(p.engagement?.ups ?? 0), comments: Number(p.engagement?.comments ?? 0) },
+  }));
+  return { posts, error: j?.error ? String(j.error).slice(0, 200) : null };
+}
+async function readInstagramHashtags() {
+  const secret = process.env.INSTAGRAM_BOT_SECRET || process.env.PUSH_CATCHUP_SECRET;
+  if (!secret) return { posts: [], error: "no PUSH_CATCHUP_SECRET in this workflow — the Radar cannot ask the site for Instagram hashtag posts." };
+  const base = (process.env.APP_URL || "https://swiftcard.me").replace(/\/$/, "");
+  const res = await get(`${base}/api/agents/instagram/hashtags`, { headers: { authorization: `Bearer ${secret}` }, timeoutMs: 60_000 });
+  if (res.status !== 200) return { posts: [], error: `Instagram hashtags → ${res.status || res.error}` };
+  return postsFromInstagram(res.text);
+}
+
 // ── The scan ─────────────────────────────────────────────────────────────────
 
-const PLATFORM_OF = { reddit_search: "reddit", reddit_sub: "reddit", telegram_channel: "telegram", telegram_bot: "telegram", hn: "hn", rss: "news", appstore_reviews: "appstore", youtube: "youtube" };
+const PLATFORM_OF = { reddit_search: "reddit", reddit_sub: "reddit", telegram_channel: "telegram", telegram_bot: "telegram", hn: "hn", rss: "news", appstore_reviews: "appstore", youtube: "youtube", instagram_hashtag: "instagram" };
 
 /** Turn raw posts into signal rows (classified, scored, routed). */
 export function toSignals(posts, { platform, source_id, list }) {
@@ -487,6 +516,7 @@ export function toSignals(posts, { platform, source_id, list }) {
     let c;
     if (platform === "appstore") c = { intent: "competitor_complaint", matched: ["1-2★ review"] };
     else if (platform === "youtube") c = { intent: "creator", matched: classify(text, list)?.matched ?? [] };
+    else if (platform === "instagram") c = { intent: "prospect", matched: [String(p.community ?? "").replace(/^Instagram · /, "")].filter(Boolean) };
     else {
       c = classify(text, list, { title: p.title });
       if (!c) continue;
@@ -575,6 +605,7 @@ export async function scanRadar({ log = console.log } = {}) {
       else if (s.kind === "rss") await finish(s, await readFeed(s.target, s.label));
       else if (s.kind === "appstore_reviews") await finish(s, await readAppStore(s.target, String(s.label ?? "").split(" · ")[0]));
       else if (s.kind === "youtube") await finish(s, await readYouTube(list.youtube_queries));
+      else if (s.kind === "instagram_hashtag") await finish(s, await readInstagramHashtags());
     } catch (e) {
       summary.errors.push(`${s.id}: ${String(e?.message ?? e).slice(0, 160)}`);
       await markSource(s.id, { last_scanned_at: now, last_error: String(e?.message ?? e).slice(0, 300) });

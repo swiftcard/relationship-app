@@ -19,6 +19,7 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { type ConnectionMap, freshAccessToken, loadConnections } from "@/lib/agent-connections";
 import { LINKEDIN_VERSION, META_GRAPH } from "@/lib/agent-connect-oauth";
+import { igPrivateReply, igReplyToComment, igSendMessage } from "@/lib/instagram-send";
 
 export type QueueItemLite = {
   id: string;
@@ -203,6 +204,28 @@ const facebook: Connector = {
   },
 };
 
+/** A carousel's slides: payload.asset_ids (creative pool) or payload.media_urls, 2–10 of them. */
+async function resolveCarousel(it: QueueItemLite): Promise<Asset[] | null> {
+  const p = it.payload ?? {};
+  const urls = Array.isArray(p.media_urls) ? p.media_urls.filter((u): u is string => typeof u === "string" && /^https?:\/\//.test(u)) : [];
+  const ids = Array.isArray(p.asset_ids) ? p.asset_ids.filter((a): a is string => typeof a === "string" && /^[0-9a-f-]{36}$/i.test(a)) : [];
+  if (urls.length < 2 && ids.length < 2) return null;
+  const out: Asset[] = urls.map((url) => ({ kind: /\.(mp4|mov|webm|m4v)(\?|$)/i.test(url) ? "video" : "image", url }));
+  if (!out.length) {
+    try {
+      const { data } = await getAdminSupabase().from("media_assets").select("id,kind,url,status").in("id", ids);
+      // Keep the brief's slide order, and only slides that actually rendered.
+      for (const id of ids) {
+        const row = (data ?? []).find((r) => r.id === id);
+        if (row?.url && row.status === "ready") out.push({ kind: row.kind === "video" ? "video" : "image", url: row.url });
+      }
+    } catch {
+      return null;
+    }
+  }
+  return out.length >= 2 ? out.slice(0, 10) : null;
+}
+
 // ── Instagram: publish a picture or reel to the Page's Business account ─────
 // Two-step Content Publishing API (container → publish), 100 posts/24h.
 // Instagram has no text-only posts, so an item without a ready asset is held.
@@ -215,12 +238,28 @@ const instagram: Connector = {
     const caption = (it.content ?? "").trim();
     const conn = c.meta!;
     const ig = String(conn.meta.ig_user_id);
-    const asset = await resolveAsset(it);
-    if (!asset) return { executed: false, connector: "instagram", reason: "Instagram needs a picture or video — attach a ready asset from the creative pool (asset_id) and approve again" };
     const auth = { Authorization: `Bearer ${conn.access_token}`, "Content-Type": "application/json" };
-    const body = asset.kind === "video"
-      ? { media_type: "REELS", video_url: asset.url, caption: caption.slice(0, 2200), share_to_feed: true }
-      : { image_url: asset.url, caption: caption.slice(0, 2200) };
+    // A carousel (swipe post): one child container per image, then the parent.
+    // Image slides only — a video child needs its own transcode wait.
+    const slides = await resolveCarousel(it);
+    const asset: Asset | null = slides ? { kind: "image", url: slides[0].url } : await resolveAsset(it);
+    if (!asset) return { executed: false, connector: "instagram", reason: "Instagram needs a picture or video — attach a ready asset from the creative pool (asset_id) and approve again" };
+    let body: Record<string, unknown>;
+    if (slides) {
+      if (slides.some((sl) => sl.kind === "video")) return { executed: false, connector: "instagram", reason: "Instagram carousel: use images only (a video goes out as its own Reel)" };
+      const children: string[] = [];
+      for (const sl of slides) {
+        const r = await fetch(`${META_GRAPH}/${ig}/media`, { method: "POST", headers: auth, body: JSON.stringify({ image_url: sl.url, is_carousel_item: true }) });
+        const j = await readJson(r);
+        if (!r.ok || !j.id) return { executed: false, connector: "instagram", reason: `Instagram carousel slide ${errText(j, r.status)}` };
+        children.push(String(j.id));
+      }
+      body = { media_type: "CAROUSEL", children: children.join(","), caption: caption.slice(0, 2200) };
+    } else {
+      body = asset.kind === "video"
+        ? { media_type: "REELS", video_url: asset.url, caption: caption.slice(0, 2200), share_to_feed: true }
+        : { image_url: asset.url, caption: caption.slice(0, 2200) };
+    }
     const cRes = await fetch(`${META_GRAPH}/${ig}/media`, { method: "POST", headers: auth, body: JSON.stringify(body) });
     const cj = await readJson(cRes);
     if (!cRes.ok || !cj.id) return { executed: false, connector: "instagram", reason: `Instagram container ${errText(cj, cRes.status)}` };
@@ -414,7 +453,43 @@ const reddit: Connector = {
   },
 };
 
-const CONNECTORS: Connector[] = [linkedin, x, facebook, instagram, youtube, higgsfield, reddit];
+// ── Instagram: answer someone who commented on our post or messaged us ───────
+// The Instagram bot (lib/instagram-bot.ts) files these when it is switched off,
+// when an answer is still a draft, or when Meta refused the automatic send.
+// The owner's Approve sends the text as written (edits included):
+//   ig_dm      → the card link, privately, to the commenter + a public reply
+//   ig_reply   → a public reply under their comment
+//   ig_message → a reply to their message (Instagram allows it for 24h)
+// All three need an id that only exists because that person wrote to us first.
+const IG_ENGAGE_KINDS = new Set(["ig_dm", "ig_reply", "ig_message"]);
+const instagramEngage: Connector = {
+  id: "instagram_engage",
+  label: "Send on Instagram",
+  ready: (c) => !!c.meta?.meta.ig_user_id,
+  matches: (it) => IG_ENGAGE_KINDS.has(it.item_type),
+  run: async (it, c) => {
+    const token = c.meta!.access_token;
+    const p = it.payload ?? {};
+    const text = (it.content ?? "").trim();
+    if (!text) return { executed: false, connector: "instagram_engage", reason: "nothing to send — write the reply first" };
+    const commentId = typeof p.comment_id === "string" ? p.comment_id : null;
+    const igsid = typeof p.igsid === "string" ? p.igsid : null;
+    const sent =
+      it.item_type === "ig_dm" && commentId ? await igPrivateReply(token, commentId, text)
+      : it.item_type === "ig_reply" && commentId ? await igReplyToComment(token, commentId, text)
+      : it.item_type === "ig_message" && igsid ? await igSendMessage(token, igsid, text)
+      : null;
+    if (!sent) return { executed: false, connector: "instagram_engage", reason: "this item has no comment or message to answer" };
+    if (!sent.ok) return { executed: false, connector: "instagram_engage", reason: `Instagram: ${sent.error}` };
+    if (it.item_type === "ig_dm" && commentId && typeof p.public_reply === "string") await igReplyToComment(token, commentId, p.public_reply).catch(() => null);
+    if (typeof p.event_id === "string") {
+      try { await getAdminSupabase().from("agent_ig_events").update({ status: "sent", reply: text, handled_at: new Date().toISOString() }).eq("id", p.event_id); } catch { /* the send already happened */ }
+    }
+    return { executed: true, connector: "instagram_engage", detail: it.item_type === "ig_reply" ? "Replied on Instagram" : "Sent on Instagram", url: it.target_url ?? undefined };
+  },
+};
+
+const CONNECTORS: Connector[] = [linkedin, x, facebook, instagram, instagramEngage, youtube, higgsfield, reddit];
 
 /** Which connectors are armed (for the board payload / Connections panel). */
 export function connectorStatus(conns: ConnectionMap): Record<string, boolean> {

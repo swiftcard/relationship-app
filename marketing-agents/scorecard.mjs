@@ -20,6 +20,9 @@
 //   • Pro trials     profiles.pro_trial_started_at
 //   • Leads          leads.created_at
 //   • App Store      iTunes lookup: average rating + rating count (public)
+//   • Instagram      agent_ig_events (keyword comments, links sent),
+//                    product_events name=campaign_link_clicked code ig_*,
+//                    profiles.signup_source like ig_* (signups, cards, trials)
 import { sbCount, sbRows, isoAgo, DAY } from "./lib/probe.mjs";
 import { email } from "./lib/agentkit.mjs";
 
@@ -48,6 +51,15 @@ async function newCardsViewed(from, to) {
   if (!views) return null;
   const seen = new Set(views.map((v) => v.username));
   return cards.filter((c) => seen.has(c.username)).length;
+}
+
+/** Cards made this week by accounts that came from Instagram. */
+async function igCards(from, to) {
+  const people = await sbRows("profiles", `select=id&signup_source=like.ig_*&${REAL_PEOPLE}&limit=2000`);
+  if (!people) return null;
+  if (people.length === 0) return 0;
+  const ids = people.map((p) => p.id).join(",");
+  return sbCount("cards", `${wk("created_at", from, to)}&user_id=in.(${ids})`);
 }
 
 async function appStore() {
@@ -80,6 +92,19 @@ async function main() {
     appStore(),
   ]);
 
+  // Instagram, as one funnel (the bot + its tracked links, 2026-10-02). Every
+  // step is "no data" until supabase/agent-instagram.sql has run.
+  const IG = "signup_source=like.ig_*";
+  const [igAsked, igSent, igTaps, igSignups, igTrials, igCardsNow, igCardsPrev] = await Promise.all([
+    pair("agent_ig_events", "created_at", "action=eq.link&kind=eq.comment"),
+    pair("agent_ig_events", "handled_at", "action=eq.link&status=eq.sent"),
+    pair("product_events", "created_at", "name=eq.campaign_link_clicked&is_internal=eq.false&props->>code=like.ig_*"),
+    pair("profiles", "created_at", `${IG}&${REAL_PEOPLE}`),
+    pair("profiles", "pro_trial_started_at", `${IG}&${REAL_PEOPLE}`),
+    igCards(7, 0),
+    igCards(14, 7),
+  ]);
+
   const rows = [
     ["Signups", signups],
     ["Cards created", cards],
@@ -89,6 +114,12 @@ async function main() {
     ["Leads captured", leads],
     ["Referral signups", referrals],
     ["Pro trials started", trials],
+    ["Instagram · keyword comments", igAsked],
+    ["Instagram · card links sent", igSent],
+    ["Instagram · link taps", igTaps],
+    ["Instagram · signups", igSignups],
+    ["Instagram · cards created", { now: igCardsNow, prev: igCardsPrev }],
+    ["Instagram · Pro trials", igTrials],
   ];
 
   const weekEnd = new Date();

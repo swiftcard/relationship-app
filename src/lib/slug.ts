@@ -28,7 +28,7 @@ export function normalizeSlug(raw: string): string {
 export const RESERVED_SLUGS = new Set([
   // current app routes
   "account-deleted", "admin", "api", "auth", "card", "cards", "checkout",
-  "company", "compare", "contact", "for", "contacts", "dashboard", "grow", "join",
+  "company", "compare", "contact", "for", "contacts", "dashboard", "go", "grow", "join",
   "links", "login", "office", "onboarding", "preview", "pricing", "privacy",
   "products", "profile", "r", "settings", "share", "sms-consent", "sms-terms",
   "templates", "terms", "testimonials", "unsubscribe", "upgrade", "welcome",

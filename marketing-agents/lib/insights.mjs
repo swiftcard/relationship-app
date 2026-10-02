@@ -223,7 +223,39 @@ async function asoBlock() {
 - Last reviews (the words real users use): ${reviews.length ? reviews.map((r) => `${r.stars}★ "${r.title}": ${r.body.slice(0, 140)}`).join(" | ") : "none"}`;
 }
 
-const BLOCKS = { analyst: analystBlock, onboarding: onboardingBlock, upsell: upsellBlock, churn: churnBlock, proof: proofBlock, launch: launchBlock, aso: asoBlock };
+/** Milo (social) + Addy (ads): which of OUR Instagram posts brought signups.
+ *  Every Instagram link carries its post's own code (ig_p_<id>), and that code
+ *  is the signup source — so this is a real count per post, not a guess from
+ *  likes. Counts only; no commenter's name or text ever reaches a prompt. */
+async function instagramBlock() {
+  const since = isoAgo(30 * DAY);
+  const posts = (await sbRows("agent_ig_posts", `select=media_id,code,caption,media_type,posted_at,like_count,comments_count&posted_at=gte.${since}&order=posted_at.desc&limit=30`)) ?? [];
+  if (!posts.length) return "";
+  const [events, clicks, signups] = await Promise.all([
+    sbRows("agent_ig_events", `select=media_id,status&action=eq.link&created_at=gte.${since}&limit=5000`),
+    sbRows("product_events", `select=props&name=eq.campaign_link_clicked&is_internal=eq.false&created_at=gte.${since}&limit=5000`),
+    sbRows("profiles", `select=signup_source&signup_source=like.ig_*&created_at=gte.${since}&limit=5000`),
+  ]);
+  const tally = (rows, key) => { const m = {}; for (const r of rows ?? []) { const k = key(r); if (k) m[k] = (m[k] ?? 0) + 1; } return m; };
+  const asked = tally(events, (e) => e.media_id);
+  const tapped = tally(clicks, (c) => c.props?.code);
+  const joined = tally(signups, (p) => p.signup_source);
+  const ranked = posts.map((p) => ({ ...p, asked: asked[p.media_id] ?? 0, taps: tapped[p.code] ?? 0, signups: joined[p.code] ?? 0 }))
+    .sort((a, b) => b.signups - a.signups || b.taps - a.taps || b.asked - a.asked);
+  const total = (m) => Object.values(m).reduce((a, b) => a + b, 0);
+  const line = (p) => `- "${String(p.caption ?? "").split("\n")[0].slice(0, 80) || "untitled"}" (${String(p.media_type ?? "post").toLowerCase()}, ${String(p.posted_at ?? "").slice(0, 10)}): ${p.asked} keyword comments, ${p.taps} link taps, ${p.signups} signups, ${p.like_count} likes`;
+  return [
+    "INSTAGRAM — WHICH OF OUR POSTS BROUGHT SIGNUPS (last 30 days, real counts; signups are the only goal)",
+    `Totals: ${total(asked)} keyword comments → ${total(tapped)} link taps → ${total(joined)} signups, across ${posts.length} posts.`,
+    "Posts, best first:",
+    ...ranked.slice(0, 12).map(line),
+    total(joined) + total(tapped) === 0
+      ? "Nothing has converted yet — vary the format and the hook, and keep the keyword call to action on every post so the next ones can be measured."
+      : "Make more of what is at the top (same format, same kind of hook, a new angle) and stop making what is at the bottom. Likes alone are not a reason to repeat a post.",
+  ].join("\n");
+}
+
+const BLOCKS = { analyst: analystBlock, onboarding: onboardingBlock, upsell: upsellBlock, churn: churnBlock, proof: proofBlock, launch: launchBlock, aso: asoBlock, social: instagramBlock, ads: instagramBlock };
 
 /** The LIVE DATA block for an agent, or "" for agents that don't get one / on any error. */
 export async function dataBlock(agentId) {

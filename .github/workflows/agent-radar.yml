@@ -38,4 +38,6 @@ jobs:
           REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          # Lets the Radar ask the site for Instagram hashtag posts (read-only).
+          PUSH_CATCHUP_SECRET: ${{ secrets.PUSH_CATCHUP_SECRET }}
         run: node marketing-agents/radar.mjs

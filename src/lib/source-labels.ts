@@ -67,7 +67,22 @@ export const SIGNUP_SOURCE_LABELS: Record<string, string> = {
   follow_up:    "Link in a follow-up email/text",
 };
 
+// Social campaign sources (lib/referral.ts CAMPAIGN_PLATFORMS): ig_bio →
+// "Instagram — bio link", ig_p_ab12 → "Instagram — post ab12".
+const CAMPAIGN_NAMES: Record<string, string> = { ig: "Instagram", fb: "Facebook", li: "LinkedIn", tt: "TikTok", yt: "YouTube", pin: "Pinterest", rd: "Reddit" };
+const CAMPAIGN_PLACES: Record<string, string> = { bio: "bio link", dm: "message", ad: "ad", story: "story", comment: "comment", prospect: "outreach message" };
+
+export function campaignSourceLabel(source: string): string | null {
+  const m = source.match(/^(ig|fb|li|tt|yt|pin|rd)_(.+)$/);
+  if (!m) return null;
+  const [, platform, rest] = m;
+  const post = rest.match(/^p_(.+)$/);
+  const creator = rest.match(/^creator_(.+)$/);
+  const place = post ? `post ${post[1]}` : creator ? `creator @${creator[1]}` : (CAMPAIGN_PLACES[rest] ?? rest.replace(/_/g, " "));
+  return `${CAMPAIGN_NAMES[platform]} — ${place}`;
+}
+
 export function getSignupSourceLabel(source: string | null | undefined): string {
   if (!source) return SIGNUP_SOURCE_LABELS.direct;
-  return SIGNUP_SOURCE_LABELS[source] ?? source.replace(/_/g, " ");
+  return SIGNUP_SOURCE_LABELS[source] ?? campaignSourceLabel(source) ?? source.replace(/_/g, " ");
 }

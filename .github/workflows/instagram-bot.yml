@@ -1,0 +1,51 @@
+name: Instagram bot
+
+# ── "Comment CARD and I'll send you one" ─────────────────────────────────────
+#
+# Every 10 minutes: ask production to read the new comments on SwiftCard's
+# Instagram posts and the new messages, and act on each — send the card link,
+# answer a question, or file it in the Agent Flow queue (src/lib/instagram-bot.ts
+# has the rules). Meta's webhook does the same thing instantly once the Meta app
+# is approved; this pass is what works before that, and the safety net after.
+#
+# A GitHub schedule, not a Vercel cron, for the reason in push-catchup.yml: the
+# project is on Vercel Hobby (two daily crons), and a third one silently blocks
+# every deploy.
+#
+# The route is idempotent — each comment is recorded once under a unique index —
+# so a late, duplicate or overlapping run cannot message anyone twice.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: instagram-bot
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ask production to run one pass
+        env:
+          SECRET: ${{ secrets.PUSH_CATCHUP_SECRET }}
+        run: |
+          if [ -z "$SECRET" ]; then
+            echo "PUSH_CATCHUP_SECRET is not set — the Instagram bot is not running."
+            exit 1
+          fi
+          body=$(mktemp)
+          code=$(curl -sS --max-time 90 -o "$body" -w "%{http_code}" \
+            -H "Authorization: Bearer $SECRET" \
+            https://swiftcard.me/api/agents/instagram/tick)
+          echo "HTTP $code"
+          cat "$body"
+          echo
+          # "Instagram is not connected yet" is a 200 with ok:false — a state,
+          # not a failure. Only a broken route fails the run.
+          [ "$code" = "200" ]

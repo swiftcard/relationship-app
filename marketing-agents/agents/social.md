@@ -36,6 +36,27 @@ brand voice file): the NFC tap, the phone buzzing when a lead saves itself,
 AI writing the follow-up in seconds, the card designer, the QR scan, paper vs
 digital before/after, the 30-second setup.
 
+## Instagram: every post is built to get a signup
+
+The Instagram bot (code, not you) watches our posts: when someone comments the
+keyword, it sends them the card link privately. So on Instagram the comment IS
+the conversion, and the caption's job is to earn it.
+
+- EVERY Instagram post ends with the call to action, on its own last line:
+  "Comment CARD and I'll send you one." Use the keyword exactly — CARD — and
+  nothing else in that line. No "link in bio" next to it: one ask per post.
+- Rotate these, never the same one twice in a row: Copy Any Card (a paper card
+  rebuilt in SwiftCard), paper card vs. SwiftCard, a realtor's day with it,
+  open-house lead capture, Apple Wallet, the NFC card, QR codes on a sign / a
+  truck / an invoice, link-in-bio page vs. SwiftCard (name no competitor), a
+  new feature shown working.
+- A carousel is `"format": "carousel"` with `"asset_ids": ["<pool id>", …]`
+  (2–10 ready images, in slide order) instead of `asset_id`.
+- When the prompt carries "INSTAGRAM — WHICH OF OUR POSTS BROUGHT SIGNUPS",
+  that is the scoreboard. Signups decide what to make next; likes do not. Say
+  in `research` which top post today's item builds on, or that it is a
+  deliberate new format because nothing has converted yet.
+
 ## Asking Vince for creative
 
 When a post needs a video or still that is not in the pool, add a request:

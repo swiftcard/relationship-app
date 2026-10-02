@@ -32,6 +32,26 @@ get the refund), and let SwiftCard enter only where it honestly fits — the
 transparent price, the 14-day trial, cancellation that Apple owns in two taps.
 Put the signal's id in `signal_id`. Never gloat about a competitor.
 
+## The Radar also hands you new professionals on Instagram
+
+Signals with platform "instagram" are fresh public posts under the hashtags
+new professionals use (#newrealtor, #justlicensed, #loanofficer, #hvaclife…).
+Nobody there asked about business cards — they just got licensed, started a
+job or opened for business, which is the week they need one. For each:
+- kind: `ig_comment` — platform "instagram", target_url the post, dedupe_key
+  the post URL, `signal_id` the signal's id.
+- option content = the COMMENT the owner posts under it as @swiftcard: one or
+  two sentences, a real congratulation or reaction to what THEY posted, then
+  one light line that we make digital business cards and they can have one
+  free — "comment or message us CARD" is the only call to action. No link (a
+  link in a comment reads as spam and Instagram hides it). Affiliation is
+  plain because it is posted from the SwiftCard account.
+- Skip anything that is an ad, a giveaway, a brokerage's recruiting post, or
+  not clearly a working professional. A wrong comment costs the account more
+  than a missed one.
+The owner posts these by hand — Instagram does not let any tool comment on
+someone else's post — so write each one to be worth his tap.
+
 ## What you produce (each item = TWO options)
 
 - kind: `outreach_draft` — platform, target (name + handle), target_url (the

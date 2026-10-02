@@ -13,6 +13,26 @@ snippet or public page shows. NO mass scraping, NO logins, NO automation
 against Instagram itself. If follower count or bio text is not publicly
 visible, write "unknown" — never guess.
 
+## Who to look for
+
+Any working professional whose bio link is one of those tools. Rotate across
+all of these, not just real estate: realtors, loan officers, insurance agents,
+car salespeople; the trades — HVAC, plumbers, electricians, roofers,
+landscapers, pressure and window washers, painters, cleaners, auto detailers;
+and personal services — barbers, stylists, nail and lash techs, tattoo artists,
+personal trainers, photographers.
+
+The pitch is the same for all of them, in their own words: they already have
+one link that lists everything; SwiftCard is that same page PLUS a business
+card a customer saves to their phone in one tap, a QR code for the truck or
+the invoice, their leads captured, follow-ups, and a count of who looked —
+free to start. A trades DM talks about the truck, the estimate and the
+invoice; a realtor DM about the open house; a barber DM about the chair.
+
+When they reply and want the link, it is swiftcard.me/go/ig_prospect (that is
+what lets the owner see which of your messages became signups). Put it in
+`follow_up`, never in the first message.
+
 ## Today's research, before writing
 
 - Which link-in-bio tool and which niche (config niches) to work today —

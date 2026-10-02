@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ORG, firstName } from "@/lib/agent-org";
 import { mentionables, partyOfResponder } from "@/lib/agent-chat";
+import InstagramBotCard from "./InstagramBotCard";
 
 // ── Agent Flow v3: one switch, three teams, zero ambiguity ──────────────────
 // The owner's mental model, implemented literally: press ▶ Start All and the
@@ -38,6 +39,7 @@ const CONNECTOR_RULES: Array<{ id: string; label: string; matches: (i: Item) => 
   { id: "x", label: "Post to X", matches: (i) => ["x", "twitter"].includes(platformOf(i)) && SOCIAL_KINDS.has(i.item_type) },
   { id: "facebook", label: "Post to Facebook", matches: (i) => ["facebook", "fb"].includes(platformOf(i)) && SOCIAL_KINDS.has(i.item_type) },
   { id: "instagram", label: "Post to Instagram", matches: (i) => ["instagram", "ig"].includes(platformOf(i)) && SOCIAL_KINDS.has(i.item_type) },
+  { id: "instagram_engage", label: "Send on Instagram", matches: (i) => ["ig_dm", "ig_reply", "ig_message"].includes(i.item_type) },
   { id: "youtube", label: "Upload to YouTube", matches: (i) => ["youtube", "youtube_shorts", "yt"].includes(platformOf(i)) && SOCIAL_KINDS.has(i.item_type) },
   { id: "higgsfield", label: "Send to Higgsfield", matches: (i) => (i.item_type === "video_script" || i.item_type === "image_brief") && platformOf(i) !== "linkedin" },
   { id: "reddit", label: "Reply on Reddit", matches: (i) => platformOf(i) === "reddit" && ["reply_draft", "outreach_draft"].includes(i.item_type) && !!i.target_url },
@@ -139,7 +141,7 @@ const TYPE_LABEL: Record<string, string> = {
 
 // Person-facing drafts with no connector: Approve copies the text, the owner
 // pastes and sends. Every kind here is a message to a real human.
-const COPY_KINDS = new Set(["outreach_draft", "reply_draft", "influencer", "generic", "social_post", "email_draft", "prospect_dm", "industry_outreach", "forum_reply", "partner_pitch", "roundup_pitch", "review_reply", "review_ask", "listing_submission", "retention_copy", "site_change", "help_article", "kb_finding", "competitor_update", "image_brief", "growth_memo", "experiment", "agent_review", "calendar_play", "trend_pick", "aso_change", "keyword_map", "geo_play", "citation_audit", "launch_pack", "positioning_note", "referral_play", "share_moment", "press_pitch", "podcast_pitch", "local_post", "local_pitch", "onboarding_nudge", "activation_insight", "upgrade_nudge", "paywall_copy", "churn_insight", "winback", "proof_ask", "case_study", "proof_asset", "policy_change"]);
+const COPY_KINDS = new Set(["ig_dm", "ig_reply", "ig_message", "ig_comment", "outreach_draft", "reply_draft", "influencer", "generic", "social_post", "email_draft", "prospect_dm", "industry_outreach", "forum_reply", "partner_pitch", "roundup_pitch", "review_reply", "review_ask", "listing_submission", "retention_copy", "site_change", "help_article", "kb_finding", "competitor_update", "image_brief", "growth_memo", "experiment", "agent_review", "calendar_play", "trend_pick", "aso_change", "keyword_map", "geo_play", "citation_audit", "launch_pack", "positioning_note", "referral_play", "share_moment", "press_pitch", "podcast_pitch", "local_post", "local_pitch", "onboarding_nudge", "activation_insight", "upgrade_nudge", "paywall_copy", "churn_insight", "winback", "proof_ask", "case_study", "proof_asset", "policy_change"]);
 
 function ago(iso: string | null) {
   if (!iso) return "—";
@@ -1324,6 +1326,7 @@ export default function AgentFlowClient() {
               <p className="text-gray-600 text-[0.6875rem] pt-1">Instagram needs a picture or video on the item (a ready asset from the creative pool); YouTube uploads the rendered video from the pool. TikTok forbids tools that post to your own account and Reddit bans automated promotion — those stay Approve &amp; Copy. Blog posts publish themselves via the Publish button.</p>
             </div>
           </div>
+          <InstagramBotCard />
           <div className="rounded-xl border border-gray-800 bg-gray-900 p-4 space-y-3">
             <div>
               <p className="text-white text-sm font-semibold">📡 Radar — what we listen for</p>

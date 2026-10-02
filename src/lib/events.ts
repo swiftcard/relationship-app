@@ -86,6 +86,13 @@ export const EVENTS = [
 
 export type EventName = (typeof EVENTS)[number];
 
+// Written ONLY by our own server routes, straight into product_events — never
+// accepted from a browser (/api/events validates against EVENTS above), so a
+// visitor cannot forge them.
+//   campaign_link_clicked — a real tap on /go/<code> (Instagram bio, a message
+//   the Instagram bot sent, an ad). props: { code }.
+export const SERVER_EVENTS = ["campaign_link_clicked"] as const;
+
 // Deliberately narrow. Everything here is an id, an enum, or a count — nothing
 // that identifies a human. PostHog already attaches device/timestamp/campaign
 // from the pageview, so we don't duplicate them.

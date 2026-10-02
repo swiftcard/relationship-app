@@ -5,6 +5,7 @@ import { safeNextPath } from "@/lib/safe-next";
 import { createBrowserClient } from "@supabase/ssr";
 import { loadGoogleIdentity } from "@/lib/google-gis";
 import { detectNativeApp } from "@/lib/platform";
+import { isSocialInAppBrowser } from "@/lib/in-app-browser";
 
 // ── Web-only Google sign-in via Google Identity Services (GIS) ──────────────
 // Renders Google's official "Sign in with Google" button and exchanges the
@@ -49,7 +50,10 @@ const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 // "unavailable" = we deliberately are not rendering a Google button here (the
 // native shell, which uses its own system-browser flow). A terminal state, so
 // the component can't sit on "loading" forever.
-type Phase = "loading" | "ready" | "authenticating" | "error" | "unavailable";
+// "in_app" = the browser inside Instagram / Facebook / TikTok, where Google
+// blocks its own sign-in. Offering the button there strands the visitor on a
+// Google error page; pointing them at email signup (instant) does not.
+type Phase = "loading" | "ready" | "authenticating" | "error" | "unavailable" | "in_app";
 
 export default function GoogleSignInButton({ redirectTo, className, oneTap = false, intent, loginHint }: Props) {
   const btnRef = useRef<HTMLDivElement>(null);
@@ -87,6 +91,11 @@ export default function GoogleSignInButton({ redirectTo, className, oneTap = fal
     if (detectNativeApp()) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- setting a TERMINAL phase is the whole point: detectNativeApp() is client-only, and returning without it left the pill stuck on "Loading Google…" forever (see above)
       if (!cancelled) setPhase("unavailable");
+      return;
+    }
+
+    if (isSocialInAppBrowser(navigator.userAgent)) {
+      if (!cancelled) setPhase("in_app");
       return;
     }
 
@@ -223,6 +232,12 @@ export default function GoogleSignInButton({ redirectTo, className, oneTap = fal
         <div className="w-full flex items-center justify-center gap-3 bg-white text-gray-500 font-semibold py-3 px-6 rounded-full text-sm border border-[#E4DDD4]">
           Signing you in…
         </div>
+      )}
+
+      {phase === "in_app" && (
+        <p className="text-gray-500 text-xs text-center">
+          Google sign-in doesn&apos;t work inside this app&apos;s browser. Use your email below — it takes a few seconds.
+        </p>
       )}
 
       {phase === "error" && (

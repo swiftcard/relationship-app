@@ -10,6 +10,7 @@ import { PersonaShowcase } from "@/components/site/HeroShowcase";
 import NativeHidden from "@/components/NativeHidden";
 import HomeHeadingReveal from "@/components/site/HomeHeadingReveal";
 import MarketingCta from "@/components/site/MarketingCta";
+import { PROFESSION_TEMPLATE } from "@/lib/campaign-links";
 import "@/app/home.css";
 
 // ── Vertical landing pages: /for/<industry> ──────────────────────────────────
@@ -305,6 +306,8 @@ export default async function VerticalPage({ params }: { params: Promise<{ slug:
   if (!v) notFound();
 
   const src = `for_${slug.replace(/-/g, "_")}`;
+  // The builder opens on the design this page just showed them.
+  const builderHref = `/cards/new?src=${src}${PROFESSION_TEMPLATE[slug] ? `&template=${PROFESSION_TEMPLATE[slug]}` : ""}`;
   // The FAQ copy IS the structured data — one source, no drift.
   const faqJsonLd = {
     "@context": "https://schema.org",
@@ -345,7 +348,7 @@ export default async function VerticalPage({ params }: { params: Promise<{ slug:
                 <p className="hp-lede !text-[1.12rem] mt-5 max-w-[560px]">{v.sub}</p>
               </div>
               <div className="mt-8 flex flex-wrap gap-3" data-reveal>
-                <Link href={`/cards/new?src=${src}`} className="rd-btn rd-btn-primary rd-btn-lg">Create your free card</Link>
+                <Link href={builderHref} className="rd-btn rd-btn-primary rd-btn-lg">Create your free card</Link>
                 <NativeHidden><Link href="/pricing" className="rd-btn rd-btn-ghost-l rd-btn-lg">See pricing</Link></NativeHidden>
               </div>
               <p className="text-slate-500 text-[0.8125rem] mt-5" data-reveal>Free to start · No app for them to download · Live in 60 seconds</p>
@@ -428,7 +431,7 @@ export default async function VerticalPage({ params }: { params: Promise<{ slug:
             <h2 className="rd-display text-white text-[clamp(2.2rem,5vw,4rem)]">Your next client is one tap away.</h2>
             <p className="text-white/85 text-[1.15rem] mt-5 max-w-[480px]">The digital business card built for {v.audience} — free in 60 seconds.</p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
-              <Link href={`/cards/new?src=${src}`} className="hp-btn-white">Create your free card</Link>
+              <Link href={builderHref} className="hp-btn-white">Create your free card</Link>
               <NativeHidden><Link href="/pricing" className="rd-btn border border-white/40 bg-white/10 text-white">See pricing</Link></NativeHidden>
             </div>
           </MarketingCta>

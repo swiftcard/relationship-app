@@ -43,7 +43,12 @@ const SCOPES: Record<AgentProvider, string> = {
   x: "tweet.read tweet.write users.read offline.access",
   // pages_manage_posts publishes to the Page; instagram_content_publish to the
   // linked IG Business account; the rest are what the two need to list + read.
-  meta: "pages_show_list pages_read_engagement pages_manage_posts instagram_basic instagram_content_publish business_management",
+  // The Instagram bot (lib/instagram-bot.ts) adds four: read + answer comments
+  // on our posts, read + answer messages sent to us, and subscribe the Page to
+  // webhooks. META_SCOPES overrides the whole list if the Meta app is ever
+  // missing one of them (an unknown scope fails the consent screen outright).
+  meta: process.env.META_SCOPES
+    || "pages_show_list pages_read_engagement pages_manage_posts instagram_basic instagram_content_publish business_management instagram_manage_comments instagram_manage_messages pages_manage_metadata pages_messaging",
   youtube: "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly",
   // The Page-attached "SwiftCard Agent Flow" app (LINKEDIN_AGENT_CLIENT_ID) can
   // only hold the Community Management API — LinkedIn refuses to add Sign In /
@@ -145,6 +150,20 @@ export async function describeAccount(p: AgentProvider, t: TokenSet): Promise<Ac
       if (!pages.length) throw new Error("this Facebook login administers no Page — create the SwiftCard Page first, then connect again");
       // META_PAGE_ID picks among several Pages; otherwise the first (usually only) one.
       const page = pages.find((pg) => pg.id === process.env.META_PAGE_ID) ?? pages[0];
+      // What the owner actually granted — the consent screen lets them untick
+      // any of it, and the Instagram bot needs to know before it tries to send.
+      let granted: string[] = [];
+      try {
+        const perms = (await getJson(`${META_GRAPH}/me/permissions`, bearer)) as { data?: Array<{ permission?: string; status?: string }> };
+        granted = (perms.data ?? []).filter((x) => x.status === "granted" && x.permission).map((x) => String(x.permission));
+      } catch { /* best-effort: an empty list reads as "not granted yet" */ }
+      // Subscribe the Page so Instagram messages reach /api/meta/webhook. A
+      // refusal here (app not Live yet) is fine — the 10-minute pass covers it.
+      if (granted.includes("pages_manage_metadata")) {
+        try {
+          await fetch(`${META_GRAPH}/${page.id}/subscribed_apps?subscribed_fields=messages`, { method: "POST", headers: { Authorization: `Bearer ${page.access_token}` } });
+        } catch { /* best-effort */ }
+      }
       return {
         account_id: page.id,
         account_label: page.instagram_business_account?.username ? `${page.name} · @${page.instagram_business_account.username}` : `${page.name} (Page)`,
@@ -154,6 +173,7 @@ export async function describeAccount(p: AgentProvider, t: TokenSet): Promise<Ac
           page_id: page.id, page_name: page.name,
           ig_user_id: page.instagram_business_account?.id ?? null, ig_username: page.instagram_business_account?.username ?? null,
           pages: pages.map((pg) => ({ id: pg.id, name: pg.name })),
+          granted,
         },
       };
     }

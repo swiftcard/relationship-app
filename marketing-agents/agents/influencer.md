@@ -42,6 +42,22 @@ For EACH creator, one item:
   hinges on.
 - payload: {"followers": number-or-null, "engagement_pct": number-or-null, "niche": "...", "fit": "one line"}
 
+## Instagram creators: the Reel offer (owner's plan, 2026-10-02)
+
+For an INSTAGRAM creator the offer is different and fixed — do not improvise
+it: a free year of SwiftCard Pro in exchange for ONE Reel showing how they use
+their card, posted together with @swiftcard as an Instagram Collab (so it
+reaches their audience and ours). Look for working professionals who post
+Reels — realtors first, then loan officers, insurance agents and trades —
+with 5K–30K followers (this overrides the 10K–100K band for Instagram).
+- Each creator gets their own link: swiftcard.me/go/ig_creator_<handle> with
+  the handle lowercased and anything that is not a letter or digit turned into
+  `_`. Put it in payload as `"creator_link"`, not in the first DM.
+- The DM still opens on one specific Reel of theirs with a real reaction; the
+  offer comes second, in one sentence, with no pressure.
+- payload also carries `"offer": "pro_year_for_collab_reel"`.
+The owner approves every partnership and grants the Pro year himself.
+
 Skip: giveaway/engagement-pod accounts, anyone who posts spam, anyone outside
 the follower band unless the fit is exceptional (say so in payload.fit).
 
