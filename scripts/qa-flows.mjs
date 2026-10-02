@@ -641,15 +641,20 @@ FLOWS["signup-ui"] = async () => {
     await page.click('button[type="submit"]');
     // The PATH, not the URL: `next=%2Fdashboard` would match a regex on the
     // whole address while still sitting on /login.
-    await page.waitForURL((u) => /^\/(dashboard|onboarding|welcome)/.test(u.pathname), { timeout: 45000 }).catch(() => {});
+    // A brand-new account builds its card FIRST (owner, 2026-10-02): onboarding
+    // sends it to the first-card builder, never to an empty "Create Card"
+    // dashboard — and ?next=/dashboard counts as no destination. Landing on
+    // /dashboard here is the fresh-install bug coming back.
+    await page.waitForURL((u) => /^\/(cards\/new|dashboard|welcome)/.test(u.pathname), { timeout: 45000 }).catch(() => {});
     const landed = new URL(page.url()).pathname;
     // Find the account so the finally block removes it whatever happened next.
     const found = await (await adm(`/auth/v1/admin/users?page=1&per_page=50`)).json().catch(() => null);
     const created = found?.users?.find((u) => u.email === e2);
     if (created?.id) extraUsers.push({ id: created.id, uname: `qa-signup-${stamp}` });
-    if (!/^\/(dashboard|onboarding|welcome)/.test(landed)) fail("signup-ui", `a valid signup did not reach the app (at ${landed}; page said: ${JSON.stringify((await page.locator("body").innerText()).replace(/\s+/g, " ").slice(0, 200))})`);
+    if (landed === "/dashboard" || landed === "/welcome") fail("signup-ui", `a brand-new account landed on ${landed} instead of the card builder — it must build its card first`);
+    else if (landed !== "/cards/new") fail("signup-ui", `a valid signup did not reach the card builder (at ${landed}; page said: ${JSON.stringify((await page.locator("body").innerText()).replace(/\s+/g, " ").slice(0, 200))})`);
     else if (!created?.id) fail("signup-ui", `landed on ${landed} but no auth user exists for ${e2}`);
-    else pass("signup-ui", `typo caught, mismatch caught, account created → ${landed}`);
+    else pass("signup-ui", `typo caught, mismatch caught, account created → ${landed} (builds its card first)`);
     await page.screenshot({ path: `${OUT}/signup-ui.png` }).catch(() => {});
   } finally { await ctx.close(); }
 };
