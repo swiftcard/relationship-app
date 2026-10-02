@@ -49,6 +49,15 @@ describe("the desk never touches LinkedIn", () => {
     expect(sql).not.toMatch(/create policy/i);
     expect(sql).toMatch(/create unique index if not exists agent_li_prospects_profile_idx on agent_li_prospects \(lower\(profile_url\)\)/);
   });
+  it("the production self-test is secret-gated, saves nothing, and runs by hand only", () => {
+    const route = code("src/app/api/agents/linkedin/selftest/route.ts");
+    expect(route).toMatch(/if \(!botAuthorized\(req\)\) return NextResponse\.json\(\{ error: "Unauthorized" \}, \{ status: 401 \}\)/);
+    expect(route).not.toMatch(/getAdminSupabase|\bfetch\(/);
+    const wf = read(".github/workflows/linkedin-desk-check.yml");
+    expect(wf).toContain("workflow_dispatch:");
+    expect(wf).not.toContain("schedule:");
+    expect(wf).toContain("https://swiftcard.me/api/agents/linkedin/selftest");
+  });
   it("is a tab in Agent Flow", () => {
     const client = read("src/app/admin/agent-flow/AgentFlowClient.tsx");
     expect(client).toMatch(/\["linkedin", "LinkedIn desk"\]/);

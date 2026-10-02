@@ -1,0 +1,38 @@
+name: LinkedIn desk check
+
+# ── Does the LinkedIn desk's writer work in production? ──────────────────────
+#
+# Sends one made-up post through the real model on swiftcard.me and checks the
+# drafts against the desk's own rules (src/app/api/agents/linkedin/selftest).
+# Nothing is saved and nobody is contacted.
+#
+# Run by hand only. Each run is a model call, and the desk itself is used by a
+# person who sees straight away if the writer is down — a schedule would spend
+# tokens to learn nothing new.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ask production to write one sample
+        env:
+          SECRET: ${{ secrets.PUSH_CATCHUP_SECRET }}
+        run: |
+          if [ -z "$SECRET" ]; then
+            echo "PUSH_CATCHUP_SECRET is not set."
+            exit 1
+          fi
+          body=$(mktemp)
+          code=$(curl -sS --max-time 90 -o "$body" -w "%{http_code}" \
+            -H "Authorization: Bearer $SECRET" \
+            https://swiftcard.me/api/agents/linkedin/selftest)
+          echo "HTTP $code"
+          cat "$body"
+          echo
+          [ "$code" = "200" ]
