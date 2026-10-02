@@ -287,7 +287,7 @@ describe("one ask on screen, and every way of saying no is honoured", () => {
   it("the bell's reminder is a sibling of the row, so a tap on the switch can never open the contact", () => {
     const bell = read("src/components/NotificationBell.tsx");
     const rowEnd = bell.indexOf("{n.id === askId && <PushAskCallout");
-    const clickable = bell.lastIndexOf("onClick={CONTACT_TYPES.has(n.type)", rowEnd);
+    const clickable = bell.lastIndexOf("onClick={rowHref(n)", rowEnd);
     const closeRow = bell.lastIndexOf("</div>", rowEnd);
     expect(rowEnd).toBeGreaterThan(-1);
     expect(clickable).toBeGreaterThan(-1);

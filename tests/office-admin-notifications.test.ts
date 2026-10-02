@@ -142,7 +142,10 @@ describe("the daily team check", () => {
   });
 
   it("an office whose only people are still invited is checked too (its first expired invite)", () => {
-    expect(route).toContain('.from("office_members").select("office_id").eq("status", "pending")');
+    expect(route).toMatch(/\.from\("office_members"\)\.select\("office_id"\)\s*\.eq\("status", "pending"\)/);
+    // …and only while the owner is still on Office: pending-only offices are
+    // exactly where a lapsed owner hides (2026-10-02 audit).
+    expect(route).toContain("const toCheck = await liveTeams(admin, candidates);");
   });
 
   it("an invitee who declines is named", () => {

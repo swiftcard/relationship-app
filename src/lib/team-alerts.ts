@@ -1,5 +1,5 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
-import { notifyOffice, type OfficeNotificationType } from "@/lib/office-notify";
+import { notifyOffice, officeIsLive, type OfficeNotificationType } from "@/lib/office-notify";
 import { sendPushToUser } from "@/lib/push";
 import { isAssignableRole, roleHasCapability } from "@/lib/office-roles";
 import { officeNotificationPath } from "@/lib/office-notification-links";
@@ -29,8 +29,10 @@ import { officeNotificationPath } from "@/lib/office-notification-links";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
-/** The office owner plus every active member whose role sees team analytics. */
+/** The office owner plus every active member whose role sees team analytics —
+ *  nobody at all once the team is no longer live (owner off the Office plan). */
 export async function teamAlertRecipients(officeId: string): Promise<string[]> {
+  if (!(await officeIsLive(officeId))) return [];
   const admin = getAdminSupabase();
   const { data: office } = await admin.from("offices").select("owner_id").eq("id", officeId).maybeSingle();
   const ids = new Set<string>();
@@ -47,15 +49,17 @@ export async function teamAlertRecipients(officeId: string): Promise<string[]> {
   return [...ids];
 }
 
-/** Is this person someone who receives team alerts for some office? */
+/** Is this person someone who receives team alerts for some LIVE office? A
+ *  lapsed owner is not: they get their own recap and no Team alerts switch. */
 export async function isTeamAlertRecipient(userId: string): Promise<boolean> {
   const admin = getAdminSupabase();
   const { data: owned } = await admin.from("offices").select("id").eq("owner_id", userId).limit(1).maybeSingle();
-  if (owned) return true;
+  if (owned) return officeIsLive(owned.id as string);
   const { data: m } = await admin
-    .from("office_members").select("role").eq("user_id", userId).eq("status", "active").limit(1).maybeSingle();
+    .from("office_members").select("role, office_id").eq("user_id", userId).eq("status", "active").limit(1).maybeSingle();
   const role = typeof m?.role === "string" && isAssignableRole(m.role) ? m.role : "employee";
-  return !!m && roleHasCapability(role, "view_org_analytics");
+  if (!m || !roleHasCapability(role, "view_org_analytics")) return false;
+  return officeIsLive(m.office_id as string);
 }
 
 export type TeamAlert = {

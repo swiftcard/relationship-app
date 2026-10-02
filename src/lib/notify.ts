@@ -16,6 +16,10 @@ export const DUPLICATE_WINDOW_MS = 10 * 60 * 1000;
 export async function insertNotification(row: {
   user_id: string;
   card_owner?: string | null;
+  /** The contact this row is about. The bell opens THAT contact with it
+   *  (NotificationBell contactHref); redactForPlan withholds it from a Free
+   *  reader whenever the name is blocked out. */
+  lead_id?: string | null;
   type: string;
   title: string;
   body: string;

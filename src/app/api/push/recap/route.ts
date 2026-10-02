@@ -3,6 +3,7 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { sendPushToUser } from "@/lib/push";
 import { insertNotification } from "@/lib/notify";
 import { readPushPrefs } from "@/lib/push-policy";
+import { isOfficePlan } from "@/lib/plan";
 import { followUpState, type FollowUpStep } from "@/lib/lead-followup";
 import {
   alertTeam, firstNameOf, formatCount, nextTeamMilestone, noCardCopy, noFollowUpCopy, teamAlertRecipients,
@@ -67,13 +68,23 @@ const viewKeys = (slugs: string[]) => slugs.flatMap((s) => [s, `${s}__links`]);
 
 type Team = { officeId: string; ownerId: string; name: string | null; memberIds: string[] };
 
+// Every table read below is PAGED. PostgREST stops an unpaged select at 1,000
+// rows without saying so, and this job used to read push_subscriptions and
+// office_members whole — past the 1,000th row, recaps and team checks would
+// silently skip people (2026-10-02 notification audit).
+const PAGE = 1000;
+
 /** Offices with at least one active teammate: officeId → the team. */
 async function teams(admin: Admin): Promise<Map<string, Team>> {
-  const { data: members } = await admin.from("office_members").select("office_id, user_id").eq("status", "active");
   const byOffice = new Map<string, string[]>();
-  for (const m of members ?? []) {
-    if (!m.user_id) continue;
-    byOffice.set(m.office_id as string, [...(byOffice.get(m.office_id as string) ?? []), m.user_id as string]);
+  for (let from = 0; ; from += PAGE) {
+    const { data: members } = await admin.from("office_members").select("office_id, user_id")
+      .eq("status", "active").order("id").range(from, from + PAGE - 1);
+    for (const m of members ?? []) {
+      if (!m.user_id) continue;
+      byOffice.set(m.office_id as string, [...(byOffice.get(m.office_id as string) ?? []), m.user_id as string]);
+    }
+    if (!members || members.length < PAGE) break;
   }
   const out = new Map<string, Team>();
   if (!byOffice.size) return out;
@@ -85,6 +96,24 @@ async function teams(admin: Admin): Promise<Map<string, Team>> {
     });
   }
   return out;
+}
+
+/**
+ * Only teams whose owner is STILL on the Office plan. The offices row outlives
+ * the subscription on purpose (re-subscribing restores the team), so an office
+ * existing proves nothing: a lapsed owner with a leftover pending invite was
+ * being sent "leads waiting" and "team milestone" alerts about their own cards,
+ * into a team inbox they can no longer open (2026-10-02 audit). Same test as
+ * requireOfficeCapability (lib/office-roles) and officeIsLive (lib/office-notify).
+ */
+async function liveTeams(admin: Admin, all: Map<string, Team>): Promise<Map<string, Team>> {
+  const ownerIds = [...new Set([...all.values()].map((t) => t.ownerId).filter(Boolean))];
+  const planOf = new Map<string, string | null>();
+  for (let i = 0; i < ownerIds.length; i += 200) {
+    const { data } = await admin.from("profiles").select("id, plan").in("id", ownerIds.slice(i, i + 200));
+    for (const p of data ?? []) planOf.set(p.id as string, (p.plan as string | null) ?? null);
+  }
+  return new Map([...all].filter(([, t]) => isOfficePlan(planOf.get(t.ownerId) ?? null)));
 }
 
 async function alreadyRecapped(admin: Admin, userId: string, now: number): Promise<boolean> {
@@ -131,7 +160,7 @@ export async function GET(req: NextRequest) {
   const now = Date.now();
   const counts = { recapsPersonal: 0, recapsTeam: 0, teamChecks: 0, leadsWaiting: 0, membersNoCard: 0, milestones: 0, invitesExpired: 0 };
 
-  const allTeams = await teams(admin);
+  const allTeams = await liveTeams(admin, await teams(admin));
   // Who receives the TEAM recap instead of their own: admins of a real team.
   const teamOf = new Map<string, Team>();
   for (const t of allTeams.values()) {
@@ -139,16 +168,23 @@ export async function GET(req: NextRequest) {
   }
 
   // ── 1. Monday recaps ──────────────────────────────────────────────────────
-  const { data: subs } = await admin.from("push_subscriptions").select("user_id");
-  const userIds = [...new Set((subs ?? []).map((s) => s.user_id as string))];
+  // EVERY account, not only those with a phone registered. This loop used to be
+  // driven by push_subscriptions, so the bell row — the recap the docs promise
+  // every plan — never reached anyone who had not turned on notifications
+  // (2026-10-02 audit; the team week had the same gap, fixed in part 2 below).
+  // sendPushToUser is a logged no-op for someone with no device.
   const profiles = new Map<string, Record<string, unknown>>();
-  for (let i = 0; i < userIds.length; i += 200) {
-    const { data } = await admin.from("profiles").select("id, plan, customization").in("id", userIds.slice(i, i + 200));
+  for (let from = 0; ; from += PAGE) {
+    const { data } = await admin.from("profiles").select("id, plan, customization").order("id").range(from, from + PAGE - 1);
     for (const p of data ?? []) profiles.set(p.id as string, p);
+    if (!data || data.length < PAGE) break;
   }
+  const userIds = [...profiles.keys()];
   for (const userId of userIds) {
     try {
       const profile = profiles.get(userId);
+      // A deleted account (inside its 30-day reopen window) hears nothing.
+      if ((profile?.customization as { _deleted?: boolean } | null)?._deleted) continue;
       const prefs = readPushPrefs(profile?.customization);
       if (prefs.weekly_recap === false) continue;
       if (!isRecapHour(now, prefs.timezone)) continue;
@@ -207,17 +243,25 @@ export async function GET(req: NextRequest) {
   // Every office with a teammate — and every office still waiting on an
   // invitation, whose first expired invite used to go unmentioned because the
   // office had nobody active yet.
-  const toCheck = new Map(allTeams);
+  const candidates = new Map(allTeams);
   {
-    const { data: pending } = await admin.from("office_members").select("office_id").eq("status", "pending");
-    const extra = [...new Set((pending ?? []).map((p) => p.office_id as string))].filter((id) => !toCheck.has(id));
-    if (extra.length) {
-      const { data: offices } = await admin.from("offices").select("id, owner_id, name").in("id", extra);
+    const pendingOffices = new Set<string>();
+    for (let from = 0; ; from += PAGE) {
+      const { data: pending } = await admin.from("office_members").select("office_id")
+        .eq("status", "pending").order("id").range(from, from + PAGE - 1);
+      for (const p of pending ?? []) pendingOffices.add(p.office_id as string);
+      if (!pending || pending.length < PAGE) break;
+    }
+    const extra = [...pendingOffices].filter((id) => !candidates.has(id));
+    for (let i = 0; i < extra.length; i += 200) {
+      const { data: offices } = await admin.from("offices").select("id, owner_id, name").in("id", extra.slice(i, i + 200));
       for (const o of offices ?? []) {
-        toCheck.set(o.id as string, { officeId: o.id as string, ownerId: o.owner_id as string, name: (o.name as string | null) ?? null, memberIds: [] });
+        candidates.set(o.id as string, { officeId: o.id as string, ownerId: o.owner_id as string, name: (o.name as string | null) ?? null, memberIds: [] });
       }
     }
   }
+  // The pending-only offices are exactly where a lapsed owner hides: re-check.
+  const toCheck = await liveTeams(admin, candidates);
   for (const team of toCheck.values()) {
     try {
       const { data: owner } = await admin.from("profiles").select("customization").eq("id", team.ownerId).maybeSingle();

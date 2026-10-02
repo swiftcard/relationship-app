@@ -421,6 +421,12 @@ export async function POST(req: NextRequest) {
             url: insertedLead?.id
               ? `${APP_URL}/contacts?card=${encodeURIComponent(card_owner)}&lead=${insertedLead.id}`
               : `${APP_URL}/contacts?card=${encodeURIComponent(card_owner)}`,
+            // …and the BELL ROW carries the same contact. Only the push had it:
+            // all 8 production new_lead rows in Sept 2026 had no lead_id, so
+            // tapping one in the bell opened the contacts list (2026-10-02
+            // audit). A locked Free lead's name is marked, and redactForPlan
+            // drops the id on read whenever the name is blocked out.
+            leadId: insertedLead?.id ?? null,
             // NO vCARD ON THE NOTIFICATION. It used to carry one, and the web
             // notification put a "Save to Contacts" button on it that finished
             // the job without ever opening SwiftCard. Removed 2026-09-11: this

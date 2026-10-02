@@ -127,9 +127,13 @@ export async function checkViewMilestone(rawUsername: string): Promise<Milestone
     // `type` is still accepted as a match so the milestones announced BEFORE
     // that column existed are not all re-announced once.
     const type = `milestone_${reached}`;
+    // Scoped to the OWNER as well as the slug: slugs can change hands (a card
+    // deleted, its handle taken by someone else), and the new owner's first
+    // milestones must not count as already announced (2026-10-02 audit).
     const scoped = await admin
       .from("notifications")
       .select("id")
+      .eq("user_id", ownerId)
       .eq("card_owner", base)
       .or(`milestone.eq.${type},type.eq.${type}`)
       .limit(1);

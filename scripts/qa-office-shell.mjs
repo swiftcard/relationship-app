@@ -395,7 +395,17 @@ try {
   if (browser) await browser.close().catch(() => {});
   console.log("\ncleaning up…");
   try {
-    if (officeId) { await adm(`/rest/v1/office_members?office_id=eq.${officeId}`, { method: "DELETE" }); await adm(`/rest/v1/offices?id=eq.${officeId}`, { method: "DELETE" }); }
+    if (officeId) {
+      // profiles.office_id references the office with NO cascade, and the
+      // members' profiles still point at it here — so the office DELETE was
+      // refused (unchecked), every night: 246 "Northbeam Commercial" offices
+      // with no owner had piled up by 2026-10-02. Unlink first, then delete,
+      // and say so if it still survives.
+      await adm(`/rest/v1/profiles?office_id=eq.${officeId}`, { method: "PATCH", body: JSON.stringify({ office_id: null }) });
+      await adm(`/rest/v1/office_members?office_id=eq.${officeId}`, { method: "DELETE" });
+      const del = await adm(`/rest/v1/offices?id=eq.${officeId}`, { method: "DELETE" });
+      if (!del.ok) console.error(`  OFFICE NOT DELETED (${del.status}) — remove manually: ${officeId}`);
+    }
     for (const id of users) {
       const prof = await (await adm(`/rest/v1/profiles?id=eq.${id}&select=username`)).json().catch(() => []);
       const un = prof?.[0]?.username;

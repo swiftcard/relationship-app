@@ -110,7 +110,9 @@ describe("a paid account is never shown Free-plan copy", () => {
 describe("bell rows open what they are about", () => {
   it("a contact row in the bell opens Contacts — the contact itself when the row knows who", () => {
     const src = read("src/components/NotificationBell.tsx");
-    expect(src).toMatch(/router\.push\(contactHref\(n\)\)/);
+    // rowHref: contact rows → contactHref, referral rows → /grow#refer.
+    expect(src).toMatch(/if \(CONTACT_TYPES\.has\(n\.type\)\) return contactHref\(n\);/);
+    expect(src).toMatch(/router\.push\(rowHref\(n\)!\)/);
     expect(src).toMatch(/if \(n\.lead_id\) return `\/contacts\?/);
   });
 });

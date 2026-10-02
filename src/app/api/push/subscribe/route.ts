@@ -5,6 +5,7 @@ import { writePushPrefs } from "@/lib/push-prefs";
 import { isRateLimited } from "@/lib/rate-limit";
 import { clientIp } from "@/lib/client-ip";
 import { assertSafeUrl } from "@/lib/safe-fetch";
+import { DEVICE_COOKIE, isDeviceId } from "@/lib/device";
 
 // A browser push endpoint (or apns:<token> row) belongs to a DEVICE; on a
 // shared device the signed-in user legitimately changes, so the upsert
@@ -59,10 +60,25 @@ export async function POST(req: NextRequest) {
   // without that constraint two accounts could both hold rows for one device
   // token, so pushes for BOTH would land on the same phone
   // (supabase/view-visit-window.sql adds the constraint + dedupes old rows).
-  const { error } = await admin.from("push_subscriptions").upsert(
-    { user_id: user.id, endpoint, p256dh, auth },
+  // WHICH DEVICE this is (the sc_device cookie, lib/device.ts), so signing the
+  // device out in Settings → Devices can stop its pushes too (api/devices
+  // DELETE). Before the column existed a signed-out phone kept getting the
+  // account's alerts (2026-10-02 audit). An absent cookie leaves it null.
+  const cookieDevice = req.cookies.get(DEVICE_COOKIE)?.value;
+  const deviceId = isDeviceId(cookieDevice) ? cookieDevice : null;
+  let { error } = await admin.from("push_subscriptions").upsert(
+    { user_id: user.id, endpoint, p256dh, auth, device_id: deviceId },
     { onConflict: "endpoint" }
   );
+  // Column not migrated yet (supabase/push-subscription-device.sql): store
+  // the subscription without it rather than lose the device altogether.
+  const code = (error as { code?: string } | null)?.code;
+  if (error && (code === "42703" || code === "PGRST204")) {
+    ({ error } = await admin.from("push_subscriptions").upsert(
+      { user_id: user.id, endpoint, p256dh, auth },
+      { onConflict: "endpoint" }
+    ));
+  }
   if (error) {
     console.error("push_subscriptions upsert failed:", error.message);
     return NextResponse.json({ error: "Subscription not stored" }, { status: 500 });

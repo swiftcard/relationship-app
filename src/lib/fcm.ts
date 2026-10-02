@@ -13,7 +13,7 @@ import crypto from "node:crypto";
 // landing in that branch is not a loud failure — it is a blocked endpoint,
 // logged once and never delivered, so Android push would simply never work and
 // nothing would turn red. push.ts now filters on both prefixes explicitly and
-// tests/android-push-routing.test.ts fails if that regresses.
+// tests/android-shell.test.ts fails if that regresses.
 //
 // Completely safe to ship unconfigured, exactly like APNs: with no FIREBASE_*
 // environment set every send resolves `not_configured` and no notification is

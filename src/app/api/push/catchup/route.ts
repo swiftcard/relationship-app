@@ -7,6 +7,10 @@ import {
   localHour, quietWindowStart, readPushPrefs, QUIET_END_HOUR, type PushCategory,
 } from "@/lib/push-policy";
 import { contactMayPush } from "@/lib/contact-return-notify";
+import { hasMarkedName } from "@/lib/contact-privacy";
+import { teamAlertRecipients, teamPushContext, teamPushThread } from "@/lib/team-alerts";
+import { officeNotificationPath } from "@/lib/office-notification-links";
+import type { OfficeNotificationType } from "@/lib/office-notify";
 
 // ── The morning after quiet hours ────────────────────────────────────────────
 //
@@ -76,6 +80,19 @@ const RANK: Record<PushCategory, number> = {
   weekly_recap: 0.5,
 };
 
+// Team news an admin's phone was sent (lib/team-alerts `push`), and so could
+// have been held overnight: a teammate joining at 11pm, or the team check
+// landing at the OWNER's 9am — which is still quiet hours for an admin in
+// another timezone. These live in office_notifications, which this job used to
+// never read, so held team news was simply lost (2026-10-02 notification
+// audit). Bell-only team rows (invite_expired, invite_declined, member_left)
+// never had a push to hold, and the Monday team recap goes at 9am.
+const TEAM_PUSH_TYPES = ["member_joined", "member_first_lead", "leads_waiting", "members_no_card", "team_milestone"];
+
+type TeamRow = { officeId: string; officeName: string | null; type: string; title: string; body: string | null; created_at: string };
+
+const PAGE = 1000;
+
 function destinationFor(category: PushCategory, cardOwner: string | null): string {
   const card = cardOwner ? `?card=${encodeURIComponent(cardOwner)}` : "";
   if (category === "billing_problem") return `${APP_URL}/settings/flows?billing=1`;
@@ -113,13 +130,49 @@ export async function GET(req: NextRequest) {
 
   // Driven by DEVICES, not by profiles: someone with no push subscription has
   // nothing to catch up on, and this runs every hour of every day.
-  const { data: subs, error } = await admin.from("push_subscriptions").select("user_id");
-  if (error) {
-    console.error("[push] catch-up could not read subscriptions:", error.message);
-    return NextResponse.json({ error: "read_failed" }, { status: 500 });
+  // PAGED: an unpaged select stops at PostgREST's 1,000-row cap without saying
+  // so, and everyone past the 1,000th device silently lost their mornings.
+  const ids = new Set<string>();
+  for (let from = 0; ; from += PAGE) {
+    const { data: subs, error } = await admin.from("push_subscriptions").select("user_id").order("id").range(from, from + PAGE - 1);
+    if (error) {
+      console.error("[push] catch-up could not read subscriptions:", error.message);
+      return NextResponse.json({ error: "read_failed" }, { status: 500 });
+    }
+    for (const s of subs ?? []) ids.add(s.user_id as string);
+    if (!subs || subs.length < PAGE) break;
   }
-  const userIds = [...new Set((subs ?? []).map((s) => s.user_id as string))];
+  const userIds = [...ids];
   counts.subscribers = userIds.length;
+
+  // Unread team news from the last 12 hours, keyed by each admin who was sent
+  // it. Read once for the run; each person's own quiet window filters it below.
+  const teamRowsFor = new Map<string, TeamRow[]>();
+  try {
+    const { data: recent } = await admin.from("office_notifications")
+      .select("office_id, type, title, body, created_at")
+      .eq("read", false)
+      .in("type", TEAM_PUSH_TYPES)
+      .gte("created_at", new Date(now - 12 * 3600 * 1000).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(PAGE);
+    const officeIds = [...new Set((recent ?? []).map((r) => r.office_id as string))];
+    if (officeIds.length) {
+      const { data: offices } = await admin.from("offices").select("id, name").in("id", officeIds);
+      const nameOf = new Map((offices ?? []).map((o) => [o.id as string, (o.name as string | null) ?? null]));
+      for (const officeId of officeIds) {
+        // teamAlertRecipients: the owner and roles that see team analytics,
+        // and nobody once the team has lapsed — the same people the live push
+        // went to.
+        const recipients = await teamAlertRecipients(officeId);
+        const rows: TeamRow[] = (recent ?? []).filter((r) => r.office_id === officeId).map((r) => ({
+          officeId, officeName: nameOf.get(officeId) ?? null,
+          type: r.type as string, title: r.title as string, body: (r.body as string | null) ?? null, created_at: r.created_at as string,
+        }));
+        for (const uid of recipients) teamRowsFor.set(uid, [...(teamRowsFor.get(uid) ?? []), ...rows]);
+      }
+    }
+  } catch { /* team news is extra; never cost anyone their own morning */ }
 
   // Read the profiles in batches rather than one per subscriber. This runs
   // every hour of every day and almost nobody in it is at 8am — a round trip
@@ -178,12 +231,23 @@ export async function GET(req: NextRequest) {
         .order("created_at", { ascending: false })
         .limit(50);
 
-      let held = (rows ?? [])
-        .map((r) => ({ row: r, category: CATEGORY_FOR_TYPE[r.type as string] }))
-        .filter((x): x is { row: typeof x.row; category: PushCategory } =>
+      type Held = { row: Row; category: PushCategory; team?: TeamRow };
+      let held: Held[] = (rows ?? [])
+        .map((r) => ({ row: r as Row, category: CATEGORY_FOR_TYPE[r.type as string] }))
+        .filter((x): x is Held =>
           // A category switched OFF is a decision the person made; the morning
           // must not be a way around it.
           Boolean(x.category) && prefs[x.category] !== false);
+
+      // Their team's held news, under the Team alerts switch.
+      if (prefs.team_alert !== false) {
+        const since = quietWindowStart(now, prefs.timezone);
+        for (const t of teamRowsFor.get(userId) ?? []) {
+          if (new Date(t.created_at).getTime() < since) continue;
+          held.push({ row: { type: t.type, title: t.title, body: t.body, card_owner: null, created_at: t.created_at, lead_id: null }, category: "team_alert", team: t });
+        }
+        held.sort((a, b) => String(b.row.created_at).localeCompare(String(a.row.created_at)));
+      }
 
       // ── The contacts the owner silenced ─────────────────────────────────
       // A contact marked Not interested / Closed is held from the phone at
@@ -227,27 +291,46 @@ export async function GET(req: NextRequest) {
         endpoints: 0,
       });
 
+      // A LOCKED Free lead (its name is marked, api/leads): the live push says a
+      // plain "New contact" / "Someone shared their info — open to unlock.",
+      // because "New contact: a contact" is what the marked title becomes on a
+      // Free lock screen. The morning says exactly what the night would have.
+      const lockedLead = !paid && top.row.type === "new_lead" && hasMarkedName(String(top.row.title ?? ""));
+      const contactUrl = top.row.lead_id
+        ? `${APP_URL}/contacts?${top.row.card_owner ? `card=${encodeURIComponent(String(top.row.card_owner))}&` : ""}lead=${encodeURIComponent(String(top.row.lead_id))}`
+        : null;
       await sendPushToUser(userId, {
         category: top.category,
         // The headline is the news itself, exactly as the bell wrote it ("New
         // contact: Dana Whitfield"). The count goes in the body, where it
         // cannot push the name off the line.
-        title: String(top.row.title ?? "While you were away"),
+        title: lockedLead ? "New contact" : String(top.row.title ?? "While you were away"),
         body: extra > 0
           ? `Plus ${extra} more while you were away.`
+          : lockedLead
+            ? "Someone shared their info — open to unlock."
           // A contact locked overnight and unlocked by an upgrade before 8am
           // must not reach a paid lock screen as "— open to unlock".
           : paid && top.row.type === "new_lead"
             ? unlockedLeadBody(String(top.row.body ?? ""))
             : String(top.row.body ?? ""),
-        // The same screen the live push opens: one returning contact on Pro
-        // opens THAT contact; on Free (the name is withheld) that card's
-        // dashboard, where the row waits in the bell.
-        url: extra === 0 && top.category === "contact_return" && top.row.lead_id
+        // The same screen the live push opens: a new contact or a reply opens
+        // THAT contact (the bell row carries lead_id since 2026-10-02); one
+        // returning contact on Pro opens that contact, on Free (the name is
+        // withheld) that card's dashboard, where the row waits in the bell; team
+        // news opens the admin screen the team bell row opens.
+        url: top.team
+          ? `${APP_URL}${officeNotificationPath(top.team.type as OfficeNotificationType)}`
+          : extra === 0 && (top.category === "new_lead" || top.category === "lead_reply") && contactUrl
+          ? contactUrl
+          : extra === 0 && top.category === "contact_return" && contactUrl
           ? paid
-            ? `${APP_URL}/contacts?${top.row.card_owner ? `card=${encodeURIComponent(String(top.row.card_owner))}&` : ""}lead=${encodeURIComponent(String(top.row.lead_id))}`
+            ? contactUrl
             : `${APP_URL}/dashboard${top.row.card_owner ? `?card=${encodeURIComponent(String(top.row.card_owner))}` : ""}`
           : destinationFor(top.category, (top.row.card_owner as string | null) ?? null),
+        // Team news says which team, and sits in that team's thread, like every
+        // team push (lib/team-alerts).
+        ...(top.team ? { context: teamPushContext(top.team.officeName), thread: teamPushThread(top.team.officeId) } : {}),
         // Name the card only when the whole night was about ONE card — "Card:
         // Work" over "Plus 3 more" would be wrong if the others were elsewhere.
         cardOwner: held.every((h) => (h.row.card_owner ?? null) === (top.row.card_owner ?? null))

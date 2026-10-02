@@ -43,6 +43,19 @@ function contactHref(n: Notification): string {
   return card ? `/contacts?${card}` : "/contacts";
 }
 
+// Referral rows open the Refer a friend section, where the Claim button is.
+// "Congratulations — … Tap here and it comes off your next bill" was a row
+// that could not be tapped (2026-10-02 notification audit). Hidden in the app
+// either way (referral_claim, below).
+const REFERRAL_ROW_TYPES = new Set(["referral_claim", "referral_progress"]);
+
+/** Where tapping this row goes, or null for a row that is just information. */
+function rowHref(n: Notification): string | null {
+  if (CONTACT_TYPES.has(n.type)) return contactHref(n);
+  if (REFERRAL_ROW_TYPES.has(n.type)) return "/grow#refer";
+  return null;
+}
+
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
@@ -366,10 +379,13 @@ export default function NotificationBell({
                   <div className={`group px-4 py-3 transition-colors ${n.read ? "" : "bg-blue-950"} ${n.id === askId && ask.show ? "border-b-0" : ""}`}>
                     <div className="flex items-start gap-3">
                       <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${n.read ? "bg-gray-700" : "bg-blue-500"}`} />
+                      {/* Opening a row is reading it: it used to stay unread
+                          (and counted on the badge) after you had gone to it,
+                          unlike the team inbox, which marks on tap. */}
                       <div
-                        className={`min-w-0 flex-1 ${CONTACT_TYPES.has(n.type) ? "cursor-pointer" : ""}`}
-                        onClick={CONTACT_TYPES.has(n.type) ? () => { setOpen(false); router.push(contactHref(n)); } : undefined}
-                        role={CONTACT_TYPES.has(n.type) ? "button" : undefined}
+                        className={`min-w-0 flex-1 ${rowHref(n) ? "cursor-pointer" : ""}`}
+                        onClick={rowHref(n) ? () => { if (!n.read) void setRead(n.id, true); setOpen(false); router.push(rowHref(n)!); } : undefined}
+                        role={rowHref(n) ? "button" : undefined}
                       >
                         <p className="text-white text-xs font-semibold truncate"><NotificationBody text={n.title} /></p>
                         {/* Same renderer as the dashboard list: on a Free

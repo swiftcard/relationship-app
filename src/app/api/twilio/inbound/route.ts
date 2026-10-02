@@ -169,6 +169,9 @@ export async function POST(req: NextRequest) {
             const wrote = await insertNotification({
               user_id: owner.id as string,
               card_owner: target.card_owner,
+              // Without it the bell row opened the contacts list rather than
+              // this conversation (2026-10-02 notification audit).
+              lead_id: target.id,
               type: "lead_reply",
               title: `${who} replied`,
               // The message itself, trimmed by push-policy to the lock-screen

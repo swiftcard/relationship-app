@@ -1,4 +1,5 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
+import { isOfficePlan } from "@/lib/plan";
 
 // ── Office "team inbox" notifications ────────────────────────────────────────
 // Deliberately SEPARATE from the personal per-user notifications (public
@@ -32,13 +33,42 @@ export type OfficeNotification = {
   created_at: string;
 };
 
+/**
+ * Is this team LIVE — its owner still on the Office plan?
+ *
+ * The offices row outlives the subscription on purpose (re-subscribing restores
+ * the team), so its existence proves nothing. Nobody can open a lapsed team's
+ * inbox (requireOfficeCapability refuses it), and its owner was still being
+ * sent team alerts about their own cards (2026-10-02 notification audit). The
+ * same test requireOfficeCapability makes, for the same reason.
+ *
+ * Fails OPEN on a read error: a real team missing one alert during a database
+ * blip is worse than a lapsed one getting one.
+ */
+export async function officeIsLive(officeId: string): Promise<boolean> {
+  if (!officeId) return false;
+  try {
+    const admin = getAdminSupabase();
+    const { data: office, error } = await admin.from("offices").select("owner_id").eq("id", officeId).maybeSingle();
+    if (error) return true;
+    if (!office?.owner_id) return false;
+    const { data: owner, error: ownerErr } = await admin.from("profiles").select("plan").eq("id", office.owner_id).maybeSingle();
+    if (ownerErr) return true;
+    return isOfficePlan((owner?.plan as string | null) ?? null);
+  } catch {
+    return true;
+  }
+}
+
 // Emit one important team-inbox notification. Best-effort: a failure here must
 // never break the action that triggered it (join, decline, …). Service-role.
+// Only for a LIVE team (officeIsLive): a lapsed team's inbox can't be opened.
 export async function notifyOffice(
   officeId: string,
   n: { type: OfficeNotificationType; title: string; body?: string | null; meta?: Record<string, unknown> },
 ): Promise<void> {
   if (!officeId) return;
+  if (!(await officeIsLive(officeId))) return;
   try {
     await getAdminSupabase().from("office_notifications").insert({
       office_id: officeId,

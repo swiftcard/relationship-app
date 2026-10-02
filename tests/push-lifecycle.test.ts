@@ -67,7 +67,10 @@ describe("silent token refresh — rotated APNs tokens stop being silent death",
 
 describe("the binding row is trustworthy", () => {
   it("the subscribe upsert result is CHECKED — no more 'subscribed' with no row", () => {
-    expect(subscribe).toMatch(/const \{ error \} = await admin\.from\("push_subscriptions"\)\.upsert/);
+    // `let`, not `const`: a missing device_id column retries without it, and
+    // the retry's error is the one checked (2026-10-02, push-subscription-device.sql).
+    expect(subscribe).toMatch(/let \{ error \} = await admin\.from\("push_subscriptions"\)\.upsert/);
+    expect(subscribe).toMatch(/if \(error\) \{\s*console\.error\("push_subscriptions upsert failed:"/);
     expect(subscribe).toMatch(/status: 500/);
   });
 

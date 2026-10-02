@@ -273,7 +273,7 @@ export function usePushState(): [State, () => Promise<boolean>, FailReason, Rech
         // naming a channel that does not exist — silently, with the send
         // reported as delivered. The id must stay byte-identical to
         // FCM_CHANNEL_ID in lib/fcm.ts, which is what the server puts on every
-        // message; tests/android-push-routing.test.ts pins the pair.
+        // message; tests/android-shell.test.ts pins the pair.
         // importance 4 = IMPORTANCE_HIGH, which is what makes a banner appear
         // over the app instead of a silent row in the shade — the Android
         // equivalent of the iOS presentationOptions in capacitor.config.ts.

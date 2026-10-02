@@ -26,6 +26,9 @@ let profile: Row = {};
 let catchupMarks: Row[] = [];
 let notifications: Row[] = [];
 let leads: Row[] = [];
+// Team news (office_notifications) and who it went to (teamAlertRecipients).
+let teamRows: Row[] = [];
+let teamRecipients: string[] = [];
 const inserted: Row[] = [];
 const pushes: Row[] = [];
 
@@ -33,7 +36,9 @@ vi.mock("@/lib/supabase-admin", () => ({
   getAdminSupabase: () => ({
     from: (table: string) => {
       if (table === "push_subscriptions") {
-        return { select: async () => ({ data: subscriptions, error: null }) };
+        // Paged (order + range): an unpaged select stops at 1,000 rows silently.
+        const q = { order: () => q, range: async () => ({ data: subscriptions, error: null }) };
+        return { select: () => q };
       }
       if (table === "profiles") {
         // Read in batches with .in(), not one round trip per subscriber: this
@@ -57,6 +62,13 @@ vi.mock("@/lib/supabase-admin", () => ({
         };
         return { select: () => q };
       }
+      if (table === "office_notifications") {
+        const q = { eq: () => q, in: () => q, gte: () => q, order: () => q, limit: async () => ({ data: teamRows }) };
+        return { select: () => q };
+      }
+      if (table === "offices") {
+        return { select: () => ({ in: async () => ({ data: [{ id: "office-1", name: "Harbor Realty" }] }) }) };
+      }
       if (table === "leads") {
         // The contacts behind held return alerts: status decides whether
         // the morning may name them (2026-09-23 audit).
@@ -65,6 +77,11 @@ vi.mock("@/lib/supabase-admin", () => ({
       throw new Error("unexpected table " + table);
     },
   }),
+}));
+
+vi.mock("@/lib/team-alerts", async () => ({
+  ...(await vi.importActual<typeof import("@/lib/team-alerts")>("@/lib/team-alerts")),
+  teamAlertRecipients: async () => teamRecipients,
 }));
 
 vi.mock("@/lib/push", () => ({
@@ -97,6 +114,8 @@ beforeEach(() => {
     { type: "new_lead", title: "New contact: Dana Whitfield", body: "Dana Whitfield shared their info with you.", card_owner: "dana-card", created_at: "2026-09-11T02:40:00.000Z" },
   ];
   leads = [];
+  teamRows = [];
+  teamRecipients = [];
   inserted.length = 0;
   pushes.length = 0;
 });
@@ -439,5 +458,50 @@ describe("the timezone the whole thing depends on", () => {
     const src = read("src/components/TimezoneSync.tsx");
     const then = src.slice(src.indexOf(".then("));
     expect(then).toMatch(/if \(!alive \|\| !res\.ok\) return;/);
+  });
+});
+
+// ── 2026-10-02 notification audit ────────────────────────────────────────────
+describe("the morning carries what the night would have said", () => {
+  it("team news held overnight reaches the admin at 8am, as team news", async () => {
+    notifications = [];
+    teamRecipients = ["u1"];
+    teamRows = [{ office_id: "office-1", type: "member_joined", title: "Sam joined your team", body: "Sam accepted your invitation.", created_at: "2026-09-11T03:10:00.000Z" }];
+    await run();
+    expect(pushes).toHaveLength(1);
+    expect(pushes[0]).toMatchObject({ category: "team_alert", title: "Sam joined your team", context: "Team · Harbor Realty", thread: "team-office-1" });
+    expect(String(pushes[0].url)).toContain("/office/admin");
+  });
+
+  it("…but not to someone who switched Team alerts off", async () => {
+    notifications = [];
+    teamRecipients = ["u1"];
+    profile = { plan: "enterprise", customization: { _push: { timezone: "America/New_York", team_alert: false } } };
+    teamRows = [{ office_id: "office-1", type: "member_joined", title: "Sam joined your team", body: null, created_at: "2026-09-11T03:10:00.000Z" }];
+    await run();
+    expect(pushes).toHaveLength(0);
+  });
+
+  it("…and not to an admin it was never sent to", async () => {
+    notifications = [];
+    teamRecipients = ["someone-else"];
+    teamRows = [{ office_id: "office-1", type: "member_joined", title: "Sam joined your team", body: null, created_at: "2026-09-11T03:10:00.000Z" }];
+    await run();
+    expect(pushes).toHaveLength(0);
+  });
+
+  it("a locked Free lead says 'New contact', never 'New contact: a contact'", async () => {
+    profile = { plan: "free", customization: { _push: { timezone: "America/New_York" } } };
+    // The marked name api/leads writes for a lead over the Free cap.
+    const { markName } = await import("@/lib/contact-privacy");
+    notifications = [{ type: "new_lead", title: `New contact: ${markName("Dana Whitfield")}`, body: `${markName("Dana Whitfield")} shared their info — open to unlock.`, card_owner: "dana-card", lead_id: "lead-9", created_at: "2026-09-11T02:40:00.000Z" }];
+    await run();
+    expect(pushes[0]).toMatchObject({ title: "New contact", body: "Someone shared their info — open to unlock." });
+  });
+
+  it("one new contact opens THAT contact, like the live push", async () => {
+    notifications = [{ type: "new_lead", title: "New contact: Dana Whitfield", body: "Dana Whitfield shared their info with you.", card_owner: "dana-card", lead_id: "lead-9", created_at: "2026-09-11T02:40:00.000Z" }];
+    await run();
+    expect(pushes[0].url).toBe("https://swiftcard.me/contacts?card=dana-card&lead=lead-9");
   });
 });

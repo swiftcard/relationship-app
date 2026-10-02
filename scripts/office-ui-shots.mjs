@@ -196,8 +196,12 @@ try {
   if (browser) await browser.close().catch(() => {});
   try {
     if (officeId) {
+      // Unlink profiles first: profiles.office_id has no cascade, so deleting
+      // the office while a profile points at it is refused (see qa-office-shell).
+      await adm(`/rest/v1/profiles?office_id=eq.${officeId}`, { method: "PATCH", body: JSON.stringify({ office_id: null }) });
       await adm(`/rest/v1/office_members?office_id=eq.${officeId}`, { method: "DELETE" });
-      await adm(`/rest/v1/offices?id=eq.${officeId}`, { method: "DELETE" });
+      const del = await adm(`/rest/v1/offices?id=eq.${officeId}`, { method: "DELETE" });
+      if (!del.ok) console.error(`  OFFICE NOT DELETED (${del.status}) — remove manually: ${officeId}`);
     }
     for (const id of users) {
       await adm(`/rest/v1/cards?user_id=eq.${id}`, { method: "DELETE" });

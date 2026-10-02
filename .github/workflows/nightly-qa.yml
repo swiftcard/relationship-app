@@ -44,6 +44,10 @@ jobs:
       # step decides. `|| true` so one red script never hides the others.
       - name: Analytics + notifications end to end
         run: OUT=nightly/probe node scripts/qa-prod-probe.mjs || true
+      # Who gets which notification — bell, team inbox and phone — for Free,
+      # Pro, an Office owner/admin/employee and a lapsed Office owner.
+      - name: Notifications for every plan and account type
+        run: OUT=nightly/notifications node scripts/qa-notifications.mjs || true
       - name: Health + speed budget
         run: node scripts/health-check.mjs > nightly/health.json || true
       - name: Flows

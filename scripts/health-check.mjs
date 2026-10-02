@@ -112,19 +112,23 @@ const CHECKS = [
     // anywhere said so: a push that fails is silent by nature. /api/health asks
     // Apple about a fake device token — BadDeviceToken back means the APNs key,
     // team id and connection are all good; a 403 means they are not.
-    name: "push notifications can be delivered (APNs credentials valid, web push configured)",
+    name: "push notifications can be delivered (APNs + FCM credentials valid, web push configured)",
     run: async () => {
       const res = await get("/api/health");
       let push = null;
       try { push = (await res.json()).push; } catch { /* reported below */ }
       if (!push) return { ok: false, detail: `no push block in /api/health (status ${res.status})` };
-      const ok = push.apns?.configured === true && push.apns?.ok === true && push.webPush === true;
+      // Android (FCM) too, once it is configured: a broken Firebase key fails
+      // every Android phone exactly as silently as a broken APNs key fails
+      // every iPhone. Not configured is fine — that is "no Android build yet".
+      const fcmOk = push.fcm?.configured !== true || push.fcm?.ok === true;
+      const ok = push.apns?.configured === true && push.apns?.ok === true && push.webPush === true && fcmOk;
       return {
         ok,
         detail: ok
-          ? `apns ok (${push.apns.reason}), web push configured`
-          : `apns configured=${push.apns?.configured} ok=${push.apns?.ok} reason=${push.apns?.reason}; webPush=${push.webPush}` +
-            " — check APPLE_TEAM_ID / APPLE_PUSH_KEY_ID / APPLE_PUSH_PRIVATE_KEY and the VAPID keys in Vercel.",
+          ? `apns ok (${push.apns.reason}), web push configured, fcm ${push.fcm?.configured ? "ok" : "not configured"}`
+          : `apns configured=${push.apns?.configured} ok=${push.apns?.ok} reason=${push.apns?.reason}; webPush=${push.webPush}; fcm configured=${push.fcm?.configured} ok=${push.fcm?.ok} reason=${push.fcm?.reason}` +
+            " — check APPLE_TEAM_ID / APPLE_PUSH_KEY_ID / APPLE_PUSH_PRIVATE_KEY, the VAPID keys and the Firebase service account in Vercel.",
       };
     },
   },
