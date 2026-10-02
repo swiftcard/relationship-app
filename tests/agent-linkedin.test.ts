@@ -116,6 +116,7 @@ describe("the drafts", () => {
     for (const t of Object.keys(LI_TRIGGERS) as LiTrigger[]) {
       const d = fallbackDrafts(facts(t), link(null));
       expect(d.message.length).toBeGreaterThan(0);
+      expect(d.comment).toEqual([]);
       for (const m of [...d.message, ...d.followup]) expect(m).toContain(link(null));
       for (const n of d.note) { expect(n.length).toBeLessThanOrEqual(NOTE_MAX); expect(n).toContain("I work with SwiftCard"); expect(n).not.toContain("swiftcard.me"); }
     }

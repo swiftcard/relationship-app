@@ -139,7 +139,9 @@ export function fallbackDrafts(p: ProspectFacts, link: string): LiDrafts {
     other: "a free digital business card",
   };
   return {
-    comment: [opener[p.trigger]],
+    // No canned comment: a line that could sit under anyone's post reads as a
+    // bot, and a comment is only worth posting when it reacts to what they said.
+    comment: [],
     note: [clamp(`${hi}${hi ? opener[p.trigger].replace(/^./, (c) => c.toLowerCase()) : opener[p.trigger]} I work with SwiftCard: ${pitch[p.trigger]}. Glad to connect.`, NOTE_MAX)],
     message: [
       `Thanks for connecting${first(p.name) ? `, ${first(p.name)}` : ""}. I work with SwiftCard: ${pitch[p.trigger]}. It takes about a minute to make: ${link}`,
