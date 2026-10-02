@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
-import { classify, scoreSignal, routeAgent, toSignals, redditFromAtom, telegramFromPreview, telegramFromUpdates, itemsFromFeed, hnFromAlgolia, reviewsFromAppStoreRss, stripHtml, RADAR_AGENTS } from "../marketing-agents/lib/radar.mjs";
+import { classify, scoreSignal, routeAgent, toSignals, redditFromAtom, redditPlan, redditWaitMs, telegramFromPreview, telegramFromUpdates, itemsFromFeed, hnFromAlgolia, reviewsFromAppStoreRss, stripHtml, RADAR_AGENTS } from "../marketing-agents/lib/radar.mjs";
 
 const read = (p: string) => readFileSync(p, "utf8");
 
@@ -133,6 +133,85 @@ describe("radar: scoring and routing", () => {
     expect(news[0].intent).toBe("press"); expect(news[0].assigned_agent).toBe("pr");
     const rev = toSignals([{ external_id: "1:2", title: "Blinq · 1★ · Worst support", body: "Stay away", posted_at: null, engagement: {} }], { platform: "appstore", source_id: "appstore:blinq", list });
     expect(rev[0].intent).toBe("competitor_complaint"); expect(rev[0].status).toBe("noted");
+  });
+});
+
+// ── Reddit, configured for signups (owner order 2026-10-02) ──────────────────
+// "Find people already asking questions SwiftCard solves… The best
+// opportunities are people directly asking: What digital business card should
+// I use?" Reddit closed self-serve API keys in Nov 2025, so the public feeds
+// are the only way in, and they allow about one request per window.
+describe("radar: Reddit — the direct ask first, and a scan Reddit will not refuse", () => {
+  const reddit = { ...list, context_keywords: config.radar.context_keywords as string[], subreddits: config.radar.subreddits as string[] };
+  const post = (id: string, title: string, community: string, body = "") => ({ external_id: id, title, body, community, posted_at: null, engagement: {} });
+  const signals = (posts: ReturnType<typeof post>[]) => toSignals(posts, { platform: "reddit", source_id: "reddit:search", list: reddit });
+
+  it("the owner's watch list is on the list", () => {
+    for (const c of ["Linq", "Popl", "Blinq", "Mobilo"]) expect(config.targets.competitors).toContain(c);
+    for (const k of ["digital business card", "business card alternative", "qr code business card"]) expect(reddit.keywords).toContain(k);
+    for (const k of ["open house sign in", "lead follow up", "networking event", "qr code"]) expect(reddit.context_keywords).toContain(k);
+    expect(read("marketing-agents/lib/radar.mjs")).toMatch(/context_keywords: pick\("context_keywords", DEFAULTS\.context_keywords\)/);
+  });
+  it("'What digital business card should I use?' outranks every other ask", () => {
+    const direct = classify("What digital business card should I use?", reddit, { title: "What digital business card should I use?" });
+    expect(direct).toMatchObject({ intent: "ask", direct: true });
+    expect(direct?.matched[0]).toBe("asked in the title");
+    expect(classify("Popl or Blinq for a small team?", reddit, { title: "Popl or Blinq for a small team?" })?.direct).toBe(true);
+    const buried = classify("Moving to Austin next month\nLong story about the move. " + "x ".repeat(250) + "Also, can anyone recommend a digital business card?", reddit, { title: "Moving to Austin next month" });
+    expect(buried).toMatchObject({ intent: "ask", direct: false });
+    expect(scoreSignal({ intent: "ask", direct: true })).toBe(scoreSignal({ intent: "ask" }) + 15);
+    const [a, b] = signals([post("t3_1", "What digital business card should I use?", "r/sales"), post("t3_2", "Moving to Austin next month", "r/sales", "Can anyone recommend a digital business card?")]);
+    expect(a.score).toBeGreaterThan(b.score);
+    expect(a.matched).toContain("asked in the title");
+  });
+  it("a question that only mentions us in paragraph six is a pitch, not a buyer", () => {
+    const pitch = classify("Epoxy floor installers: does your website actually bring in jobs?\n" + "We audited forty contractor sites this year. ".repeat(12) + "Most of them are a digital business card and nothing more.", reddit, { title: "Epoxy floor installers: does your website actually bring in jobs?" });
+    expect(pitch?.intent).toBe("topic");
+  });
+  it("open houses, follow-up and networking count in the subreddits we watch — and nowhere else", () => {
+    const [watched] = signals([post("t3_3", "How do you get open house visitors to actually use the sign in sheet?", "r/realtors")]);
+    expect(watched).toMatchObject({ intent: "ask", assigned_agent: "mentions", status: "new" });
+    expect(watched.score).toBeGreaterThanOrEqual(50);
+    expect(signals([post("t3_4", "Any good networking events in Austin this month?", "r/Austin")])).toEqual([]);
+    expect(classify("Any good networking events in Austin this month?", reddit, { title: "Any good networking events in Austin this month?" })).toBeNull();
+  });
+  it("adverts on someone's own profile are dropped; our own name never is", () => {
+    expect(signals([post("t3_5", "Why you need a digital business card?", "u/webagency123")])).toEqual([]);
+    expect(signals([post("t3_6", "SwiftCard review", "u/someone")])[0].intent).toBe("brand");
+  });
+  it("one request reads every subreddit, and the searches take turns", () => {
+    const sources = [{ kind: "reddit_search", target: "*" }, ...reddit.subreddits.map((s) => ({ kind: "reddit_sub", target: s }))];
+    const first = redditPlan(reddit, sources, 0);
+    expect(first.requests[0].sub.split("+")).toEqual(reddit.subreddits);
+    expect(first.requests.filter((r: { sub?: string }) => r.sub)).toHaveLength(1);
+    expect(first.requests.length).toBeLessThanOrEqual(3);
+    // Context keywords never go into the site-wide search.
+    for (const r of first.requests) if (r.q) expect(r.q).not.toMatch(/open house|networking event/);
+    // Every query gets its turn before any repeats.
+    const seen = new Set<string>();
+    let cursor = 0, total = 0;
+    for (let i = 0; i < 6; i++) { const p = redditPlan(reddit, sources, cursor); for (const r of p.requests) if (r.q) { seen.add(r.q); total++; } cursor = p.cursor; }
+    expect(seen.size).toBeGreaterThanOrEqual(5);
+    expect(seen.has(config.targets.competitors.map((c) => (/\s/.test(c) ? `"${c}"` : c)).join(" OR "))).toBe(true);
+    expect(total).toBe(12);
+  });
+  it("waits out the window Reddit names instead of guessing", () => {
+    const h = (o: Record<string, string>) => new Headers(o);
+    expect(redditWaitMs(h({ "x-ratelimit-remaining": "0.0", "x-ratelimit-reset": "17" }))).toBe(18000);
+    expect(redditWaitMs(h({ "x-ratelimit-remaining": "5", "x-ratelimit-reset": "17" }))).toBe(2500);
+    expect(redditWaitMs(h({ "x-ratelimit-remaining": "0", "x-ratelimit-reset": "900" }))).toBe(76000);
+    expect(redditWaitMs(null)).toBe(20000);
+    const src = read("marketing-agents/lib/radar.mjs");
+    expect(src).toMatch(/wait = redditWaitMs\(res\.headers\)/);
+    // A scan that was cut short keeps its place.
+    expect(src).toMatch(/cursor: error \? cursor : plan\.cursor/);
+  });
+  it("Zoe is briefed on the goal, the order, and the link that counts the signup", () => {
+    const brief = read("marketing-agents/agents/mentions.md");
+    expect(brief).toContain("asked in the title");
+    expect(brief).toContain("swiftcard.me/go/rd_<subreddit>");
+    expect(brief).toMatch(/Menash or Aaron, by hand/);
+    expect(brief).toMatch(/Never write it as a\s+customer/);
   });
 });
 

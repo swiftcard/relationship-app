@@ -14,10 +14,11 @@
 // before. The Radar never posts, replies, DMs or joins anything.
 //
 // Sources (all read-only, all public):
-//   reddit     official read API when REDDIT_CLIENT_ID/SECRET exist (free,
-//              100 req/min, the way Reddit wants it); the public Atom search
-//              feed otherwise (rate-limited — a 429 stops the family for
-//              this scan and says so on the source row)
+//   reddit     the public Atom feeds: one multireddit feed for every watched
+//              subreddit + the keyword searches taking turns, paced by
+//              Reddit's own rate-limit headers (see readReddit). Self-serve
+//              API keys ended in Nov 2025; if REDDIT_CLIENT_ID/SECRET ever
+//              exist the official read API is used instead
 //   telegram   public channel previews (t.me/s/<channel>) — no account needed
 //              — plus every group a SwiftCard bot has been added to
 //              (TELEGRAM_BOT_TOKEN, getUpdates; privacy mode off so it sees
@@ -61,9 +62,9 @@ async function get(url, { headers = {}, timeoutMs = 20_000, method = "GET", body
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(url, { method, body, signal: ctrl.signal, redirect: "follow", headers: { "user-agent": UA_BOT, ...headers } });
-    return { status: res.status, text: await res.text() };
+    return { status: res.status, text: await res.text(), headers: res.headers };
   } catch (e) {
-    return { status: 0, text: "", error: String(e?.message ?? e) };
+    return { status: 0, text: "", headers: null, error: String(e?.message ?? e) };
   } finally { clearTimeout(timer); }
 }
 
@@ -104,6 +105,7 @@ export async function listeningList() {
   const pick = (k, fallback) => (Array.isArray(over?.[k]) && over[k].length ? over[k] : fallback) ?? [];
   return {
     keywords: pick("keywords", DEFAULTS.keywords),
+    context_keywords: pick("context_keywords", DEFAULTS.context_keywords),
     brand: pick("brand", TARGETS.brand_variations),
     competitors: pick("competitors", TARGETS.competitors),
     ask_words: pick("ask_words", DEFAULTS.ask_words),
@@ -142,37 +144,64 @@ const wordRe = (w) => new RegExp(`(^|[^a-z0-9])${escapeRe(String(w).toLowerCase(
  *   competitor           — a competitor mentioned neutrally (intel only)
  *   topic                — the category came up, no question asked
  * Platforms override afterwards: news → press, YouTube → creator.
+ *
+ * `watched` = the post sits in a community we chose to listen to. Only there
+ * do the CONTEXT keywords count ("open house sign in", "follow up with
+ * leads", "networking event"): in r/realtors they are our conversation, on
+ * the whole of Reddit they are noise.
+ *
+ * `direct` = the category (or a competitor) AND the question are both in the
+ * title — "What digital business card should I use?". The owner's best
+ * opportunity (2026-10-02), so it outranks every other ask.
  */
-export function classify(text, list, { title = null } = {}) {
+export function classify(text, list, { title = null, watched = false } = {}) {
   const t = String(text ?? "").replace(/\s+/g, " ");
   if (!t) return null;
   const lower = t.toLowerCase();
-  const hit = (words) => (words ?? []).filter((w) => w && wordRe(w).test(lower)).map(String);
+  const hit = (words, where = lower) => (words ?? []).filter((w) => w && wordRe(w).test(where)).map(String);
   const brand = hit(list.brand);
   const competitors = (list.competitors ?? []).filter((c) => competitorRe(c).test(t));
   const topic = hit(list.keywords);
-  if (!brand.length && !competitors.length && !topic.length) return null;
+  const context = watched ? hit(list.context_keywords) : [];
+  if (!brand.length && !competitors.length && !topic.length && !context.length) return null;
   const complaint = hit(list.complaint_words);
   const asks = hit(list.ask_words);
   // A question is one asked in the title (or the opening line) — a "?" buried
   // in paragraph four of a sales post is not someone asking for help.
-  const question = /\?/.test(title ? String(title) : t.slice(0, 200));
+  const head = title ? String(title) : t.slice(0, 200);
+  const headLower = head.toLowerCase();
+  const question = /\?/.test(head);
+  const direct = (hit(list.keywords, headLower).length > 0 || competitors.some((c) => competitorRe(c).test(head)))
+    && (question || hit(list.ask_words, headLower).length > 0);
+  // …and it has to be a question ABOUT our subject: the subject opens the post,
+  // or sits next to the asking words. "Does your website bring in jobs?" with
+  // "digital business card" in paragraph six is a pitch, not a buyer.
+  const subject = [...topic, ...context, ...competitors];
+  const at = (words) => words.flatMap((w) => { const i = lower.indexOf(String(w).toLowerCase()); return i < 0 ? [] : [i]; });
+  const subjectAt = at(subject);
+  const about = direct || subjectAt.some((i) => i < 400) || at(asks).some((a) => subjectAt.some((i) => Math.abs(i - a) <= 160));
   let intent;
   if (brand.length) intent = "brand";
   else if (competitors.length && complaint.length) intent = "competitor_complaint";
-  else if (question || asks.length) intent = "ask";
+  else if ((question || asks.length) && about) intent = "ask";
   else if (competitors.length) intent = "competitor";
   else intent = "topic";
-  return { intent, matched: [...new Set([...brand, ...competitors, ...topic.slice(0, 3), ...complaint.slice(0, 2), ...asks.slice(0, 2)])] };
+  const isDirect = intent === "ask" && direct;
+  return {
+    intent, direct: isDirect,
+    matched: [...new Set([...(isDirect ? ["asked in the title"] : []), ...brand, ...competitors, ...topic.slice(0, 3), ...context.slice(0, 2), ...complaint.slice(0, 2), ...asks.slice(0, 2)])],
+  };
 }
 
 // prospect = a fresh Instagram post under a hashtag new professionals use
 // (#newrealtor, #justlicensed): nobody asked about us, but it is the moment
 // they need a card. 45 + freshness, so only a post from the last day wakes Ava.
 const INTENT_BASE = { brand: 90, competitor_complaint: 75, ask: 70, press: 55, creator: 50, prospect: 45, competitor: 40, topic: 30 };
+// "What digital business card should I use?" — someone choosing right now.
+const DIRECT_ASK_BONUS = 15;
 /** 0-100. Intent carries it; engagement and freshness nudge it. */
-export function scoreSignal({ intent, engagement = {}, posted_at }) {
-  let s = INTENT_BASE[intent] ?? 30;
+export function scoreSignal({ intent, engagement = {}, posted_at, direct = false }) {
+  let s = (INTENT_BASE[intent] ?? 30) + (direct ? DIRECT_ASK_BONUS : 0);
   const eng = Number(engagement.ups ?? engagement.points ?? 0) + 2 * Number(engagement.comments ?? 0) + Number(engagement.views ?? 0) / 500;
   if (eng > 0) s += Math.min(15, Math.round(Math.log10(1 + eng) * 7));
   const age = posted_at ? Date.now() - new Date(posted_at).getTime() : null;
@@ -278,28 +307,63 @@ export function redditFromAtom(xml) {
   return out;
 }
 
-/** One scan of Reddit: keyword searches site-wide + the newest posts of every
- *  listed subreddit. Returns { posts, mode, error }. */
-async function readReddit(list, sources) {
-  const token = await redditAuth();
-  const mode = token ? "api" : "rss";
+// Reddit closed self-serve API keys in November 2025 (new apps need a reviewed
+// Data Access Request, and marketing use is what it refuses), so the public
+// Atom feeds are how the Radar reads Reddit. They allow roughly ONE request
+// per window per address and say so in x-ratelimit-reset — the old scan sent
+// 22 requests 2.5s apart and was refused after the first. So:
+//   • every watched subreddit is read in ONE request (a multireddit feed:
+//     /r/a+b+c/new.rss returns the 100 newest posts across all of them);
+//   • the site-wide keyword searches take turns, a couple per scan, picking up
+//     where the last scan stopped (the cursor lives on the reddit:search row);
+//   • between requests the scan waits out the window Reddit names.
+const REDDIT_SUBS_PER_FEED = 25;
+const REDDIT_SEARCHES_PER_SCAN = 2;
+const REDDIT_KEYWORDS_PER_QUERY = 8;
+
+/** The requests one scan makes: every multireddit feed, then the next few
+ *  searches after `cursor`. Pure — returns { requests, cursor } (the new cursor). */
+export function redditPlan(list, sources, cursor = 0, { api = false } = {}) {
   const subs = sources.filter((s) => s.kind === "reddit_sub").map((s) => s.target);
   const searchOn = sources.some((s) => s.kind === "reddit_search");
+  const chunk = (arr, n) => arr.reduce((a, x, i) => ((a[Math.floor(i / n)] ??= []).push(x), a), []);
+  const quote = (w) => (/\s/.test(w) ? `"${w}"` : w);
   const queries = [];
   if (searchOn) {
-    const quote = (w) => (/\s/.test(w) ? `"${w}"` : w);
-    const chunk = (arr, n) => arr.reduce((a, x, i) => ((a[Math.floor(i / n)] ??= []).push(x), a), []);
-    for (const group of chunk(list.keywords, 6)) queries.push(group.map(quote).join(" OR "));
-    queries.push([...list.brand].slice(0, 6).map(quote).join(" OR "));
-    queries.push(list.competitors.map(quote).join(" OR "));
+    // Site-wide, only the core category words — never the context keywords.
+    for (const group of chunk(list.keywords ?? [], REDDIT_KEYWORDS_PER_QUERY)) queries.push(group.map(quote).join(" OR "));
+    if (list.brand?.length) queries.push([...list.brand].slice(0, 6).map(quote).join(" OR "));
+    if (list.competitors?.length) queries.push(list.competitors.map(quote).join(" OR "));
   }
+  // With an approved API app there is room for everything on every scan.
+  if (api) return { requests: [...queries.map((q) => ({ q })), ...subs.map((sub) => ({ sub }))], cursor: 0 };
+  const feeds = chunk(subs, REDDIT_SUBS_PER_FEED).map((group) => ({ sub: group.join("+") }));
+  const turn = [];
+  const start = queries.length ? cursor % queries.length : 0;
+  for (let i = 0; i < Math.min(REDDIT_SEARCHES_PER_SCAN, queries.length); i++) turn.push({ q: queries[(start + i) % queries.length] });
+  return { requests: [...feeds, ...turn], cursor: queries.length ? (start + turn.length) % queries.length : 0 };
+}
+
+/** How long Reddit asked us to wait before the next request (ms). */
+export function redditWaitMs(headers) {
+  const remaining = Number(headers?.get?.("x-ratelimit-remaining"));
+  const reset = Number(headers?.get?.("x-ratelimit-reset"));
+  if (Number.isFinite(remaining) && remaining >= 1) return 2500;
+  // No header, or a window with nothing left: wait it out, within reason.
+  return (Number.isFinite(reset) && reset > 0 ? Math.min(reset, 75) + 1 : 20) * 1000;
+}
+
+/** One scan of Reddit: the newest posts of every listed subreddit + a turn of
+ *  the site-wide keyword searches. Returns { posts, mode, error, cursor }. */
+async function readReddit(list, sources, cursor = 0) {
+  const token = await redditAuth();
+  const mode = token ? "api" : "rss";
+  const plan = redditPlan(list, sources, cursor, { api: !!token });
   const posts = [];
   let error = null;
-  const requests = [
-    ...queries.map((q) => ({ q, sub: null })),
-    ...subs.map((sub) => ({ q: null, sub })),
-  ];
-  for (const r of requests) {
+  let done = 0;
+  let wait = 2500;
+  for (const r of plan.requests) {
     let res;
     if (token) {
       const url = r.q
@@ -309,17 +373,20 @@ async function readReddit(list, sources) {
       if (res.status === 200) posts.push(...redditFromListing(res.text));
       await sleep(700);
     } else {
+      if (done > 0) await sleep(wait);
       const url = r.q
-        ? `https://www.reddit.com/search.rss?q=${encodeURIComponent(r.q)}&sort=new&t=week`
-        : `https://www.reddit.com/r/${encodeURIComponent(r.sub)}/new.rss`;
+        ? `https://www.reddit.com/search.rss?q=${encodeURIComponent(r.q)}&sort=new&t=week&limit=100`
+        : `https://www.reddit.com/r/${r.sub.split("+").map(encodeURIComponent).join("+")}/new.rss?limit=100`;
       res = await get(url, { headers: { "user-agent": UA_BROWSER } });
       if (res.status === 200) posts.push(...redditFromAtom(res.text));
-      await sleep(2500);
+      wait = redditWaitMs(res.headers);
     }
-    if (res.status === 429) { error = "Reddit rate-limited this scan — add REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET (a free script app) so the Radar reads through the official API instead of the public feed."; break; }
-    if (res.status === 401 || res.status === 403) { error = `Reddit refused the read (${res.status}) — ${token ? "check the app credentials" : "the public feed is blocked from here; add REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET"}.`; if (token) break; }
+    done++;
+    if (res.status === 429) { error = "Reddit asked us to slow down — this scan stopped early and the next one picks up where it left off."; break; }
+    if (res.status === 401 || res.status === 403) { error = `Reddit refused the read (${res.status})${token ? " — check the app credentials" : " from this address — the next scan tries again"}.`; break; }
   }
-  return { posts, mode, error };
+  // A scan that was cut short did not take its search turn: keep the cursor.
+  return { posts, mode, error, cursor: error ? cursor : plan.cursor };
 }
 
 /** A public Telegram channel's preview page (t.me/s/<channel>). */
@@ -510,6 +577,7 @@ const PLATFORM_OF = { reddit_search: "reddit", reddit_sub: "reddit", telegram_ch
 /** Turn raw posts into signal rows (classified, scored, routed). */
 export function toSignals(posts, { platform, source_id, list }) {
   const rows = [];
+  const watchedSubs = new Set((list.subreddits ?? []).map((s) => `r/${s}`.toLowerCase()));
   for (const p of posts) {
     if (!p?.external_id) continue;
     const text = `${p.title ?? ""}\n${p.body ?? ""}`;
@@ -518,11 +586,14 @@ export function toSignals(posts, { platform, source_id, list }) {
     else if (platform === "youtube") c = { intent: "creator", matched: classify(text, list)?.matched ?? [] };
     else if (platform === "instagram") c = { intent: "prospect", matched: [String(p.community ?? "").replace(/^Instagram · /, "")].filter(Boolean) };
     else {
-      c = classify(text, list, { title: p.title });
+      c = classify(text, list, { title: p.title, watched: platform === "reddit" && watchedSubs.has(String(p.community ?? "").toLowerCase()) });
       if (!c) continue;
+      // A post on someone's own profile (u/name) is an advert with nobody to
+      // answer — the site-wide search is full of them. Our own name still counts.
+      if (platform === "reddit" && /^u\//i.test(String(p.community ?? "")) && c.intent !== "brand") continue;
       if (platform === "news" && c.intent !== "brand") c = { ...c, intent: "press" };
     }
-    const score = scoreSignal({ intent: c.intent, engagement: p.engagement, posted_at: p.posted_at });
+    const score = scoreSignal({ intent: c.intent, engagement: p.engagement, posted_at: p.posted_at, direct: c.direct === true });
     const assigned_agent = routeAgent(platform, c.intent);
     rows.push({
       source_id, platform, external_id: String(p.external_id).slice(0, 300), url: p.url ?? null,
@@ -584,7 +655,8 @@ export async function scanRadar({ log = console.log } = {}) {
   // credit each source with what came from it.
   const redditSources = sources.filter((s) => s.kind === "reddit_search" || s.kind === "reddit_sub");
   if (redditSources.length) {
-    const { posts, mode, error } = await readReddit(list, redditSources);
+    const search = redditSources.find((x) => x.kind === "reddit_search");
+    const { posts, mode, error, cursor } = await readReddit(list, redditSources, Number(search?.state?.cursor ?? 0));
     const bySub = new Map();
     for (const p of posts) { const k = String(p.community ?? "").toLowerCase(); if (!bySub.has(k)) bySub.set(k, []); bySub.get(k).push(p); }
     const claimed = new Set();
@@ -593,8 +665,7 @@ export async function scanRadar({ log = console.log } = {}) {
       for (const p of mine) claimed.add(p.external_id);
       await finish(s, { posts: mine, error: error && !mine.length ? error : null, state: { ...(s.state ?? {}), mode } });
     }
-    const search = redditSources.find((x) => x.kind === "reddit_search");
-    if (search) await finish(search, { posts: posts.filter((p) => !claimed.has(p.external_id)), error, state: { ...(search.state ?? {}), mode } });
+    if (search) await finish(search, { posts: posts.filter((p) => !claimed.has(p.external_id)), error, state: { ...(search.state ?? {}), mode, cursor } });
   }
 
   for (const s of sources) {

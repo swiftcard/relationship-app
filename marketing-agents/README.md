@@ -59,7 +59,7 @@ it never posts, replies, joins or DMs anywhere.**
 
 | Source | How | Needs |
 |---|---|---|
-| Reddit | official read API (app-only OAuth) or the public Atom search feed | `REDDIT_CLIENT_ID/SECRET` for the API (free script app); without them the public feed, rate-limited |
+| Reddit | the public Atom feeds — one multireddit feed for all watched subreddits, keyword searches taking turns, paced by Reddit's rate-limit headers | nothing. Reddit ended self-serve API keys in Nov 2025 (apps now need a reviewed Data Access Request); `REDDIT_CLIENT_ID/SECRET` are used only if they ever exist |
 | Telegram | public channel previews (`t.me/s/<channel>`) + every group a SwiftCard bot is in (`getUpdates`) | `TELEGRAM_BOT_TOKEN` for groups (bot privacy mode OFF, bot added to the group); channels need nothing |
 | Hacker News | Algolia search API | nothing |
 | News / RSS | Google News + Bing News queries by default; any RSS/Atom feed | nothing |
