@@ -3,17 +3,20 @@
 import Link from "next/link";
 import { useIsNativeApp } from "@/lib/platform";
 
-// Dashboard banner shown while an account is on an app-level Pro grant (the
-// 14-day reverse trial, or a stacked referral/free month). Presentational only —
-// the dashboard decides when to render it and passes the computed days left.
+// Dashboard banner for a free period (a Stripe trial, or free Pro/Office with
+// nothing billing it). Presentational only — the dashboard decides when to
+// render it, which is the account's first day only (lib/billing-state
+// showsTrialBubble); after that the days left are in Settings → Profile.
 //
 // NATIVE (App Store 3.1.1): the status line is neutral information and stays,
 // but the "Keep Pro →" /pricing CTA is a selling surface and must never render
 // inside the Capacitor shell. Web is byte-identical (native is false on SSR and
 // first paint).
-export default function TrialBanner({ daysLeft, isTrial, billedFrom, canceled = false }: {
+export default function TrialBanner({ daysLeft, isTrial, planName = "Pro", billedFrom, canceled = false }: {
   daysLeft: number;
   isTrial: boolean;
+  /** "Office" for a granted Office — it was called "Pro". */
+  planName?: "Pro" | "Office";
   /** A Stripe trial: the subscription STARTS on this date (it does not fall
    *  back to Free), so the banner says so and points at billing, not /upgrade. */
   billedFrom?: string;
@@ -23,7 +26,7 @@ export default function TrialBanner({ daysLeft, isTrial, billedFrom, canceled = 
 }) {
   const native = useIsNativeApp();
   const urgent = daysLeft <= 3;
-  const label = isTrial ? "You're on a free Pro trial" : "You're on free Pro";
+  const label = isTrial ? `You're on a free ${planName} trial` : `You're on free ${planName}`;
   const days = daysLeft === 1 ? "1 day left" : `${daysLeft} days left`;
 
   return (
@@ -62,7 +65,7 @@ export default function TrialBanner({ daysLeft, isTrial, billedFrom, canceled = 
             urgent ? "bg-amber-600 hover:bg-amber-500" : "bg-blue-600 hover:bg-blue-500"
           }`}
         >
-          Keep Pro →
+          Keep {planName} →
         </Link>
       )}
     </div>

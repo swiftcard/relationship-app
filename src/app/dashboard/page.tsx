@@ -37,7 +37,7 @@ import TourAutoStart from "@/components/TourAutoStart";
 import MyCardsList from "@/components/dashboard/MyCardsList";
 import TrialBanner from "@/components/TrialBanner";
 import ProEndedPanel from "@/components/ProEndedPanel";
-import { PLAN_STEP_REQUIRED_SINCE, PRO_ENDED_PENDING_KEY, TRIAL_ENDS_KEY, formatBillingDate } from "@/lib/billing-state";
+import { PLAN_STEP_REQUIRED_SINCE, PRO_ENDED_PENDING_KEY, formatBillingDate, freePeriodOf, showsTrialBubble } from "@/lib/billing-state";
 import { PLAN_CHOSEN_KEY } from "@/lib/welcome-email";
 import type { CardLink } from "@/components/card-templates/types";
 import PushNudge from "@/components/PushNudge";
@@ -69,9 +69,6 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
 const FREE_LIMIT = PLAN_LIMITS.FREE_LEADS_PER_MONTH;
 
-function daysUntil(iso: string) {
-  return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000));
-}
 function daysAgoISO(days: number) {
   return new Date(Date.now() - days * 86400000).toISOString();
 }
@@ -179,19 +176,22 @@ export default async function DashboardPage({
     // checkout then refused.
     : trialHistoryFor(user.id, user.email).then((h) => isProTrialEligible(profile.stripe_customer_id as string | null, undefined, h));
 
-  // App-level Pro grant (14-day reverse trial or a stacked referral/free month):
-  // plan is pro, with an expiry, and NO real Stripe subscription behind it.
-  const proExpiresAt = profile.plan_expires_at as string | null;
-  const onAppGrant = profile.plan === "pro" && !!proExpiresAt && !profile.stripe_subscription_id;
-  const trialDaysLeft = onAppGrant ? daysUntil(proExpiresAt as string) : 0;
-  const isTrialGrant = !!(profile.customization as { _trial?: boolean } | null)?._trial;
 
   const profileCust = (profile.customization ?? {}) as Record<string, unknown>;
-  // A Stripe Pro trial (card on file, charges when it ends): the webhook stores
-  // the end date. Shown as a countdown like the app grant — it used to show
-  // nothing at all, so a trial user never saw when billing would start.
-  const stripeTrialEnds = typeof profileCust[TRIAL_ENDS_KEY] === "string" && !!profile.stripe_subscription_id ? (profileCust[TRIAL_ENDS_KEY] as string) : null;
-  const stripeTrialDaysLeft = stripeTrialEnds ? daysUntil(stripeTrialEnds) : 0;
+  // The free period this account is in — a Stripe trial (card on file, charges
+  // when it ends) or free time with nothing billing it (a friend's month, a
+  // promo code, the delete-flow gift) — described once, in lib/billing-state,
+  // exactly as Settings → Profile describes it.
+  const freePeriod = freePeriodOf({
+    plan: profile.plan as string | null,
+    planExpiresAt: profile.plan_expires_at as string | null,
+    hasSubscription: !!profile.stripe_subscription_id,
+    customization: profileCust,
+  });
+  // The bubble at the top is for the account's FIRST DAY only (owner,
+  // 2026-10-02, asked for more than once). After that it never appears here;
+  // the days left are in Settings → Profile.
+  const trialBubble = !!freePeriod && showsTrialBubble(user.created_at);
 
   // Pro ended and the choice is still open (components/ProEndedPanel): which
   // card stays live, and what Free changes about the design. Named with the
@@ -947,12 +947,20 @@ export default async function DashboardPage({
             />
           )}
 
-          {/* Free-Pro grant countdown */}
-          {onAppGrant && trialDaysLeft > 0 && <TrialBanner daysLeft={trialDaysLeft} isTrial={isTrialGrant} />}
-          {/* canceled: a trial cancelled from Plan and billing keeps its end date
-              (_trialEndsAt) but will charge nothing — it must stop saying
-              "your subscription starts <date>". */}
-          {!onAppGrant && stripeTrialDaysLeft > 0 && <TrialBanner daysLeft={stripeTrialDaysLeft} isTrial billedFrom={formatBillingDate(stripeTrialEnds)} canceled={profileCust._cancelAtPeriodEnd === true} />}
+          {/* The free period, on the account's first day only — never again
+              after that (the days left live in Settings → Profile). canceled:
+              a trial cancelled from Plan and billing keeps its end date but
+              will charge nothing, so it must not say "your subscription
+              starts <date>". */}
+          {trialBubble && freePeriod && (
+            <TrialBanner
+              daysLeft={freePeriod.daysLeft}
+              isTrial={freePeriod.isTrial}
+              planName={freePeriod.planName}
+              billedFrom={freePeriod.kind === "trial" ? formatBillingDate(freePeriod.endsAt) : undefined}
+              canceled={freePeriod.canceled}
+            />
+          )}
 
           {/* First-run guided-tour invitation — only on the ?tour=1/?welcome=1
               load right after the first card is created (the banner reads the
@@ -1064,7 +1072,7 @@ export default async function DashboardPage({
           {/* Paid accounts only (a stray ?upgraded on a Free account is not a
               sale), and the param comes off the address once recorded. */}
           {params.upgraded && isPro && <TrackEvent event="checkout_completed" props={{ plan: isEnterprise ? "office" : "pro" }} clearParams={["upgraded"]} />}
-          {params.upgraded && isPro && stripeTrialDaysLeft <= 0 && (
+          {params.upgraded && isPro && freePeriod?.kind !== "trial" && (
             <div className="flex items-center gap-3 bg-green-950 border border-green-800/60 rounded-2xl px-5 py-3.5 mb-5">
               <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center shrink-0">
                 <svg viewBox="0 0 20 20" fill="#4ade80" className="w-3.5 h-3.5"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd"/></svg>

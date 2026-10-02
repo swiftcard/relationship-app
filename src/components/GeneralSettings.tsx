@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { formatBillingDate, type FreePeriod } from "@/lib/billing-state";
 
 type Props = {
   email: string;
@@ -12,12 +13,16 @@ type Props = {
    *  "team" for a team member whose seat their office pays for (there is no
    *  Billing section and nothing to manage), "none" otherwise. */
   billingNote?: "below" | "team" | "none";
+  /** The free period running now (a trial, or free Pro/Office), or null. The
+   *  days left are shown here — the dashboard announces them on the account's
+   *  first day only. No price, no link: the same on the web and in the app. */
+  freePeriod?: FreePeriod | null;
 };
 
 // Account basics (email, card count, current plan at a glance). Subscription
 // management — Change Plan / Cancel / Keep / seats — lives in its own Billing
 // section (BillingManager), so this stays a simple read-only summary.
-export default function GeneralSettings({ email, cardCount, plan, isPro, defaultOpen = false, billingNote = "below" }: Props) {
+export default function GeneralSettings({ email, cardCount, plan, isPro, defaultOpen = false, billingNote = "below", freePeriod = null }: Props) {
   const [open, setOpen] = useState(defaultOpen);
   const planLabel = plan === "enterprise" ? "Office" : isPro ? "Pro" : "Free";
   const ref = useRef<HTMLDivElement>(null);
@@ -68,6 +73,24 @@ export default function GeneralSettings({ email, cardCount, plan, isPro, default
               {planLabel}
             </span>
           </div>
+          {freePeriod && (
+            <div className="flex items-start justify-between gap-3">
+              <span className="text-gray-500 text-xs shrink-0">
+                {freePeriod.isTrial ? "Free trial" : `Free ${freePeriod.planName}`}
+              </span>
+              {/* The date is formatted in the reader's own time zone, so the
+                  server's and the browser's renders may differ by a day. */}
+              <span
+                suppressHydrationWarning
+                className={`text-xs font-medium text-right ${freePeriod.daysLeft <= 3 ? "text-amber-300" : "text-white"}`}
+              >
+                {freePeriod.daysLeft === 1 ? "1 day left" : `${freePeriod.daysLeft} days left`}
+                {freePeriod.canceled
+                  ? " · cancelled, you won't be charged"
+                  : ` · ends ${formatBillingDate(freePeriod.endsAt)}`}
+              </span>
+            </div>
+          )}
           {/* Named as it is on screen — there is no "Billing" section — and
               true for Free too, which has no subscription to "manage". */}
           {billingNote === "below" && <p className="text-gray-600 text-[0.6875rem] pt-2">{isPro ? "Manage your subscription" : "See or change your plan"} under Plan and billing below.</p>}

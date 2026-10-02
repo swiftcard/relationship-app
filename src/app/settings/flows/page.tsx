@@ -8,6 +8,7 @@ import IntegrationsSettings from "@/components/IntegrationsSettings";
 import ManageCards from "@/components/ManageCards";
 import GeneralSettings from "@/components/GeneralSettings";
 import BillingManager from "@/components/BillingManager";
+import { freePeriodOf } from "@/lib/billing-state";
 import AiConsentSetting from "@/components/AiConsentSetting";
 import ManageAccount from "@/components/ManageAccount";
 import ReferAFriend from "@/components/ReferAFriend";
@@ -86,7 +87,7 @@ export default async function FlowSettingsPage({
     supabase.auth.getUser(),
     supabase
       .from("profiles")
-      .select("flow_settings, plan, zapier_webhook_url, zapier_card_ids, name, username, customization, stripe_subscription_id")
+      .select("flow_settings, plan, plan_expires_at, zapier_webhook_url, zapier_card_ids, name, username, customization, stripe_subscription_id")
       .eq("id", authedUserId)
       .single(),
     // card_ids: which cards feed each connection (null = all). Drives the
@@ -217,6 +218,16 @@ export default async function FlowSettingsPage({
   //   preferences / Security / Help and referrals / Advanced account settings.
   // Sections that don't apply to a role are dropped here on the SERVER (never
   // hidden with CSS); the APIs behind them are role-guarded independently.
+  // The free period's days left live HERE (owner, 2026-10-02): the dashboard
+  // only announces it on the account's first day. Same description the
+  // dashboard uses (lib/billing-state), so the two never disagree.
+  const freePeriod = freePeriodOf({
+    plan: profile.plan as string | null,
+    planExpiresAt: (profile as { plan_expires_at?: string | null }).plan_expires_at ?? null,
+    hasSubscription: !!profile.stripe_subscription_id,
+    customization: (profile.customization ?? {}) as Record<string, unknown>,
+  });
+
   const sections: SettingsSection[] = [
     {
       id: "profile",
@@ -231,6 +242,7 @@ export default async function FlowSettingsPage({
             plan={profile.plan ?? "free"}
             isPro={isPro}
             billingNote={isOfficeSubUser && !showBilling ? "team" : showBilling ? "below" : "none"}
+            freePeriod={freePeriod}
             defaultOpen
           />
           {/* Sign out lives HERE, not in the top-right corner of every app

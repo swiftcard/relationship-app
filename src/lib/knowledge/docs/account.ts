@@ -117,6 +117,19 @@ export const accountDocs = defineDocs([
       "On the \"Choose your plan\" step, tap \"Have a promo code?\" under the plans, enter your code and press \"Apply\". When the box says \"Added to the Pro plan\", the Pro card changes to your code's offer — tap its button and Apple's code page opens with your code already filled in. Apple shows exactly what you get before you confirm, in the app with your Apple account. Come back to SwiftCard and Pro switches on by itself; if it doesn't, tap \"Continue\" under the button. Make sure you use the Pro card's button after applying the code — the code only counts once the button has changed. If Apple can't take your code, the Pro card's button says where to use it instead.",
   },
   {
+    id: "trial-days-left",
+    title: "How many days are left on a free trial or free Pro",
+    audience: ["user"],
+    triggers: [
+      "days left", "trial days", "how long is my trial", "when does my trial end", "trial end",
+      "trial ending", "free pro ends", "free month ends", "trial banner", "trial bubble", "countdown",
+    ],
+    answer:
+      "Settings → Profile → General: under \"Plan\" there is a \"Free trial\" row (or \"Free Pro\" / \"Free Office\" for free time that isn't a trial) with the days left and the date it ends. It's there for the whole free period. The bubble at the top of the dashboard only appears on the account's first day — after that it is gone on purpose, so look in Settings.",
+    detail:
+      "Every kind of free period shows there the same way: the {trial.days}-day Pro trial, free time from a promo code, a friend's free month, the free days offered when deleting an account, a trial stretched to a full month, and free Office. When three days or fewer are left the row turns amber. A trial that has been cancelled says \"cancelled, you won't be charged\" instead of the end date. Plan and billing shows the same end date. A subscription started in the iPhone app with Apple's free trial has no countdown in SwiftCard — Apple doesn't share its end date; it's in the iPhone's Settings → Apple ID → Subscriptions. A free period that starts after the first day (for example a promo code entered later) never shows on the dashboard at all — only in Settings.",
+  },
+  {
     id: "cancel-subscription",
     title: "Cancelling, and undoing a cancellation",
     audience: ["user"],

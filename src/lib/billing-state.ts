@@ -140,3 +140,72 @@ export function officeEndedNotice(wasTrial: boolean): { title: string; body: str
  *  (dashboard → /welcome until a plan is recorded). Earlier accounts were never
  *  asked and are left exactly as they are. */
 export const PLAN_STEP_REQUIRED_SINCE = "2026-09-17T00:00:00Z";
+
+// ── The free period, and where it is announced ───────────────────────────────
+//
+// Owner, 2026-10-02 (asked for more than once): a free period — the Pro trial,
+// a friend's free month, a promo code, the delete-flow gift, an Office grant —
+// is announced at the top of the dashboard ONLY on the account's first day.
+// From then on the bubble is gone for good, and the days left live in
+// Settings → Profile. One description of the period, read by both, so the two
+// places can never disagree about what it is or when it ends.
+
+export type FreePeriod = {
+  /** "trial": a card-backed Stripe trial (it converts to paid unless cancelled).
+   *  "grant": free time with nothing billing it (it ends on its own). */
+  kind: "trial" | "grant";
+  planName: "Pro" | "Office";
+  /** ISO end of the free period. */
+  endsAt: string;
+  daysLeft: number;
+  /** Said as a "trial" (a Stripe trial, or a legacy app trial) vs "free Pro". */
+  isTrial: boolean;
+  /** A Stripe trial cancelled before it converts: nothing will be charged. */
+  canceled: boolean;
+};
+
+/**
+ * The free period this account is in right now, or null. Apple-billed plans
+ * are null: Apple never tells us when its intro trial ends, so there is no
+ * date to show. A period that has run out is null too.
+ */
+export function freePeriodOf(
+  p: {
+    plan: string | null | undefined;
+    planExpiresAt: string | null | undefined;
+    hasSubscription: boolean;
+    customization: Record<string, unknown> | null | undefined;
+  },
+  nowMs: number = Date.now(),
+): FreePeriod | null {
+  if (p.plan !== "pro" && p.plan !== "enterprise") return null;
+  const cust = p.customization ?? {};
+  if (cust._planSource === "apple") return null;
+  const planName = p.plan === "enterprise" ? "Office" : "Pro";
+  const trialEnds = typeof cust[TRIAL_ENDS_KEY] === "string" ? (cust[TRIAL_ENDS_KEY] as string) : null;
+  const kind: FreePeriod["kind"] | null =
+    p.hasSubscription && trialEnds ? "trial" : !p.hasSubscription && p.planExpiresAt ? "grant" : null;
+  if (!kind) return null;
+  const endsAt = (kind === "trial" ? trialEnds : p.planExpiresAt) as string;
+  const daysLeft = daysUntil(endsAt, nowMs);
+  if (daysLeft <= 0) return null;
+  return {
+    kind,
+    planName,
+    endsAt,
+    daysLeft,
+    isTrial: kind === "trial" || cust._trial === true,
+    canceled: kind === "trial" && cust._cancelAtPeriodEnd === true,
+  };
+}
+
+/** The dashboard's free-period bubble is for the account's first day only. */
+export const TRIAL_BUBBLE_FIRST_DAY_MS = DAY_MS;
+
+/** True only during the first 24 hours of the account's life. Unknown → false. */
+export function showsTrialBubble(accountCreatedAt: string | null | undefined, nowMs: number = Date.now()): boolean {
+  const t = accountCreatedAt ? Date.parse(accountCreatedAt) : NaN;
+  if (!Number.isFinite(t)) return false;
+  // A creation time a moment in the future (clock skew) is still day one.
+  return nowMs - t < TRIAL_BUBBLE_FIRST_DAY_MS;
+}
