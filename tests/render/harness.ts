@@ -101,7 +101,7 @@ export async function measureCard(
   const css = await appCss();
   const markup = renderToStaticMarkup(createElement(Template, { data }));
 
-  const page = await browser.newPage({ viewportSize: { width: Math.max(cardWidth + 80, 800), height: 900 } });
+  const page = await browser.newPage({ viewport: { width: Math.max(cardWidth + 80, 800), height: 900 } });
   try {
     await page.setContent(
       `<!doctype html><html><head><meta charset="utf-8"><style>${css}</style>
