@@ -435,7 +435,7 @@ type NativePromo = ReturnType<typeof useNativePromo>;
  * without the app noticing (StoreKit's in-app sheet never leaves the app).
  */
 function AppleOfferCodeButton({ code, label, className, onPurchased }: { code: string; label: string; className: string; onPurchased?: () => void }) {
-  const [state, setState] = useState<"idle" | "opening" | "waiting" | "checking" | "failed">("idle");
+  const [state, setState] = useState<"idle" | "opening" | "waiting" | "checking" | "notyet" | "failed">("idle");
   const waiting = useRef(false);
   const done = useRef(onPurchased);
   useEffect(() => { done.current = onPurchased; }, [onPurchased]);
@@ -448,7 +448,8 @@ function AppleOfferCodeButton({ code, label, className, onPurchased }: { code: s
       else window.location.reload();
       return;
     }
-    setState("waiting");
+    // Checked and nothing there yet — say so, rather than a silent no-op.
+    setState("notyet");
   }, []);
 
   useEffect(() => {
@@ -469,9 +470,9 @@ function AppleOfferCodeButton({ code, label, className, onPurchased }: { code: s
       <button type="button" onClick={() => { void redeem(); }} disabled={state === "opening" || state === "checking"} className={className}>
         {state === "opening" ? "Opening Apple…" : state === "checking" ? "Checking your subscription…" : label}
       </button>
-      {state === "waiting" && (
-        <p className="mt-2 text-center text-xs text-white/85">
-          Redeemed it with Apple?{" "}
+      {(state === "waiting" || state === "notyet") && (
+        <p className="mt-2 text-center text-xs text-white/85" role={state === "notyet" ? "status" : undefined}>
+          {state === "notyet" ? "Pro isn't on yet — finish redeeming on Apple's page, then " : "Redeemed it with Apple? "}
           <button type="button" onClick={() => { void finish(); }} className="font-semibold underline">Continue</button>
         </p>
       )}

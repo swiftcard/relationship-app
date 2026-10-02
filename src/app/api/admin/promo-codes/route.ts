@@ -5,7 +5,7 @@ import {
   MAX_FREE_DAYS, isFreeDays, isDiscountType, isAppliesTo, isIntervalTarget,
   isPromoDuration, isAudience, MAX_DURATION_MONTHS, type AppliesTo, type IntervalTarget,
 } from "@/lib/promo";
-import { appleOfferPlan, mirrorPromoToApple } from "@/lib/apple-offer-codes";
+import { appleOfferPlan, deactivateAppleOffer, mirrorPromoToApple } from "@/lib/apple-offer-codes";
 
 // The Stripe PRODUCTS behind each plan, so a coupon can be restricted to the
 // plan it was created for. Without this, a code typed on Stripe's own checkout
@@ -259,8 +259,15 @@ export async function DELETE(req: NextRequest) {
   // active promotion code must be turned off — and a failure is reported, not
   // swallowed (a silently-still-working "deleted" code is the worst outcome).
   let stripeWarning: string | null = null;
-  const { data: promo } = await admin.from("promo_codes").select("code, active").eq("id", id).maybeSingle();
+  const { data: promo } = await admin.from("promo_codes").select("*").eq("id", id).maybeSingle();
   if (!promo) return NextResponse.json({ error: "Promo code not found" }, { status: 404 });
+
+  // …and on Apple, where the iPhone app redeems it (lib/apple-offer-codes).
+  // Otherwise a deactivated code kept working in the App Store.
+  const appleError = await deactivateAppleOffer(promo.apple_offer_code_id as string | null | undefined);
+  if (appleError) {
+    stripeWarning = `Deactivated in SwiftCard, but Apple's copy is still on (${appleError}).`;
+  }
   try {
     const { getStripe } = await import("@/lib/stripe");
     const stripe = getStripe();
@@ -269,7 +276,7 @@ export async function DELETE(req: NextRequest) {
       if (pc.active) await stripe.promotionCodes.update(pc.id, { active: false });
     }
   } catch (e) {
-    stripeWarning = `Deactivated in SwiftCard, but Stripe cleanup failed (${e instanceof Error ? e.message : e}). If this code has a Stripe coupon, disable it in the Stripe dashboard too.`;
+    stripeWarning = [stripeWarning, `Deactivated in SwiftCard, but Stripe cleanup failed (${e instanceof Error ? e.message : e}). If this code has a Stripe coupon, disable it in the Stripe dashboard too.`].filter(Boolean).join(" ");
   }
 
   // Stamp when it was turned off (for the "how long was it active" log).

@@ -152,16 +152,41 @@ export async function mirrorPromoToApple(promo: PromoForApple): Promise<{ ok: bo
   const plan = appleOfferPlan(promo);
   if (!plan) return { ok: false, error: "Not a code Apple can take." };
   if (!ascConfigured()) return { ok: false, error: "App Store Connect isn't connected (ASC_* env vars)." };
+  // A code whose redemptions are used up stays off Apple — Apple would
+  // otherwise hand out uses the website no longer has.
+  const usedUp = promo.max_uses != null && Number(promo.max_uses) - Number((promo as { uses_count?: number }).uses_count ?? 0) <= 0;
+  if (usedUp) return { ok: false, error: "This code has no redemptions left." };
   const admin = getAdminSupabase();
+  const name = `SwiftCard ${promo.code}`.slice(0, 64);
   try {
     const subId = await subscriptionId(plan.productId);
+    // FIND before CREATE. A run that made the offer but failed on its custom
+    // code would otherwise make a second offer on the daily retry, and
+    // another every day after.
+    const existing = await asc<{ data: AscItem[] }>("GET", `/subscriptions/${subId}/offerCodes?limit=200`).catch(() => ({ data: [] as AscItem[] }));
+    const found = (existing.data ?? []).find((o) => o.attributes?.name === name);
+    const offerId = found ? found.id : await createOffer(subId, name, plan);
+    const codes = await asc<{ data: AscItem[] }>("GET", `/subscriptionOfferCodes/${offerId}/customCodes?limit=50`).catch(() => ({ data: [] as AscItem[] }));
+    if (!(codes.data ?? []).some((c) => String(c.attributes?.customCode ?? "").toUpperCase() === promo.code)) {
+      await createCustomCode(offerId, promo);
+    }
+    await admin.from("promo_codes").update({ apple_offer_code_id: offerId, apple_offer_error: null }).eq("id", promo.id);
+    return { ok: true };
+  } catch (e) {
+    const error = (e instanceof Error ? e.message : String(e)).slice(0, 500);
+    await admin.from("promo_codes").update({ apple_offer_error: error }).eq("id", promo.id);
+    return { ok: false, error };
+  }
+}
+
+async function createOffer(subId: string, name: string, plan: AppleOfferPlan): Promise<string> {
     const terrs = await territories(subId);
     // A free trial has no price, only the territories it runs in.
     const made = await asc<{ data: AscItem }>("POST", "/subscriptionOfferCodes", {
       data: {
         type: "subscriptionOfferCodes",
         attributes: {
-          name: `SwiftCard ${promo.code}`.slice(0, 64),
+          name,
           customerEligibilities: plan.customerEligibilities,
           offerEligibility: "REPLACE_INTRO_OFFERS",
           offerMode: "FREE_TRIAL",
@@ -180,25 +205,42 @@ export async function mirrorPromoToApple(promo: PromoForApple): Promise<{ ok: bo
         relationships: { territory: { data: { type: "territories", id: t } } },
       })),
     });
-    const offerId = made.data.id;
-    const remaining = promo.max_uses != null ? Math.max(1, Number(promo.max_uses) - Number((promo as { uses_count?: number }).uses_count ?? 0)) : DEFAULT_APPLE_CODES;
-    await asc("POST", "/subscriptionOfferCodeCustomCodes", {
-      data: {
-        type: "subscriptionOfferCodeCustomCodes",
-        attributes: {
-          customCode: promo.code,
-          numberOfCodes: remaining,
-          ...(promo.expires_at ? { expirationDate: new Date(promo.expires_at).toISOString().slice(0, 10) } : {}),
-        },
-        relationships: { offerCode: { data: { type: "subscriptionOfferCodes", id: offerId } } },
+    return made.data.id;
+}
+
+/** The code people type, on Apple's offer — with the same cap and expiry. */
+async function createCustomCode(offerId: string, promo: PromoForApple): Promise<void> {
+  const remaining = promo.max_uses != null
+    ? Math.max(1, Number(promo.max_uses) - Number((promo as { uses_count?: number }).uses_count ?? 0))
+    : DEFAULT_APPLE_CODES;
+  await asc("POST", "/subscriptionOfferCodeCustomCodes", {
+    data: {
+      type: "subscriptionOfferCodeCustomCodes",
+      attributes: {
+        customCode: promo.code,
+        numberOfCodes: remaining,
+        ...(promo.expires_at ? { expirationDate: new Date(promo.expires_at).toISOString().slice(0, 10) } : {}),
       },
+      relationships: { offerCode: { data: { type: "subscriptionOfferCodes", id: offerId } } },
+    },
+  });
+}
+
+/**
+ * Turn a code off on Apple too (api/admin/promo-codes DELETE). Without this a
+ * deactivated SwiftCard code stayed redeemable in the App Store for ever.
+ * Returns an error message, or null when Apple has it off (or never had it).
+ */
+export async function deactivateAppleOffer(offerId: string | null | undefined): Promise<string | null> {
+  if (!offerId) return null;
+  if (!ascConfigured()) return "App Store Connect isn't connected — turn this code off in App Store Connect → Subscriptions → Offer Codes.";
+  try {
+    await asc("PATCH", `/subscriptionOfferCodes/${offerId}`, {
+      data: { type: "subscriptionOfferCodes", id: offerId, attributes: { active: false } },
     });
-    await admin.from("promo_codes").update({ apple_offer_code_id: offerId, apple_offer_error: null }).eq("id", promo.id);
-    return { ok: true };
+    return null;
   } catch (e) {
-    const error = (e instanceof Error ? e.message : String(e)).slice(0, 500);
-    await admin.from("promo_codes").update({ apple_offer_error: error }).eq("id", promo.id);
-    return { ok: false, error };
+    return (e instanceof Error ? e.message : String(e)).slice(0, 300);
   }
 }
 

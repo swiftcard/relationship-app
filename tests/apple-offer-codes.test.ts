@@ -60,6 +60,26 @@ describe("which codes Apple can take (appleOfferPlan)", () => {
 });
 
 describe("codes reach Apple on their own", () => {
+  const lib = read("src/lib/apple-offer-codes.ts");
+
+  it("a retry finds what an earlier run made instead of making it twice", () => {
+    const mirror = lib.slice(lib.indexOf("export async function mirrorPromoToApple("), lib.indexOf("async function createOffer("));
+    expect(mirror).toMatch(/offerCodes\?limit=200/);
+    expect(mirror).toMatch(/found \? found\.id : await createOffer\(/);
+    expect(mirror).toMatch(/customCodes\?limit=50/);
+    expect(mirror.indexOf("customCodes?limit=50")).toBeLessThan(mirror.indexOf("await createCustomCode("));
+  });
+
+  it("a used-up code never reaches Apple", () => {
+    expect(lib).toMatch(/if \(usedUp\) return \{ ok: false/);
+  });
+
+  it("deactivating a code turns Apple's copy off too", () => {
+    expect(lib).toMatch(/attributes: \{ active: false \}/);
+    const del = read("src/app/api/admin/promo-codes/route.ts");
+    expect(del.slice(del.indexOf("export async function DELETE("))).toMatch(/await deactivateAppleOffer\(promo\.apple_offer_code_id/);
+  });
+
   it("creating a code mirrors it, and the daily cron retries anything missing", () => {
     expect(read("src/app/api/admin/promo-codes/route.ts")).toMatch(/await mirrorPromoToApple\(data\)/);
     expect(read("src/app/api/reminders/route.ts")).toMatch(/await mirrorPendingPromosToApple\(\)/);
@@ -107,7 +127,9 @@ describe("the app's Pro card acts on an applied code", () => {
     const iap = read("src/lib/iap.ts");
     expect(iap).toMatch(/https:\/\/apps\.apple\.com\/redeem\?ctx=offercodes&id=\$\{APP_STORE_ID\}&code=\$\{encodeURIComponent\(code\)\}/);
     expect(iap).toMatch(/presentCodeRedemptionSheet\(\)/);
-    expect(iap).toMatch(/syncPurchases\(\)/);
+    // RevenueCat picks the redemption up itself; syncPurchases is observer-mode only.
+    expect(iap).not.toMatch(/syncPurchases\(\)/);
+    expect(iap).toMatch(/invalidateCustomerInfoCache\(\)/);
     expect(src).toMatch(/if \(await syncIapAfterRedeem\(\)\)/);
     // apps.apple.com is on the native plugin's host allow-list.
     expect(read("ios/App/App/ExternalPurchase.swift")).toMatch(/"apps\.apple\.com"/);

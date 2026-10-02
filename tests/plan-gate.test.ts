@@ -201,5 +201,9 @@ describe("the purchase path is In-App Purchase, wired through PlanNotice", () =>
     expect(raw.indexOf("await configuredForSession()")).toBeLessThan(raw.indexOf("getOfferings()"));
     // Two configure() calls never race each other.
     expect(iap).toMatch(/configuring = run;/);
+    // Always the CURRENT session's account — never "configured for someone".
+    const cfs = iap.slice(iap.indexOf("async function configuredForSession("), iap.indexOf("async function configuredForSession(") + 200);
+    expect(cfs).not.toContain("if (configuredFor) return true");
+    expect(cfs).toContain("const uid = await sessionUserId();");
   });
 });

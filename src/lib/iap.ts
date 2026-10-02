@@ -196,8 +196,12 @@ export async function sessionUserId(): Promise<string | null> {
  * a bare "Get Pro →" (owner report 2026-10-02). Every StoreKit read now waits
  * for this first.
  */
+//
+// Always the CURRENT session, never just "configured for someone": an account
+// switched in the shell without a reload must not have its prices, its
+// redeemed code or its sync attributed to the previous account
+// (ensureIapConfigured re-identifies, and is a no-op for the same uid).
 async function configuredForSession(): Promise<boolean> {
-  if (configuredFor) return true;
   const uid = await sessionUserId();
   return uid ? ensureIapConfigured(uid) : false;
 }
@@ -426,10 +430,18 @@ export async function syncIapAfterRedeem(): Promise<boolean> {
   const w = await plugin();
   if (!w || !(await configuredForSession())) return false;
   try {
-    await w.P.syncPurchases().catch(() => {});
-    await w.P.invalidateCustomerInfoCache().catch(() => {});
-    const { customerInfo } = await w.P.getCustomerInfo();
-    if (!customerInfo?.entitlements?.active?.[IAP_ENTITLEMENT]) return false;
+    // RevenueCat picks a redeemed code up by itself (StoreKit's transaction
+    // listener) when the app comes back; syncPurchases is for observer mode
+    // only and the SDK warns against it alongside purchasePackage. So: read
+    // fresh, a few times, while that lands.
+    let active = false;
+    for (let attempt = 0; attempt < 3 && !active; attempt++) {
+      if (attempt) await new Promise((ok) => setTimeout(ok, 2000));
+      await w.P.invalidateCustomerInfoCache().catch(() => {});
+      const { customerInfo } = await w.P.getCustomerInfo();
+      active = !!customerInfo?.entitlements?.active?.[IAP_ENTITLEMENT];
+    }
+    if (!active) return false;
     for (let attempt = 0; attempt < 4; attempt++) {
       const r = await fetch("/api/iap/sync", { method: "POST" }).then((x) => x.json()).catch(() => null) as { applied?: string } | null;
       if (r?.applied === "grant") break;
