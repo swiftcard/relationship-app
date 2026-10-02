@@ -173,6 +173,14 @@ describe("radar: Reddit — the direct ask first, and a scan Reddit will not ref
     expect(watched).toMatchObject({ intent: "ask", assigned_agent: "mentions", status: "new" });
     expect(watched.score).toBeGreaterThanOrEqual(50);
     expect(signals([post("t3_4", "Any good networking events in Austin this month?", "r/Austin")])).toEqual([]);
+    // "Look for anything relevant": a post on our subject in a watched subreddit
+    // is kept for the agent even when nobody asked anything — and is still only
+    // a wake-up when it is a question.
+    const [said] = signals([post("t3_7", "Printed 500 business cards and handed out twelve", "r/smallbusiness")]);
+    expect(said).toMatchObject({ intent: "topic", status: "new", assigned_agent: "mentions" });
+    expect(said.score).toBeGreaterThanOrEqual(35);
+    expect(said.score).toBeLessThan(50);
+    expect(said.score).toBe(scoreSignal({ intent: "topic" }) + 5);
     expect(classify("Any good networking events in Austin this month?", reddit, { title: "Any good networking events in Austin this month?" })).toBeNull();
   });
   it("adverts on someone's own profile are dropped; our own name never is", () => {
@@ -209,6 +217,7 @@ describe("radar: Reddit — the direct ask first, and a scan Reddit will not ref
   it("Zoe is briefed on the goal, the order, and the link that counts the signup", () => {
     const brief = read("marketing-agents/agents/mentions.md");
     expect(brief).toContain("asked in the title");
+    expect(brief).toMatch(/Look for anything relevant, not only people asking for a card/);
     expect(brief).toContain("swiftcard.me/go/rd_<subreddit>");
     expect(brief).toMatch(/Menash or Aaron, by hand/);
     expect(brief).toMatch(/Never write it as a\s+customer/);

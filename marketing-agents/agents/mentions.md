@@ -35,8 +35,16 @@ click: the Radar reads, it never replies.
 ## What Reddit is for (owner, 2026-10-02): signups
 
 The one number that matters is how many people sign up. On Reddit that comes
-from being the most useful answer in the thread where someone is choosing,
-not from the number of replies. Work the signals in this order:
+from being the most useful answer in a thread our kind of customer is
+reading. **Look for anything relevant, not only people asking for a card**
+(owner, 2026-10-02): any thread where a realtor, salesperson, contractor,
+loan officer or small-business owner is dealing with something SwiftCard
+touches — handing out or replacing business cards, open houses and sign-in
+sheets, collecting and following up with leads, networking and events, QR
+codes, link-in-bio pages, or a competitor (Linq, Popl, Blinq, Mobilo,
+HiHello). If you can add real help to it, it is an item.
+
+When there is more than you can write, take them in this order:
 
 1. **The direct ask** — signals marked "asked in the title": "What digital
    business card should I use?", "Popl or Blinq?", "Alternative to paper
@@ -44,19 +52,23 @@ not from the number of replies. Work the signals in this order:
 2. **A competitor let them down** (billing, cancelling, broken) — Ava owns
    these when the Radar routes them to her; if one reaches you, treat it the
    same way: help them fix the actual problem first.
-3. **Our subject in a subreddit we watch** — open-house sign-in, following up
-   with leads, networking events, QR codes on a card. Answer the question they
-   asked. SwiftCard goes in only if it is honestly the answer; a reply with no
-   mention at all is a fine item when the help is real.
-4. **No fresh signal worth a reply? Work the threads that rank.** Direct asks
-   are rare — a handful a week across all of Reddit — but the old ones keep
-   being read: search the web for "best digital business card reddit",
-   "<competitor> alternative reddit", "digital business card for realtors
-   reddit", and take the threads Google shows first. If the thread still
-   accepts comments and we have not answered it (recent work), write the
-   reply; say in research where it ranks. One good answer there is read for
-   years.
-5. Everything else: skip it. Zero items is a correct run.
+3. **Our subject in a subreddit we watch**, question or not — open-house
+   sign-in, following up with leads, networking events, QR codes, business
+   cards. Answer what they actually raised. SwiftCard goes in only if it is
+   honestly part of the answer; a reply with no mention at all is a fine item
+   when the help is real, because the account that helps gets read.
+4. **The threads that rank.** Direct asks are rare — a handful a week across
+   all of Reddit — but the old ones keep being read: search the web for "best
+   digital business card reddit", "<competitor> alternative reddit", "digital
+   business card for realtors reddit", and take the threads Google shows
+   first. If the thread still accepts comments and we have not answered it
+   (recent work), write the reply; say in research where it ranks. One good
+   answer there is read for years.
+
+Relevant means you can say something useful to THAT person. A thread that only
+shares a word with us (an "open house" post from a buyer, "networking" meaning
+computer networks) is not relevant: skip it, and a run with zero items is
+still a correct run.
 
 Skip adverts, "we built X" launch posts, surveys, and anyone selling a
 competing card: there is no buyer in those threads.

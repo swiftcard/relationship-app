@@ -197,6 +197,7 @@ export function classify(text, list, { title = null, watched = false } = {}) {
 // (#newrealtor, #justlicensed): nobody asked about us, but it is the moment
 // they need a card. 45 + freshness, so only a post from the last day wakes Ava.
 const INTENT_BASE = { brand: 90, competitor_complaint: 75, ask: 70, press: 55, creator: 50, prospect: 45, competitor: 40, topic: 30 };
+const WATCHED_BONUS = 5;
 // "What digital business card should I use?" — someone choosing right now.
 const DIRECT_ASK_BONUS = 15;
 /** 0-100. Intent carries it; engagement and freshness nudge it. */
@@ -581,19 +582,24 @@ export function toSignals(posts, { platform, source_id, list }) {
   for (const p of posts) {
     if (!p?.external_id) continue;
     const text = `${p.title ?? ""}\n${p.body ?? ""}`;
-    let c;
+    let c, watched = false;
     if (platform === "appstore") c = { intent: "competitor_complaint", matched: ["1-2★ review"] };
     else if (platform === "youtube") c = { intent: "creator", matched: classify(text, list)?.matched ?? [] };
     else if (platform === "instagram") c = { intent: "prospect", matched: [String(p.community ?? "").replace(/^Instagram · /, "")].filter(Boolean) };
     else {
-      c = classify(text, list, { title: p.title, watched: platform === "reddit" && watchedSubs.has(String(p.community ?? "").toLowerCase()) });
+      watched = platform === "reddit" && watchedSubs.has(String(p.community ?? "").toLowerCase());
+      c = classify(text, list, { title: p.title, watched });
       if (!c) continue;
       // A post on someone's own profile (u/name) is an advert with nobody to
       // answer — the site-wide search is full of them. Our own name still counts.
       if (platform === "reddit" && /^u\//i.test(String(p.community ?? "")) && c.intent !== "brand") continue;
       if (platform === "news" && c.intent !== "brand") c = { ...c, intent: "press" };
     }
-    const score = scoreSignal({ intent: c.intent, engagement: p.engagement, posted_at: p.posted_at, direct: c.direct === true });
+    // A post in a community we chose to watch is our audience by definition, so
+    // anything relevant there stays on the agent's list (>= 35) for its whole
+    // first day instead of dropping off — "look for anything relevant" (owner,
+    // 2026-10-02). It still takes a question to wake an agent.
+    const score = Math.min(100, scoreSignal({ intent: c.intent, engagement: p.engagement, posted_at: p.posted_at, direct: c.direct === true }) + (watched ? WATCHED_BONUS : 0));
     const assigned_agent = routeAgent(platform, c.intent);
     rows.push({
       source_id, platform, external_id: String(p.external_id).slice(0, 300), url: p.url ?? null,
