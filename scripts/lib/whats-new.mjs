@@ -7,8 +7,7 @@
 // narrower list than "what changed in SwiftCard": every web improvement is
 // already live for users without an app update.
 //
-// 1.0.5 / build 16 (2026-09-30). Two native changes since the live build 14:
-// the Apple Watch app ships for the first time (build 15 was uploaded without
-// it and never submitted), and the Associated Domains entitlement is gone, so
-// no swiftcard.me link ever opens inside the app.
-export const WHATS_NEW = "New: SwiftCard for Apple Watch. Your card's QR code on your wrist, with a watch-face complication that opens it in one tap. It follows the card you choose on your iPhone and works without your phone nearby.\n\nLinks to SwiftCards and Swift Links now always open in your web browser, never inside the app.";
+// 1.0.6 / build 17 (2026-10-02). One native change since the live build 16:
+// with no connection the app shows the saved card's QR code instead of a blank
+// screen (ios/App/App/OfflineCard.swift).
+export const WHATS_NEW = "Your QR code now works with no signal. Open SwiftCard without a connection and your card's QR code fills the screen, ready to scan. The app reloads by itself when you're back online.";

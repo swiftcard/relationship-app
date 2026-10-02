@@ -112,6 +112,19 @@ export const productDocs = defineDocs([
       "It comes WITH the iPhone app (version 1.0.5 and later — on an older version, update SwiftCard from the App Store first; until then the Apple Wallet pass is how the card reaches the watch), as part of the same download — there is no separate watch app to install, though you may need to switch it on in the iPhone's Watch app under Available Apps. Add the complication to a watch face (\"My SwiftCard\") and your card is one tap from a raised wrist. Three things worth knowing. It works without your phone: the card is stored on the watch, so the QR still shows with the phone off or left at home. It follows your active card automatically — change cards on the phone, and the watch changes with it. And signing out on the phone clears the watch too. If the watch says \"Open SwiftCard on your iPhone\", open the iPhone app once while the watch is nearby and it will catch up. There is no Android or Wear OS version.",
   },
   {
+    id: "offline",
+    title: "Showing your card with no signal",
+    audience: ["visitor", "user"],
+    triggers: [
+      "offline", "no signal", "no internet", "no wifi", "no service", "without internet",
+      "works offline", "bad reception", "no connection", "airplane mode", "you're offline",
+    ],
+    answer:
+      "Your QR code works without signal. Open the iPhone app with no connection and it shows \"You're offline\" with your card's QR code full screen, ready to scan. The person who scans it needs signal to open your card and save you.",
+    detail:
+      "The offline QR screen is in the iPhone app version 1.0.6 and later; older versions show a blank screen with no connection, so update from the App Store. It shows the card that was active the last time the app was open with signal, with your name, company and card link, plus a \"Try again\" button. It reloads by itself the moment the connection is back. If you've never opened the app signed in, or you signed out, there is no saved card and it only says \"You're offline\". Other ways to show your code with no signal: the Apple Wallet pass, the \"My SwiftCard QR\" home-screen widget and the Apple Watch app all keep your QR code on the device. A blank NFC card or tag needs no signal on your side either. In every case the OTHER person's phone needs internet to open your card — the code and the tag only carry your card's link. The website itself (swiftcard.me in a browser) does not work offline.",
+  },
+  {
     id: "nfc",
     title: "NFC cards and tags",
     audience: ["visitor", "user"],

@@ -202,7 +202,13 @@ composed from it. A listing refresh means steps 1–3 in order, on a machine tha
 has the service-role key.
 
 ## Version
-- 1.0.5, build 16. "What's New": `New: SwiftCard for Apple Watch. Your card's
+- 1.0.6, build 17. "What's New": `Your QR code now works with no signal. Open
+  SwiftCard without a connection and your card's QR code fills the screen,
+  ready to scan. The app reloads by itself when you're back online.` Native
+  change: ios/App/App/OfflineCard.swift (offline QR over the webview on a
+  connectivity failure). Prepared 2026-10-02; NOT uploaded or submitted —
+  Menash submits.
+- 1.0.5, build 16 (LIVE 2026-10-01). "What's New": `New: SwiftCard for Apple Watch. Your card's
   QR code on your wrist, with a watch-face complication that opens it in one
   tap. It follows the card you choose on your iPhone and works without your
   phone nearby. Links to SwiftCards and Swift Links now always open in your

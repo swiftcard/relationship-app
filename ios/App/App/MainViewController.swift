@@ -96,6 +96,12 @@ class MainViewController: CAPBridgeViewController {
 
         applyTextScale()
         applyPlatformFlags()
+
+        // No signal → the saved card's QR, drawn natively over the webview,
+        // instead of a blank screen. See OfflineCard.swift.
+        if let webView {
+            offlineCard = OfflineCardController(webView: webView, homeURL: bridge?.config.appStartServerURL)
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -187,6 +193,7 @@ class MainViewController: CAPBridgeViewController {
     }
 
     private var urlObservation: NSKeyValueObservation?
+    private var offlineCard: OfflineCardController?
 
     deinit {
         urlObservation?.invalidate()
