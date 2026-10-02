@@ -10,6 +10,7 @@ import { officeSubUserBlockMessage, getOfficeSubUserContext, roleHasCapability, 
 import { stripeTrialEndIso } from "@/lib/billing-state";
 import { discountRefusalFor, retentionDiscountTakenBy } from "@/lib/retention-discount";
 import { getAccountEmail } from "@/lib/account-email";
+import { trialExtensionOfferFor } from "@/lib/trial-extension-server";
 
 // GET /api/stripe/subscription — the read model the billing UI renders from.
 // Reads the profile, and (when there's a live Stripe subscription) the
@@ -92,6 +93,10 @@ export async function GET() {
     // discount): active, monthly, no discount already on it. False until the
     // live subscription below says otherwise.
     discountOfferable: false,
+    // The trial-stretch offer for the cancel flow (lib/trial-extension): an
+    // individual Pro on a card trial that has never had retention time. Null
+    // unless the live subscription below says it can be applied.
+    trialExtension: null as { until: string; currentEnd: string; extraDays: number; chargeCents: number | null; chargeInterval: "month" | "year" } | null,
     paymentFailed: typeof cust._paymentFailedAt === "string",
     hasStripeSubscription: !!profile?.stripe_subscription_id,
     hasCustomer: !!profile?.stripe_customer_id,
@@ -130,6 +135,21 @@ export async function GET() {
     // the same ledger — showing an offer it would refuse is a broken promise).
     base.discountOfferable = discountRefusalFor(sub) === null && !(await discountTaken);
     base.cancelAtPeriodEnd = sub.cancel_at_period_end === true;
+    // Only on a trial, so a paying subscriber's billing page never waits on it.
+    // Only the caller's OWN personal Pro: never an organisation's billing seen
+    // by a delegate, nor a team member's leftover subscription — the
+    // extend-trial route acts on the caller's own account and refuses both.
+    if (base.trialEnd && dbPlan === "pro" && !managingOrgBilling && !personalSubOnly) {
+      const ext = await trialExtensionOfferFor({
+        plan: dbPlan,
+        cust,
+        sub,
+        email: await getAccountEmail(subjectId, (profile.email as string | null) ?? null).catch(() => null),
+      }).catch(() => null);
+      base.trialExtension = ext
+        ? { until: ext.until, currentEnd: ext.currentEnd, extraDays: ext.extraDays, chargeCents: ext.chargeCents, chargeInterval: ext.chargeInterval }
+        : null;
+    }
     base.currentPeriodEnd = periodEndUnix ? new Date(periodEndUnix * 1000).toISOString() : null;
     base.seats = mapped?.plan === "office" ? (item?.quantity ?? null) : null;
     const unit = item?.price?.unit_amount ?? null;

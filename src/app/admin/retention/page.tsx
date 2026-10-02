@@ -18,6 +18,7 @@ const SAVED_BY: Record<string, string> = {
   discount: "50% off ×3",
   downgrade: "→ Free",
   quiet: "Emails off",
+  extend: "Trial → full month",
 };
 
 export default async function AdminRetentionPage() {

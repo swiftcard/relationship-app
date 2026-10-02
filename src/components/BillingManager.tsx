@@ -9,6 +9,7 @@ import { useIsNativeApp } from "@/lib/platform";
 import IapSubscribeButton from "@/components/NativePaywall";
 import { manageIapSubscription } from "@/lib/iap";
 import { trialStatusLine } from "@/lib/billing-state";
+import { dayLabel, trialExtensionOffer } from "@/lib/retention";
 import { canOfferExternalPurchase, openExternalPurchase } from "@/lib/external-purchase";
 
 // ── In-app subscription manager (Settings > Billing) ─────────────────────────
@@ -41,6 +42,9 @@ type Sub = {
   /** The 50%-off coupon can go on this subscription: active, monthly, and no
       discount already on it (lib/retention-discount — the route refuses the rest). */
   discountOfferable?: boolean;
+  /** A card trial that can run on free to a full month from its start
+      (lib/trial-extension) — the cancel flow offers it before cancelling. */
+  trialExtension?: { until: string; currentEnd: string; extraDays: number; chargeCents: number | null; chargeInterval: "month" | "year" } | null;
   paymentFailed: boolean;
   hasStripeSubscription: boolean;
   hasCustomer: boolean;
@@ -766,6 +770,12 @@ function CancelModal({ sub, onClose, onDone }: {
   // Nor on an annual plan (a 3-month coupon lapses before a yearly renewal) or
   // over a discount they already have — `discountOfferable` says so.
   const canOfferDiscount = !sub.retentionUsed && !sub.trialEnd && sub.discountOfferable === true && PRICE_SENSITIVE_REASONS.includes(reason);
+  // On a card trial: stretch it to a full month from its start instead —
+  // for every reason, the same offer the delete flow makes (owner, 2026-10-02).
+  // This modal only exists on the web, so the copy is the web form.
+  const ext = sub.plan === "pro" ? sub.trialExtension ?? null : null;
+  const extOffer = ext ? trialExtensionOffer(ext, false, "No thanks, continue canceling") : null;
+  const canOfferExtension = !!extOffer;
 
   const proCents = (sub.interval ?? "monthly") === "annual" ? PLAN_PRICES.PRO_ANNUAL_CENTS : PLAN_PRICES.PRO_MONTHLY_CENTS;
   const proLabel = `${formatUsd(proCents)}/${(sub.interval ?? "monthly") === "annual" ? "yr" : "mo"}`;
@@ -774,7 +784,7 @@ function CancelModal({ sub, onClose, onDone }: {
     if (!reason) { setErr("Please pick a reason so we can improve."); return; }
     setErr(null);
     // Only interrupt with the save step if we actually have something to offer.
-    setStep(canOfferPro || canOfferDiscount ? "offer" : "confirming");
+    setStep(canOfferPro || canOfferDiscount || canOfferExtension ? "offer" : "confirming");
   }
 
   async function switchToPro() {
@@ -799,6 +809,21 @@ function CancelModal({ sub, onClose, onDone }: {
       const data = await res.json();
       if (!res.ok) { setErr(data.error || "Couldn't apply the discount."); return; }
       await onDone("Great news — 50% off for your next 3 months is applied. Your plan stays active.");
+    } catch {
+      setErr("Couldn't reach the server.");
+    } finally { setBusy(null); }
+  }
+
+  async function acceptExtension() {
+    setBusy("extend"); setErr(null);
+    try {
+      const res = await fetch("/api/stripe/subscription/extend-trial", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setErr(data.error || "Couldn't extend your trial. Please try again."); return; }
+      const until = typeof data.until === "string" ? dayLabel(data.until) : "";
+      await onDone(until
+        ? `Your trial now runs until ${until}. Your first charge moves to that day — cancel any time before then and you pay nothing.`
+        : "Your trial is extended.");
     } catch {
       setErr("Couldn't reach the server.");
     } finally { setBusy(null); }
@@ -875,6 +900,25 @@ function CancelModal({ sub, onClose, onDone }: {
               <button onClick={acceptOffer} disabled={busy !== null}
                 className="mt-3 w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-sm py-3 rounded-full">
                 {busy === "offer" ? "Applying…" : "Apply 50% off & keep my plan"}
+              </button>
+            </div>
+          )}
+
+          {/* A card trial → run on free to a full month from its start. */}
+          {extOffer && (
+            <div className="rounded-2xl border border-blue-700/40 bg-blue-950/30 p-4 mb-3">
+              {extOffer.badge && (
+                <span className="inline-block rounded-full bg-blue-600 text-white text-[0.625rem] font-bold uppercase tracking-wider px-2.5 py-1 mb-2">
+                  {extOffer.badge}
+                </span>
+              )}
+              <p className="text-white font-bold text-base leading-snug text-balance">{extOffer.title}</p>
+              <p className="text-gray-300 text-sm mt-1">{extOffer.body}</p>
+              {extOffer.priceLine && <p className="text-gray-500 text-xs mt-2">{extOffer.priceLine}</p>}
+              {extOffer.fineprint && <p className="text-gray-500 text-[0.6875rem] mt-1">{extOffer.fineprint}</p>}
+              <button onClick={acceptExtension} disabled={busy !== null}
+                className="mt-3 w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm py-3 rounded-full">
+                {busy === "extend" ? "One moment…" : extOffer.accept}
               </button>
             </div>
           )}

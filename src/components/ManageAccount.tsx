@@ -305,7 +305,8 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
                 <p className="text-white font-bold text-base mb-2">
                   {saved === "grant" && (savedUntil ? `Pro is on until ${dayLabel(savedUntil)}` : "Pro is on — enjoy it")}
                   {saved === "discount" && "Discount applied"}
-                  {saved === "downgrade" && "Pro is cancelled — nothing was deleted"}
+                  {saved === "downgrade" && (elig.trialEndsAt ? "Your trial is cancelled — nothing was deleted" : "Pro is cancelled — nothing was deleted")}
+                  {saved === "extend" && (savedUntil ? `Your trial now runs until ${dayLabel(savedUntil)}` : "Your trial is extended")}
                   {saved === "quiet" && "We'll stop emailing you"}
                 </p>
                 <p className="text-gray-400 text-sm mb-4 leading-relaxed">
@@ -314,7 +315,15 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
                       bills from the day the gift ends, so saying so is true. */}
                   {saved === "grant" && !native && savedUntil && ` Want to keep Pro after that? Subscribe any time — you won't be charged until ${dayLabel(savedUntil)}.`}
                   {saved === "discount" && "It comes off your next invoices automatically. Nothing else changes — same account, same card, same everything."}
-                  {saved === "downgrade" && "You won't be charged again. Pro stays on until the end of the period you've paid for, then you move to Free and choose which card stays live. Every contact you've collected stays here. Changed your mind? Keep Subscription is in Settings → Plan and billing."}
+                  {saved === "downgrade" && !elig.trialEndsAt && "You won't be charged again. Pro stays on until the end of the period you've paid for, then you move to Free and choose which card stays live. Every contact you've collected stays here. Changed your mind? Keep Subscription is in Settings → Plan and billing."}
+                  {/* A card trial: nothing was paid, so "the period you've paid
+                      for" would be untrue. The Plan-and-billing pointer is web
+                      only (3.1.1) — that section is hidden inside the app. */}
+                  {saved === "downgrade" && elig.trialEndsAt && `You won't be charged. Pro stays on until ${dayLabel(elig.trialEndsAt)}, then you move to Free and choose which card stays live. Every contact you've collected stays here.`}
+                  {saved === "downgrade" && elig.trialEndsAt && !native && " Changed your mind? Keep Subscription is in Settings → Plan and billing."}
+                  {saved === "extend" && "Pro stays on, free, and your card, your link and your contacts are exactly where you left them."}
+                  {/* Web only (3.1.1): the charge and the billing pointer. */}
+                  {saved === "extend" && !native && savedUntil && ` Your first charge moves to ${dayLabel(savedUntil)} — cancel any time before then in Settings → Plan and billing and you pay nothing.`}
                   {saved === "quiet" && "Every SwiftCard email to you is off. Your card, your link and your contacts are untouched — come back whenever you want."}
                 </p>
                 <button type="button" onClick={() => setModal(false)} className="w-full text-sm font-semibold text-white bg-gray-800 hover:bg-gray-700 rounded-full py-2.5 transition-colors">

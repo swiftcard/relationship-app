@@ -25,13 +25,14 @@ import { escapeHtml } from "@/lib/escape";
 // losing the notification is bad, blocking a customer's deletion is worse (and
 // App Review 5.1.1(v) requires deletion to complete).
 
-export type RetentionOutcome = "grant" | "discount" | "downgrade" | "quiet" | "deleted";
+export type RetentionOutcome = "grant" | "discount" | "downgrade" | "quiet" | "extend" | "deleted";
 
 const LABEL: Record<RetentionOutcome, string> = {
   grant: "SAVED — took 30 free days of Pro",
   discount: "SAVED — took 50% off for 3 months",
   downgrade: "SAVED — switched to Free instead of deleting",
   quiet: "SAVED — turned off emails, kept the account",
+  extend: "SAVED — stretched their Pro trial to a full month",
   deleted: "LOST — account deleted",
 };
 

@@ -11,6 +11,7 @@ import { ledgerAdd, ledgerHas, trialHistoryFor } from "@/lib/trial-ledger";
 import { TRIAL_ENDS_KEY } from "@/lib/billing-state";
 import { getStripe } from "@/lib/stripe";
 import { discountRefusalFor, retentionDiscountTakenBy } from "@/lib/retention-discount";
+import { trialExtensionOfferFor, type TrialExtensionOffer } from "@/lib/trial-extension-server";
 import {
   RETENTION_GRANT_DAYS,
   RETENTION_GRANT_DAYS_AFTER_TRIAL,
@@ -28,7 +29,8 @@ import {
 //        own numbers, and which offers it is actually eligible for.
 // POST → one of: "survey" (record the answers), "grant" (30 free days of Pro),
 //        "discount" (50% off the next 3 invoices), "downgrade" (Pro → Free,
-//        billing stops, nothing destroyed), "quiet" (all email off).
+//        billing stops, nothing destroyed), "quiet" (all email off),
+//        "extend" (a card trial runs on free to a full month from its start).
 //
 // Every offer is ONE PER ACCOUNT, FOREVER, recorded in customization._retention
 // before the reward is handed out. Otherwise the flow is a vending machine:
@@ -48,6 +50,8 @@ type RetentionRecord = {
   /** ISO timestamp of the one grant/discount this account has taken. */
   grantedAt?: string;
   discountedAt?: string;
+  /** ISO timestamp the card trial was stretched (api/stripe/subscription/extend-trial). */
+  trialExtendedAt?: string;
   /** What the account chose in the end, for the admin funnel. */
   savedBy?: string;
   savedAt?: string;
@@ -118,6 +122,15 @@ function eligibilityOf(opts: {
    * See lib/retention-discount.
    */
   discountOk?: boolean | null;
+  /**
+   * The trial stretch this account could take (lib/trial-extension-server),
+   * checked against the live subscription: null = none, or not looked up.
+   */
+  extension?: TrialExtensionOffer | null;
+  /** POST only: the extend-trial route makes the live checks itself (see discountOk). */
+  extendOk?: boolean | null;
+  /** When the card-backed trial ends now, for the keep step's wording. */
+  trialEndsAt?: string | null;
 }): Eligibility {
   const { plan, rawPlan, source, rec, planExpiresAt, subId, retentionUsed } = opts;
   // An Office/enterprise subscription is a seat-billed team plan: its price is
@@ -134,7 +147,7 @@ function eligibilityOf(opts: {
     // of Pro (with its paid AI features) came free with no card, once per
     // throwaway email (security audit 2026-09-24). Someone who has used
     // SwiftCard for two weeks is the customer this offer is for.
-    grant: plan === "free" && !rec.grantedAt && !planExpiresAt && !opts.grantLedgerUsed && accountOldEnough(opts.accountCreatedAt),
+    grant: plan === "free" && !rec.grantedAt && !rec.trialExtendedAt && !planExpiresAt && !opts.grantLedgerUsed && accountOldEnough(opts.accountCreatedAt),
     // Someone who has had a 14-day trial gets the rest of 30, not 30 more.
     grantDays: opts.hadTrial ? RETENTION_GRANT_DAYS_AFTER_TRIAL : RETENTION_GRANT_DAYS,
     // Only a real Stripe subscription can be discounted. Apple bills Apple.
@@ -148,7 +161,32 @@ function eligibilityOf(opts: {
     // the subscription + not in the ledger (`discountOk`, fails closed).
     discount: individualPro && !rec.discountedAt && retentionUsed !== true && !opts.trialing && opts.discountOk === true,
     downgrade: individualPro,
+    // A card trial stretched to a month from its start. Its own once-only
+    // record on the account, plus the free-time ledger it shares with
+    // `grant` — one free month per person, whichever door it came through.
+    extend: individualPro && (!!opts.extension || opts.extendOk === true) && !rec.grantedAt && !rec.trialExtendedAt,
+    extendUntil: opts.extension?.until ?? null,
+    extendDays: opts.extension?.extraDays,
+    trialEndsAt: individualPro ? opts.trialEndsAt ?? null : null,
+    chargeCents: opts.extension?.chargeCents ?? null,
+    chargeInterval: opts.extension?.chargeInterval ?? null,
   };
+}
+
+// The trial stretch, asked of the live subscription — the same question the
+// extend-trial route asks right before applying it. Any failure is "no offer".
+async function extensionFor(
+  subId: string,
+  plan: string | null,
+  cust: Cust,
+  email: string | null | undefined,
+): Promise<TrialExtensionOffer | null> {
+  try {
+    const sub = await getStripe().subscriptions.retrieve(subId);
+    return await trialExtensionOfferFor({ plan, cust, sub, email });
+  } catch {
+    return null;
+  }
 }
 
 // The 50% offer against the live subscription (active, monthly, no discount
@@ -190,11 +228,19 @@ export async function GET() {
   const discountWorthChecking =
     profile.plan === "pro" && source === "stripe" && !!subId &&
     !rec.discountedAt && cust._retentionUsed !== true && typeof cust[TRIAL_ENDS_KEY] !== "string";
-  const [trialFacts, discountOk] = await Promise.all([
+  // The trial stretch is asked only of an individual Stripe Pro that is on a
+  // card trial and has never had retention time — never alongside the 50%
+  // look-up, which a trial rules out, so this is still at most one Stripe call.
+  const trialEndsAt = typeof cust[TRIAL_ENDS_KEY] === "string" ? (cust[TRIAL_ENDS_KEY] as string) : null;
+  const extendWorthChecking =
+    profile.plan === "pro" && source === "stripe" && !!subId &&
+    !!trialEndsAt && !rec.grantedAt && !rec.trialExtendedAt;
+  const [trialFacts, discountOk, extension] = await Promise.all([
     trialFactsFor(user.id, user.email, cust),
     discountWorthChecking
       ? discountOkFor(subId as string, user.email, (profile.payment_fingerprint as string | null) ?? null)
       : null,
+    extendWorthChecking ? extensionFor(subId as string, profile.plan as string | null, cust, user.email) : null,
   ]);
   const elig = eligibilityOf({
     plan,
@@ -207,6 +253,8 @@ export async function GET() {
     ...trialFacts,
     accountCreatedAt: user.created_at ?? null,
     discountOk,
+    extension,
+    trialEndsAt,
   });
 
   // Their own numbers for the "what you lose" step. Counted with head:true so
@@ -246,7 +294,7 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json().catch(() => ({}))) as { action?: string; reason?: string; comment?: string };
   const action = body.action;
-  if (!action || !["survey", "grant", "discount", "downgrade", "quiet"].includes(action)) {
+  if (!action || !["survey", "grant", "discount", "downgrade", "quiet", "extend"].includes(action)) {
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   }
 
@@ -278,11 +326,15 @@ export async function POST(req: NextRequest) {
     // which makes them itself right before applying the coupon — asking Stripe
     // here as well would only double the wait on "Apply 50% off".
     discountOk: action === "discount" ? true : null,
+    // Same reasoning: the extend-trial route checks the live subscription and
+    // the ledger itself, immediately before moving the trial end.
+    extendOk: action === "extend" ? true : null,
+    trialEndsAt: typeof cust[TRIAL_ENDS_KEY] === "string" ? (cust[TRIAL_ENDS_KEY] as string) : null,
   });
 
   // The reason they gave at step 1-2, so an alert carries WHY, not just WHAT.
   const lastSurvey = (rec.surveys ?? [])[(rec.surveys ?? []).length - 1];
-  const saved = (outcome: "grant" | "discount" | "downgrade" | "quiet") =>
+  const saved = (outcome: "grant" | "discount" | "downgrade" | "quiet" | "extend") =>
     alertRetention({
       userId: user.id,
       email: user.email ?? null,
@@ -417,6 +469,38 @@ export async function POST(req: NextRequest) {
       .eq("id", user.id);
     await saved("downgrade");
     return NextResponse.json({ ok: true });
+  }
+
+  // ── A card trial stretched to a full month ────────────────────────────────
+  if (action === "extend") {
+    if (!elig.extend || !subId) {
+      return NextResponse.json({ error: "This offer isn't available on your account." }, { status: 409 });
+    }
+    // THE SAME OFFER Billing's cancel flow makes, applied by the same route:
+    // it owns the Stripe call, the once-per-person ledger and the account's
+    // trialExtendedAt record. Called in-process, like the discount above.
+    const { POST: extend } = await import("@/app/api/stripe/subscription/extend-trial/route");
+    const res = await extend();
+    const data = (await res.json().catch(() => ({}))) as { error?: string; until?: string; extraDays?: number };
+    if (!res.ok) {
+      if (res.status !== 409) await reportError("retention.extend-failed", new Error(data.error ?? `status ${res.status}`), { userId: user.id });
+      return NextResponse.json({ error: data.error || "Couldn't extend your trial right now. Please try again." }, { status: res.status });
+    }
+    // Re-read: the extend route just rewrote customization (trialExtendedAt,
+    // the new trial end) — writing back the copy read above would undo it.
+    const { data: fresh } = await admin.from("profiles").select("customization").eq("id", user.id).maybeSingle();
+    const freshCust = (fresh?.customization as Cust | null) ?? {};
+    await admin
+      .from("profiles")
+      .update({
+        customization: {
+          ...freshCust,
+          _retention: { ...retentionOf(freshCust), savedBy: "extend", savedAt: new Date().toISOString() },
+        },
+      })
+      .eq("id", user.id);
+    await saved("extend");
+    return NextResponse.json({ ok: true, until: data.until ?? null, extraDays: data.extraDays ?? null });
   }
 
   // ── Go quiet: every SwiftCard email off, account untouched ────────────────

@@ -9,7 +9,8 @@
 //   2. detail   — a follow-up that CHANGES with the reason they picked
 //   3. keep     — the no-money save (Free: go quiet. Pro: switch to Free instead)
 //   4. loss     — what deleting actually destroys, with their real numbers
-//   5. offer    — the promotion (Free: 30 days of Pro on us. Pro: 50% off 3 months)
+//   5. offer    — the promotion (Free: 30 days of Pro on us. Pro: 50% off 3 months.
+//                 Pro on a card trial: the trial stretched to a full month)
 //   6. confirm  — password (when the account has one) + type DELETE
 //
 // The promotion is the LAST thing before the typed DELETE (owner order
@@ -181,6 +182,21 @@ export type Eligibility = {
   discount: boolean;
   /** Pro on Stripe → "switch to Free" keeps everything and stops billing. */
   downgrade: boolean;
+  /**
+   * Pro on a card-backed Stripe trial, never given retention time → the trial
+   * runs on free until a month from its start (lib/trial-extension). Absent =
+   * not offered.
+   */
+  extend?: boolean;
+  /** ISO: the trial's new end if `extend` is taken. */
+  extendUntil?: string | null;
+  /** Days the stretch adds to the trial (16 for a standard 14-day trial). */
+  extendDays?: number;
+  /** ISO: when the card-backed trial ends now (null when not on one). */
+  trialEndsAt?: string | null;
+  /** The first charge after the trial — the web price line only, never in the app. */
+  chargeCents?: number | null;
+  chargeInterval?: "month" | "year" | null;
 };
 
 /**
@@ -208,7 +224,7 @@ export type OfferCopy = {
   /** Label on the button that ACCEPTS the offer, or null when there is none. */
   accept: string | null;
   /** The action the accept button posts. */
-  action: "grant" | "discount" | "downgrade" | "quiet" | null;
+  action: "grant" | "discount" | "downgrade" | "quiet" | "extend" | null;
   /** Label on the button that declines and continues toward deletion. */
   decline: string;
   /** The small pill above a promotion's headline ("Pro · on us"). */
@@ -270,6 +286,21 @@ export function offerStep(plan: RetentionPlan, elig: Eligibility, native: boolea
       decline: "No thanks, continue to delete",
     };
   }
+  // A card trial stretched to a full month. A gift of days, not a sale, so it
+  // is offered inside the app too — there without the price or the charge.
+  if (elig.extend && elig.extendUntil) {
+    return trialExtensionOffer(
+      {
+        until: elig.extendUntil,
+        currentEnd: elig.trialEndsAt ?? null,
+        extraDays: elig.extendDays ?? 0,
+        chargeCents: elig.chargeCents ?? null,
+        chargeInterval: elig.chargeInterval ?? null,
+      },
+      native,
+      "No thanks, continue to delete",
+    );
+  }
   // Never inside the app: a discount on the WEB (Stripe) subscription is a
   // price offer for a purchase Apple doesn't process — App Review 3.1.1, and
   // the billing panel's own rule ("no retention offers on native").
@@ -286,6 +317,37 @@ export function offerStep(plan: RetentionPlan, elig: Eligibility, native: boolea
     accept: `Apply ${RETENTION_DISCOUNT_PERCENT}% off`,
     action: "discount",
     decline: "No thanks, continue to delete",
+  };
+}
+
+/**
+ * "Keep your free trial going until October 31" — one wording for both doors
+ * (this flow's step 5 and Billing's cancel flow), so they never disagree.
+ * Native (3.1.1): the days only — no price, no charge, no billing pointer.
+ */
+export function trialExtensionOffer(
+  o: { until: string; currentEnd: string | null; extraDays: number; chargeCents?: number | null; chargeInterval?: "month" | "year" | null },
+  native: boolean,
+  decline: string,
+): OfferCopy {
+  const until = dayLabel(o.until);
+  const ends = o.currentEnd ? dayLabel(o.currentEnd) : "";
+  const more = o.extraDays > 0 ? `${o.extraDays} more days of Pro, free` : "more days of Pro, free";
+  const per = o.chargeInterval === "year" ? "year" : "month";
+  return {
+    badge: "Pro · on us",
+    title: `Keep your free trial going until ${until}`,
+    body: `${ends ? `Your trial ends ${ends}. ` : ""}Stay, and we'll stretch it to a full month — ${more}.`,
+    bullets: native
+      ? ["Unlimited cards and links", "Every contact unlocked", "Automatic follow-up", "The AI card scanner"]
+      : ["Unlimited cards and links", "Every contact unlocked", "Automatic email and text follow-up", "The AI card scanner"],
+    priceLine: native || !o.chargeCents ? null : `Then $${(o.chargeCents / 100).toFixed(2)}/${per} from ${until}`,
+    fineprint: native
+      ? "One-time offer. Nothing else changes."
+      : `Nothing to pay today. Cancel any time before ${until} and you pay nothing. One-time offer.`,
+    accept: `Keep my trial until ${until}`,
+    action: "extend",
+    decline,
   };
 }
 
@@ -329,6 +391,20 @@ export function keepStep(plan: RetentionPlan, elig: Eligibility, source: PlanSou
       accept: null,
       action: null,
       decline: "Continue with deletion",
+    };
+  }
+  // A card trial: nothing has been paid, so "the period you've already paid
+  // for" was untrue here. Cancelling the trial is the honest save.
+  if (elig.trialEndsAt) {
+    const day = dayLabel(elig.trialEndsAt);
+    return {
+      title: "Cancel your trial instead of deleting",
+      body: elig.downgrade
+        ? `You won't be charged. Pro stays on until ${day}, then your account moves to Free — nothing is destroyed: your card stays live, your link keeps working, and every contact you've collected stays in your account.`
+        : `Your trial can be cancelled without deleting anything: your card stays live, your link keeps working, and every contact stays in your account.`,
+      accept: elig.downgrade ? "Cancel my trial, keep my account" : null,
+      action: elig.downgrade ? "downgrade" : null,
+      decline: "No thanks, keep deleting",
     };
   }
   return {

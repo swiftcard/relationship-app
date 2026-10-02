@@ -17,9 +17,23 @@ import { appCss, launchBrowser } from "./harness";
 
 const ORIGIN = "https://sc.test";
 
-type Elig = { grant: boolean; grantDays?: number; discount: boolean; downgrade: boolean };
+type Elig = {
+  grant: boolean; grantDays?: number; discount: boolean; downgrade: boolean;
+  extend?: boolean; extendUntil?: string | null; extendDays?: number; trialEndsAt?: string | null;
+  chargeCents?: number | null; chargeInterval?: "month" | "year" | null;
+};
 const FREE_ELIG: Elig = { grant: true, grantDays: 30, discount: false, downgrade: false };
 const PRO_ELIG: Elig = { grant: false, discount: true, downgrade: true };
+// Day 7 of a 14-day card trial: free until a month from its start.
+const TRIAL_START = Date.now() - 7 * 86400000;
+const TRIAL_ELIG: Elig = {
+  grant: false, discount: false, downgrade: true,
+  extend: true,
+  extendUntil: new Date(TRIAL_START + 30 * 86400000).toISOString(),
+  extendDays: 16,
+  trialEndsAt: new Date(TRIAL_START + 14 * 86400000).toISOString(),
+  chargeCents: 499, chargeInterval: "month",
+};
 const facts = { contacts: 12, views: 40, cards: 1, cardUrl: "swiftcard.me/dana-acme", since: null, isOfficeOwner: false };
 
 let browser: Browser;
@@ -80,7 +94,10 @@ async function open(o: Opts): Promise<{ page: Page; posts: Record<string, unknow
     const body = JSON.parse(r.request().postData() || "{}");
     posts.push(body);
     const until = new Date(Date.now() + 30 * 86400000).toISOString();
-    return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body.action === "grant" ? { ok: true, days: 30, until } : { ok: true }) });
+    return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(
+      body.action === "grant" ? { ok: true, days: 30, until }
+      : body.action === "extend" ? { ok: true, until: o.elig.extendUntil, extraDays: o.elig.extendDays }
+      : { ok: true }) });
   });
   await page.route(`${ORIGIN}/`, (r) => r.fulfill({
     status: 200, contentType: "text/html",
@@ -263,6 +280,95 @@ describe("Pro: 50% off, last before DELETE — and never inside the app", () => 
       await page.getByRole("button", { name: "Continue", exact: true }).click();
       await page.getByText("Your free Pro ends on its own").waitFor();
       expect(await modal(page).innerText()).not.toMatch(/subscription/i);
+    } finally { await page.context().close(); }
+  });
+});
+
+describe("Pro trial: stretched to a full month, the last thing before DELETE — web and app", () => {
+  for (const width of [390, 1280]) {
+    for (const theme of ["light", "dark"] as const) {
+      for (const native of [false, true]) {
+        it(`${width}px, ${theme}, ${native ? "app" : "web"}: step 5 of 6, fits, and says exactly what happens`, async () => {
+          const { page } = await open({ width, theme, native, elig: TRIAL_ELIG, plan: "pro", source: "stripe" });
+          try {
+            await walkToPromotion(page);
+            await page.getByText(/^Keep your free trial going until [A-Z][a-z]+ \d{1,2}$/).waitFor();
+            expect(await label(page).innerText()).toMatch(/step 5 of 6/i);
+            const text = await modal(page).innerText();
+            expect(text).toMatch(/Your trial ends [A-Z][a-z]+ \d{1,2}\. Stay, and we'll stretch it to a full month — 16 more days of Pro, free\./);
+            if (native) {
+              expect(text, "price or charge inside the app").not.toMatch(/\$|charge|pay /i);
+            } else {
+              expect(text).toMatch(/Then \$4\.99\/month from [A-Z][a-z]+ \d{1,2}/);
+              expect(text).toMatch(/Nothing to pay today\./);
+            }
+            const l = await layoutOf(page);
+            expect(l.pageOverflowX).toBe(false);
+            expect(l.modalLeft).toBeGreaterThanOrEqual(0);
+            expect(l.modalRight).toBeLessThanOrEqual(l.viewport);
+            expect(l.clipped, "text cut off inside the card").toEqual([]);
+            for (const b of l.buttons) {
+              expect(b.inside, `${b.text} sticks out of the dialog`).toBe(true);
+              expect(b.h, `${b.text} is too small to tap`).toBeGreaterThanOrEqual(32);
+            }
+            const color = await page.getByRole("button", { name: /^Keep my trial until / }).evaluate((b) => getComputedStyle(b).color);
+            expect(color).toBe("rgb(255, 255, 255)");
+            await shot(page, `trial-${width}-${theme}-${native ? "app" : "web"}.png`);
+          } finally { await page.context().close(); }
+        });
+      }
+    }
+  }
+
+  it("the keep step on a trial offers to cancel the trial, never 'the period you paid for'", async () => {
+    const { page } = await open({ elig: TRIAL_ELIG, plan: "pro", source: "stripe" });
+    try {
+      await page.getByRole("button", { name: "Continue", exact: true }).waitFor();
+      await page.locator('input[type="radio"]').first().check();
+      await page.getByRole("button", { name: "Continue", exact: true }).click();
+      await page.getByRole("button", { name: "Continue", exact: true }).click();
+      await page.getByText("Cancel your trial instead of deleting").waitFor();
+      const text = await modal(page).innerText();
+      expect(text).toMatch(/You won't be charged\. Pro stays on until [A-Z][a-z]+ \d{1,2}/);
+      expect(text).not.toMatch(/paid for/);
+      await page.getByRole("button", { name: "Cancel my trial, keep my account" }).click();
+      await page.getByText("Your trial is cancelled — nothing was deleted").waitFor();
+      expect(await modal(page).innerText()).not.toMatch(/paid for/);
+    } finally { await page.context().close(); }
+  });
+
+  for (const native of [false, true]) {
+    it(`${native ? "app" : "web"}: taking it ends the flow with the new date`, async () => {
+      const { page, posts } = await open({ elig: TRIAL_ELIG, plan: "pro", source: "stripe", native, theme: "light" });
+      try {
+        await walkToPromotion(page);
+        await page.getByRole("button", { name: /^Keep my trial until / }).click();
+        await page.getByText(/^Your trial now runs until [A-Z][a-z]+ \d{1,2}$/).waitFor();
+        expect(posts.map((p) => p.action)).toEqual(["survey", "extend"]);
+        const text = await modal(page).innerText();
+        if (native) expect(text, "billing words inside the app").not.toMatch(/charge|Plan and billing|\$/);
+        else expect(text).toMatch(/Your first charge moves to [A-Z][a-z]+ \d{1,2}/);
+        expect(await page.getByText("Type DELETE to confirm").count()).toBe(0);
+      } finally { await page.context().close(); }
+    });
+  }
+
+  it("declining carries straight on to Type DELETE", async () => {
+    const { page } = await open({ elig: TRIAL_ELIG, plan: "pro", source: "stripe" });
+    try {
+      await walkToPromotion(page);
+      await page.getByRole("button", { name: "No thanks, continue to delete" }).click();
+      await page.getByText("Type DELETE to confirm").waitFor();
+      expect(await label(page).innerText()).toMatch(/step 6 of 6/i);
+    } finally { await page.context().close(); }
+  });
+
+  it("not eligible (already cancelled, or had the free month): five steps", async () => {
+    const { page } = await open({ elig: { ...TRIAL_ELIG, extend: false, extendUntil: null }, plan: "pro", source: "stripe" });
+    try {
+      await walkToPromotion(page);
+      await page.getByText("Type DELETE to confirm").waitFor();
+      expect(await label(page).innerText()).toMatch(/step 5 of 5/i);
     } finally { await page.context().close(); }
   });
 });
