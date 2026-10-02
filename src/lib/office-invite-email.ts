@@ -6,15 +6,39 @@ import { extractEmailDomain, isPersonalEmailDomain } from "@/lib/logo-provider";
 // Pure builder: no IO, so tests assert the real bytes instead of grepping the
 // route's source. It lives here rather than inline in the route because the
 // invite is the ONLY mail SwiftCard sends to someone with no prior relationship
-// to us — a stranger whose address a third party typed in — so it needs the
-// bulk-class treatment (who sent it, why they got it, how to stop it) that a
-// receipt or a password reset does not.
+// to us — a stranger whose address a third party typed in — so it says who sent
+// it, why they got it, and that ignoring it is safe.
+//
+// IT MUST LAND IN THE PRIMARY INBOX (owner, 2026-10-02: "it cannot go to spam
+// and it cannot go to promotions"). It reads like the workspace invites Gmail
+// files under Primary — Slack's, Google Docs' — and carries none of the
+// newsletter markers its Promotions classifier and SpamAssassin score:
+//   • no unsubscribe link in the body, and no List-Unsubscribe header (the
+//     route sends it personal: true). An invite is not a list; the invitee
+//     ignores it or the admin revokes it, and a one-click opt-out also wrote
+//     them into message_opt_outs, blocking the re-invite they'd then ask for.
+//   • a complete HTML document (doctype, <html>, <body>) — a bare <div> trips
+//     SpamAssassin's HTML_MIME_NO_HTML_TAG.
+//   • a subject shaped "Dana invited you to join Acme on SwiftCard", not a
+//     product pitch ("create your … digital business card").
+//   • no store-promo copy ("Get the app from the App Store").
+// Sender side, unchanged and also required: support@ (not news@), SPF + DKIM +
+// DMARC on swiftcard.me, open/click tracking off (resend-domain.ts), a text
+// part (sendRawEmail), and a Reply-To only at a company address (below).
 //
 // Deliberately does NOT reuse layout() from email-templates.ts: that hardcodes
 // SwiftCard's own header image and branding, which fights the whole point of a
 // team invite looking like it came from the recipient's employer.
 
 export type InviteEmail = { subject: string; html: string; fromName: string };
+
+// A complete document around the body. `title` is the subject; htmlToText drops
+// the whole <head>, so it never leaks into the text part.
+export function emailDocument(title: string, body: string): string {
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${escapeHtml(title)}</title></head>
+<body style="margin:0;padding:0;background:#ffffff;">${body}</body></html>`;
+}
 
 // An image an email client will actually show. SVG isn't one — Gmail strips
 // it and Outlook draws an empty box — and data:/javascript: URLs are blocked
@@ -46,8 +70,6 @@ export function buildInviteEmail(opts: {
   inviteeFirst?: string | null;
   inviteUrl: string;
   brandLogoUrl?: string | null;
-  /** contactUnsubUrl(recipient), or null when the signing secret is unavailable. */
-  unsubscribeUrl?: string | null;
   /** The invited address, so the "get the app" line can say which email to use. */
   inviteEmail?: string | null;
 }): InviteEmail {
@@ -78,7 +100,11 @@ export function buildInviteEmail(opts: {
     }
   })();
 
-  const html = `
+  // "Dana invited you to join Acme Realty on SwiftCard" — the workspace-invite
+  // shape, with a version for each thing we may not know.
+  const subject = `${ownerRaw ? `${ownerRaw} invited you` : "You're invited"} to join ${officeRaw ?? (ownerRaw ? "their team" : "a team")} on SwiftCard`;
+
+  const html = emailDocument(subject, `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#fff;">
         ${logo
           ? `<img src="${logo}" width="56" height="56" alt="${office ?? ""}" style="border-radius:10px;display:block;margin:0 0 20px;" />`
@@ -88,29 +114,29 @@ export function buildInviteEmail(opts: {
           ${addedLine} It takes 2 minutes.
         </p>
         <a href="${opts.inviteUrl}" style="display:inline-block;background:#2563eb;color:#fff;font-weight:600;text-decoration:none;padding:13px 30px;border-radius:100px;font-size:15px;">Create my card →</a>
-        <p style="color:#999;font-size:12px;margin-top:14px;">This link goes to ${escapeHtml(host)}. The invite expires in ${ttlDays} days.</p>
+        <p style="color:#6b7280;font-size:12px;margin-top:14px;">This link goes to ${escapeHtml(host)}. The invite expires in ${ttlDays} days.</p>
         ${/* The app is a real second door now (2026-09-16): signing in there
             with this address (email, Google or Apple) finds the invite and goes
             straight to Join, because onboarding, the dashboard and /welcome all
             route a pending invite there, so it no longer strands anyone. */ ""}
         <p style="color:#444;font-size:14px;line-height:1.5;margin:20px 0 0;">
-          Prefer your phone? Get the <strong>SwiftCard</strong> app from the App Store and create your account with <strong>${opts.inviteEmail ? escapeHtml(opts.inviteEmail) : "this email address"}</strong>. Your invite will be waiting.
+          ${/* Says the same thing the old "Get the SwiftCard app from the App
+              Store" line did, minus the store pitch — that phrasing is ad copy
+              to a classifier, in the one email that most needs to look like a
+              colleague wrote it. */ ""}Prefer your phone? You can also do this in the <strong>SwiftCard</strong> app — create your account there with <strong>${opts.inviteEmail ? escapeHtml(opts.inviteEmail) : "this email address"}</strong> and your invite will be waiting.
           ${/* Hide My Email gives the account a relay address no invite can be
               matched to, so the app-first door finds the invite only when
               Apple shares the real address. */ ""}Signing in with Apple? Choose <strong>Share My Email</strong> so your invite can find you.
         </p>
-        <p style="color:#999;font-size:12px;margin-top:24px;">${why} If you didn't expect it, you can ignore this email${opts.unsubscribeUrl ? " or unsubscribe below" : ""}.</p>
-        <p style="color:#b6bcc6;font-size:11px;margin:0;line-height:1.6;">
-          Sent by SwiftCard${office ? ` on behalf of ${office}` : ""} · New York, NY${
-            opts.unsubscribeUrl
-              ? `<br><a href="${escapeHtml(opts.unsubscribeUrl)}" style="color:#b6bcc6;text-decoration:underline;">Unsubscribe from SwiftCard emails</a>`
-              : ""}
+        <p style="color:#6b7280;font-size:12px;margin-top:24px;">${why} If you weren't expecting it, you can ignore this email — nothing happens unless you accept.</p>
+        <p style="color:#6b7280;font-size:11px;margin:0;line-height:1.6;">
+          Sent by SwiftCard${office ? ` on behalf of ${office}` : ""} · New York, NY
         </p>
       </div>
-    `;
+    `);
 
   return {
-    subject: `${ownerRaw ? `${ownerRaw} invited you` : "You're invited"} to create your ${officeRaw ? `${officeRaw} ` : "company "}digital business card`,
+    subject,
     // "Dana via SwiftCard": the From names the person the body says invited
     // them, so the header and the body agree. The COMPANY is deliberately NOT in
     // the From (owner report 2026-09-24: invites landing in the invitee's spam).
@@ -171,8 +197,9 @@ export function buildJoinSignInEmail(opts: {
     }
   })();
   const joining = office ? `your <strong>${office}</strong> team` : "your team";
+  const subject = officeRaw ? `Your sign-in link to join ${officeRaw} on SwiftCard` : "Your SwiftCard sign-in link";
 
-  const html = `
+  const html = emailDocument(subject, `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#fff;">
         ${logo
           ? `<img src="${logo}" width="56" height="56" alt="${office ?? ""}" style="border-radius:10px;display:block;margin:0 0 20px;" />`
@@ -182,14 +209,14 @@ export function buildJoinSignInEmail(opts: {
           Tap the button to sign in as <strong>${email}</strong> and finish joining ${joining} on SwiftCard. No password needed.
         </p>
         <a href="${escapeHtml(opts.signInUrl)}" style="display:inline-block;background:#2563eb;color:#fff;font-weight:600;text-decoration:none;padding:13px 30px;border-radius:100px;font-size:15px;">Sign in and join →</a>
-        <p style="color:#999;font-size:12px;margin-top:14px;">This link goes to ${escapeHtml(host)}. It works once, on any device, and expires soon — if it has, open your invite again and send a new one.</p>
-        <p style="color:#999;font-size:12px;margin-top:24px;">You got this because someone asked for a sign-in link on your ${office ? `${office} ` : ""}team invitation. If it wasn't you, ignore this email — nobody can sign in without it.</p>
-        <p style="color:#b6bcc6;font-size:11px;margin:0;line-height:1.6;">Sent by SwiftCard${office ? ` on behalf of ${office}` : ""} · New York, NY</p>
+        <p style="color:#6b7280;font-size:12px;margin-top:14px;">This link goes to ${escapeHtml(host)}. It works once, on any device, and expires soon — if it has, open your invite again and send a new one.</p>
+        <p style="color:#6b7280;font-size:12px;margin-top:24px;">You got this because someone asked for a sign-in link on your ${office ? `${office} ` : ""}team invitation. If it wasn't you, ignore this email — nobody can sign in without it.</p>
+        <p style="color:#6b7280;font-size:11px;margin:0;line-height:1.6;">Sent by SwiftCard${office ? ` on behalf of ${office}` : ""} · New York, NY</p>
       </div>
-    `;
+    `);
 
   return {
-    subject: officeRaw ? `Your sign-in link to join ${officeRaw} on SwiftCard` : "Your SwiftCard sign-in link",
+    subject,
     // Plain "SwiftCard", never "Meridian Bank via SwiftCard". A company-named
     // sender plus a sign-in link, from a domain that isn't the company's, is
     // the credential-phishing template that spam filters are built to catch

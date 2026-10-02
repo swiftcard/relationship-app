@@ -6,6 +6,7 @@ import { htmlToText } from "@/lib/email-text";
 import { reportError } from "@/lib/report-error";
 import { contactCardUrl } from "@/lib/contact-links";
 import { from as senderAddress, replyToFor, type SenderKey } from "@/lib/email-senders";
+import { isTestMailbox } from "@/lib/test-mailbox";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
@@ -395,6 +396,13 @@ export async function sendRawEmail(opts: {
   personal?: boolean;
 }): Promise<SendResult> {
   if (!process.env.RESEND_API_KEY) return "not_configured";
+  // Never hand Resend an address that cannot receive mail. The QA harness
+  // mints *@swiftcard-test.invalid accounts nightly and after every deploy, and
+  // each message to one is a hard bounce scored against swiftcard.me — the
+  // reputation every team invite and card share depends on to reach the inbox
+  // (lib/test-mailbox; 1,008 such bounces found 2026-09-23). Reported as "sent"
+  // so callers behave exactly as they did when Resend accepted it.
+  if (isTestMailbox(opts.to)) return "sent";
   const resend = new Resend(process.env.RESEND_API_KEY);
   const key: Exclude<SenderKey, "inbox"> = opts.sender ?? "support";
   const replyTo = replyToFor(key, opts.replyTo);
@@ -637,6 +645,13 @@ export async function sendBrandedEmail(opts: {
   personal?: boolean;
 }): Promise<SendResult> {
   if (!process.env.RESEND_API_KEY) return "not_configured";
+  // Never hand Resend an address that cannot receive mail. The QA harness
+  // mints *@swiftcard-test.invalid accounts nightly and after every deploy, and
+  // each message to one is a hard bounce scored against swiftcard.me — the
+  // reputation every team invite and card share depends on to reach the inbox
+  // (lib/test-mailbox; 1,008 such bounces found 2026-09-23). Reported as "sent"
+  // so callers behave exactly as they did when Resend accepted it.
+  if (isTestMailbox(opts.to)) return "sent";
   const resend = new Resend(process.env.RESEND_API_KEY);
   // A reply to a card share is a reply to THAT PERSON. It must reach them, not
   // us — connect@ only catches the case where the card carries no email.

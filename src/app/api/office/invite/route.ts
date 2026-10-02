@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { NextResponse } from "next/server";
-import { sendRawEmail, isOptedOut, contactUnsubUrl } from "@/lib/messaging";
+import { sendRawEmail, isOptedOut } from "@/lib/messaging";
 import { buildInviteEmail, inviteReplyTo } from "@/lib/office-invite-email";
 import { PLAN_LIMITS } from "@/lib/plan";
 import { isRateLimited } from "@/lib/rate-limit";
@@ -269,24 +269,12 @@ export async function POST(req: Request) {
     ownerId: ctx.ownerId,
   });
 
-  // contactUnsubUrl throws when no signing secret is configured (deliberate
-  // fail-closed on SIGNING — never sign with a public constant). Degrade to "no
-  // unsubscribe link in the body" rather than blocking the invite; sendRawEmail
-  // makes the same call for the header and degrades the same way.
-  let inviteUnsubUrl: string | null = null;
-  try {
-    inviteUnsubUrl = contactUnsubUrl(email.trim());
-  } catch {
-    inviteUnsubUrl = null;
-  }
-
   const invite = buildInviteEmail({
     ownerFirst,
     officeName: officeDisplayName,
     inviteeFirst,
     inviteUrl,
     brandLogoUrl,
-    unsubscribeUrl: inviteUnsubUrl,
     inviteEmail: email.trim().toLowerCase(),
   });
 
