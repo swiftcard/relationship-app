@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
 import ReopenAccount from "@/components/ReopenAccount";
+import LeaveDeletedAccount from "@/components/LeaveDeletedAccount";
 
 const GRACE_DAYS = 30;
 
@@ -40,7 +41,7 @@ export default async function AccountDeletedPage() {
             You have <span className="text-white font-semibold">{daysLeft} day{daysLeft === 1 ? "" : "s"}</span> left to reopen it — your cards and contacts are still here. After that, your account and all its data are permanently deleted.
           </p>
           <ReopenAccount />
-          <Link href="/" className="text-sm text-gray-500 hover:text-gray-300 transition-colors mt-6">Back to swiftcard.me</Link>
+          <LeaveDeletedAccount className="text-sm text-gray-500 hover:text-gray-300 transition-colors mt-6" />
         </>
       ) : !user ? (
         <>
@@ -61,7 +62,7 @@ export default async function AccountDeletedPage() {
           >
             Sign in to reopen
           </Link>
-          <Link href="/" className="text-sm text-gray-500 hover:text-gray-300 transition-colors mt-6">Back to swiftcard.me</Link>
+          <LeaveDeletedAccount className="text-sm text-gray-500 hover:text-gray-300 transition-colors mt-6" />
         </>
       ) : (
         <>
@@ -69,7 +70,7 @@ export default async function AccountDeletedPage() {
           <p className="text-gray-400 text-sm mb-8 max-w-sm leading-relaxed">
             We&apos;re sorry to see you go. Your cards and contacts have been removed. For your security, this email can&apos;t be used to create a new account while the deleted account is held — once it&apos;s permanently purged, the email is freed up again.
           </p>
-          <Link href="/" className="text-sm font-semibold text-blue-400 hover:text-blue-300 transition-colors">Back to swiftcard.me</Link>
+          <LeaveDeletedAccount className="text-sm font-semibold text-blue-400 hover:text-blue-300 transition-colors" />
         </>
       )}
     </main>
