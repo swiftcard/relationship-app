@@ -9,6 +9,7 @@ import {
   prefetchIapPackages,
   purchaseIap,
   restoreIap,
+  sessionUserId,
   type IapPackage,
 } from "@/lib/iap";
 import { TRIAL_DAYS } from "@/lib/plan";
@@ -86,20 +87,9 @@ async function resolveStatus(): Promise<IapStatus> {
   // The RevenueCat identity must be the Supabase uid BEFORE any purchase — it
   // is how the webhook maps the sub to a profile. Read from the LOCAL session
   // (no network): getUser() cost a server round trip on every mount, which is
-  // why the button used to pop in late.
-  //
-  // Loaded here, not at the top of the file: this module is reached from
-  // PlanGate, which every editor and the homepage's mini builders render, so
-  // a static import shipped the whole Supabase client (~65KB compressed) to
-  // every marketing visitor. Only the iPhone shell ever gets past the
-  // detectNativeApp() check above, so only it pays for the download.
-  const { createBrowserClient } = await import("@supabase/ssr");
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
-  const { data: { session } } = await supabase.auth.getSession();
-  const uid = session?.user?.id;
+  // why the button used to pop in late. sessionUserId (lib/iap) loads the
+  // Supabase client lazily, so marketing visitors never download it.
+  const uid = await sessionUserId();
   if (!uid) return "needs-account";
 
   // Best effort, and DELIBERATELY not part of the visibility decision. The

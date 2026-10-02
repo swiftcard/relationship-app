@@ -22,6 +22,7 @@ export default function ProTrialPrice({
   price,
   period,
   note,
+  freeFor,
   className = "",
 }: {
   /** The real price alone: "$4.99" or "$53.99". Rendered emphasized. */
@@ -30,6 +31,9 @@ export default function ProTrialPrice({
   period: string;
   /** Optional extra after the price, e.g. "~$4.50/mo · Save 10%". */
   note?: string;
+  /** The free period, when it isn't the standard trial — a promo code's
+   *  ("two months") on the app's Pro card. Defaults to the ${TRIAL_DAYS}-day trial. */
+  freeFor?: string;
   className?: string;
 }) {
   // Two anchors, one quiet voice between them: "Free" carries the offer, the
@@ -39,7 +43,7 @@ export default function ProTrialPrice({
     <div className={className}>
       <div className="flex items-baseline gap-2.5 flex-wrap">
         <span className="text-[2.6rem] font-bold text-black leading-none tracking-tight">Free</span>
-        <span className="text-white/70 text-sm">for your first {TRIAL_DAYS} days</span>
+        <span className="text-white/70 text-sm">for your first {freeFor ?? `${TRIAL_DAYS} days`}</span>
       </div>
       <p className="text-white/70 text-sm mt-2">
         then <span className="text-black font-extrabold text-[1.0625rem]">{price}</span> / {period} · cancel anytime

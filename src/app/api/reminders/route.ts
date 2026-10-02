@@ -38,6 +38,7 @@ import { getAccountEmail } from "@/lib/account-email";
 import { expireFreeMonths } from "@/lib/referral-server";
 import { purgeExpiredDeletedAccounts, reconcileDeletedSubscriptions } from "@/lib/account-purge";
 import { applyDueSeatReductions } from "@/lib/office-scheduled-seats";
+import { mirrorPendingPromosToApple } from "@/lib/apple-offer-codes";
 import { insertNotification } from "@/lib/notify";
 import { officeEndedNotice } from "@/lib/billing-state";
 import { trialEndingSoonEmail, trialEndedEmail, unsubUrl, marketingHeaders } from "@/lib/email-templates";
@@ -253,6 +254,16 @@ export async function GET(req: NextRequest) {
     seatReductionsApplied = await applyDueSeatReductions();
   } catch (e) {
     await reportError("reminders.apply-seat-reductions", e);
+  }
+
+  // Promo codes not on Apple yet (made before App Store Connect was
+  // connected, or Apple refused at the time) — so every code also works on the
+  // iPhone app's Apple-billed Pro (lib/apple-offer-codes).
+  let appleOfferCodesMade = 0;
+  try {
+    appleOfferCodesMade = await mirrorPendingPromosToApple();
+  } catch (e) {
+    await reportError("reminders.apple-offer-codes", e);
   }
 
   // Expire finished trial / free-month grants → back to Free, unless the user
@@ -771,5 +782,5 @@ export async function GET(req: NextRequest) {
   }
   // === END PRESET-BASED SEQUENCE PROCESSING ===
 
-  return NextResponse.json({ sent: totalSent, checkedHour: currentUTCHour, downgraded, purged, seatReductionsApplied, subscriptionsStopped });
+  return NextResponse.json({ sent: totalSent, checkedHour: currentUTCHour, downgraded, purged, seatReductionsApplied, subscriptionsStopped, appleOfferCodesMade });
 }

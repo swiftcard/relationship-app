@@ -14,10 +14,12 @@ export type IapOffer = {
   /** The monthly plan's price — what the app's Pro card shows. Annual is
    *  offered in Apple's sheet, with its own StoreKit price. */
   monthly: string | null;
+  /** The annual plan's price — shown only for an annual-only promo code. */
+  annual: string | null;
   trial: boolean | null;
 };
 
-const EMPTY: IapOffer = { status: "loading", monthly: null, trial: null };
+const EMPTY: IapOffer = { status: "loading", monthly: null, annual: null, trial: null };
 
 /** The monthly StoreKit price and whether THIS Apple ID gets the free trial
  *  (lib/iap checks eligibility). All null until known. */
@@ -34,6 +36,7 @@ export function useIapOffer(): IapOffer {
         setOffer({
           status: "ready",
           monthly: pkgs.find((p) => p.period === "monthly")?.priceString ?? null,
+          annual: pkgs.find((p) => p.period === "annual")?.priceString ?? null,
           trial: pkgs.some((p) => p.introPriceString === "free trial"),
         });
       } catch {

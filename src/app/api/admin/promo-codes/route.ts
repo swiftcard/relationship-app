@@ -5,6 +5,7 @@ import {
   MAX_FREE_DAYS, isFreeDays, isDiscountType, isAppliesTo, isIntervalTarget,
   isPromoDuration, isAudience, MAX_DURATION_MONTHS, type AppliesTo, type IntervalTarget,
 } from "@/lib/promo";
+import { appleOfferPlan, mirrorPromoToApple } from "@/lib/apple-offer-codes";
 
 // The Stripe PRODUCTS behind each plan, so a coupon can be restricted to the
 // plan it was created for. Without this, a code typed on Stripe's own checkout
@@ -206,7 +207,18 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ promo: data, stripeWarning });
+
+  // ── And on Apple, for the iPhone app ────────────────────────────────────────
+  // A free-time Pro code is also made as an Apple offer code with the same
+  // string, so it works on the Apple-billed subscription the app sells
+  // (lib/apple-offer-codes). A failure doesn't block the code — the daily
+  // cron retries it, and until then the app sends the code to swiftcard.me.
+  let appleWarning: string | null = null;
+  if (data && appleOfferPlan(data)) {
+    const apple = await mirrorPromoToApple(data);
+    if (!apple.ok) appleWarning = `Saved, but not on Apple yet (${apple.error}). In the iPhone app this code is used on swiftcard.me until it is; it's retried daily.`;
+  }
+  return NextResponse.json({ promo: data, stripeWarning, appleWarning });
 }
 
 // GET /api/admin/promo-codes — list ACTIVE promo codes (the working set the

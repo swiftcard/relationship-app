@@ -234,10 +234,13 @@ describe("what only the app does", () => {
     } finally { await a.context().close(); await b.context().close(); }
   });
 
-  it("a promo code is checked in the app and opens swiftcard.me with the code filled in", async () => {
+  // A Pro code Apple doesn't have (money off): the Pro card's OWN button
+  // becomes "Use SAVE30 on swiftcard.me →". Owner, 2026-10-02: the box said a
+  // code applied, the Pro button sold the plain plan, and the code was gone.
+  it("a Pro code Apple can't take turns the Pro button into 'Use it on swiftcard.me' with the code filled in", async () => {
     const page = await open({
       width: 390, native: true,
-      promoCheck: { status: 200, body: { ok: true, code: "SAVE30", label: "30% off", detail: "This code is for Pro, billed monthly. Choose that plan below." } },
+      promoCheck: { status: 200, body: { ok: true, code: "SAVE30", label: "30% off", detail: "This code is for Pro, billed monthly. Choose that plan below.", forPro: true, apple: false } },
     });
     try {
       await page.getByRole("button", { name: "Have a promo code?" }).click();
@@ -248,12 +251,56 @@ describe("what only the app does", () => {
       // The website's chooser says "below"; in the app the plan is picked on the site.
       expect(body).toContain("This code is for Pro, billed monthly.");
       expect(body).not.toContain("Choose that plan below");
-      expect(body).toContain("Opens swiftcard.me in your browser with the code filled in.");
-      await page.getByRole("button", { name: "Use it on swiftcard.me →" }).click();
+      expect(body).toContain("Added to the Pro plan — tap its button to use it.");
+      // One action, on the Pro card — the plain Apple button is gone.
+      expect(await page.getByRole("button", { name: "Use it on swiftcard.me →" }).count()).toBe(0);
+      expect(await page.getByRole("button", { name: /^Try Pro free for \d+ days →$/ }).count()).toBe(0);
+      const s = await snapshot(page);
+      expect(s.proText).toContain("Opens swiftcard.me in your browser with the code filled in");
+      await page.getByRole("button", { name: "Use SAVE30 on swiftcard.me →" }).click();
       await page.waitForFunction(() => (window as unknown as { __opened: string[] }).__opened.length > 0);
       const opened = await page.evaluate(() => (window as unknown as { __opened: string[] }).__opened);
       expect(opened).toEqual(["https://swiftcard.me/welcome?promo=SAVE30&src=ios_link"]);
       expect((await snapshot(page)).overflowX).toBeLessThanOrEqual(0);
+    } finally { await page.context().close(); }
+  });
+
+  it("a free-time code Apple has turns the Pro card into that offer, redeemed through Apple", async () => {
+    const page = await open({
+      width: 390, native: true,
+      promoCheck: { status: 200, body: { ok: true, code: "DEMISHA", label: "Two months free", detail: "This code is for Pro, billed monthly. Choose that plan below.", forPro: true, apple: true } },
+    });
+    try {
+      await page.getByRole("button", { name: "Have a promo code?" }).click();
+      await page.getByLabel("Promo code").fill("demisha");
+      await page.getByRole("button", { name: "Apply" }).click();
+      await page.getByText("✓ DEMISHA — Two months free").waitFor({ timeout: 5_000 });
+      const s = await snapshot(page);
+      // The website's Pro block, with the code's free period and StoreKit's price.
+      expect(s.proText).toMatch(/Free\s+for your first two months/);
+      expect(s.proText).toMatch(/then \$4\.99 \/ month · cancel anytime/);
+      expect(s.proText).not.toMatch(/14 days/);
+      expect(s.proText).toContain("Code DEMISHA · Apple shows your offer before you confirm");
+      expect(await page.getByRole("button", { name: "Try Pro free for two months →" }).count()).toBe(1);
+      expect(await page.getByRole("button", { name: /swiftcard\.me/ }).count()).toBe(0);
+      expect(s.overflowX).toBeLessThanOrEqual(0);
+      // Removing the code puts the normal Pro card back.
+      await page.getByRole("button", { name: "Remove" }).click();
+      await page.getByRole("button", { name: /^Try Pro free for \d+ days →$/ }).waitFor({ timeout: 5_000 });
+    } finally { await page.context().close(); }
+  });
+
+  it("an Office code keeps its own 'Use it on swiftcard.me' and leaves the Pro card alone", async () => {
+    const page = await open({
+      width: 390, native: true,
+      promoCheck: { status: 200, body: { ok: true, code: "TEAM20", label: "20% off", detail: "the first payment", forPro: false, apple: false } },
+    });
+    try {
+      await page.getByRole("button", { name: "Have a promo code?" }).click();
+      await page.getByLabel("Promo code").fill("team20");
+      await page.getByRole("button", { name: "Apply" }).click();
+      await page.getByRole("button", { name: "Use it on swiftcard.me →" }).waitFor({ timeout: 5_000 });
+      expect(await page.getByRole("button", { name: /^Try Pro free for \d+ days →$/ }).count()).toBe(1);
     } finally { await page.context().close(); }
   });
 

@@ -100,6 +100,23 @@ export const accountDocs = defineDocs([
       "You can subscribe to Pro right in the app: tap \"Upgrade to Pro\" on any locked feature, or go to Settings → Plan and billing. The subscription sheet shows the plans and prices before anything is confirmed, and it starts with a {trial.days}-day free trial if you've never subscribed before. Pro takes every Free limit off — unlimited cards and new contacts, the AI business-card scanner, the custom card designer, text follow-ups and AI-written follow-ups (email follow-ups are on every plan), full analytics, and the CRM integrations.",
   },
   {
+    id: "promo-code-in-app",
+    title: "Using a promo code in the iPhone app",
+    audience: ["user"],
+    triggers: [
+      "promo code in the app", "promo code iphone", "promo code didnt apply", "promo code not working",
+      "code didnt work", "my code didnt apply", "offer code", "redeem code", "promo code apple",
+      "where do i enter a promo code", "discount code app",
+    ],
+    answer:
+      "In the iPhone app, the \"Choose your plan\" step has \"Have a promo code?\" under the plans. Enter the code and press \"Apply\" — the box says what it gives (for example \"Two months free\") and \"Added to the Pro plan — tap its button to use it.\" The Pro card then changes to that offer: for a free-time code it reads \"Free for your first two months, then <Apple's price> / month\" and the button becomes \"Try Pro free for two months →\". That button opens Apple's code page with the code already filled in; Apple shows the offer before you confirm and bills it on your Apple account. Come back to the app and Pro switches on by itself (if it doesn't, tap \"Continue\" under the button). A code Apple can't take — money off, an Office code, or one that isn't set up on Apple yet — is used on swiftcard.me instead, and the Pro button says so: \"Use CODE on swiftcard.me →\" opens the website in your browser with the code filled in; sign in there with the same account.",
+    detail:
+      "The thing people get wrong: pressing the plain \"Try Pro free for {trial.days} days →\" button before applying the code. A code only counts when the box shows it as applied and the Pro button has changed — the plain button sells the normal subscription. Removing the code (\"Remove\" in the box) puts the Pro card back. Apple decides who a code is for on its own side: a code for new customers can't be redeemed on an Apple ID that is already subscribed to Pro. A free-time code replaces the {trial.days}-day trial rather than adding to it, the same as on the website, which is why codes shorter than {trial.days} days are only offered on the website.",
+    commerce: true,
+    nativeAnswer:
+      "On the \"Choose your plan\" step, tap \"Have a promo code?\" under the plans, enter your code and press \"Apply\". When the box says \"Added to the Pro plan\", the Pro card changes to your code's offer — tap its button and Apple's code page opens with your code already filled in. Apple shows exactly what you get before you confirm, in the app with your Apple account. Come back to SwiftCard and Pro switches on by itself; if it doesn't, tap \"Continue\" under the button. Make sure you use the Pro card's button after applying the code — the code only counts once the button has changed. If Apple can't take your code, the Pro card's button says where to use it instead.",
+  },
+  {
     id: "cancel-subscription",
     title: "Cancelling, and undoing a cancellation",
     audience: ["user"],

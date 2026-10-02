@@ -181,8 +181,25 @@ describe("the purchase path is In-App Purchase, wired through PlanNotice", () =>
     // the webhook; an anonymous purchase would grant Pro to nobody.
     // Read from the LOCAL session (no network round trip per mount) — the
     // uid is still the Supabase user id, which is all the webhook needs.
-    expect(paywall).toMatch(/getSession\(\)/);
-    expect(paywall).toMatch(/session\?\.user\?\.id/);
+    // The session read lives in lib/iap (sessionUserId), shared with the Pro
+    // card's price so the two can't configure the SDK as different people.
+    const iap = read("src/lib/iap.ts");
+    expect(iap).toMatch(/getSession\(\)/);
+    expect(iap).toMatch(/session\?\.user\?\.id/);
+    expect(paywall).toMatch(/const uid = await sessionUserId\(\);/);
     expect(paywall).toMatch(/ensureIapConfigured\(uid\)/);
+  });
+
+  // Owner, 2026-10-02: a brand-new account's plan step showed the app's Pro
+  // card with no price, no trial and a bare "Get Pro →". The price asked
+  // StoreKit on mount while the Subscribe button was still configuring the
+  // SDK, so it asked an unconfigured SDK and got nothing back.
+  it("no StoreKit read can run before the SDK is configured for the signed-in user", () => {
+    const iap = read("src/lib/iap.ts");
+    const raw = iap.slice(iap.indexOf("async function rawPackages("), iap.indexOf("export function prefetchIapPackages"));
+    expect(raw.indexOf("await configuredForSession()")).toBeGreaterThan(-1);
+    expect(raw.indexOf("await configuredForSession()")).toBeLessThan(raw.indexOf("getOfferings()"));
+    // Two configure() calls never race each other.
+    expect(iap).toMatch(/configuring = run;/);
   });
 });

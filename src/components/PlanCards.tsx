@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useIsNativeApp } from "@/lib/platform";
+import { redeemAppleOfferCode, syncIapAfterRedeem } from "@/lib/iap";
 import MobilePlanTabs, { type PlanTier } from "@/components/MobilePlanTabs";
 import { PLAN_LIMITS, TRIAL_DAYS } from "@/lib/plan";
 import { PLAN_DESCRIPTIONS } from "@/lib/plan-content";
@@ -193,6 +194,11 @@ function NativePlanChooser({
   const canLinkOut = useCanLinkOut();
   // No Office card → no Office tab, and never a tab left open on nothing.
   const tier: PlanTier = !canLinkOut && mobileTier === "office" ? "pro" : mobileTier;
+  // The promo code is held HERE, not in its box, because the Pro card above
+  // the box has to act on it. Owner, 2026-10-02: the box said a two-months-
+  // free code applied, the Pro button then opened Apple's plain subscription,
+  // and the code was simply gone.
+  const code = useNativePromo(onLeftForWebsite);
 
   return (
     <div>
@@ -212,12 +218,13 @@ function NativePlanChooser({
           trialEligible={trialEligible}
           onPurchased={onIapPurchased}
           onNeedsAccount={onCreateAccountForPro}
+          code={code}
         />
         <NativeOffice offTab={tier !== "office"} disabled={busy !== null} onLeft={onLeftForWebsite} />
       </div>
 
       {/* Under the plans, where the website's plan step has its box. */}
-      {canLinkOut && <NativePromoCode className="max-w-md mx-auto mt-6 text-center" onLeft={onLeftForWebsite} />}
+      {canLinkOut && <NativePromoCode className="max-w-md mx-auto mt-6 text-center" code={code} />}
     </div>
   );
 }
@@ -257,6 +264,7 @@ function NativePro({
   onPurchased,
   onNeedsAccount,
   offTab,
+  code,
 }: {
   /** The caller's account-level answer (false: already had a free Pro period,
    *  or a friend's free month is on offer instead — WelcomePlan's offerTrial).
@@ -268,6 +276,10 @@ function NativePro({
    *  there is no account to attribute a subscription to yet. */
   onNeedsAccount?: () => void;
   offTab?: boolean;
+  /** The plan step's promo code (NativePlanChooser). A Pro code turns this
+   *  card into that offer: redeemed by Apple when Apple has the code, used on
+   *  swiftcard.me when it doesn't. Never silently dropped. */
+  code?: NativePromo;
 }) {
   const offer = useIapOffer();
   const price = offer.monthly;
@@ -277,8 +289,20 @@ function NativePro({
   // exactly that state — then Apple's sheet said Subscribe.
   const offersTrial = offer.trial === true && trialEligible !== false;
 
+  // ── A promo code for Pro ──────────────────────────────────────────────────
+  const promo = code?.forPro ?? null;
+  // "Two months free" → "two months", for "Free for your first two months".
+  const freeFor = promo && /\sfree$/i.test(promo.label) ? promo.label.replace(/\s+free$/i, "").toLowerCase() : null;
+  const viaApple = !!promo?.apple;
+  // Apple's own price for the plan the code is on (annual-only codes are
+  // made on the annual product, lib/apple-offer-codes).
+  const promoPrice = promo?.annualOnly ? offer.annual : price;
+  const promoPeriod = promo?.annualOnly ? "year" : "month";
+
   const priceBlock =
-    offer.status === "loading" ? (
+    viaApple && freeFor && offer.status !== "loading" ? (
+      promoPrice ? <ProTrialPrice price={promoPrice} period={promoPeriod} freeFor={freeFor} /> : null
+    ) : offer.status === "loading" ? (
       // Sized BY the real block (an invisible copy, no number in it), so the
       // card does not move when StoreKit answers. Hand-sized bars came out
       // 8px short. visibility:hidden keeps it out of the accessibility tree.
@@ -294,6 +318,40 @@ function NativePro({
     ) : (
       <div className="flex items-end gap-1"><span className="text-[2.6rem] font-bold text-white leading-none">{price}</span><span className="text-white/80 text-sm mb-1">/ month</span></div>
     );
+
+  if (promo && viaApple) {
+    return (
+      <ProPlanCard offTab={offTab} price={priceBlock}>
+        <AppleOfferCodeButton
+          code={promo.code}
+          className={PRO_CTA_CLASS}
+          label={freeFor ? `Try Pro free for ${freeFor} →` : `Use ${promo.code} with Apple →`}
+          onPurchased={onPurchased}
+        />
+        <p className={PRO_FINE_PRINT_CLASS}>
+          Code {promo.code} · Apple shows your offer before you confirm · renews automatically · cancel anytime in your Apple account
+        </p>
+      </ProPlanCard>
+    );
+  }
+
+  if (promo && code) {
+    // Apple doesn't have this code (money off, or not set up on Apple yet):
+    // it is used on swiftcard.me — said on the button itself, so pressing Pro
+    // can never quietly sell the plan without it.
+    return (
+      <ProPlanCard offTab={offTab} price={priceBlock}>
+        <button type="button" onClick={() => code.website.open(promo.code)} disabled={code.website.busy} className={PRO_CTA_CLASS}>
+          {code.website.busy ? "Opening swiftcard.me…" : `Use ${promo.code} on swiftcard.me →`}
+        </button>
+        <p className={PRO_FINE_PRINT_CLASS} role={code.website.failed ? "alert" : undefined}>
+          {code.website.failed
+            ? "Couldn't open your browser. Go to swiftcard.me, sign in with this account and enter the code there."
+            : `${promo.label} with ${promo.code}. Opens swiftcard.me in your browser with the code filled in — sign in there with this account.`}
+        </p>
+      </ProPlanCard>
+    );
+  }
 
   return (
     <ProPlanCard offTab={offTab} price={priceBlock}>
@@ -318,14 +376,33 @@ function NativePro({
  * "Have a promo code?" in the app (owner, 2026-09-30). Pro is bought through
  * Apple in here, and Apple takes no Stripe code — nor may the app switch a
  * paid plan on with a code of its own (3.1.1). So the code is CHECKED here,
- * with the website's own box and rules, and USED on swiftcard.me: "Use it on
- * swiftcard.me" opens /welcome in the default browser with the code already
- * in its box, where it applies to Stripe checkout (or switches a free-time
- * code on) exactly as on the website. Same link-out, and the same
- * fail-closed rule, as the Office card: only rendered when the shell can open
- * the default browser.
+ * with the website's own box and rules, and then:
+ *
+ *   • a Pro code Apple has (the same string made as an Apple offer code, lib/
+ *     apple-offer-codes) is redeemed BY APPLE from the Pro card — "Try Pro free
+ *     for two months →" opens Apple's code page already filled in, and Apple
+ *     bills the offer (owner, 2026-10-02: "it has to work, even if it's billed
+ *     through Apple");
+ *   • any other code is USED on swiftcard.me: the Pro card's button (or "Use
+ *     it on swiftcard.me" for an Office code) opens /welcome in the default
+ *     browser with the code already in its box, where it applies to Stripe
+ *     checkout (or switches a free-time code on) exactly as on the website.
+ *
+ * Same link-out, and the same fail-closed rule, as the Office card: only
+ * rendered when the shell can open the default browser.
  */
-function NativePromoCode({ onLeft, className }: { onLeft?: () => void; className?: string }) {
+function NativePromoCode({ code, className }: { code: NativePromo; className?: string }) {
+  return (
+    <PromoCodeBox
+      className={className}
+      promo={code.promo}
+      website={{ ...code.website, proCardAbove: !!code.forPro }}
+    />
+  );
+}
+
+/** The plan step's promo code, shared by its box and the Pro card. */
+function useNativePromo(onLeft?: () => void) {
   const promo = usePromoCode({ plan: null, interval: null });
   const [leaving, setLeaving] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -339,12 +416,69 @@ function NativePromoCode({ onLeft, className }: { onLeft?: () => void; className
     else setFailed(true);
   }
 
+  const s = promo.state;
+  return {
+    promo,
+    /** The applied code, when it is for Pro — the Pro card takes it over. */
+    forPro: s.status === "applied" && s.forPro ? s : null,
+    website: { open: (c: string) => { void openOnWebsite(c); }, busy: leaving, failed },
+  };
+}
+type NativePromo = ReturnType<typeof useNativePromo>;
+
+/**
+ * Redeem a promo code through Apple, from the Pro card. Apple's code page
+ * opens with the code filled in and shows the offer ("2 months free, then
+ * $4.99/month") before anything is bought. Coming back to the app pulls the
+ * new subscription in and carries on exactly as a purchase from the sheet does
+ * (onPurchased); "Continue" does the same by hand for anyone who returns
+ * without the app noticing (StoreKit's in-app sheet never leaves the app).
+ */
+function AppleOfferCodeButton({ code, label, className, onPurchased }: { code: string; label: string; className: string; onPurchased?: () => void }) {
+  const [state, setState] = useState<"idle" | "opening" | "waiting" | "checking" | "failed">("idle");
+  const waiting = useRef(false);
+  const done = useRef(onPurchased);
+  useEffect(() => { done.current = onPurchased; }, [onPurchased]);
+
+  const finish = useCallback(async () => {
+    setState("checking");
+    if (await syncIapAfterRedeem()) {
+      waiting.current = false;
+      if (done.current) done.current();
+      else window.location.reload();
+      return;
+    }
+    setState("waiting");
+  }, []);
+
+  useEffect(() => {
+    const onReturn = () => { if (waiting.current && document.visibilityState === "visible") void finish(); };
+    document.addEventListener("visibilitychange", onReturn);
+    return () => document.removeEventListener("visibilitychange", onReturn);
+  }, [finish]);
+
+  async function redeem() {
+    setState("opening");
+    if (!(await redeemAppleOfferCode(code))) { setState("failed"); return; }
+    waiting.current = true;
+    setState("waiting");
+  }
+
   return (
-    <PromoCodeBox
-      className={className}
-      promo={promo}
-      website={{ open: (code) => { void openOnWebsite(code); }, busy: leaving, failed }}
-    />
+    <>
+      <button type="button" onClick={() => { void redeem(); }} disabled={state === "opening" || state === "checking"} className={className}>
+        {state === "opening" ? "Opening Apple…" : state === "checking" ? "Checking your subscription…" : label}
+      </button>
+      {state === "waiting" && (
+        <p className="mt-2 text-center text-xs text-white/85">
+          Redeemed it with Apple?{" "}
+          <button type="button" onClick={() => { void finish(); }} className="font-semibold underline">Continue</button>
+        </p>
+      )}
+      {state === "failed" && (
+        <p role="alert" className="mt-2 text-center text-xs text-white/85">Couldn&apos;t open Apple&apos;s code page. Please try again.</p>
+      )}
+    </>
   );
 }
 

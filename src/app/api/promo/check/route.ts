@@ -5,6 +5,7 @@ import { isRateLimited } from "@/lib/rate-limit";
 import { clientIp } from "@/lib/client-ip";
 import { officeSubUserBlockMessage } from "@/lib/office-roles";
 import { checkPromoForPurchase, normalizePromoCode } from "@/lib/promo-check";
+import { appleRedeemable } from "@/lib/apple-offer-codes";
 
 // POST /api/promo/check — { code, plan, interval }
 //
@@ -43,5 +44,11 @@ export async function POST(req: NextRequest) {
   if (!result.ok) {
     return NextResponse.json({ error: result.reason, ...(result.grant ? { grant: true } : {}) }, { status: 422 });
   }
-  return NextResponse.json({ ok: true, code, label: result.label, detail: result.detail });
+  // For the iPhone app's Pro card: whether the code is for Pro at all, and
+  // whether Apple can redeem it (the same string made as an Apple offer code,
+  // lib/apple-offer-codes) — or it has to be used on swiftcard.me.
+  const forPro = result.source === "stripe" || (result.promo.applies_to ?? "any") !== "office";
+  const apple = result.source === "swiftcard" && appleRedeemable(result.promo);
+  const annualOnly = result.source === "swiftcard" && result.promo.interval_target === "annual";
+  return NextResponse.json({ ok: true, code, label: result.label, detail: result.detail, forPro, apple, annualOnly });
 }

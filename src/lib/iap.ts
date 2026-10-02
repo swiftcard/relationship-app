@@ -25,6 +25,7 @@
 // the web — the cross-platform access 3.1.3(b) is actually about.
 
 import { detectNativeApp, detectNativePlatform } from "@/lib/platform";
+import { APP_STORE_ID } from "@/lib/app-store";
 
 import { IAP_ENTITLEMENT } from "@/lib/iap-shared";
 export { IAP_ENTITLEMENT, IAP_PRODUCT_MONTHLY, IAP_PRODUCT_ANNUAL } from "@/lib/iap-shared";
@@ -121,6 +122,18 @@ async function loadPlugin(): Promise<{ P: PurchasesPlugin } | null> {
  * see AccountIsolationGuard for why that path is taken seriously).
  */
 export async function ensureIapConfigured(userId: string): Promise<boolean> {
+  // One configure at a time: the Subscribe button and the Pro card's price
+  // both get here on the same mount, and two configure() calls racing each
+  // other is undefined behaviour in the SDK.
+  const prev = configuring;
+  const run = (async () => { await prev; return configureNow(userId); })();
+  configuring = run;
+  return run;
+}
+let configuring: Promise<boolean> | null = null;
+
+async function configureNow(userId: string): Promise<boolean> {
+  if (configuredFor === userId) return true;
   const w = await plugin();
   if (!w) return false;
   try {
@@ -148,6 +161,45 @@ export async function ensureIapConfigured(userId: string): Promise<boolean> {
  *  canOfferExternalPurchase had. */
 export async function canOfferIap(): Promise<boolean> {
   return (await plugin()) !== null;
+}
+
+/**
+ * The signed-in user's id, from the LOCAL session (no network).
+ *
+ * Loaded lazily: this module is reached from PlanGate, which every editor and
+ * the homepage's mini builders render, so a static import shipped the whole
+ * Supabase client (~65KB compressed) to every marketing visitor. Only the
+ * iPhone shell ever gets past detectNativeApp(), so only it pays for it.
+ */
+export async function sessionUserId(): Promise<string | null> {
+  if (!detectNativeApp()) return null;
+  try {
+    const { createBrowserClient } = await import("@supabase/ssr");
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    );
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Configure for whoever is signed in, before anything asks StoreKit.
+ *
+ * The Pro card's price (useIapOffer) used to fetch offerings on mount while
+ * the Subscribe button was still reading the session to configure the SDK.
+ * On a brand-new account's plan step the price won that race, asked an
+ * UNCONFIGURED SDK, got nothing — and the card showed no price, no trial and
+ * a bare "Get Pro →" (owner report 2026-10-02). Every StoreKit read now waits
+ * for this first.
+ */
+async function configuredForSession(): Promise<boolean> {
+  if (configuredFor) return true;
+  const uid = await sessionUserId();
+  return uid ? ensureIapConfigured(uid) : false;
 }
 
 /**
@@ -192,6 +244,8 @@ async function rawPackages(): Promise<RawPackage[]> {
   if (!w) return [];
   const p = (async () => {
     try {
+      // Empty (and so not cached) until someone is signed in and configured.
+      if (!(await configuredForSession())) return [];
       const offerings = await w.P.getOfferings();
       const { current } = offerings;
       if (!(await accountTrialEligible())) {
@@ -311,6 +365,79 @@ export async function restoreIap(): Promise<boolean> {
     if (active) await fetch("/api/iap/sync", { method: "POST" }).catch(() => {});
     return active;
   } catch {
+    return false;
+  }
+}
+
+// ── Promo codes, Apple's way ─────────────────────────────────────────────────
+//
+// Pro is billed by Apple in the app, and Apple takes no Stripe code — nor may
+// the app switch a paid plan on with a code of its own (3.1.1). What Apple
+// DOES take is its own offer code. Every SwiftCard free-time Pro code is
+// mirrored as an Apple offer code with the SAME string (lib/apple-offer-codes,
+// server side), so a code typed in the app is redeemed by Apple, on Apple's
+// sheet, against the same Pro subscription — "2 months free, then $4.99/month"
+// billed by Apple, exactly what the website gives through Stripe.
+
+/** Apple's own redemption page, with the code already filled in. */
+export function appleOfferCodeUrl(code: string): string | null {
+  return APP_STORE_ID ? `https://apps.apple.com/redeem?ctx=offercodes&id=${APP_STORE_ID}&code=${encodeURIComponent(code)}` : null;
+}
+
+/**
+ * Redeem a code through Apple. Opens Apple's redemption page with the code
+ * filled in (the same native plugin as "Manage subscription" — apps.apple.com
+ * is on its host allow-list); a shell without that plugin gets StoreKit's own
+ * in-app redemption sheet, where the code is typed once more. False when
+ * neither could be shown.
+ */
+export async function redeemAppleOfferCode(code: string): Promise<boolean> {
+  if (!detectNativeApp() || detectNativePlatform() === "android") return false;
+  if (!(await configuredForSession())) return false;
+  const url = appleOfferCodeUrl(code);
+  const ext = (window as unknown as {
+    Capacitor?: { Plugins?: { ExternalPurchase?: { open: (o: { url: string }) => Promise<{ opened?: boolean }> } } };
+  }).Capacitor?.Plugins?.ExternalPurchase;
+  if (url && ext?.open) {
+    try {
+      const { opened } = await ext.open({ url });
+      if (opened) return true;
+    } catch (e) {
+      reportIapFailure("offer-code-url", e);
+    }
+  }
+  const w = await plugin();
+  if (!w) return false;
+  try {
+    await w.P.presentCodeRedemptionSheet();
+    return true;
+  } catch (e) {
+    reportIapFailure("offer-code-sheet", e);
+    return false;
+  }
+}
+
+/**
+ * After an offer code was redeemed outside the purchase sheet: pull the new
+ * transaction in, and if Pro is now active, have the server reflect it (the
+ * same /api/iap/sync wait as purchaseIap). True when the account is on Pro.
+ */
+export async function syncIapAfterRedeem(): Promise<boolean> {
+  const w = await plugin();
+  if (!w || !(await configuredForSession())) return false;
+  try {
+    await w.P.syncPurchases().catch(() => {});
+    await w.P.invalidateCustomerInfoCache().catch(() => {});
+    const { customerInfo } = await w.P.getCustomerInfo();
+    if (!customerInfo?.entitlements?.active?.[IAP_ENTITLEMENT]) return false;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const r = await fetch("/api/iap/sync", { method: "POST" }).then((x) => x.json()).catch(() => null) as { applied?: string } | null;
+      if (r?.applied === "grant") break;
+      await new Promise((ok) => setTimeout(ok, 1500));
+    }
+    return true;
+  } catch (e) {
+    reportIapFailure("offer-code-sync", e);
     return false;
   }
 }

@@ -221,7 +221,8 @@ export default function MarketingClient() {
       const data = await res.json();
       if (res.ok) {
         setPromoForm(EMPTY_PROMO);
-        setPromoError(data.stripeWarning ?? null); // honest warning if Stripe rejected the code
+        // Honest warnings: Stripe rejected the code, or it isn't on Apple yet.
+        setPromoError([data.stripeWarning, data.appleWarning].filter(Boolean).join(" ") || null);
         loadPromos();
       } else {
         setPromoError(data.error);

@@ -24,7 +24,13 @@ export type PromoInterval = "monthly" | "annual";
 export type PromoState =
   | { status: "none" }
   | { status: "checking" }
-  | { status: "applied"; code: string; label: string; detail: string }
+  | {
+      status: "applied"; code: string; label: string; detail: string;
+      /** For the app's Pro card (/api/promo/check): the code is for Pro, Apple
+       *  can redeem it (an Apple offer code with the same string), and it is
+       *  for the annual plan only. */
+      forPro?: boolean; apple?: boolean; annualOnly?: boolean;
+    }
   | { status: "refused"; code: string; message: string; grant?: boolean; atCheckout?: boolean };
 
 export function usePromoCode({
@@ -60,7 +66,10 @@ export function usePromoCode({
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.ok) {
-        setState({ status: "applied", code: data.code, label: data.label, detail: data.detail ?? "" });
+        setState({
+          status: "applied", code: data.code, label: data.label, detail: data.detail ?? "",
+          forPro: data.forPro !== false, apple: data.apple === true, annualOnly: data.annualOnly === true,
+        });
         return true;
       }
       setState({ status: "refused", code, message: data.error || "That code can't be used.", grant: data.grant === true });
@@ -156,7 +165,11 @@ export default function PromoCodeBox({
             </div>
             <button type="button" onClick={remove} className="shrink-0 text-[0.6875rem] text-gray-400 hover:text-white underline">Remove</button>
           </div>
-          {website && <WebsiteHandOff code={state.code} label="Use it on swiftcard.me →" website={website} />}
+          {/* A Pro code is used from the Pro card's own button (PlanCards
+              NativePro) — one action, not a second button down here. */}
+          {website && (website.proCardAbove
+            ? <p className="mt-2 text-[0.6875rem] text-gray-400">Added to the Pro plan — tap its button to use it.</p>
+            : <WebsiteHandOff code={state.code} label="Use it on swiftcard.me →" website={website} />)}
         </>
       ) : state.status === "refused" ? (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5 text-left">
@@ -230,6 +243,8 @@ export type PromoWebsiteHandOff = {
   busy: boolean;
   /** The browser didn't open. */
   failed: boolean;
+  /** The applied code is for Pro, and the Pro card's button uses it. */
+  proCardAbove?: boolean;
 };
 
 function WebsiteHandOff({ code, label, website }: { code: string; label: string; website: PromoWebsiteHandOff }) {
