@@ -1,9 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import PlatformIcon from "@/components/PlatformIcon";
 import type { SocialInputSpec } from "@/lib/social-input";
-import { socialDestination, socialUrl } from "@/lib/social-url";
+import { normalizeSocial, socialDestination, socialUrl } from "@/lib/social-url";
 
 // ── One social profile row: icon, name, and a box that shows the link ───────
 //
@@ -45,6 +45,181 @@ export function displayHandle(stem: string, value: string): { withPrefix: boolea
   // Anything else that is already an address: show it whole.
   if (/^https?:\/\//i.test(value.trim()) || /\.[a-z]{2,}\//i.test(bare)) return { withPrefix: false, shown: value };
   return { withPrefix: true, shown: value.replace(/^@/, "") };
+}
+
+// ── LinkedIn: "what do I type?" has no answer you can guess ─────────────────
+//
+// Owner, 2026-10-02: LinkedIn addresses are "johndoe", "john-doe" or
+// "john-doe-4a7b21", so typing your name works for some people and silently
+// opens a stranger (or a 404) for the rest. "Connect with LinkedIn" cannot
+// fix it: LinkedIn's sign-in (`openid profile email`, lib/sync-linkedin) hands
+// apps a name, photo and email — the profile address (vanityName) sits behind
+// LinkedIn's partner programme. And LinkedIn blocks server fetches of profile
+// pages, so we cannot check a guess either.
+//
+// What does work on every device: LinkedIn's own https://www.linkedin.com/in/me/
+// opens the signed-in member's profile (the LinkedIn app on a phone, a tab on a
+// computer). So "Find my exact link" takes them there, says how to copy it on
+// THEIR device (address bar on a computer; Contact info in the app, per
+// LinkedIn's help article a522735), and the box accepts whatever they bring
+// back — a bare link, a link with ?utm junk, or the share sheet's sentence.
+
+/** LinkedIn's own "my profile" address — redirects to whoever is signed in. */
+export const LINKEDIN_MY_PROFILE = "https://www.linkedin.com/in/me/";
+
+/** The first LinkedIn address in pasted text, or null. The share sheet can copy
+ *  a sentence ("Check out my profile… https://www.linkedin.com/in/…?utm=…"). */
+export function linkedinLinkIn(text: string): string | null {
+  const m = text.match(/(?:https?:\/\/)?(?:[a-z]{2,3}\.)?linkedin\.com\/[^\s"'<>]+/i);
+  return m ? normalizeSocial(m[0], "linkedin") : null;
+}
+
+/** Why a LinkedIn value cannot be someone's profile, or null when it can be. */
+export function linkedinLinkProblem(value: string): string | null {
+  const url = socialUrl("linkedin", value);
+  if (!url) return null;
+  let parts: string[];
+  try {
+    parts = new URL(url).pathname.split("/").filter(Boolean).map((p) => p.toLowerCase());
+  } catch {
+    return null;
+  }
+  // Copied before the redirect finished, or typed from our own instructions.
+  if (parts[0] === "in" && parts[1] === "me" && parts.length === 2) {
+    return "That’s LinkedIn’s shortcut, not your link — copy the address once your profile has opened.";
+  }
+  if (!["in", "company", "pub", "school", "showcase"].includes(parts[0] ?? "") || !parts[1]) {
+    return "That’s a LinkedIn page, not your profile — copy the link from your profile.";
+  }
+  return null;
+}
+
+type Device = "ios" | "android" | "computer";
+
+function deviceNow(): Device {
+  const ua = navigator.userAgent;
+  // iPadOS asks for the desktop site and reports itself as a Mac.
+  if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return "ios";
+  if (/Android/.test(ua)) return "android";
+  return "computer";
+}
+
+/** How to copy your own LinkedIn address, on the device in hand. */
+export function linkedinSteps(device: Device, mac = false): string[] {
+  if (device === "computer") {
+    return [
+      "Your LinkedIn profile opened in a new tab (sign in if LinkedIn asks).",
+      "Copy the web address at the top of that tab — it starts linkedin.com/in/.",
+      `Come back here and paste it in the box (${mac ? "⌘V" : "Ctrl+V"}).`,
+    ];
+  }
+  if (device === "ios") {
+    return [
+      "LinkedIn opens on your profile (sign in if it asks; if it opens on your feed, tap your photo).",
+      "Tap ••• More → Contact info, and copy the link under “Your Profile”.",
+      "Come back here and tap Paste my link.",
+    ];
+  }
+  return [
+    "LinkedIn opens on your profile (sign in if it asks; if it opens on your feed, tap your photo).",
+    "Scroll to Contact and copy your LinkedIn link.",
+    "Come back here and tap Paste my link.",
+  ];
+}
+
+function LinkedInLinkHelp({
+  tone,
+  inputId,
+  filled,
+  onPick,
+}: {
+  tone: (typeof TONE)[Variant];
+  inputId: string;
+  filled: boolean;
+  onPick: (v: string) => void;
+}) {
+  // null until tapped: the steps depend on the device, which the server render
+  // cannot know, so nothing device-specific is ever in the first paint.
+  const [device, setDevice] = useState<Device | null>(null);
+  const [mac, setMac] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const away = useRef(false);
+
+  // Back from the LinkedIn tab: put the cursor in the box so ⌘V/Ctrl+V lands
+  // straight away. (A phone ignores a focus it didn't tap — Paste covers it.)
+  useEffect(() => {
+    if (device !== "computer") return;
+    const leave = () => { away.current = true; };
+    const back = () => {
+      if (!away.current || document.visibilityState !== "visible") return;
+      away.current = false;
+      document.getElementById(inputId)?.focus();
+    };
+    window.addEventListener("blur", leave);
+    window.addEventListener("focus", back);
+    return () => {
+      window.removeEventListener("blur", leave);
+      window.removeEventListener("focus", back);
+    };
+  }, [device, inputId]);
+
+  const paste = async () => {
+    setNote(null);
+    try {
+      const text = await navigator.clipboard.readText();
+      const link = linkedinLinkIn(text);
+      if (link) {
+        onPick(link);
+        setDevice(null);
+        return;
+      }
+      setNote("What you copied isn’t a LinkedIn link yet — copy the link from your profile, then tap Paste again.");
+    } catch {
+      setNote("Press and hold the box above, then tap Paste.");
+      document.getElementById(inputId)?.focus();
+    }
+  };
+
+  return (
+    <div className="mt-1">
+      {/* A real link, so it works before hydration too; the click also opens
+          the steps. Same target as the row's "Open", which the iOS shell hands
+          to the system (the LinkedIn app when it is installed). */}
+      <a
+        href={LINKEDIN_MY_PROFILE}
+        target="_blank"
+        rel="noopener noreferrer"
+        data-linkedin-find
+        onClick={() => {
+          away.current = false;
+          setNote(null);
+          setMac(/Mac/.test(navigator.platform || navigator.userAgent));
+          setDevice(deviceNow());
+        }}
+        className={`inline-flex items-center gap-1 text-[0.6875rem] font-semibold ${tone.open}`}
+      >
+        {filled ? "Not sure it’s right? Find my exact link" : "Not sure what to type? Find my exact link"}
+        <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3" aria-hidden><path fillRule="evenodd" d="M5.22 14.78a.75.75 0 001.06 0l7.22-7.22v5.69a.75.75 0 001.5 0v-7.5a.75.75 0 00-.75-.75h-7.5a.75.75 0 000 1.5h5.69l-7.22 7.22a.75.75 0 000 1.06z" clipRule="evenodd" /></svg>
+      </a>
+      {device && (
+        <div data-linkedin-steps={device} className={`mt-2 rounded-xl border p-3 ${tone.box}`}>
+          <ol className={`list-decimal pl-4 space-y-1 text-[0.6875rem] leading-snug ${tone.strong}`}>
+            {linkedinSteps(device, mac).map((s) => <li key={s}>{s}</li>)}
+          </ol>
+          {device !== "computer" && (
+            <button
+              type="button"
+              onClick={paste}
+              className="mt-2.5 w-full rounded-lg bg-[#0A66C2] hover:bg-[#0958a8] text-white text-xs font-semibold py-2"
+            >
+              Paste my link
+            </button>
+          )}
+          {note && <p className="text-amber-400 text-[0.6875rem] mt-2 leading-snug">{note}</p>}
+        </div>
+      )}
+    </div>
+  );
 }
 
 type Variant = "app" | "site";
@@ -108,6 +283,8 @@ export default function SocialHandleField({
   const filled = (withPrefix ? shown : value).trim().length > 0;
   const href = filled ? socialUrl(spec.key, value) : null;
   const dest = filled ? socialDestination(spec.key, value) : null;
+  const linkedin = spec.key === "linkedin" && !managed;
+  const problem = linkedin && filled ? linkedinLinkProblem(value) : null;
 
   return (
     <div data-social-row={spec.key}>
@@ -173,6 +350,14 @@ export default function SocialHandleField({
           // value that backspace could not reach. The caller's blur still
           // saves "@handle" where a platform keeps one (normalizeSocial).
           onChange={(e) => onChange(withPrefix ? e.target.value.replace(/^@+/, "") : e.target.value)}
+          // A pasted LinkedIn link is kept as just the address: no ?utm tail,
+          // and not the share sheet's whole sentence.
+          onPaste={linkedin ? (e) => {
+            const link = linkedinLinkIn(e.clipboardData.getData("text"));
+            if (!link) return;
+            e.preventDefault();
+            onChange(link);
+          } : undefined}
           onBlur={onBlur}
           readOnly={managed}
           style={{ outline: "none" }}
@@ -184,6 +369,8 @@ export default function SocialHandleField({
           no line at all now that the box shows where the username goes. */}
       {managed ? (
         managedNote ? <p className={`text-[0.6875rem] mt-1 leading-snug ${t.note}`}>{managedNote}</p> : null
+      ) : problem ? (
+        <p className="text-amber-400 text-[0.6875rem] mt-1 leading-snug">{problem}</p>
       ) : filled && dest ? (
         <p className={`text-[0.6875rem] mt-1 leading-snug ${t.note}`}>
           Opens <span className={`font-medium break-all ${t.strong}`}>{dest}</span>
@@ -193,6 +380,10 @@ export default function SocialHandleField({
           This won&rsquo;t open as a link — just your username, like <span className="font-medium">{spec.example}</span>
         </p>
       ) : null}
+
+      {linkedin && (
+        <LinkedInLinkHelp tone={t} inputId={inputId} filled={filled} onPick={onChange} />
+      )}
     </div>
   );
 }

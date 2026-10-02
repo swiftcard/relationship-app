@@ -85,9 +85,11 @@ afterAll(async () => {
 const phoneCol = (w: number) => w - 40;
 const DESKTOP_COL = 532;
 
-async function mount(width: number, col: number, props: Record<string, unknown>, theme: "dark" | "light" = "dark"): Promise<Page> {
+async function mount(width: number, col: number, props: Record<string, unknown>, theme: "dark" | "light" = "dark", userAgent?: string): Promise<Page> {
   const css = await appCss();
-  const page = await browser.newPage();
+  const page = await browser.newPage(userAgent ? { userAgent } : undefined);
+  // Nothing here may reach the real LinkedIn ("Find my exact link" opens a tab).
+  await page.context().route(/linkedin\.com/,(r) => r.abort());
   await page.setViewportSize({ width, height: 1400 });
   await page.setContent(
     `<!doctype html><html data-sc-theme="${theme}"><head><meta charset="utf-8"><style>${css}</style>
@@ -263,6 +265,74 @@ describe("Additional links explain themselves", () => {
       });
       expect(m.inside).toBe(true);
       expect(m.labels).toEqual(["Button text", "Web address"]);
+    } finally { await page.close(); }
+  });
+});
+
+// ── LinkedIn: "Find my exact link" (owner, 2026-10-02) ──────────────────────
+// LinkedIn addresses carry numbers for many people, so the LinkedIn row sends
+// them to their own profile and says how to copy the link on THIS device.
+describe("LinkedIn: find my exact link", () => {
+  const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
+  const WIN = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36";
+  const cases: Array<[string, number, number, string, string]> = [
+    ["phone 320", 320, phoneCol(320), IPHONE, "ios"],
+    ["phone 390", 390, phoneCol(390), IPHONE, "ios"],
+    ["computer", 1280, DESKTOP_COL, WIN, "computer"],
+  ];
+  for (const [name, width, col, ua, device] of cases) {
+    for (const theme of ["dark", "light"] as const) {
+      it(`${name}, ${theme}: the steps for this device open inside the row`, async () => {
+        const page = await mount(width, col, {}, theme, ua);
+        try {
+          // Only the LinkedIn row carries it.
+          expect(await page.locator("[data-linkedin-find]").count()).toBe(1);
+          expect(await page.locator('[data-social-row="linkedin"] [data-linkedin-find]').count()).toBe(1);
+          expect(await page.getAttribute("[data-linkedin-find]", "href")).toBe("https://www.linkedin.com/in/me/");
+          const popup = page.waitForEvent("popup").catch(() => null);
+          await page.click("[data-linkedin-find]");
+          await popup;
+          const steps = page.locator(`[data-linkedin-steps="${device}"]`);
+          await steps.waitFor();
+          const m = await page.$eval('[data-social-row="linkedin"]', (row) => {
+            const r = row.getBoundingClientRect();
+            const p = row.querySelector("[data-linkedin-steps]")!.getBoundingClientRect();
+            const btn = row.querySelector("[data-linkedin-steps] button")?.getBoundingClientRect();
+            return { inside: p.left >= r.left - 0.5 && p.right <= r.right + 0.5, btnH: btn?.height ?? null };
+          });
+          expect(m.inside).toBe(true);
+          if (device === "computer") {
+            expect(await steps.textContent()).toMatch(/web address at the top/);
+            expect(m.btnH).toBeNull();
+          } else {
+            expect(await steps.textContent()).toMatch(/Contact info/);
+            expect(m.btnH!).toBeGreaterThanOrEqual(32);
+          }
+          if (process.env.SHOT) await page.screenshot({ path: `${process.env.SHOT}/linkedin-${name.replace(" ", "")}-${theme}.png`, fullPage: false, clip: { x: 0, y: 0, width, height: 520 } });
+        } finally { await page.close(); }
+      });
+    }
+  }
+
+  it("pasting LinkedIn's share text keeps just the address, numbers and all", async () => {
+    const page = await mount(390, phoneCol(390), {});
+    try {
+      await page.locator('[data-social-row="linkedin"] input').focus();
+      await page.evaluate(() => {
+        const dt = new DataTransfer();
+        dt.setData("text", "Check out my profile on LinkedIn https://www.linkedin.com/in/john-doe-4a7b21?utm_source=share&utm_medium=ios_app");
+        document.querySelector('[data-social-row="linkedin"] input')!.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+      });
+      await page.waitForFunction(() => (window as unknown as { __state: { socials: Record<string, string> } }).__state.socials.linkedin === "linkedin.com/in/john-doe-4a7b21");
+      expect(await page.inputValue('[data-social-row="linkedin"] input')).toBe("john-doe-4a7b21");
+      expect(await page.textContent('[data-social-row="linkedin"]')).toContain("Opens linkedin.com/in/john-doe-4a7b21");
+    } finally { await page.close(); }
+  });
+
+  it("LinkedIn's /in/me shortcut is called out instead of saved silently", async () => {
+    const page = await mount(390, phoneCol(390), { initial: { linkedin: "https://www.linkedin.com/in/me/" } });
+    try {
+      expect(await page.textContent('[data-social-row="linkedin"]')).toMatch(/LinkedIn’s shortcut, not your link/);
     } finally { await page.close(); }
   });
 });

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { displayHandle } from "@/components/SocialHandleField";
+import { displayHandle, linkedinLinkIn, linkedinLinkProblem, linkedinSteps, LINKEDIN_MY_PROFILE } from "@/components/SocialHandleField";
 import { SOCIAL_INPUTS } from "@/lib/social-input";
 import { normalizeSocial, socialUrl } from "@/lib/social-url";
 
@@ -94,5 +94,53 @@ describe("the box itself", () => {
   it("uses the plain keyboard: the iPhone URL keyboard has no space bar", () => {
     const input = src.slice(src.indexOf("<input"), src.indexOf("/>", src.indexOf("<input")));
     expect(input).not.toMatch(/inputMode="url"/);
+  });
+});
+
+// ── LinkedIn: "Find my exact link" (owner, 2026-10-02) ──────────────────────
+// LinkedIn addresses can be "johndoe", "john-doe" or "john-doe-4a7b21", and
+// LinkedIn's sign-in never hands apps the address — so the box sends people to
+// their own profile and accepts whatever they copy back.
+describe("LinkedIn exact link", () => {
+  it("pulls the address out of whatever was copied, without the ?utm tail", () => {
+    expect(linkedinLinkIn("https://www.linkedin.com/in/john-doe-4a7b21?utm_source=share&utm_medium=ios_app"))
+      .toBe("linkedin.com/in/john-doe-4a7b21");
+    expect(linkedinLinkIn("Check out my profile on LinkedIn https://www.linkedin.com/in/john-doe-4a7b21/"))
+      .toBe("linkedin.com/in/john-doe-4a7b21");
+    expect(linkedinLinkIn("linkedin.com/in/johndoe")).toBe("linkedin.com/in/johndoe");
+    expect(linkedinLinkIn("https://uk.linkedin.com/in/johndoe")).toBe("linkedin.com/in/johndoe");
+    expect(linkedinLinkIn("John Doe")).toBeNull();
+    expect(linkedinLinkIn("https://instagram.com/johndoe")).toBeNull();
+  });
+
+  it("a pasted link builds the exact profile, numbers and all", () => {
+    const v = linkedinLinkIn("https://www.linkedin.com/in/john-doe-4a7b21?utm_source=share")!;
+    expect(socialUrl("linkedin", v)).toBe("https://linkedin.com/in/john-doe-4a7b21");
+  });
+
+  it("flags LinkedIn's own shortcut and non-profile pages, never a real profile", () => {
+    expect(linkedinLinkProblem("https://www.linkedin.com/in/me/")).toMatch(/shortcut/);
+    expect(linkedinLinkProblem("me")).toMatch(/shortcut/);
+    expect(linkedinLinkProblem("https://www.linkedin.com/feed/")).toMatch(/not your profile/);
+    for (const ok of ["johndoe", "john-doe-4a7b21", "linkedin.com/in/john-doe", "https://www.linkedin.com/company/acme", "John Doe"]) {
+      expect(linkedinLinkProblem(ok), ok).toBeNull();
+    }
+  });
+
+  it("tells each device how to copy the link — address bar on a computer, Contact info on a phone", () => {
+    expect(linkedinSteps("computer").join(" ")).toMatch(/web address at the top/);
+    expect(linkedinSteps("computer", true).join(" ")).toMatch(/⌘V/);
+    expect(linkedinSteps("computer", false).join(" ")).toMatch(/Ctrl\+V/);
+    expect(linkedinSteps("ios").join(" ")).toMatch(/Contact info/);
+    expect(linkedinSteps("android").join(" ")).toMatch(/Contact/);
+    expect(LINKEDIN_MY_PROFILE).toBe("https://www.linkedin.com/in/me/");
+  });
+
+  const src = readFileSync(join(process.cwd(), "src/components/SocialHandleField.tsx"), "utf8");
+  it("the helper is a real link (works before hydration) and only on LinkedIn rows", () => {
+    expect(src).toMatch(/href=\{LINKEDIN_MY_PROFILE\}/);
+    expect(src).toMatch(/const linkedin = spec\.key === "linkedin" && !managed/);
+    // Device-specific steps never render on the server: they wait for the tap.
+    expect(src).toMatch(/useState<Device \| null>\(null\)/);
   });
 });

@@ -88,9 +88,23 @@ export const cardDocs = defineDocs([
       "bio required", "why is the bio required", "can't skip bio", "asterisk",
     ],
     answer:
-      "The \"Socials\" tab (step 3 of the builder) has three boxes: \"Bio\", \"Social profiles\" and \"Additional links\". In \"Social profiles\" each platform has its logo, and its box already shows the start of the link — \"linkedin.com/in/\", \"instagram.com/\", \"tiktok.com/@\", \"facebook.com/\", \"x.com/\", \"snapchat.com/add/\", \"youtube.com/@\" — so you type only your username after it (the part in your profile's own link, not your name). Pasting your whole profile link works too. Once a box is filled it says \"Opens …\" with the exact address, so a wrong username shows up before anyone taps it; one that can't become a link turns red.",
+      "The \"Socials\" tab (step 3 of the builder) has three boxes: \"Bio\", \"Social profiles\" and \"Additional links\". In \"Social profiles\" each platform has its logo, and its box already shows the start of the link — \"linkedin.com/in/\", \"instagram.com/\", \"tiktok.com/@\", \"facebook.com/\", \"x.com/\", \"snapchat.com/add/\", \"youtube.com/@\" — so you type only your username after it (the part in your profile's own link, not your name). Pasting your whole profile link works too — and for LinkedIn, whose link often has numbers on the end, \"Find my exact link\" under the box gets you the right one. Once a box is filled it says \"Opens …\" with the exact address, so a wrong username shows up before anyone taps it; one that can't become a link turns red.",
     detail:
       "The \"Bio\" is the one required field on this tab (the red asterisk). A new card can't go past the Socials step without one, and in the editor \"Save Changes\" with an empty bio jumps to the Socials tab and outlines the box in red (\"Add a bio to save your card.\"). It is required because the AI follow-ups read it: it tells them what you do, so the messages they write to your contacts are about your actual work. The homepage \"See how your SwiftLink would look\" builder asks for it too. On a team account where the company sets one bio for everyone, the box is read-only and you don't have to write your own. These all appear on your Swift Links page, and the socials also show on your card page. In \"Additional links\" each link is a button on your Swift Links page that opens any website. Tap one of the ideas (\"Book a meeting\", \"Leave a review\", \"See my listings\", \"Watch my video\", \"Shop now\") to fill \"Button text\", paste the address into \"Web address\", then \"+ Add link\" — nothing is added until both are filled. Free shows the first {limit.links} of them publicly and keeps any extras stored but hidden, so they reappear if the account becomes paid.",
+  },
+  {
+    id: "linkedin-link",
+    title: "Getting your exact LinkedIn link",
+    audience: ["user"],
+    triggers: [
+      "linkedin link", "linkedin url", "linkedin username", "my linkedin", "linkedin not working",
+      "linkedin wrong profile", "linkedin opens someone else", "linkedin numbers", "find my linkedin",
+      "connect linkedin", "connect with linkedin", "find my exact link", "paste my link",
+    ],
+    answer:
+      "Your LinkedIn link isn't always your name — it can be \"johndoe\", \"john-doe\" or \"john-doe-4a7b21\" with numbers on the end, so typing your name can open the wrong profile. Under the LinkedIn box, tap \"Find my exact link\". It opens your own LinkedIn profile and shows how to copy the link on the device you're using. On a computer, copy the web address at the top of the LinkedIn tab, come back and paste it into the box (Ctrl+V, or ⌘V on a Mac). On a phone, in LinkedIn tap ••• More → Contact info (iPhone) or scroll to Contact (Android), copy the link under your profile, come back and tap \"Paste my link\".",
+    detail:
+      "There's no \"Connect with LinkedIn\" for this: LinkedIn doesn't give apps your profile link, only your name, photo and email. Pasting the whole link always works — anything after a \"?\" and any extra text from LinkedIn's share sheet is dropped automatically, and the line under the box says \"Opens …\" with the exact address. If it warns \"That's LinkedIn's shortcut, not your link\", the address was copied before your profile finished opening — copy it again once it shows your name. \"That's a LinkedIn page, not your profile\" means the link was for your feed or another page. If \"Paste my link\" says to press and hold, your phone didn't let the app read what you copied: press and hold the LinkedIn box and tap Paste instead. The same box and button are in the new-card builder, Edit card, and the homepage \"See how your SwiftLink would look\" builder.",
   },
   {
     id: "page-background",
