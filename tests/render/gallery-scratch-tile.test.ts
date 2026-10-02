@@ -5,14 +5,15 @@ import { join, resolve } from "node:path";
 import type { Browser } from "playwright";
 import { appCss, launchBrowser } from "./harness";
 
-// ── The homepage gallery's "Start from scratch" tile is a short banner ───────
+// ── The homepage gallery's "Start from scratch" tile is the size of a card ───
 //
-// Owner, 2026-09-30, on a phone: it was "one big box … looks really awkward" —
-// a 150px-min box, taller than the template cards, alone on the last row of the
-// 2-column grid with a hole beside it. It now spans the whole row and stays
-// shorter than a template card, at every width, with its wording un-clipped and
-// inside the box. Measured in the real gallery (real templates, real
-// CardScaler, real Tailwind), inside the homepage's own px-5 container.
+// Owner, 2026-10-01: the dashed box must be "the same exact size" as the
+// template cards above it, on the phone and the computer. (It had been a
+// 150px-min box taller than the cards, then a banner across the whole row.)
+// So: one grid cell, the template card's exact width and height, at every
+// width, with "See how your card looks" un-clipped and inside the box.
+// Measured in the real gallery (real templates, real CardScaler, real
+// Tailwind), inside the homepage's own px-5 container.
 
 const ORIGIN = "https://sc.test";
 let browser: Browser;
@@ -72,8 +73,8 @@ afterAll(async () => {
 });
 
 describe("homepage gallery: Start from scratch tile", () => {
-  for (const width of [320, 375, 390, 430, 1280]) {
-    it(`spans the row and stays shorter than a template card at ${width}px`, async () => {
+  for (const width of [320, 375, 390, 430, 768, 1280]) {
+    it(`is exactly a template card's size at ${width}px`, async () => {
       const page = await browser.newPage({ viewport: { width, height: 900 } });
       await page.route(`${ORIGIN}/**`, (route) =>
         new URL(route.request().url()).pathname === "/"
@@ -93,30 +94,29 @@ describe("homepage gallery: Start from scratch tile", () => {
         const box = (el: Element) => el.getBoundingClientRect();
         const templates = [...tile.parentElement!.children].filter((c) => c !== tile);
         const tileBox = box(tile.children[1]);
-        const cardHeights = templates.map((t) => box(t.children[1]).height);
-        const lines = [...tile.children[1].querySelectorAll("p")].map((p) => ({
+        const cards = templates.map((t) => box(t.children[1]));
+        const lines = [...tile.children[1].querySelectorAll("p")].filter((p) => p.getClientRects().length > 0).map((p) => ({
           text: p.textContent, clipped: p.scrollWidth > p.clientWidth + 1,
           inside: box(p).left >= tileBox.left && box(p).right <= tileBox.right
             && box(p).top >= tileBox.top && box(p).bottom <= tileBox.bottom,
         }));
         return {
-          tile: { left: tileBox.left, right: tileBox.right, h: tileBox.height },
-          rowLeft: box(templates[0]).left, // left column
-          rowRight: box(templates[1]).right, // right column
-          templateCount: templates.length,
-          shortestCard: Math.min(...cardHeights),
+          tile: { left: tileBox.left, w: tileBox.width, h: tileBox.height },
+          leftColumn: cards[0].left,
+          cardW: { min: Math.min(...cards.map((c) => c.width)), max: Math.max(...cards.map((c) => c.width)) },
+          cardH: { min: Math.min(...cards.map((c) => c.height)), max: Math.max(...cards.map((c) => c.height)) },
+          title: tile.children[1].querySelector("p")?.textContent,
           lines,
           overflowX: document.documentElement.scrollWidth - window.innerWidth,
         };
       });
 
-      // An even count is what leaves the tile alone on its row; if a 7th
-      // template lands, the tile should go back to sitting beside it.
-      expect(m.templateCount % 2, "templates fill whole rows").toBe(0);
-      expect(Math.abs(m.tile.left - m.rowLeft), "starts at the left column").toBeLessThanOrEqual(1);
-      expect(Math.abs(m.tile.right - m.rowRight), "ends at the right column").toBeLessThanOrEqual(1);
-      expect(m.tile.h, `banner ${m.tile.h}px vs shortest card ${m.shortestCard}px`).toBeLessThan(m.shortestCard);
-      expect(m.tile.h, "still a comfortable tap target").toBeGreaterThanOrEqual(56);
+      expect(m.title).toBe("See how your card looks");
+      expect(Math.abs(m.tile.left - m.leftColumn), "sits in a grid column").toBeLessThanOrEqual(1);
+      expect(m.cardW.max - m.cardW.min, "templates share one width").toBeLessThanOrEqual(1);
+      expect(m.cardH.max - m.cardH.min, "templates share one height").toBeLessThanOrEqual(1);
+      expect(Math.abs(m.tile.w - m.cardW.min), `tile ${m.tile.w}px wide vs card ${m.cardW.min}px`).toBeLessThanOrEqual(1);
+      expect(Math.abs(m.tile.h - m.cardH.min), `tile ${m.tile.h}px tall vs card ${m.cardH.min}px`).toBeLessThanOrEqual(1);
       for (const l of m.lines) {
         expect(l.clipped, `"${l.text}" is clipped`).toBe(false);
         expect(l.inside, `"${l.text}" spills out of the tile`).toBe(true);

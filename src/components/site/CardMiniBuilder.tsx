@@ -179,40 +179,38 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
 
   return (
     <>
-      {/* The last grid item, after the six templates. Six templates fill three
-          full rows of the 2-column grid, so this sits on a row of its own:
-          col-span-2 makes it a short banner across that row. As a card-shaped
-          tile it was one big box with an empty hole beside it (owner,
-          2026-09-30: "one big box … looks really awkward"). */}
+      {/* The last grid item, after the six templates: one grid cell, exactly
+          the size of a template card, on phone and computer alike (owner,
+          2026-10-01: "the same exact size" as the cards above it). */}
       <button
         type="button"
         onClick={() => { reset(); setStep(0); setOpen(true); }}
-        className="col-span-2 text-left outline-none group"
+        className="text-left outline-none group"
         data-reveal
         style={{ transitionDelay: "350ms" }}
       >
         <p className="text-[0.84375rem] font-semibold mb-2 text-slate-500 group-hover:text-[#2563EB] transition-colors">Start from scratch</p>
-        {/* Height comes from the padding, not an aspect ratio: it stays shorter
-            than a template card at every width. Wording wraps rather than
-            clips if a narrow phone runs out of room. `relative overflow-hidden`
+        {/* w-full takes the column's width; aspect 460/263 is CardScaler's
+            card (460 wide, 263 tall) so the height matches the templates'.
+            Never add a min-height: with an aspect ratio it derives the WIDTH
+            and pushes the box off a phone's edge. The content fits a 320px
+            phone's 140×80 tile — the title wraps to two lines there and the
+            "60 seconds" line only shows from sm up. `relative overflow-hidden`
             clips the glare sweep. The button is outline-none, so keyboard
             focus shows here as a ring, like the templates' focus outline. */}
         <div
-          className="relative overflow-hidden w-full rounded-2xl flex items-center gap-3.5 sm:gap-4 px-4 py-3.5 sm:px-5 sm:py-4 transition-all duration-200 group-hover:-translate-y-[3px] group-focus-visible:-translate-y-[3px] group-focus-visible:ring-2 group-focus-visible:ring-[#2563EB] group-focus-visible:ring-offset-2"
+          className="relative overflow-hidden w-full aspect-[460/263] rounded-2xl flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2.5 px-2.5 sm:px-4 transition-all duration-200 group-hover:-translate-y-[3px] group-focus-visible:-translate-y-[3px] group-focus-visible:ring-2 group-focus-visible:ring-[#2563EB] group-focus-visible:ring-offset-2"
           style={{ border: "2px dashed #C9BEA8", background: "rgba(37,99,235,0.03)" }}
         >
           {/* Glare sweep — the same shine the SwiftLink featured tiles use. */}
           <span className="rd-ll-shine" aria-hidden="true" />
-          <span className="w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-white shadow-lg transition-transform group-hover:scale-110 shrink-0" style={{ background: "var(--rd-aurora)" }}>
-            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
+          <span className="w-7 h-7 sm:w-11 sm:h-11 rounded-full flex items-center justify-center text-white shadow-lg transition-transform group-hover:scale-110 shrink-0" style={{ background: "var(--rd-aurora)" }}>
+            <svg viewBox="0 0 24 24" className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M12 5v14M5 12h14" strokeLinecap="round" /></svg>
           </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-slate-800 font-semibold text-[0.9375rem] leading-snug">Build your own card</p>
-            <p className="text-slate-500 text-[0.8125rem] leading-snug mt-0.5">60 seconds · no signup</p>
+          <div className="min-w-0">
+            <p className="text-slate-800 font-semibold text-[0.8125rem] sm:text-[0.9375rem] leading-tight text-balance">See how your card looks</p>
+            <p className="hidden sm:block text-slate-500 text-[0.75rem] leading-tight mt-1">60 seconds · no signup</p>
           </div>
-          {/* Decorative; below 360px its room goes to the wording so both lines
-              stay single even in a wide fallback font. */}
-          <svg viewBox="0 0 24 24" aria-hidden="true" className="max-[359px]:hidden w-5 h-5 shrink-0 text-slate-400 transition-all group-hover:text-[#2563EB] group-hover:translate-x-0.5" fill="none" stroke="currentColor" strokeWidth={2.25}><path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </div>
       </button>
 

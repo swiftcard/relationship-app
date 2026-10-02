@@ -213,8 +213,8 @@ export default function TemplateGallery({ linkedinEnabled = false }: { linkedinE
             );
           })}
 
-          {/* After the six templates: "Start from scratch", a banner across
-              its own row (col-span-2 inside CardMiniBuilder). */}
+          {/* After the six templates: "Start from scratch", one grid cell the
+              exact size of a template card (see CardMiniBuilder). */}
           <CardMiniBuilder linkedinEnabled={linkedinEnabled} />
         </div>
       </div>
