@@ -17,6 +17,8 @@ type Props = {
   email?: string | null;
   /** Explicit domain to search on, if you have one. */
   domain?: string | null;
+  /** Their website — its own logo is offered first, and covers a name miss. */
+  website?: string | null;
   /** Called with the chosen logo image URL once the user confirms a candidate. */
   onConfirm: (logoUrl: string) => void;
 };
@@ -28,15 +30,16 @@ type State =
   | { kind: "empty"; status: LogoSuggestStatus }
   | { kind: "hidden" }; // provider not configured — disappear entirely
 
-export default function LogoSuggest({ company, email, domain, onConfirm }: Props) {
+export default function LogoSuggest({ company, email, domain, website, onConfirm }: Props) {
   const [state, setState] = useState<State>({ kind: "idle" });
   const [applied, setApplied] = useState<string | null>(null);
 
   // Pick the best available signal to search on.
   const input = (domain || company || email || "").trim();
+  const site = (website || "").trim();
 
   async function find() {
-    if (!input) {
+    if (!input && !site) {
       setState({ kind: "empty", status: "invalid_input" });
       return;
     }
@@ -45,7 +48,7 @@ export default function LogoSuggest({ company, email, domain, onConfirm }: Props
       const res = await fetch("/api/logo-suggest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input }),
+        body: JSON.stringify({ input, website: site }),
       });
       // 429 carries its own status the copy already covers — don't flatten a
       // "slow down" into a scarier "something went wrong".
@@ -150,7 +153,7 @@ function emptyMessage(status: LogoSuggestStatus): string {
     case "personal_domain":
       return "That looks like a personal email — enter a company name to find its logo.";
     case "invalid_input":
-      return "Enter your company name or work email first, then try again.";
+      return "Enter your company name, work email or website first, then try again.";
     case "rate_limited":
       return "Too many lookups right now — try again in a moment.";
     case "no_match":

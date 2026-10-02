@@ -245,7 +245,7 @@ export default function ProfileForm({ profile, linkedinEnabled = false }: { prof
             onUploaded={(url) => setLogoUrl(url)}
           />
           {/* Suggest my company logo — fails safe (renders nothing) if unconfigured. */}
-          <LogoSuggest company={form.company} email={form.email} onConfirm={(url) => setLogoUrl(url || null)} />
+          <LogoSuggest company={form.company} email={form.email} website={form.website} onConfirm={(url) => setLogoUrl(url || null)} />
         </div>
       </div>
 

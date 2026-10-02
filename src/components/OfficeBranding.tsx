@@ -272,7 +272,7 @@ export default function OfficeBranding({ office }: { office: Brand }) {
               <ImageUpload defer field="logo" shape="square" currentUrl={logoUrl} label="Company logo" onUploaded={(u) => setLogoUrl(u || null)} />
               {/* Auto-search uses the website domain when set — a far better hit
                   rate than a name search — and falls back to the company name. */}
-              <LogoSuggest company={company} domain={website || null} onConfirm={(u) => setLogoUrl(u)} />
+              <LogoSuggest company={company} website={website} onConfirm={(u) => setLogoUrl(u)} />
               {logoUrl && (
                 <div className="mt-2">
                   <p className="text-[0.6875rem] text-gray-500 mb-1.5">Logo shape on the card</p>

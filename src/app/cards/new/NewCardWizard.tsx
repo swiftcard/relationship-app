@@ -2154,7 +2154,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                   <ImageUpload field="logo" currentUrl={logoUrl} label="Upload your company logo" shape="square" defer guest={guest} onUploaded={(url) => setLogoUrl(url || null)} />
                   {/* Suggest an official company logo (Agent 4 contract). Fails safe —
                       renders nothing when the provider isn't configured. */}
-                  <LogoSuggest company={company} email={email} onConfirm={(url) => setLogoUrl(url || null)} />
+                  <LogoSuggest company={company} email={email} website={website} onConfirm={(url) => setLogoUrl(url || null)} />
                   {logoUrl && (
                     <div className="mt-2">
                       {/* The shared Segmented, same as the edit form. This was a
