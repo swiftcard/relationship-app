@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ORG, firstName } from "@/lib/agent-org";
 import { mentionables, partyOfResponder } from "@/lib/agent-chat";
 import InstagramBotCard from "./InstagramBotCard";
+import LinkedInDesk from "./LinkedInDesk";
 
 // ── Agent Flow v3: one switch, three teams, zero ambiguity ──────────────────
 // The owner's mental model, implemented literally: press ▶ Start All and the
@@ -268,7 +269,7 @@ const PLATFORM_ICON: Record<string, string> = { reddit: "👽 Reddit", telegram:
 const SOURCE_KIND_LABEL: Record<string, string> = { reddit_search: "Reddit search", reddit_sub: "Subreddit", telegram_channel: "Telegram channel", telegram_bot: "Telegram bot (groups)", hn: "Hacker News", rss: "News / RSS feed", appstore_reviews: "App Store reviews", youtube: "YouTube" };
 const RADAR_AGENT_IDS = ["mentions", "forums", "outreach", "influencer", "pr", "competitors"];
 const REMOVABLE_SOURCE_KINDS = new Set(["reddit_sub", "telegram_channel", "rss", "appstore_reviews"]);
-type View = "agents" | "chat" | "chart" | "comms" | "queue" | "radar" | "history" | "settings";
+type View = "agents" | "chat" | "chart" | "comms" | "queue" | "radar" | "linkedin" | "history" | "settings";
 type TourStep = { view?: View; target?: string; title: string; body: string };
 const TOUR: TourStep[] = [
   { title: "Welcome to Agent Flow", body: "Your workforce. Press Start to OPEN the office — nothing runs yet; every team waits at rest. Wake a team and its agents start working on their own rhythms — a few pieces of content a day, watchdogs every few hours — until you Rest the team, press Pause, your auto-stop time hits, or the monthly token budget stops it. Nothing is ever sent to another platform without you." },
@@ -330,6 +331,7 @@ export default function AgentFlowClient() {
     if (!ok && !err && !q.get("view")) return;
     const t = setTimeout(() => {
       if (q.get("view") === "settings") setView("settings");
+      if (q.get("view") === "linkedin") setView("linkedin");
       if (ok) { setToast(`Connected ${ok.replace(":", " as ")} — Approve now posts there.`); setTimeout(() => setToast(""), 7000); }
       if (err) { setToast(`Couldn't connect — ${err}`); setTimeout(() => setToast(""), 9000); }
       window.history.replaceState(null, "", window.location.pathname);
@@ -722,7 +724,7 @@ export default function AgentFlowClient() {
       {/* ── View tabs ── */}
       <div data-aftour="tabs" className="flex flex-wrap items-center gap-1">
         <button onClick={() => setTourStep(0)} className="px-3 py-1.5 rounded-full text-xs font-semibold text-blue-300 bg-blue-950/40 border border-blue-800/50 hover:bg-blue-900/40 whitespace-nowrap transition-colors">✦ Take a tour</button>
-        {([["agents", "Agents"], ["chat", "💬 Chat"], ["chart", "Org chart"], ["comms", "Comms"], ["queue", "Review queue"], ["radar", "📡 Radar"], ["history", "History"], ["settings", "Settings"]] as const).map(([v, label]) => (
+        {([["agents", "Agents"], ["chat", "💬 Chat"], ["chart", "Org chart"], ["comms", "Comms"], ["queue", "Review queue"], ["radar", "📡 Radar"], ["linkedin", "LinkedIn desk"], ["history", "History"], ["settings", "Settings"]] as const).map(([v, label]) => (
           <button key={v} onClick={() => setView(v)} className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${view === v ? "bg-gray-700 text-white" : "text-gray-500 hover:text-gray-300"}`}>
             {label}{v === "queue" && board.pendingTotal > 0 ? ` (${board.pendingTotal})` : ""}{v === "radar" && (radar?.counts?.new ?? 0) > 0 ? ` (${radar!.counts.new})` : ""}
             {v === "chat" && chatUnread > 0 && <span className="ml-1.5 inline-block min-w-[18px] px-1 rounded-full bg-sky-500 text-white text-[0.625rem] font-bold text-center align-middle">{chatUnread}</span>}
@@ -1258,6 +1260,8 @@ export default function AgentFlowClient() {
           </div>
         </div>
       )}
+
+      {view === "linkedin" && <LinkedInDesk />}
 
       {view === "history" && (
         <div data-aftour="historylist" className="space-y-1.5">
