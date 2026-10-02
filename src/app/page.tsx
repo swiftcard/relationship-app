@@ -100,7 +100,12 @@ export default function Home() {
               networking scene looping muted behind the hero. The white wash is
               strongest over the text and nearly clear on the right so the
               footage reads as footage. motion-reduce hides the video; the
-              poster paints the first frame before the file arrives. */}
+              poster paints the first frame before the file arrives.
+              Owner, 2026-10-02: "way too white" — the wash was lightened
+              (0.88/0.70 → 0.74/0.52, phones 0.46 → 0.30) and the hero's small
+              text (subtitle, feature list) went from grey to ink to keep it
+              readable: measured against the footage it now reads BETTER than
+              before (darkest spot 6.1:1 desktop, 4.7:1 phone; was 5.3 / 4.3). */}
           <video
             className="absolute inset-0 w-full h-full object-cover motion-reduce:hidden"
             autoPlay
@@ -117,17 +122,17 @@ export default function Home() {
           <div
             className="absolute inset-0 pointer-events-none"
             aria-hidden="true"
-            style={{ background: "linear-gradient(90deg, rgba(255,255,255,0.88) 0%, rgba(255,255,255,0.7) 48%, rgba(255,255,255,0.2) 78%, rgba(255,255,255,0.08) 100%)" }}
+            style={{ background: "linear-gradient(90deg, rgba(255,255,255,0.74) 0%, rgba(255,255,255,0.52) 48%, rgba(255,255,255,0.1) 78%, rgba(255,255,255,0) 100%)" }}
           />
           {/* Phones: the text spans the full width, so one even wash more. */}
-          <div className="absolute inset-0 pointer-events-none sm:hidden" aria-hidden="true" style={{ background: "rgba(255,255,255,0.46)" }} />
+          <div className="absolute inset-0 pointer-events-none sm:hidden" aria-hidden="true" style={{ background: "rgba(255,255,255,0.3)" }} />
 
           <div className="relative w-full min-w-0 max-w-7xl mx-auto px-5 sm:px-6 lg:flex lg:items-center lg:gap-8">
             <div className="max-w-[640px] lg:flex-1">
               <h1 className="rd-display text-slate-900 text-[clamp(2.6rem,5.6vw,4.5rem)]" data-reveal>
                 The business card that <HeroShareWord />
               </h1>
-              <p className="mt-6 text-slate-700 text-[clamp(1.05rem,1.6vw,1.25rem)] leading-snug max-w-[540px]" data-reveal>
+              <p className="mt-6 text-[var(--hp-ink)] text-[clamp(1.05rem,1.6vw,1.25rem)] leading-snug max-w-[540px]" data-reveal>
                 Saves you in one tap, and does the follow-ups for you.
               </p>
 
