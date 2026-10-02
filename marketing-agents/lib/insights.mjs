@@ -230,12 +230,28 @@ async function asoBlock() {
 async function instagramBlock() {
   const since = isoAgo(30 * DAY);
   const posts = (await sbRows("agent_ig_posts", `select=media_id,code,caption,media_type,posted_at,like_count,comments_count&posted_at=gte.${since}&order=posted_at.desc&limit=30`)) ?? [];
-  if (!posts.length) return "";
-  const [events, clicks, signups] = await Promise.all([
+  if (!posts.length) {
+    // Instagram not connected or nothing posted yet: TikTok still runs (it is
+    // posted by hand), so its numbers must not depend on Instagram's.
+    const [taps, joined] = await Promise.all([
+      sbCount("product_events", `name=eq.campaign_link_clicked&is_internal=eq.false&props->>code=like.tt_*&created_at=gte.${since}`),
+      sbCount("profiles", `signup_source=like.tt_*&created_at=gte.${since}`),
+    ]);
+    return `TIKTOK (bio link swiftcard.me/go/tt_bio, last 30 days): ${num(taps)} link taps → ${num(joined)} signups. No Instagram post has been published yet, so there is nothing to reuse: pick a ready VIDEO from the creative pool for today's TikTok item. Signups decide what to repeat, not views.`;
+  }
+  const [events, clicks, signups, published, ttSignups, onTikTok] = await Promise.all([
     sbRows("agent_ig_events", `select=media_id,status&action=eq.link&created_at=gte.${since}&limit=5000`),
     sbRows("product_events", `select=props&name=eq.campaign_link_clicked&is_internal=eq.false&created_at=gte.${since}&limit=5000`),
     sbRows("profiles", `select=signup_source&signup_source=like.ig_*&created_at=gte.${since}&limit=5000`),
+    // Which pool asset each Instagram post was made from — so the same video
+    // can be reused on TikTok without rendering it again.
+    sbRows("agent_queue_items", `select=payload&platform=eq.instagram&status=eq.posted&created_at=gte.${since}&limit=200`),
+    sbRows("profiles", `select=signup_source&signup_source=like.tt_*&created_at=gte.${since}&limit=5000`),
+    sbRows("agent_queue_items", `select=payload&platform=eq.tiktok&created_at=gte.${isoAgo(60 * DAY)}&limit=300`),
   ]);
+  const assetOf = {};
+  for (const q of published ?? []) if (q.payload?.instagram_media_id && q.payload?.asset_id) assetOf[q.payload.instagram_media_id] = q.payload.asset_id;
+  const reused = new Set((onTikTok ?? []).flatMap((q) => [q.payload?.asset_id, ...((q.payload?.options ?? []).map((o) => o?.payload?.asset_id))]).filter(Boolean));
   const tally = (rows, key) => { const m = {}; for (const r of rows ?? []) { const k = key(r); if (k) m[k] = (m[k] ?? 0) + 1; } return m; };
   const asked = tally(events, (e) => e.media_id);
   const tapped = tally(clicks, (c) => c.props?.code);
@@ -243,7 +259,12 @@ async function instagramBlock() {
   const ranked = posts.map((p) => ({ ...p, asked: asked[p.media_id] ?? 0, taps: tapped[p.code] ?? 0, signups: joined[p.code] ?? 0 }))
     .sort((a, b) => b.signups - a.signups || b.taps - a.taps || b.asked - a.asked);
   const total = (m) => Object.values(m).reduce((a, b) => a + b, 0);
-  const line = (p) => `- "${String(p.caption ?? "").split("\n")[0].slice(0, 80) || "untitled"}" (${String(p.media_type ?? "post").toLowerCase()}, ${String(p.posted_at ?? "").slice(0, 10)}): ${p.asked} keyword comments, ${p.taps} link taps, ${p.signups} signups, ${p.like_count} likes`;
+  const line = (p) => {
+    const asset = assetOf[p.media_id];
+    const tiktok = !asset ? "" : reused.has(asset) ? " · already written for TikTok" : ` · asset_id ${asset} — NOT on TikTok yet`;
+    return `- "${String(p.caption ?? "").split("\n")[0].slice(0, 80) || "untitled"}" (${String(p.media_type ?? "post").toLowerCase()}, ${String(p.posted_at ?? "").slice(0, 10)}): ${p.asked} keyword comments, ${p.taps} link taps, ${p.signups} signups, ${p.like_count} likes${tiktok}`;
+  };
+  const ttTaps = (clicks ?? []).filter((c) => String(c.props?.code ?? "").startsWith("tt_")).length;
   return [
     "INSTAGRAM — WHICH OF OUR POSTS BROUGHT SIGNUPS (last 30 days, real counts; signups are the only goal)",
     `Totals: ${total(asked)} keyword comments → ${total(tapped)} link taps → ${total(joined)} signups, across ${posts.length} posts.`,
@@ -252,6 +273,7 @@ async function instagramBlock() {
     total(joined) + total(tapped) === 0
       ? "Nothing has converted yet — vary the format and the hook, and keep the keyword call to action on every post so the next ones can be measured."
       : "Make more of what is at the top (same format, same kind of hook, a new angle) and stop making what is at the bottom. Likes alone are not a reason to repeat a post.",
+    `TIKTOK (bio link swiftcard.me/go/tt_bio, last 30 days): ${ttTaps} link taps → ${(ttSignups ?? []).length} signups. A video above marked "NOT on TikTok yet" is today's TikTok post — same asset_id, a caption written for TikTok.`,
   ].join("\n");
 }
 

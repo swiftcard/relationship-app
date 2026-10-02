@@ -21,9 +21,36 @@ export async function GET(req: NextRequest) {
     if (p.get("type")) q = q.eq("item_type", p.get("type")!);
     const { data, error } = await q;
     if (error) throw error;
-    return NextResponse.json({ ready: true, items: data });
+    return NextResponse.json({ ready: true, items: data, assets: await assetsFor(admin, data ?? []) });
   } catch {
     return NextResponse.json({ ready: false, items: [] });
+  }
+}
+
+/** The rendered video / picture each item carries (payload.asset_id, a
+ *  carousel's asset_ids, or either option's asset_id) → its file in the
+ *  creative pool. A post the owner publishes BY HAND — TikTok, where no tool
+ *  may post for you — is useless without the file, and the queue used to show
+ *  only the caption. Ready assets only; a missing table is an empty map. */
+async function assetsFor(admin: ReturnType<typeof getAdminSupabase>, items: Array<{ payload?: unknown }>): Promise<Record<string, { kind: string; url: string }>> {
+  const UUID = /^[0-9a-f-]{36}$/i;
+  const ids = new Set<string>();
+  const take = (p: unknown) => {
+    const o = (p && typeof p === "object" ? p : {}) as Record<string, unknown>;
+    if (typeof o.asset_id === "string" && UUID.test(o.asset_id)) ids.add(o.asset_id);
+    if (Array.isArray(o.asset_ids)) for (const a of o.asset_ids) if (typeof a === "string" && UUID.test(a)) ids.add(a);
+  };
+  for (const it of items) {
+    take(it.payload);
+    const opts = (it.payload as { options?: Array<{ payload?: unknown }> } | null)?.options;
+    if (Array.isArray(opts)) for (const o of opts) take(o?.payload);
+  }
+  if (!ids.size) return {};
+  try {
+    const { data } = await admin.from("media_assets").select("id, kind, url, status").in("id", [...ids].slice(0, 300));
+    return Object.fromEntries((data ?? []).filter((a) => a.status === "ready" && a.url).map((a) => [a.id as string, { kind: a.kind as string, url: a.url as string }]));
+  } catch {
+    return {};
   }
 }
 

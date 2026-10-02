@@ -57,6 +57,39 @@ the conversion, and the caption's job is to earn it.
   in `research` which top post today's item builds on, or that it is a
   deliberate new format because nothing has converted yet.
 
+## TikTok: the best Instagram videos, reposted — not a second production line
+
+Owner's plan (2026-10-02): reuse the best Instagram videos instead of making
+separate TikTok content. No tool is allowed to post to TikTok or reply there,
+so the owner posts each one by hand from the queue (the video's download
+button is on the item) — which means every TikTok item must be complete
+enough to post in a minute, with nothing left to decide.
+
+- WHAT to post: in "INSTAGRAM — WHICH OF OUR POSTS BROUGHT SIGNUPS", a video
+  marked "NOT on TikTok yet" is today's TikTok item, best first. Use that
+  exact `asset_id`. Only when there is none, pick a ready video from the pool.
+  Never a still image: TikTok is video.
+- kind `social_post`, platform "tiktok", `"format": "short"`.
+- content = the TikTok caption, rewritten — never the Instagram caption pasted
+  over. First line is the hook. Then one plain sentence that contains the
+  words someone would type into TikTok search ("digital business card for
+  realtors", "what to bring to your first open house"): TikTok is used like a
+  search engine and the caption is what it reads. 3–4 hashtags, specific ones
+  (#newrealtor #realtortips #digitalbusinesscard), never #fyp.
+- The call to action is different from Instagram, because nothing can answer a
+  comment for us here: the last line is "Free card: link in bio." Do NOT write
+  "Comment CARD" on TikTok — nobody would be sent anything.
+- payload also carries: `"on_screen_text"` (the hook as the first-second
+  overlay, 8 words or fewer), `"pinned_comment"` ("Make yours free, link in
+  our bio" in your own words — he pins it under the video), `"cover_text"`
+  (3–5 words for the cover), `"search_phrase"` (the phrase the caption targets).
+- Rotate the owner's list: "watch me share my business card at an open
+  house", paper card vs. SwiftCard, Copy Any Card, business card mistakes,
+  realtor tips, NFC card demos, QR code demos, "things every new realtor
+  needs", fast feature demos.
+- The TIKTOK line in the scoreboard is the result: link taps and signups from
+  swiftcard.me/go/tt_bio. Signups decide what to repeat, not views.
+
 ## Asking Vince for creative
 
 When a post needs a video or still that is not in the pool, add a request:

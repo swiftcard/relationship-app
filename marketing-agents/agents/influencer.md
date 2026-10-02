@@ -58,6 +58,11 @@ with 5K–30K followers (this overrides the 10K–100K band for Instagram).
 - payload also carries `"offer": "pro_year_for_collab_reel"`.
 The owner approves every partnership and grants the Pro year himself.
 
+A TIKTOK creator gets the same offer for one TikTok video, and their link is
+swiftcard.me/go/tt_creator_<handle> (same rule for the handle). TikTok has no
+shared "Collab" post: ask them to tag @swiftcard and put the link in their bio
+for a week instead.
+
 Skip: giveaway/engagement-pod accounts, anyone who posts spam, anyone outside
 the follower band unless the fit is exceptional (say so in payload.fit).
 

@@ -23,6 +23,7 @@
 //   • Instagram      agent_ig_events (keyword comments, links sent),
 //                    product_events name=campaign_link_clicked code ig_*,
 //                    profiles.signup_source like ig_* (signups, cards, trials)
+//   • TikTok         the same, for codes / sources starting tt_
 import { sbCount, sbRows, isoAgo, DAY } from "./lib/probe.mjs";
 import { email } from "./lib/agentkit.mjs";
 
@@ -53,9 +54,10 @@ async function newCardsViewed(from, to) {
   return cards.filter((c) => seen.has(c.username)).length;
 }
 
-/** Cards made this week by accounts that came from Instagram. */
-async function igCards(from, to) {
-  const people = await sbRows("profiles", `select=id&signup_source=like.ig_*&${REAL_PEOPLE}&limit=2000`);
+/** Cards made this week by accounts that came from one social platform
+ *  (prefix "ig", "tt", …  = the start of profiles.signup_source). */
+async function socialCards(prefix, from, to) {
+  const people = await sbRows("profiles", `select=id&signup_source=like.${prefix}_*&${REAL_PEOPLE}&limit=2000`);
   if (!people) return null;
   if (people.length === 0) return 0;
   const ids = people.map((p) => p.id).join(",");
@@ -101,8 +103,19 @@ async function main() {
     pair("product_events", "created_at", "name=eq.campaign_link_clicked&is_internal=eq.false&props->>code=like.ig_*"),
     pair("profiles", "created_at", `${IG}&${REAL_PEOPLE}`),
     pair("profiles", "pro_trial_started_at", `${IG}&${REAL_PEOPLE}`),
-    igCards(7, 0),
-    igCards(14, 7),
+    socialCards("ig", 7, 0),
+    socialCards("ig", 14, 7),
+  ]);
+
+  // TikTok: no tool may post or reply there, so its funnel is the bio link
+  // (swiftcard.me/go/tt_bio) and what it turned into.
+  const TT = "signup_source=like.tt_*";
+  const [ttTaps, ttSignups, ttTrials, ttCardsNow, ttCardsPrev] = await Promise.all([
+    pair("product_events", "created_at", "name=eq.campaign_link_clicked&is_internal=eq.false&props->>code=like.tt_*"),
+    pair("profiles", "created_at", `${TT}&${REAL_PEOPLE}`),
+    pair("profiles", "pro_trial_started_at", `${TT}&${REAL_PEOPLE}`),
+    socialCards("tt", 7, 0),
+    socialCards("tt", 14, 7),
   ]);
 
   const rows = [
@@ -120,6 +133,10 @@ async function main() {
     ["Instagram · signups", igSignups],
     ["Instagram · cards created", { now: igCardsNow, prev: igCardsPrev }],
     ["Instagram · Pro trials", igTrials],
+    ["TikTok · link taps", ttTaps],
+    ["TikTok · signups", ttSignups],
+    ["TikTok · cards created", { now: ttCardsNow, prev: ttCardsPrev }],
+    ["TikTok · Pro trials", ttTrials],
   ];
 
   const weekEnd = new Date();

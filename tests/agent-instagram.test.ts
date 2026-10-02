@@ -357,3 +357,52 @@ describe("the owner's surface and the schedule", () => {
     expect(read("marketing-agents/agents/social.md")).toContain("Comment CARD and I'll send you one.");
   });
 });
+
+// ── TikTok (owner order 2026-10-02): "reuse the best Instagram videos" ───────
+// No tool may post to TikTok or reply there (its Content Sharing Guidelines
+// rule out a utility that uploads to your own account), so the bot is the
+// hand-off: the agent writes the TikTok version of what converted on Instagram,
+// the queue hands over the video file, and the bio link makes signups countable.
+describe("TikTok: prepared by agents, posted by hand, counted by signups", () => {
+  it("TikTok links are valid sources, read as words, and land in the builder", () => {
+    for (const s of ["tt_bio", "tt_dm", "tt_creator_maya"]) expect(isSignupSource(s), s).toBe(true);
+    expect(getSignupSourceLabel("tt_bio")).toBe("TikTok — bio link");
+    expect(getSignupSourceLabel("tt_creator_maya")).toBe("TikTok — creator @maya");
+    expect(campaignLink("tt_bio")).toBe("https://swiftcard.me/go/tt_bio");
+    expect(campaignDestination("tt_bio")).toBe("/cards/new?src=tt_bio");
+  });
+  it("TikTok's own browser gets email signup, not a Google button that cannot work", () => {
+    expect(isSocialInAppBrowser("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 musical_ly_36.0.0 JsSdk/2.0 NetType/WIFI Channel/App Store ByteLocale/en Region/US")).toBe(true);
+    expect(isSocialInAppBrowser("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/128.0 Mobile Safari/537.36 trill_360000 BytedanceWebview/d8a21c6")).toBe(true);
+  });
+  it("there is still no TikTok posting code — the owner posts it", () => {
+    const exec = code("src/lib/agent-execute.ts");
+    expect(exec).not.toMatch(/tiktokapis|open\.tiktok|tiktok\.com/i);
+    expect(read("src/lib/agent-connections.ts")).not.toMatch(/"tiktok"/);
+  });
+  it("the queue hands over the video file, so a hand-posted item is postable", () => {
+    const route = code("src/app/api/admin/agents/items/route.ts");
+    expect(route).toMatch(/assets: await assetsFor\(admin, data \?\? \[\]\)/);
+    expect(route).toMatch(/a\.status === "ready" && a\.url/);
+    const ui = read("src/app/admin/agent-flow/AgentFlowClient.tsx");
+    expect(ui).toContain("<AssetFiles payload={it.payload} assets={assets} />");
+    expect(ui).toContain("Download the video");
+  });
+  it("Milo writes the TikTok version of what converted, with the bio-link call to action", () => {
+    const brief = read("marketing-agents/agents/social.md");
+    expect(brief).toContain("NOT on TikTok yet");
+    expect(brief).toContain("Free card: link in bio.");
+    expect(brief).toMatch(/Do NOT write\s+"Comment CARD" on TikTok/);
+    const insights = read("marketing-agents/lib/insights.mjs");
+    expect(insights).toContain("NOT on TikTok yet");
+    expect(insights).toMatch(/social: instagramBlock, ads: instagramBlock/);
+  });
+  it("the Sunday scorecard and the Tracked links card report TikTok by signups", () => {
+    const sc = read("marketing-agents/scorecard.mjs");
+    for (const row of ["TikTok · link taps", "TikTok · signups", "TikTok · Pro trials"]) expect(sc).toContain(row);
+    const links = code("src/app/api/admin/agents/links/route.ts");
+    expect(links).toMatch(/if \(!\(await requireAdmin\(\)\)\)/);
+    expect(links).toContain("swiftcard-test.invalid");
+    expect(read("src/app/admin/agent-flow/AgentFlowClient.tsx")).toContain("<TrackedLinksCard />");
+  });
+});

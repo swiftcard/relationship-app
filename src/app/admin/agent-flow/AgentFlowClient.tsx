@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ORG, firstName } from "@/lib/agent-org";
 import { mentionables, partyOfResponder } from "@/lib/agent-chat";
 import InstagramBotCard from "./InstagramBotCard";
+import TrackedLinksCard from "./TrackedLinksCard";
 import LinkedInDesk from "./LinkedInDesk";
 
 // ── Agent Flow v3: one switch, three teams, zero ambiguity ──────────────────
@@ -142,7 +143,25 @@ const TYPE_LABEL: Record<string, string> = {
 
 // Person-facing drafts with no connector: Approve copies the text, the owner
 // pastes and sends. Every kind here is a message to a real human.
-const COPY_KINDS = new Set(["ig_dm", "ig_reply", "ig_message", "ig_comment", "outreach_draft", "reply_draft", "influencer", "generic", "social_post", "email_draft", "prospect_dm", "industry_outreach", "forum_reply", "partner_pitch", "roundup_pitch", "review_reply", "review_ask", "listing_submission", "retention_copy", "site_change", "help_article", "kb_finding", "competitor_update", "image_brief", "growth_memo", "experiment", "agent_review", "calendar_play", "trend_pick", "aso_change", "keyword_map", "geo_play", "citation_audit", "launch_pack", "positioning_note", "referral_play", "share_moment", "press_pitch", "podcast_pitch", "local_post", "local_pitch", "onboarding_nudge", "activation_insight", "upgrade_nudge", "paywall_copy", "churn_insight", "winback", "proof_ask", "case_study", "proof_asset", "policy_change"]);
+const COPY_KINDS = new Set(["ig_dm", "ig_reply", "ig_message", "ig_comment", "tt_comment", "outreach_draft", "reply_draft", "influencer", "generic", "social_post", "email_draft", "prospect_dm", "industry_outreach", "forum_reply", "partner_pitch", "roundup_pitch", "review_reply", "review_ask", "listing_submission", "retention_copy", "site_change", "help_article", "kb_finding", "competitor_update", "image_brief", "growth_memo", "experiment", "agent_review", "calendar_play", "trend_pick", "aso_change", "keyword_map", "geo_play", "citation_audit", "launch_pack", "positioning_note", "referral_play", "share_moment", "press_pitch", "podcast_pitch", "local_post", "local_pitch", "onboarding_nudge", "activation_insight", "upgrade_nudge", "paywall_copy", "churn_insight", "winback", "proof_ask", "case_study", "proof_asset", "policy_change"]);
+
+/** The video / pictures an item carries, as files the owner can open and
+ *  save — what makes a hand-posted item (TikTok) postable from the queue. */
+function AssetFiles({ payload, assets }: { payload: Record<string, unknown> | null | undefined; assets: Record<string, { kind: string; url: string }> }) {
+  const p = payload ?? {};
+  const ids = [p.asset_id, ...(Array.isArray(p.asset_ids) ? p.asset_ids : [])].filter((a): a is string => typeof a === "string");
+  const files = [...new Set(ids)].map((id) => assets[id]).filter(Boolean);
+  if (!files.length) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {files.map((f, i) => (
+        <a key={i} href={f.url} target="_blank" rel="noreferrer" download className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-100 px-3 py-1.5 rounded-full">
+          ⬇ {f.kind === "video" ? "Download the video" : `Download picture${files.length > 1 ? ` ${i + 1}` : ""}`}
+        </a>
+      ))}
+    </div>
+  );
+}
 
 function ago(iso: string | null) {
   if (!iso) return "—";
@@ -291,6 +310,8 @@ const TOUR: TourStep[] = [
 export default function AgentFlowClient() {
   const [board, setBoard] = useState<Board | null>(null);
   const [items, setItems] = useState<Item[]>([]);
+  // asset id → the rendered file, for the items the owner posts by hand.
+  const [assets, setAssets] = useState<Record<string, { kind: string; url: string }>>({});
   const [view, setView] = useState<View>("agents");
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [commsKind, setCommsKind] = useState("");
@@ -389,6 +410,7 @@ export default function AgentFlowClient() {
       if (filterType) q.set("type", filterType);
       const d = await fetch(`/api/admin/agents/items?${q}`).then((r) => r.json()).catch(() => null);
       setItems(d?.items ?? []);
+      setAssets(d?.assets ?? {});
     }
     setLoading(false); setUpdatedAt(Date.now());
   }, [filterAgent, filterType, filterStatus]);
@@ -1098,6 +1120,7 @@ export default function AgentFlowClient() {
                             <p className="text-[0.6875rem] font-bold uppercase tracking-wide text-violet-300">Option {o.label ?? (oi === 0 ? "A" : "B")}{o.headline ? <span className="text-gray-300 normal-case tracking-normal"> — {o.headline}</span> : null}</p>
                             {o.why_this && <p className="text-[0.6875rem] text-gray-500 mt-0.5">{o.why_this}</p>}
                             <pre className="mt-2 text-gray-300 text-[0.8125rem] whitespace-pre-wrap font-sans max-h-72 overflow-y-auto flex-1">{o.content}</pre>
+                            <AssetFiles payload={o.payload ?? it.payload} assets={assets} />
                             {it.status === "pending" && (
                               <button onClick={() => choose(it, oi)} title={`This option becomes the real item and goes out: ${String(it.payload?.kind) === "blog_post" ? "live on the blog now" : "posted by a connector if one is armed, otherwise approved + copied for you to send"}.`} className="mt-2 text-xs bg-emerald-700 hover:bg-emerald-600 text-white font-bold px-3 py-1.5 rounded-full self-start whitespace-nowrap">✓ Pick {o.label ?? (oi === 0 ? "A" : "B")}{String(it.payload?.kind) === "blog_post" ? " & publish" : ""}</button>
                             )}
@@ -1107,6 +1130,7 @@ export default function AgentFlowClient() {
                     ) : (
                       it.content && <pre className="mt-2 text-gray-300 text-[0.8125rem] whitespace-pre-wrap font-sans bg-gray-950/60 border border-gray-800/60 rounded-lg p-3 max-h-64 overflow-y-auto">{it.content}</pre>
                     )}
+                    {it.item_type !== "choice" && <AssetFiles payload={it.payload} assets={assets} />}
                     {it.item_type !== "choice" && it.payload?.chosen ? <p className="mt-1 text-[0.625rem] text-violet-400/80">you picked option {String(it.payload.chosen)} of two</p> : null}
                   </div>
                   {it.status === "pending" && editing !== it.id && it.item_type === "choice" && (
@@ -1327,10 +1351,11 @@ export default function AgentFlowClient() {
                   </div>
                 );
               })}
-              <p className="text-gray-600 text-[0.6875rem] pt-1">Instagram needs a picture or video on the item (a ready asset from the creative pool); YouTube uploads the rendered video from the pool. TikTok forbids tools that post to your own account and Reddit bans automated promotion — those stay Approve &amp; Copy. Blog posts publish themselves via the Publish button.</p>
+              <p className="text-gray-600 text-[0.6875rem] pt-1">Instagram needs a picture or video on the item (a ready asset from the creative pool); YouTube uploads the rendered video from the pool. TikTok forbids tools that post to your own account and Reddit bans automated promotion — those stay Approve &amp; Copy (a TikTok item carries a button to download its video). Blog posts publish themselves via the Publish button.</p>
             </div>
           </div>
           <InstagramBotCard />
+          <TrackedLinksCard />
           <div className="rounded-xl border border-gray-800 bg-gray-900 p-4 space-y-3">
             <div>
               <p className="text-white text-sm font-semibold">📡 Radar — what we listen for</p>
