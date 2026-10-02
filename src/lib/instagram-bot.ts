@@ -169,7 +169,7 @@ export type IgEventRow = {
   status: "new" | "sent" | "queued" | "skipped" | "failed"; reason?: string | null; reply?: string | null; code?: string | null;
 };
 export type IgQueueItem = {
-  item_type: "ig_dm" | "ig_reply" | "ig_message"; target: string | null; target_url: string | null;
+  item_type: `${"ig" | "fb"}_${"dm" | "reply" | "message"}`; target: string | null; target_url: string | null;
   title: string; content: string; context: string; payload: Record<string, unknown>; dedupe_key: string;
 };
 
@@ -188,13 +188,30 @@ export type IgIo = {
   sendMessage: (igsid: string, text: string) => Promise<SendResult>;
 };
 
-export type IgContext = { settings: IgSettings; ownUsername: string | null; ownUserId: string | null; io: IgIo };
+/**
+ * Where the conversation is happening. The decisions below are the same on
+ * Instagram and on the SwiftCard Facebook Page (lib/facebook-bot.ts runs them
+ * with FACEBOOK): only the names, the link code and the inbox differ.
+ */
+export type Channel = {
+  platform: "instagram" | "facebook"; name: string; prefix: "ig" | "fb";
+  /** The code a post's link carries — and the signup source it is recorded under. */
+  postCode: (postId: string) => string;
+  /** Where the owner answers a message by hand. */
+  inbox: string;
+  /** How a person is shown in the queue: "@maya" on Instagram, "Maya R." on Facebook. */
+  handle: (username: string) => string;
+};
+export const INSTAGRAM: Channel = { platform: "instagram", name: "Instagram", prefix: "ig", postCode, inbox: "https://www.instagram.com/direct/inbox/", handle: (u) => `@${u}` };
+
+export type IgContext = { settings: IgSettings; ownUsername: string | null; ownUserId: string | null; io: IgIo; channel?: Channel };
 export type Outcome = "seen" | "own" | "sent" | "queued" | "skipped" | "failed";
 
 const WEEK = 7 * 86400e3;
 
 export async function processComment(c: IgComment, ctx: IgContext): Promise<Outcome> {
   const { settings, io } = ctx;
+  const ch = ctx.channel ?? INSTAGRAM;
   if ((c.username && ctx.ownUsername && c.username.toLowerCase() === ctx.ownUsername.toLowerCase()) || (c.userId && c.userId === ctx.ownUserId)) return "own";
 
   const keyword = matchKeyword(c.text, settings.keywords);
@@ -206,16 +223,16 @@ export async function processComment(c: IgComment, ctx: IgContext): Promise<Outc
   const skip = async (reason: string): Promise<Outcome> => ((await io.record({ ...base, status: "skipped", reason })) ? "skipped" : "seen");
 
   if (!keyword && !question) return skip("not_a_request");
-  // Instagram only allows a private reply within 7 days of the comment.
+  // Meta only allows a private reply within 7 days of the comment.
   if (c.timestamp && Date.now() - new Date(c.timestamp).getTime() > WEEK) return skip("older_than_7_days");
 
-  const target = c.username ? `@${c.username}` : null;
+  const target = c.username ? ch.handle(c.username) : null;
   const url = await io.permalink(c.mediaId);
 
   if (keyword) {
     // One link per person per post — checked BEFORE recording this comment.
     if (c.userId && (await io.alreadyLinked(c.userId, c.mediaId))) return skip("already_sent_for_this_post");
-    const code = c.mediaId ? postCode(c.mediaId) : "ig_dm";
+    const code = c.mediaId ? ch.postCode(c.mediaId) : `${ch.prefix}_dm`;
     const dm = buildDm(settings, code);
     const publicReply = pickPublicReply(settings, c.id);
     const id = await io.record({ ...base, reply: dm, code });
@@ -223,11 +240,11 @@ export async function processComment(c: IgComment, ctx: IgContext): Promise<Outc
 
     const toQueue = async (reason: string): Promise<Outcome> => {
       const item = await io.queue({
-        item_type: "ig_dm", target, target_url: url,
+        item_type: `${ch.prefix}_dm`, target, target_url: url,
         title: `${target ?? "Someone"} commented "${keyword}" — send their card link`,
         content: dm, context: `Comment: "${c.text.slice(0, 300)}"`,
-        payload: { platform: "instagram", comment_id: c.id, media_id: c.mediaId, public_reply: publicReply, code, event_id: id },
-        dedupe_key: `ig:comment:${c.id}`,
+        payload: { platform: ch.platform, comment_id: c.id, media_id: c.mediaId, public_reply: publicReply, code, event_id: id },
+        dedupe_key: `${ch.prefix}:comment:${c.id}`,
       });
       await io.update(id, { status: "queued", reason, item_id: item });
       return "queued";
@@ -238,7 +255,7 @@ export async function processComment(c: IgComment, ctx: IgContext): Promise<Outc
 
     const sent = await io.privateReply(c.id, dm);
     if (!sent.ok) {
-      if (isAccessError(sent)) return toQueue(`instagram_refused: ${sent.error}`);
+      if (isAccessError(sent)) return toQueue(`${ch.platform}_refused: ${sent.error}`);
       await io.update(id, { status: "failed", reason: sent.error });
       return "failed";
     }
@@ -260,11 +277,11 @@ export async function processComment(c: IgComment, ctx: IgContext): Promise<Outc
     if (!isAccessError(sent)) { await io.update(id, { status: "failed", reason: sent.error }); return "failed"; }
   }
   const item = await io.queue({
-    item_type: "ig_reply", target, target_url: url,
-    title: `${target ?? "Someone"} asked a question on Instagram`,
+    item_type: `${ch.prefix}_reply`, target, target_url: url,
+    title: `${target ?? "Someone"} asked a question on ${ch.name}`,
     content: answer ?? "", context: `Comment: "${c.text.slice(0, 300)}"${answer ? "" : "\n\nThe assistant had no answer from the knowledge base — this one needs you."}`,
-    payload: { platform: "instagram", comment_id: c.id, media_id: c.mediaId, event_id: id },
-    dedupe_key: `ig:comment:${c.id}`,
+    payload: { platform: ch.platform, comment_id: c.id, media_id: c.mediaId, event_id: id },
+    dedupe_key: `${ch.prefix}:comment:${c.id}`,
   });
   await io.update(id, { status: "queued", reason: answer ? "answers_are_drafts" : "no_answer", item_id: item });
   return "queued";
@@ -272,6 +289,8 @@ export async function processComment(c: IgComment, ctx: IgContext): Promise<Outc
 
 export async function processMessage(m: IgMessage, ctx: IgContext): Promise<Outcome> {
   const { settings, io } = ctx;
+  const ch = ctx.channel ?? INSTAGRAM;
+  const dmCode = `${ch.prefix}_dm`;
   if (m.userId === ctx.ownUserId) return "own";
   const keyword = matchKeyword(m.text, settings.keywords);
   const base: IgEventRow = {
@@ -281,9 +300,9 @@ export async function processMessage(m: IgMessage, ctx: IgContext): Promise<Outc
   // "thanks", "ok", an emoji: nothing to answer.
   if (!keyword && !isQuestion(m.text)) return (await io.record({ ...base, action: "none", status: "skipped", reason: "not_a_request" })) ? "skipped" : "seen";
 
-  const id = await io.record({ ...base, code: keyword ? "ig_dm" : null });
+  const id = await io.record({ ...base, code: keyword ? dmCode : null });
   if (!id) return "seen";
-  const reply = keyword ? buildDm(settings, "ig_dm") : await io.answer(m.text);
+  const reply = keyword ? buildDm(settings, dmCode) : await io.answer(m.text);
   if (reply) await io.update(id, { reply });
 
   const auto = settings.enabled && (keyword ? true : settings.auto_answers);
@@ -293,11 +312,11 @@ export async function processMessage(m: IgMessage, ctx: IgContext): Promise<Outc
     if (!isAccessError(sent)) { await io.update(id, { status: "failed", reason: sent.error }); return "failed"; }
   }
   const item = await io.queue({
-    item_type: "ig_message", target: null, target_url: "https://www.instagram.com/direct/inbox/",
-    title: keyword ? `Someone messaged "${keyword}" — send their card link` : "Someone messaged SwiftCard a question on Instagram",
+    item_type: `${ch.prefix}_message`, target: null, target_url: ch.inbox,
+    title: keyword ? `Someone messaged "${keyword}" — send their card link` : `Someone messaged SwiftCard a question on ${ch.name}`,
     content: reply ?? "", context: `Message: "${m.text.slice(0, 300)}"${reply ? "" : "\n\nThe assistant had no answer from the knowledge base — this one needs you."}`,
-    payload: { platform: "instagram", igsid: m.userId, event_id: id },
-    dedupe_key: `ig:message:${m.id}`,
+    payload: { platform: ch.platform, igsid: m.userId, event_id: id },
+    dedupe_key: `${ch.prefix}:message:${m.id}`,
   });
   await io.update(id, { status: "queued", reason: !settings.enabled ? "bot_is_off" : reply ? "answers_are_drafts" : "no_answer", item_id: item });
   return "queued";

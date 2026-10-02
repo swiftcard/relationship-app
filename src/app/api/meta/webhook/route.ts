@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { handleWebhook, verifyMetaSignature } from "@/lib/instagram-bot";
+import { handleFacebookWebhook } from "@/lib/facebook-bot";
 
-// Meta's webhook for the SwiftCard Instagram account: a comment on one of our
-// posts, or a message to us, arrives here the moment it happens. The decisions
-// are lib/instagram-bot.ts — the same ones the 10-minute pass makes, so this
-// route only makes them faster. It works once the Meta app is Live and
+// Meta's webhook for the SwiftCard Instagram account and Facebook Page: a
+// comment on one of our posts, or a message to us, arrives here the moment it
+// happens. The decisions are lib/instagram-bot.ts (and lib/facebook-bot.ts for
+// the Page, which runs the same ones) — the same the 10-minute passes make, so
+// this route only makes them faster. It works once the Meta app is Live and
 // approved; until then Meta sends nothing and the pass does the job.
 
 export const runtime = "nodejs";
@@ -29,8 +31,9 @@ export async function POST(req: NextRequest) {
   let body: unknown;
   try { body = JSON.parse(raw); } catch { return new NextResponse("Bad request", { status: 400 }); }
   try {
-    const r = await handleWebhook(body);
-    return NextResponse.json({ ok: true, ...r });
+    // One delivery is about one of the two: object "instagram" or object "page".
+    const [ig, fb] = await Promise.all([handleWebhook(body), handleFacebookWebhook(body)]);
+    return NextResponse.json({ ok: true, handled: ig.handled + fb.handled });
   } catch {
     // Always 200 once the signature checks out: Meta retries (and eventually
     // disables the subscription) on errors, and the 10-minute pass will catch

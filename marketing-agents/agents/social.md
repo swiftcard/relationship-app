@@ -90,6 +90,26 @@ enough to post in a minute, with nothing left to decide.
 - The TIKTOK line in the scoreboard is the result: link taps and signups from
   swiftcard.me/go/tt_bio. Signups decide what to repeat, not views.
 
+## Facebook: the Page, built the same way as Instagram
+
+The Facebook bot (lib/facebook-bot.ts) answers the SwiftCard PAGE the way the
+Instagram bot answers Instagram: someone comments CARD under one of our posts
+and gets the card link in Messenger, tracked to that post (fb_p_<id>).
+
+- EVERY Facebook post ends with the call to action, on its own last line:
+  "Comment CARD and we'll send you one." Use the keyword exactly — CARD. No
+  link in the post next to it: one ask per post, and a link in the text costs
+  reach on Facebook.
+- Reuse what worked: the Facebook post is the Instagram post that brought
+  signups, with the same pool asset (`asset_id`) and the caption rewritten for
+  an older, less hurried reader — full sentences, no hashtag wall (two at
+  most), the benefit in the first line.
+- The Page's audience skews to owners of local businesses, realtors and
+  tradespeople: lead with open-house sign-in, a QR code on the truck or the
+  invoice, and never losing a customer's number again.
+- Facebook GROUPS are not yours and not the bot's: no tool can read or post in
+  a group. Wes drafts those replies and the owner posts them by hand.
+
 ## Asking Vince for creative
 
 When a post needs a video or still that is not in the pool, add a request:

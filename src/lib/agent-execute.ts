@@ -20,6 +20,7 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { type ConnectionMap, freshAccessToken, loadConnections } from "@/lib/agent-connections";
 import { LINKEDIN_VERSION, META_GRAPH } from "@/lib/agent-connect-oauth";
 import { igPrivateReply, igReplyToComment, igSendMessage } from "@/lib/instagram-send";
+import { fbPrivateReply, fbReplyToComment, fbSendMessage } from "@/lib/facebook-send";
 
 export type QueueItemLite = {
   id: string;
@@ -489,7 +490,45 @@ const instagramEngage: Connector = {
   },
 };
 
-const CONNECTORS: Connector[] = [linkedin, x, facebook, instagram, instagramEngage, youtube, higgsfield, reddit];
+// ── Facebook: answer the people who wrote to the Page ───────────────────────
+// The Facebook bot's three kinds (lib/facebook-bot.ts), the mirror of the
+// Instagram ones above:
+//   fb_dm      → the card link, privately in Messenger, to someone who
+//                commented the keyword (plus the short public reply)
+//   fb_reply   → a public reply under their comment
+//   fb_message → a reply to their Messenger message (allowed for 24h)
+// All three need an id that only exists because that person wrote to us first.
+const FB_ENGAGE_KINDS = new Set(["fb_dm", "fb_reply", "fb_message"]);
+const facebookEngage: Connector = {
+  id: "facebook_engage",
+  label: "Send on Facebook",
+  ready: (c) => !!c.meta?.meta.page_id,
+  matches: (it) => FB_ENGAGE_KINDS.has(it.item_type),
+  run: async (it, c) => {
+    const token = c.meta!.access_token;
+    const pageId = String(c.meta!.meta.page_id);
+    const p = it.payload ?? {};
+    const text = (it.content ?? "").trim();
+    if (!text) return { executed: false, connector: "facebook_engage", reason: "nothing to send — write the reply first" };
+    const commentId = typeof p.comment_id === "string" ? p.comment_id : null;
+    // The shared decisions file the sender's id under the Instagram bot's name for it.
+    const psid = typeof p.igsid === "string" ? p.igsid : null;
+    const sent =
+      it.item_type === "fb_dm" && commentId ? await fbPrivateReply(token, pageId, commentId, text)
+      : it.item_type === "fb_reply" && commentId ? await fbReplyToComment(token, commentId, text)
+      : it.item_type === "fb_message" && psid ? await fbSendMessage(token, pageId, psid, text)
+      : null;
+    if (!sent) return { executed: false, connector: "facebook_engage", reason: "this item has no comment or message to answer" };
+    if (!sent.ok) return { executed: false, connector: "facebook_engage", reason: `Facebook: ${sent.error}` };
+    if (it.item_type === "fb_dm" && commentId && typeof p.public_reply === "string") await fbReplyToComment(token, commentId, p.public_reply).catch(() => null);
+    if (typeof p.event_id === "string") {
+      try { await getAdminSupabase().from("agent_fb_events").update({ status: "sent", reply: text, handled_at: new Date().toISOString() }).eq("id", p.event_id); } catch { /* the send already happened */ }
+    }
+    return { executed: true, connector: "facebook_engage", detail: it.item_type === "fb_reply" ? "Replied on Facebook" : "Sent on Facebook", url: it.target_url ?? undefined };
+  },
+};
+
+const CONNECTORS: Connector[] = [linkedin, x, facebook, instagram, instagramEngage, facebookEngage, youtube, higgsfield, reddit];
 
 /** Which connectors are armed (for the board payload / Connections panel). */
 export function connectorStatus(conns: ConnectionMap): Record<string, boolean> {

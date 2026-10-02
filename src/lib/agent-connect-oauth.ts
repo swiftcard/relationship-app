@@ -45,10 +45,12 @@ const SCOPES: Record<AgentProvider, string> = {
   // linked IG Business account; the rest are what the two need to list + read.
   // The Instagram bot (lib/instagram-bot.ts) adds four: read + answer comments
   // on our posts, read + answer messages sent to us, and subscribe the Page to
-  // webhooks. META_SCOPES overrides the whole list if the Meta app is ever
+  // webhooks. The Facebook bot (lib/facebook-bot.ts) adds two more: read what
+  // people comment on the Page's posts, and reply under them. META_SCOPES
+  // overrides the whole list if the Meta app is ever
   // missing one of them (an unknown scope fails the consent screen outright).
   meta: process.env.META_SCOPES
-    || "pages_show_list pages_read_engagement pages_manage_posts instagram_basic instagram_content_publish business_management instagram_manage_comments instagram_manage_messages pages_manage_metadata pages_messaging",
+    || "pages_show_list pages_read_engagement pages_manage_posts instagram_basic instagram_content_publish business_management instagram_manage_comments instagram_manage_messages pages_manage_metadata pages_messaging pages_manage_engagement pages_read_user_content",
   youtube: "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly",
   // The Page-attached "SwiftCard Agent Flow" app (LINKEDIN_AGENT_CLIENT_ID) can
   // only hold the Community Management API — LinkedIn refuses to add Sign In /
@@ -157,11 +159,12 @@ export async function describeAccount(p: AgentProvider, t: TokenSet): Promise<Ac
         const perms = (await getJson(`${META_GRAPH}/me/permissions`, bearer)) as { data?: Array<{ permission?: string; status?: string }> };
         granted = (perms.data ?? []).filter((x) => x.status === "granted" && x.permission).map((x) => String(x.permission));
       } catch { /* best-effort: an empty list reads as "not granted yet" */ }
-      // Subscribe the Page so Instagram messages reach /api/meta/webhook. A
+      // Subscribe the Page so Instagram messages — and comments on the Page's
+      // own posts (feed) — reach /api/meta/webhook. A
       // refusal here (app not Live yet) is fine — the 10-minute pass covers it.
       if (granted.includes("pages_manage_metadata")) {
         try {
-          await fetch(`${META_GRAPH}/${page.id}/subscribed_apps?subscribed_fields=messages`, { method: "POST", headers: { Authorization: `Bearer ${page.access_token}` } });
+          await fetch(`${META_GRAPH}/${page.id}/subscribed_apps?subscribed_fields=messages,feed`, { method: "POST", headers: { Authorization: `Bearer ${page.access_token}` } });
         } catch { /* best-effort */ }
       }
       return {

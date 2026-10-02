@@ -1,0 +1,52 @@
+name: Facebook bot
+
+# ── "Comment CARD and we'll send you one", on the SwiftCard Facebook Page ────
+#
+# Every 10 minutes: ask production to read the new comments on the Page's
+# posts and the new Messenger messages, and act on each — send the card link,
+# answer a question, or file it in the Agent Flow queue (src/lib/facebook-bot.ts
+# has the rules). Meta's webhook does the same thing instantly once the Page is
+# subscribed; this pass is the safety net.
+#
+# A GitHub schedule, not a Vercel cron, for the reason in push-catchup.yml: the
+# project is on Vercel Hobby (two daily crons), and a third one silently blocks
+# every deploy. Five minutes off the Instagram bot's schedule so the two never
+# call Meta at the same moment.
+#
+# The route is idempotent — each comment is recorded once under a unique index —
+# so a late, duplicate or overlapping run cannot message anyone twice.
+on:
+  schedule:
+    - cron: "5-59/10 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: facebook-bot
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ask production to run one pass
+        env:
+          SECRET: ${{ secrets.PUSH_CATCHUP_SECRET }}
+        run: |
+          if [ -z "$SECRET" ]; then
+            echo "PUSH_CATCHUP_SECRET is not set — the Facebook bot is not running."
+            exit 1
+          fi
+          body=$(mktemp)
+          code=$(curl -sS --max-time 90 -o "$body" -w "%{http_code}" \
+            -H "Authorization: Bearer $SECRET" \
+            https://swiftcard.me/api/agents/facebook/tick)
+          echo "HTTP $code"
+          cat "$body"
+          echo
+          # "Facebook is not connected yet" is a 200 with ok:false — a state,
+          # not a failure. Only a broken route fails the run.
+          [ "$code" = "200" ]
