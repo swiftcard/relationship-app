@@ -455,13 +455,18 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
               </div>
               <button onClick={copy} disabled={!ready || status === "working"}
                 className="w-full mt-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-sm py-2.5 rounded-full transition-colors">
-                {status === "working" ? "Generating from your card…" : copied ? "Copied ✓" : "Copy signature"}
+                {status === "working" ? "Generating from your card…" : copied ? "Copied ✓ Now paste it in your email" : "Copy signature"}
               </button>
-              <p className="mt-2 text-[0.6875rem] text-gray-500 leading-relaxed text-center">
-                Changed your card design? Copy again and re-paste — email apps keep showing the old image for about a day otherwise.
-              </p>
+              {/* Only for someone who already pasted an older design: a first-time
+                  copier has nothing to refresh, and the note read as a step. */}
+              {changedSinceCopy && (
+                <p className="mt-2 text-[0.6875rem] text-gray-500 leading-relaxed text-center">
+                  Your card changed since you last copied. Copy again and replace the old signature in your email.
+                </p>
+              )}
 
-              {/* Concise 3-step directions */}
+              {/* Two steps. "Save" is in step 2 on purpose: an unsaved Gmail
+                  signature silently disappears, the most common way this fails. */}
               <ol className="mt-4 space-y-2.5">
                 <li className="flex gap-2.5">
                   <span className="w-5 h-5 rounded-full bg-gray-800 text-gray-300 text-[0.6875rem] font-bold flex items-center justify-center shrink-0">1</span>
@@ -469,11 +474,7 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
                 </li>
                 <li className="flex gap-2.5">
                   <span className="w-5 h-5 rounded-full bg-gray-800 text-gray-300 text-[0.6875rem] font-bold flex items-center justify-center shrink-0">2</span>
-                  <p className="text-gray-300 text-[0.75rem] leading-relaxed">Open your email below and <strong className="text-white">paste</strong> it into your signature settings.</p>
-                </li>
-                <li className="flex gap-2.5">
-                  <span className="w-5 h-5 rounded-full bg-gray-800 text-gray-300 text-[0.6875rem] font-bold flex items-center justify-center shrink-0">3</span>
-                  <p className="text-gray-300 text-[0.75rem] leading-relaxed">Using a different email? Paste it into that app&apos;s signature settings.</p>
+                  <p className="text-gray-300 text-[0.75rem] leading-relaxed">Open your email below, <strong className="text-white">paste</strong> it into the Signature box, and <strong className="text-white">save</strong>.</p>
                 </li>
               </ol>
 
@@ -495,6 +496,17 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
                     <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 opacity-60"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" /><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" /></svg>
                   </a>
                 ))}
+              </div>
+              {/* Gmail has no link deeper than the General tab, so say where the
+                  box is and where its Save button hides. Outlook's link lands on
+                  Signatures itself; work accounts live on a different host. */}
+              <div className="mt-3 space-y-1.5 text-[0.6875rem] text-gray-500 leading-relaxed">
+                <p><strong className="text-gray-300">Gmail:</strong> scroll down to Signature, paste, then click <strong className="text-gray-300">Save Changes</strong> at the very bottom.</p>
+                <p>
+                  <strong className="text-gray-300">Outlook for work or school?</strong>{" "}
+                  <a href="https://outlook.office.com/mail/options/mail/messageContent" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline underline-offset-2">Open it here</a> instead.
+                </p>
+                <p>Another email app? Paste it into that app&apos;s signature settings.</p>
               </div>
             </div>
           </div>
