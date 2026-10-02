@@ -153,8 +153,16 @@ export default async function OnboardingPage({
     }
 
     // Brand-new account → return to a pending guest editor (to claim the draft)
-    // if we have one, otherwise the dashboard with the App Store prompt.
-    redirect(safeNext ?? (await inviteLanding(user.email, user.id)) ?? "/dashboard?welcome=1");
+    // if we have one, a team invite if one is waiting, otherwise straight into
+    // the card builder. NEVER the dashboard: a new account has no card, and an
+    // empty dashboard saying "Create Card" is exactly the dead end the owner
+    // found on a fresh app install (2026-10-02). Every path to an account must
+    // build the card first; ?add=1 is the signed-in first-card flow (design
+    // preview, then choose a plan, then the tour) — the same one the
+    // dashboard's empty-state button opens.
+    // A `next` that is just the dashboard counts as none, for the same reason.
+    const newAccountNext = safeNext?.split("?")[0] === "/dashboard" ? null : safeNext;
+    redirect(newAccountNext ?? (await inviteLanding(user.email, user.id)) ?? "/cards/new?add=1");
   }
 
   redirect(safeNext ?? (await inviteLanding(user.email, user.id)) ?? "/dashboard");

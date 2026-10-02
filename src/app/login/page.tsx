@@ -7,7 +7,14 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ next?: string; mode?: string; ref?: string }>;
 }) {
-  const { next, mode, ref } = await searchParams;
+  const { next: rawNext, mode, ref } = await searchParams;
+  // ?next=/dashboard is not a destination — it is where every sign-in lands
+  // anyway. Treating it as one turned "Get Started" (the card builder first)
+  // into a bare "Create account" form, and a brand-new person who used it
+  // skipped the builder and landed on an empty dashboard. It arrives that way
+  // from any signed-out bounce off /dashboard: an app cold launch, an expired
+  // session, an old link (owner, 2026-10-02).
+  const next = rawNext === "/dashboard" ? undefined : rawNext;
 
   // The app creates accounts too (owner decision 2026-08-27, IAP live): with
   // Pro purchasable in-app, the old sign-in-only posture — accounts deflected

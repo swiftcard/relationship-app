@@ -209,7 +209,16 @@ export default function RootLayout({
               // frame during the redirect. Scoped to the shell on "/" only, so
               // the website never hides anything.
               "document.documentElement.style.visibility='hidden';" +
-              "location.replace('/dashboard');" +
+              // Signed out → /login, NOT /dashboard. This is the FIRST launch
+              // after install (no sc_shell cookie yet, so the proxy never saw
+              // it), i.e. almost always someone with no account. /dashboard
+              // bounced them to /login?next=/dashboard, and a sign-in screen
+              // WITH a destination swaps "Get Started" (the card builder) for
+              // a bare "Create account" form — so the very first install
+              // skipped the builder and landed on an empty dashboard (owner,
+              // 2026-10-02). Same choice the proxy makes for every later launch;
+              // data-sc-authed is the cookie check made a few lines up.
+              "location.replace(document.documentElement.hasAttribute('data-sc-authed')?'/dashboard':'/login');" +
               "}}}catch(e){}",
           }}
         />

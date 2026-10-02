@@ -19,7 +19,6 @@ function stripComments(src: string): string {
 // plan. That broke because the trigger was split across TWO flags: a redirect
 // had to set welcome=1 AND remember tour=1, and two of them didn't.
 //
-//   onboarding      → /dashboard?welcome=1                  (free signup)
 //   checkout/success→ /dashboard?upgraded=true&welcome=1    (paid signup)
 //
 // Both marked the account as new; neither started the tour. Only the guest-card
@@ -138,11 +137,25 @@ describe("the Office admin tour and the dashboard tour don't fight", () => {
   });
 });
 
+// A free signup no longer lands on the dashboard at all (owner, 2026-10-02):
+// a brand-new account has no card, so onboarding sends it into the signed-in
+// first-card builder, and the builder carries the tour to the dashboard when the
+// card is done (tourOnDone). Pinned here so the tour still reaches that path.
+describe("free signup (onboarding) gets the tour through the builder", () => {
+  it("a brand-new account goes to the first-card builder, not the dashboard", () => {
+    const src = stripComments(read("src/app/onboarding/page.tsx"));
+    expect(src).toContain('?? "/cards/new?add=1");');
+    expect(src).not.toContain('"/dashboard?welcome=1"');
+  });
+  it("the builder starts the tour after a first card", () => {
+    expect(stripComments(read("src/app/cards/new/page.tsx"))).toMatch(/const tourOnDone = !!user && authedAdd && !authedPlan && cardCount === 0;/);
+  });
+});
+
 describe("every new-account redirect carries a marker the tour acts on", () => {
   // The real regression was a redirect that marked a new account without a
   // trigger. Each entry is a path a brand-new account can land on.
   for (const [label, file] of [
-    ["free signup (onboarding)", "src/app/onboarding/page.tsx"],
     ["paid signup (checkout success)", "src/app/checkout/success/page.tsx"],
     ["guest-card claim (welcome)", "src/app/welcome/page.tsx"],
   ] as const) {

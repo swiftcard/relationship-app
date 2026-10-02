@@ -13,7 +13,9 @@ describe("a pending team invite finds the person by email", () => {
   it("onboarding sends a fresh account with an invite to Join, not to a personal card", () => {
     const s = code("src/app/onboarding/page.tsx");
     expect(s).toContain("findPendingInviteForEmail");
-    expect(s).toMatch(/redirect\(safeNext \?\? \(await inviteLanding\(user\.email, user\.id\)\) \?\? "\/dashboard\?welcome=1"\)/);
+    // A brand-new account with no invite builds its card first (2026-10-02);
+    // the invite still wins over the builder.
+    expect(s).toMatch(/redirect\(newAccountNext \?\? \(await inviteLanding\(user\.email, user\.id\)\) \?\? "\/cards\/new\?add=1"\)/);
     expect(s).toMatch(/redirect\(safeNext \?\? \(await inviteLanding\(user\.email, user\.id\)\) \?\? "\/dashboard"\)/);
   });
 
