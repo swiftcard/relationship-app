@@ -197,6 +197,30 @@ export default function PrivacyPage() {
           policy continues to apply and we&apos;ll notify you of any successor).
         </P>
 
+        <H2>YouTube API Services</H2>
+        <P>
+          SwiftCard&apos;s own marketing tools use{" "}
+          <a href="https://developers.google.com/youtube/terms/developer-policies" className="underline" target="_blank" rel="noopener noreferrer">
+            YouTube API Services
+          </a>{" "}
+          for one purpose: to upload SwiftCard&apos;s videos to SwiftCard&apos;s own YouTube channel. Only our team uses
+          this, with our own Google account; it never reads, stores or shows any other person&apos;s YouTube data.
+          What we keep is the id and name of our connected channel and the sign-in tokens Google issues us, stored
+          encrypted and deleted the moment the channel is disconnected. By using it we are bound by the{" "}
+          <a href="https://www.youtube.com/t/terms" className="underline" target="_blank" rel="noopener noreferrer">
+            YouTube Terms of Service
+          </a>{" "}
+          and the{" "}
+          <a href="https://www.google.com/policies/privacy" className="underline" target="_blank" rel="noopener noreferrer">
+            Google Privacy Policy
+          </a>
+          . Access granted to SwiftCard can be revoked at any time from the Google account&apos;s{" "}
+          <a href="https://security.google.com/settings/security/permissions" className="underline" target="_blank" rel="noopener noreferrer">
+            security settings
+          </a>
+          .
+        </P>
+
         <H2>Text messaging (SMS) and mobile information</H2>
         <P>
           <strong>
