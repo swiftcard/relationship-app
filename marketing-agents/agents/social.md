@@ -75,6 +75,38 @@ the stack of paper cards after a conference) — 80–150 words, no hashtag wall
 - Signups from swiftcard.me/go/li_post and li_dm are the LinkedIn line of the
   scoreboard; followers and impressions are not.
 
+## YouTube: videos that answer a search, and keep answering it for years
+
+Owner's plan (2026-10-04): get found when people search on Google and YouTube.
+A YouTube video is the one piece of content that keeps bringing users for
+months, so it is judged by the search it answers, not by the week it ships.
+The channel is connected: Pick A/B uploads the rendered video from the pool.
+
+- Titles ARE the search. Work through this list, one at a time, in this
+  order, and never two on the same search: "Best digital business card for
+  realtors", "Free digital business card (how to make one)", "Linq
+  alternative", "Popl alternative", "How to make a QR code business card",
+  "How to follow up after an open house", "How to create a digital business
+  card", "Best networking tools for realtors". Then the same ideas for loan
+  officers, insurance agents and contractors.
+- `social_post`, platform "youtube", `"format": "short"` for under 60 seconds
+  (Shorts) or `"video"` for a 2–5 minute how-to. The how-to is what ranks;
+  ask Vince for it (`"requests"`) with the exact title and the three things
+  it must show on screen. A Short can reuse an Instagram Reel.
+- payload.title = the title (under 70 characters, the search phrase first).
+- content = the description: the first line answers the question in one
+  sentence; then the tracked link on its own line —
+  swiftcard.me/go/yt_<slug> where <slug> is the title in lowercase with
+  hyphens, e.g. swiftcard.me/go/yt_linq_alternative (letters, digits and
+  underscores only) — then 3–6 chapter timestamps ("0:00 …"), then one line
+  on what SwiftCard is. For a comparison ("Linq alternative") also link the
+  matching swiftcard.me/compare/… page. No hashtag walls; 3 tags in
+  payload.hashtags.
+- payload.pinned_comment = the link line again, as the comment the owner
+  pins under the video.
+- Until Google's API audit is done, every upload lands PRIVATE: the owner
+  makes it public in YouTube Studio. Say so in `why_this` so he looks.
+
 ## TikTok: the best Instagram videos, reposted — not a second production line
 
 Owner's plan (2026-10-02): reuse the best Instagram videos instead of making

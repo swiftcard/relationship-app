@@ -16,8 +16,8 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { decryptToken, encryptToken } from "@/lib/token-crypto";
 
-export type AgentProvider = "x" | "meta" | "youtube" | "linkedin";
-export const AGENT_PROVIDERS: AgentProvider[] = ["x", "meta", "youtube", "linkedin"];
+export type AgentProvider = "x" | "meta" | "youtube" | "linkedin" | "pinterest";
+export const AGENT_PROVIDERS: AgentProvider[] = ["x", "meta", "youtube", "linkedin", "pinterest"];
 
 export type AgentConnection = {
   provider: AgentProvider;
@@ -47,6 +47,7 @@ export function providerAppConfigured(p: AgentProvider): boolean {
     // The Agent Flow app is a separate LinkedIn app from the profile-photo
     // import one (different Page, different products). Falls back to it.
     case "linkedin": return !!(linkedinClient().id && linkedinClient().secret);
+    case "pinterest": return !!(process.env.PINTEREST_APP_ID && process.env.PINTEREST_APP_SECRET);
   }
 }
 
@@ -143,6 +144,16 @@ export async function freshAccessToken(conn: AgentConnection): Promise<string | 
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: conn.refresh_token, client_id: youtubeClient().id!, client_secret: youtubeClient().secret! }),
+    });
+  } else if (conn.provider === "pinterest") {
+    // Pinterest access tokens live 30 days; the refresh token a year.
+    res = await fetch("https://api.pinterest.com/v5/oauth/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Basic ${Buffer.from(`${process.env.PINTEREST_APP_ID}:${process.env.PINTEREST_APP_SECRET}`).toString("base64")}`,
+      },
+      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: conn.refresh_token }),
     });
   } else {
     return null;

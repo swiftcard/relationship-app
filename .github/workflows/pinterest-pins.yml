@@ -1,0 +1,47 @@
+name: Pinterest pins
+
+# ── "Every image links back to SwiftCard" ────────────────────────────────────
+#
+# Twice a week, render the next few pin pictures (real card designs, drawn by
+# the site at /pin/<slug>), upload them, and post them to the SwiftCard
+# Pinterest boards through the site, which holds the Pinterest connection
+# (scripts/pinterest-pins.mjs). A few per run, so the boards grow the way a
+# person's would. Each pin is posted once (agent_pins ledger), so a re-run
+# never duplicates.
+#
+# A GitHub job because it needs a browser (Playwright) — Vercel has none.
+on:
+  schedule:
+    - cron: "0 15 * * 1,4"
+  workflow_dispatch:
+    inputs:
+      per_run:
+        description: "How many pins to post this run"
+        default: "3"
+
+concurrency:
+  group: pinterest-pins
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  pins:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Render and post the next pins
+        env:
+          PUSH_CATCHUP_SECRET: ${{ secrets.PUSH_CATCHUP_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PINS_PER_RUN: ${{ github.event.inputs.per_run || '3' }}
+        run: node scripts/pinterest-pins.mjs

@@ -58,6 +58,8 @@ const SCOPES: Record<AgentProvider, string> = {
   // Until LinkedIn grants that product the authorization fails with
   // unauthorized_scope_error, which the panel shows as a connect error. The
   // legacy fallback (sign-in app) keeps the member scopes.
+  // Pins and the boards they go on, plus the account name for the panel.
+  pinterest: "boards:read boards:write pins:read pins:write user_accounts:read",
   linkedin: process.env.LINKEDIN_AGENT_SCOPES
     || (process.env.LINKEDIN_AGENT_CLIENT_ID ? "w_organization_social r_organization_admin" : "openid profile w_member_social"),
 };
@@ -80,6 +82,10 @@ export function authorizeUrl(p: AgentProvider, state: string, codeChallenge?: st
     case "linkedin": {
       const q = new URLSearchParams({ response_type: "code", client_id: linkedinClient().id!, redirect_uri, scope: SCOPES.linkedin, state });
       return `https://www.linkedin.com/oauth/v2/authorization?${q}`;
+    }
+    case "pinterest": {
+      const q = new URLSearchParams({ client_id: process.env.PINTEREST_APP_ID!, redirect_uri, response_type: "code", scope: SCOPES.pinterest.replace(/ /g, ","), state });
+      return `https://www.pinterest.com/oauth/?${q}`;
     }
   }
 }
@@ -116,6 +122,20 @@ export async function exchangeCode(p: AgentProvider, code: string, codeVerifier?
     case "linkedin": {
       const j = await form("https://www.linkedin.com/oauth/v2/accessToken", { grant_type: "authorization_code", code, redirect_uri, client_id: linkedinClient().id!, client_secret: linkedinClient().secret! });
       return { access_token: String(j.access_token), refresh_token: (j.refresh_token as string) ?? null, expires_in: Number(j.expires_in ?? 5184000), scope: (j.scope as string) ?? null };
+    }
+    case "pinterest": {
+      // Pinterest wants the app credentials as HTTP Basic, not in the body.
+      const res = await fetch("https://api.pinterest.com/v5/oauth/token", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Authorization: `Basic ${Buffer.from(`${process.env.PINTEREST_APP_ID}:${process.env.PINTEREST_APP_SECRET}`).toString("base64")}`,
+        },
+        body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri, continuous_refresh: "true" }),
+      });
+      const j = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+      if (!res.ok || !j.access_token) throw new Error(`Pinterest token exchange failed: ${String(j.message ?? j.error ?? res.status).slice(0, 160)}`);
+      return { access_token: String(j.access_token), refresh_token: (j.refresh_token as string) ?? null, expires_in: Number(j.expires_in ?? 2592000), scope: (j.scope as string) ?? null };
     }
   }
 }
@@ -185,6 +205,10 @@ export async function describeAccount(p: AgentProvider, t: TokenSet): Promise<Ac
       const ch = j.items?.[0];
       if (!ch) throw new Error("this Google account has no YouTube channel — sign in with the account that owns the SwiftCard channel");
       return { account_id: ch.id, account_label: ch.snippet?.customUrl ?? ch.snippet?.title ?? ch.id, access_token: t.access_token, expires_at, meta: { channel_title: ch.snippet?.title ?? null } };
+    }
+    case "pinterest": {
+      const j = (await getJson("https://api.pinterest.com/v5/user_account", bearer)) as { id?: string; username?: string; account_type?: string };
+      return { account_id: j.id ?? null, account_label: j.username ? `@${j.username}` : null, access_token: t.access_token, expires_at, meta: { account_type: j.account_type ?? null } };
     }
     case "linkedin": {
       // userinfo needs the openid scope, which the Page-only app cannot request.

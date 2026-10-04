@@ -444,3 +444,57 @@ describe("LinkedIn: new-hire announcements → Ava → the owner's tap", () => {
     expect(sc).toContain("· signups`");
   });
 });
+
+// ── Pinterest + YouTube (owner order 2026-10-04): long-term traffic ─────────
+describe("Pinterest: every pin is a real design, posted once, linking back", () => {
+  it("every pin idea has a persona the homepage renders, a board, and a valid code", async () => {
+    const { PIN_IDEAS, pinCode } = await import("@/lib/pinterest-pins");
+    const src = read("src/components/site/HeroShowcase.tsx");
+    expect(PIN_IDEAS.length).toBeGreaterThanOrEqual(10);
+    for (const p of PIN_IDEAS) {
+      expect(src, `${p.slug}: persona "${p.persona}" is not a homepage persona`).toContain(`key: "${p.persona}"`);
+      expect(isCampaignSource(pinCode(p.slug)), pinCode(p.slug)).toBe(true);
+      expect(p.description.length).toBeLessThanOrEqual(800);
+      expect(p.headline.length).toBeLessThanOrEqual(100);
+    }
+    expect(new Set(PIN_IDEAS.map((p) => p.slug)).size).toBe(PIN_IDEAS.length);
+    expect(getSignupSourceLabel("pin_luxury_business_cards")).toBe("Pinterest — luxury business cards");
+  });
+  it("the pin page is static and noindex, and the picture is 1000×1500", () => {
+    const page = read("src/app/pin/[slug]/page.tsx");
+    expect(page).toContain('export const dynamic = "force-static"');
+    expect(page).toMatch(/robots: \{ index: false, follow: false \}/);
+    expect(read("src/app/pin/[slug]/PinPicture.tsx")).toMatch(/width: PIN_W, height: PIN_H/);
+    const idx = read("src/lib/knowledge/index.ts");
+    expect(idx).toContain('"/pin/[slug]"');
+  });
+  it("the route posts each idea once, needs the bot secret, and links through /go", () => {
+    const r = code("src/app/api/agents/pinterest/pin/route.ts");
+    expect(r).toMatch(/if \(!botAuthorized\(req\)\) return NextResponse\.json\(\{ error: "Unauthorized" \}, \{ status: 401 \}\)/);
+    expect(r).toMatch(/existing\?\.status === "posted"\) return NextResponse\.json\(\{ ok: true, already: true/);
+    expect(r).toContain("campaignLink(code, idea.profession)");
+    expect(r).toContain("onConflict: \"slug\"");
+    const script = read("scripts/pinterest-pins.mjs");
+    expect(script).toContain("/api/agents/pinterest/pin");
+    expect(script).toMatch(/viewport: \{ width: 1000, height: 1500 \}/);
+    expect(read(".github/workflows/pinterest-pins.yml")).toContain("node scripts/pinterest-pins.mjs");
+    expect(read("supabase/agent-pinterest.sql")).toMatch(/values \('pins', 'pins', true\)/);
+  });
+  it("Pinterest is a connectable account with a refresh path", () => {
+    const conns = read("src/lib/agent-connections.ts");
+    expect(conns).toContain('"pinterest"');
+    expect(conns).toMatch(/conn\.provider === "pinterest"/);
+    const oauth = read("src/lib/agent-connect-oauth.ts");
+    expect(oauth).toContain("https://www.pinterest.com/oauth/");
+    expect(oauth).toContain("https://api.pinterest.com/v5/oauth/token");
+    expect(read("src/app/admin/agent-flow/AgentFlowClient.tsx")).toContain('id: "pinterest"');
+  });
+  it("YouTube: titles are the search, and the description carries the tracked link", () => {
+    const milo = read("marketing-agents/agents/social.md");
+    expect(milo).toMatch(/Best digital business card for\s+realtors/);
+    expect(milo).toContain("swiftcard.me/go/yt_<slug>");
+    expect(milo).toMatch(/lands PRIVATE/);
+    expect(read("marketing-agents/agents/video.md")).toContain("YouTube how-tos");
+    expect(isSignupSource("yt_linq_alternative")).toBe(true);
+  });
+});

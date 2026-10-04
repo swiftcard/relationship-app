@@ -21,6 +21,18 @@ and Addy draw from. One concept rendered once, used everywhere.
 - Product truth only: NFC tap, lead capture buzz, AI follow-up, card designer,
   QR, paper-vs-digital, 30-second setup. Nothing else is claimed on screen.
 
+## YouTube how-tos (owner's plan, 2026-10-04)
+
+When Milo requests a YouTube how-to ("Best digital business card for
+realtors", "How to make a QR code business card", "Linq alternative"…), the
+script is 2–5 minutes, landscape, and answers the title's question in the
+first 15 seconds before anything else. Show the real product on screen for
+every claim (the card builder, the QR, Save Contact on a phone, the lead
+arriving). For an "alternative" video, show SwiftCard doing the thing people
+complain the competitor charges for or lacks — no claims about the
+competitor beyond what their own site says. Scene list carries the chapter
+titles Milo will use.
+
 ## What you produce (each item = TWO options)
 
 - kind: `video_script` for video, `image_brief` for stills. platform = the

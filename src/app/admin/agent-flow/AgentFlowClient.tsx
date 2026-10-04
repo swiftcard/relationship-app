@@ -55,6 +55,7 @@ const OAUTH_PROVIDERS = [
   { id: "meta", name: "Facebook + Instagram", posts: "posts to the SwiftCard Page and its Instagram", env: "META_APP_ID + META_APP_SECRET" },
   { id: "youtube", name: "YouTube", posts: "uploads rendered videos to the channel", env: "YOUTUBE_CLIENT_ID + YOUTUBE_CLIENT_SECRET" },
   { id: "linkedin", name: "LinkedIn", posts: "posts as the SwiftCard Page", env: "LINKEDIN_AGENT_CLIENT_ID + LINKEDIN_AGENT_CLIENT_SECRET" },
+  { id: "pinterest", name: "Pinterest", posts: "pins SwiftCard's card designs, each linking back, on its own schedule", env: "PINTEREST_APP_ID + PINTEREST_APP_SECRET" },
 ];
 const ENV_CONNECTORS = CONNECTOR_RULES.filter((c) => c.id === "higgsfield" || c.id === "reddit");
 /** Findings and reports are ACKNOWLEDGED, not executed — the green button files
