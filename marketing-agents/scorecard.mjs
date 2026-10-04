@@ -23,7 +23,7 @@
 //   • Instagram      agent_ig_events (keyword comments, links sent),
 //                    product_events name=campaign_link_clicked code ig_*,
 //                    profiles.signup_source like ig_* (signups, cards, trials)
-//   • TikTok         the same, for codes / sources starting tt_
+//   • TikTok, LinkedIn, Reddit, Facebook — the same, for tt_ / li_ / rd_ / fb_
 import { sbCount, sbRows, isoAgo, DAY } from "./lib/probe.mjs";
 import { email } from "./lib/agentkit.mjs";
 
@@ -96,26 +96,32 @@ async function main() {
 
   // Instagram, as one funnel (the bot + its tracked links, 2026-10-02). Every
   // step is "no data" until supabase/agent-instagram.sql has run.
-  const IG = "signup_source=like.ig_*";
-  const [igAsked, igSent, igTaps, igSignups, igTrials, igCardsNow, igCardsPrev] = await Promise.all([
+  const [igAsked, igSent] = await Promise.all([
     pair("agent_ig_events", "created_at", "action=eq.link&kind=eq.comment"),
     pair("agent_ig_events", "handled_at", "action=eq.link&status=eq.sent"),
-    pair("product_events", "created_at", "name=eq.campaign_link_clicked&is_internal=eq.false&props->>code=like.ig_*"),
-    pair("profiles", "created_at", `${IG}&${REAL_PEOPLE}`),
-    pair("profiles", "pro_trial_started_at", `${IG}&${REAL_PEOPLE}`),
-    socialCards("ig", 7, 0),
-    socialCards("ig", 14, 7),
   ]);
 
-  // TikTok: no tool may post or reply there, so its funnel is the bio link
-  // (swiftcard.me/go/tt_bio) and what it turned into.
-  const TT = "signup_source=like.tt_*";
-  const [ttTaps, ttSignups, ttTrials, ttCardsNow, ttCardsPrev] = await Promise.all([
-    pair("product_events", "created_at", "name=eq.campaign_link_clicked&is_internal=eq.false&props->>code=like.tt_*"),
-    pair("profiles", "created_at", `${TT}&${REAL_PEOPLE}`),
-    pair("profiles", "pro_trial_started_at", `${TT}&${REAL_PEOPLE}`),
-    socialCards("tt", 7, 0),
-    socialCards("tt", 14, 7),
+  // Every social platform the same way: taps on its tracked links
+  // (swiftcard.me/go/<prefix>_…), the signups recorded under those codes, the
+  // cards those accounts made, and their Pro trials. The prefixes are the
+  // campaign sources in src/lib/referral.ts.
+  const PLATFORMS = [["ig", "Instagram"], ["tt", "TikTok"], ["li", "LinkedIn"], ["rd", "Reddit"], ["fb", "Facebook"]];
+  const social = await Promise.all(PLATFORMS.map(async ([prefix, name]) => {
+    const src = `signup_source=like.${prefix}_*`;
+    const [taps, signups, trials, cardsNow, cardsPrev] = await Promise.all([
+      pair("product_events", "created_at", `name=eq.campaign_link_clicked&is_internal=eq.false&props->>code=like.${prefix}_*`),
+      pair("profiles", "created_at", `${src}&${REAL_PEOPLE}`),
+      pair("profiles", "pro_trial_started_at", `${src}&${REAL_PEOPLE}`),
+      socialCards(prefix, 7, 0),
+      socialCards(prefix, 14, 7),
+    ]);
+    return { name, taps, signups, trials, cards: { now: cardsNow, prev: cardsPrev } };
+  }));
+  const socialRows = social.flatMap((p) => [
+    [`${p.name} · link taps`, p.taps],
+    [`${p.name} · signups`, p.signups],
+    [`${p.name} · cards created`, p.cards],
+    [`${p.name} · Pro trials`, p.trials],
   ]);
 
   const rows = [
@@ -129,14 +135,7 @@ async function main() {
     ["Pro trials started", trials],
     ["Instagram · keyword comments", igAsked],
     ["Instagram · card links sent", igSent],
-    ["Instagram · link taps", igTaps],
-    ["Instagram · signups", igSignups],
-    ["Instagram · cards created", { now: igCardsNow, prev: igCardsPrev }],
-    ["Instagram · Pro trials", igTrials],
-    ["TikTok · link taps", ttTaps],
-    ["TikTok · signups", ttSignups],
-    ["TikTok · cards created", { now: ttCardsNow, prev: ttCardsPrev }],
-    ["TikTok · Pro trials", ttTrials],
+    ...socialRows,
   ];
 
   const weekEnd = new Date();

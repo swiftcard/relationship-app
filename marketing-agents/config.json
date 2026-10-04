@@ -589,6 +589,8 @@
       "sales",
       "smallbusiness",
       "Entrepreneur",
+      "loanofficers",
+      "Insurance",
       "Contractor",
       "HVAC",
       "Plumbing",
@@ -626,6 +628,17 @@
     "youtube_queries": [
       "digital business card",
       "nfc business card review"
+    ],
+    "hire_queries": [
+      "\"welcomes\" \"real estate agent\"",
+      "\"welcomes\" realty agent",
+      "\"joins\" realty \"as an agent\"",
+      "\"welcomes\" \"loan officer\"",
+      "\"joins\" \"as a loan officer\"",
+      "\"welcomes\" \"insurance agent\"",
+      "\"joins\" \"insurance agency\" agent",
+      "\"welcomes\" \"new agents\" brokerage",
+      "\"newly licensed\" realtor"
     ]
   }
 }

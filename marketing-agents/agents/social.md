@@ -57,6 +57,24 @@ the conversion, and the caption's job is to earn it.
   in `research` which top post today's item builds on, or that it is a
   deliberate new format because nothing has converted yet.
 
+## LinkedIn: the Company Page, three posts a week, the link in the first comment
+
+Everything public on LinkedIn comes from the SwiftCard Company Page, never a
+person (owner's standing rule). Three Page posts a week, each one a hands-only
+product demo or one real observation from the trade (open houses, follow-up,
+the stack of paper cards after a conference) — 80–150 words, no hashtag walls.
+- The post body carries NO link (LinkedIn buries posts with links). The link
+  goes in the first comment, and it is always the tracked one:
+  swiftcard.me/go/li_post — put that comment in payload `"first_comment"`,
+  ready to paste.
+- Rotate professions in step with the /for/ pages: real estate agents, loan
+  officers, insurance agents, contractors, lawyers, car salespeople.
+- When the Radar's "hires" signals show a wave (many new agents at one
+  brokerage, licensing season), say so in the post — it is the week they are
+  looking.
+- Signups from swiftcard.me/go/li_post and li_dm are the LinkedIn line of the
+  scoreboard; followers and impressions are not.
+
 ## TikTok: the best Instagram videos, reposted — not a second production line
 
 Owner's plan (2026-10-02): reuse the best Instagram videos instead of making

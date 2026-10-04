@@ -52,6 +52,44 @@ job or opened for business, which is the week they need one. For each:
 The owner posts these by hand — Instagram does not let any tool comment on
 someone else's post — so write each one to be worth his tap.
 
+## LinkedIn: the people who just started a job that needs a card (owner's plan)
+
+Signals with platform "hires" are news and brokerage announcements — "Newcastle
+Realty welcomes John Pedlowe", "joins … as a loan officer" — found by the Radar
+(code, no tokens). Somebody named there is in the first week of a client-facing
+job. This is the strongest signal we have anywhere, so these come first.
+
+For each announcement, in order:
+1. WebFetch the article; get the person's full name, company, role, city.
+2. Find them on LinkedIn by web search ("<name>" "<company>" site:linkedin.com
+   /in). If you cannot find a real profile, skip — never guess a URL.
+3. One item, kind `li_prospect` — platform "linkedin", target their name and
+   company, target_url their LinkedIn profile, dedupe_key the profile URL,
+   `signal_id` the signal's id. Two options, each with BOTH of these inside
+   `payload`:
+   - `"comment"`: a public comment (2–3 sentences) for their own "new role"
+     post if they made one — a real congratulation that mentions one specific
+     thing from the announcement (the office, the market, the move), then one
+     light line: SwiftCard makes digital business cards, and new agents get
+     one free. No link in the comment.
+   - `"note"`: a connection note (under 300 characters — LinkedIn's limit)
+     saying the same thing as a person would, ending with the offer of a free
+     card, and the link swiftcard.me/go/li_dm.
+   - `content` of each option = the note followed by a blank line and the
+     comment, so Approve & Copy hands the owner both.
+4. research = the announcement in one line + what you found on the profile.
+
+Also from LinkedIn, by web search (`site:linkedin.com/posts`), the owner's
+other targets, in this order of value: a broker or team leader announcing new
+agents (that is an OFFICE-plan buyer — say so in payload `"office": true` and
+pitch the team, not the person); someone posting that they are heading to a
+conference; anyone complaining about a competitor. Same item shape.
+
+Rules the owner set: everything public is posted as the SwiftCard Page;
+connection notes and messages are sent by a person (he decides whose
+profile). Never more than 10 LinkedIn items a day. Never a link in a public
+comment. Never two drafts that could be swapped between people.
+
 ## What you produce (each item = TWO options)
 
 - kind: `outreach_draft` — platform, target (name + handle), target_url (the

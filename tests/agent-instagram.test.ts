@@ -399,10 +399,48 @@ describe("TikTok: prepared by agents, posted by hand, counted by signups", () =>
   });
   it("the Sunday scorecard and the Tracked links card report TikTok by signups", () => {
     const sc = read("marketing-agents/scorecard.mjs");
-    for (const row of ["TikTok · link taps", "TikTok · signups", "TikTok · Pro trials"]) expect(sc).toContain(row);
+    expect(sc).toMatch(/\["tt", "TikTok"\]/);
+    for (const row of ["· link taps`", "· signups`", "· Pro trials`"]) expect(sc).toContain(row);
     const links = code("src/app/api/admin/agents/links/route.ts");
     expect(links).toMatch(/if \(!\(await requireAdmin\(\)\)\)/);
     expect(links).toContain("swiftcard-test.invalid");
     expect(read("src/app/admin/agent-flow/AgentFlowClient.tsx")).toContain("<TrackedLinksCard />");
+  });
+});
+
+// ── LinkedIn (owner order 2026-10-04) ────────────────────────────────────────
+// LinkedIn gives no API for finding people and its search cannot be driven
+// from the owner's account (it signed him out). The finder therefore reads
+// public new-hire announcements — "Newcastle Realty welcomes John Pedlowe" —
+// through Google News RSS inside the Radar, and Ava finds the person on
+// LinkedIn and writes the comment + connection note the owner sends.
+describe("LinkedIn: new-hire announcements → Ava → the owner's tap", () => {
+  it("the Radar has a hires source, read-only, routed to Ava as prospects", () => {
+    const radar = read("marketing-agents/lib/radar.mjs");
+    expect(radar).toMatch(/hires_feed: "hires"/);
+    expect(radar).toMatch(/platform === "hires"\) c = \{ intent: "prospect"/);
+    expect(radar).toMatch(/kind === "hires_feed"\) await finish\(s, await readFeed\(/);
+    expect(radar).toContain("when:7d");
+    const cfg = JSON.parse(read("marketing-agents/config.json"));
+    expect(Array.isArray(cfg.radar.hire_queries) && cfg.radar.hire_queries.length).toBeTruthy();
+    expect(read("src/app/api/admin/agents/radar/route.ts")).toContain('"hire_queries"');
+    expect(read("src/app/admin/agent-flow/AgentFlowClient.tsx")).toContain('["hire_queries", ');
+  });
+  it("Ava's and Milo's LinkedIn rules carry the tracked links and the Page-only rule", () => {
+    const ava = read("marketing-agents/agents/outreach.md");
+    expect(ava).toContain("`li_prospect`");
+    expect(ava).toContain("swiftcard.me/go/li_dm");
+    expect(ava).toMatch(/under 300 characters/);
+    expect(ava).toMatch(/Never a link in a public\s+comment/);
+    const milo = read("marketing-agents/agents/social.md");
+    expect(milo).toContain("swiftcard.me/go/li_post");
+    expect(milo).toMatch(/never a\s+person/);
+    for (const s of ["li_dm", "li_post", "li_page", "rd_realtors"]) expect(isSignupSource(s), s).toBe(true);
+    expect(getSignupSourceLabel("li_post")).toBe("LinkedIn — post");
+  });
+  it("the Sunday scorecard reports every social platform by signups", () => {
+    const sc = read("marketing-agents/scorecard.mjs");
+    expect(sc).toMatch(/\["ig", "Instagram"\], \["tt", "TikTok"\], \["li", "LinkedIn"\], \["rd", "Reddit"\], \["fb", "Facebook"\]/);
+    expect(sc).toContain("· signups`");
   });
 });

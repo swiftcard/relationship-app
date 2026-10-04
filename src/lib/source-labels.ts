@@ -70,7 +70,7 @@ export const SIGNUP_SOURCE_LABELS: Record<string, string> = {
 // Social campaign sources (lib/referral.ts CAMPAIGN_PLATFORMS): ig_bio →
 // "Instagram — bio link", ig_p_ab12 → "Instagram — post ab12".
 const CAMPAIGN_NAMES: Record<string, string> = { ig: "Instagram", fb: "Facebook", li: "LinkedIn", tt: "TikTok", yt: "YouTube", pin: "Pinterest", rd: "Reddit" };
-const CAMPAIGN_PLACES: Record<string, string> = { bio: "bio link", dm: "message", ad: "ad", story: "story", comment: "comment", prospect: "outreach message" };
+const CAMPAIGN_PLACES: Record<string, string> = { bio: "bio link", dm: "message", ad: "ad", story: "story", comment: "comment", prospect: "outreach message", post: "post", page: "page button", reply: "reply" };
 
 export function campaignSourceLabel(source: string): string | null {
   const m = source.match(/^(ig|fb|li|tt|yt|pin|rd)_(.+)$/);

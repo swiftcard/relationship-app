@@ -114,6 +114,9 @@ export async function listeningList() {
     telegram_channels: pick("telegram_channels", DEFAULTS.telegram_channels).map((s) => String(s).replace(/^@|^https?:\/\/t\.me\/(s\/)?/i, "").trim()).filter(Boolean),
     feeds: pick("feeds", DEFAULTS.feeds).filter((f) => f?.url),
     hn_queries: pick("hn_queries", DEFAULTS.hn_queries),
+    // "Just joined … as a loan officer" — news and brokerage announcements of
+    // people starting a client-facing job: the week they need a new card.
+    hire_queries: pick("hire_queries", DEFAULTS.hire_queries),
     youtube_queries: pick("youtube_queries", DEFAULTS.youtube_queries),
     interval_min: Number(over?.interval_min ?? DEFAULTS.interval_min ?? 15),
     wake_cooldown_min: Number(over?.wake_cooldown_min ?? DEFAULTS.wake_cooldown_min ?? 120),
@@ -238,6 +241,7 @@ export async function ensureSources(list) {
     ...list.feeds.map((f) => ({ id: `rss:${sha(f.url).slice(0, 10)}`, kind: "rss", target: f.url, label: f.label ?? f.url })),
     { id: "youtube:search", kind: "youtube", target: list.youtube_queries.join(" | "), label: "YouTube · new videos on the topic" },
     { id: "instagram:hashtags", kind: "instagram_hashtag", target: "hashtags", label: "Instagram · new posts under our hashtags" },
+    ...(list.hire_queries ?? []).map((q) => ({ id: `hires:${sha(q).slice(0, 10)}`, kind: "hires_feed", target: `https://news.google.com/rss/search?q=${encodeURIComponent(`${q} when:7d`)}&hl=en-US&gl=US&ceid=US:en`, label: `New hires · ${q}` })),
   ];
   let competitors = [];
   try { competitors = (await sb("GET", "agent_competitors", { params: "active=is.true&app_store=not.is.null&select=id,name,app_store" })) ?? []; } catch { competitors = []; }
@@ -573,7 +577,7 @@ async function readInstagramHashtags() {
 
 // ── The scan ─────────────────────────────────────────────────────────────────
 
-const PLATFORM_OF = { reddit_search: "reddit", reddit_sub: "reddit", telegram_channel: "telegram", telegram_bot: "telegram", hn: "hn", rss: "news", appstore_reviews: "appstore", youtube: "youtube", instagram_hashtag: "instagram" };
+const PLATFORM_OF = { reddit_search: "reddit", reddit_sub: "reddit", telegram_channel: "telegram", telegram_bot: "telegram", hn: "hn", rss: "news", appstore_reviews: "appstore", youtube: "youtube", instagram_hashtag: "instagram", hires_feed: "hires" };
 
 /** Turn raw posts into signal rows (classified, scored, routed). */
 export function toSignals(posts, { platform, source_id, list }) {
@@ -586,6 +590,10 @@ export function toSignals(posts, { platform, source_id, list }) {
     if (platform === "appstore") c = { intent: "competitor_complaint", matched: ["1-2★ review"] };
     else if (platform === "youtube") c = { intent: "creator", matched: classify(text, list)?.matched ?? [] };
     else if (platform === "instagram") c = { intent: "prospect", matched: [String(p.community ?? "").replace(/^Instagram · /, "")].filter(Boolean) };
+    // A new-hire announcement is a prospect whatever words it uses: the person
+    // named in it just started a job that needs a card. Ava finds them on
+    // LinkedIn by name and writes the congratulation.
+    else if (platform === "hires") c = { intent: "prospect", matched: ["new hire"] };
     else {
       watched = platform === "reddit" && watchedSubs.has(String(p.community ?? "").toLowerCase());
       c = classify(text, list, { title: p.title, watched });
@@ -683,6 +691,7 @@ export async function scanRadar({ log = console.log } = {}) {
       else if (s.kind === "appstore_reviews") await finish(s, await readAppStore(s.target, String(s.label ?? "").split(" · ")[0]));
       else if (s.kind === "youtube") await finish(s, await readYouTube(list.youtube_queries));
       else if (s.kind === "instagram_hashtag") await finish(s, await readInstagramHashtags());
+      else if (s.kind === "hires_feed") await finish(s, await readFeed(s.target, s.label));
     } catch (e) {
       summary.errors.push(`${s.id}: ${String(e?.message ?? e).slice(0, 160)}`);
       await markSource(s.id, { last_scanned_at: now, last_error: String(e?.message ?? e).slice(0, 300) });

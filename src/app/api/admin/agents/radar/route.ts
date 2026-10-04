@@ -14,7 +14,7 @@ const REPO = process.env.AGENTS_GITHUB_REPO || "swiftcard/relationship-app";
 const RADAR_WORKFLOW = "agent-radar.yml";
 const DEFAULTS = (agentConfig as { radar?: Record<string, unknown> }).radar ?? {};
 const TARGETS = (agentConfig as { targets?: Record<string, unknown> }).targets ?? {};
-const LIST_KEYS = ["keywords", "brand", "competitors", "ask_words", "complaint_words", "subreddits", "telegram_channels", "hn_queries", "youtube_queries"] as const;
+const LIST_KEYS = ["keywords", "brand", "competitors", "ask_words", "complaint_words", "subreddits", "telegram_channels", "hn_queries", "youtube_queries", "hire_queries"] as const;
 const SOURCE_KINDS = new Set(["reddit_sub", "telegram_channel", "rss", "appstore_reviews"]);
 const sha = (s: string) => createHash("sha1").update(s).digest("hex");
 
@@ -37,7 +37,7 @@ function mergedList(over: Record<string, unknown> | null) {
     keywords: arr("keywords", DEFAULTS.keywords), brand: arr("brand", TARGETS.brand_variations), competitors: arr("competitors", TARGETS.competitors),
     ask_words: arr("ask_words", DEFAULTS.ask_words), complaint_words: arr("complaint_words", DEFAULTS.complaint_words),
     subreddits: arr("subreddits", DEFAULTS.subreddits), telegram_channels: arr("telegram_channels", DEFAULTS.telegram_channels),
-    feeds: arr("feeds", DEFAULTS.feeds), hn_queries: arr("hn_queries", DEFAULTS.hn_queries), youtube_queries: arr("youtube_queries", DEFAULTS.youtube_queries),
+    feeds: arr("feeds", DEFAULTS.feeds), hn_queries: arr("hn_queries", DEFAULTS.hn_queries), youtube_queries: arr("youtube_queries", DEFAULTS.youtube_queries), hire_queries: arr("hire_queries", DEFAULTS.hire_queries),
     interval_min: Number(o.interval_min ?? DEFAULTS.interval_min ?? 15), wake_score: Number(o.wake_score ?? DEFAULTS.wake_score ?? 50),
     overridden: [...LIST_KEYS.filter((k) => Array.isArray(o[k]) && (o[k] as unknown[]).length), ...(Array.isArray(o.feeds) && (o.feeds as unknown[]).length ? ["feeds"] : [])] as string[],
   };
