@@ -1572,7 +1572,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
 
         {/* Step 1 — card details */}
         {step === 1 && (
-          <div className="space-y-4">
+          <div className="space-y-4 sc-step-in">
             <div className="mb-1">
               <h1 className="text-2xl font-bold text-white">New card</h1>
               {/* The required rule lives here now, in the heading — it was a
@@ -1884,7 +1884,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
 
         {/* Step 3 — Socials: bio, social links, additional links */}
         {step === 3 && (
-          <div className="space-y-5">
+          <div className="space-y-5 sc-step-in">
             <div className="mb-1">
               <h1 className="text-2xl font-bold text-white">Socials</h1>
               <p className="text-gray-400 text-sm mt-1">What goes on your Swift Links page — the page people open from your card. Only the bio is required.</p>
@@ -2054,7 +2054,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
 
         {/* Step 5 — card created: turn on notifications for this card */}
         {step === 5 && (
-          <div className="space-y-5 text-center">
+          <div className="space-y-5 text-center sc-step-in">
             <div className="w-14 h-14 rounded-full bg-green-900/40 border border-green-700/40 flex items-center justify-center mx-auto">
               <svg className="w-7 h-7 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -2106,7 +2106,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
         {/* Step 2 — Card design: Photos · Template · the numbered design steps
             (the same tab as the edit form's Card design) */}
         {step === 2 && (
-          <div className="space-y-5">
+          <div className="space-y-5 sc-step-in">
             {/* Phone: the card sits at the top of the step and stays pinned to
                 the top of the screen while every control below scrolls under
                 it. Not while the custom designer is open — that IS the card. */}
@@ -2291,7 +2291,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
             preview of the page itself. Separate keys from the card design, so
             the two steps never fight over the same values. */}
         {step === 4 && (
-          <div className="space-y-5">
+          <div className="space-y-5 sc-step-in">
             {/* Phone: the Swift Links page sits at the top of the step and stays
                 pinned while every control below scrolls under it; tap it to
                 see the whole page. */}
@@ -2437,7 +2437,12 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
             the form column. */}
         {step !== 5 && !designerIsCanvas && (
           <div className="hidden lg:block lg:order-2 lg:sticky lg:top-6">
-            {step === 3 || step === 4 ? linkPagePreview : livePreview}
+            {/* Keyed by WHICH preview, so moving from the card to the Swift
+                Links page fades across instead of snapping; moving between two
+                steps that share a preview keeps it (no remount, no flicker). */}
+            <div key={step === 3 || step === 4 ? "links" : "card"} className="sc-step-in">
+              {step === 3 || step === 4 ? linkPagePreview : livePreview}
+            </div>
           </div>
         )}
         </div>{/* grid */}

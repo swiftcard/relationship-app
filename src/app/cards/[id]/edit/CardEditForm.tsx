@@ -865,7 +865,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
 
         {/* ── CONTENT ── */}
         {tab === "content" && (
-          <div className="space-y-4">
+          <div className="space-y-4 sc-step-in">
             {/* Company information — office sub-users see the org-owned half of
                 their card here, read-only. Fields the office set never render as
                 inputs below; whatever it left blank stays editable. */}
@@ -1093,7 +1093,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
             design lock: the lock covers template/colors, never someone's own
             headshot. ── */}
         {tab === "design" && (
-          <div className="space-y-5">
+          <div className="space-y-5 sc-step-in">
             {/* Phone: the card sits at the top of the tab and stays pinned to
                 the top of the screen while every control below scrolls under
                 it. Not while the custom designer is open — that IS the card. */}
@@ -1238,7 +1238,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
 
         {/* ── SHARING (Swift Links page) ── */}
         {tab === "sharing" && (
-          <div className="space-y-5">
+          <div className="space-y-5 sc-step-in">
             <p className="text-gray-400 text-xs leading-relaxed">
               These go on your <strong className="text-gray-200">Swift Links</strong> page — the page people open from your card.
             </p>
@@ -1420,7 +1420,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
             of the page itself. Separate keys from the card design, so the two
             tabs never fight over the same values. ── */}
         {tab === "linkdesign" && (
-          <div className="space-y-4">
+          <div className="space-y-4 sc-step-in">
             {/* Phone: the Swift Links page sits at the top of the tab and stays
                 pinned while every control below scrolls under it; tap it to see
                 the whole page. */}
@@ -1557,6 +1557,9 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
           hide would leave the grid's 340px track claimed by an empty column. */}
       {!designerIsCanvas && (
       <div className="hidden lg:block order-1 lg:order-2 lg:sticky lg:top-6">
+        {/* Keyed by WHICH preview: card → Swift Links fades across; two tabs
+            that share a preview keep it mounted (no flicker). */}
+        <div key={tab === "linkdesign" || tab === "sharing" ? "links" : "card"} className="sc-step-in">
         {tab === "linkdesign" || tab === "sharing" ? (
           <>
             <div className="flex items-center justify-between gap-2 mb-2">
@@ -1589,6 +1592,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
             <p className="text-gray-600 text-[0.6875rem] mt-2 leading-snug">Your changes appear here instantly.</p>
           </>
         )}
+        </div>
       </div>
       )}
       {proBlock && (

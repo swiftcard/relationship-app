@@ -325,7 +325,7 @@ export default function WelcomePlan({
       <div className="max-w-6xl mx-auto">
         {setupNext !== null ? (
           // ── Step after the plan: the card is live now ───────────────────
-          <div className="max-w-md mx-auto text-center">
+          <div className="max-w-md mx-auto text-center sc-step-in">
             <div className="w-14 h-14 rounded-full bg-green-900/40 border border-green-700/40 flex items-center justify-center mx-auto mb-4">
               <svg className="w-7 h-7 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
             </div>

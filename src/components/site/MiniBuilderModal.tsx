@@ -151,7 +151,10 @@ export default function MiniBuilderModal({
               <h3 className="text-white font-bold text-[1.25rem] leading-tight">{current.title}</h3>
               {current.subtitle && <p className="text-white/50 text-[0.84375rem] mt-1.5 leading-relaxed">{current.subtitle}</p>}
 
-              <div className="mt-5 space-y-3.5">{current.content}</div>
+              {/* Keyed by step so each new step fades in (globals.css sc-step-in)
+                  instead of snapping; the fields are controlled by the sketch,
+                  so remounting them loses nothing. */}
+              <div key={step} className="mt-5 space-y-3.5 sc-step-in">{current.content}</div>
 
               {/* nav */}
               <div className="mt-7 flex items-center gap-3">
