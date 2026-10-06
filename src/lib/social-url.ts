@@ -80,6 +80,22 @@ export function handleLabel(raw?: string | null): string {
   return (raw || "").trim().replace(/^https?:\/\//i, "");
 }
 
+// What a pasted LinkedIn address is kept as (2026-10-05, "make it bulletproof"):
+//  • lnkd.in short links stay whole — rebuilding them as linkedin.com/<code>
+//    made a link that opens nothing.
+//  • Only the profile itself: a link copied while a panel was open
+//    (/in/john-doe/overlay/contact-info/, /in/john-doe/details/…) keeps
+//    /in/john-doe. Old /pub/ addresses are all path, so they stay whole.
+//  • LinkedIn Lite and email links (/mwlite/in/…, /comm/in/…) lose the prefix.
+const LINKEDIN_PAGES = new Set(["in", "company", "school", "showcase"]);
+function linkedinPath(url: URL, parts: string[]): string | null {
+  if (/(^|\.)lnkd\.in$/i.test(url.hostname)) return parts.length ? `https://lnkd.in/${parts.join("/")}` : null;
+  if (!parts.length) return null;
+  if (/^(mwlite|comm)$/i.test(parts[0]) && parts.length > 1) parts = parts.slice(1);
+  if (LINKEDIN_PAGES.has(parts[0].toLowerCase()) && parts.length > 2) parts = parts.slice(0, 2);
+  return `linkedin.com/${parts.join("/")}`;
+}
+
 // Turn whatever the user types (a URL, an @handle, or a bare handle) into a clean,
 // linkable value so the card connects to the right account. Shared by the new-card
 // wizard and the edit form so both behave identically.
@@ -93,7 +109,7 @@ export function normalizeSocial(raw: string, platform: string): string {
       // so a pasted profile URL always normalizes to something linkable.
       const url = new URL(v.includes("://") ? v : `https://${v}`);
       const parts = url.pathname.split("/").filter(Boolean);
-      if (platform === "linkedin") return parts.length ? `linkedin.com/${parts.join("/")}` : v;
+      if (platform === "linkedin") return linkedinPath(url, parts) ?? v;
       if (platform === "youtube") return parts.length ? `youtube.com/${parts.join("/")}` : v;
       if (platform === "facebook") return parts.length ? `facebook.com/${parts.join("/")}` : v;
       const handle = parts[parts.length - 1]?.replace(/^@/, "");

@@ -109,6 +109,23 @@ describe("LinkedIn exact link", () => {
       .toBe("linkedin.com/in/john-doe-4a7b21");
     expect(linkedinLinkIn("linkedin.com/in/johndoe")).toBe("linkedin.com/in/johndoe");
     expect(linkedinLinkIn("https://uk.linkedin.com/in/johndoe")).toBe("linkedin.com/in/johndoe");
+    // Every shape LinkedIn itself puts on the clipboard.
+    expect(linkedinLinkIn("https://www.linkedin.com/in/john-doe-4a7b21?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=android_app"))
+      .toBe("linkedin.com/in/john-doe-4a7b21");
+    expect(linkedinLinkIn("www.linkedin.com/in/john-doe-4a7b21")).toBe("linkedin.com/in/john-doe-4a7b21");
+    expect(linkedinLinkIn("https://m.linkedin.com/in/john-doe-4a7b21")).toBe("linkedin.com/in/john-doe-4a7b21");
+    // Copied from the address bar while a panel was open, or from LinkedIn Lite / an email.
+    expect(linkedinLinkIn("https://www.linkedin.com/in/john-doe-4a7b21/overlay/contact-info/")).toBe("linkedin.com/in/john-doe-4a7b21");
+    expect(linkedinLinkIn("https://www.linkedin.com/in/john-doe-4a7b21/details/experience/")).toBe("linkedin.com/in/john-doe-4a7b21");
+    expect(linkedinLinkIn("https://www.linkedin.com/mwlite/in/john-doe-4a7b21")).toBe("linkedin.com/in/john-doe-4a7b21");
+    expect(linkedinLinkIn("https://www.linkedin.com/comm/in/john-doe-4a7b21")).toBe("linkedin.com/in/john-doe-4a7b21");
+    // Short links stay whole — linkedin.com/<code> opens nothing.
+    expect(linkedinLinkIn("https://lnkd.in/gAbC123")).toBe("https://lnkd.in/gAbC123");
+    expect(socialUrl("linkedin", linkedinLinkIn("https://lnkd.in/gAbC123")!)).toBe("https://lnkd.in/gAbC123");
+    expect(linkedinLinkProblem("https://lnkd.in/gAbC123")).toBeNull();
+    // Names in other alphabets arrive percent-encoded and must stay that way.
+    expect(linkedinLinkIn("https://www.linkedin.com/in/%E5%BC%A0%E4%BC%9F-12345/")).toBe("linkedin.com/in/%E5%BC%A0%E4%BC%9F-12345");
+    expect(linkedinLinkIn("https://www.linkedin.com/")).toBeNull();
     expect(linkedinLinkIn("John Doe")).toBeNull();
     expect(linkedinLinkIn("https://instagram.com/johndoe")).toBeNull();
   });
@@ -127,12 +144,24 @@ describe("LinkedIn exact link", () => {
     }
   });
 
-  it("tells each device how to copy the link — address bar on a computer, Contact info on a phone", () => {
-    expect(linkedinSteps("computer").join(" ")).toMatch(/web address at the top/);
-    expect(linkedinSteps("computer", true).join(" ")).toMatch(/⌘V/);
-    expect(linkedinSteps("computer", false).join(" ")).toMatch(/Ctrl\+V/);
-    expect(linkedinSteps("ios").join(" ")).toMatch(/Contact info/);
-    expect(linkedinSteps("android").join(" ")).toMatch(/Contact/);
+  it("tells each device how to copy the link — address bar on a computer, Share profile → Copy on a phone", () => {
+    const pc = linkedinSteps("computer");
+    expect(pc.steps.join(" ")).toMatch(/web address at the top/);
+    expect(pc.help).toMatch(/Sign in/);
+    expect(linkedinSteps("computer", true).steps.join(" ")).toMatch(/⌘V/);
+    expect(linkedinSteps("computer", false).steps.join(" ")).toMatch(/Ctrl\+V/);
+    for (const phone of ["ios", "android"] as const) {
+      const p = linkedinSteps(phone);
+      expect(p.steps.join(" ")).toMatch(/Share profile → Copy/);
+      expect(p.steps.join(" ")).toMatch(/Paste my link/);
+      expect(p.help).toMatch(/Contact info/);
+    }
+    // Simple means short: three steps, none longer than a line on a phone.
+    for (const d of ["computer", "ios", "android"] as const) {
+      const { steps } = linkedinSteps(d);
+      expect(steps).toHaveLength(3);
+      for (const s of steps) expect(s.length, s).toBeLessThanOrEqual(70);
+    }
     expect(LINKEDIN_MY_PROFILE).toBe("https://www.linkedin.com/in/me/");
   });
 

@@ -81,6 +81,13 @@ describe("LinkedIn linkability — every stored shape builds a working URL", () 
   it("accepts a full pasted profile URL (with or without www / trailing slash)", () => {
     expect(socialUrl("linkedin", "https://www.linkedin.com/in/aaron-lavi")).toBe("https://www.linkedin.com/in/aaron-lavi");
     expect(normalizeSocial("https://www.linkedin.com/in/aaron-lavi/", "linkedin")).toBe("linkedin.com/in/aaron-lavi");
+    // 2026-10-05: a short link left the box as linkedin.com/<code>, which opens
+    // nothing; a sub-page keeps only the profile; old /pub/ paths stay whole.
+    expect(normalizeSocial("https://lnkd.in/gAbC123", "linkedin")).toBe("https://lnkd.in/gAbC123");
+    expect(normalizeSocial("lnkd.in/gAbC123", "linkedin")).toBe("https://lnkd.in/gAbC123");
+    expect(normalizeSocial("https://www.linkedin.com/in/aaron-lavi/overlay/contact-info/", "linkedin")).toBe("linkedin.com/in/aaron-lavi");
+    expect(normalizeSocial("https://www.linkedin.com/company/acme/about/", "linkedin")).toBe("linkedin.com/company/acme");
+    expect(normalizeSocial("https://www.linkedin.com/pub/aaron-lavi/1a/2b3/4c5", "linkedin")).toBe("linkedin.com/pub/aaron-lavi/1a/2b3/4c5");
     expect(socialUrl("linkedin", "linkedin.com/in/aaron-lavi")).toBe("https://linkedin.com/in/aaron-lavi");
   });
 

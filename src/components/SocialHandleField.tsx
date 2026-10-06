@@ -70,8 +70,10 @@ export const LINKEDIN_MY_PROFILE = "https://www.linkedin.com/in/me/";
 /** The first LinkedIn address in pasted text, or null. The share sheet can copy
  *  a sentence ("Check out my profile… https://www.linkedin.com/in/…?utm=…"). */
 export function linkedinLinkIn(text: string): string | null {
-  const m = text.match(/(?:https?:\/\/)?(?:[a-z]{2,3}\.)?linkedin\.com\/[^\s"'<>]+/i);
-  return m ? normalizeSocial(m[0], "linkedin") : null;
+  const m = text.match(/(?:https?:\/\/)?(?:(?:[a-z]{2,3}\.)?linkedin\.com|lnkd\.in)\/[^\s"'<>]+/i);
+  if (!m) return null;
+  const link = normalizeSocial(m[0], "linkedin");
+  return /linkedin\.com\/.|lnkd\.in\/./i.test(link) ? link : null;
 }
 
 /** Why a LinkedIn value cannot be someone's profile, or null when it can be. */
@@ -80,7 +82,10 @@ export function linkedinLinkProblem(value: string): string | null {
   if (!url) return null;
   let parts: string[];
   try {
-    parts = new URL(url).pathname.split("/").filter(Boolean).map((p) => p.toLowerCase());
+    const u = new URL(url);
+    // LinkedIn's own short link: we can't see where it goes, so trust it.
+    if (/(^|\.)lnkd\.in$/i.test(u.hostname)) return null;
+    parts = u.pathname.split("/").filter(Boolean).map((p) => p.toLowerCase());
   } catch {
     return null;
   }
@@ -104,37 +109,44 @@ function deviceNow(): Device {
   return "computer";
 }
 
-/** How to copy your own LinkedIn address, on the device in hand. */
-export function linkedinSteps(device: Device, mac = false): string[] {
+/**
+ * How to copy your own LinkedIn address, on the device in hand: three short
+ * steps, then one line for the case that goes wrong. Owner, 2026-10-05: "the
+ * directions are simple but make sense". The phone route is LinkedIn's
+ * ••• → Share profile → Copy, the same in the iPhone and Android apps; Contact
+ * info is the fallback because its label differs per app.
+ */
+export function linkedinSteps(device: Device, mac = false): { steps: string[]; help: string } {
   if (device === "computer") {
-    return [
-      "Your LinkedIn profile opened in a new tab (sign in if LinkedIn asks).",
-      "Copy the web address at the top of that tab — it starts linkedin.com/in/.",
-      `Come back here and paste it in the box (${mac ? "⌘V" : "Ctrl+V"}).`,
-    ];
+    return {
+      steps: [
+        "Your LinkedIn profile just opened in a new tab.",
+        "Copy the web address at the top of that tab.",
+        `Come back here and paste it into the box (${mac ? "⌘V" : "Ctrl+V"}).`,
+      ],
+      help: "Not signed in to LinkedIn? Sign in, then click Find my exact link again.",
+    };
   }
-  if (device === "ios") {
-    return [
-      "LinkedIn opens on your profile (sign in if it asks; if it opens on your feed, tap your photo).",
-      "Tap ••• More → Contact info, and copy the link under “Your Profile”.",
+  return {
+    steps: [
+      "LinkedIn opens on your profile. (On your feed? Tap your photo.)",
+      "Tap ••• (More), then Share profile → Copy.",
       "Come back here and tap Paste my link.",
-    ];
-  }
-  return [
-    "LinkedIn opens on your profile (sign in if it asks; if it opens on your feed, tap your photo).",
-    "Scroll to Contact and copy your LinkedIn link.",
-    "Come back here and tap Paste my link.",
-  ];
+    ],
+    help: "Can’t find it? Tap Contact info on your profile and copy the link there.",
+  };
 }
 
 function LinkedInLinkHelp({
   tone,
   inputId,
+  value,
   filled,
   onPick,
 }: {
   tone: (typeof TONE)[Variant];
   inputId: string;
+  value: string;
   filled: boolean;
   onPick: (v: string) => void;
 }) {
@@ -143,6 +155,11 @@ function LinkedInLinkHelp({
   const [device, setDevice] = useState<Device | null>(null);
   const [mac, setMac] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  // The value when the steps opened. Once a real profile link replaces it —
+  // pasted with ⌘V/Ctrl+V, a long-press, or the button — the job is done and
+  // the steps fold away (derived, so no effect has to chase the value).
+  const [openedWith, setOpenedWith] = useState("");
+  const done = value !== openedWith && /linkedin\.com\/.|lnkd\.in\/./i.test(value) && !linkedinLinkProblem(value);
   const away = useRef(false);
 
   // Back from the LinkedIn tab: put the cursor in the box so ⌘V/Ctrl+V lands
@@ -169,11 +186,17 @@ function LinkedInLinkHelp({
       const text = await navigator.clipboard.readText();
       const link = linkedinLinkIn(text);
       if (link) {
+        // Saved either way, so the box shows what was copied; a wrong page
+        // keeps the steps open with the reason, a right one folds them away.
         onPick(link);
-        setDevice(null);
+        const problem = linkedinLinkProblem(link);
+        // The reason already shows under the box; this says what to do next.
+        if (problem) setNote("Copy the link from your own profile, then tap Paste my link again.");
         return;
       }
-      setNote("What you copied isn’t a LinkedIn link yet — copy the link from your profile, then tap Paste again.");
+      setNote(text.trim()
+        ? "That isn’t a LinkedIn link. In LinkedIn, tap ••• (More) → Share profile → Copy, then tap Paste my link again."
+        : "Nothing is copied yet. In LinkedIn, tap ••• (More) → Share profile → Copy, then tap Paste my link again.");
     } catch {
       setNote("Press and hold the box above, then tap Paste.");
       document.getElementById(inputId)?.focus();
@@ -193,18 +216,21 @@ function LinkedInLinkHelp({
         onClick={() => {
           away.current = false;
           setNote(null);
+          setOpenedWith(value);
           setMac(/Mac/.test(navigator.platform || navigator.userAgent));
           setDevice(deviceNow());
         }}
-        className={`inline-flex items-center gap-1 text-[0.6875rem] font-semibold ${tone.open}`}
+        className={`inline-flex items-center gap-1 py-1 text-[0.6875rem] font-semibold ${tone.open}`}
       >
         {filled ? "Not sure it’s right? Find my exact link" : "Not sure what to type? Find my exact link"}
         <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3" aria-hidden><path fillRule="evenodd" d="M5.22 14.78a.75.75 0 001.06 0l7.22-7.22v5.69a.75.75 0 001.5 0v-7.5a.75.75 0 00-.75-.75h-7.5a.75.75 0 000 1.5h5.69l-7.22 7.22a.75.75 0 000 1.06z" clipRule="evenodd" /></svg>
       </a>
-      {device && (
-        <div data-linkedin-steps={device} className={`mt-2 rounded-xl border p-3 ${tone.box}`}>
+      {/* Read out when the steps appear, and when a note replaces them. */}
+      <div aria-live="polite">
+      {device && !done && (
+        <div data-linkedin-steps={device} className={`mt-1 rounded-xl border p-3 ${tone.box}`}>
           <ol className={`list-decimal pl-4 space-y-1 text-[0.6875rem] leading-snug ${tone.strong}`}>
-            {linkedinSteps(device, mac).map((s) => <li key={s}>{s}</li>)}
+            {linkedinSteps(device, mac).steps.map((s) => <li key={s}>{s}</li>)}
           </ol>
           {device !== "computer" && (
             <button
@@ -219,8 +245,11 @@ function LinkedInLinkHelp({
             </button>
           )}
           {note && <p className="text-amber-400 text-[0.6875rem] mt-2 leading-snug">{note}</p>}
+          {/* The fallback goes last: steps → the action → what if it didn't work. */}
+          <p className={`mt-2 text-[0.625rem] leading-snug ${tone.note}`}>{linkedinSteps(device, mac).help}</p>
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -385,7 +414,7 @@ export default function SocialHandleField({
       ) : null}
 
       {linkedin && (
-        <LinkedInLinkHelp tone={t} inputId={inputId} filled={filled} onPick={onChange} />
+        <LinkedInLinkHelp tone={t} inputId={inputId} value={value} filled={filled} onPick={onChange} />
       )}
     </div>
   );

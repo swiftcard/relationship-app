@@ -305,6 +305,7 @@ describe("LinkedIn: find my exact link", () => {
             expect(await steps.textContent()).toMatch(/web address at the top/);
             expect(m.btnH).toBeNull();
           } else {
+            expect(await steps.textContent()).toMatch(/Share profile → Copy/);
             expect(await steps.textContent()).toMatch(/Contact info/);
             expect(m.btnH!).toBeGreaterThanOrEqual(32);
             // The light theme turns .text-white near-black except on the app's
@@ -329,6 +330,90 @@ describe("LinkedIn: find my exact link", () => {
       await page.waitForFunction(() => (window as unknown as { __state: { socials: Record<string, string> } }).__state.socials.linkedin === "linkedin.com/in/john-doe-4a7b21");
       expect(await page.inputValue('[data-social-row="linkedin"] input')).toBe("john-doe-4a7b21");
       expect(await page.textContent('[data-social-row="linkedin"]')).toContain("Opens linkedin.com/in/john-doe-4a7b21");
+    } finally { await page.close(); }
+  });
+
+  it("Android gets the same phone steps and button", async () => {
+    const ANDROID = "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Mobile Safari/537.36";
+    const page = await mount(390, phoneCol(390), {}, "dark", ANDROID);
+    try {
+      await page.click("[data-linkedin-find]");
+      await page.locator('[data-linkedin-steps="android"]').waitFor();
+      expect(await page.textContent("[data-linkedin-steps]")).toMatch(/Share profile → Copy/);
+      expect(await page.locator("[data-linkedin-steps] button").count()).toBe(1);
+    } finally { await page.close(); }
+  });
+
+  it("computer: once a profile link is pasted into the box, the steps fold away", async () => {
+    const page = await mount(1280, DESKTOP_COL, {}, "dark", WIN);
+    try {
+      await page.click("[data-linkedin-find]");
+      await page.locator("[data-linkedin-steps]").waitFor();
+      await page.locator('[data-social-row="linkedin"] input').focus();
+      await page.evaluate(() => {
+        const dt = new DataTransfer();
+        dt.setData("text", "https://www.linkedin.com/in/john-doe-4a7b21/");
+        document.querySelector('[data-social-row="linkedin"] input')!.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+      });
+      await page.locator("[data-linkedin-steps]").waitFor({ state: "detached" });
+      expect(await page.inputValue('[data-social-row="linkedin"] input')).toBe("john-doe-4a7b21");
+      // …and it can be opened again to re-check.
+      expect(await page.textContent("[data-linkedin-find]")).toMatch(/Not sure it’s right?/);
+      await page.click("[data-linkedin-find]");
+      await page.locator("[data-linkedin-steps]").waitFor();
+    } finally { await page.close(); }
+  });
+
+  // What "Paste my link" does with each thing the clipboard can hold.
+  async function tapPaste(clip: string | null) {
+    const page = await mount(390, phoneCol(390), {}, "dark", IPHONE);
+    await page.evaluate((c) => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value: { readText: () => (c === null ? Promise.reject(new Error("denied")) : Promise.resolve(c)) },
+      });
+    }, clip);
+    await page.click("[data-linkedin-find]");
+    await page.locator("[data-linkedin-steps]").waitFor();
+    await page.click("[data-linkedin-steps] button");
+    await page.waitForTimeout(150);
+    const linkedin = () => page.evaluate(() => (window as unknown as { __state: { socials: Record<string, string> } }).__state.socials.linkedin ?? "");
+    return { page, linkedin };
+  }
+
+  it("Paste my link: a profile link (LinkedIn's share copy) is saved clean and the steps fold away", async () => {
+    const { page, linkedin } = await tapPaste("https://www.linkedin.com/in/john-doe-4a7b21?utm_source=share&utm_medium=ios_app");
+    try {
+      expect(await linkedin()).toBe("linkedin.com/in/john-doe-4a7b21");
+      expect(await page.locator("[data-linkedin-steps]").count()).toBe(0);
+      expect(await page.textContent('[data-social-row="linkedin"]')).toContain("Opens linkedin.com/in/john-doe-4a7b21");
+    } finally { await page.close(); }
+  });
+
+  it("Paste my link: the feed instead of the profile keeps the steps open and says why", async () => {
+    const { page } = await tapPaste("https://www.linkedin.com/feed/");
+    try {
+      expect(await page.locator("[data-linkedin-steps]").count()).toBe(1);
+      expect(await page.textContent('[data-social-row="linkedin"]')).toMatch(/not your profile/);
+      expect(await page.textContent("[data-linkedin-steps]")).toMatch(/Paste my link again/);
+    } finally { await page.close(); }
+  });
+
+  it("Paste my link: something that isn't LinkedIn, or nothing copied, saves nothing and says what to do", async () => {
+    for (const [clip, says] of [["Hello world", /isn’t a LinkedIn link/], ["", /Nothing is copied yet/]] as const) {
+      const { page, linkedin } = await tapPaste(clip);
+      try {
+        expect(await linkedin()).toBe("");
+        expect(await page.textContent("[data-linkedin-steps]")).toMatch(says);
+      } finally { await page.close(); }
+    }
+  });
+
+  it("Paste my link: a phone that won't share the clipboard falls back to press-and-hold", async () => {
+    const { page, linkedin } = await tapPaste(null);
+    try {
+      expect(await linkedin()).toBe("");
+      expect(await page.textContent("[data-linkedin-steps]")).toMatch(/Press and hold the box above, then tap Paste/);
     } finally { await page.close(); }
   });
 
