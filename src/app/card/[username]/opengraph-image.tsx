@@ -3,6 +3,7 @@ import { resolveCardMeta } from "@/lib/resolve-card";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { isCardActive } from "@/lib/card-active";
 import { storedCaptureIsCurrent } from "@/lib/stored-capture";
+import { BrandOg, loadBrandOgInputs } from "@/lib/brand-og";
 
 // A pixel-perfect PNG of the real card, captured client-side on the dashboard
 // and stored here. When present it IS the share preview, so the link unfurls
@@ -83,17 +84,21 @@ async function embedImage(url: string | null): Promise<string | null> {
   }
 }
 
-// Guaranteed-renderable branded fallback — ASCII text only, so it can NEVER
-// hit Satori's "missing glyph" error the way an arbitrary name/company could.
-function BrandFallback() {
-  return (
-    <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #0b1120 0%, #1e293b 100%)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
-        <div style={{ width: 76, height: 76, borderRadius: 20, background: "#2563eb", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 46, fontWeight: 800, color: "#fff" }}>S</div>
-        <div style={{ fontSize: 54, fontWeight: 800, color: "#fff", letterSpacing: -1 }}>SwiftCard</div>
-      </div>
-    </div>
-  );
+// Guaranteed-renderable branded fallback: the SAME picture the homepage and
+// every marketing page unfurl with (lib/brand-og), at this route's 1200×686
+// frame, so an offline/deleted card or a failed render never shows a
+// generic placeholder. Every input it loads is optional and time-bounded,
+// and its text is Latin-1 only, so it can't glyph-fail the way an arbitrary
+// name/company could.
+async function brandFallbackResponse(): Promise<Response> {
+  const { fonts, ...inputs } = await loadBrandOgInputs(2500);
+  const buf = await new ImageResponse(<BrandOg {...inputs} height={686} />, {
+    ...size,
+    fonts: fonts.length ? fonts : undefined,
+  }).arrayBuffer();
+  return new Response(buf, {
+    headers: { "Content-Type": "image/png", "Cache-Control": CACHE_DEGRADED },
+  });
 }
 
 // Absolute last resort: a static solid PNG (bytes are constant → cannot fail).
@@ -470,14 +475,14 @@ export default async function Image({
   }
 
   // ── Tier 2: faithfully render the card (full-bleed) ───────────────────────
-  try {
-    let p: Meta | null = null;
-    try { p = await resolveCardMeta(username); } catch { p = null; }
-    const meta: Meta = p ?? {
-      name: "SwiftCard", title: null, company: null, photoUrl: null, logoUrl: null,
-      phone: null, email: null, website: null, address: null, accentColor: null, template: null,
-      style: {}, custom: null,
-    };
+  // Only for a card that exists and is live. An address with no card behind
+  // it, or a card that's offline/deleted, is not anyone's card: it gets the
+  // brand picture (Tier 3) — the same one the homepage unfurls with — never a
+  // template rendered around a made-up "SwiftCard" name.
+  let p: Meta | null = null;
+  if (active) try { p = await resolveCardMeta(username); } catch { p = null; }
+  if (p) try {
+    const meta: Meta = p;
     // Never hand the renderers a null name (used for initials/hero text).
     if (!(typeof meta.name === "string" && meta.name.trim())) meta.name = "SwiftCard";
 
@@ -518,7 +523,7 @@ export default async function Image({
 
   // ── Tier 3: guaranteed branded image (ASCII only — can't glyph-fail) ──────
   try {
-    return await toResponse(<BrandFallback />, "image/png", false);
+    return await brandFallbackResponse();
   } catch {
     /* fall through to the static bytes */
   }

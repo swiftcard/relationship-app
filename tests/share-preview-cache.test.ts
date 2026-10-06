@@ -70,8 +70,18 @@ describe("a degraded preview expires quickly", () => {
   });
 
   it("never caches a branded fallback as if it were the card", () => {
-    // Tier 3 is not this person's card at all.
-    expect(og()).toMatch(/toResponse\(<BrandFallback \/>, "image\/png", false\)/);
+    // Tier 3 is not this person's card at all: the shared brand picture
+    // (lib/brand-og, the same one the homepage unfurls with), short-cached.
+    expect(og()).toMatch(/return await brandFallbackResponse\(\);/);
+    const fallback = og().slice(og().indexOf("async function brandFallbackResponse"), og().indexOf("// Absolute last resort"));
+    expect(fallback).toMatch(/<BrandOg \{\.\.\.inputs\} height=\{686\} \/>/);
+    expect(fallback).toMatch(/"Cache-Control": CACHE_DEGRADED/);
+  });
+
+  it("an unknown or offline address gets the brand picture, never a made-up card", () => {
+    expect(og()).toMatch(/if \(active\) try \{ p = await resolveCardMeta\(username\); \}/);
+    expect(og()).toMatch(/if \(p\) try \{/);
+    expect(og()).not.toMatch(/name: "SwiftCard", title: null/);
   });
 
   it("and not the last-resort static bytes either", () => {
