@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { isInternalCardSlug, isUnlistedCardSlug } from "@/lib/seeded-views";
 
@@ -16,6 +16,26 @@ describe("our own test cards are not offered to Google", () => {
   it("matches on prefix, because each submission mints a new suffix", () => {
     expect(isInternalCardSlug("apple-review-anything-at-all")).toBe(true);
     expect(isInternalCardSlug("APPLE-REVIEW-UPPERCASE")).toBe(true);
+  });
+
+  it("covers the QA scripts' throwaway cards (indexed as dead results, 2026-10-05)", () => {
+    // Real ones Google was holding in a site: search after the accounts were
+    // deleted: qa-au-55191296, qa-crm-951343, qa-free-m-09708875.
+    for (const slug of ["qa-au-55191296", "qa-crm-951343", "qa-free-m-09708875", "qa-flows-1a2b3c", "qa-pro-m-47744724"]) {
+      expect(isInternalCardSlug(slug), `${slug} is a QA artifact`).toBe(true);
+    }
+    // But not a customer whose slug merely contains "qa".
+    expect(isInternalCardSlug("qatar-airways")).toBe(false);
+    expect(isInternalCardSlug("maria-qa-consulting")).toBe(false);
+  });
+
+  it("a missing card answers with a real 404, not a 200 skeleton", () => {
+    // src/app/[username]/loading.tsx streamed a 200 shell before the page could
+    // call notFound(), so deleted/renamed cards were "soft 404s" that Google kept
+    // as live results (site: search, 2026-10-05). The Swift Links page has no
+    // loading boundary and 404s correctly — the card page must match it.
+    expect(existsSync(join(process.cwd(), "src/app/[username]/loading.tsx"))).toBe(false);
+    expect(existsSync(join(process.cwd(), "src/app/links/[username]/loading.tsx"))).toBe(false);
   });
 
   it("leaves the marketing demos alone", () => {

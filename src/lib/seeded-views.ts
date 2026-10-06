@@ -34,7 +34,12 @@ export function isSeededView(visitorId: string | null | undefined): boolean {
 // showcases, linked from the preview page and the marketing components, and
 // they should stay indexable. The distinction is "internal artifact" versus
 // "content we chose to publish".
-const INTERNAL_CARD_PREFIXES = ["apple-review-", "iaptest-"];
+//
+// "qa-" is every card the QA scripts mint (scripts/qa-*.mjs: qa-flows-, qa-free-m-,
+// qa-crm-, qa-au-, …). They live for minutes, but the sitemap revalidates
+// hourly and Google crawled them in that window — then kept them as dead
+// results under the domain (found in a site: search, 2026-10-05).
+const INTERNAL_CARD_PREFIXES = ["apple-review-", "iaptest-", "qa-"];
 
 /**
  * True for a card slug that belongs to our own testing rather than to a
