@@ -27,6 +27,12 @@ describe("the SwiftCard badge is universal", () => {
     expect(badge).toMatch(/tone === "onWhite"/);
   });
 
+  it("carries the REAL SwiftCard logo, not a hand-drawn bolt (owner, 2026-10-05)", () => {
+    expect(badge).toMatch(/import \{ SwiftCardIcon \} from "@\/components\/SwiftCardLogo"/);
+    expect(badge).toMatch(/<SwiftCardIcon size=\{20\} \/>/);
+    expect(badge, "the stand-in bolt is back").not.toMatch(/<polygon/);
+  });
+
   it("card page: the blurb renders under Saved to Contacts, ungated by plan", () => {
     expect(save).toMatch(/<MadeWithSwiftCard/);
     // Inside the `saved &&` block — it is the post-save invite.

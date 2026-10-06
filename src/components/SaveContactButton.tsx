@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import { createPortal } from "react-dom";
-import { getVisitorId, getVisitorInfo, hasSharedWith, markSharedWith, hasSavedContact, markSavedContact } from "@/lib/visitor";
+import { getVisitorId, getVisitorInfo, markSharedWith, hasSavedContact, markSavedContact } from "@/lib/visitor";
 import { triggerSignupNudge, triggerSignupNudgeWhenVisible } from "@/lib/nudge";
 import {
   buildVCard, pickContactImage, contactInitials, CONTACT_INITIALS_BG, CONTACT_INITIALS_FG, type VCardPhoto,
@@ -154,7 +154,6 @@ export default function SaveContactButton({
   // Desktop-only QR popup: on a computer you can't tap the card into your
   // phone, so the QR is the bridge — scan it and the card opens there.
   const [showQr, setShowQr] = useState(false);
-  const [alreadyShared, setAlreadyShared] = useState(false);
   const [form, setForm] = useState({ name: "", phone: "", email: "" });
   // SMS opt-in. MUST default to false and MUST NOT gate submission — Twilio
   // A2P review requires the box be unchecked by default and optional.
@@ -176,12 +175,11 @@ export default function SaveContactButton({
 
   useEffect(() => {
     if (!cardOwner) return;
-    // Assigned, not just raised: these describe THIS card, so when cardOwner
-    // changes they must fall back to false for the new one. Only ever setting
-    // them true meant a component reused across two cards carried the first
-    // card's "Saved to Contacts!" state onto the second.
+    // Assigned, not just raised: this describes THIS card, so when cardOwner
+    // changes it must fall back to false for the new one. Only ever setting it
+    // true meant a component reused across two cards carried the first card's
+    // "Saved to Contacts!" state onto the second.
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration read from localStorage
-    setAlreadyShared(hasSharedWith(cardOwner));
     setSaved(hasSavedContact(cardOwner));
     // Pre-fill from an earlier share anywhere on SwiftCard — never ask twice.
     const v = getVisitorInfo();
@@ -192,12 +190,15 @@ export default function SaveContactButton({
   // this component entirely — ScanSaveContact (on the card page) announces when
   // that's done so the share-back ask lands there too, matching the button flow.
   // Listening rather than lifting state keeps the sheet's markup in one place.
+  //
+  // EVERY save raises the sheet — button, phone, QR popup or scan (owner,
+  // 2026-10-05: the popups "need to work every single time"). It used to be
+  // skipped for good once a visitor had shared with this owner, which from the
+  // outside looked like the popup had broken. Someone who already shared finds
+  // the form filled in from last time: one tap to send, or "No thanks".
   useEffect(() => {
     if (!cardOwner) return;
     function onScanSaved() {
-      // Visibility-aware: this fires as the visitor comes back from the OS
-      // "Add to Contacts" sheet, where the page can still be backgrounded.
-      if (hasSharedWith(cardOwner!)) { triggerSignupNudgeWhenVisible("vcard"); return; }
       setSaved(true);
       setShowSheet(true);
     }
@@ -205,21 +206,24 @@ export default function SaveContactButton({
     return () => window.removeEventListener(SCAN_SAVED_EVENT, onScanSaved);
   }, [cardOwner]);
 
-  // Every dismissal path (X, backdrop, "No thanks") still earns the visitor a
+  // Every dismissal path (X, backdrop, "No thanks", Escape) still earns the visitor a
   // friendly "create your free card" invite — the moment is already theirs.
+  // A half-typed error goes with the sheet, so the next save opens it clean.
   function closeSheet() {
     setShowSheet(false);
+    setShareErr(null);
+    setShareMissing(null);
     triggerSignupNudge("vcard");
   }
 
   // Closing the QR popup hands off to the SAME share-back sheet the Save
   // Contact button raises — the ask doesn't belong inside the QR popup (they're
   // looking at their phone, not the screen), it belongs after it, exactly where
-  // it lands in the save flow. If they've already shared, skip straight to the
-  // signup nudge like every other dismissal path.
+  // it lands in the save flow. With no card owner to share with, skip straight
+  // to the signup nudge like every other dismissal path.
   function closeQr() {
     setShowQr(false);
-    if (cardOwner && !alreadyShared && !hasSharedWith(cardOwner)) {
+    if (cardOwner) {
       setTimeout(() => setShowSheet(true), 250);
     } else {
       triggerSignupNudge("vcard");
@@ -254,7 +258,7 @@ export default function SaveContactButton({
       if (!suppressTracking) {
         trackEvent(username, "downloaded_vcard", source);
       }
-      if (cardOwner && !alreadyShared && !hasSharedWith(cardOwner)) {
+      if (cardOwner) {
         setTimeout(() => setShowSheet(true), 900);
       }
       return;
@@ -278,7 +282,7 @@ export default function SaveContactButton({
       setSaved(true);
       markSavedContact(cardOwner);
       if (username && !suppressTracking) trackEvent(username, "downloaded_vcard", source);
-      if (cardOwner && !alreadyShared && !hasSharedWith(cardOwner)) {
+      if (cardOwner) {
         setTimeout(() => setShowSheet(true), 900);
       } else {
         triggerSignupNudgeWhenVisible("vcard", 900);
@@ -346,10 +350,10 @@ export default function SaveContactButton({
       trackEvent(username, "downloaded_vcard", source);
     }
 
-    // Show the "share your info back" lead-capture sheet (card owner's). If it
-    // won't show, invite the visitor to make their OWN card instead (signup nudge).
-    // Live check too — they may have shared via another form since mount.
-    if (cardOwner && !alreadyShared && !hasSharedWith(cardOwner)) {
+    // Show the "share your info back" lead-capture sheet (card owner's) — on
+    // every save. With no owner to share with, invite the visitor to make
+    // their OWN card instead (signup nudge).
+    if (cardOwner) {
       setTimeout(() => setShowSheet(true), 900);
     } else {
       // Visibility-aware: the OS "Add to Contacts" sheet backgrounds the page
@@ -415,7 +419,6 @@ export default function SaveContactButton({
     }
 
     markSharedWith(cardOwner, form);
-    setAlreadyShared(true);
     setStatus("done");
     // After they share back, close whichever surface hosted the form (the
     // bottom sheet or the desktop QR popup) and invite them to make their own
@@ -425,6 +428,7 @@ export default function SaveContactButton({
     setTimeout(() => {
       setShowSheet(false);
       setShowQr(false);
+      setStatus("idle"); // the next save opens the form, not "Info shared!"
       triggerSignupNudgeWhenVisible("vcard", 60);
     }, 1500);
   }

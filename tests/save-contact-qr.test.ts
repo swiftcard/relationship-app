@@ -147,9 +147,9 @@ describe("a QR save notifies the owner exactly like a button save", () => {
   it("closing the QR popup raises the same share-back sheet the button raises", () => {
     const close = src.slice(src.indexOf("function closeQr()"), src.indexOf("async function downloadVCard"));
     expect(close, "closing the QR no longer opens the share sheet").toContain("setShowSheet(true)");
-    // Someone who already shared shouldn't be asked twice — they get the
-    // signup nudge instead, same as every other dismissal path.
-    expect(close).toContain("hasSharedWith");
+    // EVERY time (owner, 2026-10-05) — no "already shared" skip. Only a card
+    // with no owner to share with goes straight to the signup nudge.
+    expect(close, "the sheet is being skipped for visitors who shared before").not.toContain("hasSharedWith");
     expect(close).toContain("triggerSignupNudge");
   });
 
@@ -316,17 +316,46 @@ describe("the free-card invite closes out every path", () => {
     // opened the sheet, the sheet's own exit would find the invite already
     // spent — the visitor would never see it at the moment it's meant to land.
     const closeQr = src.slice(src.indexOf("function closeQr()"), src.indexOf("async function downloadVCard"));
-    expect(closeQr, "not-yet-shared must open the sheet").toContain("setShowSheet(true)");
-    expect(closeQr, "already-shared must invite directly").toContain('triggerSignupNudge("vcard")');
+    expect(closeQr, "a card with an owner must open the sheet").toContain("setShowSheet(true)");
+    expect(closeQr, "no owner to share with must invite directly").toContain('triggerSignupNudge("vcard")');
     expect(closeQr, "the two cases must be exclusive, not both").toMatch(/\} else \{/);
   });
 
   it("and neither does the phone scan", () => {
     const onScan = src.slice(src.indexOf("function onScanSaved()"), src.indexOf("window.addEventListener(SCAN_SAVED_EVENT"));
-    expect(onScan).toContain("hasSharedWith");
-    // Visibility-aware: this fires as the visitor returns from the OS "Add to
-    // Contacts" sheet, where the page can still be backgrounded.
-    expect(onScan, "already-shared must invite directly").toContain('triggerSignupNudgeWhenVisible("vcard")');
-    expect(onScan, "otherwise the sheet comes first").toContain("setShowSheet(true)");
+    // EVERY scan raises the sheet (owner, 2026-10-05) — the invite then
+    // follows when it is closed, exactly as on the button path.
+    expect(onScan, "a scan by someone who shared before skips the sheet again").not.toContain("hasSharedWith");
+    expect(onScan, "the sheet comes first").toContain("setShowSheet(true)");
+    expect(onScan, "the scan spent the invite before the sheet").not.toMatch(/triggerSignupNudge/);
+  });
+});
+
+// ── Every save, every time (owner, 2026-10-05) ───────────────────────────────
+//
+// "They need to work every single time." The share-back sheet used to be
+// skipped for good once a visitor had shared with this owner, and the free-card
+// invite was rationed to once per browser — so on a second save both popups
+// simply did not appear, which looked exactly like a broken feature.
+describe("the share-back sheet opens on every save", () => {
+  it("no path gates the sheet on an earlier share", () => {
+    expect(src, "a save path still skips the sheet for visitors who shared before").not.toMatch(/hasSharedWith|alreadyShared/);
+  });
+
+  it("every save path that has an owner opens the sheet", () => {
+    const save = src.slice(src.indexOf("async function downloadVCard"), src.indexOf("async function shareBack"));
+    // Native app, phone iframe, and the browser-built file.
+    expect((save.match(/setTimeout\(\(\) => setShowSheet\(true\), 900\)/g) ?? []).length).toBe(3);
+  });
+
+  it("a finished share resets to the form, so the next save does not open on 'Info shared!'", () => {
+    const done = src.slice(src.indexOf('setStatus("done")'));
+    const block = done.slice(0, 900);
+    expect(block, "status stays 'done' after the sheet closes").toContain('setStatus("idle")');
+  });
+
+  it("closing the sheet clears a leftover validation error", () => {
+    const closeSheet = src.slice(src.indexOf("function closeSheet()"), src.indexOf("function closeQr()"));
+    expect(closeSheet).toContain("setShareErr(null)");
   });
 });

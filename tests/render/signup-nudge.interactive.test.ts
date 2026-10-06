@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { build } from "esbuild";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { Browser, Page } from "playwright";
 import { appCss, launchBrowser } from "./harness";
@@ -138,9 +138,15 @@ async function mount(opts: { acctExists?: boolean; width?: number; seed?: Record
   const html = `<!doctype html><html><head><meta charset="utf-8"><style>${css}</style>
      <style>body{margin:0;padding:16px;background:#FAF7F2}</style></head>
      <body class="sc-app"><div id="root"></div><script>${bundle}</script></body></html>`;
-  await page.route("https://swiftcard.me/**", (route) =>
-    route.fulfill({ status: 200, contentType: "text/html; charset=utf-8", body: html }),
-  );
+  await page.route("https://swiftcard.me/**", (route) => {
+    // Static images come from public/, exactly as Next serves them — the
+    // blurb's logo is the real brand icon and must actually load.
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith(".png")) {
+      return route.fulfill({ status: 200, contentType: "image/png", body: readFileSync(resolve("public", path.slice(1))) });
+    }
+    return route.fulfill({ status: 200, contentType: "text/html; charset=utf-8", body: html });
+  });
   await page.goto(`https://swiftcard.me/card/${OWNER}`);
 
   if (opts.seed) {
@@ -262,6 +268,12 @@ describe("save a contact → the free-card popup actually appears", () => {
       () => document.querySelectorAll('[aria-label="Create your own SwiftCard"]').length,
     );
     expect(count).toBe(1);
+    // ...and the re-trigger while it is open is not counted as a second view.
+    const impressions = await page.evaluate(() =>
+      (window as never as { calls: { url: string; body: { event_type?: string } | null }[] }).calls
+        .filter((c) => c.url.includes("/api/analytics/event") && c.body?.event_type === "nudge_impression").length,
+    );
+    expect(impressions, "one popup on screen, one impression").toBe(1);
     await page.close();
   });
 
@@ -304,9 +316,10 @@ describe("save a contact → the free-card popup actually appears", () => {
     await page.close();
   });
 
-  it("REAL JOURNEY: a visitor who already shared still gets the popup on save", async () => {
-    // Section 2 was completed earlier (or on another card), so the share-back
-    // sheet is skipped entirely and the save goes straight to the nudge.
+  it("REAL JOURNEY: a visitor who already shared gets BOTH popups again, form pre-filled", async () => {
+    // Owner, 2026-10-05: "they need to work every single time". Having shared
+    // with this owner before no longer skips the sheet — it opens with their
+    // details already in it, and the invite follows as on any other save.
     const page = await mount({
       seed: {
         swiftcard_shared: JSON.stringify({ "alex-morgan": true }),
@@ -314,11 +327,40 @@ describe("save a contact → the free-card popup actually appears", () => {
       },
     });
 
-    await page.locator('button:has-text("Save Contact")').click();
-    await page.waitForTimeout(2200);
+    await saveContact(page);
+    expect(await page.locator('input[placeholder="Your name *"]').inputValue()).toBe("Mina R");
+    expect(await page.locator('input[placeholder="Your phone *"]').inputValue()).toBe("+15557654321");
 
-    expect(await sheetOpen(page), "already shared → no share-back ask").toBe(false);
-    expect(await popupVisible(page), "the popup is the whole follow-up for this path").toBe(true);
+    await page.locator('button:has-text("No thanks")').click();
+    await page.waitForTimeout(900);
+    expect(await popupVisible(page), "the invite follows the sheet").toBe(true);
+    await page.close();
+  });
+
+  it("EVERY TIME: after sharing, the next save opens the FORM again — not a stale 'Info shared!'", async () => {
+    const page = await mount();
+    await saveContact(page);
+    await page.locator('input[placeholder="Your name *"]').fill("Mina R");
+    await page.locator('input[placeholder="Your phone *"]').fill("+15557654321");
+    await page.locator('button[type="submit"]').click();
+    await page.waitForTimeout(2600);
+    expect(await popupVisible(page)).toBe(true);
+    await page.locator('[aria-label="Create your own SwiftCard"] button[aria-label="Dismiss"]').click();
+    await page.waitForTimeout(400);
+
+    // The button now reads "Saved to Contacts!" — pressing it again is a save.
+    await page.locator('button:has-text("Saved to Contacts!")').click();
+    await page.waitForFunction(
+      () => !!Array.from(document.querySelectorAll("p")).find((p) => /have yours too/.test(p.textContent ?? "")),
+      undefined,
+      { timeout: 8000 },
+    );
+    expect(await page.locator('button[type="submit"]').isVisible(), "the sheet reopened on its done state").toBe(true);
+    expect(await page.locator('input[placeholder="Your name *"]').inputValue()).toBe("Mina R");
+
+    await page.locator('button:has-text("No thanks")').click();
+    await page.waitForTimeout(900);
+    expect(await popupVisible(page), "the second save invites too").toBe(true);
     await page.close();
   });
 
@@ -336,11 +378,9 @@ describe("save a contact → the free-card popup actually appears", () => {
     await page.close();
   });
 
-  it("ONCE EVER: a save-class moment invites only the FIRST time — never again", async () => {
-    // Owner order 2026-09-02 (supersedes the 2026-08-25 unrationed rule): the
-    // first save/scan gets the invite; after that it never comes back — not
-    // on a re-save, and not on a DIFFERENT card either (the flag is per
-    // browser, not per card or session).
+  it("EVERY TIME: each save invites — the same card again, and a different card", async () => {
+    // Owner, 2026-10-05 (supersedes the 2026-09-02 once-ever rule for the
+    // save moment): "they need to work every single time".
     const page = await mount();
     await saveContact(page);
     await page.locator('button:has-text("No thanks")').click();
@@ -349,22 +389,30 @@ describe("save a contact → the free-card popup actually appears", () => {
     await page.locator('[aria-label="Create your own SwiftCard"] button[aria-label="Dismiss"]').click();
     await page.waitForTimeout(400);
 
-    // Re-fire the same moment — nothing.
-    await page.evaluate(() => window.dispatchEvent(new CustomEvent("sc:nudge", { detail: { source: "vcard" } })));
+    // Save the same card again — the sheet AND the invite, again.
+    await page.locator('button:has-text("Saved to Contacts!")').click();
+    await page.waitForFunction(
+      () => !!Array.from(document.querySelectorAll("p")).find((p) => /have yours too/.test(p.textContent ?? "")),
+      undefined,
+      { timeout: 8000 },
+    );
+    await page.locator('button:has-text("No thanks")').click();
     await page.waitForTimeout(800);
-    expect(await popupVisible(page), "a second save never re-invites").toBe(false);
+    expect(await popupVisible(page), "a second save re-invites").toBe(true);
+    await page.locator('[aria-label="Create your own SwiftCard"] button[aria-label="Dismiss"]').click();
+    await page.waitForTimeout(400);
 
-    // A different card in the same browser — still nothing.
+    // A different card in the same browser — again.
     await page.evaluate(() => (window as never as { mount: (c?: string) => void }).mount("sam-rivera"));
     await page.waitForTimeout(300);
     await saveContact(page);
     await page.locator('button:has-text("No thanks")').click();
     await page.waitForTimeout(800);
-    expect(await popupVisible(page), "the invite is once per BROWSER, not per card").toBe(false);
+    expect(await popupVisible(page), "another card's save invites").toBe(true);
     await page.close();
   });
 
-  it("ONCE EVER: the flag survives a reload (localStorage, not session)", async () => {
+  it("EVERY TIME: a new visit still invites on save (nothing is spent in storage)", async () => {
     const page = await mount();
     await saveContact(page);
     await page.locator('button:has-text("No thanks")').click();
@@ -375,11 +423,16 @@ describe("save a contact → the free-card popup actually appears", () => {
     await page.reload();
     await page.evaluate(() => (window as never as { mount: (c?: string) => void }).mount());
     await page.waitForSelector("button");
-    // The earlier save also persisted its own saved/shared state, so drive
-    // the MOMENT directly rather than re-clicking through the sheet.
-    await page.evaluate(() => window.dispatchEvent(new CustomEvent("sc:nudge", { detail: { source: "vcard" } })));
+    await page.locator('button:has-text("Saved to Contacts!")').click();
+    await page.waitForFunction(
+      () => !!Array.from(document.querySelectorAll("p")).find((p) => /have yours too/.test(p.textContent ?? "")),
+      undefined,
+      { timeout: 8000 },
+    );
+    await page.locator('button:has-text("No thanks")').click();
     await page.waitForTimeout(800);
-    expect(await popupVisible(page), "a new visit must not re-invite").toBe(false);
+    expect(await popupVisible(page), "a new visit's save must invite").toBe(true);
+    expect(await page.evaluate(() => localStorage.getItem("sc_nudged_ever:save"))).toBeNull();
     await page.close();
   });
 
@@ -444,6 +497,42 @@ describe("the blurb under Saved to Contacts", () => {
     expect(info.borderColor).toBe("rgb(228, 221, 212)");
     expect(info.clippedX, "the blurb must not clip its own text").toBeLessThanOrEqual(1);
     expect(info.height).toBeGreaterThan(30);
+    await page.close();
+  });
+
+  it("shows the REAL SwiftCard logo, loaded, beside the words (owner, 2026-10-05)", async () => {
+    const page = await mount();
+    await saveContact(page);
+    await page.locator('button:has-text("No thanks")').click();
+    await page.waitForTimeout(700);
+
+    const logo = await page.evaluate((sel) => {
+      const a = document.querySelector(sel) as HTMLElement;
+      const img = a.querySelector("img") as HTMLImageElement | null;
+      const words = Array.from(a.querySelectorAll("span")).find((s) => /^Made with/.test(s.textContent ?? ""));
+      if (!img || !words) return null;
+      const r = img.getBoundingClientRect();
+      const w = words.getBoundingClientRect();
+      return {
+        src: new URL(img.src).pathname,
+        loaded: img.complete && img.naturalWidth > 0,
+        width: Math.round(r.width),
+        height: Math.round(r.height),
+        // Vertically centred on the text line, to the left of it.
+        centreGap: Math.abs((r.top + r.bottom) / 2 - (w.top + w.bottom) / 2),
+        leftOfWords: r.right <= w.left,
+        drawnBolt: !!a.querySelector("polygon"),
+      };
+    }, blurb);
+
+    expect(logo, "the blurb has no logo image").not.toBeNull();
+    expect(logo!.src).toBe("/brand-icon-192.png");
+    expect(logo!.loaded, "the logo did not load").toBe(true);
+    expect(logo!.width).toBe(20);
+    expect(logo!.height).toBe(20);
+    expect(logo!.centreGap).toBeLessThanOrEqual(1.5);
+    expect(logo!.leftOfWords).toBe(true);
+    expect(logo!.drawnBolt, "the hand-drawn stand-in is back").toBe(false);
     await page.close();
   });
 

@@ -1,3 +1,5 @@
+import { SwiftCardIcon } from "@/components/SwiftCardLogo";
+
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
 // ── "Made with SwiftCard · Get yours free" ───────────────────────────────────
@@ -48,13 +50,13 @@ export default function MadeWithSwiftCard({
       className={`group w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-full border shadow-sm hover:border-blue-300 hover:shadow-md transition-all ${className}`}
       style={ground}
     >
-      <span
-        className="w-5 h-5 rounded-md flex items-center justify-center shrink-0"
-        style={{ background: "linear-gradient(135deg,#1D3FB8,#2563EB 55%,#4DA8F5)" }}
-      >
-        <svg viewBox="0 0 100 100" className="w-3 h-3" aria-hidden="true">
-          <polygon points="57,15 38,52 50,52 43,85 62,48 50,48" fill="#fff" />
-        </svg>
+      {/* The real SwiftCard app icon — the same mark as the site header,
+          footer and app nav. It was a hand-drawn bolt on a gradient square,
+          which didn't read as the SwiftCard logo (owner, 2026-10-05). The
+          words beside it already say "SwiftCard", so the image stays silent
+          to screen readers. */}
+      <span aria-hidden="true" className="shrink-0 flex">
+        <SwiftCardIcon size={20} />
       </span>
       {/* whitespace-nowrap on both halves: at 320px inside a padded section card
           this line is close to the available width, and letting it wrap split

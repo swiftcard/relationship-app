@@ -44,6 +44,18 @@ describe("each moment invites once EVER, spent only when a popup renders", () =>
     expect(host).not.toMatch(/sc_nudge_count/);
   });
 
+  it("EXCEPT the save moment, which invites every time (owner, 2026-10-05)", () => {
+    // "They need to work every single time": a second save ended at the
+    // share-back sheet with no invite, which read as a broken popup.
+    expect(host).toMatch(/EVERY_TIME_CLASSES = new Set\(\["save"\]\)/);
+    expect(host).toMatch(/onceEver && localStorage\.getItem\(key\)/);
+    // Link taps and share-info stay rationed.
+    expect(host).not.toMatch(/EVERY_TIME_CLASSES = new Set\(\[[^\]]*"(link|share)"/);
+    // Unrationed must not mean stacked: a popup already on screen swallows
+    // the next trigger instead of re-opening and re-counting.
+    expect(host).toMatch(/if \(deciding\.current \|\| open\.current\) return;/);
+  });
+
   it("the account check runs BEFORE the lifetime flag is written", () => {
     const handler = host.slice(host.indexOf("async function onNudge"));
     const acctCheck = handler.indexOf("await visitorHasAccount()");

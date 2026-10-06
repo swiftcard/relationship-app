@@ -64,6 +64,13 @@ const NUDGE_CLASS: Record<string, string> = {
 const nudgeClassOf = (src: string) => NUDGE_CLASS[src] ?? "link";
 const slotKey = (cls: string) => `sc_nudged_ever:${cls}`;
 
+// EXCEPT the save moment, which now invites EVERY time (owner, 2026-10-05:
+// the Save Contact / QR-scan popups "need to work every single time"). Once
+// ever meant a second save — on this card or any other — ended at "Share your
+// info" with no invite, which read as the popup being broken. Incidental link
+// taps and share-info keep their once-ever flag.
+const EVERY_TIME_CLASSES = new Set(["save"]);
+
 // The conversion funnel's denominator: without impression/click events the
 // popup's absence was invisible in data — there was literally no number that
 // could reveal it wasn't showing. Attributed to the card that hosted the
@@ -149,6 +156,10 @@ export default function SignupNudgeHost({
   // two triggers in quick succession could both pass the guards and both
   // count/track, since the slot is only written at render time now.
   const deciding = useRef(false);
+  // Is a popup on screen right now? With the save moment unrationed, a second
+  // trigger for the same save (a backdrop tap during "Info shared!", then its
+  // timer) must not re-open it or count a second impression.
+  const open = useRef(false);
   const native = useIsNativeApp();
 
   // Warm the example card while the page is idle, so the invite never opens
@@ -165,16 +176,17 @@ export default function SignupNudgeHost({
   useEffect(() => {
     async function onNudge(e: Event) {
       const src = (e as CustomEvent).detail?.source ?? "default";
-      if (deciding.current) return;
+      if (deciding.current || open.current) return;
       deciding.current = true;
       try {
         const cls = nudgeClassOf(src);
         const key = slotKey(cls);
-        // Once EVER per class per browser (owner order 2026-09-02). Fails
-        // open on blocked storage — a private-mode visitor still gets the
-        // invite, it just can't be remembered.
+        const onceEver = !EVERY_TIME_CLASSES.has(cls);
+        // Once EVER per class per browser (owner order 2026-09-02) — save
+        // excepted, above. Fails open on blocked storage — a private-mode
+        // visitor still gets the invite, it just can't be remembered.
         try {
-          if (localStorage.getItem(key)) return;
+          if (onceEver && localStorage.getItem(key)) return;
         } catch { /* private mode — show anyway */ }
         // Existing SwiftCard customers are never nudged to create a card —
         // they already have one. Checked BEFORE the flag is spent, so a slow
@@ -182,7 +194,10 @@ export default function SignupNudgeHost({
         if (await visitorHasAccount()) return;
         // The popup is actually going to render — spend this class's
         // lifetime invite.
-        try { localStorage.setItem(key, "1"); } catch { /* private mode */ }
+        if (onceEver) {
+          try { localStorage.setItem(key, "1"); } catch { /* private mode */ }
+        }
+        open.current = true;
         trackNudge(cardUsername, "nudge_impression", src);
         // A newer nudge can arrive while an older one's dismiss-fade is still
         // scheduled — cancel that stale timer so it can't clear the new popup.
@@ -212,7 +227,7 @@ export default function SignupNudgeHost({
   if (variant === "links") {
     return (
       <SwiftLinksPromoSheet
-        onClose={() => setSource(null)}
+        onClose={() => { open.current = false; setSource(null); }}
         ctaHref={ctaHref}
         onCta={() => trackNudge(cardUsername, "nudge_cta_click", source)}
         exploreHref={`/?src=${encodeURIComponent(source)}`}
@@ -221,6 +236,7 @@ export default function SignupNudgeHost({
   }
 
   function dismiss() {
+    open.current = false;
     setClosing(true);
     dismissTimer.current = setTimeout(() => setSource(null), 220);
   }
