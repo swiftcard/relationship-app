@@ -307,6 +307,9 @@ describe("LinkedIn: find my exact link", () => {
           } else {
             expect(await steps.textContent()).toMatch(/Contact info/);
             expect(m.btnH!).toBeGreaterThanOrEqual(32);
+            // The light theme turns .text-white near-black except on the app's
+            // own blues — a custom blue read dark-on-blue live (2026-10-05).
+            expect(await page.$eval("[data-linkedin-steps] button", (b) => getComputedStyle(b).color)).toBe("rgb(255, 255, 255)");
           }
           if (process.env.SHOT) await page.screenshot({ path: `${process.env.SHOT}/linkedin-${name.replace(" ", "")}-${theme}.png`, fullPage: false, clip: { x: 0, y: 0, width, height: 520 } });
         } finally { await page.close(); }

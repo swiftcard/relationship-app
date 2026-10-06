@@ -210,7 +210,10 @@ function LinkedInLinkHelp({
             <button
               type="button"
               onClick={paste}
-              className="mt-2.5 w-full rounded-lg bg-[#0A66C2] hover:bg-[#0958a8] text-white text-xs font-semibold py-2"
+              // bg-blue-600 + text-white: the light theme turns .text-white
+              // near-black except on the app's own blues (globals.css), and a
+              // custom LinkedIn blue read dark-on-blue live (2026-10-05).
+              className="mt-2.5 w-full rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold py-2"
             >
               Paste my link
             </button>
