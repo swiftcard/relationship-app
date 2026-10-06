@@ -58,7 +58,7 @@ beforeAll(async () => {
     (window as any).mount = (canScan: boolean) => {
       createRoot(document.getElementById("root")!).render(
         h("main", { className: "sc-app bg-gray-950 min-h-screen p-4" },
-          h(AddContactModal, { variant: "scan", canScan, cardOwner: "demo", onAdded() {} })),
+          h(AddContactModal, { variant: "scan", canScan, cardOwner: "demo", onAdded(l: unknown) { (window as any).__added = l; } })),
       );
     };
   `);
@@ -218,6 +218,47 @@ describe.each([[390, false], [390, true], [1280, false]] as [number, boolean][])
 });
 
 describe("shutter, Free, and a blocked camera", () => {
+  // Owner, 2026-10-06: "Scan a card" on Contacts opens the actual scanner; the
+  // scan fills the contact in; they add where they met and notes, and press
+  // Add contact. The whole path, ending in a saved contact.
+  it("Scan a card → scanner → details filled → where you met + notes → Add contact saves it all", async () => {
+    const { page } = await open(390);
+    const saved: Record<string, string>[] = [];
+    await page.route(`${ORIGIN}/api/leads/manual`, async (r) => {
+      const body = r.request().postDataJSON() as Record<string, string>;
+      saved.push(body);
+      await r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ lead: { id: "new-lead", ...body } }) });
+    });
+    try {
+      await setScale(page, 1);
+      await page.getByRole("button", { name: "Scan a card" }).click();
+      // One tap lands in the scanner itself, not a form with a second button.
+      await page.locator("[data-card-scan-camera]").waitFor();
+      await page.locator("[data-card-scan-camera]").waitFor({ state: "detached", timeout: 8000 });
+
+      await expect.poll(() => page.getByPlaceholder("Sarah Williams").inputValue(), { timeout: 8000 }).toBe("Jordan Rivera");
+      expect(await page.getByPlaceholder("sarah@acme.com").inputValue()).toBe("jordan@example.com");
+      expect(await page.getByPlaceholder("(555) 000-0000").inputValue()).toBe("(415) 555-0148");
+      expect(await page.getByPlaceholder("Acme Corp").inputValue()).toBe("Northbeam Studio");
+      await page.getByText("Filled from the card", { exact: false }).waitFor();
+
+      await page.getByPlaceholder("e.g. NAR Conference, booth #42").fill("Realtor expo, booth 12");
+      await page.getByPlaceholder("What you discussed, next steps…").fill("Wants a listing walkthrough next week");
+      await page.locator('form button[type="submit"]', { hasText: "Add contact" }).click();
+
+      await expect.poll(() => saved.length, { timeout: 8000 }).toBe(1);
+      expect(saved[0]).toMatchObject({
+        name: "Jordan Rivera", email: "jordan@example.com", phone: "(415) 555-0148", company: "Northbeam Studio",
+        where_met: "Realtor expo, booth 12", notes: "Wants a listing walkthrough next week", card_owner: "demo",
+      });
+      // Saved → the modal closes and the new contact is handed to the list.
+      await page.locator("#add-contact-title").waitFor({ state: "detached" });
+      expect(await page.evaluate(() => (window as unknown as { __added?: { id: string } }).__added?.id)).toBe("new-lead");
+    } finally {
+      await page.context().close();
+    }
+  });
+
   it("the shutter takes the photo even when the frame isn't green", async () => {
     const { page, sent } = await open(390);
     try {
