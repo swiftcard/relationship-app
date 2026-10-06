@@ -24,6 +24,7 @@ import { bindFormDevice } from "@/lib/known-contact";
 import { isOwnerRequest } from "@/lib/self-traffic";
 import { markName } from "@/lib/contact-privacy";
 import { activeEvent } from "@/lib/event-tag";
+import { sameContactFill } from "@/lib/same-contact";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
@@ -184,41 +185,43 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
 
-    // Idempotency: a double-submit (double-tap, slow-response retry, or a
-    // client that fires on both click and form-submit) must not create two
-    // leads — that means two notifications, two pushes, and two CRM/Zapier
-    // syncs for one person. The (IP, card) rate limit is 3/10min, which is
-    // deliberately loose enough to let two DIFFERENT people at one venue (shared
-    // NAT IP) both submit — so it can't be the dedup. Instead, treat a lead as a
-    // duplicate of a very recent one from the SAME person to the SAME card:
-    // matched on visitor_id when present (the first-party per-browser id, so two
-    // different people never collide), else on the phone number (unique to a
-    // person). Window kept short (5 min) so a genuine second visit later still
-    // captures. On a hit we return success WITHOUT inserting — the visitor
-    // already succeeded the first time, so re-reporting success is correct and
-    // avoids a "something went wrong" re-submit loop.
-    const DEDUP_WINDOW_MS = 5 * 60 * 1000;
-    // Duplicate = same phone to the same card within the window (and same
-    // visitor_id too when the browser supplied one, for extra precision). Same
-    // phone → same person, so this catches the double-submit without dropping a
-    // genuinely different second contact. A corrected re-submit with a DIFFERENT
-    // phone is not a duplicate and still captures.
-    const dedupSince = new Date(Date.now() - DEDUP_WINDOW_MS).toISOString();
-    let dupQuery = admin
+    // ── The same person is one contact (owner, 2026-10-06) ─────────────────
+    // Save Contact opens "Share your info" on EVERY save, filled in from last
+    // time (d6c84bca), so a returning visitor re-sends with one tap. A 5-minute
+    // dedup window let that become a second contact on any later visit: a
+    // duplicate row, a second "new lead" push, a second CRM/Zapier sync and, on
+    // Free, one of the month's contacts used up. Same phone to the same card is
+    // the contact the owner already has — whenever it arrives and from whichever
+    // device — which also covers a double-tap, a slow-response retry and a send
+    // replayed from the offline outbox. Phone, because it is required here and
+    // unique to a person; a corrected re-send with a DIFFERENT phone is a new
+    // contact. The sample contact every card starts with never matches.
+    //
+    // Nothing is inserted, notified or counted, and the visitor still gets
+    // success ("Info shared!"), which also avoids a re-submit loop. Only what
+    // the contact lacked is added — a missing email or company, and a new
+    // message appended — never overwriting anything the owner has edited.
+    // Nothing to reconcile on SMS consent: this route cannot change it.
+    const { data: knownRows } = await admin
       .from("leads")
-      .select("id, tags")
+      .select("id, email, company, message")
       .eq("card_owner", card_owner)
       .eq("phone", phone)
-      .gte("created_at", dedupSince)
+      .not("tags", "cs", "{demo}")
+      .order("created_at", { ascending: true })
       .limit(1);
-    // A freshly MINTED id (no cookie, no client id) is unique to this request,
-    // so matching on it would stop a fast double-tap from deduping at all —
-    // fall back to phone alone exactly as a browser with no id always did.
-    if (!visitIdentity.minted) dupQuery = dupQuery.eq("visitor_id", visitor_id);
-    const { data: recentDup } = await dupQuery;
-    if (recentDup?.length) {
-      // Nothing to reconcile on a re-submit: this route cannot change SMS
-      // consent in either direction any more (see above).
+    const known = knownRows?.[0];
+    if (known) {
+      const fill = sameContactFill(known, { email, company, message });
+      if (fill) await admin.from("leads").update(fill).eq("id", known.id);
+      // This browser is theirs too, exactly as a first send binds it below, so
+      // a re-share from a new phone is still recognised on later visits.
+      if (!(await isOwnerRequest(admin, card_owner).catch(() => false))) {
+        after(
+          bindFormDevice(admin, { leadId: known.id as string, ownerId: ownerProfile.id as string, visitorId: visitor_id, email, phone })
+            .catch((e) => reportError("leads.bindFormDevice", e)),
+        );
+      }
       return attachVisitIdentity(NextResponse.json({ success: true, deduped: true }), visitIdentity);
     }
 

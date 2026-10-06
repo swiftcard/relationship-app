@@ -552,8 +552,13 @@ describe("the pipeline is wired the way the tests assume", () => {
     // Every success exit sets the cookie, including the deduped re-submit.
     expect(leadsSrc).toMatch(/attachVisitIdentity\(NextResponse\.json\(\{ success: true \}\), visitIdentity\)/);
     expect(leadsSrc).toMatch(/attachVisitIdentity\(NextResponse\.json\(\{ success: true, deduped: true \}\), visitIdentity\)/);
-    // A minted id is unique per request, so it must not narrow the double-submit dedupe.
-    expect(leadsSrc).toMatch(/if \(!visitIdentity\.minted\) dupQuery = dupQuery\.eq\("visitor_id", visitor_id\);/);
+    // A minted id is unique per request, so it must not narrow the double-submit
+    // dedupe. The same-person check (2026-10-06) is card + phone only — no
+    // visitor id at all, so neither a minted id nor another device gets a
+    // second contact through.
+    const knownQuery = leadsSrc.slice(leadsSrc.indexOf("const { data: knownRows }"), leadsSrc.indexOf("const known = knownRows"));
+    expect(knownQuery).toMatch(/\.eq\("phone", phone\)/);
+    expect(knownQuery).not.toMatch(/visitor_id/);
   });
 
   it("a lead submitted by a browser whose storage was wiped still lands on the cookie's id", () => {
