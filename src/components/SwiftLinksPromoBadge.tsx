@@ -43,7 +43,20 @@ export default function SwiftLinksPromoBadge({ username, appUrl }: { username: s
         aria-label="What is Swift Links?"
         className="absolute top-3.5 left-3.5 z-20 w-10 h-10 flex items-center justify-center rounded-[14px] bg-white/85 backdrop-blur-md border border-black/[0.06] shadow-[0_2px_10px_rgba(15,23,42,0.18)] transition-transform active:scale-95 hover:scale-105"
       >
-        <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]" aria-hidden="true">
+        {/* The bolt GLINTS every 3s (owner, 2026-10-06: "a very clean subtle
+            flash just to grab the attention" of whoever is looking at the
+            page): ~0.4s of brighter blue, a soft glow and a 10% pop, then
+            still for the rest of the cycle. Bolt only; the chip never moves.
+            Off under reduced motion. */}
+        <style>{`
+          @keyframes sc-bolt-flash {
+            0%, 14%, 100% { transform: scale(1); filter: brightness(1) drop-shadow(0 0 0 rgba(59,130,246,0)); }
+            5% { transform: scale(1.1); filter: brightness(1.35) drop-shadow(0 0 4px rgba(59,130,246,0.8)); }
+          }
+          .sc-bolt-flash { transform-origin: 50% 50%; animation: sc-bolt-flash 3s ease-in-out 1s infinite; }
+          @media (prefers-reduced-motion: reduce) { .sc-bolt-flash { animation: none; } }
+        `}</style>
+        <svg viewBox="0 0 24 24" className="sc-bolt-flash w-[22px] h-[22px]" aria-hidden="true">
           <path d="M13 2.5L4.5 13.5h6l-1.5 8 8.5-11h-6l1.5-8z" fill="#1d4ed8" stroke="#1d4ed8" strokeWidth="1" strokeLinejoin="round" />
         </svg>
       </button>
