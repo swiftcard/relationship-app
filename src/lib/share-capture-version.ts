@@ -26,7 +26,11 @@
 // Import-free on purpose: the browser capture imports it too.
 
 export const SHARE_CAPTURE_VERSION = 8;
-export const SHARE_CAPTURES_TRUSTED_SINCE = Date.parse("2026-10-06T20:00:00Z");
+// The moment the pixel-verified capture (v8, 5633d26a) went live: its Vercel
+// deploy turned READY at 18:35:50Z. It was first set to 20:00Z, a guess in
+// the FUTURE, so a verified re-capture taken at 19:27Z was ignored and the
+// owner's shared link still showed the stand-in.
+export const SHARE_CAPTURES_TRUSTED_SINCE = Date.parse("2026-10-06T18:36:00Z");
 export const DROPPED_OLD_CAPTURES: ReadonlySet<string> = new Set([
   "aaronlavi-nadlanhomesllc", // logo slot empty
   "aaronlavi-malvecapital",   // logo slot empty
