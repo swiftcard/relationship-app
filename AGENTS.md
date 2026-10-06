@@ -98,7 +98,7 @@ of them is removed or quietly weakened.
 | Guard | Runs | What it catches |
 |---|---|---|
 | `.github/workflows/uptime.yml` → `scripts/health-check.mjs` | every 15 min | outage, blank card, expired Apple secret, **speed budget** (median full-response time per key route, DB latency) |
-| `.github/workflows/nightly-qa.yml` | nightly 05:00 NY + after every production deploy | real Chromium against production: flows, every screen at both widths for Free/Pro/Office, Office admin + member, **analytics and notifications end to end** (`scripts/qa-prod-probe.mjs`) |
+| `.github/workflows/nightly-qa.yml` | nightly 05:00 NY + after every production deploy | real Chromium against production: flows, every screen at both widths for Free/Pro/Office, Office admin + member, **analytics and notifications end to end** (`scripts/qa-prod-probe.mjs`), **real cards' link previews: name, logo and photo actually in the picture** (`scripts/qa-share-preview.mjs`) |
 | `.github/workflows/deploy-watchdog.yml` | on every deploy | error-rate spike → automatic rollback (needs the Sentry secrets) |
 | `ci.yml` + the tripwire tests (`one-notification-per-visit`, `view-visit-window`, `analytics-*`, `trial-eligibility`, `proxy-auth-hop`) | every push | the recurring bugs, pinned at source |
 | `.githooks/pre-push` (installed by `npm install` via `scripts/install-hooks.mjs`) | before every push leaves the machine | a type or lint error reaching `main`. CI was red for 26 pushes in Sept 2026 over one lint error nobody saw, and while red its Test job never ran. Pinned by `tests/push-guard.test.ts`. |

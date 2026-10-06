@@ -46,6 +46,11 @@ jobs:
         run: OUT=nightly/probe node scripts/qa-prod-probe.mjs || true
       # Who gets which notification — bell, team inbox and phone — for Free,
       # Pro, an Office owner/admin/employee and a lapsed Office owner.
+      # Real cards' link previews, as a messenger gets them: the name, and
+      # every logo and photo the card shows, actually in the picture
+      # (owner, 2026-10-06: "it'll miss my name or it'll miss my logo").
+      - name: Link previews show the name, logo and photo
+        run: OUT=nightly/share-preview node scripts/qa-share-preview.mjs || true
       - name: Notifications for every plan and account type
         run: OUT=nightly/notifications node scripts/qa-notifications.mjs || true
       - name: Health + speed budget

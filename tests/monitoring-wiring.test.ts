@@ -28,10 +28,21 @@ describe("always-on production guards", () => {
     const wf = read(".github/workflows/nightly-qa.yml");
     expect(wf).toMatch(/- cron: "0 9 \* \* \*"/);
     expect(wf).toContain("deployment_status:");
-    for (const s of ["qa-prod-probe.mjs", "health-check.mjs", "qa-flows.mjs", "qa-office-links-brand.mjs", "qa-office-shell.mjs", "qa-sweep.mjs", "qa-nightly-summary.mjs"]) {
+    for (const s of ["qa-prod-probe.mjs", "health-check.mjs", "qa-flows.mjs", "qa-office-links-brand.mjs", "qa-office-shell.mjs", "qa-sweep.mjs", "qa-share-preview.mjs", "qa-nightly-summary.mjs"]) {
       expect(wf, s).toContain(`scripts/${s}`);
     }
     expect(wf).toContain("labels: 'nightly-qa'");
+  });
+
+  // Owner, 2026-10-06: a texted link unfurled without the logo, and nothing
+  // noticed. The link-preview check must stay in the run AND in the verdict,
+  // and must keep comparing pixels, not just fetching the image.
+  it("the nightly run checks real link previews for a dropped name, logo or photo", () => {
+    expect(read("scripts/qa-nightly-summary.mjs")).toContain('"nightly/share-preview/failures.json"');
+    const p = read("scripts/qa-share-preview.mjs");
+    expect(p).toContain("?embed=card");
+    expect(p).toMatch(/sLive >= 10 && sOg < /);
+    expect(p).toContain("unfurls as the generic SwiftCard picture");
   });
 
   it("the production probe pins the pipelines that were fixed more than once", () => {
@@ -75,7 +86,7 @@ describe("always-on production guards", () => {
   });
 
   it("every QA script can take its secrets from the environment, so CI can run it", () => {
-    for (const s of ["qa-flows", "qa-sweep", "qa-office-shell", "qa-office-links-brand", "qa-a11y", "qa-mac", "qa-prod-probe"]) {
+    for (const s of ["qa-flows", "qa-sweep", "qa-office-shell", "qa-office-links-brand", "qa-a11y", "qa-mac", "qa-prod-probe", "qa-share-preview"]) {
       const src = read(`scripts/${s}.mjs`);
       expect(src, s).toContain("process.env[k]");
       expect(src, s).not.toMatch(/const env = readFileSync\(`\$\{ROOT\}\/\.env\.local`/);
