@@ -97,6 +97,8 @@ export const LAST_AUTH_UID_KEY = "sc_last_uid";
 
 /** Cookie mirror of the active card — must die with the localStorage copy. */
 const ACTIVE_CARD_COOKIE = "sc_active_card";
+/** …and its session-only copy the dashboard reads (lib/active-card.ts). */
+const SESSION_CARD_COOKIE = "sc_session_card";
 
 /**
  * Should person-scoped (identity) state be reset for this session user?
@@ -144,6 +146,7 @@ export function clearPersonScopedState(opts?: { includeGuestFlow?: boolean; sign
   }
   try {
     document.cookie = `${ACTIVE_CARD_COOKIE}=; path=/; max-age=0; samesite=lax`;
+    document.cookie = `${SESSION_CARD_COOKIE}=; path=/; max-age=0; samesite=lax`;
   } catch { /* ignore */ }
   // OTHER accounts' unfinished card drafts (swiftcard_card_draft:<uid>) once
   // someone is signed in — never shown to anyone else, but a previous person's

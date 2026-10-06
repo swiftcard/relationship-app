@@ -9,12 +9,31 @@ import { join } from "node:path";
 const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 
 describe("returning user: open SwiftCard → show my QR", () => {
-  it("the dashboard honours the remembered card, like Contacts and Links do", () => {
-    // A Pro account with two cards met "Select a card" on every cold open of
-    // the app because only ?card= was read.
+  it("the dashboard keeps the card for the SESSION, and a fresh open asks again", () => {
+    // This audit first made the dashboard reopen the one-year remembered card.
+    // Owner, 2026-10-06: reopening the app must show "Select a card" again.
+    // So the fallback is the session-only copy: bare /dashboard links inside
+    // the app keep the card, a relaunch starts at the picker.
     const src = read("src/app/dashboard/page.tsx");
-    expect(src).toMatch(/ACTIVE_CARD_COOKIE/);
-    expect(src).toMatch(/const selectedCard = params\.card \?\? cookieCard/);
+    expect(src).toMatch(/SESSION_CARD_COOKIE/);
+    expect(src).not.toMatch(/ACTIVE_CARD_COOKIE/);
+    expect(src).toMatch(/const selectedCard = params\.card \?\? sessionCard/);
+    expect(src).toMatch(/const sessionCard = params\.pick \? null :/);
+    expect(src).toMatch(/restored=\{!params\.card && !!sessionCard\}/);
+
+    const lib = read("src/lib/active-card.ts");
+    expect(lib).toMatch(/export const SESSION_CARD_COOKIE = "sc_session_card";/);
+
+    // Written with NO max-age (a session cookie) next to its sessionStorage
+    // marker; a session card this webview never wrote sends you to the picker.
+    const persist = read("src/components/CardSelectionPersist.tsx");
+    const write = persist.slice(persist.indexOf("document.cookie = `${SESSION_CARD_COOKIE}=${"));
+    expect(write.slice(0, write.indexOf(";\n"))).not.toMatch(/max-age/);
+    expect(persist).toMatch(/sessionStorage\.setItem\(SESSION_CARD_FLAG, "1"\)/);
+    expect(persist).toMatch(/location\.replace\("\/dashboard\?pick=1"\)/);
+
+    // Signing out / switching account drops it with the one-year copy.
+    expect(read("src/lib/account-state.ts")).toMatch(/\$\{SESSION_CARD_COOKIE\}=; path=\/; max-age=0/);
   });
 
   it("Show QR is the share box's first, primary control", () => {

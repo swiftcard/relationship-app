@@ -63,7 +63,7 @@ import { trialHistoryFor } from "@/lib/trial-ledger";
 import EventTagChip from "@/components/EventTagChip";
 import { activeEvent } from "@/lib/event-tag";
 import { ownLiveHref } from "@/lib/self-pass";
-import { ACTIVE_CARD_COOKIE } from "@/lib/active-card";
+import { SESSION_CARD_COOKIE } from "@/lib/active-card";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
@@ -76,20 +76,22 @@ function daysAgoISO(days: number) {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ upgraded?: string; range?: string; card?: string; surface?: string; vrange?: string; welcome?: string; claim?: string }>;
+  searchParams: Promise<{ upgraded?: string; range?: string; card?: string; surface?: string; vrange?: string; welcome?: string; claim?: string; pick?: string }>;
 }) {
   const supabase = await createClient();
   const params = await searchParams;
-  // The remembered card (sc_active_card, written by CardSelectionPersist)
-  // stands in when the address carries no ?card=. Contacts and Links already
-  // did this; the dashboard did not, so a Pro account with two cards met the
-  // "Select a card" screen on every cold open of the app and every typed
-  // /dashboard — one more tap between "open SwiftCard" and "show my card".
+  // The card chosen EARLIER IN THIS SESSION (sc_session_card, written by
+  // CardSelectionPersist) stands in when the address carries no ?card=, so the
+  // many bare /dashboard links inside the app keep your card. It is a session
+  // cookie on purpose: a fresh open of the app shows "Select a card" again
+  // (owner, 2026-10-06 — the 2026-09-30 audit had made it reopen the last card
+  // from the one-year sc_active_card, and the owner wants to choose).
+  // ?pick=1 is the picker on demand (and CardSelectionPersist's loop guard).
   // Only a card THIS account owns is honoured (the find() below), so a cookie
   // left by a previous account on the device still lands on the picker.
   const cookieStore = await cookies();
-  const cookieCard = cookieStore.get(ACTIVE_CARD_COOKIE)?.value ?? null;
-  const selectedCard = params.card ?? cookieCard;
+  const sessionCard = params.pick ? null : (cookieStore.get(SESSION_CARD_COOKIE)?.value ?? null);
+  const selectedCard = params.card ?? sessionCard;
   const viewsRange: "today" | "week" | "month" | "locations" =
     params.vrange === "week" || params.vrange === "month" || params.vrange === "locations" ? params.vrange : "today";
 
@@ -841,7 +843,10 @@ export default async function DashboardPage({
         {/* Only a card THIS account owns is remembered: the raw ?card= could
             be the previous account's address carried over by the nav on the
             first page after a sign-in (isolation audit 2026-09-24). */}
-        <CardSelectionPersist selectedCard={selectedCard && activeCard?.username === selectedCard ? selectedCard : null} />
+        <CardSelectionPersist
+          selectedCard={selectedCard && activeCard?.username === selectedCard ? selectedCard : null}
+          restored={!params.card && !!sessionCard}
+        />
       </Suspense>
       {/* Persist plan/role so the guided tour describes the right plan. */}
       <TourContextPersist tier={tourTier} isOfficeMember={isOfficeMember} hasCards />

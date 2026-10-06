@@ -32,3 +32,21 @@ export const ACTIVE_CARD_COOKIE_MAX_AGE = 31536000;
  * the wrist kept showing the previous card until the app was relaunched.
  */
 export const ACTIVE_CARD_EVENT = "swiftcard:active-card";
+
+/**
+ * Session-only mirror of the selection — what the DASHBOARD falls back to when
+ * the address carries no ?card=. No max-age, so it dies with the app (or the
+ * browser session): reopening the app shows "Select a card" again, while every
+ * bare /dashboard link inside the same session keeps the card you chose
+ * (owner, 2026-10-06: "when the app is closed and I reopen it … it's supposed
+ * to open to choose a card"). Contacts, Links and the widget keep reading the
+ * one-year {@link ACTIVE_CARD_COOKIE}.
+ */
+export const SESSION_CARD_COOKIE = "sc_session_card";
+
+/**
+ * sessionStorage marker written next to {@link SESSION_CARD_COOKIE}. A webview
+ * that kept session cookies across a relaunch still starts with empty
+ * sessionStorage, so a session card WITHOUT this marker is a previous launch's.
+ */
+export const SESSION_CARD_FLAG = "sc_session_card_set";
