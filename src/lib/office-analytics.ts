@@ -1,5 +1,6 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { getAccountEmail } from "@/lib/account-email";
+import { defaultEmployeeSort } from "@/lib/office-analytics-metrics";
 
 type Admin = ReturnType<typeof getAdminSupabase>;
 
@@ -265,8 +266,10 @@ export async function getOfficeAnalytics(officeId: string, ownerId: string): Pro
     }),
   );
 
-  // Owner first, then by views desc.
-  employees.sort((a, b) => (a.isOwner ? -1 : b.isOwner ? 1 : b.views - a.views));
+  // A to Z, like a directory — never ranked by views or leads. The console is
+  // not a race between teammates (owner, 2026-10-06); this is the Team tab's
+  // order, the same one the Analytics table opens on.
+  const sorted = defaultEmployeeSort(employees);
 
   const totals = {
     members: team.length,
@@ -275,7 +278,7 @@ export async function getOfficeAnalytics(officeId: string, ownerId: string): Pro
     leads: employees.reduce((s, e) => s + e.leads, 0),
   };
 
-  return { totals, employees };
+  return { totals, employees: sorted };
 }
 
 // ── Office Analytics Dashboard (date-ranged, RPC-backed) ─────────────────────

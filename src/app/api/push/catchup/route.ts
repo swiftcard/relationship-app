@@ -22,9 +22,9 @@ import type { OfficeNotificationType } from "@/lib/office-notify";
 // next happened to open the app, which for the notification that matters most
 // in the product is the failure this whole file exists to fix.
 //
-// So: one push, at 8am in the person's OWN timezone, saying what came in while
-// they were asleep. One, not a replay — a night of five events must not become
-// five buzzes at breakfast.
+// So: one push, the morning after (due from 8am in the person's OWN timezone),
+// saying what came in while they were asleep. One, not a replay — a night of
+// five events must not become five buzzes at breakfast.
 //
 // WHERE THE COPY COMES FROM. Not a queue. Every held push left a bell row
 // behind (lib/visit-notify.ts writes the row first and pushes second), so the
@@ -73,20 +73,20 @@ const RANK: Record<PushCategory, number> = {
   contact_saved: 3,
   card_view: 1,
   meeting_booked: 2,
-  // Never held overnight in practice (the recap goes at 9am, team alerts at
-  // send time or 9am), and neither writes a personal bell row this reads —
-  // listed so the ranking is total.
+  // Never held overnight in practice (the recap and the team check are due
+  // from 9am, other team alerts go at send time), and neither writes a
+  // personal bell row this reads — listed so the ranking is total.
   team_alert: 2.5,
   weekly_recap: 0.5,
 };
 
 // Team news an admin's phone was sent (lib/team-alerts `push`), and so could
 // have been held overnight: a teammate joining at 11pm, or the team check
-// landing at the OWNER's 9am — which is still quiet hours for an admin in
+// going out from the OWNER's 9am — which is still quiet hours for an admin in
 // another timezone. These live in office_notifications, which this job used to
 // never read, so held team news was simply lost (2026-10-02 notification
 // audit). Bell-only team rows (invite_expired, invite_declined, member_left)
-// never had a push to hold, and the Monday team recap goes at 9am.
+// never had a push to hold, and the Monday team recap is due from 9am.
 const TEAM_PUSH_TYPES = ["member_joined", "member_first_lead", "leads_waiting", "members_no_card", "team_milestone"];
 
 type TeamRow = { officeId: string; officeName: string | null; type: string; title: string; body: string | null; created_at: string };
@@ -148,7 +148,7 @@ export async function GET(req: NextRequest) {
   const userIds = [...ids];
   counts.subscribers = userIds.length;
 
-  // Unread team news from the last 12 hours, keyed by each admin who was sent
+  // Unread team news from the last 24 hours, keyed by each admin who was sent
   // it. Read once for the run; each person's own quiet window filters it below.
   const teamRowsFor = new Map<string, TeamRow[]>();
   try {
@@ -202,17 +202,13 @@ export async function GET(req: NextRequest) {
       // rule exists to prevent. TimezoneSync learns the zone on the next launch;
       // until then this person is simply skipped.
       if (!prefs.timezone) continue;
-      // 8am, or 9am if the scheduler was late. GitHub's cron is best-effort and
-      // can lag under load; a strict equality would silently skip a person's
-      // whole morning over a twenty-minute delay. The once-a-day mark below is
-      // what keeps the wider window from meaning two notifications.
-      //
-      // NOT ONLY 8–9am ANY MORE (2026-10-05). The scheduler is a GitHub cron
+      // A WINDOW, NOT AN HOUR (2026-10-05). The scheduler is a GitHub cron
       // that runs a few times a day, not hourly — 01:42, 08:35 and 18:04 UTC on
       // 2026-10-05 — so an 8–9am slot was usually missed and the catch-up
       // simply never came. It is now due from 8am until 8pm (two hours before
-      // quiet hours start again), still once a day, and still only for news
-      // that is UNREAD: open the app first and there is nothing to send.
+      // quiet hours start again), still once a day (the mark below), and still
+      // only for news that is UNREAD: open the app first and there is nothing
+      // to send.
       const hour = localHour(now, prefs.timezone) % 24;
       if (hour < QUIET_END_HOUR || hour >= CATCHUP_LAST_HOUR) continue;
       counts.atEight++;
@@ -223,7 +219,10 @@ export async function GET(req: NextRequest) {
         .select("id")
         .eq("user_id", userId)
         .eq("outcome", CATCHUP_OUTCOME)
-        .gte("created_at", new Date(now - 14 * 3600 * 1000).toISOString()) // spans the whole 8am–8pm window
+        // 13h: the 8am–8pm window, plus the extra hour of a clocks-back night.
+        // Not more — 14h let yesterday's 7:30pm catch-up hold this morning's
+        // back until 9:30.
+        .gte("created_at", new Date(now - 13 * 3600 * 1000).toISOString())
         .limit(1);
       if (already?.length) { counts.alreadyDone++; continue; }
 

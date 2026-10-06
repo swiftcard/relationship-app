@@ -6,6 +6,7 @@ import { requireOfficeCapability } from "@/lib/office-roles";
 import { getOfficeEmployeeMetrics } from "@/lib/office-analytics";
 import { resolveDateRange, type DateRangePreset } from "@/lib/office-analytics-dates";
 import { buildEmployeeAnalyticsCsv } from "@/lib/office-analytics-csv";
+import { defaultEmployeeSort } from "@/lib/office-analytics-metrics";
 
 const PRESETS: DateRangePreset[] = ["7d", "30d", "90d"];
 
@@ -35,8 +36,9 @@ export async function GET(req: NextRequest) {
 
   const employees = await getOfficeEmployeeMetrics(ctx.officeId, ctx.ownerId, range.since, range.until);
 
+  // A to Z, the order the Analytics table opens on (lib/office-analytics-metrics).
   const csv = buildEmployeeAnalyticsCsv(
-    employees.map((e) => ({
+    defaultEmployeeSort(employees).map((e) => ({
       name: e.name,
       cardName: e.cardName,
       views: e.views,

@@ -58,17 +58,18 @@ export default async function OfficeAnalyticsMemberPage({
 
   const slugs = memberSlugs(member);
   const keys = flattenOfficeKeys(slugs);
-  // Reuses the `team` already resolved above instead of getOfficeEmployeeMetrics
-  // re-resolving it internally, and runs alongside the other independent
+  // Just this person: each row is summed from their own slugs only, so the
+  // rest of the office would be queried for nothing now that the page no
+  // longer shows an office average. Runs alongside the other independent
   // queries rather than serially ahead of them (code review).
-  const [allMetrics, dailyViews, trafficSources, cardBreakdown, recentLeads] = await Promise.all([
-    getOfficeEmployeeMetricsForTeam(team, range.since, range.until).catch(() => []),
+  const [myMetrics, dailyViews, trafficSources, cardBreakdown, recentLeads] = await Promise.all([
+    getOfficeEmployeeMetricsForTeam([member], range.since, range.until).catch(() => []),
     getOfficeDailyViews(keys, range.since, range.until, tz),
     getOfficeTrafficSources(keys, range.since, range.until),
     getEmployeeCardBreakdown(member.cardSlugs, range.since, range.until),
     getRecentLeadsForSlugs(slugs, range.since, range.until),
   ]);
-  const mine = allMetrics.find((m) => m.userId === id) ?? null;
+  const mine = myMetrics[0] ?? null;
 
   const chartData = fillDateRange(dailyViews, range.since, range.until, tz);
   const totalViews = (mine?.views ?? 0) + (mine?.swiftlinkViews ?? 0);

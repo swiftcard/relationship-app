@@ -22,8 +22,8 @@ type SelfLive = { userId: string; href: string };
 type Caps = {
   canInvite: boolean; canRemove: boolean; canManageCards: boolean; canManageSeats: boolean;
   /** The person looking is the office owner (not a delegated admin). The
-   *  owner's own card is theirs alone — a delegated admin's "Edit card" on it
-   *  opened an editor whose every save came back 403. */
+   *  owner's own card is theirs alone — a delegated admin's button for it
+   *  (then "Edit card") opened an editor whose every save came back 403. */
   viewerIsOwner: boolean;
 };
 

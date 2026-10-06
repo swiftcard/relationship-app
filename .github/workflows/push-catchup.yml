@@ -15,9 +15,9 @@ name: Morning push catch-up
 # one-line change if the plan ever changes.
 #
 # The route is idempotent by design (it marks push_log before sending and will
-# not repeat inside 12 hours), so a duplicate or delayed run cannot double-buzz
-# anyone — and it accepts 8am OR 9am local, because GitHub's scheduler is
-# best-effort and lags under load.
+# not repeat the same day), so a duplicate or delayed run cannot double-buzz
+# anyone — and it is due any time from 8am to 8pm local, not one hour, because
+# GitHub's scheduler is best-effort and runs only a few times a day.
 on:
   schedule:
     - cron: "0 * * * *"

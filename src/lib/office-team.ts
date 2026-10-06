@@ -286,6 +286,7 @@ export async function getTeamOverview(
     const { data: ownerUser } = await admin.auth.admin.getUserById(ownerId);
     ownerAuthEmail = ownerUser?.user?.email ?? null;
   } catch { /* falls back to profiles.email below */ }
+  // A to Z, in getOfficeAnalytics' order — the same as the Analytics table.
   const people: TeamPerson[] = analytics.employees.map((e) => {
     const counts = cardCounts.get(e.userId) ?? { total: 0, live: 0 };
     const prof = profById.get(e.userId);
@@ -325,9 +326,6 @@ export async function getTeamOverview(
       status: memberStatus({ liveCards: counts.live, totalCards: counts.total, lastActiveAt }),
     };
   });
-  // The owner-first pin made sense on the old Overview; the Team table sorts by
-  // results instead — highest leads first, views as the tiebreak.
-  people.sort((a, b) => b.leads - a.leads || b.views - a.views);
 
   const invites: TeamInvite[] = rows
     .filter((r) => r.status === "pending")

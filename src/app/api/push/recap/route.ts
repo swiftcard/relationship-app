@@ -11,25 +11,27 @@ import {
 } from "@/lib/team-alerts";
 import { displayLabelFrom } from "@/lib/office-notify";
 import { officeNotificationPath } from "@/lib/office-notification-links";
-import { isRecapHour, isTeamCheckHour, isTeamRecapBellHour, personalRecapCopy, rankPlaces, teamRecapCopy } from "@/lib/weekly-recap";
+import { isRecapHour, isTeamCheckHour, isTeamRecapBellHour, noticeGivenToday, personalRecapCopy, rankPlaces, teamRecapCopy } from "@/lib/weekly-recap";
 
 // ── The hourly notification sweep: Monday recaps + the daily team check ─────
 //
-// Owner, 2026-09-22. Called every hour by .github/workflows/push-catchup.yml
-// (same schedule and secret as the 8am catch-up, for the same Hobby-plan
-// reason). Each part decides for itself whether this hour is its hour:
+// Owner, 2026-09-22. Called by .github/workflows/push-catchup.yml on an hourly
+// schedule that GitHub runs only a few times a day (same secret as the morning
+// catch-up, for the same Hobby-plan reason). So each part has a WINDOW, not an
+// hour, and decides for itself whether it is due (lib/weekly-recap):
 //
-//   1. WEEKLY RECAP — Monday 9am in each person's own zone. One push each:
-//      an Office admin (of a team with at least one teammate) gets the TEAM's
-//      week, everyone else their own. Marked in push_log BEFORE sending, so a
-//      duplicate run cannot buzz twice. Nothing for an empty week.
-//   2. TEAM CHECK — 9am in the owner's zone, every day, per office with a team
-//      or an open invitation: leads with no follow-up 24h on (only ones not
-//      already announced), teammates two days in with no card, a team
-//      milestone crossed, invitations that expired (bell only), and on Mondays
-//      the team's week in the admin bell. Grouped — one row names everyone it
-//      is about. Every piece is ledgered in office_notifications, so reruns are
-//      no-ops.
+//   1. WEEKLY RECAP — due all Monday from 9am in each person's own zone. One
+//      push each: an Office admin (of a team with at least one teammate) gets
+//      the TEAM's week, everyone else their own. Marked in push_log BEFORE
+//      sending, so a duplicate run cannot buzz twice. Nothing for an empty week.
+//   2. TEAM CHECK — due from 9am to midnight in the owner's zone, every day,
+//      per office with a team or an open invitation: leads with no follow-up
+//      24h on (only ones not already announced), teammates two days in with no
+//      card, a team milestone crossed, invitations that expired (bell only),
+//      and on Mondays the team's week in the admin bell. Grouped — one row
+//      names everyone it is about. Every piece is ledgered in
+//      office_notifications, so reruns are no-ops, and "leads waiting" / "no
+//      card yet" go out at most once a day (noticeGivenToday).
 //
 // Pushes go through sendPushToUser: the person's switches, quiet hours and the
 // team_alert cap of two a day all still apply.
@@ -320,11 +322,11 @@ export async function GET(req: NextRequest) {
         const stuck = (recent ?? []).filter((l) =>
           followUpState(l.follow_up_sequence as FollowUpStep[] | null, l.tags as string[] | null) === "none");
         if (stuck.length) {
-          const { data: prior } = await admin.from("office_notifications").select("meta")
+          const { data: prior } = await admin.from("office_notifications").select("meta, created_at")
             .eq("office_id", team.officeId).eq("type", "leads_waiting")
             .gte("created_at", new Date(now - 8 * DAY).toISOString());
           const told = new Set<string>((prior ?? []).flatMap((r) => ((r.meta as { leadIds?: string[] } | null)?.leadIds ?? [])));
-          if (stuck.some((l) => !told.has(l.id as string))) {
+          if (!noticeGivenToday(prior, now) && stuck.some((l) => !told.has(l.id as string))) {
             // One row for the whole team, naming whose leads they are.
             const perPerson = new Map<string, number>();
             for (const l of stuck) {
@@ -386,10 +388,10 @@ export async function GET(req: NextRequest) {
         return !!uid && !(slugMap.get(uid)?.length) && joined <= now - 2 * DAY && joined >= now - 30 * DAY;
       });
       if (noCard.length) {
-        const { data: priorNoCard } = await admin.from("office_notifications").select("meta")
+        const { data: priorNoCard } = await admin.from("office_notifications").select("meta, created_at")
           .eq("office_id", team.officeId).eq("type", "members_no_card");
         const toldNoCard = new Set<string>((priorNoCard ?? []).flatMap((r) => ((r.meta as { userIds?: string[] } | null)?.userIds ?? [])));
-        if (noCard.some((m) => !toldNoCard.has(m.user_id as string))) {
+        if (!noticeGivenToday(priorNoCard, now) && noCard.some((m) => !toldNoCard.has(m.user_id as string))) {
           const copy = noCardCopy(noCard.map((m) => who(m.user_id as string)));
           await alertTeam(team.officeId, {
             type: "members_no_card",

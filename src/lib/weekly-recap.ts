@@ -5,8 +5,8 @@ import { localHour } from "@/lib/push-policy";
 //
 // Owner, 2026-09-22: office admins get their team's week, weekly only; a Free
 // account's notifications should show what they are missing. So one recap a
-// week, on its own switch (push-policy weekly_recap), Monday at 9am in the
-// person's own zone (api/push/recap):
+// week, on its own switch (push-policy weekly_recap), due Monday from 9am in
+// the person's own zone (api/push/recap):
 //
 //   everyone      "Your week: 14 views · 2 contacts" / "Top spot in Austin, TX ·
 //                 4 places in all." — on a Free lock screen the place is shaded
@@ -19,7 +19,7 @@ import { localHour } from "@/lib/push-policy";
 // Nothing is sent for a week with nothing in it: "0 views" is not news, it is
 // a nudge, and nudges are not allowed on a phone.
 //
-// Pure, so the copy and the "is it Monday 9am for them" rule are testable.
+// Pure, so the copy and the "is it due for them" rules are testable.
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
 
@@ -95,6 +95,26 @@ export function isTeamCheckHour(now: number, timezone: string | null | undefined
   const zone = timezone || FALLBACK_ZONE;
   const from = timezone ? 9 : FALLBACK_FROM_HOUR;
   try { return localHour(now, zone) % 24 >= from; } catch { return false; } // % 24: some ICU builds say "24" at midnight
+}
+
+/** How long one team-check notice of a kind holds the next one back. Longer
+ *  than the 9am–midnight window (15h), so a kind is said at most once per
+ *  owner day; shorter than 24h, so a scheduler that runs a little earlier
+ *  tomorrow still says it tomorrow. */
+export const TEAM_NOTICE_GAP_MS = 20 * 3600 * 1000;
+
+/**
+ * Has this kind of team notice ("leads waiting", "no card yet") already gone
+ * out today? The team check runs every hour from 9am, and each notice names
+ * EVERYONE it is about — so without this, a lead crossing the 24h line at 3pm
+ * fired a second notice that repeated the morning's names. Anything new waits
+ * for tomorrow's one notice (it stays unannounced in the ledger until then).
+ */
+export function noticeGivenToday(rows: { created_at?: unknown }[] | null | undefined, now: number): boolean {
+  return (rows ?? []).some((r) => {
+    const t = typeof r.created_at === "string" ? Date.parse(r.created_at) : NaN;
+    return t > now - TEAM_NOTICE_GAP_MS;
+  });
 }
 
 /**

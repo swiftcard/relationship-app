@@ -247,7 +247,8 @@ function TeamTab() {
           <p className="col-span-2 text-right">Actions</p>
         </div>
         <div>
-          {PEOPLE.map((p) => (
+          {/* A to Z, like the real Team tab (lib/office-analytics). */}
+          {defaultEmployeeSort(PEOPLE).map((p) => (
             <div key={p.id} className="grid grid-cols-12 gap-3 px-5 py-3.5 items-center border-t border-gray-800 first:border-t-0 hover:bg-gray-800/40 transition-colors">
               <button type="button" onClick={() => setOpen(p)} className="col-span-12 @3xl:col-span-4 min-w-0 flex items-center gap-3 text-left" aria-label={`Open ${p.name}'s details`}>
                 <Avatar name={p.name} photo={p.photo} />
