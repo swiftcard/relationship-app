@@ -698,6 +698,9 @@ summary.list-none::-webkit-details-marker { display: none; }
    light theme remaps .text-white (and friends) inside .sc-app to near-black,
    which is what turned "App Store" black-on-black on /welcome. No remap
    matches these, so the text is white everywhere. */
+/* On a phone, show only that phone's store (data-sc-os is set before paint
+   by the sc-boot script). Desktops and unknown devices keep both badges. */
+[data-sc-os="ios"] .sc-store-play, [data-sc-os="android"] .sc-store-apple { display: none !important; }
 .sc-appstore-badge { background-color: #191A1E; border: 1px solid #2F3034; color: #fff; }
 .sc-appstore-badge:hover { background-color: #232328; }
 .sc-appstore-badge .sc-asb-top { color: rgba(255,255,255,.7); }

@@ -188,8 +188,10 @@ export default function Home() {
                     ))}
                   </span>
                 </Link>
-                <AppStoreBadge size="lg" className="lg:hidden" />
-                <GooglePlayBadge size="lg" className="lg:hidden" />
+                <div className="flex gap-2 lg:hidden">
+                  <AppStoreBadge size="lg" />
+                  <GooglePlayBadge size="lg" />
+                </div>
                 <div className="hp-ring">
                   <HeroClaim />
                 </div>

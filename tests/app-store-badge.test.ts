@@ -139,7 +139,9 @@ describe("placement", () => {
     const badge = src.indexOf("<AppStoreBadge", cta);
     expect(badge, "the badge must come after the CTA").toBeGreaterThan(cta);
     expect(src.indexOf("<HeroClaim", cta), "the claim box stays last").toBeGreaterThan(badge);
-    expect(src.slice(badge, badge + 120)).toContain('className="lg:hidden"');
+    // Phone-only via the store group that holds both badges (2026-10-06): the
+    // pair travels as one unit so it never splits across two lines.
+    expect(src.slice(badge - 80, badge)).toContain('className="flex gap-2 lg:hidden"');
   });
 
   // Owner kept the header badge on desktop (2026-09-03) — but ONLY there. The
@@ -247,7 +249,7 @@ describe("the hero badge and the nav badge are complements", () => {
   it("the hero carries a phone-only badge beside See how it works", () => {
     const row = hero.slice(hero.indexOf('id="hero-cta"') - 900, hero.indexOf("<HeroClaim"));
     expect(row, "the badge must sit in the same row as the CTA").toContain("<AppStoreBadge");
-    expect(row).toMatch(/<AppStoreBadge[^>]*className="lg:hidden"/);
+    expect(row).toMatch(/className="flex gap-2 lg:hidden">\s*<AppStoreBadge/);
     // size="lg" is the one built for this slot — 50px tall, matching the
     // .rd-btn-lg beside it to the pixel. Any other size and the two sit a
     // couple of pixels off, which is the sort of thing you cannot unsee.
@@ -273,5 +275,25 @@ describe("the hero badge and the nav badge are complements", () => {
     // 50px button beside it would inherit padding chosen for a 343px column.
     const users = CONSUMERS.map(([f]) => f).filter((f) => /size="lg"/.test(read(f)));
     expect(users).toEqual(["src/app/page.tsx"]);
+  });
+});
+
+// On a phone only that phone's store shows (owner, 2026-10-06): the boot script
+// tags <html data-sc-os> before paint and CSS hides the other badge, so an
+// iPhone hero row is "See how it works" + App Store, Android's + Google Play.
+describe("phones see only their own store", () => {
+  const boot = read("src/app/layout.tsx");
+  const css = read("src/app/globals.css");
+  const badge = read("src/components/AppStoreBadge.tsx");
+  it("the boot script tags the OS before paint and keeps the tag", () => {
+    expect(boot).toContain("setAttribute('data-sc-os','android')");
+    expect(boot).toContain("setAttribute('data-sc-os','ios')");
+    expect(boot).toContain("a==='data-sc-os'");
+    expect(boot).toMatch(/attributeFilter:\[[^\]]*'data-sc-os'/);
+  });
+  it("each badge carries its store class and CSS hides the other store", () => {
+    expect(badge).toContain("sc-appstore-badge sc-store-apple");
+    expect(badge).toContain("sc-appstore-badge sc-store-play");
+    expect(css).toContain('[data-sc-os="ios"] .sc-store-play, [data-sc-os="android"] .sc-store-apple { display: none !important; }');
   });
 });

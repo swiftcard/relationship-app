@@ -151,6 +151,11 @@ export default function RootLayout({
               // rather than flash the new-customer trial (see home.css). Only a
               // cookie NAME is read; the check that counts is server-side.
               "if(/(^|;\\s*)sb-[^=]*-auth-token/.test(document.cookie))document.documentElement.setAttribute('data-sc-authed','');" +
+              // Which phone this is, before paint, so the store badges can show
+              // only the visitor's own store (iPhone → App Store, Android →
+              // Google Play) with no flash of the other. iPadOS reports itself
+              // as a Mac, so a touch "Mac" counts as iOS. Unset = show both.
+              "var U=navigator.userAgent;if(/Android/i.test(U))document.documentElement.setAttribute('data-sc-os','android');else if(/iPhone|iPad|iPod/.test(U)||(/Macintosh/.test(U)&&navigator.maxTouchPoints>1))document.documentElement.setAttribute('data-sc-os','ios');" +
               // React 19 strips EVERY attribute off <html> when a hydration
               // mismatch makes it client-render the root, so the light theme
               // dropped to dark "at random" (owner, 2026-09-24: going back to
@@ -164,9 +169,9 @@ export default function RootLayout({
               // and nothing puts it back, the glass chrome drops under the status
               // bar "at random" — the same failure the light theme had.
               "if(o&&/(^|\\s)native-android(\\s|$)/.test(o)&&!d.classList.contains('native-android'))d.classList.add('native-android');}" +
-              "else if(a==='data-sc-mac'||a==='data-sc-authed'){if(o!==null&&!d.hasAttribute(a))d.setAttribute(a,o);}" +
+              "else if(a==='data-sc-mac'||a==='data-sc-authed'||a==='data-sc-os'){if(o!==null&&!d.hasAttribute(a))d.setAttribute(a,o);}" +
               "else if(a==='data-sc-theme'&&!d.hasAttribute(a)){var t=null;try{t=localStorage.getItem('sc_theme');}catch(e){}if(t!=='dark')d.setAttribute(a,'light');}}})" +
-              ".observe(document.documentElement,{attributes:true,attributeOldValue:true,attributeFilter:['class','data-sc-theme','data-sc-mac','data-sc-authed']});}catch(e){}" +
+              ".observe(document.documentElement,{attributes:true,attributeOldValue:true,attributeFilter:['class','data-sc-theme','data-sc-mac','data-sc-authed','data-sc-os']});}catch(e){}" +
               // Detect the shell from window.webkit.messageHandlers.bridge, the
               // NATIVE message handler WKWebView installs before any page script
               // runs. window.Capacitor alone is not reliable here: it is created
