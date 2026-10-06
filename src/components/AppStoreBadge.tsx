@@ -27,11 +27,11 @@ const SIZES: Record<Size, { pad: string; glyph: string; top: string; main: strin
   sm: { pad: "px-3 py-1.5", glyph: "w-[17px] h-[17px]", top: "text-[0.5625rem]", main: "text-[0.78125rem]", gap: "gap-2", radius: "rounded-xl" },
   // Phone hero (owner, 2026-10-06): App Store + Google Play as a matched pair,
   // each half of a two-column grid under the full-width "See how it works".
-  // Fixed 52px so the two are identical whatever their label widths; natural
-  // width again from sm up, where the pair sits inline.
+  // Fixed 48px so the two are identical whatever their label widths; from sm
+  // up natural width at 50px, matching the "See how it works" pill inline.
   // Under 360px (the 320px first-gen SE) each half is ~134px, so it tightens
   // there rather than letting "Download on the" wrap onto two lines.
-  pair: { pad: "sc-asb-pair w-full sm:w-auto h-[52px] justify-center whitespace-nowrap px-3 max-[359px]:px-2 sm:px-5", glyph: "w-6 h-6 max-[359px]:w-5 max-[359px]:h-5", top: "text-[0.625rem] max-[359px]:text-[0.5625rem] tracking-[0.02em]", main: "text-[1.0625rem] max-[359px]:text-[0.9375rem]", gap: "gap-2.5 max-[359px]:gap-1.5", radius: "rounded-[14px]" },
+  pair: { pad: "sc-asb-pair w-full sm:w-auto h-12 sm:h-[50px] justify-center whitespace-nowrap px-3 max-[359px]:px-2 sm:px-5", glyph: "w-[22px] h-[22px] max-[359px]:w-5 max-[359px]:h-5", top: "text-[0.625rem] max-[359px]:text-[0.5625rem] tracking-[0.02em]", main: "text-base max-[359px]:text-[0.9375rem]", gap: "gap-2.5 max-[359px]:gap-1.5", radius: "rounded-xl" },
 };
 
 // ONE LOOK, everywhere (owner, 2026-09-18): the desktop header's. There used
