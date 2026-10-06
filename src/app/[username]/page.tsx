@@ -550,7 +550,11 @@ export default async function CardPage({
             card. Personalized with the owner's first name and dressed like
             the signup nudge's hero CTA — gradient, shine sweep, sparkle —
             because this is the page's one conversion ask and it should look
-            like the product it sells. Straight into the builder. */}
+            like the product it sells. Straight into the builder.
+            Free cards only (owner request 2026-10-05): a Pro or Office card
+            ends at "Share this card". The pop-up nudges elsewhere on the page
+            are separate and stay on every plan. */}
+        {!isPaidPlan(profile.plan) && (<>
         <a
           href={`${APP_URL}/cards/new?src=card_cta`}
           className="sc-getcard relative overflow-hidden mt-2 w-full flex items-center justify-center gap-2 font-bold py-3 px-6 rounded-full text-sm text-white transition-all hover:brightness-110 active:scale-[0.98]"
@@ -585,6 +589,7 @@ export default async function CardPage({
             .sc-getcard-shine { animation: none; }
           }
         `}</style>
+        </>)}
       </div>
       </div>
 
