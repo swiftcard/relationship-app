@@ -3,6 +3,7 @@ import { cardSlug, prettyCardSlug } from "@/lib/slug";
 import { cardHeadshot } from "@/lib/card-media";
 import { sanitizeCustomizationForPlan } from "@/lib/plan";
 import { unitLine } from "@/lib/address-unit";
+import { clampAddress, clampField } from "@/lib/card-limits";
 
 /**
  * ONE builder for the card object every surface renders.
@@ -113,13 +114,16 @@ export function buildCardData(
   const template = rawTemplate === "custom" && !opts.isPro ? "classic-pro" : rawTemplate;
 
   const username = card.username ?? "";
+  // Printed at most lib/card-limits long, whatever is stored: a card saved
+  // before the limits existed, or imported from a scanned card, still fits
+  // (card-every-template.test.ts measures every template at these limits).
   const data: CardData = {
-    name: card.name || "",
-    title: card.title || "",
-    company: card.company || "",
-    phone: card.phone || "",
-    email: card.email || "",
-    website: card.website || "",
+    name: clampField("name", card.name),
+    title: clampField("title", card.title),
+    company: clampField("company", card.company),
+    phone: clampField("phone", card.phone),
+    email: clampField("email", card.email),
+    website: clampField("website", card.website),
     instagram: card.instagram || "",
     twitter: card.twitter || "",
     tiktok: card.tiktok || "",
@@ -139,7 +143,7 @@ export function buildCardData(
     cardUrl: `${opts.appUrl.replace(/^https?:\/\//, "")}/${
       cardSlug(card.name || "", card.company) === username ? prettyCardSlug(card.name || "", card.company) : username
     }`,
-    address: formatCardAddress(customization.address),
+    address: clampAddress(formatCardAddress(customization.address)),
     customization,
   };
 

@@ -1,6 +1,7 @@
 // Shared design tokens, icons, and utilities for all card templates
 
 import type { CardData } from "./types";
+import { MAX_CARD_PHONES, clampField } from "@/lib/card-limits";
 
 // Preset-template style overrides (accent/background/text/typography). The pure
 // logic lives in src/lib/template-style.ts so it's node-testable; re-exported
@@ -19,19 +20,23 @@ export type ShownPhone = { number: string; label: string };
 
 // Phone numbers to display on the card: the ones flagged showOnCard, falling
 // back to the legacy single `phone` field for cards saved before multi-phone.
+//
+// At most MAX_CARD_PHONES (lib/card-limits): more can be saved, but the card
+// is measured to fit exactly that many, so that is how many it prints.
 export function cardPhones(data: CardData): ShownPhone[] {
   const phones = data.customization?.phones;
   if (Array.isArray(phones) && phones.length) {
     return phones
       .filter((p) => p?.showOnCard && p.number?.trim())
-      .map((p) => ({ number: p.number, label: p.label || "" }));
+      .slice(0, MAX_CARD_PHONES)
+      .map((p) => ({ number: clampField("phone", p.number), label: p.label || "" }));
   }
-  return data.phone ? [{ number: data.phone, label: "" }] : [];
+  return data.phone ? [{ number: clampField("phone", data.phone), label: "" }] : [];
 }
 
 // Fax number (card-only).
 export function cardFax(data: CardData): string {
-  return data.customization?.fax?.trim() || "";
+  return clampField("fax", data.customization?.fax);
 }
 
 // Absolute URL for the card's website value (handles bare domains like "swiftcard.me").
@@ -68,7 +73,13 @@ export function titleLoad(data: CardData): number {
 }
 
 export function contactRowCount(data: CardData): number {
-  const addrLines = data.address ? data.address.split("\n").filter(Boolean).length : 0;
+  // Counted the way ContactRows LAYS THEM OUT (detailLineBudget): a long
+  // address line wraps onto a second row there, so it is two rows here too.
+  // Counting it once let a card with every field at the limits stay too short,
+  // and on Photo First and Luxury Minimal the address ran onto the QR
+  // (card-every-template.test.ts, 2026-10-02).
+  const addrLines = (data.address ?? "").split("\n").map((l) => l.trim()).filter(Boolean)
+    .reduce((n, l) => n + Math.max(1, Math.ceil(l.length / ADDR_LINE_CHARS)), 0);
   return (
     cardPhones(data).length +
     (data.email ? 1 : 0) +
@@ -77,6 +88,8 @@ export function contactRowCount(data: CardData): number {
     // line here or the card doesn't grow for it and the QR is pushed off.
     ((data.email ?? "").trim().length > 32 ? 0.8 : 0) +
     (data.website ? 0.9 : 0) +
+    // …and so does a website long enough to wrap (WEB_WRAP_CHARS).
+    ((data.website ?? "").trim().length > WEB_WRAP_CHARS ? 0.7 : 0) +
     (cardFax(data) ? 0.9 : 0) +
     addrLines * 0.7 +
     // A long title is real content and has to be paid for. It was invisible to
@@ -850,7 +863,20 @@ export function detailLineBudget(data: CardData): number {
   );
 }
 
-export function ContactRows({ data, palette }: { data: CardData; palette: RowPalette }) {
+/**
+ * The QR as the details block's bottom-right corner (owner, 2026-10-02: "use
+ * the space beside the QR"). Passed by templates whose QR used to sit on a row
+ * of its own under the details, which left the whole width beside it empty.
+ * The block now runs to the bottom of the column, the QR is floated into its
+ * corner, and rows flow down the full height — a row that reaches the corner
+ * is narrowed to pass beside it (a flex row is its own formatting context, so
+ * it never runs underneath a float). The QR's position and size are unchanged.
+ */
+export type DetailsQR = { node: React.ReactNode; size: number };
+/** Clear space kept between the QR and any row beside or above it. */
+const QR_CLEAR_PX = 8;
+
+export function ContactRows({ data, palette, qr }: { data: CardData; palette: RowPalette; qr?: DetailsQR }) {
   const ic = (rowColor: string) => ({ color: palette.accent ?? rowColor });
   const phones = cardPhones(data);
   const fax = cardFax(data);
@@ -863,7 +889,16 @@ export function ContactRows({ data, palette }: { data: CardData; palette: RowPal
   // The phone size the block's HEIGHT allows (1 above), capped by design (3).
   // `--sc-u` is resolved where it is USED, so 100cqh is always this block's
   // height: the root below is the nearest size container for every row.
-  const unit = `min(${DETAIL_MAX_PX}px, calc((100cqh - 2px) / ${detailLineBudget(data).toFixed(3)}))`;
+  //
+  // With the QR in the block's corner, rows are still SIZED for the height
+  // above it — exactly as when the QR had a row of its own, so a card that fit
+  // before looks the same. The space beside the QR is the room a packed card
+  // flows into when its rows reach their floor sizes, instead of running onto
+  // the QR (Photo First, every field at the limits — card-every-template).
+  // Sizing them for the full height failed the other way: rows narrowed beside
+  // the QR wrapped onto lines the budget never paid for and left the card.
+  const qrCorner = qr ? qr.size + QR_CLEAR_PX : 0;
+  const unit = `min(${DETAIL_MAX_PX}px, calc((100cqh - ${2 + qrCorner}px) / ${detailLineBudget(data).toFixed(3)}))`;
   const rel = detailShares(data);
   const u = (k: number) => `calc(${k} * var(--sc-u))`;
   /** What fits one line across the block (2): chrome px, then ems of text. */
@@ -904,6 +939,12 @@ export function ContactRows({ data, palette }: { data: CardData; palette: RowPal
   // normal wrapping has nowhere to break and the text just leaves the card.
   const wrapLong: React.CSSProperties = { overflowWrap: "anywhere", minWidth: 0 };
 
+  // With the QR in the corner the rows are blocks beside a float, not flex
+  // items (a float cannot sit in a flex column), so the gap becomes a margin.
+  let rowIndex = 0;
+  const rowGap = (): React.CSSProperties => (qr && rowIndex++ > 0 ? { marginTop: u(ROW_GAP_U) } : {});
+  const corner = qrCorner;
+
   const vars = {
     "--sc-u": unit,
     ...(phones.length ? { "--sc-p": phoneSize(phones[0]) } : {}),
@@ -915,9 +956,19 @@ export function ContactRows({ data, palette }: { data: CardData; palette: RowPal
     // 1 1 0 — never its content's height, which size containment ignores) and
     // the column's width. 100cqh / 100cqw inside are exactly that box.
     <div data-contact-block style={{ flex: "1 1 0", minHeight: 0, minWidth: 0, alignSelf: "stretch", containerType: "size" }}>
-      <div className="flex flex-col" style={{ ...vars, gap: u(ROW_GAP_U), lineHeight: ROW_LH }}>
+      <div className={qr ? undefined : "flex flex-col"} style={{ ...vars, ...(qr ? { height: "100%" } : { gap: u(ROW_GAP_U) }), lineHeight: ROW_LH }}>
+        {qr && (
+          <>
+            {/* A zero-width float as tall as the block less the corner pushes
+                the QR's float down into the bottom-right corner. */}
+            <div aria-hidden style={{ float: "right", width: 0, height: `calc(100% - ${corner}px)` }} />
+            <div style={{ float: "right", clear: "right", width: corner, height: corner, display: "flex", alignItems: "flex-end", justifyContent: "flex-end" }}>
+              {qr.node}
+            </div>
+          </>
+        )}
         {phones.map((p, i) => (
-          <a key={`ph${i}`} href={`tel:${p.number.replace(/[^\d+]/g, "")}`} className={row} style={{ color: palette.strong, textDecoration: "none" }}>
+          <a key={`ph${i}`} href={`tel:${p.number.replace(/[^\d+]/g, "")}`} className={row} style={{ color: palette.strong, textDecoration: "none", ...rowGap() }}>
             <span className="shrink-0" style={ic(palette.strong)}><IcoPhone /></span>
             {/* The number and its label are budgeted TOGETHER against the panel's
                 real width (phoneBudget above). Sizing the number alone by a
@@ -944,19 +995,19 @@ export function ContactRows({ data, palette }: { data: CardData; palette: RowPal
         {/* Email + website: sized so they normally sit on one line, and allowed
             to wrap when they're past what the floor can hold. */}
         {email && (
-          <a href={`mailto:${data.email}`} className={row} style={{ color: palette.mid, textDecoration: "none" }}>
+          <a href={`mailto:${data.email}`} className={row} style={{ color: palette.mid, textDecoration: "none", ...rowGap() }}>
             <span className="shrink-0" style={ic(palette.mid)}><IcoMail /></span>
             <span style={{ fontSize: "var(--sc-e)", fontWeight: 600, ...wrapLong }}>{data.email}</span>
           </a>
         )}
         {web && (
-          <a href={webHref(data.website ?? "")} target="_blank" rel="noopener noreferrer" className={row} style={{ color: palette.soft, textDecoration: "none" }}>
+          <a href={webHref(data.website ?? "")} target="_blank" rel="noopener noreferrer" className={row} style={{ color: palette.soft, textDecoration: "none", ...rowGap() }}>
             <span className="shrink-0" style={ic(palette.soft)}><IcoGlobe /></span>
             <span style={{ fontSize: webSize, fontWeight: 500, ...wrapLong }}>{data.website}</span>
           </a>
         )}
         {fax && (
-          <div className="flex items-center gap-2" style={{ color: palette.soft }}>
+          <div className="flex items-center gap-2 min-w-0" style={{ color: palette.soft, ...rowGap() }}>
             <span className="shrink-0" style={ic(palette.soft)}><IcoPhone /></span>
             <span style={{ fontSize: faxSize, fontWeight: 500, whiteSpace: "nowrap" }}>
               {formatPhone(fax)}
@@ -965,7 +1016,7 @@ export function ContactRows({ data, palette }: { data: CardData; palette: RowPal
           </div>
         )}
         {data.address && (
-          <div className="flex items-start gap-2" style={{ color: palette.muted }}>
+          <div className="flex items-start gap-2 min-w-0" style={{ color: palette.muted, ...rowGap() }}>
             <span className="shrink-0" style={{ ...ic(palette.muted), marginTop: 1 }}><IcoPin /></span>
             <span style={{ fontSize: addrSize, lineHeight: ADDR_LH, whiteSpace: "pre-line", ...wrapLong }}>{data.address}</span>
           </div>

@@ -10,6 +10,7 @@
 // than the card — see the block above the return.
 
 import { useState, useEffect, useRef } from "react";
+import { CARD_FIELD_MAX, MAX_CARD_PHONES } from "@/lib/card-limits";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import DashboardLink from "@/components/DashboardLink";
@@ -930,7 +931,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
             <FormSection id="about" title="About you">
               <div>
                 <label htmlFor="card-name" className="block text-xs font-medium text-gray-400 mb-1.5">Full name <span className="text-red-500">*</span></label>
-                <input id="card-name" type="text" placeholder="John Smith" data-hydrate="name" value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
+                <input id="card-name" type="text" placeholder="John Smith" data-hydrate="name" maxLength={CARD_FIELD_MAX.name} value={name} onChange={(e) => setName(e.target.value)} className={inputCls} />
                 {/* A member has no company field, which is where the URL editor
                     lives for everyone else — so they could never change their
                     card's address, although it is theirs (the rename API allows
@@ -939,12 +940,12 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
               </div>
               <div>
                 <label htmlFor="card-title" className="block text-xs font-medium text-gray-400 mb-1.5">Job title</label>
-                <input id="card-title" type="text" placeholder="Sales Director" data-hydrate="title" value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} />
+                <input id="card-title" type="text" placeholder="Sales Director" data-hydrate="title" maxLength={CARD_FIELD_MAX.title} value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} />
               </div>
               {!org && (
                 <div>
                   <label htmlFor="card-company" className="block text-xs font-medium text-gray-400 mb-1.5">Company name</label>
-                  <input id="card-company" type="text" placeholder="Acme Corp" data-hydrate="company" value={company} onChange={(e) => setCompany(e.target.value)} className={inputCls} />
+                  <input id="card-company" type="text" placeholder="Acme Corp" data-hydrate="company" maxLength={CARD_FIELD_MAX.company} value={company} onChange={(e) => setCompany(e.target.value)} className={inputCls} />
                   <CardUrlEditor cardId={card.id} currentSlug={card.username} />
                 </div>
               )}
@@ -988,6 +989,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                         type="tel"
                         placeholder="+1 (555) 000-0000"
                         value={p.number}
+                        maxLength={CARD_FIELD_MAX.phone}
                         onChange={(e) => updatePhone(i, { number: e.target.value })}
                         className={`${inputCls} flex-1 min-w-[9rem]`}
                       />
@@ -1011,6 +1013,11 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                 <p className="text-gray-600 text-xs mt-1.5">
                   {org ? "Numbers you add are your mobile. Pick which show on your card." : "Pick which numbers show on your card."}
                 </p>
+                {phones.filter((p) => p.showOnCard && p.number.trim()).length > MAX_CARD_PHONES && (
+                  <p className="text-amber-300 text-xs mt-1">
+                    Only {MAX_CARD_PHONES} numbers fit on your card — the first {MAX_CARD_PHONES} marked On card are shown. The rest stay saved.
+                  </p>
+                )}
                 {org && orgPhone && (
                   <p className="text-gray-500 text-xs mt-1">
                     Your office number ({orgPhone}) is added to your card automatically by your organization.
@@ -1019,7 +1026,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
               </div>
               <div>
                 <label htmlFor="card-email" className="block text-xs font-medium text-gray-400 mb-1.5">Email</label>
-                <input id="card-email" type="email" placeholder="john@company.com" data-hydrate="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
+                <input id="card-email" type="email" placeholder="john@company.com" data-hydrate="email" maxLength={CARD_FIELD_MAX.email} value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
               </div>
 
               {/* Website is CARD information — it renders on the card itself (and
@@ -1033,7 +1040,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                     id="card-website"
                     type="text"
                     placeholder="yoursite.com"
-                    data-hydrate="website" value={website}
+                    data-hydrate="website" maxLength={CARD_FIELD_MAX.website} value={website}
                     onChange={(e) => setWebsite(e.target.value)}
                     className={inputCls}
                   />
@@ -1048,7 +1055,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                   <label htmlFor="card-fax" className="block text-xs font-medium text-gray-400 mb-1.5">
                     Fax number <span className="text-gray-600 font-normal">· shows on your card only</span>
                   </label>
-                  <input id="card-fax" type="tel" placeholder="+1 (555) 000-0000" value={fax} onChange={(e) => setFax(e.target.value)} className={inputCls} />
+                  <input id="card-fax" type="tel" maxLength={CARD_FIELD_MAX.fax} placeholder="+1 (555) 000-0000" value={fax} onChange={(e) => setFax(e.target.value)} className={inputCls} />
                 </div>
               </FormSection>
             )}

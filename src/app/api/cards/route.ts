@@ -10,6 +10,7 @@ import { normalizeSocial } from "@/lib/social-url";
 import { ensureUniqueUsername, normalizeSlug } from "@/lib/username";
 import { cardSlug } from "@/lib/slug";
 import { getOfficeSubUserContext } from "@/lib/office-roles";
+import { clampCardWrite } from "@/lib/card-limits";
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -170,7 +171,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const cardRow = {
+  // Clamped to lib/card-limits, the most the card prints (see the PATCH route).
+  const cardRow = clampCardWrite({
     user_id: user.id,
     name: name || "",
     title: title || "",
@@ -200,7 +202,7 @@ export async function POST(req: NextRequest) {
     // stay unflagged (getMemberBrandForUser/subCtx are null for them), so their
     // personal cards remain individual.
     is_office_card: !!subCtx,
-  };
+  });
 
   let { data, error } = await admin
     .from("cards")

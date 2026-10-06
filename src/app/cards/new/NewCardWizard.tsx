@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
+import { CARD_FIELD_MAX, MAX_CARD_PHONES } from "@/lib/card-limits";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import ImageUpload from "@/components/ImageUpload";
@@ -1670,7 +1671,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                   ref={nameInputRef}
                   type="text"
                   placeholder="John Smith"
-                  maxLength={120}
+                  maxLength={CARD_FIELD_MAX.name}
                   value={name}
                   aria-invalid={nameMissing || undefined}
                   aria-describedby={nameMissing && error ? "wizard-name-error" : undefined}
@@ -1693,12 +1694,12 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
               </div>
               <div>
                 <label htmlFor="wizard-title" className="block text-xs font-medium text-gray-400 mb-1.5">Job title</label>
-                <input id="wizard-title" type="text" placeholder="Sales Director" value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} />
+                <input id="wizard-title" type="text" placeholder="Sales Director" maxLength={CARD_FIELD_MAX.title} value={title} onChange={(e) => setTitle(e.target.value)} className={inputCls} />
               </div>
               {!org && (
                 <div>
                   <label htmlFor="wizard-company" className="block text-xs font-medium text-gray-400 mb-1.5">Company name</label>
-                  <input id="wizard-company" type="text" placeholder="Acme Corp" value={company} onChange={(e) => setCompany(e.target.value)} className={inputCls} />
+                  <input id="wizard-company" type="text" placeholder="Acme Corp" maxLength={CARD_FIELD_MAX.company} value={company} onChange={(e) => setCompany(e.target.value)} className={inputCls} />
                   <p className="text-gray-600 text-xs mt-1">Card URL: swiftcard.me/{prettyUsername || "your-name"}</p>
                 </div>
               )}
@@ -1748,6 +1749,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                         type="tel"
                         placeholder="+1 (555) 000-0000"
                         value={p.number}
+                        maxLength={CARD_FIELD_MAX.phone}
                         onChange={(e) => updatePhone(i, { number: e.target.value })}
                         // min-w-[9rem], not min-w-0: with min-w-0 the field just
                         // shrank to 98px at 320px and hid 30px of the number, and
@@ -1782,6 +1784,11 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                 <p className="text-gray-600 text-xs mt-1.5">
                   {org ? "Numbers you add are your mobile. Pick which show on your card." : "Pick which numbers show on your card."}
                 </p>
+                {phones.filter((p) => p.showOnCard && p.number.trim()).length > MAX_CARD_PHONES && (
+                  <p className="text-amber-300 text-xs mt-1">
+                    Only {MAX_CARD_PHONES} numbers fit on your card — the first {MAX_CARD_PHONES} marked On card are shown. The rest stay saved.
+                  </p>
+                )}
                 {org && orgPhone && (
                   <p className="text-gray-500 text-xs mt-1">
                     Your office number ({orgPhone}) is added to your card automatically by your organization.
@@ -1790,7 +1797,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
               </div>
               <div>
                 <label htmlFor="wizard-email" className="block text-xs font-medium text-gray-400 mb-1.5">Email</label>
-                <input id="wizard-email" type="email" placeholder="john@company.com" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
+                <input id="wizard-email" type="email" placeholder="john@company.com" maxLength={CARD_FIELD_MAX.email} value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
               </div>
 
               {/* Website is CARD information — it renders on the card itself (and
@@ -1804,6 +1811,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                     id="wizard-website"
                     type="text"
                     placeholder="yoursite.com"
+                    maxLength={CARD_FIELD_MAX.website}
                     value={website}
                     onChange={(e) => setWebsite(e.target.value)}
                     className={inputCls}
@@ -1830,7 +1838,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                     <label htmlFor="wizard-fax" className="block text-xs font-medium text-gray-400 mb-1.5">
                       Fax number <span className="text-gray-600 font-normal">· shows on your card only</span>
                     </label>
-                    <input id="wizard-fax" type="tel" placeholder="+1 (555) 000-0000" value={fax} onChange={(e) => setFax(e.target.value)} className={inputCls} />
+                    <input id="wizard-fax" type="tel" maxLength={CARD_FIELD_MAX.fax} placeholder="+1 (555) 000-0000" value={fax} onChange={(e) => setFax(e.target.value)} className={inputCls} />
                   </div>
                 </MoreOptions>
               </FormSection>

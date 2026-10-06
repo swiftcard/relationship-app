@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CARD_FIELD_MAX } from "@/lib/card-limits";
 import type { CardAddress } from "@/components/card-templates/types";
 import { unitLine } from "@/lib/address-unit";
 
@@ -44,6 +45,7 @@ export default function AddressInput({
             autoFocus
             type="text"
             placeholder="Street address (e.g. 123 Main St)"
+            maxLength={CARD_FIELD_MAX.addressLine}
             value={value.street}
             onChange={(e) => set("street", e.target.value)}
             className={fieldCls}
@@ -51,6 +53,7 @@ export default function AddressInput({
           <input
             type="text"
             placeholder="Unit # (optional)"
+            maxLength={20}
             value={value.unit}
             onChange={(e) => set("unit", e.target.value)}
             className={fieldCls}
@@ -58,6 +61,7 @@ export default function AddressInput({
           <input
             type="text"
             placeholder="City"
+            maxLength={CARD_FIELD_MAX.addressLine}
             value={value.city}
             onChange={(e) => set("city", e.target.value)}
             className={fieldCls}
@@ -74,6 +78,7 @@ export default function AddressInput({
             <input
               type="text"
               placeholder="Zip code"
+              maxLength={10}
               value={value.zip}
               onChange={(e) => set("zip", e.target.value)}
               className={fieldCls}

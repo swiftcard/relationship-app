@@ -15,6 +15,46 @@
 import type {
   AiDesignBrief, CardData, CardEmphasis, CardSkeleton, CardZone, CustomBlock, CustomElement, CustomLayout,
 } from "@/components/card-templates/types";
+import { fitName, fitPx } from "@/components/card-templates/shared";
+
+// ── How big a line of text is drawn — ONE rule, for the renderer AND the model ──
+//
+// A field is drawn at its emphasis size x the card's density, and then made
+// smaller again for its own length (a long title, an unbroken email that has to
+// fit its column). The density model used to know only the first half, so it
+// planned for lines it would never draw and solved a full card far smaller than
+// it needed to be — the details sat in the top half with the rest empty (owner,
+// 2026-10-02: "maximize their space"). CustomCard draws with this function and
+// the model measures with it, so the two cannot disagree.
+
+/** The smallest a custom card's text is ever drawn, design px. */
+export const TEXT_MIN_PX = 6.5;
+/** Fields drawn with a contact icon in front of the text. */
+const ICON_FIELDS = new Set(["phone", "fax", "email", "website", "address"]);
+
+export function fieldHasIcon(block: CustomBlock): boolean {
+  return block.type === "field" && ICON_FIELDS.has(block.field ?? "");
+}
+
+/**
+ * The font size a field or text block is drawn at, given its density-scaled
+ * size `fs` and the text it prints. `zonePx` is the width the renderer fits an
+ * unbroken token against (the main zone, or a share of it).
+ */
+export function textBlockPx(block: CustomBlock, shown: string, fs: number, zonePx = 248): number {
+  // Auto-fit by length so a long value shrinks instead of overflowing. The name
+  // additionally fits by longest WORD, the same rule the preset templates use.
+  // An email or a domain is ONE unbroken token: it either fits its column or it
+  // splits mid-word, so anything without a space is ALSO clamped to the zone's
+  // real width (0.6em per character errs small rather than splitting); prose
+  // with spaces just wraps.
+  let sized = block.field === "name" ? fitName(fs, shown, 16) : fitPx(fs, shown, block.emphasis === "hero" ? 18 : 26);
+  if (!/\s/.test(shown)) {
+    const chars = shown.length + (fieldHasIcon(block) ? 2 : 0);
+    sized = Math.min(sized, Math.max(fs * 0.4, Math.min(fs, zonePx / Math.max(1, chars * 0.6))));
+  }
+  return Math.max(Math.min(TEXT_MIN_PX, fs), sized);
+}
 
 // ── Sizing ──────────────────────────────────────────────────────────────────
 // Design px at the 460 natural card width, exactly like the preset templates.
@@ -159,10 +199,12 @@ function imagePx(block: CustomBlock, scale = 1): number {
  * Without `data` (the designer's placeholder mode) every string is a short
  * stand-in, which is exactly what placeholder mode draws.
  */
-function blockPx(block: CustomBlock, data: CardData | undefined, width: number, placeholder: boolean): number {
+function blockPx(block: CustomBlock, data: CardData | undefined, width: number, placeholder: boolean, d: number): number {
+  // The gap the renderer puts on every main-column block: round(5 x density).
+  const gap = Math.round(GAP_PX * d);
   if (!TEXT_TYPES.has(block.type)) {
-    if (block.type === "divider") return DIVIDER_PX + GAP_PX;
-    return imagePx(block) + GAP_PX;
+    if (block.type === "divider") return DIVIDER_PX + gap;
+    return imagePx(block) * Math.min(1.1, d) + gap;
   }
   // Real text first, ALWAYS — including in the designer. Sizing the preview off
   // a stand-in while the published card sizes off a 60-character address is how
@@ -171,17 +213,29 @@ function blockPx(block: CustomBlock, data: CardData | undefined, width: number, 
   // draws a `{name}` chip for, and those chips take room too.
   const text = (data ? blockTextForFit(block, data) : "") || (placeholder ? "{placeholder}" : "");
   if (!text) return 0;
-  const fs = EMPHASIS_PX[block.emphasis];
+  // Wrapping is counted AT THE SIZE THE TEXT WILL BE DRAWN (owner, 2026-10-02:
+  // "maximize their space"). It used to be counted at full size and the whole
+  // estimate then scaled down — but smaller text wraps onto FEWER lines, so a
+  // full card was solved for lines it would never draw: every field at the
+  // limits came out at the 0.42 floor with half the card empty below it.
+  const fs = blockFontPx(block.emphasis, d);
+  // …and at the size the RENDERER draws it — after its own length fit
+  // (textBlockPx), which is smaller than `fs` for every long value.
+  const isSocial = block.type === "social" || block.type === "socials";
+  const sized = isSocial ? fs : textBlockPx(block, text, fs);
+  // The contact icon and its gap take width from the text beside them.
+  const textW = width - (fieldHasIcon(block) ? fs * 1.05 + Math.max(5, fs * 0.5) : 0);
   // Ceil, because half a rendered line still occupies a whole one. Split on
   // HARD breaks first: the address arrives as up to three lines joined by \n
   // and the renderer sets `white-space: pre-line` for it, so counting its
-  // characters alone modelled a three-line address as one — a blind spot in
-  // exactly the field this model was rewritten to see.
-  const perLine = Math.max(1, Math.floor(width / (fs * CHAR_W)));
+  // characters alone modelled a three-line address as one.
+  const perLine = Math.max(1, Math.floor(textW / (sized * CHAR_W)));
   const lines = text
     .split("\n")
     .reduce((n, seg) => n + Math.max(1, Math.ceil(seg.length / perLine)), 0);
-  return Math.max(1, lines) * fs * LINE + GAP_PX;
+  // A line is never shorter than its icon (the row centres the two).
+  const lineH = Math.max(sized * LINE, fieldHasIcon(block) ? fs * 1.05 : 0);
+  return Math.max(1, lines) * lineH + gap;
 }
 
 /**
@@ -211,32 +265,24 @@ function blockTextForFit(block: CustomBlock, data: CardData): string {
 }
 
 /**
- * Total design px the content wants at density 1.
+ * The height each zone takes, in design px, with everything drawn at density
+ * `d` — text at its real size (and therefore its real wrapping), images and
+ * gaps scaled as the renderer scales them, padding fixed, and the QR never
+ * below its floor.
  *
- * Exported so the calibration sweep can check the model against the real
- * rendered height rather than trusting it.
+ * Padding is the part that doesn't shrink — it is written in fixed px and
+ * stays there however small the type gets. Stacked cards carry 56px of it (a
+ * band and a column).
  */
-/**
- * What the content needs, split into the part that SHRINKS with density and the
- * part that doesn't.
- *
- * Padding is the part that doesn't — it is written in fixed px and stays there
- * however small the type gets. Multiplying the whole estimate by density
- * therefore over-credited what shrinking could achieve, and it over-credited it
- * most at exactly the loads where the card was fullest. Stacked cards carry
- * 56px of it (a band and a column), which is why they were the last shapes
- * still overflowing.
- */
-function budget(
-  blocks: CustomBlock[], skeleton?: CardSkeleton, data?: CardData, placeholder = false,
+function zoneHeights(
+  blocks: CustomBlock[], skeleton: CardSkeleton | undefined, data: CardData | undefined, placeholder: boolean,
   // Whether the renderer will actually DRAW a side panel. It is not the same
   // question as "are there side blocks": a coloured panel survives an empty
   // side zone, so an owner who has not uploaded a logo yet still gets a panel
-  // and a main column 30% narrower than this model assumed. Left unsaid, the
-  // model sized the text for a full-width column and the published card came
-  // out 18-35% off the designer's preview.
-  panelShown?: boolean,
-) {
+  // and a main column 30% narrower than a full-width one.
+  panelShown: boolean | undefined,
+  d: number,
+): { main: number; side: number } {
   const on = blocks.filter((b) => b.on);
   const stacked = skeleton === "stacked";
   const side = on.filter((b) => zoneFor(b) === "left");
@@ -246,49 +292,36 @@ function budget(
   const qr = on.find((b) => zoneFor(b) === "right" && b.type === "qr");
   const main = on.filter((b) => zoneFor(b) === "right" && b.type !== "qr");
 
-  // The QR sits in its own bottom row, outside Zone, so it carries no gap.
   // Socials are grouped with the SAME rule the renderer groups them by, so the
   // budget counts the rows that will actually be drawn.
-  // The QR's floor is ABSOLUTE, so it belongs with the padding in `fixed` —
-  // only the part above the floor shrinks with density. Modelling the whole
-  // code as scalable would let the solve believe it can shrink past a size the
-  // renderer refuses to go below.
-  const qrPx = qr ? imagePx(qr) : 0;
-  const mainScaled =
-    groupSocials(main).reduce((n, g) => {
-      if (!Array.isArray(g)) return n + blockPx(g, data, width, placeholder);
-      const shown = data ? g.filter((b) => blockHasValue(b, data)) : g;
-      if (!shown.length) return n;
-      const rows = Math.ceil(shown.length / socialCols(shown.length));
-      return n + rows * EMPHASIS_PX[shown[0].emphasis] * LINE + GAP_PX;
-    }, 0) + Math.max(0, qrPx - (qr ? QR_MIN_PX : 0));
-  const mainFixed = (stacked ? MAIN_PAD_STACKED : MAIN_PAD_SPLIT) + (qr ? QR_MIN_PX : 0);
+  const mainText = groupSocials(main).reduce((n, g) => {
+    if (!Array.isArray(g)) return n + blockPx(g, data, width, placeholder, d);
+    const shown = data ? g.filter((b) => blockHasValue(b, data)) : g;
+    if (!shown.length) return n;
+    const rows = Math.ceil(shown.length / socialCols(shown.length));
+    return n + rows * blockFontPx(shown[0].emphasis, d) * LINE + Math.round(GAP_PX * d);
+  }, 0);
+  // The QR sits in its own bottom row, outside Zone, so it carries no gap, and
+  // its floor is ABSOLUTE: the renderer refuses to draw it smaller.
+  const qrPx = qr ? Math.max(QR_MIN_PX, imagePx(qr) * Math.min(1.1, d)) : 0;
+  const mainPx = mainText + qrPx + (stacked ? MAIN_PAD_STACKED : MAIN_PAD_SPLIT);
 
   // The side panel's Zone is rendered with gap 0, so its blocks stack flush.
   const scale = sideImageScale(skeleton);
-  const sideScaled = side.length === 0 ? 0
-    : stacked
-      // A band is a ROW: its height is its tallest item, not their sum.
-      ? Math.max(...side.map((b) => imagePx(b, scale)))
-      : side.reduce((n, b) => n + imagePx(b, scale), 0);
-  const sideFixed = hasPanel ? SIDE_PAD : 0;
+  const sideImgs = side.map((b) => imagePx(b, scale) * Math.min(1.1, d));
+  const sidePx = side.length === 0 ? 0
+    // A band is a ROW: its height is its tallest item, not their sum.
+    : (stacked ? Math.max(...sideImgs) : sideImgs.reduce((n, h) => n + h, 0)) + (hasPanel ? SIDE_PAD : 0);
 
-  // Stacked, the zones ADD — the band sits above the main column. Side by side
-  // they SHARE the card's height, so the taller one sets it; compare them at
-  // their full size, which is the only point at which they are comparable.
-  return stacked
-    ? { scaled: mainScaled + sideScaled, fixed: mainFixed + sideFixed }
-    : mainScaled + mainFixed >= sideScaled + sideFixed
-      ? { scaled: mainScaled, fixed: mainFixed }
-      : { scaled: sideScaled, fixed: sideFixed };
+  return { main: mainPx, side: sidePx };
 }
 
-/** Total design px the content wants at density 1. Exported for the sweep. */
+/** Total design px the content wants at density 1. */
 export function contentPx(
   blocks: CustomBlock[], skeleton?: CardSkeleton, data?: CardData, placeholder = false, panelShown?: boolean,
 ): number {
-  const b = budget(blocks, skeleton, data, placeholder, panelShown);
-  return b.scaled + b.fixed;
+  const h = zoneHeights(blocks, skeleton, data, placeholder, panelShown, 1);
+  return skeleton === "stacked" ? h.main + h.side : Math.max(h.main, h.side);
 }
 
 /**
@@ -321,15 +354,44 @@ const SAFETY = 0.9;
 const FLOOR = 0.42;
 const CEILING = 1.14;
 
+/** The largest density in [FLOOR, CEILING] at which `height(d)` fits the card. */
+function solveDensity(height: (d: number) => number): number {
+  const room = CARD_PX * SAFETY;
+  if (height(CEILING) <= room) return CEILING;
+  if (height(FLOOR) > room) return FLOOR;
+  // Height rises with density (bigger type, never fewer lines), so the largest
+  // fitting density is found by bisection. 24 steps is far below 0.01px.
+  let lo = FLOOR, hi = CEILING;
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    if (height(mid) <= room) lo = mid; else hi = mid;
+  }
+  return lo;
+}
+
+/** The main column's density: its text, gaps and QR (and, stacked, the band above it). */
 export function blockDensity(
   blocks: CustomBlock[], skeleton?: CardSkeleton, data?: CardData, placeholder = false, panelShown?: boolean,
 ): number {
-  const { scaled, fixed } = budget(blocks, skeleton, data, placeholder, panelShown);
-  if (scaled <= 0) return CEILING;
-  // scaled x d + fixed <= room  ->  d <= (room - fixed) / scaled
-  const room = CARD_PX * SAFETY - fixed;
-  if (room <= 0) return FLOOR;
-  return Math.max(FLOOR, Math.min(CEILING, room / scaled));
+  return solveDensity((d) => {
+    const h = zoneHeights(blocks, skeleton, data, placeholder, panelShown, d);
+    // Stacked, the zones ADD — the band sits above the main column. Side by
+    // side they don't share height, so the main column answers for itself.
+    return skeleton === "stacked" ? h.main + h.side : h.main;
+  });
+}
+
+/**
+ * The side panel's own density. Side by side, the panel is a column of its own
+ * with the card's full height, so a busy main column must not shrink its logo
+ * and headshot — on a full card they came out as a dot in an empty panel.
+ * Stacked, the band and the column share the height, so they share the density.
+ */
+export function sideDensity(
+  blocks: CustomBlock[], skeleton?: CardSkeleton, data?: CardData, placeholder = false, panelShown?: boolean,
+): number {
+  if (skeleton === "stacked") return blockDensity(blocks, skeleton, data, placeholder, panelShown);
+  return solveDensity((d) => zoneHeights(blocks, skeleton, data, placeholder, panelShown, d).side);
 }
 
 /** Side-band images sit above the text when stacked, so they cost real height. */

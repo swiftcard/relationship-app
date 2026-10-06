@@ -101,7 +101,12 @@ describe("card details start right under the header, on every template", () => {
           if (prev) { gap = top - prev.getBoundingClientRect().bottom; break; }
           const par = node.parentElement as HTMLElement;
           const siblings = Array.from(par.children).filter(inFlow).length;
-          if (par === card || siblings > 1) {
+          // A column the details are the only thing in (the QR now lives
+          // inside the details block on four templates — shared.tsx
+          // DetailsQR) is still "their column": measure from its top rather
+          // than climbing out into the panel beside it.
+          const column = getComputedStyle(par).flexDirection === "column" && getComputedStyle(par).display.includes("flex");
+          if (par === card || siblings > 1 || (column && par.getBoundingClientRect().width < cr.width * 0.9)) {
             gap = top - (par.getBoundingClientRect().top + parseFloat(getComputedStyle(par).paddingTop || "0"));
             break;
           }

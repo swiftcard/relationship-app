@@ -143,8 +143,19 @@ export default function ClassicPro({ data }: { data: CardData }) {
         style={{ padding: "16px 18px 14px", borderLeft: "1px solid #e8eef8" }}
       >
         {/* Contact rows — shared block, auto-fits to the amount of info */}
+        {/* The QR is the block's bottom-right corner, so a packed card's rows
+            use the width beside it instead of running onto it. */}
         <div className="mt-0.5 flex flex-col min-h-0" style={{ flex: "1 1 0" }}>
-          <ContactRows data={data} palette={style.infoColor ? infoPaletteFrom(style.infoColor) : infoInk} />
+          <ContactRows
+            data={data}
+            palette={style.infoColor ? infoPaletteFrom(style.infoColor) : infoInk}
+            qr={{
+              size: qrSize(f),
+              // The QR keeps a light plate on a dark panel: a scanner needs the
+              // contrast, and inverting it is the one thing that stops it scanning.
+              node: <QR size={qrSize(f)} bg="#f0f5ff" fg={NAVY} url={data.cardUrl} />,
+            }}
+          />
         </div>
 
         {/* Social handles (compact, if space) */}
@@ -158,15 +169,6 @@ export default function ClassicPro({ data }: { data: CardData }) {
             ))}
           </div>
         )}
-
-        {/* QR + scan label — always on the card; gives up a little room when dense */}
-        <div className="flex items-end justify-end">
-          <div className="flex flex-col items-end gap-1">
-            {/* The QR keeps a light plate on a dark panel: a scanner needs the
-                contrast, and inverting it is the one thing that stops it scanning. */}
-            <QR size={qrSize(f)} bg="#f0f5ff" fg={NAVY} url={data.cardUrl} />
-          </div>
-        </div>
       </div>
 
       {/* Bottom gradient accent */}

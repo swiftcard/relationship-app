@@ -142,16 +142,15 @@ export default function ModernBold({ data }: { data: CardData }) {
         className="flex-1 flex flex-col justify-between"
         style={{ padding: "16px 18px 14px", color: "#94a3b8" }}
       >
-        {/* Contact rows — shared block, auto-fits to the amount of info */}
+        {/* Contact rows — shared block, auto-fits to the amount of info. The QR
+            is the block's bottom-right corner, so a packed card's rows use the
+            width beside it instead of running onto it. */}
         <div className="mt-1 flex flex-col min-h-0" style={{ flex: "1 1 0" }}>
-          <ContactRows data={data} palette={{ accent: BLUE, ...infoPal }} />
-        </div>
-
-        {/* QR + label — always on the card; gives up a little room when dense */}
-        <div className="flex items-end justify-end">
-          <div className="flex flex-col items-end gap-1">
-            <QR size={qrSize(f)} bg={DIM} fg={BLUE} url={data.cardUrl} />
-          </div>
+          <ContactRows
+            data={data}
+            palette={{ accent: BLUE, ...infoPal }}
+            qr={{ size: qrSize(f), node: <QR size={qrSize(f)} bg={DIM} fg={BLUE} url={data.cardUrl} /> }}
+          />
         </div>
       </div>
     </div>

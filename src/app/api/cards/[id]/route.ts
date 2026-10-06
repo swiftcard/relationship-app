@@ -9,6 +9,7 @@ import { getMemberBrandForUser, overlayOfficeContact, overlayOfficeDesign, findM
 import { normalizeSocial } from "@/lib/social-url";
 import { getOfficeSubUserContext } from "@/lib/office-roles";
 import { cardContentChanged, signatureContentChanged } from "@/lib/card-changed";
+import { clampCardWrite } from "@/lib/card-limits";
 
 const ALLOWED = ["name", "title", "company", "phone", "email", "website", "linkedin", "instagram", "twitter", "tiktok", "template", "customization", "logo_url", "label"];
 const SOCIAL_COLUMNS = ["linkedin", "instagram", "twitter", "tiktok"] as const;
@@ -307,9 +308,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
+  // The card prints at most lib/card-limits — the editor stops typing there,
+  // and this holds the line for any client that does not.
   const { error } = await admin
     .from("cards")
-    .update(updates)
+    .update(clampCardWrite(updates))
     .eq("id", id)
     .eq("user_id", user.id);
 

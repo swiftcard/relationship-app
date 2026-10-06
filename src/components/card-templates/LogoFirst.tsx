@@ -293,7 +293,11 @@ export default function LogoFirst({ data }: { data: CardData }) {
                 // Bigger than it was: the mark is the thing this template is
                 // named for, and it was rendering at about half the height the
                 // panel could give it.
-                maxWidth: circle ? "100%" : 134 * (0.94 + 0.06 * grow),
+                // …and never wider than the tile, which is capped at the
+                // panel: at 134px a wide wordmark (a 5:1 banner PNG) was wider
+                // than the panel, so the tile's own overflow:hidden cut both
+                // ends off (card-every-template, real-size logo fixtures).
+                maxWidth: circle ? "100%" : `min(${134 * (0.94 + 0.06 * grow)}px, 100%)`,
                 maxHeight: circle ? "100%" : 116 * (0.94 + 0.06 * grow),
                 ...(circle ? { width: "100%", height: "100%" } : {}),
                 objectFit: "contain",

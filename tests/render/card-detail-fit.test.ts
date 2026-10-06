@@ -197,7 +197,10 @@ describe("card details fit, never collide, and grow into spare room", () => {
           const bb = block.getBoundingClientRect();
           const ox = Math.min(q.right, bb.right) - Math.max(q.left, bb.left);
           const oy = Math.min(q.bottom, bb.bottom) - Math.max(q.top, bb.top);
-          if (ox > 1 && oy > 1) overlaps.push(`contact block covers the QR by ${Math.round(ox)}x${Math.round(oy)}px`);
+          // On four templates the QR is the block's own corner (shared.tsx
+          // DetailsQR), so the block's box contains it by design; what must
+          // never touch it is a ROW — checked one by one below.
+          if (!block.contains(qr) && ox > 1 && oy > 1) overlaps.push(`contact block covers the QR by ${Math.round(ox)}x${Math.round(oy)}px`);
           // …and every individual row, in case the block's own box is roomier
           // than the text inside it.
           for (const t of texts) {

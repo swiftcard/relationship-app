@@ -11,9 +11,9 @@
 //                       shrink to fit the card rather than run off its edge.
 import type { CardData, CustomBlock, CustomElement, CustomLayout, CustomSocial } from "./types";
 import { MiniQR } from "./MiniQR";
-import { fitName, fitPx, formatPhone, IcoPhone, IcoMail, IcoGlobe, IcoPin } from "./shared";
+import { fitName, formatPhone, IcoPhone, IcoMail, IcoGlobe, IcoPin } from "./shared";
 import {
-  QR_MIN_PX, blockDensity, blockFontPx, blockHasValue, blockImagePx, groupSocials, hasBlocks,
+  QR_MIN_PX, blockDensity, sideDensity, textBlockPx, blockFontPx, blockHasValue, blockImagePx, groupSocials, hasBlocks,
   normalizeCustomLayout, sideImageScale, socialCols, visibleBlocks, zoneFor,
 } from "@/lib/custom-layout";
 import PlatformIcon from "@/components/PlatformIcon";
@@ -64,7 +64,8 @@ const SOCIAL_HANDLE_MIN_PX = 8;
  * density solve — on a card full enough that even the emphasis size is under
  * the floor, the card still has to fit, and that is the solve's call to make.
  */
-const TEXT_MIN_PX = 6.5;
+// The value, and the fit it floors, live in lib/custom-layout (TEXT_MIN_PX, textBlockPx)
+// so the density model sizes text with exactly the rule drawn here.
 
 /** The handle a social block will draw — shared so the row can size to its longest. */
 function socialShown(block: CustomBlock, data: CardData, placeholder: boolean): string {
@@ -571,10 +572,9 @@ export function CustomBlockContent({
   // character count against a comfy length, which is a proxy and was still
   // letting a hero-emphasis email split. Anything without a space is therefore
   // ALSO clamped to the zone's real width; prose with spaces just wraps.
-  const unbroken = !/\s/.test(shown);
-  let sized = isName ? fitName(fs, value, 16) : fitPx(fs, shown, block.emphasis === "hero" ? 18 : 26);
-  if (unbroken) sized = Math.min(sized, fitToWidth(shown + (Icon ? "xx" : ""), fs));
-  sized = Math.max(Math.min(TEXT_MIN_PX, fs), sized);
+  // ONE rule, shared with the density model (lib/custom-layout textBlockPx), so
+  // the model plans for the size this actually draws.
+  const sized = textBlockPx(block, shown, fs, zonePx);
 
   const text = (
     <span
@@ -720,6 +720,10 @@ export function CustomBlockCard({ data, placeholder = false }: { data: CardData;
   // the content really is, and invisible to a block list on its own. Passed in
   // placeholder mode too, so the designer previews at the size it will publish.
   const density = blockDensity(blocks, skeleton, data, placeholder, panelShown);
+  // The side panel is solved on its own (lib/custom-layout sideDensity): side
+  // by side it has the card's whole height, so a full main column no longer
+  // shrinks the logo and headshot in an otherwise empty panel.
+  const panelDensity = sideDensity(blocks, skeleton, data, placeholder, panelShown);
   const sideScale = sideImageScale(skeleton);
 
   const side = sideForPanel;
@@ -752,7 +756,7 @@ export function CustomBlockCard({ data, placeholder = false }: { data: CardData;
       }}
     >
       <Zone
-        blocks={side} data={data} layout={layout} density={density} placeholder={placeholder}
+        blocks={side} data={data} layout={layout} density={panelDensity} placeholder={placeholder}
         gap={0} imageScale={sideScale} onPanel={!!panelBg}
       />
     </div>
@@ -767,6 +771,9 @@ export function CustomBlockCard({ data, placeholder = false }: { data: CardData;
   return (
     <div
       className="sc-card"
+      // The solved density, for the layout sweep: at the ceiling the card is as
+      // large as it is allowed to be, so spare height is not "unused space".
+      data-density={density.toFixed(3)}
       style={{
         position: "relative", width: "100%",
         background: layout.background, fontFamily: layout.fontFamily, color: layout.textColor,

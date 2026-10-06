@@ -7,7 +7,7 @@ import { panelBackground } from "@/lib/template-style";
 import React from "react";
 import { MiniQR as QR } from "./MiniQR";
 import type { CardData } from "./types";
-import { cardAspect, ContactRows, DetailsGap, QR_PINNED, fitFactor, fitCompany, splitLogoRow, fitTitleFluid, titleBox, fitName, heroGrow, logoStyle, logoCircleStyle, cardLogoShape, qrSize, templateStyle, CARD_BASE_FONT, isDarkBg, infoPaletteFrom, IcoInsta, IcoX, IcoTikTok, IcoLinkedIn, nameClass, textWidthFactor, cardFontClass } from "./shared";
+import { cardAspect, ContactRows, DetailsGap, fitFactor, fitCompany, splitLogoRow, fitTitleFluid, titleBox, fitName, heroGrow, logoStyle, logoCircleStyle, cardLogoShape, qrSize, templateStyle, CARD_BASE_FONT, isDarkBg, infoPaletteFrom, IcoInsta, IcoX, IcoTikTok, IcoLinkedIn, nameClass, textWidthFactor, cardFontClass } from "./shared";
 import PanelVideo from "./PanelVideo";
 
 const ACCENT_DEFAULT = "#6d28d9";
@@ -153,19 +153,18 @@ export default function PhotoFirst({ data }: { data: CardData }) {
         <DetailsGap f={f} />
         {/* Contact rows — shared block, auto-fits to the amount of info */}
         <div className="flex flex-col min-h-0" style={{ gap: Math.round(5 * f), flex: "1 1 0" }}>
-          <ContactRows data={data} palette={{ accent: ACCENT, ...rowPal }} />
           {socials.length > 0 && (
             <div className="flex items-center gap-2.5 mt-0.5">
               {socials.map((s, i) => <span key={i} style={{ color: s.color }}>{s.icon}</span>)}
             </div>
           )}
-        </div>
-
-        {/* QR + scan label — always on the card; gives up a little room when dense */}
-        <div className="flex items-end justify-end" style={QR_PINNED}>
-          <div className="flex flex-col items-end gap-1">
-            <QR size={qrSize(f)} bg={infoPalette.qrBg} fg={darkInfo ? "#1e1b4b" : ACCENT} url={data.cardUrl} />
-          </div>
+          {/* The QR is the details block's bottom-right corner, so rows use the
+              width beside it instead of stopping a whole QR-height short. */}
+          <ContactRows
+            data={data}
+            palette={{ accent: ACCENT, ...rowPal }}
+            qr={{ size: qrSize(f), node: <QR size={qrSize(f)} bg={infoPalette.qrBg} fg={darkInfo ? "#1e1b4b" : ACCENT} url={data.cardUrl} /> }}
+          />
         </div>
       </div>
     </div>
