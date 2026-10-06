@@ -163,8 +163,7 @@ export default function SiteNav() {
       >
         {/* px-4 on the smallest phones (320px): the logo + Get started + menu
             trigger together need every pixel, and px-5 pushed the trigger off
-            the right edge. The button's own size utilities lose to .rd-btn, so
-            under 360px they are forced (!) or "Get started" wraps to 2 lines. */}
+            the right edge. */}
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-2.5 shrink-0">
             <SwiftCardIcon size={30} />
@@ -215,7 +214,7 @@ export default function SiteNav() {
             <Link
               href="/cards/new"
               onClick={() => trackCta("create_your_card", "mobile_nav")}
-              className="rd-btn rd-btn-primary text-[0.8125rem] px-3 sm:px-3.5 py-2 !whitespace-nowrap max-[359px]:!px-3.5 max-[359px]:!text-[0.875rem]"
+              className="rd-btn rd-btn-primary text-[0.8125rem] px-3 sm:px-3.5 py-2 whitespace-nowrap"
             >
               Get started
             </Link>

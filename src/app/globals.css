@@ -712,11 +712,6 @@ summary.list-none::-webkit-details-marker { display: none; }
    light theme remaps .text-white (and friends) inside .sc-app to near-black,
    which is what turned "App Store" black-on-black on /welcome. No remap
    matches these, so the text is white everywhere. */
-/* The phone hero's matched pair (size="pair"): a touch of depth and a press
-   response, so the two read as real buttons. Nav/footer badges stay flat. */
-.sc-appstore-badge.sc-asb-pair { box-shadow: inset 0 1px 0 rgba(255,255,255,.08), 0 10px 24px -14px rgba(11,16,34,.55);
-  transition: transform .15s ease-out, background-color .2s; }
-.sc-appstore-badge.sc-asb-pair:active { transform: scale(.97); }
 .sc-appstore-badge { background-color: #191A1E; border: 1px solid #2F3034; color: #fff; }
 .sc-appstore-badge:hover { background-color: #232328; }
 .sc-appstore-badge .sc-asb-top { color: rgba(255,255,255,.7); }

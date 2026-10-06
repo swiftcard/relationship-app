@@ -16,7 +16,7 @@ import NativeHidden from "@/components/NativeHidden";
 // NOT a client component — it has no interactivity, so server-rendered pages
 // (homepage, footer) keep shipping zero JS for it. The shine is pure CSS.
 
-type Size = "sm" | "pair";
+type Size = "sm" | "lg";
 
 const SIZES: Record<Size, { pad: string; glyph: string; top: string; main: string; gap: string; radius: string }> = {
   // Desktop nav bar: renders 120×40, which fits the 64px bar beside Log in and
@@ -25,13 +25,25 @@ const SIZES: Record<Size, { pad: string; glyph: string; top: string; main: strin
   // already fill a 375px row), which is why the nav badge is inside a
   // `hidden lg:flex` cluster and there is no phone equivalent.
   sm: { pad: "px-3 py-1.5", glyph: "w-[17px] h-[17px]", top: "text-[0.5625rem]", main: "text-[0.78125rem]", gap: "gap-2", radius: "rounded-xl" },
-  // Phone hero (owner, 2026-10-06): App Store + Google Play as a matched pair,
-  // each half of a two-column grid under the full-width "See how it works".
-  // Fixed 48px so the two are identical whatever their label widths; from sm
-  // up natural width at 50px, matching the "See how it works" pill inline.
-  // Under 360px (the 320px first-gen SE) each half is ~134px, so it tightens
-  // there rather than letting "Download on the" wrap onto two lines.
-  pair: { pad: "sc-asb-pair w-full sm:w-auto h-12 sm:h-[50px] justify-center whitespace-nowrap px-3 max-[359px]:px-2 sm:px-5", glyph: "w-[22px] h-[22px] max-[359px]:w-5 max-[359px]:h-5", top: "text-[0.625rem] max-[359px]:text-[0.5625rem] tracking-[0.02em]", main: "text-base max-[359px]:text-[0.9375rem]", gap: "gap-2.5 max-[359px]:gap-1.5", radius: "rounded-xl" },
+  // Hero: sits directly beside "See how it works" (.rd-btn + .rd-btn-lg), and
+  // the height is not a guess — that button is padding 1rem + font-size 1rem at
+  // line-height 1 + a 1px border = exactly 50px. This lands on 50 too:
+  // py-2.5 (20) + the two label lines at leading-tight (10×1.25 + 14×1.25 = 30).
+  // Anything else and the two sit a pixel or two off from each other, which is
+  // the kind of thing you cannot unsee once you notice it.
+  // px-3 on phones, px-4 from sm up: this badge sits beside a 186px button in a
+  // hero column that is only 343px wide on a 375px phone, and the wider padding
+  // put the pair 3px from the edge. py-2.5 is untouched by the breakpoint, so
+  // the 50px height — the whole point of this size — holds at every width.
+  //
+  // Trimming further does NOT buy a narrower phone. Measured 2026-09-10 at
+  // 360px, where the column is 320: the button is 186 and this badge 133, so
+  // even at px-2.5 with an 8px row gap the pair needs 319-323px and the badge
+  // drops to its own line either way. So it keeps the roomier padding and
+  // wraps below 375 — cleanly, still full size, still directly under the
+  // button. Shaving a pixel off a badge to win a pixel is how a design ends up
+  // cramped everywhere to serve the one width it still cannot fit.
+  lg: { pad: "px-3 sm:px-4 py-2.5", glyph: "w-[22px] h-[22px]", top: "text-[0.625rem]", main: "text-[0.875rem]", gap: "gap-2.5", radius: "rounded-xl" },
 };
 
 // ONE LOOK, everywhere (owner, 2026-09-18): the desktop header's. There used
@@ -40,8 +52,8 @@ const SIZES: Record<Size, { pad: string; glyph: string; top: string; main: strin
 // near-black, so it rendered black on black. The colours now live in
 // globals.css (.sc-appstore-badge), under class names no theme remap touches:
 // the pill is always the header's dark glass and its words are always white.
-// Size is the header's (`sm`, 120×40) everywhere except the phone hero's
-// matched `pair`.
+// Size is the header's (`sm`, 120×40) everywhere except the phone hero, whose
+// `lg` exists only to match the 50px button beside it.
 
 export function AppleGlyph({ className, color = "#fff" }: { className?: string; color?: string }) {
   return (

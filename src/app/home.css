@@ -112,8 +112,6 @@
 .hp-feat { display: flex; align-items: center; gap: 0.7rem; color: var(--hp-ink); font-size: 0.97rem; line-height: 1.35; font-weight: 500; }
 .hp-feat-ico { flex-shrink: 0; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
   background: #fff; box-shadow: 0 1px 2px rgba(11,16,34,.06), inset 0 0 0 1px rgba(37,99,235,.16); }
-/* Phones: the list is supporting proof below the actions, so a lighter tile. */
-@media (max-width: 639px) { .hp-feat-ico { width: 30px; height: 30px; border-radius: 9px; } }
 
 /* ── Gradient ribbon under the hero ──────────────────────────────────────── */
 .hp-ribbon { background: var(--rd-aurora); background-size: 200% 100%; animation: rd-aurora-pan 12s ease-in-out infinite; }

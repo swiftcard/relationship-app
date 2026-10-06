@@ -95,7 +95,7 @@ export default function Home() {
       {/* `.hp` scopes every homepage-only style in home.css. */}
       <main className="hp overflow-clip">
         {/* ═══════════════ HERO ═══════════════ */}
-        <section className="relative flex flex-col justify-start sm:justify-center min-h-[calc(100svh-56px)] pt-[5.5rem] pb-12 sm:pt-24 sm:pb-14 overflow-hidden">
+        <section className="relative flex flex-col justify-center min-h-[calc(100svh-56px)] pt-24 pb-14 overflow-hidden">
           {/* Ambient video background (owner request 2026-08-19): a bright
               networking scene looping muted behind the hero. The white wash is
               strongest over the text and nearly clear on the right so the
@@ -128,19 +128,15 @@ export default function Home() {
           <div className="absolute inset-0 pointer-events-none sm:hidden" aria-hidden="true" style={{ background: "rgba(255,255,255,0.3)" }} />
 
           <div className="relative w-full min-w-0 max-w-7xl mx-auto px-5 sm:px-6 lg:flex lg:items-center lg:gap-8">
-            {/* Phones (owner, 2026-10-06): one clear order — promise, the name box,
-                a quiet "See how it works", the download group, then the feature
-                list as supporting proof. Done with order-* so the source order
-                (and tablet/desktop) is unchanged. */}
-            <div className="max-w-[640px] lg:flex-1 flex flex-col sm:block">
-              <h1 className="rd-display text-slate-900 text-[clamp(2.6rem,5.6vw,4.5rem)] max-sm:text-[clamp(2.2rem,10.6vw,2.75rem)]" data-reveal>
+            <div className="max-w-[640px] lg:flex-1">
+              <h1 className="rd-display text-slate-900 text-[clamp(2.6rem,5.6vw,4.5rem)]" data-reveal>
                 The business card that <HeroShareWord />
               </h1>
-              <p className="mt-4 sm:mt-6 text-[var(--hp-ink)] text-[clamp(1.05rem,1.6vw,1.25rem)] leading-snug max-w-[540px]" data-reveal>
-                Saves you in one tap, and does the follow‑ups for you.
+              <p className="mt-6 text-[var(--hp-ink)] text-[clamp(1.05rem,1.6vw,1.25rem)] leading-snug max-w-[540px]" data-reveal>
+                Saves you in one tap, and does the follow-ups for you.
               </p>
 
-              <ul className="order-last sm:order-none mt-10 sm:mt-7 grid sm:grid-cols-2 gap-x-6 gap-y-3 sm:gap-y-3.5 max-w-[580px]" data-reveal>
+              <ul className="mt-7 grid sm:grid-cols-2 gap-x-6 gap-y-3.5 max-w-[580px]" data-reveal>
                 {[
                   { t: "Share by link, QR code or NFC", d: "M9 15l6-6M11 6l1.2-1.2a4 4 0 015.6 5.6L16.6 11.6M13 18l-1.2 1.2a4 4 0 01-5.6-5.6L7.4 12.4" },
                   { t: "Saved in one tap, no app", d: "M20 7L9.5 17.5 4 12" },
@@ -163,12 +159,12 @@ export default function Home() {
                   above the fold at every width), then the claim box. The claim
                   box sits inside a slowly turning gradient ring: it is the one
                   thing on the page we most want a first-time visitor to do. */}
-              <div className="mt-7 sm:mt-9 flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:gap-3" data-reveal>
+              <div className="mt-9 flex flex-wrap items-center gap-3" data-reveal>
                 {/* Glitter across the whole button (owner, 2026-09-17): a scatter of
                     tiny stars over the face of it, each twinkling on its own slow
                     offset so it shimmers rather than blinks. VERY light on purpose.
                     Inert to the pointer, aria-hidden, stilled by reduced-motion. */}
-                <Link id="hero-cta" href="#cards" className="rd-btn rd-btn-ghost-l rd-btn-lg !bg-white/90 hp-sparkle max-sm:!hidden">
+                <Link id="hero-cta" href="#cards" className="rd-btn rd-btn-ghost-l rd-btn-lg !bg-white/90 hp-sparkle">
                   See how it works
                   <span className="hp-sparks" aria-hidden="true">
                     {[
@@ -192,20 +188,9 @@ export default function Home() {
                     ))}
                   </span>
                 </Link>
-                {/* Phones: the secondary action is a quiet text link, so the
-                    name box above it is the one thing that leads. */}
-                <Link href="#cards" className="sm:hidden order-2 mt-3 self-center inline-flex items-center gap-1.5 min-h-11 px-3 text-[0.9375rem] font-semibold text-[var(--hp-ink)] underline-offset-4 hover:underline active:underline">
-                  See how it works
-                  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
-                </Link>
-                <div className="order-3 sm:order-none mt-7 sm:mt-0 lg:hidden">
-                  <p className="sm:hidden mb-2.5 text-center text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-[var(--hp-ink)] opacity-60">Get the app</p>
-                  <div className="grid grid-cols-2 gap-2.5 sm:flex sm:gap-3">
-                    <AppStoreBadge size="pair" />
-                    <GooglePlayBadge size="pair" />
-                  </div>
-                </div>
-                <div className="hp-ring order-1 sm:order-none">
+                <AppStoreBadge size="lg" className="lg:hidden" />
+                <GooglePlayBadge size="lg" className="lg:hidden" />
+                <div className="hp-ring">
                   <HeroClaim />
                 </div>
               </div>

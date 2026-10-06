@@ -139,12 +139,7 @@ describe("placement", () => {
     const badge = src.indexOf("<AppStoreBadge", cta);
     expect(badge, "the badge must come after the CTA").toBeGreaterThan(cta);
     expect(src.indexOf("<HeroClaim", cta), "the claim box stays last").toBeGreaterThan(badge);
-    // Phone-only via the download group (2026-10-06): a labelled two-column
-    // matched pair, hidden from lg up where the nav carries the badges.
-    const group = src.lastIndexOf("lg:hidden", badge);
-    expect(group, "the badges must sit inside an lg:hidden group").toBeGreaterThan(cta);
-    expect(src.slice(group, badge)).toContain("Get the app");
-    expect(src.slice(group, badge)).toContain('className="grid grid-cols-2 gap-2.5 sm:flex sm:gap-3"');
+    expect(src.slice(badge, badge + 120)).toContain('className="lg:hidden"');
   });
 
   // Owner kept the header badge on desktop (2026-09-03) — but ONLY there. The
@@ -252,18 +247,11 @@ describe("the hero badge and the nav badge are complements", () => {
   it("the hero carries a phone-only badge beside See how it works", () => {
     const row = hero.slice(hero.indexOf('id="hero-cta"') - 900, hero.indexOf("<HeroClaim"));
     expect(row, "the badge must sit in the same row as the CTA").toContain("<AppStoreBadge");
-    expect(row).toMatch(/className="grid grid-cols-2[^"]*">\s*<AppStoreBadge size="pair" \/>\s*<GooglePlayBadge size="pair" \/>/);
-  });
-
-  // Phones (owner, 2026-10-06): the name box leads, "See how it works" is a
-  // quiet text link, then the download group, and the feature list moves below
-  // the actions. All via order-* so tablet/desktop keep the source order.
-  it("on phones the name box leads and the feature list follows the actions", () => {
-    expect(hero).toMatch(/id="hero-cta"[^>]*max-sm:!hidden/);
-    expect(hero).toMatch(/<Link href="#cards" className="sm:hidden order-2/);
-    expect(hero).toContain('<div className="hp-ring order-1 sm:order-none">');
-    expect(hero).toMatch(/order-3 sm:order-none[^"]*lg:hidden/);
-    expect(hero).toMatch(/<ul className="order-last sm:order-none/);
+    expect(row).toMatch(/<AppStoreBadge[^>]*className="lg:hidden"/);
+    // size="lg" is the one built for this slot — 50px tall, matching the
+    // .rd-btn-lg beside it to the pixel. Any other size and the two sit a
+    // couple of pixels off, which is the sort of thing you cannot unsee.
+    expect(row).toMatch(/<AppStoreBadge[^>]*size="lg"/);
   });
 
   it("the nav badge stays desktop-only, so the two never both show", () => {
@@ -280,10 +268,10 @@ describe("the hero badge and the nav badge are complements", () => {
     expect(nav.slice(at, at + 80)).toContain('size="sm"');
   });
 
-  it("pair is used by the hero and nowhere else", () => {
-    // It is full-width by design: half of the hero's two-column grid. Anywhere
-    // else it would stretch to fill whatever row it landed in.
-    const users = CONSUMERS.map(([f]) => f).filter((f) => /size="pair"/.test(read(f)));
+  it("lg is used by the hero and nowhere else", () => {
+    // It is tuned to one specific neighbour. Reusing it somewhere without that
+    // 50px button beside it would inherit padding chosen for a 343px column.
+    const users = CONSUMERS.map(([f]) => f).filter((f) => /size="lg"/.test(read(f)));
     expect(users).toEqual(["src/app/page.tsx"]);
   });
 });
