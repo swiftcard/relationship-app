@@ -1,15 +1,17 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import Link from "next/link";
-import { scanBusinessCard, ProRequiredError, AiConsentRequiredError } from "@/lib/scan-card";
+import { scanBusinessCard, ProRequiredError, AiConsentRequiredError, EmptyScanError } from "@/lib/scan-card";
 import { PlanGate } from "@/components/PlanGate";
+import CardScanCamera from "@/components/CardScanCamera";
 
 export default function AddContactModal({
   cardOwner,
   onAdded,
   variant = "add",
+  canScan,
 }: {
   /** Username of the card the contact should be attached to (the selected card). */
   cardOwner?: string;
@@ -28,20 +30,34 @@ export default function AddContactModal({
    * button rather than competing with it.
    */
   variant?: "add" | "scan";
+  /**
+   * false = this account is on Free. The scanner is Pro, so tapping it says so
+   * at once instead of opening the camera, lining the card up, and only then
+   * hearing "Pro feature". undefined = unknown → open the camera; the server's
+   * 403 is the real gate either way.
+   */
+  canScan?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", company: "", notes: "", where_met: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [atLimit, setAtLimit] = useState(false);
-  const [scanState, setScanState] = useState<"idle" | "scanning" | "error" | "pro">("idle");
+  const [scanState, setScanState] = useState<"idle" | "scanning" | "error" | "blocked" | "pro">("idle");
   const [scanMsg, setScanMsg] = useState("");
   const [scanned, setScanned] = useState(false);
+  // The scanner's live camera (CardScanCamera) — over the modal, not instead of it.
+  const [camera, setCamera] = useState(false);
+  // The photo being read, shown while it reads so the wait has a face.
+  const [thumb, setThumb] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   // Escape closes (same as the × and the backdrop), focus lands in the modal
-  // and returns to "Add contact" afterwards.
-  useDialogA11y(open, () => { setOpen(false); reset(); }, panelRef);
+  // and returns to "Add contact" afterwards. With the camera up, Escape closes
+  // only the camera — the person lands back in the form.
+  useDialogA11y(open, () => { if (camera) setCamera(false); else { setOpen(false); reset(); } }, panelRef);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => () => { if (thumb) URL.revokeObjectURL(thumb); }, [thumb]);
 
   function set(field: keyof typeof form, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -54,17 +70,39 @@ export default function AddContactModal({
     setScanState("idle");
     setScanMsg("");
     setScanned(false);
+    setCamera(false);
+    setThumb(null);
+  }
+
+  // Free → say "Pro" now. Anyone else → the camera.
+  function openScanner() {
+    if (canScan === false) {
+      setScanState("pro");
+      setScanMsg(new ProRequiredError().message);
+      return;
+    }
+    setScanState("idle");
+    setScanMsg("");
+    setCamera(true);
+  }
+
+  // Inside the tap, so the browser lets the file picker open.
+  function pickPhoto() {
+    setCamera(false);
+    fileRef.current?.click();
   }
 
   // Scan a business card → auto-fill name/company/email/phone. The user still
   // adds "where you met" and notes. lib/scan-card compresses huge phone photos
-  // and times out, so it never hangs.
-  async function handleScan(file: File) {
+  // and times out, so it never hangs. `prepared` = the camera's crop, already
+  // card-sized, which goes up untouched.
+  async function handleScan(photo: Blob, prepared = false) {
     setScanState("scanning");
     setScanMsg("");
+    setScanned(false);
     if (fileRef.current) fileRef.current.value = "";
     try {
-      const d = await scanBusinessCard(file);
+      const d = await scanBusinessCard(photo, { prepared });
       setForm((prev) => ({
         ...prev,
         name: d.name || prev.name,
@@ -75,8 +113,10 @@ export default function AddContactModal({
       setScanned(true);
       setScanState("idle");
     } catch (err) {
-      if (err instanceof AiConsentRequiredError) { setScanState("error"); setScanMsg(err.message); }
+      // "blocked": AI is switched off — a setting, so no "Try again".
+      if (err instanceof AiConsentRequiredError) { setScanState("blocked"); setScanMsg(err.message); }
       else if (err instanceof ProRequiredError) { setScanState("pro"); setScanMsg(err.message); }
+      else if (err instanceof EmptyScanError) { setScanState("error"); setScanMsg("Couldn't find contact details on that card. Fill the frame with the card and try again."); }
       else if (err instanceof DOMException && err.name === "AbortError") { setScanState("error"); setScanMsg("That took too long — try a clearer photo."); }
       else { setScanState("error"); setScanMsg("Couldn't read that card. Try a clear, well-lit photo."); }
     }
@@ -115,7 +155,8 @@ export default function AddContactModal({
   return (
     <>
       <button
-        onClick={() => setOpen(true)}
+        // "Scan a card" goes straight to the camera — one tap, not two.
+        onClick={() => { setOpen(true); if (variant === "scan") openScanner(); }}
         // whitespace-nowrap: in a narrow header row "Add contact" broke to two
         // lines INSIDE the button — which doubled its height and read as an
         // oversized blue block rather than a small action.
@@ -170,23 +211,35 @@ export default function AddContactModal({
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="px-5 py-4 space-y-3 overflow-y-auto">
-              {/* Scan a business card — auto-fills the fields below */}
+              {/* Scan a business card — auto-fills the fields below. The
+                  button opens our own camera (CardScanCamera: a card frame
+                  that turns green). This input is the fallback behind its
+                  "Choose photo" — no `capture`, so it offers the photo
+                  library, which is the point of it. */}
               <input
                 ref={fileRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
                 className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleScan(f); }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) { setThumb(URL.createObjectURL(f)); handleScan(f); }
+                }}
               />
               <button
                 type="button"
-                onClick={() => fileRef.current?.click()}
+                onClick={openScanner}
                 disabled={scanState === "scanning"}
                 className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors"
               >
                 {scanState === "scanning" ? (
-                  <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Reading card…</>
+                  <>
+                    {thumb
+                      // eslint-disable-next-line @next/next/no-img-element -- a local blob: URL, nothing for next/image to optimise
+                      ? <img src={thumb} alt="" className="h-5 w-[2.2rem] rounded object-cover ring-1 ring-white/40" />
+                      : null}
+                    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Reading card…
+                  </>
                 ) : (
                   <>
                     <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" /></svg>
@@ -197,7 +250,14 @@ export default function AddContactModal({
               {scanned && scanState === "idle" && (
                 <p className="text-emerald-400 text-[0.6875rem] text-center">✓ Filled from the card — add where you met &amp; notes below.</p>
               )}
-              {scanState === "error" && <p className="text-amber-400 text-[0.6875rem] text-center">{scanMsg}</p>}
+              {(scanState === "error" || scanState === "blocked") && (
+                <p className="text-amber-400 text-[0.6875rem] text-center">
+                  {scanMsg}
+                  {scanState === "error" && (
+                    <> <button type="button" onClick={openScanner} className="font-semibold underline">Try again</button></>
+                  )}
+                </p>
+              )}
               {scanState === "pro" && (
                 <PlanGate
                   feature="scanner"
@@ -215,7 +275,9 @@ export default function AddContactModal({
               <div>
                 <label className="text-xs text-gray-400 font-medium block mb-1">Full name *</label>
                 <input
-                  autoFocus
+                  // Not under the camera: on a phone a focused field behind it
+                  // can raise the keyboard over the viewfinder.
+                  autoFocus={!camera}
                   value={form.name}
                   onChange={(e) => set("name", e.target.value)}
                   placeholder="Sarah Williams"
@@ -308,6 +370,18 @@ export default function AddContactModal({
               </div>
             </form>
           </div>
+
+          {camera && (
+            <CardScanCamera
+              onClose={() => setCamera(false)}
+              onPickPhoto={pickPhoto}
+              onCapture={(photo) => {
+                setCamera(false);
+                setThumb(URL.createObjectURL(photo));
+                handleScan(photo, true);
+              }}
+            />
+          )}
         </div>
       )}
     </>

@@ -28,10 +28,23 @@ export class ProRequiredError extends Error {
   constructor(message = "Scanning business cards is a Pro feature.") { super(message); this.name = "ProRequiredError"; }
 }
 
+/** The card came back with nothing on it we could use — usually a blurry or far-away photo. */
+export class EmptyScanError extends Error {
+  constructor(message = "Couldn't find any contact details on that card.") { super(message); this.name = "EmptyScanError"; }
+}
+
 const SCAN_TIMEOUT_MS = 45_000;
 
-export async function scanBusinessCard(file: File): Promise<ScannedCard> {
-  const { base64, mediaType } = await compressToBase64(file);
+/**
+ * `photo` is either a picked file (any size — compressed here) or the
+ * scanner camera's capture, which is already cropped to the card and
+ * JPEG-compressed (components/CardScanCamera) and goes up as it is: no second
+ * decode, no second compression, nothing to wait for.
+ */
+export async function scanBusinessCard(photo: Blob, opts: { prepared?: boolean } = {}): Promise<ScannedCard> {
+  const { base64, mediaType } = opts.prepared
+    ? { base64: (await readAsDataURL(photo)).split(",")[1] ?? "", mediaType: photo.type || "image/jpeg" }
+    : await compressToBase64(photo);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), SCAN_TIMEOUT_MS);
@@ -50,13 +63,17 @@ export async function scanBusinessCard(file: File): Promise<ScannedCard> {
       throw new ProRequiredError(data.message || undefined);
     }
     if (!res.ok) throw new Error("scan_failed");
-    return (await res.json()) as ScannedCard;
+    const card = (await res.json()) as ScannedCard;
+    // A green "Filled from the card" over four empty fields is worse than an
+    // honest "try again".
+    if (!card?.name && !card?.email && !card?.phone && !card?.company) throw new EmptyScanError();
+    return card;
   } finally {
     clearTimeout(timer);
   }
 }
 
-async function compressToBase64(file: File): Promise<{ base64: string; mediaType: string }> {
+async function compressToBase64(file: Blob): Promise<{ base64: string; mediaType: string }> {
   const dataUrl = await readAsDataURL(file);
   try {
     const img = await loadImage(dataUrl);
@@ -90,7 +107,7 @@ function rawFrom(dataUrl: string): { base64: string; mediaType: string } {
   return { base64: b64, mediaType };
 }
 
-function readAsDataURL(file: File): Promise<string> {
+function readAsDataURL(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(r.result as string);

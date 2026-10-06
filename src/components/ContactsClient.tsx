@@ -1048,6 +1048,7 @@ export default function ContactsClient({
                 This is the same modal — it just says so from the outside. */}
             <AddContactModal
               variant="scan"
+              canScan={isPro}
               cardOwner={cardFilter !== "all" ? cardFilter : (primaryUsername || userCards[0]?.username)}
               onAdded={(lead) => {
                 const l = lead as Lead;
@@ -1056,6 +1057,7 @@ export default function ContactsClient({
               }}
             />
             <AddContactModal
+              canScan={isPro}
               cardOwner={cardFilter !== "all" ? cardFilter : (primaryUsername || userCards[0]?.username)}
               onAdded={(lead) => {
                 const l = lead as Lead;

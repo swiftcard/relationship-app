@@ -37,11 +37,12 @@ export const contactsDocs = defineDocs([
     triggers: [
       "scan", "scanner", "scan a business card", "scan card", "camera", "ocr",
       "photo of a card", "business card scanner",
+      "scanner frame", "frame not turning green", "move closer", "camera won't open", "scan from photos",
     ],
     answer:
-      "Open \"Add contact\" and tap \"Scan a business card\" at the top of the modal — take a photo and the name, email, phone and company fill themselves in, ready for you to check and save. It's a Pro feature.",
+      "On Contacts, tap \"Scan a card\" (or open \"Add contact\" and tap \"Scan a business card\"). The camera opens with a card-shaped frame: line the card up inside it. If the card is too far away it says \"Move closer\"; when the card fills the frame, the frame turns green, and if you hold still for about half a second it takes the photo by itself — or tap the round shutter button any time. The name, email, phone and company then fill themselves in, ready for you to check and save. It's a Pro feature.",
     detail:
-      "There's no separate Scanner page or tab; the Add contact modal is the only way in. It fills the form but does not save on its own — you still press Add contact. Job title and website are read but not transferred into the form. There is no free scan allowance at all: it is Pro from the first scan.",
+      "There's no separate Scanner page or tab — both buttons open the same Add contact form, and the scan fills it but does not save on its own: you still press Add contact. Job title and website are read but not transferred into the form. If the frame never turns green (a white card on a white table is the usual reason), put the card on a plain, darker surface, or just tap the shutter — green is a guide, not a lock. \"Choose photo\" at the bottom left of the camera scans a picture you already took. If the camera won't open in the iPhone app, camera access is off: iPhone Settings → SwiftCard → Camera; in a browser, allow the camera for the site. If nothing could be read, the form says so with a \"Try again\" link. There is no free scan allowance at all: it is Pro from the first scan, and on Free the scan button says so instead of opening the camera.",
   },
   {
     id: "read-unread",
