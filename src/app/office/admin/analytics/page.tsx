@@ -13,7 +13,7 @@ import {
   getOfficeUniqueVisitors,
 } from "@/lib/office-analytics";
 import { resolveDateRange, previousPeriod, type DateRangePreset } from "@/lib/office-analytics-dates";
-import { computeConversionRate, pctChange, fillDateRange } from "@/lib/office-analytics-metrics";
+import { pctChange, fillDateRange } from "@/lib/office-analytics-metrics";
 import { getSourceLabel } from "@/lib/source-labels";
 import { StatTile, PageHead, Empty } from "@/components/office/OfficeUI";
 import ViewsChart from "@/components/ViewsChart";
@@ -93,7 +93,6 @@ export default async function OfficeAnalyticsPage({
   const totalLeads = employees.reduce((s, e) => s + e.leads, 0);
   const totalContacts = employees.reduce((s, e) => s + e.contactsSaved, 0);
   const totalSwiftlinkViews = employees.reduce((s, e) => s + e.swiftlinkViews, 0);
-  const conversionRate = computeConversionRate(totalLeads, totalViews);
 
   const prevTotalViews = prevEmployees.reduce((s, e) => s + e.views + e.swiftlinkViews, 0);
   const prevTotalScans = prevEmployees.reduce((s, e) => s + e.scans, 0);
@@ -121,11 +120,6 @@ export default async function OfficeAnalyticsPage({
         <StatTile label="Leads captured" value={totalLeads} hint={deltaLabel(totalLeads, prevTotalLeads)} />
         <StatTile label="Contact downloads" value={totalContacts} hint={deltaLabel(totalContacts, prevTotalContacts)} />
         <StatTile label="SwiftLink views" value={totalSwiftlinkViews} hint="Visits to a Swift Links page" />
-        <StatTile
-          label="Conversion rate"
-          value={conversionRate == null ? "—" : `${(conversionRate * 100).toFixed(1)}%`}
-          hint="Leads captured ÷ total views"
-        />
       </div>
 
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-6">

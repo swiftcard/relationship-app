@@ -360,14 +360,15 @@ export async function getTeamOverview(
 }
 
 // ── First-time setup checklist ───────────────────────────────────────────────
-// Derived from durable facts rather than a stored flag: once all four are true
-// they stay true, and the checklist never renders again.
+// Derived from durable facts rather than a stored flag: once all three are true
+// they stay true, and the checklist never renders again. There is no "capture
+// your first lead" step: a team whose clients only save their contacts is fully
+// set up, and a card is not a lead funnel (owner, 2026-10-06).
 
 export type SetupProgress = {
   brandingDone: boolean;
   invitedDone: boolean;
   cardLiveDone: boolean;
-  firstLeadDone: boolean;
   completed: number;
   total: number;
   allDone: boolean;
@@ -377,16 +378,14 @@ export function computeSetupProgress(input: {
   hasBrand: boolean;
   memberRowCount: number;   // any status — an invite that was sent counts, even if later revoked
   liveEmployeeCards: number; // employees (not the owner) with a live card
-  leadCount: number;
 }): SetupProgress {
   const brandingDone = input.hasBrand;
   const invitedDone = input.memberRowCount > 0;
   const cardLiveDone = input.liveEmployeeCards > 0;
-  const firstLeadDone = input.leadCount > 0;
-  const steps = [brandingDone, invitedDone, cardLiveDone, firstLeadDone];
+  const steps = [brandingDone, invitedDone, cardLiveDone];
   const completed = steps.filter(Boolean).length;
   return {
-    brandingDone, invitedDone, cardLiveDone, firstLeadDone,
+    brandingDone, invitedDone, cardLiveDone,
     completed, total: steps.length, allDone: completed === steps.length,
   };
 }

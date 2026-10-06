@@ -1,24 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeConversionRate, pctChange, fillDateRange, defaultEmployeeSort } from "@/lib/office-analytics-metrics";
-
-describe("computeConversionRate — leads ÷ views", () => {
-  it("computes a normal ratio", () => {
-    expect(computeConversionRate(5, 20)).toBe(0.25);
-  });
-
-  it("returns null (not 0 or Infinity) when there are zero views — nothing to convert from", () => {
-    expect(computeConversionRate(0, 0)).toBeNull();
-    expect(computeConversionRate(3, 0)).toBeNull();
-  });
-
-  it("stays bounded and correct even when leads exceed views (edge case, not an error)", () => {
-    expect(computeConversionRate(10, 4)).toBe(2.5);
-  });
-
-  it("zero leads over real views is a real 0, not null", () => {
-    expect(computeConversionRate(0, 50)).toBe(0);
-  });
-});
+import { pctChange, fillDateRange, defaultEmployeeSort } from "@/lib/office-analytics-metrics";
 
 describe("pctChange — period-over-period delta", () => {
   it("computes a normal percentage change", () => {
@@ -71,35 +52,43 @@ describe("fillDateRange — zero-fills missing UTC days for the chart", () => {
   });
 });
 
-describe("defaultEmployeeSort — leads first, never raw views first", () => {
-  it("ranks by leads descending as the primary key", () => {
+describe("defaultEmployeeSort — most-used cards first, never ranked by leads", () => {
+  it("ranks by card views descending as the primary key", () => {
     const rows = [
-      { name: "Low leads", leads: 1, contactsSaved: 0 },
-      { name: "High leads", leads: 9, contactsSaved: 0 },
+      { name: "Fewer views", views: 10, contactsSaved: 0 },
+      { name: "More views", views: 90, contactsSaved: 0 },
     ];
-    expect(defaultEmployeeSort(rows).map((r) => r.name)).toEqual(["High leads", "Low leads"]);
+    expect(defaultEmployeeSort(rows).map((r) => r.name)).toEqual(["More views", "Fewer views"]);
   });
 
-  it("breaks a leads tie by contacts saved descending", () => {
+  it("ignores leads entirely — a card is not a lead funnel", () => {
     const rows = [
-      { name: "Fewer saves", leads: 2, contactsSaved: 1 },
-      { name: "More saves", leads: 2, contactsSaved: 5 },
+      { name: "Many leads", views: 5, contactsSaved: 0, leads: 50 },
+      { name: "No leads", views: 40, contactsSaved: 0, leads: 0 },
+    ];
+    expect(defaultEmployeeSort(rows).map((r) => r.name)).toEqual(["No leads", "Many leads"]);
+  });
+
+  it("breaks a views tie by contact downloads descending", () => {
+    const rows = [
+      { name: "Fewer saves", views: 20, contactsSaved: 1 },
+      { name: "More saves", views: 20, contactsSaved: 5 },
     ];
     expect(defaultEmployeeSort(rows).map((r) => r.name)).toEqual(["More saves", "Fewer saves"]);
   });
 
   it("breaks a full tie by name ascending", () => {
     const rows = [
-      { name: "Zed", leads: 0, contactsSaved: 0 },
-      { name: "Anna", leads: 0, contactsSaved: 0 },
+      { name: "Zed", views: 0, contactsSaved: 0 },
+      { name: "Anna", views: 0, contactsSaved: 0 },
     ];
     expect(defaultEmployeeSort(rows).map((r) => r.name)).toEqual(["Anna", "Zed"]);
   });
 
   it("does not mutate the input array", () => {
     const rows = [
-      { name: "B", leads: 1, contactsSaved: 0 },
-      { name: "A", leads: 2, contactsSaved: 0 },
+      { name: "B", views: 1, contactsSaved: 0 },
+      { name: "A", views: 2, contactsSaved: 0 },
     ];
     const copy = [...rows];
     defaultEmployeeSort(rows);

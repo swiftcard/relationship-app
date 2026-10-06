@@ -5,7 +5,6 @@ import { isRateLimited } from "@/lib/rate-limit";
 import { requireOfficeCapability } from "@/lib/office-roles";
 import { getOfficeEmployeeMetrics } from "@/lib/office-analytics";
 import { resolveDateRange, type DateRangePreset } from "@/lib/office-analytics-dates";
-import { computeConversionRate } from "@/lib/office-analytics-metrics";
 import { buildEmployeeAnalyticsCsv } from "@/lib/office-analytics-csv";
 
 const PRESETS: DateRangePreset[] = ["7d", "30d", "90d"];
@@ -46,7 +45,6 @@ export async function GET(req: NextRequest) {
       leads: e.leads,
       contactsSaved: e.contactsSaved,
       swiftlinkViews: e.swiftlinkViews,
-      conversionRate: computeConversionRate(e.leads, e.views + e.swiftlinkViews),
       lastActivityAt: e.lastActivityAt,
     }))
   );

@@ -4,14 +4,13 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import DownloadLink from "@/components/DownloadLink";
 import type { EmployeeMetrics } from "@/lib/office-analytics";
-import { computeConversionRate, defaultEmployeeSort } from "@/lib/office-analytics-metrics";
+import { defaultEmployeeSort } from "@/lib/office-analytics-metrics";
 import { relativeTime } from "@/lib/relative-time";
 import { useDisplayClock } from "@/components/DisplayClock";
 
-type Row = EmployeeMetrics & { conversionRate: number | null };
 type SortKey = keyof Pick<
-  Row,
-  "name" | "cardName" | "views" | "uniqueVisitors" | "scans" | "leads" | "contactsSaved" | "swiftlinkViews" | "conversionRate" | "lastActivityAt"
+  EmployeeMetrics,
+  "name" | "cardName" | "views" | "uniqueVisitors" | "scans" | "leads" | "contactsSaved" | "swiftlinkViews" | "lastActivityAt"
 >;
 
 const COLUMNS: { key: SortKey; label: string; hint: string }[] = [
@@ -23,7 +22,6 @@ const COLUMNS: { key: SortKey; label: string; hint: string }[] = [
   { key: "leads", label: "Leads", hint: "People who shared their contact info" },
   { key: "contactsSaved", label: "Contact downloads", hint: "Visitors who downloaded this card as a contact. Whether they then tapped Add in their phone's contact sheet is not something any app can see." },
   { key: "swiftlinkViews", label: "SwiftLink views", hint: "Visits to their Swift Links page" },
-  { key: "conversionRate", label: "Conversion", hint: "Leads captured ÷ total views" },
   { key: "lastActivityAt", label: "Last activity", hint: "Most recent view, lead, or contact save" },
 ];
 
@@ -37,14 +35,9 @@ export default function EmployeeAnalyticsTable({ employees, range }: { employees
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  const rows: Row[] = useMemo(
-    () => employees.map((e) => ({ ...e, conversionRate: computeConversionRate(e.leads, e.views + e.swiftlinkViews) })),
-    [employees]
-  );
-
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const filtered = q ? rows.filter((r) => r.name.toLowerCase().includes(q) || r.cardName.toLowerCase().includes(q)) : rows;
+    const filtered = q ? employees.filter((r) => r.name.toLowerCase().includes(q) || r.cardName.toLowerCase().includes(q)) : employees;
 
     if (!sortKey) return defaultEmployeeSort(filtered);
 
@@ -58,7 +51,7 @@ export default function EmployeeAnalyticsTable({ employees, range }: { employees
       if (typeof av === "string" && typeof bv === "string") return dir * av.localeCompare(bv);
       return dir * ((av as number) - (bv as number));
     });
-  }, [rows, query, sortKey, sortDir]);
+  }, [employees, query, sortKey, sortDir]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -128,9 +121,6 @@ export default function EmployeeAnalyticsTable({ employees, range }: { employees
                   <td className="px-4 py-3 text-gray-300 tabular-nums font-semibold">{r.leads}</td>
                   <td className="px-4 py-3 text-gray-300 tabular-nums">{r.contactsSaved}</td>
                   <td className="px-4 py-3 text-gray-300 tabular-nums">{r.swiftlinkViews}</td>
-                  <td className="px-4 py-3 text-gray-300 tabular-nums">
-                    {r.conversionRate == null ? "—" : `${(r.conversionRate * 100).toFixed(1)}%`}
-                  </td>
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
                     {r.lastActivityAt ? relativeTime(r.lastActivityAt, clock.now) : "No activity yet"}
                   </td>

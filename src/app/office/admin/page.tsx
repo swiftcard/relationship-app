@@ -81,7 +81,6 @@ export default async function OfficeTeamPage() {
     hasBrand: !!brand && (office.brand_locks as { saved?: boolean } | null)?.saved === true,
     memberRowCount: people.filter((p) => !p.isOwner).length + invites.length,
     liveEmployeeCards: people.filter((p) => !p.isOwner && p.liveCards > 0).length,
-    leadCount: overview?.totals.leads ?? 0,
   });
 
   const activation = overview?.stats.activation;
@@ -112,7 +111,7 @@ export default async function OfficeTeamPage() {
         </p>
       )}
 
-      {/* Setup checklist — derived from durable facts, so once all four are done
+      {/* Setup checklist — derived from durable facts, so once all three are done
           it never renders again. */}
       {!setup.allDone && (
         <div className="bg-gray-900 border border-purple-500/20 rounded-2xl p-5 mb-6">
@@ -157,16 +156,6 @@ export default async function OfficeTeamPage() {
               {!setup.cardLiveDone && (
                 <span className="block text-[0.6875rem] text-gray-600 mt-0.5">
                   This checks off as soon as someone you invited finishes their card.
-                </span>
-              )}
-            </Step>
-            <Step n={4} done={setup.firstLeadDone}>
-              <span className={`text-sm ${setup.firstLeadDone ? "text-gray-500 line-through" : "text-gray-400"}`}>
-                Capture your first lead
-              </span>
-              {!setup.firstLeadDone && (
-                <span className="block text-[0.6875rem] text-gray-600 mt-0.5">
-                  Happens by itself the first time someone shares their info with your team.
                 </span>
               )}
             </Step>

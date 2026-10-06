@@ -64,20 +64,20 @@ describe("memberStatus — the six states an owner sees", () => {
   });
 });
 
-describe("computeSetupProgress — four steps, derived from durable facts", () => {
-  it("counts completion out of four", () => {
-    const none = computeSetupProgress({ hasBrand: false, memberRowCount: 0, liveEmployeeCards: 0, leadCount: 0 });
-    expect(none).toMatchObject({ completed: 0, total: 4, allDone: false });
+describe("computeSetupProgress — three steps, derived from durable facts", () => {
+  it("counts completion out of three", () => {
+    const none = computeSetupProgress({ hasBrand: false, memberRowCount: 0, liveEmployeeCards: 0 });
+    expect(none).toMatchObject({ completed: 0, total: 3, allDone: false });
 
-    const two = computeSetupProgress({ hasBrand: true, memberRowCount: 1, liveEmployeeCards: 0, leadCount: 0 });
-    expect(two).toMatchObject({ completed: 2, total: 4, allDone: false });
+    const two = computeSetupProgress({ hasBrand: true, memberRowCount: 1, liveEmployeeCards: 0 });
+    expect(two).toMatchObject({ completed: 2, total: 3, allDone: false });
 
-    const all = computeSetupProgress({ hasBrand: true, memberRowCount: 1, liveEmployeeCards: 1, leadCount: 3 });
-    expect(all).toMatchObject({ completed: 4, allDone: true });
+    const all = computeSetupProgress({ hasBrand: true, memberRowCount: 1, liveEmployeeCards: 1 });
+    expect(all).toMatchObject({ completed: 3, allDone: true });
   });
 
   it("a live employee card is its own step, separate from inviting", () => {
-    const p = computeSetupProgress({ hasBrand: false, memberRowCount: 2, liveEmployeeCards: 0, leadCount: 0 });
+    const p = computeSetupProgress({ hasBrand: false, memberRowCount: 2, liveEmployeeCards: 0 });
     expect(p.invitedDone).toBe(true);
     expect(p.cardLiveDone).toBe(false);
   });

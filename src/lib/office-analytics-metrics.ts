@@ -5,14 +5,6 @@ import { localDayKey } from "@/lib/tz-days";
 // codebase's convention (see tests/authz-negative.test.ts) of extracting the
 // meaningful logic into plain, dependency-free functions.
 
-// null (not 0 or Infinity) when there's no traffic to convert — a "0%"
-// conversion rate reads as "nobody converted", which is misleading when the
-// real story is "nobody has visited yet".
-export function computeConversionRate(leads: number, totalViews: number): number | null {
-  if (totalViews <= 0) return null;
-  return leads / totalViews;
-}
-
 // null (not 0 or +Infinity) when there's no prior-period baseline to compare
 // against — "new this period" is a different story than "0% change" or an
 // undefined blow-up.
@@ -44,13 +36,15 @@ export function fillDateRange(rows: DailyPoint[], sinceIso: string, untilIso: st
   return out;
 }
 
-export type SortableEmployeeRow = { leads: number; contactsSaved: number; name: string };
+export type SortableEmployeeRow = { views: number; contactsSaved: number; name: string };
 
-// The employee table's default ranking: leads, then contacts saved, then name.
-// Deliberately NEVER ranks by raw views first — the task this dashboard was
-// built for is explicit that raw traffic isn't "performance", conversions are.
+// The employee table's default order: card views, then contact downloads, then
+// name — whose card is getting used. Never leads first: a card is there to make
+// the people a teammate meets save and reach them easily, not to be a lead
+// funnel (a client saving their lawyer's contact isn't a lead). Owner,
+// 2026-10-06; the Conversion rate figure went the same day.
 export function defaultEmployeeSort<T extends SortableEmployeeRow>(rows: T[]): T[] {
   return [...rows].sort(
-    (a, b) => b.leads - a.leads || b.contactsSaved - a.contactsSaved || a.name.localeCompare(b.name)
+    (a, b) => b.views - a.views || b.contactsSaved - a.contactsSaved || a.name.localeCompare(b.name)
   );
 }

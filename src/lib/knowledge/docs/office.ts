@@ -78,9 +78,9 @@ export const officeDocs = defineDocs([
       "export analytics", "team report",
     ],
     answer:
-      "The Analytics tab, with a 7 / 30 / 90-day range picker. Seven tiles — Total views, Unique visitors, Card/QR scans, Leads captured, Contact downloads, SwiftLink views and Conversion rate — then a views-over-time chart, traffic sources, and a sortable \"Team performance\" table per person. \"Export CSV\" there is the only export in the console.",
+      "The Analytics tab, with a 7 / 30 / 90-day range picker. Six tiles — Total views, Unique visitors, Card/QR scans, Leads captured, Contact downloads and SwiftLink views — then a views-over-time chart, traffic sources, and a sortable \"Team performance\" table per person. \"Export CSV\" there is the only export in the console.",
     detail:
-      "Two things to read correctly: \"Total views\" already includes Swift Links views, so the SwiftLink tile is a breakdown of it rather than a number to add on. And \"Export CSV\" always exports the full date range, not just the rows left after you've typed in the search box. Clicking an employee's name opens their own analytics page at /office/admin/analytics/<their id>, with the same tiles for just that person.",
+      "Two things to read correctly: \"Total views\" already includes Swift Links views, so the SwiftLink tile is a breakdown of it rather than a number to add on. And \"Export CSV\" always exports the full date range, not just the rows left after you've typed in the search box. The Team performance table starts with the most-viewed cards on top (then contact downloads, then name); click any column heading to sort by it instead. Clicking an employee's name opens their own analytics page at /office/admin/analytics/<their id>, with the same tiles for just that person and the office average views and contact downloads beside them. There is no conversion-rate figure anywhere: a card is there to make it easy for the people your team meets to save and reach them, and someone saving a contact (a client saving their lawyer's number, say) isn't a lead that failed to convert.",
   },
   {
     id: "team-leads",

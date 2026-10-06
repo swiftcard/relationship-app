@@ -10,7 +10,6 @@ const baseRow: EmployeeCsvRow = {
   leads: 3,
   contactsSaved: 2,
   swiftlinkViews: 7,
-  conversionRate: 0.25,
   lastActivityAt: "2026-03-01T12:00:00.000Z",
 };
 
@@ -19,7 +18,7 @@ describe("buildEmployeeAnalyticsCsv", () => {
     const csv = buildEmployeeAnalyticsCsv([baseRow]);
     const lines = csv.split("\n");
     expect(lines[0]).toBe(
-      "Employee,Card,Card views,Unique visitors,QR/NFC scans,Leads captured,Contact downloads,SwiftLink views,Conversion rate,Most recent activity"
+      "Employee,Card,Card views,Unique visitors,QR/NFC scans,Leads captured,Contact downloads,SwiftLink views,Most recent activity"
     );
     expect(lines).toHaveLength(2);
   });
@@ -32,17 +31,10 @@ describe("buildEmployeeAnalyticsCsv", () => {
     expect(dataLine).toContain('"Acme, Inc."');
   });
 
-  it("renders a null conversion rate as blank, not 0% or NaN", () => {
-    const row: EmployeeCsvRow = { ...baseRow, conversionRate: null };
-    const csv = buildEmployeeAnalyticsCsv([row]);
-    const cols = csv.split("\n")[1].split(",");
-    // Conversion rate is the 9th column.
-    expect(cols[8]).toBe('""');
-  });
-
-  it("renders a real conversion rate as a percentage", () => {
+  it("has no conversion-rate column — a saved contact is not a lead that failed to convert", () => {
     const csv = buildEmployeeAnalyticsCsv([baseRow]);
-    expect(csv.split("\n")[1]).toContain("25.0%");
+    expect(csv.toLowerCase()).not.toContain("conversion");
+    expect(csv.split("\n")[1]).not.toContain("%");
   });
 
   it("handles an empty employee list — header only, no crash", () => {
@@ -54,7 +46,7 @@ describe("buildEmployeeAnalyticsCsv", () => {
     const row: EmployeeCsvRow = { ...baseRow, lastActivityAt: null };
     const csv = buildEmployeeAnalyticsCsv([row]);
     const cols = csv.split("\n")[1].split(",");
-    expect(cols[9]).toBe('""');
+    expect(cols[8]).toBe('""');
   });
 
   it("neutralizes a leading formula character so Excel/Sheets can't execute it (CSV/formula injection)", () => {

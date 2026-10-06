@@ -16,7 +16,7 @@ import {
   getRecentLeadsForSlugs,
 } from "@/lib/office-analytics";
 import { resolveDateRange, type DateRangePreset } from "@/lib/office-analytics-dates";
-import { fillDateRange, computeConversionRate } from "@/lib/office-analytics-metrics";
+import { fillDateRange } from "@/lib/office-analytics-metrics";
 import { getSourceLabel } from "@/lib/source-labels";
 import { relativeTime } from "@/lib/relative-time";
 import { StatTile, PageHead, Empty } from "@/components/office/OfficeUI";
@@ -72,12 +72,11 @@ export default async function OfficeAnalyticsMemberPage({
   const others = allMetrics.filter((m) => m.userId !== id);
   const officeAverage = {
     views: others.length ? others.reduce((s, e) => s + e.views + e.swiftlinkViews, 0) / others.length : 0,
-    leads: others.length ? others.reduce((s, e) => s + e.leads, 0) / others.length : 0,
+    contactsSaved: others.length ? others.reduce((s, e) => s + e.contactsSaved, 0) / others.length : 0,
   };
 
   const chartData = fillDateRange(dailyViews, range.since, range.until, tz);
   const totalViews = (mine?.views ?? 0) + (mine?.swiftlinkViews ?? 0);
-  const conversionRate = computeConversionRate(mine?.leads ?? 0, totalViews);
   const mostActiveCard = cardBreakdown[0] ?? null;
 
   return (
@@ -97,16 +96,11 @@ export default async function OfficeAnalyticsMemberPage({
         <StatTile label="Leads captured" value={mine?.leads ?? 0} />
         <StatTile label="Contact downloads" value={mine?.contactsSaved ?? 0} />
         <StatTile label="SwiftLink views" value={mine?.swiftlinkViews ?? 0} />
-        <StatTile
-          label="Conversion rate"
-          value={conversionRate == null ? "—" : `${(conversionRate * 100).toFixed(1)}%`}
-          hint="Leads captured ÷ total views"
-        />
       </div>
 
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-6 flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-400">
         <span>Office average: <span className="text-gray-200 tabular-nums">{officeAverage.views.toFixed(1)}</span> views</span>
-        <span>Office average: <span className="text-gray-200 tabular-nums">{officeAverage.leads.toFixed(1)}</span> leads</span>
+        <span>Office average: <span className="text-gray-200 tabular-nums">{officeAverage.contactsSaved.toFixed(1)}</span> contact downloads</span>
       </div>
 
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-6">

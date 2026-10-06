@@ -12,7 +12,6 @@ export type EmployeeCsvRow = {
   leads: number;
   contactsSaved: number;
   swiftlinkViews: number;
-  conversionRate: number | null;
   lastActivityAt: string | null;
 };
 
@@ -35,7 +34,6 @@ const HEADER = [
   "Leads captured",
   "Contact downloads",
   "SwiftLink views",
-  "Conversion rate",
   "Most recent activity",
 ].join(",");
 
@@ -50,7 +48,6 @@ export function buildEmployeeAnalyticsCsv(rows: EmployeeCsvRow[]): string {
       esc(r.leads),
       esc(r.contactsSaved),
       esc(r.swiftlinkViews),
-      esc(r.conversionRate == null ? "" : `${(r.conversionRate * 100).toFixed(1)}%`),
       esc(r.lastActivityAt ? new Date(r.lastActivityAt).toLocaleDateString() : ""),
     ].join(",")
   );

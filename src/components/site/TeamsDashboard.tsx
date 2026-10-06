@@ -22,7 +22,7 @@ import { socialInput } from "@/lib/social-input";
 import SocialHandleField from "@/components/SocialHandleField";
 import AddLinkForm from "@/components/AddLinkForm";
 import { getSourceLabel } from "@/lib/source-labels";
-import { computeConversionRate, defaultEmployeeSort } from "@/lib/office-analytics-metrics";
+import { defaultEmployeeSort } from "@/lib/office-analytics-metrics";
 import { FOLLOW_UP_COPY, FOLLOW_UP_STATES, type FollowUpState } from "@/lib/lead-followup";
 import { MEMBER_STATUS_LABEL, type MemberStatus } from "@/lib/member-status";
 
@@ -374,7 +374,7 @@ function PersonDrawer({ person, onClose }: { person: Person; onClose: () => void
 
 // ── Analytics ───────────────────────────────────────────────────────────────
 
-type SortKey = "name" | "card" | "views" | "unique" | "scans" | "leads" | "contacts" | "swiftlink" | "conversion";
+type SortKey = "name" | "card" | "views" | "unique" | "scans" | "leads" | "contacts" | "swiftlink";
 const COLUMNS: { key: SortKey | "last"; label: string; hint: string }[] = [
   { key: "name", label: "Employee", hint: "Team member name" },
   { key: "card", label: "Card", hint: "Their card, or how many cards they own" },
@@ -384,7 +384,6 @@ const COLUMNS: { key: SortKey | "last"; label: string; hint: string }[] = [
   { key: "leads", label: "Leads", hint: "People who shared their contact info" },
   { key: "contacts", label: "Contact downloads", hint: "Visitors who downloaded this card as a contact" },
   { key: "swiftlink", label: "SwiftLink views", hint: "Visits to their Swift Links page" },
-  { key: "conversion", label: "Conversion", hint: "Leads captured ÷ total views" },
   { key: "last", label: "Last activity", hint: "Most recent view, lead, or contact save" },
 ];
 
@@ -395,10 +394,9 @@ function AnalyticsTab() {
 
   const totalViews = sum((p) => p.views + p.swiftlink);
   const totalLeads = sum((p) => p.leads);
-  const conversion = computeConversionRate(totalLeads, totalViews);
 
   const rows = useMemo(() => {
-    const base = PEOPLE.map((p) => ({ ...p, contactsSaved: p.contacts, conversion: computeConversionRate(p.leads, p.views + p.swiftlink) }));
+    const base = PEOPLE.map((p) => ({ ...p, contactsSaved: p.contacts }));
     const q = query.trim().toLowerCase();
     const filtered = q ? base.filter((r) => r.name.toLowerCase().includes(q) || r.card.toLowerCase().includes(q)) : base;
     if (!sortKey) return defaultEmployeeSort(filtered);
@@ -438,7 +436,6 @@ function AnalyticsTab() {
         <StatTile label="Leads captured" value={totalLeads} hint="+18% vs prior period" />
         <StatTile label="Contact downloads" value={sum((p) => p.contacts)} hint="+9% vs prior period" />
         <StatTile label="SwiftLink views" value={sum((p) => p.swiftlink)} hint="Visits to a Swift Links page" />
-        <StatTile label="Conversion rate" value={conversion == null ? "—" : `${(conversion * 100).toFixed(1)}%`} hint="Leads captured ÷ total views" />
       </div>
 
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-6">
@@ -500,7 +497,6 @@ function AnalyticsTab() {
                   <td className="px-4 py-3 text-gray-300 tabular-nums font-semibold">{r.leads}</td>
                   <td className="px-4 py-3 text-gray-300 tabular-nums">{r.contacts}</td>
                   <td className="px-4 py-3 text-gray-300 tabular-nums">{r.swiftlink}</td>
-                  <td className="px-4 py-3 text-gray-300 tabular-nums">{r.conversion == null ? "—" : `${(r.conversion * 100).toFixed(1)}%`}</td>
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{r.lastActive}</td>
                 </tr>
               ))}
