@@ -2,8 +2,31 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { getOwnerUsernames } from "@/lib/owner-usernames";
+import { storedCaptureIsCurrent } from "@/lib/stored-capture";
+import { SHARE_CAPTURE_VERSION } from "@/lib/share-capture-version";
 
 const BUCKET = "card-shares";
+
+// Is there a capture the share preview will actually SERVE for this card?
+//
+// ShareCardCapture used to trust a per-device localStorage note ("I captured
+// this content"). But every card save deletes the capture on the server, and
+// the note on a device that already holds a matching hash never learns that —
+// edit on the computer, revert on the phone, or edit a field the capture's hash
+// doesn't cover, and the capture was gone for good while every device believed
+// it current. Links then went out as the rendered stand-in indefinitely. The
+// dashboard asks here instead of assuming.
+export async function GET(req: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const username = req.nextUrl.searchParams.get("username") ?? "";
+  if (!/^[a-z0-9-]{1,40}$/i.test(username)) return NextResponse.json({ error: "bad username" }, { status: 400 });
+  const owned = await getOwnerUsernames(user.id);
+  if (!owned.includes(username)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  const current = await storedCaptureIsCurrent(getAdminSupabase(), BUCKET, username);
+  return NextResponse.json({ current }, { headers: { "Cache-Control": "no-store" } });
+}
 
 // Stores a client-rendered, pixel-perfect PNG of the user's card EXACTLY as it
 // looks on the public card page. The card's share-link preview (Open Graph
@@ -14,7 +37,13 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const { dataUrl, username } = (await req.json().catch(() => ({}))) as { dataUrl?: string; username?: string };
+  const { dataUrl, username, v } = (await req.json().catch(() => ({}))) as { dataUrl?: string; username?: string; v?: number };
+  // Only the capture code that verifies its pixels may store a preview. An
+  // older page still open on some device would otherwise upload a capture
+  // with the logo or name missing (lib/share-capture-version).
+  if (typeof v !== "number" || v < SHARE_CAPTURE_VERSION) {
+    return NextResponse.json({ error: "outdated capture" }, { status: 409 });
+  }
   if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/png;base64,")) {
     return NextResponse.json({ error: "bad image" }, { status: 400 });
   }

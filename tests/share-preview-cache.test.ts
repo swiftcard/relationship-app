@@ -167,3 +167,111 @@ describe("the preview is warmed on every share path", () => {
       expect(d).toContain(key);
   });
 });
+
+// ── 2026-10-06: "sometimes it misses my name, sometimes my logo" ─────────────
+//
+// Four ways a shared link went out incomplete, each pinned here:
+//  1. The rendered stand-in (Tier 2) was cached for a day. Saving a card
+//     deletes the capture, the Share button warms the preview on mount, and the
+//     new capture lands seconds later — so the stand-in was frozen for that
+//     version and the real card was never served.
+//  2. Three stand-in templates drew no logo at all.
+//  3. A WebP/AVIF/SVG logo made Satori throw, and the throw fell to the brand
+//     fallback: no name, no logo, just "SwiftCard".
+//  4. The capture was checked in the DOM, never in the pixels, and WebKit
+//     paints foreignObject before images and web-font glyphs decode.
+describe("the stand-in never outlives the real capture", () => {
+  it("a complete stand-in is served instantly but refreshed on every fetch", () => {
+    expect(og()).toMatch(/const CACHE_STANDIN = "public, max-age=0, s-maxage=1, stale-while-revalidate=604800"/);
+    expect(og()).toMatch(/"Cache-Control": complete \? CACHE_STANDIN : CACHE_DEGRADED/);
+  });
+
+  it("only the pixel-perfect capture is cached hard", () => {
+    // Tier 1's header is the only place the long policy is applied.
+    expect(og().match(/"Cache-Control": [^\n]*CACHE_COMPLETE/g)?.length).toBe(1);
+  });
+});
+
+describe("every stand-in template draws the logo", () => {
+  for (const fn of ["ModernBoldOG", "ClassicProOG", "PhotoFirstOG", "LocalBusinessOG", "LuxuryMinimalOG", "LogoFirstOG", "GenericOG"]) {
+    it(fn, () => {
+      const body = og().match(new RegExp(String.raw`function ${fn}\(p: Meta\)[\s\S]*?\n\}`))?.[0] ?? "";
+      expect(body, `${fn} must exist`).not.toBe("");
+      expect(body).toMatch(/<img src=\{p\.logoUrl\}/);
+      expect(body).toMatch(/\{p\.name\}/);
+    });
+  }
+});
+
+describe("an image the renderer can't draw costs only that image", () => {
+  it("re-encodes photo and logo to PNG before Satori sees them", () => {
+    expect(og()).toMatch(/sharp\(buf\)[\s\S]{0,200}\.png\(\)/);
+  });
+
+  it("retries without images before the brand fallback", () => {
+    expect(og()).toMatch(/card = drawCard\(\{ \.\.\.meta, photoUrl: null, logoUrl: null \}\);/);
+  });
+});
+
+describe("the capture is verified in its pixels, and its presence on the server", () => {
+  const cap = () => readFileSync(join(root, "src/components/ShareCardCapture.tsx"), "utf8");
+  const route = () => readFileSync(join(root, "src/app/api/card-share-image/route.ts"), "utf8");
+
+  it("rejects a raster where the name, logo or photo did not paint", () => {
+    // The pixel check itself is exercised in Chromium and WebKit by
+    // tests/render/share-capture-verify.test.ts.
+    expect(cap()).toMatch(/if \(!\(await capturePainted\(el, cardData\.name \?\? "", dataUrl, w, raster\)\)\) return null;/);
+  });
+
+  it("asks the server instead of trusting this device's note", () => {
+    expect(route()).toMatch(/export async function GET/);
+    expect(route()).toMatch(/storedCaptureIsCurrent\(getAdminSupabase\(\), BUCKET, username\)/);
+    expect(cap()).toMatch(/\/api\/card-share-image\?username=/);
+  });
+
+  it("swaps the edge's stand-in for the capture as soon as it uploads", () => {
+    expect(cap()).toMatch(/warmSharePreview\(`\$\{window\.location\.origin\}\/\$\{username\}`\);/);
+  });
+});
+
+// ── Captures from before the pixel check are never served ───────────────────
+// Production held captures with the logo slot empty (aaronlavi-nadlanhomesllc,
+// 2026-10-06), and re-capturing waits for the owner to open the app. So the
+// server distrusts every share capture older than the v8 cutoff on its own.
+import { storedCaptureIsCurrent } from "../src/lib/stored-capture";
+import { SHARE_CAPTURE_VERSION, SHARE_CAPTURES_TRUSTED_SINCE } from "../src/lib/share-capture-version";
+
+function fakeAdmin(fileWritten: string, cardCreated: string | null) {
+  return {
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: cardCreated ? { created_at: cardCreated } : null }) }) }) }),
+    storage: { from: () => ({ list: async () => ({ data: [{ name: "alex.png", updated_at: fileWritten }], error: null }) }) },
+  } as unknown as Parameters<typeof storedCaptureIsCurrent>[0];
+}
+const before = new Date(SHARE_CAPTURES_TRUSTED_SINCE - 60_000).toISOString();
+const after = new Date(SHARE_CAPTURES_TRUSTED_SINCE + 60_000).toISOString();
+const cardBorn = "2026-01-01T00:00:00Z";
+
+describe("pre-v8 share captures are distrusted server-side", () => {
+  it("a share capture from before the cutoff is not served", async () => {
+    expect(await storedCaptureIsCurrent(fakeAdmin(before, cardBorn), "card-shares", "alex")).toBe(false);
+  });
+  it("…not even for a legacy card with no cards row", async () => {
+    expect(await storedCaptureIsCurrent(fakeAdmin(before, null), "card-shares", "alex")).toBe(false);
+  });
+  it("a capture after the cutoff is served", async () => {
+    expect(await storedCaptureIsCurrent(fakeAdmin(after, cardBorn), "card-shares", "alex")).toBe(true);
+  });
+  it("email signatures are a different picture and keep their own rule", async () => {
+    expect(await storedCaptureIsCurrent(fakeAdmin(before, cardBorn), "card-signatures", "alex")).toBe(true);
+  });
+  it("the upload route refuses a capture that doesn't declare the version", () => {
+    const route = readFileSync(join(root, "src/app/api/card-share-image/route.ts"), "utf8");
+    expect(route).toMatch(/if \(typeof v !== "number" \|\| v < SHARE_CAPTURE_VERSION\) \{\s*return NextResponse\.json\(\{ error: "outdated capture" \}, \{ status: 409 \}\);/);
+  });
+  it("the capture declares it and keys its local note on it", () => {
+    const cap = readFileSync(join(root, "src/components/ShareCardCapture.tsx"), "utf8");
+    expect(cap).toMatch(/JSON\.stringify\(\{ dataUrl, username, v: SHARE_CAPTURE_VERSION \}\)/);
+    expect(cap).toMatch(/const contentSig = `share-v\$\{SHARE_CAPTURE_VERSION\}\|`/);
+    expect(SHARE_CAPTURE_VERSION).toBeGreaterThanOrEqual(8);
+  });
+});

@@ -10,6 +10,9 @@ import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { CardData } from "@/components/card-templates/types";
 import { withoutSocials } from "@/components/card-templates/types";
+import { warmSharePreview } from "@/lib/share-preview";
+import { capturePainted } from "@/lib/capture-verify";
+import { SHARE_CAPTURE_VERSION } from "@/lib/share-capture-version";
 
 const ClassicPro    = dynamic(() => import("@/components/card-templates/ClassicPro"),    { ssr: false });
 const ModernBold    = dynamic(() => import("@/components/card-templates/ModernBold"),    { ssr: false });
@@ -137,11 +140,12 @@ export default function ShareCardCapture({
   const Template = TEMPLATE_MAP[template] ?? ClassicPro;
 
   // Capture-logic version. Bump to force a global re-capture
-  // ("v7" = photo/logo resolved to data URLs BEFORE render, so a re-render can't
+  // ("v8" = the name/logo/photo verified in the PIXELS, not just the DOM;
+  // "v7" = photo/logo resolved to data URLs BEFORE render, so a re-render can't
   // undo the inlining; "v6" = wait for web fonts + verify each inlined image
   // actually decodes; "v5" = images inlined + reject on missing; "v4" = max-space
   // sizing, banner-aware logos).
-  const contentSig = "share-v7|" + hashStr(JSON.stringify(cardData) + "|" + template);
+  const contentSig = `share-v${SHARE_CAPTURE_VERSION}|` + hashStr(JSON.stringify(cardData) + "|" + template);
   const hashKey = `sc_sharehash_${username}`;
 
   // Photo/logo through a same-origin proxy so the browser can read them into the canvas.
@@ -233,18 +237,18 @@ export default function ShareCardCapture({
     const w = el.offsetWidth || NATURAL;
     const h = el.offsetHeight || NATURAL;
     const SCALE = 4;
-    const png = toPng(el, {
-      width: w * SCALE,
-      height: h * SCALE,
-      pixelRatio: 1,
-      cacheBust: false,
-      backgroundColor: CARD_BG,
-      style: { transform: `scale(${SCALE})`, transformOrigin: "top left" },
-    });
-    const dataUrl = await Promise.race([
-      png,
+    const raster = () => Promise.race([
+      toPng(el, {
+        width: w * SCALE,
+        height: h * SCALE,
+        pixelRatio: 1,
+        cacheBust: false,
+        backgroundColor: CARD_BG,
+        style: { transform: `scale(${SCALE})`, transformOrigin: "top left" },
+      }),
       new Promise<null>((resolve) => setTimeout(() => resolve(null), 20000)),
     ]);
+    const dataUrl = await raster();
     if (!dataUrl || dataUrl.length < 5000) return null; // blank / timed out
 
     // Pre-flight: a real card capture is landscape (~1.35–1.75:1). Anything
@@ -256,6 +260,10 @@ export default function ShareCardCapture({
     if (!dims) return null;
     const ratio = dims.w / Math.max(1, dims.h);
     if (ratio < 1.25 || ratio > 2.4) return null;
+
+    // The name, logo and photo must be IN the picture, not just in the DOM —
+    // WebKit can paint the card before they decode (lib/capture-verify).
+    if (!(await capturePainted(el, cardData.name ?? "", dataUrl, w, raster))) return null;
 
     return dataUrl;
   }
@@ -275,10 +283,15 @@ export default function ShareCardCapture({
       }
       if (!dataUrl) return;
       const res = await fetch("/api/card-share-image", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dataUrl, username }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dataUrl, username, v: SHARE_CAPTURE_VERSION }),
       });
       if (res.ok) {
         try { localStorage.setItem(hashKey, contentSig); } catch { /* ignore */ }
+        // The edge may be holding the stand-in render for this version (the
+        // Share button warmed it before this capture existed). One fetch is
+        // what swaps it for the real card, so make it now rather than leave
+        // it to the next person's messenger.
+        warmSharePreview(`${window.location.origin}/${username}`);
       }
     } catch {
       /* best-effort — the OG route falls back to a rendered approximation */
@@ -294,12 +307,26 @@ export default function ShareCardCapture({
   useEffect(() => {
     let prev = "";
     try { prev = localStorage.getItem(hashKey) || ""; } catch { /* ignore */ }
-    if (prev === contentSig) return; // up to date — nothing to render or capture
-
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     (async () => {
+      // This device captured this exact content before. That is not proof the
+      // server still HAS it: every save deletes the stored capture, and a
+      // device whose note already matches never re-captures. Ask the server;
+      // only a capture it will actually serve counts as up to date.
+      if (prev === contentSig) {
+        try {
+          const r = await fetch(`/api/card-share-image?username=${encodeURIComponent(username)}`, { cache: "no-store" });
+          if (!r.ok) return; // signed out / not this owner's card — nothing to do
+          const { current } = (await r.json()) as { current?: boolean };
+          if (current) return; // up to date — nothing to render or capture
+        } catch {
+          return;
+        }
+        if (cancelled) return;
+      }
+
       // Resolve the photo/logo to data URLs BEFORE the card is rendered, so the
       // <img> elements are born with an embedded source. Each falls back from
       // the same-origin proxy to the raw URL, and to null (the template then

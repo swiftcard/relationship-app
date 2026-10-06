@@ -78,7 +78,25 @@ async function embedImage(url: string | null): Promise<string | null> {
     if (!/^image\//.test(type)) return null;
     const buf = Buffer.from(await res.arrayBuffer());
     if (buf.byteLength < 100 || buf.byteLength > 6_000_000) return null;
-    return `data:${type};base64,${buf.toString("base64")}`;
+    // Re-encode to PNG. Satori draws PNG/JPEG/GIF, but a WebP, AVIF or HEIC
+    // logo (what phones and design tools hand out) made it THROW, and a throw
+    // here used to take the whole card down to the brand fallback — no name,
+    // no logo, just "SwiftCard". sharp also rasterises SVG and shrinks a 4000px
+    // headshot to the size the preview actually draws, which keeps the render
+    // fast enough for a messenger that will not wait.
+    try {
+      const sharp = (await import("sharp")).default;
+      const png = await sharp(buf)
+        .rotate()
+        .resize({ width: 640, height: 640, fit: "inside", withoutEnlargement: true })
+        .png()
+        .toBuffer();
+      return `data:image/png;base64,${png.toString("base64")}`;
+    } catch {
+      // sharp could not read it. PNG/JPEG still render as they came; anything
+      // else would throw in Satori, so drop it and draw initials instead.
+      return /^image\/(png|jpe?g)$/i.test(type) ? `data:${type};base64,${buf.toString("base64")}` : null;
+    }
   } catch {
     return null;
   }
@@ -201,10 +219,19 @@ function PhotoFirstOG(p: Meta) {
       </div>
       {/* Right details */}
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", flex: 1, padding: "48px 56px" }}>
+        {/* Logo + company head the details, as on the card. This stand-in
+            used to draw no logo at all, so every share made before the
+            pixel-perfect capture landed went out without it. */}
+        {p.logoUrl ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 22 }}>
+            <img src={p.logoUrl} alt="" width={64} height={64} style={{ borderRadius: 12, objectFit: "contain" }} />
+            {p.company ? <div style={{ fontSize: 30, fontWeight: 700, color: ACCENT }}>{p.company}</div> : null}
+          </div>
+        ) : null}
         <div style={{ fontSize: 64, fontWeight: 800, color: "#1e1b4b", lineHeight: 1.05 }}>{p.name}</div>
         <div style={{ width: 80, height: 6, borderRadius: 6, background: `linear-gradient(90deg, ${ACCENT}, #a78bfa)`, marginTop: 16, display: "flex" }} />
         {p.title ? <div style={{ fontSize: 32, color: "#4b5563", marginTop: 18 }}>{p.title}</div> : null}
-        {p.company ? <div style={{ fontSize: 30, fontWeight: 700, color: ACCENT, marginTop: 4 }}>{p.company}</div> : null}
+        {p.company && !p.logoUrl ? <div style={{ fontSize: 30, fontWeight: 700, color: ACCENT, marginTop: 4 }}>{p.company}</div> : null}
         <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 26 }}>
           {p.phone ? <Contact value={p.phone} dot={ACCENT} color="#374151" fs={29} /> : null}
           {p.email ? <Contact value={p.email} dot={ACCENT} color="#374151" /> : null}
@@ -256,7 +283,14 @@ function LuxuryMinimalOG(p: Meta) {
       <div style={{ width: 14, background: `linear-gradient(to bottom, #c9a96a, ${GOLD}, #8c6c34)`, display: "flex" }} />
       <div style={{ display: "flex", flex: 1, alignItems: "center", justifyContent: "space-between", padding: "48px 64px" }}>
         <div style={{ display: "flex", flexDirection: "column" }}>
-          {p.company ? <div style={{ fontSize: 24, letterSpacing: 7, textTransform: "uppercase", color: "#8c7b60", fontWeight: 600 }}>{p.company}</div> : null}
+          {/* Logo beside the company, as on the card — this stand-in used to
+              leave the logo off entirely. */}
+          {p.logoUrl || p.company ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+              {p.logoUrl ? <img src={p.logoUrl} alt="" width={72} height={72} style={{ borderRadius: 72, objectFit: "contain", background: "#ffffff" }} /> : null}
+              {p.company ? <div style={{ fontSize: 24, letterSpacing: 7, textTransform: "uppercase", color: "#8c7b60", fontWeight: 600 }}>{p.company}</div> : null}
+            </div>
+          ) : null}
           <div style={{ fontSize: 62, fontWeight: 700, color: "#1c1612", lineHeight: 1.08, marginTop: 14, letterSpacing: 1 }}>{p.name}</div>
           <div style={{ width: 90, height: 3, background: `linear-gradient(90deg, ${GOLD}, transparent)`, marginTop: 18, display: "flex" }} />
           {p.title ? <div style={{ fontSize: 29, color: "#8c7b60", marginTop: 16 }}>{p.title}</div> : null}
@@ -354,8 +388,13 @@ function GenericOG(p: Meta) {
   const accent = p.accentColor || "#2563eb";
   const website = (p.website ?? "").replace(/^https?:\/\//, "");
   return (
-    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "#ffffff" }}>
+    <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", background: "#ffffff", position: "relative" }}>
       <div style={{ height: 16, background: accent, display: "flex" }} />
+      {/* The logo, which this stand-in used to drop. Top-right, clear of the
+          name block. */}
+      {p.logoUrl ? (
+        <img src={p.logoUrl} alt="" width={96} height={96} style={{ position: "absolute", top: 44, right: 56, borderRadius: 16, objectFit: "contain" }} />
+      ) : null}
       <div style={{ display: "flex", flex: 1, padding: "44px 56px", alignItems: "center", gap: 48 }}>
         <Photo url={p.photoUrl} name={p.name ?? ""} size={230} radius={230} border={`8px solid ${accent}`} bg={accent} />
         <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
@@ -403,6 +442,20 @@ const CACHE_COMPLETE = "public, max-age=600, s-maxage=86400, stale-while-revalid
 // next scrape retries the image.
 const CACHE_DEGRADED = "public, max-age=60, s-maxage=60";
 
+// The rendered card (Tier 2) is a STAND-IN for the pixel-perfect capture, and
+// it is exactly what gets served right after an edit: saving deletes the old
+// capture, the dashboard's Share button warms the preview on mount, and the
+// owner's device only uploads the new capture a few seconds later. Caching the
+// stand-in for a day (CACHE_COMPLETE) froze it for that version — the real
+// capture, landing seconds later, was never served, and links kept going out
+// as the approximation ("sometimes it misses my logo").
+//
+// So a stand-in is always served instantly from the edge (the long SWR window
+// keeps the no-cold-render guarantee above) but is refreshed behind the scenes
+// on every request after its first second. The first fetch after the capture
+// lands — the Share tap's own warm-up, usually — swaps it for the real card.
+const CACHE_STANDIN = "public, max-age=0, s-maxage=1, stale-while-revalidate=604800";
+
 async function toResponse(
   el: React.ReactElement,
   contentType = "image/png",
@@ -413,7 +466,7 @@ async function toResponse(
   return new Response(buf, {
     headers: {
       "Content-Type": contentType,
-      "Cache-Control": complete ? CACHE_COMPLETE : CACHE_DEGRADED,
+      "Cache-Control": complete ? CACHE_STANDIN : CACHE_DEGRADED,
     },
   });
 }
@@ -505,18 +558,30 @@ export default async function Image({
     // it. Non-US numbers pass through untouched.
     if (meta.phone) meta.phone = prettyPhone(meta.phone);
 
-    let card: React.ReactElement;
-    switch (meta.template) {
-      case "modern-bold":     card = ModernBoldOG(meta); break;
-      case "classic-pro":     card = ClassicProOG(meta); break;
-      case "photo-first":     card = PhotoFirstOG(meta); break;
-      case "local-business":  card = LocalBusinessOG(meta); break;
-      case "luxury-minimal":  card = LuxuryMinimalOG(meta); break;
-      case "logo-first":      card = LogoFirstOG(meta); break;
-      default:                card = meta.template ? GenericOG(meta) : ClassicProOG(meta); break;
+    const drawCard = (m: Meta): React.ReactElement => {
+      switch (m.template) {
+        case "modern-bold":     return ModernBoldOG(m);
+        case "classic-pro":     return ClassicProOG(m);
+        case "photo-first":     return PhotoFirstOG(m);
+        case "local-business":  return LocalBusinessOG(m);
+        case "luxury-minimal":  return LuxuryMinimalOG(m);
+        case "logo-first":      return LogoFirstOG(m);
+        default:                return m.template ? GenericOG(m) : ClassicProOG(m);
+      }
+    };
+    let card = drawCard(meta);
+    try {
+      // Full-bleed: the card fills the ENTIRE frame — no backdrop, no blank space.
+      return await toResponse(<div style={{ width: "100%", height: "100%", display: "flex" }}>{card}</div>, "image/png", complete);
+    } catch (e) {
+      // A picture Satori could not draw must cost only that picture. Falling
+      // straight to the brand fallback here is how a link went out with no
+      // NAME on it. Draw the card again with initials in place of the images
+      // (degraded, so it expires fast and the next fetch retries them).
+      if (!meta.photoUrl && !meta.logoUrl) throw e;
+      card = drawCard({ ...meta, photoUrl: null, logoUrl: null });
+      return await toResponse(<div style={{ width: "100%", height: "100%", display: "flex" }}>{card}</div>, "image/png", false);
     }
-    // Full-bleed: the card fills the ENTIRE frame — no backdrop, no blank space.
-    return await toResponse(<div style={{ width: "100%", height: "100%", display: "flex" }}>{card}</div>, "image/png", complete);
   } catch {
     /* fall through to the branded fallback */
   }
