@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { triggerSignupNudge } from "@/lib/nudge";
 import { getVisitorId, getVisitorInfo, markSharedWith } from "@/lib/visitor";
+import { outbox, isQueuedOffline } from "@/lib/offline-outbox";
 
 export default function ConnectButton({
   cardOwner,
@@ -29,6 +30,8 @@ export default function ConnectButton({
   const [knownInfo, setKnownInfo] = useState(false);
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [error, setError] = useState("");
+  // No signal: kept on this phone and sent once there is (lib/offline-outbox.ts).
+  const [queued, setQueued] = useState(false);
 
   function openModal() {
     const v = getVisitorInfo();
@@ -55,8 +58,9 @@ export default function ConnectButton({
     if (!form.name.trim() || !form.phone.trim()) return;
     setStatus("loading");
     setError("");
+    setQueued(false);
     try {
-      const res = await fetch("/api/leads", {
+      const res = await outbox.fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -71,7 +75,7 @@ export default function ConnectButton({
           // Submitting the share form IS the consent (the disclosure sits right
           // above the Send button) — so every share opts in to text + email.
         }),
-      });
+      }, { timeoutMs: 20_000 });
       const data = await res.json();
       if (!res.ok) {
         setError(data.message || data.error || "Couldn't send your message. Try again.");
@@ -83,7 +87,15 @@ export default function ConnectButton({
       // Sent successfully → briefly show the confirmation, then auto-surface the
       // "Create your free account" invite (same as the exit path). No extra tap.
       setTimeout(() => closeModal(), 1400);
-    } catch {
+    } catch (err) {
+      if (isQueuedOffline(err)) {
+        // It will arrive, so it counts as shared. Left open (no auto-close) so
+        // the "no signal" note is actually read; Done closes it.
+        markSharedWith(cardOwner, form);
+        setQueued(true);
+        setStatus("done");
+        return;
+      }
       setError("Couldn't send your message. Try again.");
       setStatus("error");
     }
@@ -124,7 +136,12 @@ export default function ConnectButton({
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
-                <p className="text-slate-900 font-bold text-base">Info shared!</p>
+                <p className="text-slate-900 font-bold text-base">{queued ? "Saved on your phone" : "Info shared!"}</p>
+                {queued && (
+                  <p className="text-slate-500 text-sm mt-1">
+                    No signal right now. Leave this page open and it sends to {ownerFirstName} by itself once you&apos;re back online.
+                  </p>
+                )}
                 <button type="button" onClick={closeModal} className="mt-5 w-full font-semibold py-3 rounded-full text-white text-sm" style={{ background: accent, color: accentText }}>
                   Done
                 </button>

@@ -34,6 +34,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 export default function WelcomePlan({
   cardSlug,
   cardName = "",
+  contactPayload,
   designConverted = false,
   // What Free will change about the card they just built, in plain English,
   // computed server-side in welcome/page.tsx from the saved row (never from
@@ -50,6 +51,8 @@ export default function WelcomePlan({
 }: {
   /** The name on the card, for the QR popup's "Scan to connect with <first name>". */
   cardName?: string;
+  /** Show QR's no-signal Contact code (lib/contact-qr.ts). */
+  contactPayload?: string;
   /** Phone-width web: open the plan tabs on Office (sent by the app's Office card). */
   initialTier?: "pro" | "office";
   /** A friend's free month of Pro is waiting (referral sign-up). Offered as a
@@ -344,7 +347,7 @@ export default function WelcomePlan({
                 lead, before anyone had shared anything; audit 2026-09-30). */}
             {cardSlug && (
               <div className="mt-6 space-y-2 text-left">
-                <QRCodeModal url={qrScanUrl(liveUrl)} firstName={ownerFirstName} label="Show QR" variant="primary" />
+                <QRCodeModal url={qrScanUrl(liveUrl)} firstName={ownerFirstName} label="Show QR" variant="primary" contactPayload={contactPayload} />
                 <ShareButton url={liveUrl} title="My SwiftCard" text="Save my contact and connect with me instantly." label="Share link" variant="ghost" ownCard />
               </div>
             )}

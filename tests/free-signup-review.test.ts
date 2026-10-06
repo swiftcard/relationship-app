@@ -91,7 +91,8 @@ describe("the two \"Your card is live!\" screens agree", () => {
 
   it("/welcome shows the link the way the builder does (AaronLavi-MalveCapital), only when it is this card's", () => {
     const p = code("src/app/welcome/page.tsx");
-    expect(p).toMatch(/\.select\("template, customization, username, name, company"\)/);
+    // name and company for the link; the rest feeds Show QR's Contact code.
+    expect(p).toMatch(/\.select\("template, customization, username, name, company(, [a-z_]+)*"\)/);
     expect(p).toMatch(/slugFor\(cardName, cardCompany\) === rawSlug\s*\?\s*prettyCardSlug\(cardName, cardCompany\)\s*:\s*rawSlug/);
   });
 });

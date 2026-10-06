@@ -100,6 +100,13 @@ export function warmSharePreview(cardUrl: string): void {
   if (!sameOrigin(clean)) return;
   void (async () => {
     try {
+      // Called on mount, this ran while the page was still loading, so on a
+      // weak signal (a conference floor) a 1200×686 preview picture competed
+      // with the card's own scripts and photos. Wait for the page to finish;
+      // a tap comes after that, so it never waits.
+      if (document.readyState === "loading" || document.readyState === "interactive") {
+        await new Promise<void>((r) => window.addEventListener("load", () => r(), { once: true }));
+      }
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 12000);
       // On the card page itself (a visitor forwarding it) the tag is already

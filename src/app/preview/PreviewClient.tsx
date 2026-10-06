@@ -9,7 +9,8 @@ import DemoContactActions from "@/components/site/DemoContactActions";
 import ShareButton from "@/components/ShareButton";
 import MoreShareOptions from "@/components/MoreShareOptions";
 import QRCodeModal from "@/components/QRCodeModal";
-import { qrScanUrl } from "@/lib/share-source";
+import { qrScanUrl, withSource } from "@/lib/share-source";
+import { buildContactQr } from "@/lib/contact-qr";
 import type { CardData } from "@/components/card-templates/types";
 import TrafficChart, { type TrafficBucket } from "@/components/TrafficChart";
 
@@ -275,7 +276,17 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
     setBuckets({ list, max: Math.max(...list.map((b) => b.count), 1) });
   }, [card, range]);
   const cardUrl = `https://swiftcard.me/${card.handle}`;
-  const toggleRead = (id: string) => setRead((p) => ({ ...p, [id]: !p[id] }));
+  // The demo's Show QR has the same Contact switch as the real dashboard.
+  const contactPayload = buildContactQr({
+    name: card.data.name,
+    title: card.data.title,
+    company: card.data.company,
+    email: card.data.email,
+    phone: card.data.phone,
+    website: card.data.website,
+    cardUrl: withSource(cardUrl, "contact_qr"),
+  });
+  const toggleRead =(id: string) => setRead((p) => ({ ...p, [id]: !p[id] }));
 
   function copySig() {
     try { navigator.clipboard?.writeText(`${card.data.name}\nhttps://swiftcard.me/${card.handle}`); } catch { /* ignore */ }
@@ -312,7 +323,7 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
           Share link, Other ways to share, and "At an event?" (drawn — tagging
           contacts needs an account). */}
       <Box className="space-y-2">
-        <QRCodeModal url={qrScanUrl(cardUrl)} firstName={String(card.data.name ?? "").split(/\s+/)[0] || "me"} label="Show QR" variant="primary" />
+        <QRCodeModal url={qrScanUrl(cardUrl)} firstName={String(card.data.name ?? "").split(/\s+/)[0] || "me"} label="Show QR" variant="primary" contactPayload={contactPayload} />
         <ShareButton url={cardUrl} title="My SwiftCard" text="Save my contact and connect with me instantly." label="Share link" variant="ghost" />
         <MoreShareOptions url={cardUrl} />
         <div className="pt-2">

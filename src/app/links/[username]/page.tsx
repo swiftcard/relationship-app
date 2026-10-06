@@ -11,6 +11,7 @@ import { cardIsOffline } from "@/lib/card-active";
 import { getCardPageData } from "@/lib/card-page-data";
 import { cardHeadshot } from "@/lib/card-media";
 import CardEventTracker from "@/components/CardEventTracker";
+import OfflineCardSaver from "@/components/OfflineCardSaver";
 import SignupNudgeHost from "@/components/SignupNudgeHost";
 import SwiftLinkProfile from "@/components/SwiftLinkProfile";
 import ReportCardLink from "@/components/ReportCardLink";
@@ -291,6 +292,8 @@ export default async function SwiftLinksPage({ params, searchParams }: { params:
           would otherwise record rows under a key the dashboard never reads. */}
       {!isEmbed && !isOwnerView && <CardEventTracker username={(cardOrLegacy.username as string) || username} source={source} viewSurface="links" />}
       {!isEmbed && !isOwnerView && <SignupNudgeHost cardUsername={(cardOrLegacy.username as string) || username} variant="links" />}
+      {/* Keeps this page on the phone so it opens again with no signal (public/sw.js). */}
+      {!isEmbed && <OfflineCardSaver name={`${cardOrLegacy.name || username} · Swift Links`} />}
       <SwiftLinkProfile
         name={cardOrLegacy.name || username}
         username={username}

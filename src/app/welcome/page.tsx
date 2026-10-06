@@ -10,6 +10,7 @@ import { trialHistoryFor } from "@/lib/trial-ledger";
 import { findPendingInviteForEmail } from "@/lib/pending-invite";
 import { referralGiftPending } from "@/lib/referral-server";
 import { cardSlug as slugFor, prettyCardSlug } from "@/lib/slug";
+import { buildContactQr, contactPersonFromCardRow } from "@/lib/contact-qr";
 
 // Post-signup onboarding step. A brand-new account lands here right after its
 // first card is claimed (GuestDraftClaim → /welcome?card=slug): turn on
@@ -90,7 +91,7 @@ export default async function WelcomePage({
   // test can see it, because the code looks right.
   const { data: card } = await getAdminSupabase()
     .from("cards")
-    .select("template, customization, username, name, company")
+    .select("template, customization, username, name, company, title, email, phone, website")
     .eq("user_id", user.id)
     .order("created_at", { ascending: true })
     .limit(1)
@@ -115,6 +116,11 @@ export default async function WelcomePage({
   const cardSlug = rawSlug && card?.username === rawSlug && cardName && slugFor(cardName, cardCompany) === rawSlug
     ? prettyCardSlug(cardName, cardCompany)
     : rawSlug;
+  // Show QR's no-signal Contact code (lib/contact-qr.ts), only when the card
+  // read above IS the card this screen links to.
+  const contactPerson = card && (!rawSlug || rawSlug.toLowerCase() === card.username)
+    ? contactPersonFromCardRow(card as Record<string, unknown>, process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me")
+    : null;
   // Same eligibility check /checkout uses, so /welcome never promises a trial
   // checkout won't grant.
   let trialEligible = true;
@@ -138,6 +144,7 @@ export default async function WelcomePage({
     <WelcomePlan
       cardSlug={cardSlug}
       cardName={cardName}
+      contactPayload={contactPerson ? buildContactQr(contactPerson) : undefined}
       presetIntent={presetIntent}
       presetPromo={!presetIntent && typeof sp.promo === "string" && /^[A-Za-z0-9_-]{1,40}$/.test(sp.promo) ? sp.promo : null}
       setupFor={setupFor}

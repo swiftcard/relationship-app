@@ -12,7 +12,9 @@ import SignOutButton from "@/components/SignOutButton";
 import NotificationBell from "@/components/NotificationBell";
 import MoreShareOptions from "@/components/MoreShareOptions";
 import QRCodeModal from "@/components/QRCodeModal";
+import OfflineOwnerSnapshot from "@/components/OfflineOwnerSnapshot";
 import { qrScanUrl } from "@/lib/share-source";
+import { buildContactQr, contactPersonFromCardRow } from "@/lib/contact-qr";
 import CardPreviewDownload from "@/components/CardPreviewDownload";
 import { CardCaptureProvider } from "@/components/CardCaptureContext";
 import GuestDraftClaim from "@/components/GuestDraftClaim";
@@ -752,6 +754,11 @@ export default async function DashboardPage({
     accountPhotoUrl: profile.photo_url,
   });
 
+  // The Contact QR behind Show QR's switch: the contact itself, scannable with
+  // no internet on either phone (lib/contact-qr.ts).
+  const contactPerson = contactPersonFromCardRow(activeSource as Record<string, unknown>, APP_URL);
+  const contactPayload = contactPerson ? buildContactQr(contactPerson) : undefined;
+
   // Apple Wallet is only offered once the Apple pass certificate is configured.
   const walletEnabled = hasWalletConfig();
 
@@ -798,7 +805,7 @@ export default async function DashboardPage({
           quieter second option; everything else stays behind "Other ways to
           share". (UX audit 2026-09-30.) */}
       <div data-tour="share" className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5 space-y-2">
-        <QRCodeModal url={qrScanUrl(cardUrl)} firstName={ownerFirstName} label="Show QR" variant="primary" />
+        <QRCodeModal url={qrScanUrl(cardUrl)} firstName={ownerFirstName} label="Show QR" variant="primary" contactPayload={contactPayload} />
         <ShareButton
           url={cardUrl}
           title="My SwiftCard"
@@ -827,6 +834,14 @@ export default async function DashboardPage({
           lib/app-review.ts. Locked Free-plan leads don't count — a lead the
           owner can't open is not the moment to ask. */}
       <ReviewPromptTrigger hasLead={realLeadCount > 0} />
+      {/* Keeps this card's QR codes on the device for the no-signal screen
+          (public/offline.html), the web twin of the app's offline screen. */}
+      <OfflineOwnerSnapshot
+        name={String((activeSource as { name?: string | null }).name ?? "").trim() || "My SwiftCard"}
+        company={String((activeSource as { company?: string | null }).company ?? "").trim()}
+        url={qrScanUrl(cardUrl)}
+        contactPayload={contactPayload}
+      />
       {/* Auto-start the guided tour for a new account arriving from onboarding
           (?tour=1). No-ops if the tour was already taken. */}
       <Suspense><TourAutoStart /></Suspense>

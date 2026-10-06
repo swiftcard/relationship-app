@@ -28,7 +28,7 @@ describe("always-on production guards", () => {
     const wf = read(".github/workflows/nightly-qa.yml");
     expect(wf).toMatch(/- cron: "0 9 \* \* \*"/);
     expect(wf).toContain("deployment_status:");
-    for (const s of ["qa-prod-probe.mjs", "health-check.mjs", "qa-flows.mjs", "qa-office-links-brand.mjs", "qa-office-shell.mjs", "qa-sweep.mjs", "qa-share-preview.mjs", "qa-nightly-summary.mjs"]) {
+    for (const s of ["qa-prod-probe.mjs", "health-check.mjs", "qa-flows.mjs", "qa-office-links-brand.mjs", "qa-office-shell.mjs", "qa-sweep.mjs", "qa-share-preview.mjs", "qa-offline.mjs", "qa-nightly-summary.mjs"]) {
       expect(wf, s).toContain(`scripts/${s}`);
     }
     expect(wf).toContain("labels: 'nightly-qa'");

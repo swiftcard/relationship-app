@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#030712">
+<meta name="robots" content="noindex">
+<title>SwiftCard — You're offline</title>
+<!--
+  The no-signal screen. public/sw.js serves this for any page that fails to
+  load, and keeps a copy on the phone from the first visit. It is the web
+  (and Android app) twin of the iPhone app's native offline screen
+  (ios/App/App/OfflineCard.swift):
+
+    • the owner's own card QR, kept by the dashboard
+      (components/OfflineOwnerSnapshot.tsx, localStorage "sc_offline_card"),
+      opening on the Contact QR, which scans with no internet on either phone;
+    • every card saved on this phone (localStorage "sc_saved_cards", each one
+      checked against the worker's cache before it is listed);
+    • Try again, and an automatic reload the moment the connection is back.
+
+  Self-contained on purpose: no script, style or font from anywhere, because
+  with no signal there is nowhere to fetch them from.
+-->
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #030712; color: #fff; }
+  body {
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+    min-height: 100vh; min-height: 100dvh;
+    display: flex; align-items: center; justify-content: center;
+    padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  }
+  main { width: 100%; max-width: 380px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; }
+  .status { color: #94a3b8; font-size: 13px; font-weight: 600; letter-spacing: .02em; margin: 0; }
+  h1 { font-size: 22px; line-height: 1.25; margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+  .company { color: #94a3b8; font-size: 15px; margin: -4px 0 0; overflow-wrap: anywhere; }
+  .plate { width: min(72vw, 300px); aspect-ratio: 1 / 1; border-radius: 24px; padding: 14px; background: #fff; margin-top: 10px; }
+  .plate svg { display: block; width: 100%; height: 100%; border-radius: 10px; }
+  .switch { display: inline-flex; padding: 4px; border-radius: 999px; background: #0d1b3e; margin-top: 4px; }
+  .switch button {
+    appearance: none; border: 0; background: transparent; color: rgba(255,255,255,.8);
+    font: inherit; font-size: 12px; font-weight: 600; padding: 0 16px; min-height: 36px; border-radius: 999px; cursor: pointer;
+  }
+  .switch button[aria-pressed="true"] { background: #fff; color: #0d1b3e; }
+  .link { color: #94a3b8; font-size: 13px; font-weight: 500; margin: 2px 0 0; overflow-wrap: anywhere; }
+  .note { color: #94a3b8; font-size: 13px; margin: 0; max-width: 320px; }
+  .retry {
+    appearance: none; border: 0; cursor: pointer; margin-top: 14px;
+    background: #2563eb; color: #fff; font: inherit; font-weight: 600; font-size: 15px;
+    padding: 12px 28px; border-radius: 999px; min-height: 44px;
+  }
+  section.saved { width: 100%; margin-top: 18px; text-align: left; }
+  section.saved h2 { font-size: 13px; color: #94a3b8; font-weight: 600; margin: 0 0 8px; text-align: center; }
+  section.saved a {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 14px; min-height: 44px; border-radius: 14px; margin-top: 6px;
+    background: #0f172a; border: 1px solid #1e293b; color: #fff; text-decoration: none; font-weight: 600; font-size: 15px;
+  }
+  section.saved a span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  section.saved a::after { content: "›"; color: #64748b; font-size: 20px; line-height: 1; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <p class="status">You're offline</p>
+  <div id="owner" hidden>
+    <h1 id="name"></h1>
+    <p class="company" id="company"></p>
+  </div>
+  <div class="plate" id="plate" hidden><svg id="qr" aria-hidden="true"></svg></div>
+  <div class="switch" id="switch" role="group" aria-label="What the code shares" hidden>
+    <button type="button" data-mode="link" aria-pressed="false">Card link</button>
+    <button type="button" data-mode="contact" aria-pressed="true">Contact · no signal</button>
+  </div>
+  <p class="link" id="link" hidden></p>
+  <h1 id="plain">SwiftCard</h1>
+  <p class="note" id="note">This page needs signal to open. It opens by itself as soon as you're back online.</p>
+  <section class="saved" id="saved" hidden>
+    <h2>Cards saved on this phone</h2>
+    <div id="list"></div>
+  </section>
+  <button type="button" class="retry" id="retry">Try again</button>
+</main>
+<script>
+(function () {
+  "use strict";
+  // ── The QR look — the same drawing as components/card-templates/MiniQR.tsx
+  // (tests/offline-web.test.ts keeps these numbers equal to MiniQR's).
+  var MODULE = 0.88, CORNER = 0.28, EYE = 7;
+  var SVG = "http://www.w3.org/2000/svg";
+  function rr(x, y, w, h, r) {
+    var R = Math.min(r, w / 2, h / 2);
+    return "M" + (x + R) + "," + y + "h" + (w - 2 * R) + "a" + R + "," + R + " 0 0 1 " + R + "," + R + "v" + (h - 2 * R) +
+      "a" + R + "," + R + " 0 0 1 -" + R + "," + R + "h-" + (w - 2 * R) + "a" + R + "," + R + " 0 0 1 -" + R + ",-" + R +
+      "v-" + (h - 2 * R) + "a" + R + "," + R + " 0 0 1 " + R + ",-" + R + "z";
+  }
+  function inEye(r, c, n) { return (r < EYE && c < EYE) || (r < EYE && c >= n - EYE) || (r >= n - EYE && c < EYE); }
+  function color(v, fallback) { return typeof v === "string" && /^#[0-9a-f]{3,8}$/i.test(v) ? v : fallback; }
+  function path(svg, d, fill, evenodd) {
+    var p = document.createElementNS(SVG, "path");
+    p.setAttribute("d", d); p.setAttribute("fill", fill);
+    if (evenodd) p.setAttribute("fill-rule", "evenodd");
+    svg.appendChild(p);
+  }
+  function draw(code) {
+    var svg = document.getElementById("qr");
+    var plate = document.getElementById("plate");
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var n = code && code.count | 0;
+    if (!n || n > 177 || typeof code.bits !== "string") return false;
+    var raw; try { raw = atob(code.bits); } catch (e) { return false; }
+    var fg = color(code.fg, "#111827"), bg = color(code.bg, "#ffffff");
+    plate.style.background = bg;
+    svg.setAttribute("viewBox", "0 0 " + n + " " + n);
+    var inset = (1 - MODULE) / 2, d = "";
+    for (var r = 0; r < n; r++) for (var c = 0; c < n; c++) {
+      var i = r * n + c;
+      if (!((raw.charCodeAt(i >> 3) >> (7 - (i & 7))) & 1) || inEye(r, c, n)) continue;
+      d += rr(c + inset, r + inset, MODULE, MODULE, CORNER);
+    }
+    [[0, 0], [n - EYE, 0], [0, n - EYE]].forEach(function (e) {
+      path(svg, rr(e[0], e[1], 7, 7, 2.2) + rr(e[0] + 1, e[1] + 1, 5, 5, 1.4), fg, true);
+      path(svg, rr(e[0] + 2, e[1] + 2, 3, 3, 0.9), fg, false);
+    });
+    path(svg, d, fg, false);
+    return true;
+  }
+  function readable(u) {
+    try { var x = new URL(u); return (x.host + x.pathname).replace(/^www\./, ""); } catch (e) { return ""; }
+  }
+  function read(key) {
+    try { return JSON.parse(localStorage.getItem(key) || "null"); } catch (e) { return null; }
+  }
+
+  var NOTES = {
+    contact: "Their phone saves your contact straight from this code. No internet needed on either phone.",
+    link: "Opens your card. Whoever scans it needs signal."
+  };
+
+  var card = read("sc_offline_card");
+  if (card && card.v === 1 && card.link) {
+    var mode = card.contact ? "contact" : "link";
+    document.getElementById("plain").hidden = true;
+    document.getElementById("owner").hidden = false;
+    document.getElementById("name").textContent = String(card.name || "My SwiftCard");
+    var co = document.getElementById("company");
+    co.textContent = String(card.company || "");
+    co.hidden = !card.company;
+    var link = document.getElementById("link");
+    link.textContent = readable(card.url);
+    link.hidden = !link.textContent;
+    var sw = document.getElementById("switch");
+    var show = function (m) {
+      mode = m;
+      var ok = draw(m === "contact" ? card.contact : card.link);
+      document.getElementById("plate").hidden = !ok;
+      document.getElementById("qr").setAttribute("aria-label", m === "contact" ? "Contact QR code" : "QR code for your SwiftCard");
+      document.getElementById("note").textContent = NOTES[m];
+      Array.prototype.forEach.call(sw.querySelectorAll("button"), function (b) {
+        b.setAttribute("aria-pressed", String(b.getAttribute("data-mode") === m));
+      });
+    };
+    if (card.contact) {
+      sw.hidden = false;
+      sw.addEventListener("click", function (e) {
+        var b = e.target.closest ? e.target.closest("button[data-mode]") : null;
+        if (b) show(b.getAttribute("data-mode"));
+      });
+    }
+    show(mode);
+  }
+
+  // Cards opened on this phone before — only the ones still in the worker's cache.
+  var saved = read("sc_saved_cards");
+  if (Array.isArray(saved) && saved.length && window.caches) {
+    var here = location.pathname.toLowerCase().replace(/\/+$/, "");
+    Promise.all(saved.slice(0, 25).map(function (s) {
+      if (!s || typeof s.path !== "string" || s.path.charAt(0) !== "/" || s.path.charAt(1) === "/") return null;
+      return caches.match(location.origin + s.path, { cacheName: "sc-cards-v1" }).then(function (hit) { return hit ? s : null; }, function () { return null; });
+    })).then(function (rows) {
+      var list = document.getElementById("list");
+      rows.filter(Boolean).forEach(function (s) {
+        if (s.path === here) return;
+        var a = document.createElement("a");
+        a.href = s.path;
+        var t = document.createElement("span");
+        t.textContent = String(s.name || s.path.slice(1));
+        a.appendChild(t);
+        list.appendChild(a);
+      });
+      document.getElementById("saved").hidden = !list.firstChild;
+    });
+  }
+
+  document.getElementById("retry").addEventListener("click", function () { location.reload(); });
+  window.addEventListener("online", function () { location.reload(); });
+})();
+</script>
+</body>
+</html>

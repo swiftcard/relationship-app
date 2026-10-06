@@ -51,6 +51,11 @@ jobs:
       # (owner, 2026-10-06: "it'll miss my name or it'll miss my logo").
       - name: Link previews show the name, logo and photo
         run: OUT=nightly/share-preview node scripts/qa-share-preview.mjs || true
+      # A card opened once opens again with no signal, Save Contact still
+      # works, and anything else shows the no-signal screen (owner,
+      # 2026-10-06: "they need to have access to still get my card").
+      - name: Cards open with no signal
+        run: OUT=nightly/offline node scripts/qa-offline.mjs || true
       - name: Notifications for every plan and account type
         run: OUT=nightly/notifications node scripts/qa-notifications.mjs || true
       - name: Health + speed budget

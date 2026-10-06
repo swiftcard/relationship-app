@@ -3,6 +3,7 @@ import { Geist, Bricolage_Grotesque } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
+import OfflineOutbox from "@/components/OfflineOutbox";
 import AccountIsolationGuard from "@/components/AccountIsolationGuard";
 import NativeAppBridge from "@/components/NativeAppBridge";
 import GuidedTourHost from "@/components/GuidedTourHost";
@@ -235,6 +236,9 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: jsonLdScript(WEBSITE_JSONLD) }}
         />
         <ServiceWorkerRegistrar />
+        {/* Sends what a visitor did with no signal (a shared lead, a view)
+            once there is signal again — lib/offline-outbox.ts. */}
+        <OfflineOutbox />
         {/* Person-scoped browser state (visitor identity, active card, device
             visitor id, push binding) must die the moment a DIFFERENT account is
             the one signed in — see lib/account-state.ts for the whole story. */}

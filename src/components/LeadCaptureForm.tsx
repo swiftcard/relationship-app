@@ -3,8 +3,12 @@
 import { useEffect, useState } from "react";
 import { getVisitorId, getVisitorInfo, hasSharedWith, markSharedWith } from "@/lib/visitor";
 import { triggerSignupNudgeWhenVisible } from "@/lib/nudge";
+import { outbox, isQueuedOffline } from "@/lib/offline-outbox";
 
-type Status = "idle" | "loading" | "done" | "error" | "offline";
+// "queued": no signal, so the info is kept on the visitor's phone and sends by
+// itself once they're back online (lib/offline-outbox.ts). "offline": no
+// signal AND this browser can't keep it (storage blocked), so they must retry.
+type Status = "idle" | "loading" | "done" | "queued" | "error" | "offline";
 
 export default function LeadCaptureForm({
   cardOwner,
@@ -54,7 +58,7 @@ export default function LeadCaptureForm({
 
     let res: Response;
     try {
-      res = await fetch("/api/leads", {
+      res = await outbox.fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -63,8 +67,14 @@ export default function LeadCaptureForm({
           source,
           visitor_id: getVisitorId(),
         }),
-      });
-    } catch {
+      }, { timeoutMs: 20_000 });
+    } catch (err) {
+      if (isQueuedOffline(err)) {
+        // It WILL arrive, so this owner never asks for it again.
+        markSharedWith(cardOwner, form);
+        setStatus("queued");
+        return;
+      }
       setStatus("offline");
       return;
     }
@@ -100,6 +110,20 @@ export default function LeadCaptureForm({
           </svg>
         </div>
         <p className="text-slate-900 font-bold text-base">Info shared!</p>
+      </div>
+    );
+  }
+
+  if (status === "queued") {
+    return (
+      <div className="text-center py-3" role="status">
+        <div className="w-12 h-12 rounded-full bg-amber-50 border border-amber-100 flex items-center justify-center mx-auto mb-3">
+          <svg className="w-6 h-6 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l2.5 2.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <p className="text-slate-900 font-bold text-base">Saved on your phone</p>
+        <p className="text-slate-500 text-sm mt-1">No signal right now. Leave this page open and it sends to them by itself once you&apos;re back online.</p>
       </div>
     );
   }

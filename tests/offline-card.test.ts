@@ -69,6 +69,21 @@ describe("offline QR screen", () => {
     expect(code(swift)).toMatch(/URLQueryItem\(name: "source", value: "qr_code"\)/);
   });
 
+  it("offers the Contact QR, which scans with no signal on either phone, and opens on it", () => {
+    // The vCard rides in the same widget_card slot, sent by NativeAppBridge
+    // from lib/contact-qr.ts (the code Show QR's Contact switch draws).
+    const bridge = code(read("ios/App/App/WidgetBridge.swift"));
+    expect(bridge).toMatch(/if let vcard = call\.getString\("vcard"\), !vcard\.isEmpty \{\s*payload\["vcard"\] = vcard/);
+    const body = code(swift);
+    expect(body).toContain('vcard: obj["vcard"] ?? ""');
+    expect(body).toContain('UISegmentedControl(items: ["Card link", "Contact · no signal"])');
+    // Every appearance opens on Contact when there is one.
+    expect(body).toMatch(/modeSwitch\.isHidden = card\.vcard\.isEmpty\s*modeSwitch\.selectedSegmentIndex = Self\.contactSegment/);
+    expect(body).toMatch(/Self\.qrImage\(for: contact \? card\.vcard : Self\.scanURL\(card\.url\)\)/);
+    const js = read("src/components/NativeAppBridge.tsx");
+    expect(js).toMatch(/vcard: contact \? buildContactQr\(contact\) : ""/);
+  });
+
   it("is in the help assistant's knowledge", () => {
     const kb = read("src/lib/knowledge/docs/product.ts");
     expect(kb).toContain('id: "offline"');

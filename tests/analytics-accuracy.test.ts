@@ -382,9 +382,11 @@ describe("outbound link taps are finally counted — and counted honestly", () =
     const code = tracker.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
     expect(code).toMatch(/"\/api\/card-events"/);
     expect(code).not.toMatch(/\/api\/analytics\/event|\/api\/views/);
-    // Nothing is fetched from a second endpoint at all.
-    expect([...code.matchAll(/["'`](\/api\/[^"'`]+)["'`]/g)].map((m) => m[1]))
-      .toEqual(["/api/card-events", "/api/card-events"]);
+    // Nothing is fetched from a second endpoint at all. (Three mentions: the
+    // beacon, its fetch fallback, and the no-signal outbox, which replays to
+    // the same route.)
+    expect([...new Set([...code.matchAll(/["'`](\/api\/[^"'`]+)["'`]/g)].map((m) => m[1]))])
+      .toEqual(["/api/card-events"]);
   });
 
   it("a relative or malformed href is never recorded as OUR host", () => {

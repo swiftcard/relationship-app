@@ -60,11 +60,17 @@ public class WidgetBridgePlugin: CAPPlugin, CAPBridgedPlugin {
         }
         // Shape must stay in sync with `CardInfo` in SwiftCardWidget.swift —
         // its JSONDecoder requires all three keys to be present.
-        let payload: [String: String] = [
+        var payload: [String: String] = [
             "url": url,
             "name": call.getString("name") ?? "My SwiftCard",
             "company": call.getString("company") ?? ""
         ]
+        // The Contact QR's vCard (lib/contact-qr.ts) for the no-signal screen,
+        // OfflineCard.swift. The widget and the watch decode only the three
+        // keys above and ignore this one.
+        if let vcard = call.getString("vcard"), !vcard.isEmpty {
+            payload["vcard"] = vcard
+        }
 
         guard
             let defaults = shared,

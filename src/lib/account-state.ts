@@ -74,6 +74,14 @@ export const PERSON_SCOPED_STORAGE_KEYS = [
   // device the second account must report its own, or it keeps the UTC fallback
   // and gets its evenings silenced.
   "swiftcard_push_tz",
+  // The owner's card QR codes kept for the no-signal screen
+  // (components/OfflineOwnerSnapshot.tsx → public/offline.html). Same rule as
+  // the widget's clearCard: a signed-out or handed-on phone must stop showing
+  // the previous person's code.
+  "sc_offline_card",
+  // The cards this browser has saved for offline (components/OfflineCardSaver);
+  // the saved pages themselves are dropped with them (forgetOfflineCards below).
+  "sc_saved_cards",
 ] as const;
 
 /** Written by TimezoneSync; wiped on an account switch with the list above. */
@@ -99,6 +107,17 @@ export const LAST_AUTH_UID_KEY = "sc_last_uid";
 const ACTIVE_CARD_COOKIE = "sc_active_card";
 /** …and its session-only copy the dashboard reads (lib/active-card.ts). */
 const SESSION_CARD_COOKIE = "sc_session_card";
+
+/**
+ * Drop the cards saved for offline (public/sw.js) along with their list.
+ * Fire-and-forget: the worker does the deleting, so a page that is about to
+ * navigate away doesn't have to wait for it.
+ */
+function forgetOfflineCards(): void {
+  try {
+    navigator.serviceWorker?.controller?.postMessage({ type: "forget-cards" });
+  } catch { /* no worker: nothing was saved */ }
+}
 
 /**
  * Should person-scoped (identity) state be reset for this session user?
@@ -148,6 +167,7 @@ export function clearPersonScopedState(opts?: { includeGuestFlow?: boolean; sign
     document.cookie = `${ACTIVE_CARD_COOKIE}=; path=/; max-age=0; samesite=lax`;
     document.cookie = `${SESSION_CARD_COOKIE}=; path=/; max-age=0; samesite=lax`;
   } catch { /* ignore */ }
+  forgetOfflineCards();
   // OTHER accounts' unfinished card drafts (swiftcard_card_draft:<uid>) once
   // someone is signed in — never shown to anyone else, but a previous person's
   // draft, photos included, has no business staying on a device someone else

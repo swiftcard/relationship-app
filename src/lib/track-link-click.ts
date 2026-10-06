@@ -1,4 +1,5 @@
 import { getVisitorId } from "@/lib/visitor";
+import { enqueue } from "@/lib/offline-outbox";
 
 // ── Which link did they actually press? ──────────────────────────────────────
 //
@@ -91,6 +92,10 @@ export function trackLinkClick(opts: {
     ...(opts.label?.trim() ? { target_label: opts.label.trim().slice(0, 60) } : {}),
     source: opts.source,
   });
+
+  // No signal: a beacon would be accepted and then silently lost. Keep it on
+  // this phone and send it later (lib/offline-outbox.ts).
+  if (navigator.onLine === false && enqueue("/api/card-events", payload)) return;
 
   try {
     // sendBeacon is the right tool: the browser takes ownership of the request,

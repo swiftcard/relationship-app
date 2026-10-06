@@ -10,6 +10,7 @@ const SECTIONS = [
   ["Analytics + notifications end to end", "nightly/probe/failures.json", (j) => j],
   ["Notifications for every plan and account type", "nightly/notifications/failures.json", (j) => j],
   ["Link previews (name, logo, photo)", "nightly/share-preview/failures.json", (j) => j],
+  ["Cards open with no signal", "nightly/offline/failures.json", (j) => j],
   ["Production health + speed budget", "nightly/health.json", (j) => (j.results ?? []).filter((r) => !r.ok).map((r) => `${r.name}: ${r.detail}`)],
 ];
 const sections = SECTIONS.map(([name, file, pick]) => {

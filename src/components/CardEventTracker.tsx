@@ -5,6 +5,7 @@ import { getVisitorId } from "@/lib/visitor";
 import { whenIdentityReconciled } from "@/lib/account-state";
 import { VIEW_VISIT_WINDOW_MS } from "@/lib/view-window";
 import { waitForHuman } from "@/lib/human-gate";
+import { outbox } from "@/lib/offline-outbox";
 
 // Fire-at-most-once-per-visit guard, per (username+surface). A Map of last-fire
 // times, not a Set: the old Set was never cleared, so in a long-lived SPA tab
@@ -91,7 +92,9 @@ export default function CardEventTracker({
       // Who a visitor is to THIS owner is decided on the server now, from the
       // owner's own record of them (lib/known-contact.ts); the browser's claim
       // is not evidence and is no longer sent.
-      fetch("/api/card-events", {
+      // outbox: a view with no signal (a saved card reopened offline, or the
+      // signal dropping mid-visit) is kept and sent later, not lost.
+      outbox.fetch("/api/card-events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

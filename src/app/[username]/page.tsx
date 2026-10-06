@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase-server";
 import SaveContactButton from "@/components/SaveContactButton";
 import LeadCaptureForm from "@/components/LeadCaptureForm";
 import CardEventTracker from "@/components/CardEventTracker";
+import OfflineCardSaver from "@/components/OfflineCardSaver";
 import ScanSaveContact from "@/components/ScanSaveContact";
 import ShareButton from "@/components/ShareButton";
 import SocialLinkIntercept from "@/components/SocialLinkIntercept";
@@ -389,6 +390,13 @@ export default async function CardPage({
         }}
       />
       {!isEmbed && !isOwnerView && <CardEventTracker username={profile.username} source={source} />}
+      {/* Keeps this card on the phone so it opens again with no signal (public/sw.js). */}
+      {!isEmbed && (
+        <OfflineCardSaver
+          name={profile.name || profile.username}
+          vcardHref={awaitingPlan ? undefined : `/api/card/${encodeURIComponent(profile.username)}/vcard`}
+        />
+      )}
       {/* Scanned the desktop QR: deliver the contact over this page. */}
       {autoSave && !isEmbed && (
         <ScanSaveContact username={profile.username} source={source} suppressTracking={isOwnerView} />

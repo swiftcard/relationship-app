@@ -10,6 +10,7 @@ import {
   buildVCard, pickContactImage, contactInitials, CONTACT_INITIALS_BG, CONTACT_INITIALS_FG, type VCardPhoto,
 } from "@/lib/vcard";
 import { openFileViaSystemBrowser } from "@/lib/native-file";
+import { outbox, isQueuedOffline } from "@/lib/offline-outbox";
 // The QR popup is desktop-only (its button is hidden below md), yet the
 // encoder behind MiniQR shipped to every phone that opened a card. Loaded on
 // first open instead; phones never resolve it.
@@ -102,7 +103,8 @@ async function fetchHeadshotPhoto(url: string): Promise<VCardPhoto | null> {
 
 function trackEvent(username: string, eventType: string, source: string) {
   const visitorId = getVisitorId();
-  fetch("/api/card-events", {
+  // A save with no signal is kept and reported once there is (lib/offline-outbox.ts).
+  outbox.fetch("/api/card-events", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     // surface is always "card": this button renders on the card page only (the
@@ -111,6 +113,22 @@ function trackEvent(username: string, eventType: string, source: string) {
     // on one — which is what the whole surface column exists to stop.
     body: JSON.stringify({ card_owner_username: username, visitor_id: visitorId, event_type: eventType, surface: "card", source }),
   }).catch(() => {});
+}
+
+/**
+ * Can the server's contact file reach this page? Always with signal. With
+ * none, only when the offline worker saved this card's copy (cache name and
+ * key as in public/sw.js).
+ */
+async function contactFileReachable(href: string): Promise<boolean> {
+  if (typeof navigator === "undefined" || navigator.onLine !== false) return true;
+  try {
+    if (!navigator.serviceWorker?.controller || typeof caches === "undefined") return false;
+    const key = new URL(href, location.href);
+    return !!(await caches.match(key.origin + key.pathname.toLowerCase(), { cacheName: "sc-cards-v1" }));
+  } catch {
+    return false;
+  }
 }
 
 /** iPhone, iPad (which reports itself as a Mac with touch) or Android. */
@@ -158,6 +176,9 @@ export default function SaveContactButton({
   // SMS opt-in. MUST default to false and MUST NOT gate submission — Twilio
   // A2P review requires the box be unchecked by default and optional.
   const [status, setStatus] = useState<"idle" | "loading" | "done">("idle");
+  // The share-back had no signal: it's kept on this phone and sends once there
+  // is (lib/offline-outbox.ts). Shown as "done", in its own words.
+  const [queued, setQueued] = useState(false);
   // What went wrong with the share-back, in a sentence. Both failure paths used
   // to end in a bare `setStatus("idle")`: pressing the button with an empty
   // phone did NOTHING, forever, with no message and no outline, and a failed
@@ -273,21 +294,27 @@ export default function SaveContactButton({
     // do nothing visible, whereas the download below is exactly what a
     // computer expects.
     if (vcardHref && phoneLike()) {
-      const iframe = document.createElement("iframe");
-      iframe.style.display = "none";
-      iframe.setAttribute("aria-hidden", "true");
-      iframe.src = vcardHref;
-      document.body.appendChild(iframe);
-      setTimeout(() => iframe.remove(), 20_000);
-      setSaved(true);
-      markSavedContact(cardOwner);
-      if (username && !suppressTracking) trackEvent(username, "downloaded_vcard", source);
-      if (cardOwner) {
-        setTimeout(() => setShowSheet(true), 900);
-      } else {
-        triggerSignupNudgeWhenVisible("vcard", 900);
+      // With no signal the server file can only come from this phone's saved
+      // copy (public/sw.js keeps it once the card has been opened). Without
+      // one, the frame would load nothing while the button said "Saved", so
+      // build the file right here instead (below), which needs no network.
+      if (await contactFileReachable(vcardHref)) {
+        const iframe = document.createElement("iframe");
+        iframe.style.display = "none";
+        iframe.setAttribute("aria-hidden", "true");
+        iframe.src = vcardHref;
+        document.body.appendChild(iframe);
+        setTimeout(() => iframe.remove(), 20_000);
+        setSaved(true);
+        markSavedContact(cardOwner);
+        if (username && !suppressTracking) trackEvent(username, "downloaded_vcard", source);
+        if (cardOwner) {
+          setTimeout(() => setShowSheet(true), 900);
+        } else {
+          triggerSignupNudgeWhenVisible("vcard", 900);
+        }
+        return;
       }
-      return;
     }
     // ONE ACTION = ONE RECORD. The save is recorded once, as "downloaded_vcard"
     // through /api/card-events — the canonical pipeline. Two other writes for the
@@ -390,8 +417,9 @@ export default function SaveContactButton({
     setShareErr(null);
     setStatus("loading");
 
+    let wasQueued = false;
     try {
-      const res = await fetch("/api/leads", {
+      const res = await outbox.fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -406,19 +434,26 @@ export default function SaveContactButton({
           visitor_id: getVisitorId(),
           source: "save_contact_conversion",
         }),
-      });
+      }, { timeoutMs: 20_000 });
       if (!res.ok) throw new Error("lead capture failed");
-    } catch {
-      // Don't mark as shared or advance the UI on a failed capture — the
-      // visitor's info would otherwise be silently lost. AND SAY SO: resetting
-      // to "idle" on its own just un-pressed the button, which reads as the app
-      // ignoring them rather than as something to try again.
-      setStatus("idle");
-      setShareErr("Couldn't send that — check your connection and try again.");
-      return;
+    } catch (err) {
+      // No signal, but kept on this phone: it sends once they're back online
+      // (lib/offline-outbox.ts), so it counts as shared.
+      if (isQueuedOffline(err)) {
+        wasQueued = true;
+      } else {
+        // Don't mark as shared or advance the UI on a failed capture — the
+        // visitor's info would otherwise be silently lost. AND SAY SO: resetting
+        // to "idle" on its own just un-pressed the button, which reads as the app
+        // ignoring them rather than as something to try again.
+        setStatus("idle");
+        setShareErr("Couldn't send that — check your connection and try again.");
+        return;
+      }
     }
 
     markSharedWith(cardOwner, form);
+    setQueued(wasQueued);
     setStatus("done");
     // After they share back, close whichever surface hosted the form (the
     // bottom sheet or the desktop QR popup) and invite them to make their own
@@ -430,7 +465,8 @@ export default function SaveContactButton({
       setShowQr(false);
       setStatus("idle"); // the next save opens the form, not "Info shared!"
       triggerSignupNudgeWhenVisible("vcard", 60);
-    }, 1500);
+      setQueued(false);
+    }, wasQueued ? 3500 : 1500);
   }
 
   return (
@@ -552,7 +588,12 @@ export default function SaveContactButton({
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
-                <p className="text-slate-900 font-bold text-base">Info shared!</p>
+                <p className="text-slate-900 font-bold text-base">{queued ? "Saved on your phone" : "Info shared!"}</p>
+                {queued && (
+                  <p className="text-slate-500 text-sm mt-1">
+                    No signal right now. Leave this page open and it sends to {ownerFirstName ?? "them"} by itself once you&apos;re back online.
+                  </p>
+                )}
               </div>
             ) : (
               <>

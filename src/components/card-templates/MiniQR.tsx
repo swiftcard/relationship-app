@@ -41,10 +41,17 @@ function inEye(r: number, c: number, count: number): boolean {
   return tl || tr || bl;
 }
 
-export function MiniQR({ size = 52, bg = "#ffffff", fg = "#111827", url }: { size?: number; bg?: string; fg?: string; url?: string }) {
+export function MiniQR({ size = 52, bg = "#ffffff", fg = "#111827", url, payload }: {
+  size?: number; bg?: string; fg?: string; url?: string;
+  /** Encode this text exactly as given, not as a link. This is the Contact QR's
+      vCard (lib/contact-qr.ts), which an https:// prefix would ruin. */
+  payload?: string;
+}) {
   const p = size * 0.055;
   const raw = (url ?? "").trim();
-  const target = raw ? (/^https?:\/\//i.test(raw) ? raw : `https://${raw}`) : "https://swiftcard.me";
+  const target = payload
+    ? payload
+    : raw ? (/^https?:\/\//i.test(raw) ? raw : `https://${raw}`) : "https://swiftcard.me";
 
   let count = 0;
   let modules = "";

@@ -215,10 +215,18 @@ export default function NativeAppBridge() {
           }
 
           if (active?.username) {
+            // The Contact QR for the app's no-signal screen (OfflineCard.swift),
+            // the same vCard Show QR's "Contact" switch draws (lib/contact-qr.ts).
+            // Builds before 1.0.7 ignore the extra key. Loaded here, not at the
+            // top: this bridge ships on every page, public cards included, and
+            // only the app ever reaches this line.
+            const { buildContactQr, contactPersonFromCardRow } = await import("@/lib/contact-qr");
+            const contact = contactPersonFromCardRow(active as Record<string, unknown>, "https://swiftcard.me");
             await widgetBridge.setCard({
               url: `https://swiftcard.me/${active.username}?source=widget`,
               name: active.name || "My SwiftCard",
               company: active.company || "",
+              vcard: contact ? buildContactQr(contact) : "",
             });
             try { localStorage.setItem(WIDGET_CARD_KEY, active.username); } catch { /* ignore */ }
           } else if (res.status === 401 || res.status === 403 || cards?.length === 0) {

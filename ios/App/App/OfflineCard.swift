@@ -109,6 +109,9 @@ struct OfflineCardInfo {
     let url: String
     let name: String
     let company: String
+    /// The Contact QR's vCard (lib/contact-qr.ts), written by WidgetBridge
+    /// since 1.0.7. Empty when the web side hasn't sent one yet.
+    let vcard: String
 
     private static let appGroup = "group.me.swiftcard.app"
     private static let storeKey = "widget_card"
@@ -126,7 +129,8 @@ struct OfflineCardInfo {
         return OfflineCardInfo(
             url: url,
             name: obj["name"] ?? "My SwiftCard",
-            company: obj["company"] ?? ""
+            company: obj["company"] ?? "",
+            vcard: obj["vcard"] ?? ""
         )
     }
 }
@@ -141,6 +145,12 @@ final class OfflineCardView: UIView {
     private let companyLabel = UILabel()
     private let plate = UIView()
     private let qrView = UIImageView()
+    // Same two choices, same order, as the web Show QR switch. "Contact" is
+    // the vCard itself: the other phone saves it with no internet at all,
+    // which is the whole point of a no-signal screen, so it opens on Contact.
+    private let modeSwitch = UISegmentedControl(items: ["Card link", "Contact · no signal"])
+    private static let contactSegment = 1
+    private var card: OfflineCardInfo?
     private let linkLabel = UILabel()
     private let noteLabel = UILabel()
     private let retryButton = UIButton(type: .system)
@@ -150,6 +160,7 @@ final class OfflineCardView: UIView {
     private static let canvas = UIColor(red: 3 / 255, green: 7 / 255, blue: 18 / 255, alpha: 1)
     private static let secondary = UIColor(red: 148 / 255, green: 163 / 255, blue: 184 / 255, alpha: 1)
     private static let accent = UIColor(red: 37 / 255, green: 99 / 255, blue: 235 / 255, alpha: 1)
+    private static let navy = UIColor(red: 13 / 255, green: 27 / 255, blue: 62 / 255, alpha: 1)
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -199,10 +210,18 @@ final class OfflineCardView: UIView {
         retryButton.configuration = config
         retryButton.addAction(UIAction { [weak self] _ in self?.onRetry?() }, for: .primaryActionTriggered)
 
-        [statusLabel, nameLabel, companyLabel, plate, linkLabel, noteLabel, retryButton]
+        modeSwitch.selectedSegmentIndex = Self.contactSegment
+        modeSwitch.selectedSegmentTintColor = .white
+        modeSwitch.setTitleTextAttributes([.foregroundColor: UIColor.white.withAlphaComponent(0.8)], for: .normal)
+        modeSwitch.setTitleTextAttributes([.foregroundColor: Self.navy], for: .selected)
+        modeSwitch.accessibilityLabel = "What the code shares"
+        modeSwitch.addAction(UIAction { [weak self] _ in self?.render() }, for: .valueChanged)
+
+        [statusLabel, nameLabel, companyLabel, plate, modeSwitch, linkLabel, noteLabel, retryButton]
             .forEach(stack.addArrangedSubview)
         stack.setCustomSpacing(20, after: companyLabel)
         stack.setCustomSpacing(14, after: plate)
+        stack.setCustomSpacing(12, after: modeSwitch)
         stack.setCustomSpacing(24, after: noteLabel)
 
         let side = plate.widthAnchor.constraint(equalTo: widthAnchor, multiplier: 0.72)
@@ -235,22 +254,38 @@ final class OfflineCardView: UIView {
     /// Fill from the saved card, or the plain offline message when there is none.
     func show(card: OfflineCardInfo?) {
         statusLabel.text = "You're offline"
-        if let card, let qr = Self.qrImage(for: Self.scanURL(card.url)) {
+        self.card = card
+        if let card, Self.qrImage(for: Self.scanURL(card.url)) != nil {
             nameLabel.text = card.name
             companyLabel.text = card.company
             companyLabel.isHidden = card.company.isEmpty
-            qrView.image = qr
-            plate.isHidden = false
             linkLabel.text = Self.readable(card.url)
             linkLabel.isHidden = false
-            noteLabel.text = "Your QR code still works. Whoever scans it needs signal to open your card."
+            // Every time the screen appears it opens on Contact, when there is one.
+            modeSwitch.isHidden = card.vcard.isEmpty
+            modeSwitch.selectedSegmentIndex = Self.contactSegment
+            render()
         } else {
             nameLabel.text = "SwiftCard"
             companyLabel.isHidden = true
             plate.isHidden = true
+            modeSwitch.isHidden = true
             linkLabel.isHidden = true
             noteLabel.text = "Reconnect to the internet to open SwiftCard."
         }
+    }
+
+    /// The code for the chosen mode: the contact itself, or the card link.
+    private func render() {
+        guard let card else { return }
+        let contact = !card.vcard.isEmpty && modeSwitch.selectedSegmentIndex == Self.contactSegment
+        let qr = Self.qrImage(for: contact ? card.vcard : Self.scanURL(card.url))
+        qrView.image = qr
+        plate.isHidden = qr == nil
+        qrView.accessibilityLabel = contact ? "Contact QR code" : "QR code for your SwiftCard"
+        noteLabel.text = contact
+            ? "Their phone saves your contact straight from this code. No internet needed on either phone."
+            : "Your QR code still works. Whoever scans it needs signal to open your card."
     }
 
     /// Same encoder and error-correction level as the widget and the watch,
