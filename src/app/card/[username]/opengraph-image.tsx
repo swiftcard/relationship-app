@@ -5,6 +5,7 @@ import { isCardActive } from "@/lib/card-active";
 import { storedCaptureIsCurrent } from "@/lib/stored-capture";
 import { fetchVCardPhoto, withLogoSize } from "@/lib/contact-photo";
 import { BrandOg, loadBrandOgInputs } from "@/lib/brand-og";
+import { squareCorners } from "@/lib/square-corners";
 
 // A pixel-perfect PNG of the real card, captured client-side on the dashboard
 // and stored here. When present it IS the share preview, so the link unfurls
@@ -509,7 +510,12 @@ export default async function Image({
       const ratio = hdr.getUint32(16) / Math.max(1, hdr.getUint32(20));
       if (ratio >= 1.25 && ratio <= 2.4) {
         const sharp = (await import("sharp")).default;
-        const jpeg = await sharp(Buffer.from(stored))
+        // Square the corners first (lib/square-corners): an older screenshot
+        // still has the card's rounded corners, and the page colour + shadow
+        // behind them showed as wedges inside the messenger's own rounding.
+        const raw = await sharp(Buffer.from(stored)).flatten({ background: "#FAF7F2" }).raw().toBuffer({ resolveWithObject: true });
+        squareCorners(raw.data, raw.info.width, raw.info.height, raw.info.channels);
+        const jpeg = await sharp(raw.data, { raw: { width: raw.info.width, height: raw.info.height, channels: raw.info.channels } })
           .resize(size.width, size.height, { fit: "cover", position: "centre" })
           .jpeg({ quality: 86 })
           .toBuffer();

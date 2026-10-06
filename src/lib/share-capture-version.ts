@@ -25,7 +25,9 @@
 //
 // Import-free on purpose: the browser capture imports it too.
 
-export const SHARE_CAPTURE_VERSION = 8;
+// 9 = square corners, no drop shadow: the picture is the card edge to edge,
+// so a messenger's own rounding never shows page-colour wedges (2026-10-06).
+export const SHARE_CAPTURE_VERSION = 9;
 // The moment the pixel-verified capture (v8, 5633d26a) went live: its Vercel
 // deploy turned READY at 18:35:50Z. It was first set to 20:00Z, a guess in
 // the FUTURE, so a verified re-capture taken at 19:27Z was ignored and the

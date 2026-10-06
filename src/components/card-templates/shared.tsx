@@ -182,7 +182,11 @@ export function logoCircleStyle(f: number, base: number, extra?: React.CSSProper
     borderRadius: "50%",
     padding: pad,
     background: "#ffffff",
-    boxShadow: "inset 0 0 0 1px rgba(15,23,42,0.12)",
+    // The hairline ring as a BORDER, not an inset shadow: the iPhone's
+    // screenshot engine (the texted-link preview, components/ShareCardCapture)
+    // doesn't paint an inset shadow on an <img>, so the preview showed the logo
+    // with no circle at all (2026-10-06). border-box sizing keeps it identical.
+    border: "1px solid rgba(15,23,42,0.12)",
     objectFit: "contain",
     flexShrink: 0,
     ...extra,

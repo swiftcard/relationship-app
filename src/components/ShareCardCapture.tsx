@@ -362,9 +362,17 @@ export default function ShareCardCapture({
   // inert as well as aria-hidden: this is a real card, and it contains links.
   // aria-hidden alone left them in the tab order — you could Tab into a card
   // nobody can see (axe: aria-hidden-focus).
+  //
+  // Square corners, no shadow: the picture IS the card, edge to edge. Messages,
+  // WhatsApp and Slack round the preview themselves, at their own radius, so
+  // the card's own rounded corners showed the page colour and the drop shadow
+  // as light wedges and a grey halo in every corner (owner, 2026-10-06: "make
+  // sure … it fits the corners properly, and that it looks very clean").
+  // !important because each template sets its shadow inline.
   return (
     <div aria-hidden inert style={{ position: "absolute", left: -10000, top: 0, width: NATURAL, pointerEvents: "none", opacity: 0.01 }}>
-      <div ref={cardRef} style={{ width: NATURAL, background: CARD_BG }}>
+      <style>{`.sc-share-capture > *, .sc-share-capture .sc-card { border-radius: 0 !important; box-shadow: none !important; }`}</style>
+      <div ref={cardRef} className="sc-share-capture" style={{ width: NATURAL, background: CARD_BG }}>
         <Template data={template === "custom" ? captureData : withoutSocials(captureData)} />
       </div>
     </div>
