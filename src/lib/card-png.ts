@@ -65,12 +65,33 @@ export function dataUrlToBlob(dataUrl: string): Blob {
 const SCALE = 3;
 const ATTEMPTS = 4;
 
+// ONE CAPTURE PER CARD AT A TIME. The share popup starts a capture as it opens
+// (DownloadCardButton `prepare`), and closing the popup doesn't stop it — so
+// reopening it within a few seconds, or pressing Download under the card
+// meanwhile, started a second capture on the SAME on-screen node. The pixel
+// check hides elements and then restores what it read before hiding them, so
+// the second run could read the first run's "hidden" and put the name, logo or
+// photo back as hidden: gone from the Your Card box, and skipped by every later
+// check, which only looks at visible elements. A second caller now gets the
+// capture already running.
+const inFlight = new WeakMap<HTMLElement, Promise<Blob>>();
+
 /**
  * Rasterize the card node at 3×. `name` is the card's name, which the pixel
  * check looks for alongside every picture. Throws rather than hand back a
  * card with something missing.
  */
-export async function captureCardPng(el: HTMLElement, name = ""): Promise<Blob> {
+export function captureCardPng(el: HTMLElement, name = ""): Promise<Blob> {
+  const running = inFlight.get(el);
+  if (running) return running;
+  const run = captureOnce(el, name).finally(() => {
+    if (inFlight.get(el) === run) inFlight.delete(el);
+  });
+  inFlight.set(el, run);
+  return run;
+}
+
+async function captureOnce(el: HTMLElement, name: string): Promise<Blob> {
   // The card on screen is display-scaled (CardPreviewDownload). It is NOT
   // un-scaled for the capture any more: that made the visible card jump while
   // the popup prepared its picture. The clone gets its own transform below,

@@ -56,6 +56,17 @@ beforeAll(async () => {
         });
         return { w: img.width, h: img.height, images: spread.length, spread };
       };
+      // Two captures of the same card at once — the popup opened, closed and
+      // reopened, or Download pressed while the popup prepares. They must be
+      // one capture, and nothing on the card may be left hidden afterwards.
+      (window as any).overlap = async () => {
+        const el = c!.cardRef.current!;
+        const a = captureCardPng(el, c!.name);
+        const b = captureCardPng(el, c!.name);
+        await Promise.allSettled([a, b]);
+        const hidden = Array.from(el.querySelectorAll<HTMLElement>("*")).filter((n) => n.style.visibility === "hidden").length;
+        return { same: a === b, hidden };
+      };
       return null;
     }
 
@@ -124,6 +135,12 @@ for (const [engine, type] of ENGINES) {
           // An unpainted slot is a flat fill (spread ≈ 0–3); a real photo or
           // logo is far busier.
           for (const s of r.spread) expect(s, "a picture is missing from the PNG").toBeGreaterThan(12);
+
+          if (template === "photo-first") {
+            const o = await page.evaluate(() => (window as unknown as { overlap: () => Promise<{ same: boolean; hidden: number }> }).overlap());
+            expect(o.same, "two overlapping downloads ran two captures").toBe(true);
+            expect(o.hidden, "an overlapping capture left part of the card hidden").toBe(0);
+          }
         } finally {
           await browser.close();
         }
