@@ -29,15 +29,27 @@ export default async function CardEditPage({
   // headshot, so the photo importer is actually mounted to receive it.
   const initialTab = integration === "linkedin" ? ("design" as const) : undefined;
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  // getClaims verifies the token locally, so every read below starts at once;
+  // getUser() still runs, in the same batch, rather than as a round trip in
+  // front of it. The office sub-user lookup joins the batch too — it needs only
+  // the id (perf audit 2026-10-06: this page was five serial hops deep).
+  const { data: claimsData } = await supabase.auth.getClaims();
+  if (!claimsData?.claims?.sub) redirect("/login");
+  const uid = claimsData.claims.sub;
 
   const admin = getAdminSupabase();
-  const [{ data: card }, { data: profile }] = await Promise.all([
-    admin.from("cards").select("*").eq("id", id).eq("user_id", user.id).single(),
-    admin.from("profiles").select("photo_url, plan, stripe_customer_id").eq("id", user.id).single(),
+  const [{ data: { user } }, { data: card }, { data: profile }, subCtx] = await Promise.all([
+    supabase.auth.getUser(),
+    admin.from("cards").select("*").eq("id", id).eq("user_id", uid).single(),
+    admin.from("profiles").select("photo_url, plan, stripe_customer_id").eq("id", uid).single(),
+    // Office SUB-USER (active member, not the owner): their card carries the
+    // organization's company information, so the editor shows those fields as
+    // "Managed by your organization" instead of editable inputs, and the Design
+    // tab locks while the office's design lock is on. Resolved server-side —
+    // the client is never trusted for role or brand.
+    getOfficeSubUserContext(uid),
   ]);
-
+  if (!user || user.id !== uid) redirect("/login");
 
   if (!card) notFound();
 
@@ -56,13 +68,6 @@ export default async function CardEditPage({
       );
   // Per-card headshot (legacy cards fall back to the account photo).
   const cardPhoto = cardHeadshot(card.customization, profile?.photo_url);
-
-  // Office SUB-USER (active member, not the owner): their card carries the
-  // organization's company information, so the editor shows those fields as
-  // "Managed by your organization" instead of editable inputs, and the Design
-  // tab locks while the office's design lock is on. Resolved server-side —
-  // the client is never trusted for role or brand.
-  const subCtx = await getOfficeSubUserContext(user.id);
 
   // Office branding governs SUB-USER cards only. The office OWNER's personal
   // cards are individual to the admin (owner decision, Jul 2026) — an earlier

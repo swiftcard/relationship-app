@@ -593,23 +593,31 @@ export default function ContactsClient({
     // user has already navigated away from must not overwrite the one now on
     // screen. Read at call time and re-checked before every setState below.
     const seq = selectSeq.current;
-    try {
-      const r = await fetch(`/api/leads/${lead.id}/message`);
-      const d = await r.json();
-      if (selectSeq.current === seq && Array.isArray(d.messages)) setConvoMessages(d.messages);
-    } catch {
-      // Deliberately KEEP what is on screen. selectLead clears to [] because it
-      // is switching contacts and the old thread is simply wrong; here the
-      // displayed log is still accurate and a dropped request is no reason to
-      // blank out a correct history.
-    }
-    try {
-      const res = await fetch(`/api/card-events?lead_id=${encodeURIComponent(lead.id)}`);
-      const data = await res.json();
-      if (selectSeq.current === seq && Array.isArray(data)) setEvents(data);
-    } catch {
-      /* keep what is on screen — see above */
-    }
+    // The two feeds are independent, so they load together (they used to run
+    // one after the other, after every action and every return to the tab).
+    await Promise.all([
+      (async () => {
+        try {
+          const r = await fetch(`/api/leads/${lead.id}/message`);
+          const d = await r.json();
+          if (selectSeq.current === seq && Array.isArray(d.messages)) setConvoMessages(d.messages);
+        } catch {
+          // Deliberately KEEP what is on screen. selectLead clears to [] because it
+          // is switching contacts and the old thread is simply wrong; here the
+          // displayed log is still accurate and a dropped request is no reason to
+          // blank out a correct history.
+        }
+      })(),
+      (async () => {
+        try {
+          const res = await fetch(`/api/card-events?lead_id=${encodeURIComponent(lead.id)}`);
+          const data = await res.json();
+          if (selectSeq.current === seq && Array.isArray(data)) setEvents(data);
+        } catch {
+          /* keep what is on screen — see above */
+        }
+      })(),
+    ]);
   }
 
   // The other direction of the same staleness. Actions taken HERE now refresh

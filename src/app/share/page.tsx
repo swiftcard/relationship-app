@@ -51,18 +51,27 @@ export default async function SharePage({
   const selectedCard = params.card ?? cookieCard;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+  // Same shape as the dashboard: getClaims verifies the access token LOCALLY
+  // (no network), so the reads start at once, and getUser() — the server-side
+  // check that catches a deleted account with a still-live token — runs
+  // alongside them instead of in front of them. This page used to pay four
+  // serial round trips (user → profile → cards → office) before rendering.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  if (!claimsData?.claims?.sub) redirect("/login");
+  const uid = claimsData.claims.sub;
+  const [{ data: { user } }, { data: profile }, { data: cards }, officeSubUser] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase.from("profiles").select("*").eq("id", uid).single(),
+    getAdminSupabase()
+      .from("cards")
+      .select("*")
+      .eq("user_id", uid)
+      .order("created_at", { ascending: true }),
+    getOfficeSubUserContext(uid),
+  ]);
+  if (!user || user.id !== uid) redirect("/login");
   if (!profile) redirect("/onboarding");
   if ((profile.customization as { _deleted?: boolean } | null)?._deleted) redirect("/account-deleted");
-
-  const { data: cards } = await getAdminSupabase()
-    .from("cards")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: true });
 
   const allCards = cards ?? [];
   // Need a card to have a Swift Links URL / signature — send card-less users to
@@ -96,10 +105,9 @@ export default async function SharePage({
   const activeSource = activeCard;
   const activeUsername = activeCard.username as string;
   // Keep the "Admin" nav item present across the app shell (same gate as the page).
-  const [showOfficeAdmin, officeSubUser] = await Promise.all([
-    canViewOfficeAdmin(user.id, profile.plan),
-    getOfficeSubUserContext(user.id),
-  ]);
+  // resolveOfficeContext is per-request cached and already warm from the batch
+  // above, so this is effectively free.
+  const showOfficeAdmin = await canViewOfficeAdmin(user.id, profile.plan);
 
   const cardUrl = `${APP_URL}/${activeUsername}?source=email_signature`;
   const swiftUrl = `${APP_URL}/links/${activeUsername}`;

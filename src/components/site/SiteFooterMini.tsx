@@ -1,4 +1,5 @@
 import Link from "next/link";
+import HomeLink from "@/components/site/HomeLink";
 import SwiftCardLogo from "@/components/SwiftCardLogo";
 import NativeHidden from "@/components/NativeHidden";
 
@@ -33,7 +34,7 @@ export default function SiteFooterMini({ extra = [] }: { extra?: Extra[] }) {
             24×24 floor in WCAG 2.5.8. The padding is invisible (the row is a
             flex line) and takes them to 28px. */}
         <nav aria-label="Footer" className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 text-sm text-ink-muted">
-          <Link href="/" className="py-1 hover:text-slate-900 transition-colors">Home</Link>
+          <HomeLink className="py-1 hover:text-slate-900 transition-colors">Home</HomeLink>
           <NativeHidden><Link href="/pricing" className="py-1 hover:text-slate-900 transition-colors">Pricing</Link></NativeHidden>
           {extra.map((l) => (
             <Link key={l.href} href={l.href} className="py-1 hover:text-slate-900 transition-colors">{l.label}</Link>

@@ -186,6 +186,27 @@ function sendFirstParty(name: EventName, props: EventProps, pathOverride?: strin
 let ph: PostHog | null = null;
 let loadPromise: Promise<PostHog | null> | null = null;
 
+/**
+ * Resolves once the page has loaded and the main thread is free.
+ *
+ * The SDK is ~225 KB of JavaScript. Imported at hydration (the first pageview
+ * effect), it downloaded and compiled in exactly the window where a phone is
+ * trying to make the page respond to its first tap (perf audit 2026-10-06).
+ * Nothing is lost by waiting: every capture awaits getPostHog(), so events
+ * fired before this resolves are sent in order once it does, and the
+ * first-party sink — the one that matters — never waits at all.
+ */
+function whenIdleAfterLoad(): Promise<void> {
+  return new Promise((resolve) => {
+    const idle = () => {
+      if ("requestIdleCallback" in window) window.requestIdleCallback(() => resolve(), { timeout: 4000 });
+      else setTimeout(resolve, 1500);
+    };
+    if (document.readyState === "complete") idle();
+    else window.addEventListener("load", idle, { once: true });
+  });
+}
+
 // Shared loader so AnalyticsProvider and track() can't race into two init()s.
 async function getPostHog(): Promise<PostHog | null> {
   if (!KEY) return null;
@@ -193,6 +214,7 @@ async function getPostHog(): Promise<PostHog | null> {
   if (!loadPromise) {
     loadPromise = (async () => {
       try {
+        await whenIdleAfterLoad();
         const mod = await import("posthog-js");
         mod.default.init(KEY, {
           api_host: HOST,

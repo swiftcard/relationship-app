@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SwiftCardIcon } from "@/components/SwiftCardLogo";
+import HomeLink from "@/components/site/HomeLink";
 import SalesChat from "@/components/site/SalesChat";
 import NativeHidden from "@/components/NativeHidden";
 import AppStoreBadge, { GooglePlayBadge } from "@/components/AppStoreBadge";
@@ -83,10 +84,10 @@ export default function SiteFooter({ light = false }: { light?: boolean }) {
       <div className="max-w-7xl mx-auto px-5 sm:px-6 py-16 relative">
         <div className="grid grid-cols-2 md:grid-cols-[1.4fr_1fr_1fr_1fr_1fr] gap-10">
           <div className="col-span-2 md:col-span-1">
-            <Link href="/" className="flex items-center gap-2.5 mb-4">
+            <HomeLink className="flex items-center gap-2.5 mb-4">
               <SwiftCardIcon size={30} />
               <span className={`${light ? "text-slate-900" : "text-white"} font-bold text-[1.125rem] tracking-tight`}>SwiftCard</span>
-            </Link>
+            </HomeLink>
             <p className={`${light ? "text-slate-500" : "text-white/55"} text-[0.875rem] leading-relaxed max-w-[240px]`}>
               The digital business card that shares itself. One tap, and you&apos;re in their phone — card, links, and everything you do.
             </p>

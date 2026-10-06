@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PICK_PLAN_BELOW, seatsLabel } from "@/lib/promo";
 
 // ── "Have a promo code?" ─────────────────────────────────────────────────────
@@ -59,7 +59,16 @@ export function usePromoCode({
   const [input, setInput] = useState("");
   const [granting, setGranting] = useState(false);
 
+  // Only the LATEST check may set the answer. The check re-runs whenever the
+  // plan or interval changes, with nothing ordering the replies: toggling
+  // annual → monthly → annual could land "refused for monthly" last, while
+  // annual was selected — and a refused code disables Checkout (bug audit
+  // 2026-10-06). A stale reply is dropped; removing the code drops any reply
+  // still in flight too.
+  const seqRef = useRef(0);
+
   const check = useCallback(async (code: string): Promise<boolean> => {
+    const seq = ++seqRef.current;
     setState({ status: "checking" });
     try {
       const res = await fetch("/api/promo/check", {
@@ -68,6 +77,7 @@ export function usePromoCode({
         body: JSON.stringify({ code, ...(plan ? { plan, interval: interval ?? "monthly" } : {}) }),
       });
       const data = await res.json().catch(() => ({}));
+      if (seq !== seqRef.current) return false;
       if (res.ok && data.ok) {
         setState({
           status: "applied", code: data.code, label: data.label, detail: data.detail ?? "",
@@ -79,6 +89,7 @@ export function usePromoCode({
       setState({ status: "refused", code, message: data.error || "That code can't be used.", grant: data.grant === true });
       return false;
     } catch {
+      if (seq !== seqRef.current) return false;
       setState({ status: "refused", code, message: "Couldn't check that code — check your connection and try again." });
       return false;
     }
@@ -97,6 +108,7 @@ export function usePromoCode({
   }, [input, check, onCodeChange]);
 
   const remove = useCallback(() => {
+    seqRef.current++;
     setState({ status: "none" });
     onCodeChange?.(null);
   }, [onCodeChange]);
@@ -120,6 +132,7 @@ export function usePromoCode({
   // The code stopped applying between the check and the purchase (the last use
   // went, it expired, it's for the other plan, Stripe's own rules).
   const refuseAtCheckout = useCallback((code: string, message: string, grant?: boolean) => {
+    seqRef.current++; // checkout's own verdict outranks a check still in flight
     setState({ status: "refused", code, message, grant: grant === true, atCheckout: true });
   }, []);
 

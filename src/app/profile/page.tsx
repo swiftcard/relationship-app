@@ -14,21 +14,25 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
 export default async function ProfilePage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-  if (!profile) redirect("/onboarding");
+  // One batch instead of three serial hops: getClaims verifies the token
+  // locally, so the reads need not wait for getUser()'s round trip.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  if (!claimsData?.claims?.sub) redirect("/login");
+  const uid = claimsData.claims.sub;
 
   const admin = getAdminSupabase();
-  const [{ data: emailPrefs }, officeCtx] = await Promise.all([
+  const [{ data: { user } }, { data: profile }, { data: emailPrefs }, officeCtx] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase.from("profiles").select("*").eq("id", uid).single(),
     admin
       .from("email_preferences")
       .select("marketing_emails, receipt_emails")
-      .eq("user_id", user.id)
+      .eq("user_id", uid)
       .single(),
-    resolveOfficeContext(user.id),
+    resolveOfficeContext(uid),
   ]);
+  if (!user || user.id !== uid) redirect("/login");
+  if (!profile) redirect("/onboarding");
   // Same rule as /settings — an Office member whose seat the owner pays for is
   // never billed, so the receipts switch is hidden for them here too.
   const showBilling = canSeeBilling(officeCtx, profile.stripe_subscription_id as string | null, (profile.customization as { _planSource?: unknown } | null)?._planSource);

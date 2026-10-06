@@ -131,7 +131,15 @@ export default function SwiftLinkButtons({
 }) {
   // Fetched preview (og:image + favicon fallback) by index. Compact rows use
   // the favicon; image tiles use both — one fetch serves every size.
-  const [previews, setPreviews] = useState<Record<number, Preview>>({});
+  // Keyed by the link's URL, not its position: keyed by index, a reorder or a
+  // delete showed one link's picture on another until a refetch landed.
+  const [previews, setPreviews] = useState<Record<string, Preview>>({});
+  const requestedRef = useRef(new Set<string>());
+  // Favicons Google has no icon for (its faviconV2 endpoint answers 404). The
+  // tile falls back to the emoji / letter instead of a broken-image box.
+  const [brokenFavicons, setBrokenFavicons] = useState<ReadonlySet<string>>(() => new Set());
+  const markFaviconBroken = (u: string) => setBrokenFavicons((b) => (b.has(u) ? b : new Set(b).add(u)));
+  const firstPreviewRunRef = useRef(true);
   // Index of the tile currently playing an inline video, if any.
   const [playing, setPlaying] = useState<number | null>(null);
   // Per-tile tone of the preview image's BOTTOM strip, where the title sits:
@@ -171,7 +179,9 @@ export default function SwiftLinkButtons({
         if (avg > 150) setTileTone((t) => ({ ...t, [imgUrl]: "light" }));
       } catch { /* tainted or decode failure — keep the dark default */ }
     };
-    el.src = `/api/img-proxy?url=${encodeURIComponent(imgUrl)}`;
+    // 64px is plenty for a 32px brightness sample — and a fraction of the
+    // full-size picture, which is already on screen from its own URL.
+    el.src = `/api/img-proxy?url=${encodeURIComponent(imgUrl)}&w=64`;
   }
 
   useEffect(() => {
@@ -186,18 +196,38 @@ export default function SwiftLinkButtons({
     });
   }, [links, previews, paid]);
 
+  // The URLs that need a scraped preview, as ONE string. The editors rebuild
+  // the `links` array on every keystroke in any field, and this effect used to
+  // depend on that array — so typing re-requested EVERY link's preview on every
+  // key press, and typing a URL scraped "https://e", "https://ex", … from the
+  // open web (bug audit 2026-10-06). Now each URL is fetched once, and edits
+  // settle for 400ms first; the first render (a visitor opening the page) still
+  // fetches immediately.
+  const previewUrlsKey = links
+    .filter((l) => l.kind !== "header" && !videoThumbnail(l.url))
+    .map((l) => fullHref(l.url))
+    .join("\n");
   useEffect(() => {
-    let cancelled = false;
-    links.forEach((link, i) => {
-      if (link.kind === "header") return; // nothing to fetch for a heading
-      if (videoThumbnail(link.url)) return; // video handled instantly below
-      fetch(`/api/link-preview?url=${encodeURIComponent(fullHref(link.url))}`)
-        .then((r) => r.json())
-        .then((d: Preview) => { if (!cancelled) setPreviews((p) => ({ ...p, [i]: d })); })
-        .catch(() => { if (!cancelled) setPreviews((p) => ({ ...p, [i]: { image: null, favicon: null, title: null } })); });
+    const pending = (previewUrlsKey ? previewUrlsKey.split("\n") : []).filter((u) => {
+      if (requestedRef.current.has(u)) return false;
+      try { return new URL(u).hostname.includes("."); } catch { return false; }
     });
-    return () => { cancelled = true; };
-  }, [links]);
+    const first = firstPreviewRunRef.current;
+    firstPreviewRunRef.current = false;
+    if (!pending.length) return;
+    const timer = setTimeout(() => {
+      for (const u of pending) {
+        requestedRef.current.add(u);
+        // Results are keyed by URL, so a late answer can only ever fill in its
+        // own link — no cancellation needed when the list changes.
+        fetch(`/api/link-preview?url=${encodeURIComponent(u)}`)
+          .then((r) => r.json())
+          .then((d: Preview) => setPreviews((p) => ({ ...p, [u]: d })))
+          .catch(() => setPreviews((p) => ({ ...p, [u]: { image: null, favicon: null, title: null } })));
+      }
+    }, first ? 0 : 400);
+    return () => clearTimeout(timer);
+  }, [previewUrlsKey]);
 
   if (!links.length) return null;
 
@@ -248,8 +278,8 @@ export default function SwiftLinkButtons({
         const href = fullHref(link.url);
         const videoThumb = videoThumbnail(link.url);
         const embed = videoEmbed(link.url);
-        const pv = previews[i];
-        const favicon = pv?.favicon || null;
+        const pv = previews[href];
+        const favicon = pv?.favicon && !brokenFavicons.has(pv.favicon) ? pv.favicon : null;
 
         // ── COMPACT — slim row on the sheet itself ──────────────────────────
         // "compact" is the stock translucent row; buttonStyle solid/outline
@@ -330,7 +360,7 @@ export default function SwiftLinkButtons({
               >
                 {favicon ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={favicon} alt="" className="w-[20px] h-[20px] object-contain rounded-full" />
+                  <img src={favicon} alt="" loading="lazy" onError={() => markFaviconBroken(favicon)} className="w-[20px] h-[20px] object-contain rounded-full" />
                 ) : link.emoji ? (
                   <span className="text-[1rem] leading-none">{link.emoji}</span>
                 ) : (
@@ -454,7 +484,7 @@ export default function SwiftLinkButtons({
               >
                 {favicon ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={favicon} alt="" className="w-[20px] h-[20px] object-contain rounded-full" />
+                  <img src={favicon} alt="" loading="lazy" onError={() => markFaviconBroken(favicon)} className="w-[20px] h-[20px] object-contain rounded-full" />
                 ) : (
                   <span className="text-[0.9375rem] leading-none">{link.emoji}</span>
                 )}

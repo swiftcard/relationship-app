@@ -211,8 +211,15 @@ export default function GoogleSignInButton({ redirectTo, className, oneTap = fal
     return () => { cancelled = true; };
   }, [redirectTo, oneTap, loginHint]);
 
+  // Loading → Google's button → "Signing you in…" all occupy ONE fixed 44px
+  // slot (Google's large pill measures exactly 44px). The placeholder used to
+  // be 46px and Google briefly lays its button out taller while it swaps the
+  // iframe in, so the whole centred sign-in card jumped by ~11px twice on
+  // every visit — /login's layout-shift score was 0.148 (perf audit
+  // 2026-10-06). A fixed slot makes that internal churn invisible.
+  const fixedSlot = phase === "loading" || phase === "ready" || phase === "authenticating";
   return (
-    <div className={className}>
+    <div className={`${className ?? ""}${fixedSlot ? " h-[44px]" : ""}`}>
       {/* Warm up Google's origin the moment this renders — cuts the GIS script
           fetch (the "Loading Google…" gap) by a round-trip. React hoists these
           into <head>. */}
@@ -223,13 +230,13 @@ export default function GoogleSignInButton({ redirectTo, className, oneTap = fal
       <div ref={btnRef} className={`flex justify-center ${phase === "ready" ? "" : "hidden"}`} aria-hidden={phase !== "ready"} />
 
       {phase === "loading" && (
-        <div className="w-full flex items-center justify-center gap-3 bg-white text-gray-400 font-semibold py-3 px-6 rounded-full text-sm border border-[#E4DDD4]">
+        <div className="w-full h-[44px] flex items-center justify-center gap-3 bg-white text-gray-400 font-semibold px-6 rounded-full text-sm border border-[#E4DDD4]">
           Loading Google…
         </div>
       )}
 
       {phase === "authenticating" && (
-        <div className="w-full flex items-center justify-center gap-3 bg-white text-gray-500 font-semibold py-3 px-6 rounded-full text-sm border border-[#E4DDD4]">
+        <div className="w-full h-[44px] flex items-center justify-center gap-3 bg-white text-gray-500 font-semibold px-6 rounded-full text-sm border border-[#E4DDD4]">
           Signing you in…
         </div>
       )}

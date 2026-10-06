@@ -117,7 +117,7 @@ function LinkTile({ t, index }: { t: Tile; index: number }) {
     <div className={`relative overflow-hidden rounded-[14px] mb-2.5 aspect-[1.91/1] ${big ? "w-full" : "w-[calc(50%-6px)]"}`} style={{ background: LOOK.tile }}>
       {t.img ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={t.img} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        <img src={t.img} alt="" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
       ) : (
         <div className="absolute inset-0" style={{ background: fb.background }} />
       )}
@@ -168,7 +168,7 @@ function Profile() {
           long eased fade (no rounded sheet edge since 2026-09-02). */}
       <div className="relative w-full aspect-square overflow-hidden">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/marketing/demo-girl.jpg" alt="Alex Morgan" className="absolute inset-0 w-full h-full object-cover" />
+        <img src="/marketing/demo-girl.jpg" alt="Alex Morgan" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-x-0 bottom-0 h-[55%] pointer-events-none" style={{ background: HERO_FADE }} />
       </div>
 
@@ -259,7 +259,7 @@ export default function SwiftLinksPhone() {
         <div className="absolute top-0 inset-x-0 z-[25] h-[93px] pt-[39px] flex items-center gap-2.5 px-4 transition-opacity duration-300" style={{ background: hexAlpha(SHEET, 0.84), backdropFilter: "blur(14px)", opacity: scrolled ? 1 : 0, pointerEvents: "none" }}>
           <div className="w-8 h-8 rounded-full overflow-hidden shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/marketing/demo-girl.jpg" alt="" className="w-full h-full object-cover" />
+            <img src="/marketing/demo-girl.jpg" alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
           </div>
           <span className="font-bold text-[0.9375rem] truncate" style={{ color: TEXT }}>Alex Morgan</span>
           <VerifiedBadge className="w-4 h-4" />

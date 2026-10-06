@@ -164,7 +164,9 @@ export default function Home() {
                     tiny stars over the face of it, each twinkling on its own slow
                     offset so it shimmers rather than blinks. VERY light on purpose.
                     Inert to the pointer, aria-hidden, stilled by reduced-motion. */}
-                <Link id="hero-cta" href="#cards" className="rd-btn rd-btn-ghost-l rd-btn-lg !bg-white/90 hp-sparkle">
+                {/* prefetch off: a bare-hash Link resolves to "/" itself, so on sight it
+                    re-downloaded this whole page (~160 KB) just to scroll it. */}
+                <Link id="hero-cta" href="#cards" prefetch={false} className="rd-btn rd-btn-ghost-l rd-btn-lg !bg-white/90 hp-sparkle">
                   See how it works
                   <span className="hp-sparks" aria-hidden="true">
                     {[

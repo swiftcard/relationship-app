@@ -15,6 +15,14 @@ type Preview = { image: string | null; favicon: string | null; title: string | n
 const cache = new Map<string, { data: Preview; at: number }>();
 const TTL = 1000 * 60 * 60 * 24; // 24h
 
+// `max-age` alone is a BROWSER cache: Vercel's CDN ignores it and every visitor
+// to a Swift Links page reached the function, which re-scraped each link
+// whenever the in-memory Map above was cold (a fresh serverless instance) — a
+// third-party fetch of up to 5s per tile, per visit (perf audit 2026-10-06).
+// s-maxage lets the CDN answer for a day per URL; stale-while-revalidate keeps
+// answering instantly for a week while it refreshes in the background.
+const CACHE_HEADERS = { "Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800" };
+
 function decodeEntities(s: string): string {
   return s
     .replace(/&amp;/g, "&").replace(/&#x2F;/gi, "/").replace(/&#47;/g, "/")
@@ -52,12 +60,6 @@ function extractTitle(html: string): string | null {
 }
 
 export async function GET(req: NextRequest) {
-  // SSRF-guarded, but cap per IP so it can't be used as an outbound fetch relay.
-  const ip = clientIp(req);
-  if (await isRateLimited(`linkpreview:${ip}`, 120, 10 * 60 * 1000)) {
-    return NextResponse.json({ image: null, favicon: null, title: null }, { status: 429 });
-  }
-
   const raw = req.nextUrl.searchParams.get("url");
   if (!raw) return NextResponse.json({ image: null, favicon: null, title: null });
 
@@ -68,10 +70,18 @@ export async function GET(req: NextRequest) {
   // Always available, even when the page itself blocks scraping.
   const favicon = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(target.hostname)}&sz=128`;
 
+  // A warm hit makes no outbound request, so it is answered before the rate
+  // limiter (itself a store round trip) — the limiter guards the fetch below.
   const key = target.toString();
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL) {
-    return NextResponse.json(hit.data, { headers: { "Cache-Control": "public, max-age=86400" } });
+    return NextResponse.json(hit.data, { headers: CACHE_HEADERS });
+  }
+
+  // SSRF-guarded, but cap per IP so it can't be used as an outbound fetch relay.
+  const ip = clientIp(req);
+  if (await isRateLimited(`linkpreview:${ip}`, 120, 10 * 60 * 1000)) {
+    return NextResponse.json({ image: null, favicon: null, title: null }, { status: 429, headers: { "Cache-Control": "no-store" } });
   }
 
   let image: string | null = null;
@@ -116,5 +126,5 @@ export async function GET(req: NextRequest) {
 
   const data: Preview = { image, favicon, title };
   cache.set(key, { data, at: Date.now() });
-  return NextResponse.json(data, { headers: { "Cache-Control": "public, max-age=86400" } });
+  return NextResponse.json(data, { headers: CACHE_HEADERS });
 }

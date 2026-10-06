@@ -148,7 +148,16 @@ export default function NotificationBell({
     // shell a backgrounded webview's timers are suspended, so without this the
     // first thing a returning user sees is stale by however long they were
     // away.
-    const onVisible = () => { if (document.visibilityState === "visible") poll(); };
+    // Returning to the app fires BOTH visibilitychange and focus, which was two
+    // identical requests per return; one poll per 2s is plenty.
+    let lastReturnPoll = 0;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastReturnPoll < 2000) return;
+      lastReturnPoll = now;
+      poll();
+    };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
 

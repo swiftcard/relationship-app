@@ -185,11 +185,11 @@ function DesignCycler({ className = "" }: { className?: string }) {
         <span className="hp-ai-brief-item">
           <span className="flex -space-x-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={DEMO_HEADSHOT} alt="" className="w-7 h-7 rounded-full object-cover ring-2 ring-white" />
+            <img src={DEMO_HEADSHOT} alt="" loading="lazy" decoding="async" className="w-7 h-7 rounded-full object-cover ring-2 ring-white" />
             {/* The demo mark is white (it ships on Logo First's navy), so it sits on a navy plate here too. */}
             <span className="w-7 h-7 rounded-full grid place-items-center overflow-hidden ring-2 ring-white" style={{ background: "#1e3a8a" }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={DEMO_LOGO} alt="" className="w-4 h-4 object-contain" />
+              <img src={DEMO_LOGO} alt="" loading="lazy" decoding="async" className="w-4 h-4 object-contain" />
             </span>
           </span>
           Headshot &amp; logo

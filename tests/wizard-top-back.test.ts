@@ -104,7 +104,9 @@ describe("step 1 and the success screen still offer the way OUT", () => {
     const homeBranch = topControl.slice(topControl.indexOf(") : guest ? ("));
     expect(homeBranch).toMatch(/onClick=\{\(\) => resetMarketingSketch\(\)\}/);
     expect(homeBranch).not.toMatch(/resetGuestFlow|clearDraft/);
-    expect(homeBranch).toMatch(/href="\/"/);
+    // HomeLink (components/site/HomeLink) is a Link fixed to "/" that only
+    // prefetches the homepage on intent — the same destination.
+    expect(homeBranch).toMatch(/href="\/"|<HomeLink\b/);
   });
 });
 

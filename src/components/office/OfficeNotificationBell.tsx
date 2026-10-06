@@ -69,7 +69,16 @@ export default function OfficeNotificationBell({
       } catch { /* ignore */ }
     };
     poll(); // now, not in 30s — opening the console is when admins check
-    const onVisible = () => { if (document.visibilityState === "visible") poll(); };
+    // Returning to the app fires BOTH visibilitychange and focus, which was two
+    // identical requests per return; one poll per 2s is plenty.
+    let lastReturnPoll = 0;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastReturnPoll < 2000) return;
+      lastReturnPoll = now;
+      poll();
+    };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
     const id = setInterval(poll, 30000);

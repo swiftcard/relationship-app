@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { SwiftCardIcon } from "@/components/SwiftCardLogo";
+import HomeLink from "@/components/site/HomeLink";
 import AppStoreBadge, { GooglePlayBadge } from "@/components/AppStoreBadge";
 import { trackCta } from "@/lib/events";
 import { useIsNativeApp } from "@/lib/platform";
@@ -165,14 +166,13 @@ export default function SiteNav() {
             trigger together need every pixel, and px-5 pushed the trigger off
             the right edge. */}
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <Link href="/" className="flex items-center gap-2.5 shrink-0">
+          <HomeLink className="flex items-center gap-2.5 shrink-0">
             <SwiftCardIcon size={30} />
             <span className="text-white font-bold text-[0.9375rem] sm:text-[1.0625rem] tracking-tight">SwiftCard</span>
-          </Link>
+          </HomeLink>
 
           <div className="hidden lg:flex items-center gap-1">
-            <Link
-              href="/"
+            <HomeLink
               onClick={(e) => {
                 // Heading Home drops the homepage-builder sketch. An unfinished
                 // card is kept: the builder asks "Continue your card / Start a
@@ -184,7 +184,7 @@ export default function SiteNav() {
               className="px-3 py-2 text-[0.875rem] font-medium text-white/70 hover:text-white transition-colors"
             >
               Home
-            </Link>
+            </HomeLink>
             <Dropdown label="Products" items={PRODUCTS} />
             <Dropdown label="Solutions" items={SOLUTIONS} />
             <Dropdown label="Resources" items={RESOURCES} />
@@ -240,16 +240,15 @@ export default function SiteNav() {
             style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
           >
             <div className="flex shrink-0 items-center justify-between mb-5">
-              <Link href="/" onClick={() => setOpen(false)} className="flex items-center gap-2.5">
+              <HomeLink onClick={() => setOpen(false)} className="flex items-center gap-2.5">
                 <SwiftCardIcon size={28} /><span className="text-white font-bold text-[1rem]">SwiftCard</span>
-              </Link>
+              </HomeLink>
               <button onClick={() => setOpen(false)} aria-label="Close" className="w-10 h-10 flex items-center justify-center rounded-xl text-white hover:bg-white/10">
                 <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" /></svg>
               </button>
             </div>
             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto rd-scrollbar-none">
-              <Link
-                href="/"
+              <HomeLink
                 onClick={() => {
                   // Same abandon-on-Home rule as the desktop link above.
                   resetMarketingSketch();
@@ -259,7 +258,7 @@ export default function SiteNav() {
                 className="block rounded-xl px-3 py-2.5 text-[0.9375rem] font-medium text-white/85 hover:bg-white/[0.06]"
               >
                 Home
-              </Link>
+              </HomeLink>
               {/* Products / Solutions / Resources collapse into one "Explore"
                   accordion — collapsed by default — instead of three
                   always-expanded lists standing between Home and the direct

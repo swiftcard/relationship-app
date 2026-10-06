@@ -27,14 +27,20 @@ export default async function UpgradePage({
 }) {
   const { from } = await searchParams;
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login?next=/upgrade");
-
-  const { data: profile } = await getAdminSupabase()
-    .from("profiles")
-    .select("plan, stripe_customer_id, stripe_subscription_id, plan_expires_at, customization")
-    .eq("id", user.id)
-    .maybeSingle();
+  // getClaims (local token check) lets the profile read start alongside
+  // getUser() instead of after it — one round trip saved on every open.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  if (!claimsData?.claims?.sub) redirect("/login?next=/upgrade");
+  const uid = claimsData.claims.sub;
+  const [{ data: { user } }, { data: profile }] = await Promise.all([
+    supabase.auth.getUser(),
+    getAdminSupabase()
+      .from("profiles")
+      .select("plan, stripe_customer_id, stripe_subscription_id, plan_expires_at, customization")
+      .eq("id", uid)
+      .maybeSingle(),
+  ]);
+  if (!user || user.id !== uid) redirect("/login?next=/upgrade");
 
   // Already paying → nothing to sell. Billing settings is where they change or
   // cancel a plan they already have.
@@ -60,15 +66,18 @@ export default async function UpgradePage({
   // hit the one-card cap on claim and was sent HERE, to pay — the one thing a
   // team member is never asked to do. Join instead; accepting turns the card
   // they already have into their company card.
-  if (!isPaidPlan(plan)) {
-    const invite = await findPendingInviteForEmail(user.email, user.id);
-    if (invite) redirect(`/join/${encodeURIComponent(invite.token)}`);
-  }
+  // The invite lookup and the trial-history read are independent — run them
+  // together rather than one after the other.
+  const [invite, trialHistory] = await Promise.all([
+    isPaidPlan(plan) ? Promise.resolve(null) : findPendingInviteForEmail(user.email, user.id),
+    trialHistoryFor(user.id, user.email),
+  ]);
+  if (invite) redirect(`/join/${encodeURIComponent(invite.token)}`);
 
   const trialEligible = await isProTrialEligible(
     profile?.stripe_customer_id as string | null,
     undefined,
-    await trialHistoryFor(user.id, user.email),
+    trialHistory,
   );
 
   return (

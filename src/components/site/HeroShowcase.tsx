@@ -840,15 +840,19 @@ export default function HeroShowcase() {
       reduced.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     } catch { /* default: animate */ }
     if (reduced.current) return;
+    let swap: ReturnType<typeof setTimeout> | undefined;
     const t = setInterval(() => {
+      // A background tab shows nobody the rotation; skip the re-render.
+      if (document.visibilityState === "hidden") return;
       setEntered(false);
       // Brief out-phase (flankers slide back out, center fades) then swap.
-      setTimeout(() => {
+      swap = setTimeout(() => {
         setIdx((i) => (i + 1) % PERSONAS.length);
         setEntered(true);
       }, 380);
     }, ROTATE_MS);
-    return () => clearInterval(t);
+    // Both timers: leaving mid-swap used to fire the inner one after unmount.
+    return () => { clearInterval(t); clearTimeout(swap); };
   }, []);
 
   return <Stage persona={PERSONAS[idx]} entered={entered} preload={PERSONAS} />;

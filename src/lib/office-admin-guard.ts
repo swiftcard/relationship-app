@@ -39,16 +39,22 @@ export type OfficeAdminCtx = {
 // cached across users or requests.
 export const requireOfficeAdmin = cache(async (): Promise<OfficeAdminCtx> => {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  // getClaims verifies the token locally, so getUser()'s round trip joins the
+  // batch below instead of standing in front of it — this guard blocks every
+  // /office/admin page and its layout.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  if (!claimsData?.claims?.sub) redirect("/login");
+  const uid = claimsData.claims.sub;
 
-  // Independent lookups (both key on user.id alone) — run together instead of
-  // serially. resolveOfficeContext is read-only, so running it speculatively
+  // Independent lookups (both key on the user id alone) — run together instead
+  // of serially. resolveOfficeContext is read-only, so running it speculatively
   // even when the profile check below redirects is harmless.
-  const [{ data: profile }, ctx] = await Promise.all([
-    supabase.from("profiles").select("plan").eq("id", user.id).single(),
-    resolveOfficeContext(user.id),
+  const [{ data: { user } }, { data: profile }, ctx] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase.from("profiles").select("plan").eq("id", uid).single(),
+    resolveOfficeContext(uid),
   ]);
+  if (!user || user.id !== uid) redirect("/login");
   if (!profile) redirect("/onboarding");
   // Deliberately /pricing, NOT /upgrade. The "Item 7" guard test locks this line
   // byte-for-byte AND asserts this file mentions no app-shell detection at all —

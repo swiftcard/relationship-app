@@ -118,7 +118,11 @@ export function warmSharePreview(cardUrl: string): void {
         const res = await fetch(clean, { credentials: "omit", signal: ctrl.signal });
         img = ogImageFromHtml(await res.text());
       }
-      if (img) await fetch(img, { credentials: "omit", signal: ctrl.signal, cache: "no-store" });
+      // The og:image is an ABSOLUTE url on the canonical domain. In production
+      // that is this origin; on localhost or a preview deploy it is the live
+      // site — a cross-origin fetch CORS refuses anyway, after it has already
+      // hit production (qa-sweep 2026-10-06). Same rule as the page check above.
+      if (img && sameOrigin(img)) await fetch(img, { credentials: "omit", signal: ctrl.signal, cache: "no-store" });
       clearTimeout(t);
     } catch { /* best effort — the messenger will fetch it anyway */ }
   })();

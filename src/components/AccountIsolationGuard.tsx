@@ -76,7 +76,15 @@ export default function AccountIsolationGuard() {
     let cancelled = false;
     // An unbind that never reached the server (offline sign-out) is retried
     // on every load until it does — signed in or not.
-    void import("@/lib/push-device").then(({ retryPendingPushUnbind }) => retryPendingPushUnbind()).catch(() => {});
+    // The flag is checked HERE before importing: the push-device chunk used to
+    // be fetched on every page load by every visitor, card scanners included,
+    // only to read this one key and return (perf audit 2026-10-06). The key
+    // name is pinned to lib/push-device's UNBIND_PENDING_KEY by a test.
+    let unbindPending = false;
+    try { unbindPending = localStorage.getItem("swiftcard_push_unbind_pending") === "1"; } catch { /* storage blocked */ }
+    if (unbindPending) {
+      void import("@/lib/push-device").then(({ retryPendingPushUnbind }) => retryPendingPushUnbind()).catch(() => {});
+    }
 
     const reconcile = (sessionUid: string | null) => {
       const lastUid = readLastAuthUid();

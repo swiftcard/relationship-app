@@ -193,16 +193,23 @@ export default async function NewCardPage({
   // The first-card plan gate offers the Pro trial by name — only to an account
   // that can still get it (one free Pro period per person: the 14-day trial or
   // a friend's referral month). Guests have no history: eligible.
-  let trialEligible = true;
+
   // Signed up through a friend's link FIRST, then built the card: the builder's
   // own plan gate is their plan step, so it offers the free month too.
-  const referralGift = user && isFirstCard ? await referralGiftPending(user.id, user.email).catch(() => false) : false;
-  if (user && isFirstCard) {
-    try {
-      const { data: billing } = await getAdminSupabase().from("profiles").select("stripe_customer_id").eq("id", user.id).maybeSingle();
-      trialEligible = await isProTrialEligible((billing?.stripe_customer_id as string | null) ?? null, undefined, await trialHistoryFor(user.id, user.email));
-    } catch { /* fail open, like /checkout */ }
-  }
+  // The referral check and the trial check are independent — run together.
+  const [referralGift, trialEligible] = await Promise.all([
+    user && isFirstCard ? referralGiftPending(user.id, user.email).catch(() => false) : Promise.resolve(false),
+    (async (): Promise<boolean> => {
+      if (!(user && isFirstCard)) return true;
+      try {
+        const [{ data: billing }, history] = await Promise.all([
+          getAdminSupabase().from("profiles").select("stripe_customer_id").eq("id", user.id).maybeSingle(),
+          trialHistoryFor(user.id, user.email),
+        ]);
+        return await isProTrialEligible((billing?.stripe_customer_id as string | null) ?? null, undefined, history);
+      } catch { return true; /* fail open, like /checkout */ }
+    })(),
+  ]);
 
   return (
     <>

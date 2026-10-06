@@ -587,6 +587,10 @@ function ChangePlanModal({ sub, onClose, onCancelInstead, onChanged }: {
   const onInterval = (sub.interval ?? "monthly") === interval;
 
   async function choose(plan: "pro" | "office") {
+    // One plan change at a time. With the Pro confirm open, both switch buttons
+    // are on screen and each only disabled ITSELF, so tapping one then the other
+    // sent two change-plan requests to Stripe at once (bug audit 2026-10-06).
+    if (busy) return;
     setBusy(plan); setErr(null);
     // A change that CHARGES today — Pro → Office, or any move to annual — goes
     // through the /checkout review page, which asks Stripe for the real
@@ -666,7 +670,7 @@ function ChangePlanModal({ sub, onClose, onCancelInstead, onChanged }: {
             </ul>
             <div className="flex gap-2 mt-3">
               <button onClick={() => setConfirmPro(false)} className="flex-1 bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold py-2 rounded-full">Keep Office</button>
-              <button onClick={() => choose("pro")} disabled={busy === "pro"} className="flex-1 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-bold py-2 rounded-full">
+              <button onClick={() => choose("pro")} disabled={busy !== null} className="flex-1 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-bold py-2 rounded-full">
                 {busy === "pro" ? "Switching…" : "Switch to Pro"}
               </button>
             </div>
@@ -682,7 +686,7 @@ function ChangePlanModal({ sub, onClose, onCancelInstead, onChanged }: {
             {sub.plan === "office" && onInterval
               ? <span className="text-[0.6875rem] font-bold text-blue-300">Current</span>
               : (
-                <button onClick={() => choose("office")} disabled={busy === "office"}
+                <button onClick={() => choose("office")} disabled={busy !== null}
                   className="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white text-xs font-bold px-3 py-1.5 rounded-full">
                   {busy === "office" ? "…" : sub.plan === "office" ? (interval === "annual" ? "Switch to annual" : "Switch to monthly") : "Switch"}
                 </button>

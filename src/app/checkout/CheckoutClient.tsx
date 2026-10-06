@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { detectNativeApp, useIsNativeApp } from "@/lib/platform";
 import Link from "next/link";
@@ -215,18 +215,34 @@ export default function CheckoutClient({ trialEligible = true, officeCoversPro =
 
   // Auto-continue after returning from account creation / login (spec §1:
   // "automatically continue to checkout for the originally selected plan").
+  //
+  // Waits for the same things the Continue button waits for. It used to fire on
+  // mount, before the existing-subscriber preview had loaded and while the promo
+  // code was still being checked — so a returning subscriber went down the
+  // new-checkout path (and bounced off the server's 409) instead of getting the
+  // quoted plan change, and a refused code was sent anyway (bug audit
+  // 2026-10-06). The flag is read and cleared once; the start waits.
+  const resumeRef = useRef<boolean | null>(null);
+  const promoChecking = promo.state.status === "checking";
+  const promoBlocks = promo.blocksPurchase || (promo.state.status === "refused" && !!promoCode);
   useEffect(() => {
     // Native: never auto-resume a Stripe hand-off inside the shell — the
     // redirect-to-dashboard effect above wins (App Store 3.1.1).
     if (detectNativeApp()) return;
-    let resume = false;
-    try { resume = sessionStorage.getItem(RESUME_KEY) === "1"; } catch { /* ignore */ }
-    if (resume) {
-      try { sessionStorage.removeItem(RESUME_KEY); } catch { /* ignore */ }
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time post-login resume: reads+clears a storage flag on mount, then kicks off the checkout request (which sets busy state)
-      start();
+    if (resumeRef.current === null) {
+      let resume = false;
+      try { resume = sessionStorage.getItem(RESUME_KEY) === "1"; } catch { /* ignore */ }
+      if (resume) { try { sessionStorage.removeItem(RESUME_KEY); } catch { /* ignore */ } }
+      resumeRef.current = resume;
     }
-  }, [start]);
+    if (!resumeRef.current || previewLoading || promoChecking) return;
+    resumeRef.current = false;
+    // A blocked code leaves them on the page, where the reason is shown next to
+    // the disabled button — exactly what a manual tap would have met.
+    if (promoBlocks) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time post-login resume: kicks off the checkout request (which sets busy state) once the page is ready to accept it
+    start();
+  }, [start, previewLoading, promoChecking, promoBlocks]);
 
   const planName = plan === "office" ? "Office" : "Pro";
 

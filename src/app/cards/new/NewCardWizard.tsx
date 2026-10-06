@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { CARD_FIELD_MAX, MAX_CARD_PHONES } from "@/lib/card-limits";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import HomeLink from "@/components/site/HomeLink";
 import ImageUpload from "@/components/ImageUpload";
 import DashboardLink from "@/components/DashboardLink";
 import LogoSuggest from "@/components/LogoSuggest";
@@ -1438,12 +1439,12 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
       <main className="sc-app sc-canvas-white min-h-screen bg-gray-950 px-5 py-10">
         <ForceLightTheme />
         <div className="max-w-md mx-auto">
-          <Link href="/" className={topControlCls}>
+          <HomeLink className={topControlCls}>
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
             </svg>
             Home
-          </Link>
+          </HomeLink>
           <section className="rounded-2xl border border-gray-800 bg-gray-900 p-6" aria-labelledby="resume-title">
             <h1 id="resume-title" className="text-2xl font-bold text-white">You have an unfinished card</h1>
             <p className="text-gray-400 text-sm mt-2 leading-relaxed">
@@ -1509,8 +1510,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
             Back
           </button>
         ) : guest ? (
-          <Link
-            href="/"
+          <HomeLink
             // Leaving for Home KEEPS the unfinished card (owner rule
             // 2026-09-16: nobody loses a card by accident). It only drops the
             // marketing sketch and plan pick; coming back through any "Get
@@ -1523,7 +1523,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
             </svg>
             Home
-          </Link>
+          </HomeLink>
         ) : step === 5 ? (
           // The card is live: this corner exit goes where the big "Continue"
           // button goes — the dashboard WITH the tour for a first card — and

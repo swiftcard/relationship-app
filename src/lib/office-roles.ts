@@ -63,19 +63,23 @@ export type OfficeContext = {
 export const resolveOfficeContext = cache(async (userId: string): Promise<OfficeContext | null> => {
   const admin = getAdminSupabase();
 
-  // Owner path.
-  const { data: owned } = await admin.from("offices").select("id, owner_id").eq("owner_id", userId).maybeSingle();
+  // Owner path and member path (active membership only), asked together. They
+  // used to run one after the other, and the common case — a plain Free/Pro
+  // user in no office — misses BOTH, so every portal page paid two serial
+  // round trips before it could render (perf audit 2026-10-06). Owner still
+  // wins when both exist, exactly as before.
+  const [{ data: owned }, { data: member }] = await Promise.all([
+    admin.from("offices").select("id, owner_id").eq("owner_id", userId).maybeSingle(),
+    admin
+      .from("office_members")
+      .select("office_id, role, status")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .maybeSingle(),
+  ]);
   if (owned) {
     return { officeId: owned.id as string, ownerId: owned.owner_id as string, role: "owner", isOwner: true };
   }
-
-  // Member path (active membership only). Select role defensively.
-  const { data: member } = await admin
-    .from("office_members")
-    .select("office_id, role, status")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .maybeSingle();
   if (!member) return null;
 
   const rawRole = (member as { role?: string | null }).role;
