@@ -8,6 +8,8 @@ import { prefersShareSheet } from "@/lib/save-image";
 interface Props {
   cardRef: React.RefObject<HTMLDivElement | null>;
   filename?: string;
+  /** The card's name, which the PNG is checked for (lib/card-png). */
+  cardName?: string;
   compact?: boolean;
   /** Overrides the idle label. Compact defaults to a bare "Download", which is
       ambiguous where it sits next to "Download QR (PNG)" in the share modal.
@@ -25,7 +27,7 @@ interface Props {
  * because WKWebView can't follow a download (owner, 2026-10-06: "it's
  * literally just supposed to download a perfect picture of their SwiftCard").
  */
-export default function DownloadCardButton({ cardRef, filename = "swiftcard.png", compact = false, label: labelOverride, prepare = false }: Props) {
+export default function DownloadCardButton({ cardRef, filename = "swiftcard.png", cardName = "", compact = false, label: labelOverride, prepare = false }: Props) {
   const [status, setStatus] = useState<"idle" | "working" | "error">("idle");
   const loading = status === "working";
   const { save, sheet } = useSavePicture();
@@ -34,7 +36,7 @@ export default function DownloadCardButton({ cardRef, filename = "swiftcard.png"
   function capture(): Promise<Blob> {
     if (prepared.current) return prepared.current;
     const el = cardRef.current;
-    const png = el ? captureCardPng(el) : Promise.reject(new Error("no card"));
+    const png = el ? captureCardPng(el, cardName) : Promise.reject(new Error("no card"));
     png.catch(() => { if (prepared.current === png) prepared.current = null; });
     prepared.current = png;
     return png;

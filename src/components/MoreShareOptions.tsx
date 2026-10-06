@@ -79,6 +79,7 @@ export default function MoreShareOptions({ url, walletUsername }: { url: string;
                     <DownloadCardButton
                       cardRef={capture.cardRef}
                       filename={capture.filename}
+                      cardName={capture.name}
                       compact
                       prepare
                       label="Download card (PNG)"

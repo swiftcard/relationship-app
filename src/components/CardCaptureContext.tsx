@@ -19,6 +19,8 @@ export type CardCapture = {
   /** The live card node the PNG capture rasterizes. */
   cardRef: RefObject<HTMLDivElement | null>;
   filename: string;
+  /** The card's name: the PNG is checked for it, and for every picture. */
+  name?: string;
 };
 
 type Store = { capture: CardCapture | null; register: (c: CardCapture | null) => void };
@@ -36,14 +38,14 @@ export function CardCaptureProvider({ children }: { children: ReactNode }) {
  */
 export function useRegisterCardCapture(capture: CardCapture): void {
   const register = useContext(Ctx)?.register;
-  const { cardRef, filename } = capture;
+  const { cardRef, filename, name } = capture;
   useEffect(() => {
     if (!register) return;
-    register({ cardRef, filename });
+    register({ cardRef, filename, name });
     // Unregister on unmount so a consumer can never hold a ref to a card that
     // has left the page — it would capture nothing and look like a dead button.
     return () => register(null);
-  }, [register, cardRef, filename]);
+  }, [register, cardRef, filename, name]);
 }
 
 /**

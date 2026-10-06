@@ -53,7 +53,7 @@ export default function CardPreviewDownload({ data, template, username, previewU
   // Hand the live card node to sibling panels — "Other ways to share" offers a
   // PNG of it on mobile and cannot reach across boxes on its own. No-op when
   // rendered outside a CardCaptureProvider.
-  useRegisterCardCapture({ cardRef, filename });
+  useRegisterCardCapture({ cardRef, filename, name: data.name });
 
   useEffect(() => {
     function recompute() {
@@ -149,7 +149,7 @@ export default function CardPreviewDownload({ data, template, username, previewU
           with no empty band underneath. There is no "tap to show it full
           screen" hint anywhere (owner, 2026-09-30) — the tour teaches it. */}
       <div className={previewUrl ? "hidden lg:block mt-3" : "mt-3"}>
-        <DownloadCardButton cardRef={cardRef} filename={filename} compact />
+        <DownloadCardButton cardRef={cardRef} filename={filename} cardName={data.name} compact />
       </div>
 
       {/* The QR printed on the card encodes data.cardUrl. Full screen it is
