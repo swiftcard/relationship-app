@@ -294,14 +294,34 @@ export default function SwiftLinkProfile({
     [0, 0], [10, 0.04], [20, 0.12], [30, 0.25], [40, 0.4], [50, 0.56], [58, 0.7], [65, 0.83], [69, 0.94], [72, 1], [100, 1],
   ].map(([stop, a]) => `${hexAlpha(sheetBg, a * fadeMax)} ${stop}%`).join(", ")})`;
 
+  // THE BLACK BAND AT THE BOTTOM OF A PHONE (owner, 2026-10-06). Two causes:
+  // • The phone `zoom: 0.92` shrinks the sheet's own min-h-[100dvh] to 92% of
+  //   the screen, so a short page ended ~68px early and the Look's darker page
+  //   colour showed beneath it. The sheet now GROWS to fill main instead — flex
+  //   sizing comes from the parent, so the zoom cannot shorten it.
+  // • Under the page sat the site's canvas — near-black on a dark-mode phone —
+  //   and Safari shows it beneath its bottom toolbar, behind the home indicator
+  //   and in the bounce. The canvas now takes the colour at the bottom of the
+  //   page: the sheet on a phone, the Look's page colour around the desktop card.
+  // Never when embedded: that is the designer's preview, inside the app.
+  // Hex only: a custom background is client-written, and this goes into a
+  // stylesheet, where anything but a plain colour must not reach.
+  const hex = (c: string | undefined, fallback: string) => (c && /^#[0-9a-fA-F]{6}$/.test(c) ? c : fallback);
+  const lastWash = look.wash?.[look.wash.length - 1];
+  const sheetHex = hex(sheetBg, look.sheet);
+  const canvasPhone = wash && lastWash
+    ? `color-mix(in srgb, ${sheetHex} ${Math.round(glassAlpha * 100)}%, ${hex(lastWash, sheetHex)})`
+    : hex(!glassOn && sheetTo ? sheetTo : sheetBg, look.sheet);
+  const canvasCss = embedded ? "" : ` :root:has(main.sc-sl-page), :root:has(main.sc-sl-page) body { background: ${hex(look.page, sheetHex)}; } @media (max-width: 767px) { :root:has(main.sc-sl-page), :root:has(main.sc-sl-page) body { background: ${canvasPhone}; } }`;
+
   return (
-    <main className={embedded ? "" : "min-h-[100dvh]"} style={{ background: embedded ? "transparent" : look.page }}>
-      <style>{`@media (max-width: 767px) { .sc-sl-sheet { zoom: 0.92; } }`}</style>
+    <main className={embedded ? "" : "sc-sl-page min-h-[100dvh] flex flex-col"} style={{ background: embedded ? "transparent" : look.page }}>
+      <style>{`@media (max-width: 767px) { .sc-sl-sheet { zoom: 0.92; } }${canvasCss}`}</style>
       <div
         className={`sc-sl-sheet relative mx-auto w-full max-w-[430px] overflow-hidden ${
           embedded
             ? "rounded-[30px]"
-            : "min-h-[100dvh] md:min-h-0 md:my-8 md:rounded-[30px] md:shadow-[0_24px_80px_rgba(0,0,0,0.6)]"
+            : "grow shrink-0 md:grow-0 min-h-[100dvh] md:min-h-0 md:my-8 md:rounded-[30px] md:shadow-[0_24px_80px_rgba(0,0,0,0.6)]"
         }`}
         style={{ background: sheetBg, fontFamily: pageFont }}
       >
