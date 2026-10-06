@@ -43,9 +43,9 @@ export const INTEGRATIONS: IntegrationBrand[] = [
   },
   {
     name: "Pipedrive",
-    short: "New person + note",
+    short: "Person + note",
     blurb:
-      "Every lead becomes a Pipedrive person automatically, complete with a note recording where you met them — so the context is there when you follow up.",
+      "Every lead becomes a Pipedrive person automatically, complete with a note recording where you met them — and meeting someone again updates the person you already have (matched by email) instead of adding a duplicate.",
     logo: (
       <svg viewBox="0 0 24 24" className="w-full h-full" fill="#017737" aria-hidden="true">
         <path d="M13.1 3.2c-1.79 0-3.02.79-3.71 1.68-.04-.5-.36-1.44-1.93-1.44H5.09v3.02h1.1c.24 0 .32.08.32.32v14.02h3.36v-6.06c0-.29-.02-.53-.03-.63.63.75 1.79 1.52 3.45 1.52 3.13 0 5.35-2.45 5.35-6.26 0-3.86-2.09-6.17-5.54-6.17zm-.72 9.6c-1.9 0-2.79-1.78-2.79-3.4 0-2.55 1.4-3.44 2.72-3.44 1.63 0 2.75 1.36 2.75 3.42 0 2.15-1.27 3.42-2.68 3.42z" />
@@ -65,9 +65,9 @@ export const INTEGRATIONS: IntegrationBrand[] = [
   },
   {
     name: "HubSpot",
-    short: "New CRM record",
+    short: "CRM record",
     blurb:
-      "Every contact lands in HubSpot as a new record, tagged with which card they scanned and the context of where you met — ready for your pipeline.",
+      "Every contact lands in HubSpot, tagged with which card they scanned and the context of where you met — someone you meet again updates their existing record instead of becoming a duplicate.",
     logo: (
       <svg viewBox="0 0 24 24" className="w-full h-full" fill="#FF7A59" aria-hidden="true">
         <path d="M18.5 7.3V4.9a1.85 1.85 0 10-1.1 0v2.4a5.6 5.6 0 00-2.66 1.17L8.2 4.02a2.1 2.1 0 10-1 1.72l6.42 4.42a5.6 5.6 0 00.02 6.06l-1.95 1.95a1.8 1.8 0 101.06 1.06l1.93-1.93A5.62 5.62 0 1018.5 7.3zm-2.16 8.42a2.9 2.9 0 112.9-2.9 2.9 2.9 0 01-2.9 2.9z" />

@@ -142,7 +142,7 @@ const PRODUCTS: Record<string, Product> = {
     wide: true,
     features: [
       { t: "Copy once, paste anywhere", d: "Works in Gmail, Outlook, Apple Mail — any client that supports HTML signatures." },
-      { t: "Always up to date", d: "Change your title or number and every future email reflects it automatically." },
+      { t: "Easy to keep current", d: "Change your title or number and SwiftCard tells you — copy it again and every email from then on has the new card." },
       { t: "Clickable, not decorative", d: "One tap opens your card, saves your contact, or reaches you directly." },
       { t: "A tiny billboard", d: "Every reply becomes a professional advertisement for you and your brand." },
     ],
@@ -166,16 +166,17 @@ const PRODUCTS: Record<string, Product> = {
     // reminders/route.ts refuses to text without it. Inbound:
     // api/twilio/inbound logs replies to lead_messages. Manual send: api/sms/send
     // checks auth and sms-paused, NOT the plan — so it really is every plan.
-    // Sequences: reminders/route.ts hard-gates on isPaidPlan, hence "on Pro".
+    // Sequences (8c2ca298): EMAIL steps send on every plan; reminders/route.ts
+    // holds back only TEXT steps for Free — hence "texts on Pro".
     features: [
       { t: "Two-way exchange", d: "They save you, you capture them — the whole handshake in one tap." },
       { t: "Context that sticks", d: "Every lead is tagged with the card, time, and location they came from." },
       { t: "Texts that actually arrive", d: "SwiftCard is a carrier-registered sender, so your follow-up lands in their messages instead of being filtered out on the way." },
-      { t: "Only the people who asked", d: "A text goes out only to someone who ticked the consent box on your card. No box, no text — and STOP is honored instantly." },
+      { t: "Only the people who agreed", d: "A text goes out only to a contact you've switched texts on for — confirming they agreed to hear from you. STOP is honored instantly." },
       { t: "They text back, you see it", d: "Replies land in that contact's conversation, next to the views and the notes. One thread, not a second inbox." },
-      { t: "One tap to reach them", d: "Call or email any contact straight from their page — their thread, notes, and history right beside you." },
-      { t: "Sequences that run themselves", d: "Set an email and text follow-up once and it sends on your schedule — never outside 8am–9pm their time. On Pro." },
-      { t: "Straight to your CRM", d: "Contacts flow into your dashboard and sync to GoHighLevel, Pipedrive, HubSpot or Google Contacts." },
+      { t: "One tap to reach them", d: "Call, text or email any contact straight from your Contacts list — their thread, notes, and history right beside you." },
+      { t: "Sequences that run themselves", d: "Switch on an email follow-up for a contact and it sends on your schedule — never outside 8am–9pm their time. Texts and AI-written messages on Pro." },
+      { t: "Straight to your CRM", d: "Contacts flow into your dashboard and sync to Salesforce, GoHighLevel, Pipedrive, HubSpot or Google Contacts." },
     ],
     metaDesc: "Capture leads the moment someone opens your card — two-way contact exchange, follow-up by email or text from a registered sender, and replies that land in one thread.",
   },
@@ -183,7 +184,7 @@ const PRODUCTS: Record<string, Product> = {
     eyebrow: "Dashboard & Analytics",
     title: <>See who&apos;s looking. <A>Never lose a lead.</A></>,
     titlePlain: "Dashboard & Analytics",
-    subtitle: "Real-time views, saves, and locations. Every contact who taps your card lands in one searchable place — with full history, their replies, and automated follow-ups. Try the dashboard right here.",
+    subtitle: "Real-time views, contacts, and locations. Every contact who taps your card lands in one searchable place — with full history, their replies, and automated follow-ups. Try the dashboard right here.",
     // DashboardDemo is a faithful replica of the desktop dashboard: a browser
     // frame around a two-column board that needs ~720px to hold together. Sent
     // in raw it was CLIPPED on a phone — the right-hand card panel sat 212px
@@ -213,9 +214,9 @@ const PRODUCTS: Record<string, Product> = {
       // timeline is now two-way. api/twilio/inbound writes replies into
       // lead_messages, so a text back appears in the same thread as the views.
       { t: "One thread per person", d: "Notes, read/unread, every view — and the emails and texts you've exchanged, in the order they happened." },
-      { t: "Follow-up on autopilot", d: "Light, medium, or aggressive email and text sequences, written by AI. On Pro." },
+      { t: "Follow-up on autopilot", d: "Light, medium, or aggressive email follow-ups for any contact you choose — plus texts and AI-written messages on Pro." },
     ],
-    metaDesc: "SwiftCard's dashboard: real-time views, saves, top locations, and a built-in CRM where replies and automated follow-ups live in one thread.",
+    metaDesc: "SwiftCard's dashboard: real-time views, contacts, top locations, and a built-in CRM where replies and automated follow-ups live in one thread.",
   },
   teams: {
     eyebrow: "Teams & Offices",
@@ -228,7 +229,7 @@ const PRODUCTS: Record<string, Product> = {
       { t: "Uniform branding", d: "Lock the logo, colors, and template so every card is unmistakably on-brand." },
       { t: "A card per member", d: "Everyone gets their own card and analytics under one shared office." },
       { t: "Seats & roles", d: "Add or remove people in seconds. One bill, full admin control." },
-      { t: "Bulk import", d: "Bring your existing contacts in by CSV and get the whole team running fast." },
+      { t: "Invite by email", d: "Teammates join with Google or an emailed link — no password to set up, and their card is ready to share." },
     ],
     metaDesc: "Roll out on-brand digital cards across your whole team, with shared templates, seat management, and team analytics.",
   },
@@ -427,7 +428,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                   { t: "Admin sees everyone at a glance", d: "One dashboard shows every member's card, activity, and lead count. Spot who's actively sharing their card and who needs a nudge — without asking around." },
                   { t: "Add people in seconds", d: "Invite a teammate by email and their card is ready before the meeting ends. No IT ticket, no design request, no waiting on a template." },
                   { t: "Unlimited seats, always", d: "There's no cap on team size and no separate contract to add someone. Add or remove seats anytime from inside the account as your team grows or changes." },
-                  { t: "Team leads, not just admins", d: "Promote someone to manage their own group — new hires, a regional office, a department — without handing them the keys to the whole account." },
+                  { t: "Contacts stay with the team", d: "Every contact your team collects lands in one list you can export — and it stays with the office when someone leaves." },
                 ].map((s, i) => (
                   <div key={s.t} className="hp-card" data-reveal style={{ transitionDelay: `${i * 70}ms` }}>
                     <span className="hp-feat-ico"><Ico d={CHECK_D} /></span>
@@ -477,7 +478,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                 {[
                   { n: "1", t: "They share their info", d: "A tap on Save Contact or a quick form on your card — no app to download, no typing your details out for them." },
                   { n: "2", t: "SwiftCard captures the context", d: "Name, email, phone, plus which card they scanned, when, and where you met — all attached to the lead automatically." },
-                  { n: "3", t: "It lands in your stack", d: "Synced to GoHighLevel, Pipedrive, HubSpot or Google Contacts, piped to 6,000+ apps through Zapier, or exported as CSV — in real time, no manual step." },
+                  { n: "3", t: "It lands in your stack", d: "Synced to Salesforce, GoHighLevel, Pipedrive, HubSpot or Google Contacts, piped to 6,000+ apps through Zapier, or exported as CSV — in real time, no manual step." },
                 ].map((s, i) => (
                   <div key={s.n} className="hp-card" data-reveal style={{ transitionDelay: `${i * 80}ms` }}>
                     <span className="hp-step-num">{s.n}</span>

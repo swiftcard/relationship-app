@@ -24,7 +24,7 @@ const PRODUCTS: Item[] = [
   { label: "Lead Capture", href: "/products/lead-capture", desc: "Turn every scan into a contact" },
 ];
 const SOLUTIONS: Item[] = [
-  { label: "Dashboard & Analytics", href: "/products/analytics", desc: "See who's viewing and saving" },
+  { label: "Dashboard & Analytics", href: "/products/analytics", desc: "See who's viewing and reaching out" },
   { label: "Teams & Offices", href: "/products/teams", desc: "One brand across everyone" },
   { label: "Ways to share", href: "/products/wallet", desc: "Wallet, QR, and the share sheet" },
   { label: "Apple Watch", href: "/products/watch", desc: "Share from your wrist" },

@@ -32,6 +32,11 @@ export type CardPrefill = {
    *  does, and flattening here threw every one of them away. */
   links?: CardLink[];
   template?: string;
+  /** The Custom design built in a homepage builder (AI design opens there for
+   *  a first card, as in the real builder — owner, 2026-10-02). Raw; the
+   *  wizard normalises it (lib/custom-layout normalizeCustomLayout) and only
+   *  takes it when it may open Custom design at all. */
+  customLayout?: unknown;
   // ── Design (mirrors TemplateStyle in lib/template-style) ──────────────────
   // The homepage builders offer the SAME colour/font controls as the real
   // editor, so every key the editor can set has to survive the hand-off —
@@ -134,6 +139,7 @@ export function hasSketchContent(data: CardPrefill): boolean {
     PREFILL_STYLE_KEYS.some((k) => data[k]) ||
     PREFILL_LINK_STYLE_KEYS.some((k) => data[k]) ||
     Boolean(data.panelMedia || data.linkBgMedia || data.linkHeroImage) ||
+    Boolean(data.template === "custom" && data.customLayout) ||
     data.hideCardLink === true,
   );
 }

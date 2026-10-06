@@ -174,10 +174,23 @@ describe("Custom design is shown everywhere; open for Pro and Office, and for AI
   it("the upgrade link under a locked row only where leaving costs nothing — the card editor", () => {
     expect(picker).toMatch(/\{!customUnlocked && upsell && <CustomDesignUpsell \/>\}/);
     expect(src).toMatch(/customUnlocked=\{customDesignAvailable\}\s*\n\s*upsell=\{false\}/);
-    for (const f of ["src/components/site/CardMiniBuilder.tsx", "src/components/site/SignatureMiniBuilder.tsx", "src/components/site/TeamsDashboard.tsx"]) {
-      expect(read(f), f).toMatch(/customUnlocked=\{false\} upsell=\{false\}/);
-    }
+    expect(read("src/components/site/TeamsDashboard.tsx")).toMatch(/customUnlocked=\{false\} upsell=\{false\}/);
     expect(read(EDITOR)).toMatch(/customUnlocked=\{isPro\}/);
+  });
+
+  // Owner, 2026-10-02: the homepage builders match the real builder for a
+  // guest's first card — Custom design opens, AI design works there, Copy
+  // keeps its PRO tag — and the design rides the hand-off into /cards/new.
+  it("the homepage builders open it like a guest's first card, Copy still Pro", () => {
+    for (const f of ["src/components/site/CardMiniBuilder.tsx", "src/components/site/SignatureMiniBuilder.tsx"]) {
+      const b = read(f);
+      expect(b, f).toMatch(/customUnlocked upsell=\{false\}/);
+      expect(b, f).toMatch(/<CustomCardDesigner layout=\{customLayout\} data=\{data\} onChange=\{\(l\) => patch\(\{ customLayout: l \}\)\} canScan=\{false\} \/>/);
+    }
+    const sketch = read("src/components/site/useProductSketch.ts");
+    expect(sketch).toMatch(/s\.template === "custom" && s\.customLayout \? \{ customLayout: s\.customLayout \}/);
+    // The wizard takes it only where Custom opens, and normalised.
+    expect(src).toMatch(/p\.template === "custom" && customDesignAvailable && p\.customLayout\) setCustomLayout\(normalizeCustomLayout\(p\.customLayout\)\)/);
   });
 
   it("never restores anyone onto a Custom design they cannot open", () => {

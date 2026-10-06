@@ -7,12 +7,13 @@ import { SAMPLE_DATA, withoutSocials } from "@/components/card-templates/types";
 import type { CardData } from "@/components/card-templates/types";
 import ShareButton from "@/components/ShareButton";
 import DemoSwiftLinks from "./DemoSwiftLinks";
+import DemoGetCardButton from "./DemoGetCardButton";
 import { cardPageTheme } from "@/lib/card-page-theme";
 import PhoneFrame, { StatusBar, phoneScreenWidth } from "@/components/PhoneFrame";
 
 // The lead-capture page phone: the REAL card-open experience exactly as a
 // visitor sees it when they open a SwiftCard link — the real card template plus
-// the real card-page sections (Save contact, Share your info, Swift Links,
+// the real card-page sections (Save contact, Swift Links, Share your info,
 // Share this card), built from the same components the live card page uses,
 // on the same ambient accent-washed background the live page paints.
 // The Save-contact and Share-your-info buttons work for view (local state, no
@@ -52,11 +53,17 @@ function LinkExperience() {
             style={{ background: saved ? "#16a34a" : THEME.accent }}
           >
             {saved ? (
-              <><svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" /></svg>Saved to Contacts</>
+              <><svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" /></svg>Saved to Contacts!</>
             ) : (
-              <><svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}><path d="M19 21v-8H5v8M5 3h11l3 3v3M9 3v4h6" strokeLinecap="round" strokeLinejoin="round" /></svg>Save {FIRST}&apos;s contact</>
+              <><svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}><path d="M19 21v-8H5v8M5 3h11l3 3v3M9 3v4h6" strokeLinecap="round" strokeLinejoin="round" /></svg>Save Contact</>
             )}
           </button>
+        </div>
+
+        {/* Swift Links (the real card section, shared by every mockup) —
+            right after Save contact, as on the live page since 2026-09-22. */}
+        <div className={Panel} style={panelStyle}>
+          <DemoSwiftLinks />
         </div>
 
         {/* Share your info back (the lead-capture handshake) */}
@@ -88,15 +95,10 @@ function LinkExperience() {
                 className="mt-1 w-full h-10 rounded-lg text-white text-[0.78125rem] font-bold flex items-center justify-center"
                 style={{ background: THEME.accent, border: "1.5px solid #ffffff", boxShadow: `0 0 0 2px ${THEME.accent}, 0 0 0 5px ${THEME.accent}2E` }}
               >
-                Share my info →
+                Share My Info
               </button>
             </div>
           )}
-        </div>
-
-        {/* Swift Links (the real card section, shared by every mockup) */}
-        <div className={Panel} style={panelStyle}>
-          <DemoSwiftLinks />
         </div>
 
         {/* Share this card — just the share button, like the live page (the
@@ -104,6 +106,7 @@ function LinkExperience() {
             tool sitting in a viewer's flow). */}
         <div className={Panel} style={panelStyle}>
           <ShareButton url={DEMO_URL} text={`Connect with ${FIRST} — save their contact instantly.`} label="Share this card" />
+          <DemoGetCardButton />
         </div>
       </div>
     </div>
@@ -118,13 +121,12 @@ export default function LeadCapturePhone() {
         Exactly what they see when they open your card
       </div>
       {/* One shared iPhone for the whole site — see components/PhoneFrame.
-          650, not 600. The screen is a scrolling viewport over a ~1270px card
+          650, not 600. The screen is a scrolling viewport over a ~1190px card
           page, so where it cuts is a choice — and it should cut on a boundary,
-          not mid-control. Adding the message field and the former SMS consent
-          checkbox pushed the "Share my info" button's bottom to 619 and its
-          panel's to 636, so a 600px screen sliced the button in half and read
-          as a rendering bug. 650 lands just past the completed panel, which is
-          the whole point of this page: the capture handshake, finished. */}
+          not mid-control. Since Swift Links moved above "Share your info"
+          (2026-09-22, the live page's order) 650 lands just under the first
+          Swift Links row, with the next one peeking so the page reads as
+          scrollable; the share form is the next thing a scroll reveals. */}
       <PhoneFrame width={300} statusBar={false} screenStyle={{ height: 650, background: "#FAF7F2" }}>
         <div className="absolute inset-0 overflow-y-auto rd-scrollbar-none">
           <StatusBar width={phoneScreenWidth(300)} />

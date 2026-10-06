@@ -47,22 +47,27 @@ async function open(): Promise<Page> {
   const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
   await page.setContent(`<!doctype html><html><head><meta charset="utf-8"><style>${css}</style></head>
     <body style="margin:0;padding:24px;background:#f5f5f4"><div id="root"></div><script>${bundle}</script></body></html>`);
-  await page.getByText("Your Card", { exact: true }).waitFor();
+  await page.getByText("Show QR", { exact: true }).waitFor();
   await page.waitForTimeout(500);
   return page;
 }
 
 describe("the homepage dashboard demo", () => {
-  it("dashboard tab: no Quick Contacts, Traffic beside the Your Card panel", async () => {
+  it("dashboard tab: no Quick Contacts, Traffic beside the card panel", async () => {
     const page = await open();
     try {
       await page.screenshot({ path: "node_modules/.cache/dashboard-demo-dashboard.png", fullPage: true });
       const text = await page.evaluate(() => document.body.textContent ?? "");
       for (const gone of ["Quick Contacts", "View all in Contacts", "Total leads"]) expect(text).not.toContain(gone);
+      // The 2026-09-29/30 redesign: no "Traffic" heading, no "Your Card"
+      // heading or caption, My Cards on top, Show QR leading the Share box.
+      for (const gone of ["Your Card", "Exactly what people get", "Download card as image", "vs last week"]) expect(text).not.toContain(gone);
+      expect(await page.locator("p", { hasText: /^Traffic$/ }).count()).toBe(0);
+      for (const here of ["My Cards", "View Live Link", "Add card", "Show QR", "Share link", "Other ways to share", "At an event? Tag today's contacts", "Unique viewers", "Repeat views", "Link taps"]) expect(text).toContain(here);
       const boxes = await page.evaluate(() => {
         const r = (el: Element | null) => el?.getBoundingClientRect();
         const traffic = [...document.querySelectorAll("button")].find((b) => b.textContent === "Week")!.closest(".rounded-2xl")!;
-        const yourCard = [...document.querySelectorAll("p")].find((p) => p.textContent === "Your Card")!.closest(".rounded-2xl")!;
+        const yourCard = [...document.querySelectorAll("span")].find((p) => p.textContent?.trim() === "Download")!.closest(".rounded-2xl")!;
         return { traffic: r(traffic)!, yourCard: r(yourCard)! };
       });
       // Side by side: Traffic on the left, the card panel to its right, top-aligned.
@@ -86,6 +91,9 @@ describe("the homepage dashboard demo", () => {
       ]);
       // Fictional people: spans, not tel:/mailto: links.
       expect(labels.every((l) => l[0] === "SPAN")).toBe(true);
+      // No contact statuses (removed 2026-08-11) and no made-up actions.
+      const text = await page.evaluate(() => document.body.textContent ?? "");
+      for (const gone of ["New Contact", "Dissolved", "Reply", "Add note"]) expect(text).not.toContain(gone);
     } finally { await page.close(); }
   });
 });

@@ -5,13 +5,14 @@ import { join, resolve } from "node:path";
 import type { Browser } from "playwright";
 import { appCss, launchBrowser } from "./harness";
 
-// ── The homepage "Start from scratch" builder shows Custom design LOCKED ─────
+// ── The homepage "Start from scratch" builder opens Custom design for AI ─────
 //
-// Owner, 2026-09-18: Custom design appears on every card-design screen with a
-// very small PRO tag, locked; it opens only for a Pro or Office account. The
-// homepage builder is a website visitor with no account, so the row must be
-// there, tagged, and inert. Driven for real: open the builder, walk to "Make it
-// yours", look.
+// Owner, 2026-09-18: Custom design appears on every card-design screen. Since
+// 901ca554 (2026-09-30) the real builder opens it for someone building their
+// FIRST card — AI design works, "Copy a card or template you like" keeps its
+// PRO tag and stays locked. Owner, 2026-10-02: the homepage builder must match
+// the real builder. Driven for real: open the builder, walk to "Make it
+// yours", open Custom design, look.
 
 const ORIGIN = "https://sc.test";
 let browser: Browser;
@@ -70,7 +71,7 @@ afterAll(async () => {
 
 describe("homepage card builder", () => {
   for (const width of [390, 1280]) {
-    it(`shows Custom design locked with its PRO tag at ${width}px`, async () => {
+    it(`opens Custom design with AI design, Copy still PRO, at ${width}px`, async () => {
       const page = await browser.newPage({ viewport: { width, height: 900 } });
       await page.route(`${ORIGIN}/**`, (route) =>
         new URL(route.request().url()).pathname === "/"
@@ -90,15 +91,22 @@ describe("homepage card builder", () => {
         await page.click("button:has-text('Continue')");
         await page.waitForTimeout(300);
       }
-      const row = await page.$("button[aria-label='Custom design (Pro, locked)']");
-      expect(row, "the locked Custom design row").not.toBeNull();
-      expect(await row!.isDisabled()).toBe(true);
-      expect(await page.$("button[aria-label='Custom design']")).toBeNull(); // never open here
-      const tags = await page.$$eval("[data-ds='badge']", (els) =>
-        els.filter((e) => (e.textContent || "").trim() === "PRO" && e.getBoundingClientRect().width > 0).length);
-      expect(tags).toBeGreaterThanOrEqual(1);
-      // No upgrade link on the marketing site's builder.
+      expect(await page.$("button[aria-label='Custom design (Pro, locked)']")).toBeNull();
+      const row = await page.$("button[aria-label='Custom design']");
+      expect(row, "the open Custom design row").not.toBeNull();
+      expect(await row!.isDisabled()).toBe(false);
+      await row!.click();
+      // The real designer: AI design open, Copy locked with its PRO tag.
+      const ai = page.locator("button", { hasText: "AI design" }).first();
+      await ai.waitFor({ timeout: 5_000 });
+      expect(await ai.isDisabled()).toBe(false);
+      const copy = page.locator("button", { hasText: "Copy a card or template you like" }).first();
+      expect(await copy.isDisabled()).toBe(true);
+      expect(await copy.innerText()).toContain("PRO");
+      // The colour/font steps give way to the designer, as in the real builder.
       expect(await page.innerText("#root")).not.toContain("unlock the custom designer with Pro");
+      // Nothing spills sideways at either width.
+      expect(await page.evaluate(() => document.scrollingElement!.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
       await page.close();
     });
   }

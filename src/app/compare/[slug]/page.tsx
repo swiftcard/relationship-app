@@ -64,7 +64,7 @@ const COMPETITORS: Record<string, Competitor> = {
       { label: "Link-in-bio page", swiftcard: "✓ (Swift Links)", them: "✓" },
       { label: "Digital business card (save to contacts)", swiftcard: "✓", them: "✗" },
       { label: "Visitor shares their contact info back", swiftcard: "✓", them: "✗" },
-      { label: "Built-in lead CRM (notes, statuses)", swiftcard: "✓", them: "✗" },
+      { label: "Built-in lead CRM (notes, history)", swiftcard: "✓", them: "✗" },
       { label: "Automated follow-up (email + text)", swiftcard: "✓", them: "✗" },
       { label: "NFC tap-to-share", swiftcard: "✓", them: "✗" },
       { label: "Starting price", swiftcard: "Free", them: "Free (12% fee on storefront sales)" },
@@ -101,7 +101,7 @@ const COMPETITORS: Record<string, Competitor> = {
       { label: "Digital business card", swiftcard: "✓", them: "✓" },
       { label: "NFC tap-to-share", swiftcard: "✓ (works with any blank NFC tag)", them: "✓ (their branded hardware)" },
       { label: "Lead capture (share-back form)", swiftcard: "✓", them: "✓" },
-      { label: "Built-in lead CRM (notes, statuses, pipeline)", swiftcard: "✓", them: "Via 3rd-party integrations" },
+      { label: "Built-in lead CRM (notes, history, follow-ups)", swiftcard: "✓", them: "Via 3rd-party integrations" },
       { label: "Automated follow-up sequences (email + text)", swiftcard: "✓", them: "✗" },
       { label: "Link-in-bio page included", swiftcard: "✓ (Swift Links)", them: "Limited" },
       { label: "Starting price", swiftcard: "Free", them: "Free" },
@@ -117,12 +117,12 @@ const COMPETITORS: Record<string, Competitor> = {
       steps: [
         { t: "Create your card free", d: "Enter the same details at swiftcard.me/cards/new — name, title, company, socials — and pick a design. No hardware required to start." },
         { t: "Re-point your NFC tag", d: "SwiftCard writes your new card link to any NFC tag, including hardware you already own. The tag stores a link, so it keeps working every time you edit the card." },
-        { t: "Turn on follow-up", d: "Set your email and text sequence once — every lead your card captures gets it automatically, opt-in and STOP-compliant." },
+        { t: "Turn on follow-up", d: "Switch on your email and text follow-up for each new lead — it sends on schedule, STOP-compliant." },
       ],
     },
     faq: [
       { q: "Can I keep using my NFC card or tag?", a: "Yes — SwiftCard writes your card link to any NFC tag, including ones you already own. Tags store the link, so your card keeps working even after you edit it." },
-      { q: "What does SwiftCard automate that Popl doesn't?", a: "Follow-up: when a lead shares their info, SwiftCard can send your email and text sequence automatically (opt-in, STOP-compliant). With Popl you'd wire that through third-party tools." },
+      { q: "What does SwiftCard automate that Popl doesn't?", a: "Follow-up: when a lead shares their info, switch on your email and text sequence for them and SwiftCard sends it on schedule (STOP-compliant). With Popl you'd wire that through third-party tools." },
       { q: "How does pricing compare?", a: "Both start free. SwiftCard Pro is $4.99/month; Popl Pro lists at $7.99/month. Team plans: SwiftCard is $3.99/seat (min 2), Popl $5/user (min 5). Verify current pricing with them — plans change." },
       { q: "Do I need to buy anything to switch?", a: "No — create your card free, and share by QR, link, or Apple Wallet immediately. NFC is optional." },
       { q: "Can my team switch together?", a: "SwiftCard Office gives every teammate an on-brand card with their own leads under one admin dashboard, unlimited seats." },
@@ -133,12 +133,12 @@ const COMPETITORS: Record<string, Competitor> = {
     metaTitle: "Blinq Alternative — Digital Business Card That Follows Up",
     metaDesc: "SwiftCard is the Blinq alternative with a built-in lead CRM and automated email + text follow-up. Card, QR, NFC, link-in-bio — one plan. Free to start.",
     heroSub: "Blinq makes a clean digital card. SwiftCard makes the card, captures the lead, and runs the follow-up — the whole meeting-to-client pipeline in one product.",
-    honest: "Blinq is a well-made digital business card with a generous free tier — as a card, it's good. People switch to SwiftCard when they want the card to feed a pipeline: a built-in CRM with notes and statuses, automated email + text sequences to every new contact, and a full link-in-bio page — instead of connecting separate tools for each.",
+    honest: "Blinq is a well-made digital business card with a generous free tier — as a card, it's good. People switch to SwiftCard when they want the card to feed a pipeline: a built-in CRM with notes and full history, email + text follow-ups you switch on for any contact, and a full link-in-bio page — instead of connecting separate tools for each.",
     rows: [
       { label: "Digital business card", swiftcard: "✓", them: "✓" },
       { label: "Custom card designer", swiftcard: "✓ (Pro, incl. AI copy-my-card)", them: "✓" },
       { label: "NFC tap-to-share", swiftcard: "✓", them: "✓" },
-      { label: "Built-in lead CRM (notes, statuses, pipeline)", swiftcard: "✓", them: "Via 3rd-party integrations" },
+      { label: "Built-in lead CRM (notes, history, follow-ups)", swiftcard: "✓", them: "Via 3rd-party integrations" },
       { label: "Automated follow-up sequences (email + text)", swiftcard: "✓", them: "✗" },
       { label: "Link-in-bio page included", swiftcard: "✓ (Swift Links)", them: "Limited" },
       { label: "Starting price", swiftcard: "Free", them: "Free" },
@@ -146,7 +146,7 @@ const COMPETITORS: Record<string, Competitor> = {
     ],
     switchReasons: [
       { t: "The card feeds a real pipeline", d: "Every captured contact lands in a built-in CRM with notes, tags, and follow-up status — not a CSV you promise yourself you'll import somewhere." },
-      { t: "Follow-up runs itself", d: "Email and text sequences fire automatically for every new lead, opt-in and STOP-compliant, from your name." },
+      { t: "Follow-up runs itself", d: "Switch on an email or text follow-up for any new lead and it sends on schedule, STOP-compliant, from your name." },
       { t: "A real link-in-bio, included", d: "Swift Links replaces your Linktree too: themes, video tiles, section headers, and per-page design — one subscription fewer." },
     ],
     migration: {
@@ -154,12 +154,12 @@ const COMPETITORS: Record<string, Competitor> = {
       steps: [
         { t: "Rebuild the card", d: "Enter your details at swiftcard.me/cards/new and pick a template — or, on Pro, upload a picture of any card design and the AI designer rebuilds it with your info." },
         { t: "Re-share your new link", d: "Update the link anywhere you shared the old one — email signature, QR stickers, NFC tags (SwiftCard writes to any blank tag), and your bios." },
-        { t: "Let the pipeline start", d: "New contacts land in the built-in CRM with notes and statuses, and your automated follow-up sequence takes it from there." },
+        { t: "Let the pipeline start", d: "New contacts land in the built-in CRM with notes and history, and the follow-up you switch on takes it from there." },
       ],
     },
     faq: [
       { q: "Can I recreate my Blinq card design on SwiftCard?", a: "Yes — pick from designer templates and customize colors, fonts, photo, and logo. Pro users can even upload a picture of any card design (including a physical card) and SwiftCard's AI rebuilds it with your details." },
-      { q: "What does SwiftCard do after someone saves my card?", a: "They can share their info back; it lands in your built-in CRM tagged with time and source, and your automated email/text follow-up starts — that whole after-the-tap layer is the difference." },
+      { q: "What does SwiftCard do after someone saves my card?", a: "They can share their info back; it lands in your built-in CRM tagged with time and source, and the email/text follow-up you switch on for them takes it from there — that whole after-the-tap layer is the difference." },
       { q: "How does pricing compare?", a: "Both start free. SwiftCard Pro is $4.99/month flat; Blinq Premium ranges roughly $3–10/month depending on billing term. Verify current pricing with them — plans change." },
       { q: "Does SwiftCard work without an app for the other person?", a: "Yes — your card opens in any browser; saving your contact and sharing theirs back are one tap, no installs." },
       { q: "Is there a team version?", a: "SwiftCard Office: on-brand cards for every teammate, individual lead books, one admin dashboard — $3.99/seat/month with a 2-seat minimum, unlimited seats." },
@@ -175,15 +175,15 @@ const COMPETITORS: Record<string, Competitor> = {
       { label: "Digital business card", swiftcard: "✓", them: "✓" },
       { label: "Multiple cards per account", swiftcard: "✓ (Pro)", them: "✓" },
       { label: "Email signature generator", swiftcard: "✓ (Swift Signature)", them: "✓" },
-      { label: "Built-in lead CRM (notes, statuses, pipeline)", swiftcard: "✓", them: "Via 3rd-party integrations" },
+      { label: "Built-in lead CRM (notes, history, follow-ups)", swiftcard: "✓", them: "Via 3rd-party integrations" },
       { label: "Automated follow-up sequences (email + text)", swiftcard: "✓", them: "✗" },
       { label: "Link-in-bio page included", swiftcard: "✓ (Swift Links)", them: "Limited" },
       { label: "Starting price", swiftcard: "Free", them: "Free" },
       { label: "Cheapest paid plan", swiftcard: "$4.99/mo", them: "$6+/mo (Professional)", pricing: true },
     ],
     switchReasons: [
-      { t: "From contact exchange to pipeline", d: "SwiftCard doesn't stop at swapping details — every captured contact gets notes, statuses, and an automated follow-up sequence." },
-      { t: "Texting, done compliantly", d: "Follow-up texts are built in with opt-in consent capture and automatic STOP handling — not a separate SMS tool to buy and wire up." },
+      { t: "From contact exchange to pipeline", d: "SwiftCard doesn't stop at swapping details — every captured contact gets notes, full history, and a follow-up sequence you can switch on in one tap." },
+      { t: "Texting, done compliantly", d: "Follow-up texts are built in — sent only to contacts you've confirmed agreed to hear from you, with automatic STOP handling — not a separate SMS tool to buy and wire up." },
       { t: "The bio link is included", d: "Swift Links gives you the Instagram/TikTok bio page too — themes, video tiles, and analytics under the same roof." },
     ],
     migration: {
@@ -213,7 +213,7 @@ const COMPETITORS: Record<string, Competitor> = {
       { label: "Free plan without buying hardware", swiftcard: "✓", them: "✓ (digital wallet card)" },
       { label: "NFC tap-to-share", swiftcard: "✓ (works with any blank NFC tag)", them: "✓ (their branded cards)" },
       { label: "Lead capture (share-back form)", swiftcard: "✓", them: "✓" },
-      { label: "Built-in lead CRM (notes, statuses)", swiftcard: "✓", them: "Basic; CRM sync on team plans" },
+      { label: "Built-in lead CRM (notes, history)", swiftcard: "✓", them: "Basic; CRM sync on team plans" },
       { label: "Automated follow-up sequences (email + text)", swiftcard: "✓", them: "✗" },
       { label: "Link-in-bio page included", swiftcard: "✓ (Swift Links)", them: "✗" },
       { label: "Card link format", swiftcard: "swiftcard.me/FirstLast-Company", them: "Tracking-style redirect link" },
@@ -224,14 +224,14 @@ const COMPETITORS: Record<string, Competitor> = {
     switchReasons: [
       { t: "Pay month to month, leave in two taps", d: "SwiftCard Pro is a flat monthly (or annual, your choice) plan. On iPhone the subscription is billed by Apple and cancelled in Settings — no support ticket, no surprise renewal." },
       { t: "No card required, ever", d: "The free plan shares by QR, link, Apple Wallet and Apple Watch. Want NFC? SwiftCard writes to any blank tag, including cards you already own." },
-      { t: "Follow-up runs itself", d: "Every captured lead gets your email and text sequence automatically, opt-in and STOP-compliant — not a task in your CRM for later." },
+      { t: "Follow-up runs itself", d: "Switch on your email and text sequence for any captured lead and it runs on schedule, STOP-compliant — not a task in your CRM for later." },
     ],
     migration: {
       intro: "Your card is your own details, and your Mobilo hardware stores a link — both come with you. Most people rebuild in about ten minutes.",
       steps: [
         { t: "Create your card free", d: "Enter your details at swiftcard.me/cards/new and pick a design — or, on Pro, upload a photo of your current card and the AI designer rebuilds it with your info." },
         { t: "Re-point your NFC card", d: "SwiftCard writes your new link to any NFC tag, including the card you already carry. It keeps working every time you edit your card." },
-        { t: "Turn on follow-up", d: "Set your email and text sequence once. Every new contact your card captures gets it automatically." },
+        { t: "Turn on follow-up", d: "Switch on your email and text sequence for a new contact and it sends on schedule from there." },
       ],
     },
     faq: [
@@ -253,7 +253,7 @@ const COMPETITORS: Record<string, Competitor> = {
       { label: "Free plan without buying hardware", swiftcard: "✓", them: "✓ (basic)" },
       { label: "NFC tap-to-share", swiftcard: "✓ (works with any blank NFC tag)", them: "✓ (their products)" },
       { label: "Lead capture (share-back form)", swiftcard: "✓", them: "✓" },
-      { label: "Built-in lead CRM (notes, statuses)", swiftcard: "✓", them: "✓ (paid plans)" },
+      { label: "Built-in lead CRM (notes, history)", swiftcard: "✓", them: "✓ (paid plans)" },
       { label: "Automated follow-up sequences (email + text)", swiftcard: "✓", them: "Limited" },
       { label: "Link-in-bio page included", swiftcard: "✓ (Swift Links)", them: "Limited" },
       { label: "AI card designer (copy any card from a photo)", swiftcard: "✓ (Pro)", them: "✗" },
@@ -263,14 +263,14 @@ const COMPETITORS: Record<string, Competitor> = {
     switchReasons: [
       { t: "One price, everything in it", d: "Card, Swift Links page, lead CRM, automation, analytics and Apple Wallet — one flat plan, no per-seat tiers to decode." },
       { t: "Your link is your name", d: "Cards live at swiftcard.me/FirstLast-Company. The person you meet sees who you are before they tap." },
-      { t: "Follow-up without a sales-ops team", d: "Set your email and text sequence once; every captured lead gets it automatically, opt-in and STOP-compliant." },
+      { t: "Follow-up without a sales-ops team", d: "Switch on your email and text sequence for any captured lead and it sends on schedule, STOP-compliant." },
     ],
     migration: {
       intro: "A digital card rebuilds from details you already know, and your NFC hardware stores a link that SwiftCard can overwrite. Ten minutes, start to finish.",
       steps: [
         { t: "Rebuild the card", d: "Enter your details at swiftcard.me/cards/new and pick a template — or, on Pro, upload a picture of your current card and the AI designer rebuilds it." },
         { t: "Re-point your tags", d: "SwiftCard writes your new link to any NFC tag or card you already own, so the hardware keeps working." },
-        { t: "Update the link everywhere", d: "Email signature, QR stickers and social bios — swap in your swiftcard.me link, and turn on follow-up so new contacts hear from you automatically." },
+        { t: "Update the link everywhere", d: "Email signature, QR stickers and social bios — swap in your swiftcard.me link, and switch on follow-up so new contacts hear from you on schedule." },
       ],
     },
     faq: [

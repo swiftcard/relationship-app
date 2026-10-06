@@ -35,7 +35,7 @@ const SCREENSHOTS: { file: string; caption: string }[] = [
   { file: "01-public-card.jpg", caption: "A SwiftCard as the person you meet sees it — save the contact in one tap." },
   { file: "10-ways-to-share.jpg", caption: "Share by NFC tap, QR code, Apple Wallet, text or link." },
   { file: "03-contacts.jpg", caption: "Every person who shares back lands in your contacts, with notes and follow-up." },
-  { file: "06-dashboard.jpg", caption: "Views, saves and where your card is being opened." },
+  { file: "06-dashboard.jpg", caption: "Views, contacts and where your card is being opened." },
   { file: "08-swift-links.jpg", caption: "Swift Links — the link-in-bio page that comes with every card." },
 ];
 
@@ -141,8 +141,8 @@ export default function PressPage() {
         <H2>What makes it different</H2>
         <ul className="mb-3">
           {[
-            ["Follow-up is built in", "Email and text sequences go to every new contact automatically — no third-party automation tool."],
-            ["It tells you when someone looks", "Warm-lead alerts and a dashboard show views, saves and where the card is being opened."],
+            ["Follow-up is built in", "Switch on an email or text follow-up for any contact and it sends on schedule — no third-party automation tool."],
+            ["It tells you when someone looks", "Alerts when someone opens your card, and a dashboard that shows views, contacts and where the card is being opened."],
             ["Your link is your name", "Cards live at swiftcard.me/FirstLast-Company, not a tracking redirect, so the link looks like you."],
             ["AI Card Designer", "Snap any business card — yours or one you admire — and the AI rebuilds that design with your details."],
             ["No hardware required", "QR, link, Apple Wallet and Apple Watch sharing are free; NFC works with any blank tag."],

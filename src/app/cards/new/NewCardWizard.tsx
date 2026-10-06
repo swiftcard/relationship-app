@@ -15,7 +15,7 @@ import CopyButton from "@/components/CopyButton";
 import { qrScanUrl } from "@/lib/share-source";
 import { GetTheAppCard } from "@/components/AppStoreBadge";
 import CardScaler from "@/components/CardScaler";
-import { DEFAULT_PRESET, buildPreset } from "@/lib/custom-layout";
+import { DEFAULT_PRESET, buildPreset, normalizeCustomLayout } from "@/lib/custom-layout";
 import InertPreview from "@/components/InertPreview";
 import ClassicPro from "@/components/card-templates/ClassicPro";
 import CustomCard from "@/components/card-templates/CustomCard";
@@ -457,6 +457,9 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
     // Never put anyone onto a Custom design they cannot open — they would be
     // stranded on a design they cannot see or change.
     if (p.template && !(!customDesignAvailable && p.template === "custom")) setTemplate(p.template);
+    // The Custom design a visitor made in a homepage builder (AI design opens
+    // there too, for a first card) — normalised, and only where Custom opens.
+    if (p.template === "custom" && customDesignAvailable && p.customLayout) setCustomLayout(normalizeCustomLayout(p.customLayout));
     if (p.logoShape === "circle") setLogoShape("circle");
     // Carry the WHOLE colour/font scheme, not just the accent — the homepage
     // builders expose the same TemplateStyleControls the editor does, so

@@ -54,6 +54,9 @@ export type Sketch = {
   headshot: string | null;
   logo: string | null;
   template: string;
+  /** The Custom design, when the visitor opened it (AI design works there on
+   *  a first card, as in the real builder). Null until they do. */
+  customLayout: unknown | null;
   /** Logo plate shape — the same Original/Circle choice the real editor has. */
   logoShape: "auto" | "circle";
   style: TemplateStyle;
@@ -77,6 +80,7 @@ export const EMPTY_SKETCH: Sketch = {
   // card / signature would look" live preview leads with it the moment someone
   // starts typing. They can still switch template + colours on the design step.
   template: "photo-first",
+  customLayout: null,
   logoShape: "auto",
   style: {},
   linkStyle: {},
@@ -97,6 +101,7 @@ export function toPrefill(s: Sketch, product: CardPrefill["product"]): CardPrefi
     bio: s.bio.trim(),
     address: { street: s.street.trim(), city: s.city.trim(), state: s.stateRegion.trim(), zip: s.zip.trim() },
     template: s.template,
+    ...(s.template === "custom" && s.customLayout ? { customLayout: s.customLayout } : {}),
     logoShape: s.logoShape,
     ...s.style,
     ...s.linkStyle,
@@ -130,6 +135,7 @@ function fromPrefill(p: CardPrefill): Sketch {
     headshot: p.headshotUrl ?? null,
     logo: p.logoUrl ?? null,
     template: p.template ?? "photo-first",
+    customLayout: p.customLayout ?? null,
     logoShape: p.logoShape === "circle" ? "circle" : "auto",
     style: {
       accentColor: p.accentColor,

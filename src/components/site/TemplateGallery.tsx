@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import CardScaler from "@/components/CardScaler";
 import ClassicPro from "@/components/card-templates/ClassicPro";
 import ModernBold from "@/components/card-templates/ModernBold";
@@ -15,13 +14,14 @@ import ShareButton from "@/components/ShareButton";
 import CardMiniBuilder from "./CardMiniBuilder";
 import { cardPageTheme } from "@/lib/card-page-theme";
 import DemoSwiftLinks from "./DemoSwiftLinks";
+import DemoGetCardButton from "./DemoGetCardButton";
 import PhoneFrame, { StatusBar, phoneScreenWidth } from "@/components/PhoneFrame";
 
 // Interactive template gallery for the homepage. It renders the REAL card
 // templates (same components, same sample data as /templates and the live
 // card pages) so what people see here is identical to the card they'd ship.
 // Hovering a template swaps the phone to that template's actual link
-// experience — the card plus the Save-contact / Share-info / Swift Links /
+// experience — the card plus the Save-contact / Swift Links / Share-info /
 // Share sections on the template's own ambient accent wash (cardPageTheme),
 // exactly like opening a SwiftCard link. All interactions are local, so
 // nothing here ever counts as real traffic.
@@ -80,11 +80,17 @@ function LinkExperience({ id, Component, data }: { id: string; Component: Tmpl["
             style={{ background: saved ? "#16a34a" : theme.accent }}
           >
             {saved ? (
-              <><svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" /></svg>Saved to Contacts</>
+              <><svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" /></svg>Saved to Contacts!</>
             ) : (
-              <><svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}><path d="M19 21v-8H5v8M5 3h11l3 3v3M9 3v4h6" strokeLinecap="round" strokeLinejoin="round" /></svg>Save {FIRST}&apos;s contact</>
+              <><svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}><path d="M19 21v-8H5v8M5 3h11l3 3v3M9 3v4h6" strokeLinecap="round" strokeLinejoin="round" /></svg>Save Contact</>
             )}
           </button>
+        </div>
+
+        {/* Swift Links (the real card section, shared by every mockup) —
+            right after Save contact, as on the live page since 2026-09-22. */}
+        <div className={Panel} style={panelStyle}>
+          <DemoSwiftLinks />
         </div>
 
         {/* Share your info back */}
@@ -106,14 +112,9 @@ function LinkExperience({ id, Component, data }: { id: string; Component: Tmpl["
               ))}
               {/* No SMS consent line — the real share form has none (owner,
                   2026-09-20); see LeadCaptureForm. */}
-              <button onClick={() => setShared(true)} className="mt-1 w-full h-10 rounded-lg text-white text-[0.78125rem] font-bold flex items-center justify-center" style={{ background: theme.accent }}>Share my info →</button>
+              <button onClick={() => setShared(true)} className="mt-1 w-full h-10 rounded-lg text-white text-[0.78125rem] font-bold flex items-center justify-center" style={{ background: theme.accent }}>Share My Info</button>
             </div>
           )}
-        </div>
-
-        {/* Swift Links (the real card section, shared by every mockup) */}
-        <div className={Panel} style={panelStyle}>
-          <DemoSwiftLinks />
         </div>
 
         {/* Share this card — just the share button, like the live page (the
@@ -121,17 +122,8 @@ function LinkExperience({ id, Component, data }: { id: string; Component: Tmpl["
             tool sitting in a viewer's flow). */}
         <div className={Panel} style={panelStyle}>
           <ShareButton url={DEMO_URL} text={`Connect with ${FIRST} — save their contact instantly.`} label="Share this card" />
-          {/* A conversion path out of the demo, pointing at the builder. It used
-              to be a hard link to https://swiftcard.me/?src=card, which on
-              production merely reloaded the page you were already on, and from a
-              preview deploy or localhost ejected you onto the live site
-              mid-demo.
-              On the live page this line is Free-only (Pro is sold as "100%
-              your brand"); the demo card is a Free card, so showing it here is
-              truthful. */}
-          <Link href="/cards/new" className="block text-center text-slate-400 hover:text-slate-600 text-[0.6875rem] mt-3 transition-colors">
-            Create your card · swiftcard.me
-          </Link>
+          {/* The live page's "Create your free SwiftCard" button. */}
+          <DemoGetCardButton />
         </div>
       </div>
     </div>

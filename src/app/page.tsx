@@ -270,7 +270,7 @@ export default function Home() {
               {[
                 { n: 1, t: "Share your card", d: "They scan your QR code or open your link. No app to download.", scene: <ShareScene /> },
                 { n: 2, t: "They save you", d: "One tap on Save Contact puts your photo, number and email in their phone.", scene: <SaveScene /> },
-                { n: 3, t: "You get the lead", d: "When they share their info back, you're notified and the follow-up emails go out for you.", scene: <LeadScene /> },
+                { n: 3, t: "You get the lead", d: "When they share their info back, you're notified — switch on a follow-up and the emails go out for you.", scene: <LeadScene /> },
               ].map((s, i) => (
                 <div key={s.n} className="hp-step" data-reveal style={{ transitionDelay: `${i * 90}ms` }}>
                   <div className="hp-step-stage" aria-hidden="true">{s.scene}</div>
@@ -352,7 +352,7 @@ export default function Home() {
                 Every email you send, <span className="hp-fill">working for you.</span>
               </h2>
               <p className="hp-lede mt-4">
-                Your live card sits in your signature. Recipients open it, save you and reply in one tap.
+                Your card sits in your signature. Recipients open it, save you and reply in one tap.
               </p>
             </div>
             <div data-reveal="fade"><SignatureDemo /></div>
@@ -369,7 +369,7 @@ export default function Home() {
                 See who&apos;s looking. <span className="hp-fill">Keep every lead.</span>
               </h2>
               <p className="hp-lede mt-4">
-                Live views, saves and locations. Every contact lands in one place with their history, their replies and automatic email and text follow-ups. Try the dashboard right here.
+                Live views, contacts and locations. Every contact lands in one place with their history, their replies and automatic email and text follow-ups. Try the dashboard right here.
               </p>
             </div>
             <div data-reveal="fade">

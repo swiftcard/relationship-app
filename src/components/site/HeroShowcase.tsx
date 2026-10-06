@@ -12,7 +12,6 @@ import LogoFirst from "@/components/card-templates/LogoFirst";
 import type { CardData } from "@/components/card-templates/types";
 import { getLook, hexAlpha, fallbackTile, washGradient, type SwiftLinkLook } from "@/lib/swiftlink-looks";
 import PlatformIcon from "@/components/PlatformIcon";
-import { SwiftCardIcon } from "@/components/SwiftCardLogo";
 import PhoneFrame from "@/components/PhoneFrame";
 
 // ── The hero's rotating persona showcase (owner order 2026-08-26, modeled on
@@ -345,6 +344,16 @@ function MiniLinks({ persona }: { persona: Persona }) {
         style={{ width: LINKS_NATURAL_W, height: LINKS_NATURAL_H, transform: `scale(${LINKS_SCALE})`, background: L.sheet }}
       >
         {wash && <div aria-hidden className="absolute inset-0" style={{ background: wash }} />}
+        {/* The corner bolt badge every live Swift Links page carries
+            (SwiftLinksPromoBadge), top-left over the hero — below this phone's
+            overlaid status bar (~53px at this page's natural scale: the 340px
+            phone's 39px bar × 213/340 ÷ 0.46), where a browser's own chrome
+            puts it on a real phone. */}
+        <div aria-hidden className="absolute top-[67px] left-3.5 z-20 w-10 h-10 flex items-center justify-center rounded-[14px] bg-white/85 border border-black/[0.06] shadow-[0_2px_10px_rgba(15,23,42,0.18)]">
+          <svg viewBox="0 0 24 24" className="w-[22px] h-[22px]">
+            <path d="M13 2.5L4.5 13.5h6l-1.5 8 8.5-11h-6l1.5-8z" fill="#1d4ed8" stroke="#1d4ed8" strokeWidth="1" strokeLinejoin="round" />
+          </svg>
+        </div>
         {/* Hero — headshot cropped full-bleed, or the company logo shown whole
             on the page's gradient, exactly the live fallback order. Square,
             like the live cover hero at a phone's width. */}
@@ -391,10 +400,11 @@ function MiniLinks({ persona }: { persona: Persona }) {
           {/* The REAL brand icon row */}
           <SocialIcons socials={persona.socials} mode={L.mode} accent={L.accent} accentText={L.accentText} />
 
-          {/* Connect — the page's hero action */}
-          <div className="w-full mt-6 flex items-center justify-center gap-2 py-4 rounded-2xl font-bold text-[0.9375rem]" style={{ background: L.accent, color: L.accentText }}>
+          {/* Connect — the page's hero action, ConnectButton's own look:
+              chat bubble, glowing in the Look's accent. */}
+          <div className="w-full mt-6 flex items-center justify-center gap-2 py-4 rounded-2xl font-bold text-[0.9375rem]" style={{ background: L.accent, color: L.accentText, boxShadow: `0 8px 24px -6px ${L.accent}59` }}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM3 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 019.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
             Connect with {first}
           </div>
@@ -436,10 +446,9 @@ function MiniLinks({ persona }: { persona: Persona }) {
             })}
 
             {/* The compact row: the quiet link at the foot of a real page —
-                translucent surface, favicon disc, label on the sheet's ink. */}
+                SwiftLinkButtons' own row (ring, icon well, label, chevron). */}
             <div
-              className="w-full mb-2.5 flex items-center gap-3 rounded-[14px] px-3.5 py-3"
-              style={{ background: L.mode === "light" ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.10)" }}
+              className={`w-full mb-2.5 flex items-center gap-3 rounded-[14px] px-3.5 py-3 ${L.mode === "light" ? "ring-1 bg-white ring-black/[0.08] shadow-[0_2px_10px_rgba(15,23,42,0.06)]" : "ring-1 bg-white/[0.07] ring-white/10"}`}
             >
               <span
                 className="w-[34px] h-[34px] rounded-full shrink-0 grid place-items-center text-[0.8125rem] font-bold"
@@ -447,16 +456,18 @@ function MiniLinks({ persona }: { persona: Persona }) {
               >
                 {(persona.data.website || "s").charAt(0).toUpperCase()}
               </span>
-              <span className="font-semibold text-[0.9375rem] truncate" style={{ color: text }}>{persona.compact}</span>
+              <span className="flex-1 min-w-0 text-left font-semibold text-[0.875rem] truncate" style={{ color: text }}>{persona.compact}</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke={text} strokeOpacity={0.4} strokeWidth={2.2} className="w-4 h-4 shrink-0" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
             </div>
           </div>
 
-          {/* Made-with footer, every real profile carries it */}
-          <div className="flex justify-center mt-6">
-            <span className="flex items-center gap-2 text-[0.8125rem] opacity-50" style={{ color: text }}>
-              <span className="shrink-0 rounded-[4px] overflow-hidden flex"><SwiftCardIcon size={16} /></span>
-              <span>Made with <span className="underline underline-offset-2">swiftcard.me</span></span>
-            </span>
+          {/* "View SwiftCard →", and no "Made with" footer: these are paid
+              pages (verified seal), and paid pages dropped it on 2026-09-02 —
+              the corner badge carries the invite instead. */}
+          <div className="flex justify-center mt-10">
+            <span className="inline-block px-4 py-2 text-xs" style={{ color: text, opacity: 0.5 }}>View SwiftCard →</span>
           </div>
         </div>
       </div>
@@ -614,19 +625,8 @@ function PhoneCard({ persona }: { persona: Persona }) {
             </div>
           </div>
 
-          {/* ── Share Your Info Back ── */}
-          <div className="w-full max-w-sm rounded-2xl p-4 shadow-sm" style={{ background: "#fff", border: "1px solid #E4DDD4" }}>
-            <SectionHeading>Share your info with {first}</SectionHeading>
-            <div className="mt-3 space-y-2.5">
-              <div className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-400 shadow-sm">Your name *</div>
-              <div className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-400 shadow-sm">Your phone number *</div>
-              <div className="w-full text-white font-semibold py-3 px-6 rounded-full text-sm text-center" style={{ background: persona.accent }}>
-                Share My Info
-              </div>
-            </div>
-          </div>
-
-          {/* ── Swift Links — bio, website capsule, brand discs ── */}
+          {/* ── Swift Links — bio, website capsule, brand discs ──
+              Right after Save contact, as on the live page since 2026-09-22. */}
           <div className="w-full max-w-sm rounded-2xl p-4 shadow-sm" style={{ background: "#fff", border: "1px solid #E4DDD4" }}>
             <div className="flex items-center justify-between gap-3 mb-2.5">
               <SectionHeading>Swift Links</SectionHeading>
@@ -656,6 +656,18 @@ function PhoneCard({ persona }: { persona: Persona }) {
                     <PlatformIcon label={so.label} className="w-[18px] h-[18px] shrink-0" />
                   </span>
                 ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Share Your Info Back ── */}
+          <div className="w-full max-w-sm rounded-2xl p-4 shadow-sm" style={{ background: "#fff", border: "1px solid #E4DDD4" }}>
+            <SectionHeading>Share your info with {first}</SectionHeading>
+            <div className="mt-3 space-y-2.5">
+              <div className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-400 shadow-sm">Your name *</div>
+              <div className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-400 shadow-sm">Your phone number *</div>
+              <div className="w-full text-white font-semibold py-3 px-6 rounded-full text-sm text-center" style={{ background: persona.accent }}>
+                Share My Info
               </div>
             </div>
           </div>

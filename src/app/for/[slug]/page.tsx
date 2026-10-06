@@ -67,7 +67,7 @@ const FOR_VERTICALS: Record<string, Vertical> = {
       { t: "Showings & caravans", d: "Tap your NFC card on their phone — your card opens instantly, no app. Works when they're holding keys, a leash, and a coffee." },
       { t: "Listing presentations", d: "Your Swift Links page carries your active listings, reviews, and booking link — one URL that's always current, unlike a printed flyer." },
       { t: "Every email you send", d: "Swift Signature puts your live card at the bottom of every message — sellers and referrals save you in one tap." },
-      { t: "Automatic follow-up", d: "New lead texts and emails go out on your schedule while you're still hosting. Reply STOP compliance is built in." },
+      { t: "Automatic follow-up", d: "Switch on a follow-up for a new lead and the emails and texts go out on your schedule while you're still hosting. Reply STOP compliance is built in." },
       { t: "Your brokerage brand", d: "On a team? SwiftCard Office keeps every agent's card on-brand while each keeps their own leads." },
     ],
     faq: [
@@ -92,7 +92,7 @@ const FOR_VERTICALS: Record<string, Vertical> = {
       { t: "No time for follow-up", d: "You're on a roof at 7am, not writing check-in emails. Jobs go to whoever stays top-of-mind." },
     ],
     scenes: [
-      { t: "At the estimate", d: "Tap your NFC card or show your QR — the homeowner saves your contact on the spot, and can send you theirs with the address attached." },
+      { t: "At the estimate", d: "Tap your NFC card or show your QR — the homeowner saves your contact on the spot, and can send you theirs with a note about the job." },
       { t: "Your portfolio, one link", d: "Your Swift Links page shows job photos, reviews, licenses, and a \"request a quote\" button — a website's job without a website's cost." },
       { t: "On the truck & yard signs", d: "Put your QR on the truck door, yard signs, and invoices. Every scan is a tracked lead, not a hope." },
       { t: "Automatic follow-up", d: "Quoted a job? SwiftCard texts your follow-up on schedule so the customer hears from you before the competition." },
@@ -102,8 +102,8 @@ const FOR_VERTICALS: Record<string, Vertical> = {
     faq: [
       { q: "How does a homeowner get my card?", a: "They tap your NFC card or scan your QR — your card opens in their browser with a Save Contact button and your work photos. No app on either side." },
       { q: "Can I show pictures of my work?", a: "Yes. Your Swift Links page holds photo tiles, videos, reviews, and links — it's the portfolio page you never had to build a website for." },
-      { q: "What happens when someone scans the QR on my truck?", a: "The scan is tracked (time and source), they see your card, and they can send you their name, phone, and address for a quote — it all lands in your SwiftCard contacts." },
-      { q: "Does it cost anything to start?", a: "The card, QR sharing, contact capture, and your links page are free. Pro adds unlimited links, automatic follow-up texts and emails, and analytics." },
+      { q: "What happens when someone scans the QR on my truck?", a: "The scan is tracked (time and source), they see your card, and they can send you their name, phone, email, and a note about the job — it all lands in your SwiftCard contacts." },
+      { q: "Does it cost anything to start?", a: "The card, QR sharing, contact capture, your links page, and follow-up emails are free. Pro adds unlimited links, follow-up texts, AI-written messages, and full analytics." },
       { q: "Can my whole crew be on one account?", a: "SwiftCard Office puts every crew member's card under your brand with one bill and one dashboard, unlimited seats." },
     ],
   },
@@ -123,14 +123,14 @@ const FOR_VERTICALS: Record<string, Vertical> = {
     scenes: [
       { t: "Community events & booths", d: "A QR on your table turns foot traffic into typed, accurate contact details — no fishbowl of business cards." },
       { t: "Referral partners", d: "Realtors and lenders share your card with one tap; you see exactly which partner sends you business." },
-      { t: "Opt-in texting, built right", d: "The share-back form includes a TCPA-compliant consent checkbox — never pre-checked — so your follow-up texts are permission-based." },
+      { t: "Opt-in texting, built right", d: "A follow-up text goes only to a contact you've switched texts on for, confirming they agreed to hear from you — so your texts are permission-based." },
       { t: "Automatic touchpoints", d: "Sequences send your check-ins and renewal reminders on schedule, from you, without you." },
       { t: "Every policy line, one page", d: "Auto, home, life, commercial — your Swift Links page lays out what you write with a quote button for each." },
       { t: "Agency-wide cards", d: "SwiftCard Office keeps every producer on-brand with their own book of captured contacts." },
     ],
     faq: [
       { q: "How do I capture a prospect's information?", a: "They scan your QR or tap your card, then use \"Share your info\" — name, phone, email land in your SwiftCard contacts with the time and source attached." },
-      { q: "Is the follow-up texting compliant?", a: "The consent checkbox on the share form is optional and never pre-checked, its language covers follow-up messages, and every text honors STOP automatically." },
+      { q: "Is the follow-up texting compliant?", a: "Sharing their details never signs anyone up for texts. A follow-up text goes only to a contact you've switched texts on for, confirming they agreed to hear from you, and every text honors STOP automatically." },
       { q: "Can I track which referral partners send me people?", a: "Yes — every share and scan is tagged with its source, so your dashboard shows exactly where each contact came from." },
       { q: "Does it integrate with my agency's CRM?", a: "Leads sync to Salesforce, GoHighLevel, Pipedrive, HubSpot, and Google Contacts, plus 6,000+ apps through Zapier and CSV export." },
       { q: "Can my whole agency use it?", a: "SwiftCard Office gives every producer an on-brand card, each with their own leads, under one admin dashboard and one bill." },
@@ -154,7 +154,7 @@ const FOR_VERTICALS: Record<string, Vertical> = {
       { t: "Buyer seminars", d: "One QR on the last slide — every attendee lands in your pipeline instead of walking out with a flyer." },
       { t: "The application, one tap away", d: "Your pre-approval or application link sits on your card and links page — no digging through emails." },
       { t: "Automatic nurture", d: "Rate-watch check-ins and pre-approval reminders go out on schedule, so you're there when they're ready." },
-      { t: "Compliant contact capture", d: "The share-back form's texting consent is opt-in and never pre-checked, with STOP honored automatically." },
+      { t: "Compliant contact capture", d: "Sharing details never signs anyone up for texts — you switch texts on only for contacts who agreed, with STOP honored automatically." },
       { t: "Branch and team cards", d: "SwiftCard Office keeps every LO's card on brand and every lead attributed to the right person." },
     ],
     faq: [
@@ -162,7 +162,7 @@ const FOR_VERTICALS: Record<string, Vertical> = {
       { q: "How do I capture contacts at a seminar or mixer?", a: "Show your QR (on screen, printed, or from Apple Wallet). Everyone who scans can save your contact and share theirs back — typed, accurate, timestamped." },
       { q: "Will realtor partners actually use it?", a: "They just tap Save Contact like anyone else — and when they share your card to a buyer, the referral is tagged so you know who sent it." },
       { q: "Does it work with my CRM?", a: "Leads sync to Salesforce, GoHighLevel, Pipedrive, HubSpot, and Google Contacts, plus Zapier for the rest of your stack." },
-      { q: "Is it free to try?", a: "Yes — the card, sharing, and contact capture are free. Pro adds automated follow-up, unlimited links, and full analytics." },
+      { q: "Is it free to try?", a: "Yes — the card, sharing, contact capture, and follow-up emails are free. Pro adds follow-up texts, AI-written messages, unlimited links, and full analytics." },
     ],
   },
   lawyers: {
@@ -220,7 +220,7 @@ const FOR_VERTICALS: Record<string, Vertical> = {
       { q: "How do people book me from the card?", a: "Your booking or calendar link sits on your card and links page — one tap from meeting you to your calendar." },
       { q: "What happens at events where I'm busy shooting?", a: "A printed QR on a welcome sign or table card captures inquiries all night — every scan can save your contact and send theirs back." },
       { q: "Do clients need an app to see it?", a: "No — everything opens in their phone's browser instantly." },
-      { q: "What does it cost?", a: "The card, portfolio page, and contact capture are free. Pro adds unlimited link tiles, video previews, automated follow-up, and analytics." },
+      { q: "What does it cost?", a: "The card, portfolio page, contact capture, and follow-up emails are free. Pro adds unlimited link tiles, video previews, follow-up texts, and full analytics." },
     ],
   },
   "barbers-and-stylists": {
@@ -275,10 +275,10 @@ const FOR_VERTICALS: Record<string, Vertical> = {
     ],
     faq: [
       { q: "How do I capture a buyer's info on the lot?", a: "They scan your QR or tap your card, then \"Share your info\" sends their name and number to your SwiftCard contacts — with time and source attached." },
-      { q: "Can follow-up really be automatic?", a: "Yes — set a sequence once (day 2 text, day 7 email, etc.) and it runs for every new contact, from your name, with STOP compliance built in." },
+      { q: "Can follow-up really be automatic?", a: "Yes — switch on a follow-up for a contact and it sends on schedule, from your name: emails on every plan, texts on Pro, with STOP compliance built in." },
       { q: "Do my contacts belong to me or the dealership?", a: "Your SwiftCard account is yours — the card, the link, and every contact in it stay with you wherever you sell." },
       { q: "Do buyers need to install anything?", a: "No — your card opens in their browser, and saving your contact is one tap." },
-      { q: "What's free and what's paid?", a: "The card, sharing, and contact capture are free. Pro adds automated sequences, unlimited links, and analytics." },
+      { q: "What's free and what's paid?", a: "The card, sharing, contact capture, and follow-up emails are free. Pro adds follow-up texts, AI-written messages, unlimited links, and full analytics." },
     ],
   },
 };

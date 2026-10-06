@@ -60,13 +60,15 @@ export default function WatchShareImage() {
         {/* screen */}
         <div className="relative h-full w-full overflow-hidden rounded-[27%/23%] bg-black text-white">
           {/* One inset for every row, so nothing meets the corner curve. */}
+          {/* The real watch app's screen (ios/App/SwiftCardWatch/ContentView):
+              watchOS's own clock top-right, then the code on a WHITE rounded
+              tile filling most of the face, and under it the name and a blue
+              "Scan to connect" — which the wearer scrolls to. No app title and
+              no name above the code. */}
           <div className="flex h-full w-full flex-col px-[13%] py-[7%]">
-            <div className="flex items-baseline justify-between">
-              <span className="text-[0.5rem] sm:text-[0.5625rem] font-semibold tracking-tight text-white/55">SwiftCard</span>
-              <span className="text-[0.5rem] sm:text-[0.5625rem] font-semibold tabular-nums text-[#4DA8F5]">9:41</span>
+            <div className="flex items-baseline justify-end">
+              <span className="text-[0.5rem] sm:text-[0.5625rem] font-semibold tabular-nums text-white">9:41</span>
             </div>
-
-            <p className="mt-[2%] truncate text-[0.625rem] sm:text-[0.6875rem] font-bold leading-tight">Alex Morgan</p>
 
             {/* The face is mostly QR — that is the whole story of this picture. */}
             {/* The QR row alone breaks OUT of the 13% inset: at the vertical
@@ -77,12 +79,18 @@ export default function WatchShareImage() {
                   The arbitrary-variant overrides below beat those inline styles
                   (Tailwind emits !important), so the code fills this square and
                   scales with the watch instead of sitting at one size. */}
-              <div className="aspect-square w-[85%] [&>[data-qr]]:!h-full [&>[data-qr]]:!w-full">
+              <div className="aspect-square w-[90%] rounded-[10px] bg-white p-[3.5%] [&>[data-qr]]:!h-full [&>[data-qr]]:!w-full">
                 <MiniQR size={128} url="https://swiftcard.me/alexmorgan" fg="#0E1017" />
               </div>
             </div>
 
-            <p className="text-center text-[0.5rem] sm:text-[0.5625rem] font-semibold tracking-wide text-white/70">Scan to connect</p>
+            <p className="truncate text-center text-[0.5625rem] sm:text-[0.625rem] font-semibold leading-tight">Alex Morgan</p>
+            <p className="mt-[1%] flex items-center justify-center gap-[3px] text-[0.5rem] sm:text-[0.5625rem] font-semibold text-[#4DA8F5]">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} className="w-[1em] h-[1em]" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3" />
+              </svg>
+              Scan to connect
+            </p>
           </div>
         </div>
       </div>

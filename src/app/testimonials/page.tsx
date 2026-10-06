@@ -47,7 +47,7 @@ const USE_CASES: { role: string; title: string; body: string }[] = [
   {
     role: "Recruiters",
     title: "Stay top of mind after one meeting",
-    body: "Set a follow-up cadence once. SwiftCard sends the emails and texts for you — each one signed with your live card.",
+    body: "Pick a follow-up cadence for each new contact. SwiftCard sends the emails and texts for you — each one signed with your live card.",
   },
   {
     role: "Creators & freelancers",

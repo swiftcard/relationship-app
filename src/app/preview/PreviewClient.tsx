@@ -15,8 +15,10 @@ import TrafficChart, { type TrafficBucket } from "@/components/TrafficChart";
 
 type Range = "today" | "week" | "month" | "locations";
 type DemoLocation = { location: string; card: number; link: number };
-type Status = "New Contact" | "Touch" | "Dissolved";
-type Lead = { id: string; name: string; initial: string; source: string; color: string; status: Status; msg: string; time: string; read: boolean };
+// A contact as the real /contacts list shows it: name, where it came from
+// (lib/source-labels; none for a plain card link), company, email, date. No
+// status — that dropdown left the product on 2026-08-11.
+type Lead = { id: string; name: string; source: string | null; company: string; email: string; time: string; read: boolean };
 type DemoCard = {
   key: "sales" | "realestate";
   label: string;
@@ -26,25 +28,15 @@ type DemoCard = {
   data: CardData;
   total: string;
   traffic: Record<"today" | "week" | "month", { card: string; links: string }>;
-  /** % change vs the previous same-size window — the real Traffic box shows this. */
-  deltas: Record<"today" | "week" | "month", { card: number; links: number }>;
   bestDay: { label: string; views: number };
   locations: DemoLocation[];
   leads: Lead[];
-};
-
-/** Same phrasing the real dashboard uses under each stat tile. */
-const DELTA_PERIOD: Record<"today" | "week" | "month", string> = {
-  today: "vs yesterday",
-  week: "vs last week",
-  month: "vs last month",
 };
 
 const CARDS: DemoCard[] = [
   {
     key: "sales", label: "Sales Card", handle: "demo-sales", template: "modern-bold", accent: "#2563eb", total: "87",
     traffic: { today: { card: "142", links: "63" }, week: { card: "1,248", links: "593" }, month: { card: "4,517", links: "2,104" } },
-    deltas: { today: { card: 18, links: 9 }, week: { card: 12, links: 7 }, month: { card: 23, links: 15 } },
     bestDay: { label: "Jul 24", views: 316 },
     locations: [
       { location: "New York, US", card: 1834, link: 902 },
@@ -53,10 +45,10 @@ const CARDS: DemoCard[] = [
       { location: "Miami, US", card: 512, link: 227 },
     ],
     leads: [
-      { id: "s1", name: "Sarah Chen", initial: "S", source: "LinkedIn", color: "#0A66C2", status: "New Contact", msg: "Loved your pitch — let's set up a call this week!", time: "2m ago", read: false },
-      { id: "s2", name: "Priya Patel", initial: "P", source: "Instagram", color: "#F9A8D4", status: "New Contact", msg: "Saw your card — I'd love a demo for my team.", time: "1h ago", read: false },
-      { id: "s3", name: "James Carter", initial: "J", source: "Share Link", color: "#10B981", status: "Touch", msg: "Great meeting you at the conference!", time: "Yesterday", read: true },
-      { id: "s4", name: "Tom Nguyen", initial: "T", source: "QR Code", color: "#93C5FD", status: "Dissolved", msg: "Thanks — not a fit right now.", time: "3d ago", read: true },
+      { id: "s1", name: "Sarah Chen", source: "LinkedIn", company: "Acme Corp", email: "sarah@acmecorp.com", time: "2m ago", read: false },
+      { id: "s2", name: "Priya Patel", source: "Instagram bio", company: "Brightline Studio", email: "priya@brightline.studio", time: "1h ago", read: false },
+      { id: "s3", name: "James Carter", source: null, company: "Carter Logistics", email: "james@carterlogistics.com", time: "Yesterday", read: true },
+      { id: "s4", name: "Tom Nguyen", source: "QR code scan", company: "Nguyen & Co.", email: "tom@nguyenco.com", time: "3d ago", read: true },
     ],
     data: {
       name: "Alex Morgan", title: "Account Executive", company: "Northwind SaaS",
@@ -67,7 +59,6 @@ const CARDS: DemoCard[] = [
   {
     key: "realestate", label: "Real Estate Card", handle: "demo-realty", template: "local-business", accent: "#d97706", total: "143",
     traffic: { today: { card: "231", links: "98" }, week: { card: "2,034", links: "874" }, month: { card: "7,860", links: "3,221" } },
-    deltas: { today: { card: 11, links: 21 }, week: { card: 16, links: 10 }, month: { card: 19, links: 26 } },
     bestDay: { label: "Jul 26", views: 489 },
     locations: [
       { location: "San Francisco, US", card: 3105, link: 1240 },
@@ -76,10 +67,10 @@ const CARDS: DemoCard[] = [
       { location: "Sacramento, US", card: 903, link: 366 },
     ],
     leads: [
-      { id: "r1", name: "Nathan Cole", initial: "N", source: "QR Code", color: "#93C5FD", status: "Touch", msg: "Is the Maple St listing still available?", time: "12m ago", read: false },
-      { id: "r2", name: "Elena Ruiz", initial: "E", source: "Website", color: "#0EA5E9", status: "New Contact", msg: "Can you send pricing for next month?", time: "2h ago", read: false },
-      { id: "r3", name: "David Kim", initial: "D", source: "NFC Tap", color: "#C4B5FD", status: "New Contact", msg: "Looking to tour homes this weekend.", time: "Yesterday", read: false },
-      { id: "r4", name: "Olivia Brooks", initial: "O", source: "Instagram", color: "#F9A8D4", status: "Dissolved", msg: "Found a place — thanks for your help!", time: "4d ago", read: true },
+      { id: "r1", name: "Nathan Cole", source: "QR code scan", company: "Cole Family Trust", email: "nathan.cole@gmail.com", time: "12m ago", read: false },
+      { id: "r2", name: "Elena Ruiz", source: "Swift Signature", company: "Ruiz Design", email: "elena@ruizdesign.co", time: "2h ago", read: false },
+      { id: "r3", name: "David Kim", source: "NFC tap", company: "Kim Dental", email: "david@kimdental.com", time: "Yesterday", read: false },
+      { id: "r4", name: "Olivia Brooks", source: "Instagram bio", company: "Brooks Bakery", email: "olivia@brooksbakery.com", time: "4d ago", read: true },
     ],
     data: {
       name: "Alex Morgan", title: "Realtor®", company: "Coastline Realty",
@@ -88,12 +79,6 @@ const CARDS: DemoCard[] = [
     },
   },
 ];
-
-const STATUS_STYLE: Record<Status, { bg: string; text: string }> = {
-  "New Contact": { bg: "rgba(59,130,246,0.15)", text: "#93c5fd" },
-  "Touch": { bg: "rgba(245,158,11,0.15)", text: "#fcd34d" },
-  "Dissolved": { bg: "rgba(107,114,128,0.18)", text: "#9ca3af" },
-};
 
 function Box({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <div className={`bg-gray-900 border border-gray-800/80 rounded-2xl p-5 ${className}`}>{children}</div>;
@@ -129,15 +114,6 @@ function CardOnlyPreview({ src }: { src: string }) {
     return () => { iframe.removeEventListener("load", onLoad); window.removeEventListener("resize", measure); ro?.disconnect(); };
   }, [src]);
   return <iframe ref={ref} src={src} scrolling="no" title="Your SwiftCard preview" className="w-full block pointer-events-none" style={{ border: 0, height: h }} />;
-}
-
-function ReadToggle({ read, onClick }: { read: boolean; onClick: () => void }) {
-  return (
-    <button type="button" onClick={(e) => { e.stopPropagation(); onClick(); }}
-      className={`text-[0.625rem] font-semibold px-2 py-0.5 rounded-full border transition-colors whitespace-nowrap ${read ? "text-gray-400 border-gray-700 hover:text-gray-300" : "text-blue-300 border-blue-600/50 bg-blue-600/10 hover:bg-blue-600/20"}`}>
-      {read ? "Mark unread" : "Mark read"}
-    </button>
-  );
 }
 
 function FullScreen({ title, href, onClose, children }: { title: string; href?: string; onClose: () => void; children: React.ReactNode }) {
@@ -221,14 +197,12 @@ const RANGES: { id: Range; label: string }[] = [
   { id: "month", label: "Month" },
   { id: "locations", label: "Locations" },
 ];
-const VIEWS = ["Notifications", "List", "Pipeline"] as const;
 
 export default function PreviewClient({ embedded = false }: { embedded?: boolean }) {
   const [activeKey, setActiveKey] = useState<DemoCard["key"]>("realestate");
   // Which portal page the demo is showing, driven by PortalNavPreview's tabs.
   const [portalTab, setPortalTab] = useState<PortalTabId>("dashboard");
   const [range, setRange] = useState<Range>("week");
-  const [view, setView] = useState<(typeof VIEWS)[number]>("Notifications");
   const [modal, setModal] = useState<null | "card" | "links" | "signature">(null);
   const [copied, setCopied] = useState(false);
   // Sticky signup bar (standalone page only): appears once the visitor actually
@@ -254,8 +228,12 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
   });
 
   const card = CARDS.find((c) => c.key === activeKey)!;
-  const firstName = card.data.name.split(" ")[0];
   const traffic = card.traffic[range === "locations" ? "week" : range];
+  // The window's total, and the unique/repeat split and link taps the real
+  // Traffic box shows with it (sample proportions).
+  const totalViews = Number(traffic.card.replace(/,/g, "")) + Number(traffic.links.replace(/,/g, ""));
+  const unique = Math.round(totalViews * 0.62);
+  const linkTaps = Math.round(totalViews * 0.16);
 
   // Demo buckets for the traffic chart, mirroring the real dashboard's series.
   // Generated on the CLIENT after mount: bucket timestamps come from the clock,
@@ -281,12 +259,18 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
 
     const weights = Array.from({ length: n }, () => 0.35 + rnd());
     const sum = weights.reduce((a, b) => a + b, 0);
-    // eslint-disable-next-line react-hooks/purity -- runs in an effect, not render: bucket timestamps must come from the real clock so the chart's axis reads like live data
+    // Runs in an effect, not render: bucket timestamps come from the real
+    // clock so the chart's axis reads like live data.
     const nowBucket = Math.floor(Date.now() / stepMs) * stepMs;
-    const list: TrafficBucket[] = weights.map((w, i) => ({
-      ts: nowBucket - (n - 1 - i) * stepMs,
-      count: Math.max(0, Math.round((total * w) / sum)),
-    }));
+    // Split each bar into SwiftCard and Swift Links, in the window's own
+    // proportion, so the chart shows its legend and two colours as the real
+    // dashboard's does.
+    const linkShare = Number(t.links.replace(/,/g, "")) / total;
+    const list: TrafficBucket[] = weights.map((w, i) => {
+      const count = Math.max(0, Math.round((total * w) / sum));
+      const links = Math.round(count * linkShare * (0.85 + rnd() * 0.3));
+      return { ts: nowBucket - (n - 1 - i) * stepMs, count, card: Math.max(0, count - links), links: Math.min(count, links) };
+    });
     // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only clock-derived data
     setBuckets({ list, max: Math.max(...list.map((b) => b.count), 1) });
   }, [card, range]);
@@ -310,30 +294,50 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
   // sticky right column on desktop, matching the real dashboard's phone layout.
   const cardSharePanel = (
     <>
+      {/* Just the card (real dashboard since 2026-09-30: no heading, hint or
+          caption) — tap it to open the live card — and the small Download.
+          Download is drawn, not wired: there is no account to save to. */}
       <Box>
-        <div className="flex items-center gap-2 mb-1">
-          <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[0.6875rem] font-bold flex items-center justify-center shrink-0">1</span>
-          <p className="text-white text-sm font-semibold">Your SwiftCard</p>
-        </div>
-        <p className="text-gray-300 text-[0.6875rem] mb-3 leading-relaxed">Exactly what people get when you share — tap to open.</p>
-        <button type="button" onClick={() => openDemo("card")} className="block w-full rounded-xl overflow-hidden ring-1 ring-blue-500/30 hover:ring-blue-500/60 transition-all bg-[#FAF7F2]">
+        <button type="button" onClick={() => openDemo("card")} aria-label="Open the live card" className="block w-full rounded-xl overflow-hidden ring-1 ring-blue-500/30 hover:ring-blue-500/60 transition-all bg-[#FAF7F2]">
           <CardOnlyPreview key={card.handle} src={`/${card.handle}?embed=card`} />
         </button>
-        <button type="button" onClick={() => openDemo("card")} className="mt-3 w-full text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-full py-2.5 transition-colors">Preview SwiftCard →</button>
+        <span className="mt-3 w-full flex items-center justify-center gap-1.5 text-xs font-semibold border rounded-full py-2 text-gray-300 bg-gray-800 border-gray-700">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="w-3.5 h-3.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+          </svg>
+          Download
+        </span>
       </Box>
-      {/* The same share box the real dashboard shows: Show QR first. */}
+      {/* The same share box the real dashboard shows: Show QR first, then
+          Share link, Other ways to share, and "At an event?" (drawn — tagging
+          contacts needs an account). */}
       <Box className="space-y-2">
         <QRCodeModal url={qrScanUrl(cardUrl)} firstName={String(card.data.name ?? "").split(/\s+/)[0] || "me"} label="Show QR" variant="primary" />
         <ShareButton url={cardUrl} title="My SwiftCard" text="Save my contact and connect with me instantly." label="Share link" variant="ghost" />
         <MoreShareOptions url={cardUrl} />
+        <div className="pt-2">
+          <span className="w-full flex items-center justify-center gap-1.5 text-[0.6875rem] font-semibold text-gray-500">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3 h-3 shrink-0 text-gray-500" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+            </svg>
+            At an event? Tag today&apos;s contacts
+          </span>
+        </div>
       </Box>
     </>
   );
 
   const Wrapper = embedded ? "div" : "main";
   return (
-    <Wrapper className={embedded ? "text-white" : "min-h-screen bg-gray-950 text-white"}>
+    // data-sc-theme="light" + .sc-app: the app opens LIGHT (9d7e592), so the
+    // demo of it must too. Same hooks globals.css keys the real dashboard's
+    // light remap on, so the same classes get the same treatment. The site
+    // nav above stays outside .sc-app (the site header is dark, owner
+    // 2026-09-17); the full-screen phone viewers are portalled to <body>.
+    <Wrapper data-sc-theme="light" className={embedded ? "text-white" : "min-h-screen bg-gray-950 text-white"}>
       {!embedded && <SiteNav />}
+      <div className="sc-app bg-gray-950 text-white min-h-screen">
       {/* The signed-in portal's own navbar, replicated so the demo looks like
           the real thing rather than a marketing page wearing its data. Its
           tabs switch which section below is shown, same as the real app's
@@ -343,7 +347,9 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
       <div className={embedded ? "max-w-5xl mx-auto px-5 py-7" : "max-w-5xl mx-auto px-5 pt-7 pb-7"}>
         {!embedded && (
           <div className="mb-6">
-            <h1 className="text-2xl font-bold">This is your dashboard — try it out</h1>
+            {/* text-white as its own class: the light remap recolours .text-white
+                INSIDE .sc-app, and an inherited colour would stay white. */}
+            <h1 className="text-2xl font-bold text-white">This is your dashboard — try it out</h1>
             <p className="text-gray-300 text-sm mt-1.5">The real app, loaded with sample data. Nothing to install.</p>
           </div>
         )}
@@ -372,29 +378,53 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
         </div>
 
         {/* My Cards */}
+        {/* My Cards — the real box: its caption, "View Live Link" + "Add card"
+            top-right, and an Edit button on every row (2026-09-29). View Live
+            Link opens the live card here; Add card and Edit are drawn (there
+            is no account to add to or edit). */}
         <Box className="mb-5">
-          <div className="flex items-center justify-between mb-3">
-            <div>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="min-w-0">
               <p className="text-white font-semibold text-sm">My Cards</p>
-              <p className="text-gray-300 text-xs mt-0.5">Tap a card to switch — everything below updates to that card.</p>
+              <p className="hidden sm:block text-gray-600 text-xs mt-0.5">Check a card to view everything about it. Only one card can be selected at a time.</p>
             </div>
-            <span className="text-xs text-blue-400 font-medium">+ Add card</span>
+            <div className="flex items-center gap-2 shrink-0">
+              <button type="button" onClick={() => openDemo("card")}
+                className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg border border-gray-700 text-gray-300 text-[0.6875rem] sm:text-xs font-semibold hover:border-gray-500 hover:text-white hover:bg-gray-800 transition-colors">
+                <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 sm:w-3.5 sm:h-3.5" aria-hidden="true">
+                  <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                  <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                </svg>
+                View Live Link
+              </button>
+              <span className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg border border-gray-700 text-blue-400 text-[0.6875rem] sm:text-xs font-semibold">
+                <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 sm:w-3.5 sm:h-3.5" aria-hidden="true"><path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" /></svg>
+                Add card
+              </span>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             {CARDS.map((c) => {
               const active = c.key === activeKey;
               return (
-                <button key={c.key} onClick={() => { setActiveKey(c.key); setEngaged(true); }} type="button"
-                  className={`text-left flex items-center gap-3 rounded-xl px-4 py-3 border flex-1 min-w-full sm:min-w-[230px] transition-colors ${active ? "bg-blue-600/10 border-blue-600/40" : "bg-gray-800/60 border-gray-700/60 hover:border-gray-600"}`}>
-                  <span className={`w-[18px] h-[18px] rounded-[5px] border flex items-center justify-center shrink-0 ${active ? "bg-blue-600 border-blue-600" : "border-gray-600"}`}>
-                    {active && <svg viewBox="0 0 20 20" fill="white" className="w-3 h-3"><path fillRule="evenodd" d="M16.704 5.29a1 1 0 010 1.42l-7.5 7.5a1 1 0 01-1.42 0l-3.5-3.5a1 1 0 111.42-1.42l2.79 2.79 6.79-6.79a1 1 0 011.42 0z" clipRule="evenodd" /></svg>}
+                <div key={c.key} className={`flex items-center gap-3 rounded-xl px-4 py-3 border flex-1 min-w-full sm:min-w-[240px] transition-colors ${active ? "bg-blue-600/10 border-blue-600/40" : "bg-gray-800/60 border-gray-700/60 hover:border-gray-600"}`}>
+                  <button type="button" role="radio" aria-checked={active} onClick={() => { setActiveKey(c.key); setEngaged(true); }} className="flex items-center gap-3 flex-1 min-w-0 text-left">
+                    <span className={`w-[18px] h-[18px] rounded-[5px] border flex items-center justify-center shrink-0 ${active ? "bg-blue-600 border-blue-600" : "border-gray-600"}`}>
+                      {active && <svg viewBox="0 0 20 20" fill="white" className="w-3 h-3"><path fillRule="evenodd" d="M16.704 5.29a1 1 0 010 1.42l-7.5 7.5a1 1 0 01-1.42 0l-3.5-3.5a1 1 0 111.42-1.42l2.79 2.79 6.79-6.79a1 1 0 011.42 0z" clipRule="evenodd" /></svg>}
+                    </span>
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${active ? "bg-blue-600/30 border border-blue-500/40 text-blue-300" : "bg-gray-700 text-gray-300"}`}>{c.label[0]}</div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-white text-sm font-medium truncate">{c.label}</p>
+                      <p className="text-gray-500 text-xs truncate">/{c.handle} · {c.data.name}</p>
+                    </div>
+                  </button>
+                  <span className={`shrink-0 inline-flex items-center justify-center gap-1 h-7 min-w-7 px-2 rounded-lg border text-[0.6875rem] font-semibold ${active ? "border-blue-500/40 text-blue-300" : "border-gray-600/70 text-gray-300"}`}>
+                    <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 shrink-0" aria-hidden="true">
+                      <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                    </svg>
+                    <span className="max-sm:hidden">Edit</span>
                   </span>
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 text-white" style={{ background: c.accent }}>{c.label[0]}</div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-white text-sm font-medium truncate">{c.label}</p>
-                    <p className="text-gray-300 text-xs truncate">/{c.handle} · {c.data.title}</p>
-                  </div>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -413,58 +443,58 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 lg:items-start">
           <div className="min-w-0">
           <Box>
-            {/* flex-wrap + gap: "Traffic" plus the four range pills need 287px
-                of a 280px box at 320px, which was the last 5px of sideways
-                scroll on this page. The pills drop under the label there; at
-                360px+ they still sit on the same line as before. */}
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-              <p className="text-white font-semibold text-sm">Traffic</p>
-              <div className="flex items-center bg-gray-800 rounded-lg p-0.5">
+            {/* No "Traffic" heading (real dashboard since 2026-09-29): the range
+                bar starts at the box's left edge — four equal tabs across a
+                phone, its compact size on a computer. */}
+            <div className="flex items-center mb-4">
+              <div className="grid grid-cols-4 w-full lg:flex lg:w-auto items-center bg-gray-800 rounded-lg p-0.5">
                 {RANGES.map((r) => (
                   <button key={r.id} type="button" onClick={() => setRange(r.id)}
-                    className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-colors ${range === r.id ? "bg-gray-700 text-white" : "text-gray-400 hover:text-gray-300"}`}>{r.label}</button>
+                    className={`text-[0.6875rem] min-[375px]:text-xs font-semibold px-0.5 py-1.5 lg:px-2.5 lg:py-1 rounded-md whitespace-nowrap transition-colors ${range === r.id ? "bg-gray-700 text-white" : "text-gray-500 hover:text-gray-300"}`}>{r.label}</button>
                 ))}
               </div>
             </div>
             {range === "locations" ? (
               /* Locations — top places views come from, split by surface (mirrors the real dashboard) */
               <div className="space-y-2">
+                <p className="text-gray-500 text-[0.6875rem] mb-1">Top locations · all time</p>
                 {card.locations.map((loc) => (
                   <div key={loc.location} className="bg-gray-800/40 border border-gray-800 rounded-xl px-4 py-3">
                     <div className="flex items-center justify-between gap-2 mb-1.5">
                       <p className="text-gray-100 text-sm font-semibold truncate">{loc.location}</p>
-                      <p className="text-white text-sm font-bold tabular-nums shrink-0">{(loc.card + loc.link).toLocaleString()} <span className="text-gray-400 font-medium text-[0.6875rem]">views</span></p>
+                      <p className="text-white text-sm font-bold tabular-nums shrink-0">{(loc.card + loc.link).toLocaleString("en-US")} <span className="text-gray-500 font-medium text-[0.6875rem]">views</span></p>
                     </div>
                     <div className="flex items-center gap-4 text-[0.6875rem]">
-                      <span className="text-gray-400">SwiftCard <span className="text-gray-200 font-semibold tabular-nums">{loc.card.toLocaleString()}</span></span>
-                      <span className="text-gray-400">Swift Links <span className="text-gray-200 font-semibold tabular-nums">{loc.link.toLocaleString()}</span></span>
+                      <span className="text-gray-500">SwiftCard <span className="text-gray-200 font-semibold tabular-nums">{loc.card.toLocaleString("en-US")}</span></span>
+                      <span className="text-gray-500">Swift Links <span className="text-gray-200 font-semibold tabular-nums">{loc.link.toLocaleString("en-US")}</span></span>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
             <div>
-              {/* Stat tiles side by side with change vs the previous window —
-                  the exact layout the real dashboard's Traffic box uses. */}
+              {/* Stat tiles — label + count only, as the real box (its
+                  "▲ x% vs last week" line was removed on 2026-08-13). */}
               <div className="grid grid-cols-2 gap-3">
-                {/* range is already narrowed here — the locations branch was
-                    handled above, so no defensive fallback is needed. */}
                 {[
-                  { label: "SwiftCard views", value: traffic.card, delta: card.deltas[range].card, accent: "#818cf8" },
-                  { label: "Swift Link views", value: traffic.links, delta: card.deltas[range].links, accent: "#22d3ee" },
+                  { label: "SwiftCard views", value: traffic.card },
+                  { label: "Swift Link views", value: traffic.links },
                 ].map((m) => (
                   <div key={m.label} className="bg-gray-800/40 border border-gray-800 rounded-xl px-4 py-3.5 min-w-0">
                     <p className="text-gray-400 text-xs font-medium truncate">{m.label}</p>
                     <p className="text-2xl font-bold text-white tabular-nums mt-0.5">{m.value}</p>
-                    <p className="text-[0.6875rem] font-semibold mt-0.5" style={{ color: m.delta < 0 ? "#f87171" : m.accent }}>
-                      {m.delta < 0 ? "▼" : "▲"} {Math.abs(m.delta)}% {DELTA_PERIOD[range]}
-                    </p>
                   </div>
                 ))}
               </div>
-              {/* Same time-series bar graph the real dashboard renders. Buckets
-                  are generated on mount (they carry real timestamps, which
-                  would differ between server render and hydration). */}
+              {/* Unique vs repeat for the same window, as the real box. */}
+              <div className="flex items-center gap-4 mt-2 text-[0.6875rem]">
+                <span className="text-gray-500">Unique viewers <span className="text-gray-200 font-semibold tabular-nums">{unique.toLocaleString("en-US")}</span></span>
+                <span className="text-gray-500">Repeat views <span className="text-gray-200 font-semibold tabular-nums">{(totalViews - unique).toLocaleString("en-US")}</span></span>
+              </div>
+              {/* Same time-series bar graph the real dashboard renders, split
+                  into SwiftCard and Swift Links. Buckets are generated on mount
+                  (they carry real timestamps, which would differ between
+                  server render and hydration). */}
               {buckets && (
                 <TrafficChart
                   buckets={buckets.list}
@@ -475,10 +505,11 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
               )}
             </div>
             )}
-            {/* Basic stats footer — contacts captured + best day, like the real box */}
+            {/* Basic stats footer — contacts · link taps · best day, like the real box */}
             <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-gray-800/70 text-[0.6875rem]">
-              <span className="text-gray-400">Contacts <span className="text-gray-200 font-semibold tabular-nums">{card.total}</span></span>
-              <span className="text-gray-400">Best day <span className="text-gray-200 font-semibold">{card.bestDay.label}</span> · {card.bestDay.views}</span>
+              <span className="text-gray-500">Contacts <span className="text-gray-200 font-semibold tabular-nums">{card.total}</span></span>
+              <span className="text-gray-500">Link taps <span className="text-gray-200 font-semibold tabular-nums">{linkTaps.toLocaleString("en-US")}</span></span>
+              <span className="text-gray-500">Best day <span className="text-gray-200 font-semibold">{card.bestDay.label}</span> · {card.bestDay.views}</span>
             </div>
           </Box>
           </div>
@@ -554,97 +585,81 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
           </div>
         )}
 
-        {/* Contacts tab — the list takes the full width, matching the real
-            /contacts page. (It no longer shows on the Dashboard tab: the real
-            dashboard has no contact list since 2026-09-29.) */}
+        {/* Contacts tab — the real /contacts list: "All contacts" with Scan a
+            card + Add contact, search, sort and the count, then one row per
+            contact — avatar (with the unread dot), name + where they came
+            from, company, email, when — with Call / Text / Email and the read
+            dot. No Notifications / List / Pipeline switch and no statuses:
+            neither exists in the product (statuses left on 2026-08-11). The
+            read dot works; everything that needs an account is drawn. */}
         {portalTab === "contacts" && (
-        <div className="grid grid-cols-1 gap-5">
-          {/* Contacts */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-baseline gap-2.5">
-                <h2 className="text-white font-semibold text-sm">Contacts</h2>
-                <span className="text-white font-bold text-lg tabular-nums">{card.total}</span>
-                <span className="text-gray-300 text-[0.6875rem] font-medium">Total leads</span>
+        <div className="max-w-xl mx-auto">
+          <Box className="!p-0 overflow-hidden">
+            <div className="p-4 border-b border-gray-800 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-gray-500 text-xs">All contacts</p>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl whitespace-nowrap border border-gray-700 text-gray-300">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                    </svg>
+                    Scan a card
+                  </span>
+                  <span className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl whitespace-nowrap" style={{ background: "#1D4ED8", color: "#fff" }}>
+                    <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5"><path d="M8 2a1 1 0 011 1v4h4a1 1 0 110 2H9v4a1 1 0 11-2 0V9H3a1 1 0 110-2h4V3a1 1 0 011-1z"/></svg>
+                    Add contact
+                  </span>
+                </div>
               </div>
-              <span className="text-xs text-gray-300 bg-gray-800 border border-gray-700 px-3 py-1.5 rounded-lg">+ Add contact</span>
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <div className="w-full bg-gray-900 border border-gray-700 text-gray-500 rounded-xl pl-9 pr-4 py-2.5 text-sm">Search contacts…</div>
+              </div>
+              <div className="bg-gray-900 border border-gray-700 text-gray-300 rounded-xl px-3 py-2 text-xs w-full">Recently Added</div>
+              <p className="text-gray-600 text-xs pl-1">{card.leads.length} contacts</p>
             </div>
-
-            {/* View toggle — interactive */}
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              <div className="flex items-center bg-gray-800/80 rounded-lg p-0.5">
-                {VIEWS.map((v) => (
-                  <button key={v} type="button" onClick={() => setView(v)}
-                    className={`text-xs font-medium px-3 py-1 rounded-md transition-colors ${view === v ? "bg-gray-700 text-white" : "text-gray-400 hover:text-gray-300"}`}>{v}</button>
-                ))}
-              </div>
+            <div>
+              {card.leads.map((l) => {
+                const unread = !read[l.id];
+                return (
+                  <div key={l.id} className="w-full text-left px-4 py-3.5 border-b border-gray-800/50 last:border-b-0">
+                    <div className="flex items-start gap-3">
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                        <div className="relative shrink-0 mt-0.5">
+                          <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white">{l.name[0]}</div>
+                          {unread && <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-blue-500 border-2 border-gray-950" title="Unread" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className={`text-sm truncate ${unread ? "text-white font-bold" : "text-gray-100 font-semibold"}`}>{l.name}</p>
+                            {l.source && <span className="text-[0.625rem] font-semibold px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 shrink-0">{l.source}</span>}
+                          </div>
+                          <p className="text-gray-400 text-xs truncate">{l.company}</p>
+                          <p className="text-gray-500 text-xs truncate">{l.email}</p>
+                          <p className="text-gray-700 text-[0.625rem] mt-0.5">{l.time}</p>
+                        </div>
+                      </div>
+                      <div className="self-center"><DemoContactActions name={l.name} phone email /></div>
+                      <button
+                        type="button"
+                        onClick={() => toggleRead(l.id)}
+                        title={unread ? "Mark as read" : "Mark as unread"}
+                        aria-label={unread ? "Mark as read" : "Mark as unread"}
+                        className={`shrink-0 self-center p-1.5 rounded-lg transition-colors ${unread ? "text-blue-400 hover:bg-blue-500/10" : "text-gray-500 hover:text-gray-300 hover:bg-gray-800"}`}
+                      >
+                        <span aria-hidden="true" className="flex w-4 h-4 items-center justify-center">
+                          <span className={`block w-2.5 h-2.5 rounded-full ${unread ? "bg-current" : "border-[1.5px] border-current"}`} />
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-
-            {/* Notifications / List */}
-            {(view === "Notifications" || view === "List") && (
-              <div className="space-y-2">
-                {card.leads.map((l) => {
-                  const isRead = read[l.id];
-                  return (
-                    <div key={l.id} className={`border rounded-2xl px-4 py-3.5 flex items-center gap-3 transition-colors ${isRead ? "bg-gray-900 border-gray-800/80" : "bg-blue-600/[0.07] border-blue-600/30"}`}>
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${isRead ? "bg-transparent" : "bg-blue-500"}`} />
-                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 text-white" style={{ background: l.color }}>{l.initial}</div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className={`text-sm truncate ${isRead ? "text-gray-200 font-medium" : "text-white font-semibold"}`}>{l.name}</p>
-                          <span className="text-[0.625rem] font-semibold px-1.5 py-0.5 rounded shrink-0" style={{ background: l.color + "22", color: l.color }}>{l.source}</span>
-                        </div>
-                        <p className="text-gray-300 text-xs truncate mt-0.5">{view === "Notifications" ? `Shared their contact with ${firstName}` : l.msg}</p>
-                      </div>
-                      <DemoContactActions name={l.name} phone email />
-                      <div className="flex flex-col items-end gap-1.5 shrink-0">
-                        <span className="text-[0.625rem] font-semibold px-2 py-0.5 rounded-full" style={{ background: STATUS_STYLE[l.status].bg, color: STATUS_STYLE[l.status].text }}>{l.status}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-400 text-[0.625rem]">{l.time}</span>
-                          <ReadToggle read={isRead} onClick={() => toggleRead(l.id)} />
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Pipeline */}
-            {view === "Pipeline" && (
-              <div className="flex gap-3 overflow-x-auto pb-2">
-                {(["New Contact", "Touch", "Dissolved"] as Status[]).map((status) => {
-                  const items = card.leads.filter((l) => l.status === status);
-                  return (
-                    <div key={status} className="min-w-[160px] flex-1 bg-gray-900/40 border border-gray-800/80 rounded-2xl p-2.5">
-                      <div className="flex items-center justify-between px-1 mb-2">
-                        <span className="text-[0.6875rem] font-semibold" style={{ color: STATUS_STYLE[status].text }}>{status}</span>
-                        <span className="text-gray-400 text-[0.625rem]">{items.length}</span>
-                      </div>
-                      <div className="space-y-2">
-                        {items.map((l) => {
-                          const isRead = read[l.id];
-                          return (
-                            <div key={l.id} className={`rounded-xl p-2.5 border transition-colors ${isRead ? "bg-gray-800/50 border-gray-700/50" : "bg-blue-600/[0.1] border-blue-600/30"}`}>
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full flex items-center justify-center text-[0.625rem] font-bold shrink-0 text-white" style={{ background: l.color }}>{l.initial}</div>
-                                <p className="text-white text-xs font-semibold truncate flex-1">{l.name}</p>
-                                {!isRead && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />}
-                              </div>
-                              <p className="text-gray-400 text-[0.625rem] mt-1.5 leading-snug line-clamp-2">{l.msg}</p>
-                              <div className="mt-2 flex justify-end"><ReadToggle read={isRead} onClick={() => toggleRead(l.id)} /></div>
-                            </div>
-                          );
-                        })}
-                        {items.length === 0 && <p className="text-gray-700 text-[0.625rem] text-center py-3">None</p>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
+          </Box>
         </div>
         )}
 
@@ -652,6 +667,7 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
           <p className="text-gray-400 text-sm mb-4">This is exactly what you get — set up your own in under 30 seconds.</p>
           <Link href="/join?src=preview" className="inline-block bg-blue-600 hover:bg-blue-500 text-white font-bold px-9 py-4 rounded-full transition-colors text-base">Create Your Card for Free →</Link>
         </div>
+      </div>
       </div>
 
       {/* Sticky signup bar — standalone page only, appears after first interaction,
@@ -710,10 +726,42 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
                 </div>
               </div>
             </div>
+            {/* The real box's button, two numbered steps, email-settings buttons
+                and the Gmail / work-Outlook notes (EmailSignatureBox, 5efa1883). */}
             <button onClick={copySig} className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm py-2.5 rounded-full transition-colors">
-              {copied ? "Copied ✓ — paste it into your email signature" : "Copy Swift Signature"}
+              {copied ? "Copied ✓ Now paste it in your email" : "Copy signature"}
             </button>
-            <p className="text-gray-400 text-[0.6875rem] mt-2 text-center">Paste into <strong className="text-gray-400">Gmail → Settings → Signature</strong>.</p>
+            <ol className="mt-4 space-y-2.5">
+              <li className="flex gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-gray-800 text-gray-300 text-[0.6875rem] font-bold flex items-center justify-center shrink-0">1</span>
+                <p className="text-gray-300 text-[0.75rem] leading-relaxed">Tap <strong className="text-white">Copy signature</strong> above.</p>
+              </li>
+              <li className="flex gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-gray-800 text-gray-300 text-[0.6875rem] font-bold flex items-center justify-center shrink-0">2</span>
+                <p className="text-gray-300 text-[0.75rem] leading-relaxed">Open your email below, <strong className="text-white">paste</strong> it into the Signature box, and <strong className="text-white">save</strong>.</p>
+              </li>
+            </ol>
+            <div className="grid grid-cols-3 gap-2 mt-3">
+              {[
+                { label: "Gmail", url: "https://mail.google.com/mail/u/0/#settings/general" },
+                { label: "Outlook", url: "https://outlook.live.com/mail/0/options/mail/messageContent" },
+                { label: "Yahoo", url: "https://mail.yahoo.com/d/settings/1" },
+              ].map((p) => (
+                <a key={p.label} href={p.url} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-[0.6875rem] font-semibold py-2 rounded-xl transition-colors">
+                  {p.label}
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 opacity-60"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" /><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" /></svg>
+                </a>
+              ))}
+            </div>
+            <div className="mt-3 space-y-1.5 text-[0.6875rem] text-gray-500 leading-relaxed">
+              <p><strong className="text-gray-300">Gmail:</strong> scroll down to Signature, paste, then click <strong className="text-gray-300">Save Changes</strong> at the very bottom.</p>
+              <p>
+                <strong className="text-gray-300">Outlook for work or school?</strong>{" "}
+                <a href="https://outlook.office.com/mail/options/mail/messageContent" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline underline-offset-2">Open it here</a> instead.
+              </p>
+              <p>Another email app? Paste it into that app&apos;s signature settings.</p>
+            </div>
           </div>
         </FullScreen>
       )}

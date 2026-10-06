@@ -50,7 +50,7 @@ export const marketingDocs = defineDocs([
     answer:
       "Two ways, both free and account-free. swiftcard.me/preview is the real app loaded with sample data — click around the dashboard, contacts and links. And swiftcard.me/cards/new lets you build your actual card first; you only make an account at the end, when you save it.",
     detail:
-      "Everything on /preview is demo data — the view counts and contacts there belong to nobody, and it cannot be logged into. In the builder, a card built as a guest lives in your browser as a draft and is not stored on our servers until you pick a plan and create the account. Going back to the homepage clears that draft.",
+      "Everything on /preview is demo data — the view counts and contacts there belong to nobody, and it cannot be logged into. In the builder, a card built as a guest lives in your browser as a draft and is not stored on our servers until you pick a plan and create the account. Going back to the homepage clears that draft. The homepage's \"See how your card looks\" builder (and the Swift Signature one) has the same design steps, including \"Custom design\" with \"AI design\" — \"Copy a card or template you like\" stays Pro — and whatever you make there carries into the card builder when you press \"Make it live →\".",
   },
   {
     id: "getting-started-visitor",

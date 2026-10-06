@@ -87,9 +87,11 @@ export default function PortalNavPreview({
           })}
         </div>
 
-        {/* Right: the same icon set the real navbar carries. Inert here — see
-            the note at the top of this file. Hidden below sm so the tabs keep
-            room on a phone, exactly like the real header. */}
+        {/* Right: the same icon set the real navbar carries (Settings, Grow,
+            theme, bell). Inert here — see the note at the top of this file.
+            Hidden below sm: on a phone the real app moves its tabs to a bottom
+            bar, but this demo keeps them up here as its only navigation, so the
+            icons give them the room. */}
         <div className="hidden sm:flex items-center gap-2 shrink-0" aria-hidden="true">
           <span className="flex items-center justify-center w-9 h-9 rounded-lg text-gray-400">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} className="w-5 h-5">
@@ -112,8 +114,7 @@ export default function PortalNavPreview({
               <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
             </svg>
           </span>
-          <div className="w-px h-4 bg-gray-800 mx-1" />
-          <span className="text-sm text-gray-500">Sign out</span>
+          {/* No "Sign out" here: it moved to Settings → Profile (759a66d4). */}
         </div>
       </div>
     </nav>

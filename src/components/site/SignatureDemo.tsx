@@ -9,6 +9,7 @@ import type { CardData } from "@/components/card-templates/types";
 import SaveContactButton from "@/components/SaveContactButton";
 import ShareButton from "@/components/ShareButton";
 import DemoSwiftLinks from "./DemoSwiftLinks";
+import DemoGetCardButton from "./DemoGetCardButton";
 import { cardPageTheme } from "@/lib/card-page-theme";
 
 // Email Signature showcase: a wide, realistic email whose signature is the REAL
@@ -99,6 +100,12 @@ function SwiftCardPopup({ onClose }: { onClose: () => void }) {
               </div>
             </div>
 
+            {/* Swift Links (the real card section, shared by every mockup) —
+                right after Save contact, as on the live page since 2026-09-22. */}
+            <div className={PANEL} style={panelStyle}>
+              <DemoSwiftLinks compact={false} />
+            </div>
+
             {/* Share your info */}
             <div className={PANEL} style={panelStyle}>
               <p className="text-slate-900 font-bold text-[0.9375rem] tracking-tight mb-4">Share your info with {FIRST}</p>
@@ -117,27 +124,13 @@ function SwiftCardPopup({ onClose }: { onClose: () => void }) {
               </div>
             </div>
 
-            {/* Swift Links (the real card section, shared by every mockup) */}
-            <div className={PANEL} style={panelStyle}>
-              <DemoSwiftLinks compact={false} />
-            </div>
-
-            {/* Share this card — just the share button, like the live page
-                (the "Show QR Code" control was removed from the card page).
-                The demo card is a Free card, so the Free-only viewer CTA line
-                below the button is truthful here. */}
+            {/* Share this card — the share button and the live page's
+                "Create your free SwiftCard" button under it (the "Show QR
+                Code" control was removed from the card page). */}
             <div className={PANEL} style={panelStyle}>
               <ShareButton url={CARD_URL} text={`Connect with ${FIRST} — save their contact instantly.`} label="Share this card" />
-              <span className="block text-center text-slate-400 text-[0.6875rem] mt-3">Create your card · swiftcard.me</span>
+              <DemoGetCardButton />
             </div>
-
-            {/* The attribution badge, worded exactly as SwiftLinkProfile now
-                renders it — a marketing mock of a real surface has to say what
-                that surface says. */}
-            <span className="flex items-center gap-1.5 text-slate-400 text-[0.6875rem]">
-              <svg viewBox="0 0 100 100" className="w-3 h-3"><polygon points="57,15 38,52 50,52 43,85 62,48 50,48" fill="currentColor" /></svg>
-              Made with SwiftCard
-            </span>
           </div>
         </div>
       </div>

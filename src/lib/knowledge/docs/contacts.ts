@@ -117,9 +117,9 @@ export const contactsDocs = defineDocs([
       "drip", "cadence", "light medium aggressive",
     ],
     answer:
-      "Open a contact → \"Contact info / Presets\" tab → \"FOLLOW-UP AUTOMATIONS\". Email and Text are separate switches and you can run either or both. Flip one on, choose a cadence — Light (2 touches), Medium (3) or Aggressive (4) — and SwiftCard writes and sends the messages for you. Automated sequences are a Pro feature.",
+      "Open a contact → \"Contact info / Presets\" tab → \"FOLLOW-UP AUTOMATIONS\". Email and Text are separate switches and you can run either or both. Flip one on, choose a cadence — Light (2 touches), Medium (3) or Aggressive (4) — and SwiftCard sends the messages for you. Email follow-ups work on every plan; text follow-ups and AI-written messages are Pro.",
     detail:
-      "The messages are AI-written from that contact's \"Where did you meet?\" and Notes, plus the Swift Links bio on the card they came in through (that is how the AI knows what you do), so a contact with neither gets generic copy — fill those in first. A channel with nothing to send to is disabled (\"No email on file for this contact\"). Texts only send if that person ticked the SMS consent box themselves when they shared their info; without it the text channel cannot be switched on, whatever the plan. Free accounts get no AI-written messages at all — AI drafting is Pro-only.",
+      "On Pro the messages are AI-written from that contact's \"Where did you meet?\" and Notes, plus the Swift Links bio on the card they came in through (that is how the AI knows what you do), so a contact with neither gets generic copy — fill those in first. A channel with nothing to send to is disabled (\"No email on file for this contact\"). Texts only go to a contact you switch texts on for — the switch reads \"Only switch this on if [name] agreed you could text them.\" Sharing their details on your card never signs anyone up for texts (there is no consent box on that form), and a STOP reply ends texts for good. Free accounts get ready-made wording instead of AI-written messages — AI drafting is Pro-only.",
   },
   {
     id: "export-contacts",

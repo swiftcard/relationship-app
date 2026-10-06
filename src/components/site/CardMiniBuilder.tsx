@@ -15,6 +15,9 @@ import PhotoFirst from "@/components/card-templates/PhotoFirst";
 import LocalBusiness from "@/components/card-templates/LocalBusiness";
 import LuxuryMinimal from "@/components/card-templates/LuxuryMinimal";
 import LogoFirst from "@/components/card-templates/LogoFirst";
+import CustomCard from "@/components/card-templates/CustomCard";
+import CustomCardDesigner from "@/components/CustomCardDesigner";
+import { DEFAULT_PRESET, buildPreset, normalizeCustomLayout } from "@/lib/custom-layout";
 import type { CardData } from "@/components/card-templates/types";
 import MiniBuilderModal, { type MiniStep } from "./MiniBuilderModal";
 import { useProductSketch } from "./useProductSketch";
@@ -59,7 +62,11 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
   }, [linkedInReturn]);
 
 
-  const Preview = TEMPLATES.find((t) => t.id === sketch.template)?.Component ?? ClassicPro;
+  // Custom design: the layout the visitor is building (AI design or the
+  // designer), starting from the same preset the real builder opens on.
+  const customSelected = sketch.template === "custom";
+  const customLayout = sketch.customLayout ? normalizeCustomLayout(sketch.customLayout) : buildPreset(DEFAULT_PRESET);
+  const Preview = customSelected ? CustomCard : TEMPLATES.find((t) => t.id === sketch.template)?.Component ?? ClassicPro;
   const addressStr = [
     sketch.street,
     sketch.city,
@@ -84,7 +91,7 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
     instagram: sketch.socials.instagram,
     twitter: sketch.socials.twitter,
     tiktok: sketch.socials.tiktok,
-    customization: { ...sketch.style, links: sketch.links, logoShape: sketch.logoShape },
+    customization: { ...sketch.style, links: sketch.links, logoShape: sketch.logoShape, ...(customSelected ? { customLayout } : {}) },
   };
 
   function launch() {
@@ -167,11 +174,17 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
         <div className="space-y-4">
           {/* EXACTLY the Card design tab (owner, 2026-09-16: "the same order,
               the same everything"): the shared template gallery, then the
-              shared numbered design steps. Custom design shows LOCKED with its
-              small PRO tag, exactly as for a guest in the real builder — it opens
-              only for a Pro or Office account (owner, 2026-09-18). */}
-          <TemplatePicker template={sketch.template} onSelect={(id) => patch({ template: id })} data={data} customUnlocked={false} upsell={false} />
-          <TemplateStyleControls value={sketch.style} onChange={patchStyle} template={sketch.template} />
+              shared numbered design steps. Custom design OPENS here, exactly as
+              it does for a guest's first card in the real builder (901ca554):
+              AI design works, "Copy a card or template you like" keeps its PRO
+              tag (canScan={false} — its routes need a paid account). The
+              design rides the hand-off (CardPrefill.customLayout). */}
+          <TemplatePicker template={sketch.template} onSelect={(id) => patch({ template: id })} data={data} customUnlocked upsell={false} />
+          {customSelected ? (
+            <CustomCardDesigner layout={customLayout} data={data} onChange={(l) => patch({ customLayout: l })} canScan={false} />
+          ) : (
+            <TemplateStyleControls value={sketch.style} onChange={patchStyle} template={sketch.template} />
+          )}
         </div>
       ),
     },
