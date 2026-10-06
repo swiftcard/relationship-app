@@ -4,7 +4,7 @@ import { sendPushToUser } from "@/lib/push";
 import { isPaidPlan } from "@/lib/plan";
 import { unlockedLeadBody } from "@/lib/notification-privacy";
 import {
-  localHour, quietWindowStart, readPushPrefs, QUIET_END_HOUR, type PushCategory,
+  localHour, quietWindowStart, readPushPrefs, QUIET_END_HOUR, QUIET_WINDOW_MS, type PushCategory,
 } from "@/lib/push-policy";
 import { contactMayPush } from "@/lib/contact-return-notify";
 import { hasMarkedName } from "@/lib/contact-privacy";
@@ -93,6 +93,9 @@ type TeamRow = { officeId: string; officeName: string | null; type: string; titl
 
 const PAGE = 1000;
 
+/** The catch-up is due from the end of quiet hours (8am) until this hour. */
+const CATCHUP_LAST_HOUR = 20;
+
 function destinationFor(category: PushCategory, cardOwner: string | null): string {
   const card = cardOwner ? `?card=${encodeURIComponent(cardOwner)}` : "";
   if (category === "billing_problem") return `${APP_URL}/settings/flows?billing=1`;
@@ -153,7 +156,7 @@ export async function GET(req: NextRequest) {
       .select("office_id, type, title, body, created_at")
       .eq("read", false)
       .in("type", TEAM_PUSH_TYPES)
-      .gte("created_at", new Date(now - 12 * 3600 * 1000).toISOString())
+      .gte("created_at", new Date(now - 24 * 3600 * 1000).toISOString())
       .order("created_at", { ascending: false })
       .limit(PAGE);
     const officeIds = [...new Set((recent ?? []).map((r) => r.office_id as string))];
@@ -203,8 +206,15 @@ export async function GET(req: NextRequest) {
       // can lag under load; a strict equality would silently skip a person's
       // whole morning over a twenty-minute delay. The once-a-day mark below is
       // what keeps the wider window from meaning two notifications.
-      const hour = localHour(now, prefs.timezone);
-      if (hour !== QUIET_END_HOUR && hour !== QUIET_END_HOUR + 1) continue;
+      //
+      // NOT ONLY 8–9am ANY MORE (2026-10-05). The scheduler is a GitHub cron
+      // that runs a few times a day, not hourly — 01:42, 08:35 and 18:04 UTC on
+      // 2026-10-05 — so an 8–9am slot was usually missed and the catch-up
+      // simply never came. It is now due from 8am until 8pm (two hours before
+      // quiet hours start again), still once a day, and still only for news
+      // that is UNREAD: open the app first and there is nothing to send.
+      const hour = localHour(now, prefs.timezone) % 24;
+      if (hour < QUIET_END_HOUR || hour >= CATCHUP_LAST_HOUR) continue;
       counts.atEight++;
 
       // Once a day, even if the cron fires twice in the hour.
@@ -213,7 +223,7 @@ export async function GET(req: NextRequest) {
         .select("id")
         .eq("user_id", userId)
         .eq("outcome", CATCHUP_OUTCOME)
-        .gte("created_at", new Date(now - 12 * 3600 * 1000).toISOString())
+        .gte("created_at", new Date(now - 14 * 3600 * 1000).toISOString()) // spans the whole 8am–8pm window
         .limit(1);
       if (already?.length) { counts.alreadyDone++; continue; }
 
@@ -228,6 +238,10 @@ export async function GET(req: NextRequest) {
         // The real 10pm boundary in their zone, not `now − 10h`: a cron that
         // runs late must still read the whole night (see quietWindowStart).
         .gte("created_at", new Date(quietWindowStart(now, prefs.timezone)).toISOString())
+        // …and BEFORE quiet hours ended. Now that this can run in the
+        // afternoon, a row written at 10am — pushed live, nothing held — must
+        // not be announced again as "while you were away".
+        .lt("created_at", new Date(quietWindowStart(now, prefs.timezone) + QUIET_WINDOW_MS).toISOString())
         .order("created_at", { ascending: false })
         .limit(50);
 
@@ -243,7 +257,8 @@ export async function GET(req: NextRequest) {
       if (prefs.team_alert !== false) {
         const since = quietWindowStart(now, prefs.timezone);
         for (const t of teamRowsFor.get(userId) ?? []) {
-          if (new Date(t.created_at).getTime() < since) continue;
+          const at = new Date(t.created_at).getTime();
+          if (at < since || at >= since + QUIET_WINDOW_MS) continue; // held overnight only
           held.push({ row: { type: t.type, title: t.title, body: t.body, card_owner: null, created_at: t.created_at, lead_id: null }, category: "team_alert", team: t });
         }
         held.sort((a, b) => String(b.row.created_at).localeCompare(String(a.row.created_at)));

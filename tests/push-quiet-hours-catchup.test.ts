@@ -57,6 +57,7 @@ vi.mock("@/lib/supabase-admin", () => ({
         const q = {
           eq: () => q,
           gte: () => q,
+          lt: () => q,
           order: () => q,
           limit: async () => ({ data: notifications }),
         };
@@ -184,10 +185,28 @@ describe("who the 8am catch-up is for", () => {
     expect(pushes[0].url).toMatch(/\/contacts\?card=dana-card$/);
   });
 
-  it("stays quiet at every other hour of the day", async () => {
+  // 2026-10-05: due from 8am until 8pm, not only 8–9am. The scheduler is a
+  // GitHub cron that runs a few times a day (01:42, 08:35, 18:04 UTC that
+  // day), so an 8–9am slot was usually missed and no catch-up ever came.
+  it("still goes out later in the day when the scheduler missed the morning", async () => {
     vi.setSystemTime(new Date("2026-09-11T17:00:00.000Z")); // 1pm in New York
     await run();
-    expect(pushes).toHaveLength(0);
+    expect(pushes).toHaveLength(1);
+  });
+
+  it("stays quiet overnight, before 8am and from 8pm", async () => {
+    for (const t of ["2026-09-11T11:00:00.000Z" /* 7am */, "2026-09-12T00:30:00.000Z" /* 8:30pm */, "2026-09-12T03:00:00.000Z" /* 11pm */]) {
+      pushes.length = 0;
+      vi.setSystemTime(new Date(t));
+      await run();
+      expect(pushes, t).toHaveLength(0);
+    }
+  });
+
+  it("only news held DURING quiet hours — never a row already pushed live in the morning", () => {
+    const src = readFileSync(join(process.cwd(), "src/app/api/push/catchup/route.ts"), "utf8");
+    expect(src).toContain('.lt("created_at", new Date(quietWindowStart(now, prefs.timezone) + QUIET_WINDOW_MS).toISOString())');
+    expect(src).toContain("if (at < since || at >= since + QUIET_WINDOW_MS) continue;");
   });
 
   it("still goes out at 9am when the scheduler ran late", async () => {

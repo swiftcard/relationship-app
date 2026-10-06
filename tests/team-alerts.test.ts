@@ -115,11 +115,23 @@ describe("the Monday recap", () => {
     expect(`${c.title} ${c.body}`).not.toMatch(/pro\b|upgrade|price|plan/i);
   });
 
-  it("goes out Monday 9–10am in the person's own zone, never without a zone", () => {
+  // A WINDOW, not an hour (2026-10-05): the scheduler runs a few times a day,
+  // so "Monday 9–10am" was usually missed and production sent zero recaps in
+  // two weeks. Due from 9am Monday until Monday ends; the push_log "recap"
+  // ledger makes it once. An unknown zone gets Eastern from noon (9am Pacific).
+  it("is due all Monday from 9am in the person's own zone", () => {
+    expect(isRecapHour(Date.parse("2026-09-21T12:59:00Z"), "America/New_York")).toBe(false); // Mon 8:59
     expect(isRecapHour(Date.parse("2026-09-21T13:15:00Z"), "America/New_York")).toBe(true);  // Mon 9:15
-    expect(isRecapHour(Date.parse("2026-09-21T15:00:00Z"), "America/New_York")).toBe(false); // Mon 11
+    expect(isRecapHour(Date.parse("2026-09-21T22:00:00Z"), "America/New_York")).toBe(true);  // Mon 6pm
+    expect(isRecapHour(Date.parse("2026-09-22T03:30:00Z"), "America/New_York")).toBe(true);  // Mon 11:30pm
+    expect(isRecapHour(Date.parse("2026-09-22T04:30:00Z"), "America/New_York")).toBe(false); // Tue 12:30am
     expect(isRecapHour(Date.parse("2026-09-22T13:15:00Z"), "America/New_York")).toBe(false); // Tue
-    expect(isRecapHour(NOON_NY, null)).toBe(false);
+  });
+
+  it("an unknown zone is Eastern from noon — never a 6am buzz on the west coast", () => {
+    expect(isRecapHour(Date.parse("2026-09-21T15:00:00Z"), null)).toBe(false); // Mon 11am ET
+    expect(isRecapHour(NOON_NY, null)).toBe(true);
+    expect(isRecapHour(Date.parse("2026-09-22T16:00:00Z"), null)).toBe(false); // Tue
   });
 });
 

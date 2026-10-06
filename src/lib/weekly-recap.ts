@@ -63,21 +63,44 @@ export function teamRecapCopy(input: {
   return { title, body: (lead + quiet).trim() || "See the full week in your Admin console." };
 }
 
-/** Monday, 9am or 10am in their zone (10 covers a late scheduler). */
-export function isRecapHour(now: number, timezone: string | null | undefined): boolean {
-  if (!timezone) return false;
-  let weekday = "";
+// ── WINDOWS, NOT HOURS ──────────────────────────────────────────────────────
+// These used to be exact hours ("Monday 9 or 10am"), on the belief that the
+// job runs hourly. It does not: .github/workflows/push-catchup.yml is a GitHub
+// schedule, and GitHub drops most of them — on 2026-10-05 it ran at 01:42,
+// 08:35 and 18:04 UTC, nothing near 9am Eastern. So the recap and the team
+// check landed only when a run happened to fall inside a two-hour slot, and
+// production had sent ZERO recaps in two weeks (2026-10-05 audit).
+//
+// Each is now due from its start time until the end of the local day, and the
+// run that finds it due sends it ONCE: the recap is ledgered per person per
+// week (push_log "recap"), and every team alert carries its own "announced"
+// record (api/push/recap). Any run, however late, delivers; no run repeats.
+
+/** Where an unknown zone falls back to, and from when: noon Eastern is 9am
+ *  Pacific, so no US account is buzzed before 9am on a guess. */
+const FALLBACK_ZONE = "America/New_York";
+const FALLBACK_FROM_HOUR = 12;
+
+function weekdayIn(now: number, timezone: string): string {
   try {
-    weekday = new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "short" }).format(new Date(now));
-  } catch { return false; }
-  const h = localHour(now, timezone);
-  return weekday === "Mon" && (h === 9 || h === 10);
+    return new Intl.DateTimeFormat("en-US", { timeZone: timezone, weekday: "short" }).format(new Date(now));
+  } catch { return ""; }
 }
 
-/** The daily team check runs at 9–10am in the owner's zone (UTC 13–14 ≈ US Eastern when unknown). */
+/** The Monday recap is due from 9am Monday in their zone until Monday ends. */
+export function isRecapHour(now: number, timezone: string | null | undefined): boolean {
+  const zone = timezone || FALLBACK_ZONE;
+  const from = timezone ? 9 : FALLBACK_FROM_HOUR;
+  if (weekdayIn(now, zone) !== "Mon") return false;
+  try { return localHour(now, zone) % 24 >= from; } catch { return false; } // % 24: some ICU builds say "24" at midnight
+}
+
+/** The daily team check is due from 9am in the owner's zone until midnight
+ *  (US Eastern from noon when their zone is unknown). */
 export function isTeamCheckHour(now: number, timezone: string | null | undefined): boolean {
-  const h = timezone ? localHour(now, timezone) : new Date(now).getUTCHours() - 4;
-  return h === 9 || h === 10;
+  const zone = timezone || FALLBACK_ZONE;
+  const from = timezone ? 9 : FALLBACK_FROM_HOUR;
+  try { return localHour(now, zone) % 24 >= from; } catch { return false; } // % 24: some ICU builds say "24" at midnight
 }
 
 /**
@@ -87,11 +110,7 @@ export function isTeamCheckHour(now: number, timezone: string | null | undefined
  */
 export function isTeamRecapBellHour(now: number, timezone: string | null | undefined): boolean {
   if (!isTeamCheckHour(now, timezone)) return false;
-  let weekday = "";
-  try {
-    weekday = new Intl.DateTimeFormat("en-US", { timeZone: timezone || "America/New_York", weekday: "short" }).format(new Date(now));
-  } catch { return false; }
-  return weekday === "Mon";
+  return weekdayIn(now, timezone || FALLBACK_ZONE) === "Mon";
 }
 
 /** Most frequent labels first. */

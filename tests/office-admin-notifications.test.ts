@@ -138,7 +138,10 @@ describe("the daily team check", () => {
     expect(route).toContain("if (team.memberIds.length && isTeamRecapBellHour(now, ownerTz)) {");
     expect(isTeamRecapBellHour(Date.parse("2026-09-21T13:15:00Z"), "America/New_York")).toBe(true);  // Mon 9:15
     expect(isTeamRecapBellHour(Date.parse("2026-09-22T13:15:00Z"), "America/New_York")).toBe(false); // Tue
-    expect(isTeamRecapBellHour(Date.parse("2026-09-21T16:00:00Z"), "America/New_York")).toBe(false); // Mon noon
+    // Due all Monday from 9am (2026-10-05: the scheduler runs a few times a
+    // day, so a 9–10am slot was usually missed); one row per office per week.
+    expect(isTeamRecapBellHour(Date.parse("2026-09-21T16:00:00Z"), "America/New_York")).toBe(true);  // Mon noon
+    expect(isTeamRecapBellHour(Date.parse("2026-09-21T12:00:00Z"), "America/New_York")).toBe(false); // Mon 8am
   });
 
   it("an office whose only people are still invited is checked too (its first expired invite)", () => {
