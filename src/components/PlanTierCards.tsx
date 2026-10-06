@@ -216,11 +216,22 @@ export function OfficeWebPrice({ annual, seats }: { annual: boolean; seats: numb
   );
 }
 
-/** Team size: the presets and a Custom box. */
-export function OfficeSeatPicker({ seats, onSeats }: { seats: number; onSeats: (n: number) => void }) {
+/** Team size: the presets and a Custom box — or, with `lockedSeats`, the
+ *  count an applied promo code was made for (lib/promo promoSeats), which the
+ *  order can't change. The caller passes the same number as `seats`. */
+export function OfficeSeatPicker({ seats, onSeats, lockedSeats }: { seats: number; onSeats: (n: number) => void; lockedSeats?: number | null }) {
   // What is being TYPED in the Custom box, clamped only on blur. Clamping each
   // keystroke turned the "1" of "12" into 2, so 10–19 could not be typed.
   const [seatsDraft, setSeatsDraft] = useState<string | null>(null);
+  if (lockedSeats) {
+    return (
+      <div className="mt-4 mb-6">
+        <p className="text-xs text-slate-600 font-medium mb-2">Team size</p>
+        <p className="rounded-xl bg-blue-50 border border-blue-100 px-3 py-2 text-xs font-semibold text-blue-700">{lockedSeats} users · set by your promo code</p>
+        <p className="text-slate-500 text-[0.6875rem] mt-2">You + {lockedSeats - 1} teammate{lockedSeats === 2 ? "" : "s"}. Add more seats anytime from your account after you subscribe.</p>
+      </div>
+    );
+  }
   return (
     <div className="mt-4 mb-6">
       <label className="text-xs text-slate-600 font-medium block mb-2">Team size</label>

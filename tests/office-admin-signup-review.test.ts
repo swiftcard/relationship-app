@@ -165,7 +165,8 @@ describe("the Custom team-size box can be typed into", () => {
   for (const f of ["src/app/pricing/page.tsx", "src/components/PlanCards.tsx", "src/app/upgrade/UpgradeClient.tsx"]) {
     it(`${f} uses the shared seat picker`, () => {
       const c = code(f);
-      expect(c).toContain("<OfficeSeatPicker seats={seats} onSeats={setSeats} />");
+      // lockedSeats: an Office promo code made for a team of N (lib/promo).
+      expect(c).toMatch(/<OfficeSeatPicker seats=\{seats\} onSeats=\{setSeats\}(?: lockedSeats=\{\w+\})? \/>/);
       expect(c).not.toMatch(/type="number"/);
     });
   }

@@ -3,7 +3,7 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { getStripe } from "@/lib/stripe";
 import { isPaidPlan } from "@/lib/plan";
 import {
-  PICK_PLAN_BELOW, durationLabel, isFreeDays, isGrantCode, promoFitsPurchase, promoLabel, promoScopeMessage, type PromoRow,
+  PICK_PLAN_BELOW, durationLabel, isFreeDays, isGrantCode, promoFitsPurchase, promoLabel, promoScopeMessage, promoSeats, type PromoRow,
 } from "@/lib/promo";
 
 // ── Does this code apply to THIS purchase, for THIS account? ────────────────
@@ -33,6 +33,9 @@ export type PromoCheck =
       redemption: { id: string; consumed_at: string | null } | null;
       freeDays: number | null;
       couponId: string | null;
+      /** The Office seat count the code fixes (lib/promo promoSeats), or null.
+       *  The order pages lock to it; checkout refuses any other count. */
+      seats: number | null;
       label: string;
       detail: string;
     }
@@ -109,6 +112,7 @@ export async function checkPromoForPurchase(input: {
   const scoped = (promo.applies_to ?? "any") !== "any" || (promo.interval_target ?? "any") !== "any";
   return {
     ok: true, source: "swiftcard", promo, redemption, freeDays, couponId,
+    seats: promoSeats(promo),
     label: promoLabel(promo),
     detail: !input.purchase && scoped
       ? `${promoScopeMessage(promo)} ${PICK_PLAN_BELOW}`

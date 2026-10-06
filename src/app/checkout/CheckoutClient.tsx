@@ -71,6 +71,10 @@ export default function CheckoutClient({ trialEligible = true, officeCoversPro =
   }, [params, router]);
   const promo = usePromoCode({ plan, interval, initialCode: promoCode, onCodeChange: setPromoParam });
   const refusePromo = promo.refuseAtCheckout;
+  // An Office code made for a team of N fixes the order at N seats (lib/promo
+  // promoSeats). The summary, the price and the request all read `seats` from
+  // the URL, so the URL is set to N — and the server refuses any other count.
+  const codeSeats = plan === "office" ? promo.appliedSeats : null;
 
   // Native app (App Store 3.1.1): the checkout order summary + Stripe hand-off
   // is a purchase flow and must never appear inside the Capacitor shell — same
@@ -86,6 +90,15 @@ export default function CheckoutClient({ trialEligible = true, officeCoversPro =
   // prorated amount before they commit to anything.
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(true);
+
+  // A code's seat count wins over the one in the link (a plan change takes no
+  // code, so it is left alone).
+  useEffect(() => {
+    if (preview || !codeSeats || codeSeats === seats) return;
+    const q = new URLSearchParams(params.toString());
+    q.set("seats", String(codeSeats));
+    router.replace(`/checkout?${q.toString()}`, { scroll: false });
+  }, [preview, codeSeats, seats, params, router]);
 
   // Per-seat + subtotal in integer cents (shared util → no float artifacts, and
   // the number shown is exactly what Stripe is asked to charge).
@@ -277,7 +290,7 @@ export default function CheckoutClient({ trialEligible = true, officeCoversPro =
           <Row label="Billing"><span className="text-white">{interval === "annual" ? "Annual" : "Monthly"}</span></Row>
           {plan === "office" && (
             <>
-              <Row label="Seats"><span className="text-white">{seats} (incl. you)</span></Row>
+              <Row label="Seats"><span className="text-white">{seats} (incl. you){codeSeats && codeSeats === seats ? " · set by your code" : ""}</span></Row>
               <Row label="Price per seat"><span className="text-white">{formatUsd(perSeatCents)}/{per}</span></Row>
             </>
           )}

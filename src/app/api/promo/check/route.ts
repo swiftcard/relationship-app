@@ -50,5 +50,8 @@ export async function POST(req: NextRequest) {
   const forPro = result.source === "stripe" || (result.promo.applies_to ?? "any") !== "office";
   const apple = result.source === "swiftcard" && appleRedeemable(result.promo);
   const annualOnly = result.source === "swiftcard" && result.promo.interval_target === "annual";
-  return NextResponse.json({ ok: true, code, label: result.label, detail: result.detail, forPro, apple, annualOnly });
+  // The Office seat count the code fixes — the order pages lock their seat
+  // picker to it (lib/promo promoSeats).
+  const seats = result.source === "swiftcard" ? result.seats : null;
+  return NextResponse.json({ ok: true, code, label: result.label, detail: result.detail, forPro, apple, annualOnly, seats });
 }

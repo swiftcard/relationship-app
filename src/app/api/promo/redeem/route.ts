@@ -4,7 +4,7 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { claimPromoUse } from "@/lib/promo-claim";
 import { isRateLimited } from "@/lib/rate-limit";
 import { clientIp } from "@/lib/client-ip";
-import { promoLabel, scopeLabel, durationLabel, promoScopeMessage, isGrantCode, type PromoRow } from "@/lib/promo";
+import { promoLabel, scopeLabel, durationLabel, promoScopeMessage, promoSeats, isGrantCode, type PromoRow } from "@/lib/promo";
 import { PLAN_CHOSEN_KEY, sendWelcomeWhenCardLive } from "@/lib/welcome-email";
 import { revalidateUserCards } from "@/lib/card-page-data";
 import { provisionOfficeForOwner } from "@/lib/office-billing-sync";
@@ -32,6 +32,8 @@ function promoPayload(promo: PromoRow & Record<string, unknown>) {
     interval_target: promo.interval_target ?? "any",
     duration: promo.duration ?? "once",
     duration_months: promo.duration_months ?? null,
+    // The Office seat count the code fixes — /pricing locks its seat picker.
+    seats: promoSeats(promo),
     // What to show the person: "30% off Pro only · the first 3 months".
     label: promoLabel(promo),
     scope: scopeLabel(promo),
@@ -221,10 +223,11 @@ export async function POST(req: NextRequest) {
 
     // An Office account with no office row has an empty admin console and no
     // seats — the webhook provisions one on a real purchase, so a granted
-    // Office gets the same treatment.
+    // Office gets the same treatment. As many seats as the code was made for
+    // (lib/promo promoSeats); a code that names none keeps the old five.
     if (plan === "enterprise") {
       try {
-        await provisionOfficeForOwner(admin, user.id, 5);
+        await provisionOfficeForOwner(admin, user.id, promoSeats(promo) ?? 5);
       } catch (e) {
         console.error("[promo] office provision failed for grant:", e);
       }

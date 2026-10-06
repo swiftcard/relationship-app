@@ -53,6 +53,10 @@ type PlanCardsProps = {
    *  (pinned by tests/wallet-hardening.test.ts). This one only ever starts
    *  signup; the purchase itself happens later, in-app, through StoreKit. */
   onCreateAccountForPro?: () => void;
+  /** Web only: the seat count an applied Office promo code fixes (lib/promo
+   *  promoSeats). The Office card shows it instead of the picker, and orders
+   *  exactly that many. */
+  lockedSeats?: number | null;
 };
 
 export default function PlanCards({
@@ -70,9 +74,11 @@ export default function PlanCards({
   trialEligible = true,
   initialTier = "pro",
   onLeftForWebsite,
+  lockedSeats = null,
 }: PlanCardsProps) {
   const [annual, setAnnual] = useState(false);
-  const [seats, setSeats] = useState<number>(OFFICE_MIN_SEATS);
+  const [pickedSeats, setSeats] = useState<number>(OFFICE_MIN_SEATS);
+  const seats = lockedSeats ?? pickedSeats;
   const disabled = busy !== null;
   const native = useIsNativeApp();
   const [mobileTier, setMobileTier] = useState<PlanTier>(initialTier);
@@ -140,7 +146,7 @@ export default function PlanCards({
         <OfficePlanCard
           offTab={mobileTier !== "office"}
           price={<OfficeWebPrice annual={annual} seats={seats} />}
-          seatPicker={<OfficeSeatPicker seats={seats} onSeats={setSeats} />}
+          seatPicker={<OfficeSeatPicker seats={seats} onSeats={setSeats} lockedSeats={lockedSeats} />}
         >
           <button type="button" onClick={() => onPaid("office", annual, seats)} disabled={disabled} className={OFFICE_CTA_CLASS}>
             {busy === "office" ? "Loading…" : `Get Office · ${officeTotalLabel(annual, seats)} →`}

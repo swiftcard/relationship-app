@@ -1,3 +1,5 @@
+import { PLAN_LIMITS } from "./plan";
+
 // ── Promo codes: one vocabulary, shared by every surface ────────────────────
 // The admin form, the admin API, /api/promo/redeem and /api/stripe/checkout all
 // read this file — so an offer can never be built in the UI that the server
@@ -9,7 +11,8 @@
 //   3. WHICH PLAN is it for?   Pro · Office · either
 //   4. WHICH BILLING PERIOD?   monthly · annual · either
 //   5. WHO may redeem it?      anyone · new accounts · existing paid accounts
-// plus the limits that already existed: total redemptions and an expiry date.
+// plus the limits that already existed: total redemptions and an expiry date,
+// and — on an Office-only code — how many SEATS it is for (see promoSeats).
 //
 // Why free time is DAYS, not months: Stripe coupons can only express whole
 // months (duration_in_months), so "one week free" is impossible as a coupon.
@@ -124,6 +127,38 @@ export function isAudience(v: unknown): v is Audience {
   return v === "free" || v === "pro" || v === "all";
 }
 
+// ── 6. How many seats (Office only) ─────────────────────────────────────────
+// The usual Office deal is a whole team at once — "a month free for the admin
+// and their 14 teammates" (owner, 2026-10-06). Only the admin types the code,
+// so the code carries the team's size: an Office order it is used on is FIXED
+// at that many seats (the order pages lock their seat picker to it, and
+// /api/stripe/checkout refuses any other count), and a free-Office grant opens
+// an office of that size. NULL = the code says nothing about seats; the admin
+// chooses as before. After subscribing they can still add seats in Settings.
+export const MAX_PROMO_SEATS = 1000;
+
+export function isPromoSeats(v: unknown): v is number {
+  return typeof v === "number" && Number.isInteger(v) && v >= PLAN_LIMITS.OFFICE_MIN_SEATS && v <= MAX_PROMO_SEATS;
+}
+
+/** The seat count this code fixes, or null. Only an Office-only code fixes one. */
+export function promoSeats(promo: { applies_to?: string | null; seats?: number | null }): number | null {
+  if (promo.applies_to !== "office" || promo.seats == null) return null;
+  const n = Number(promo.seats);
+  return isPromoSeats(n) ? n : null;
+}
+
+/** "15 seats — you + 14 teammates". The person buying holds seat 1. */
+export function seatsLabel(seats: number): string {
+  const others = seats - 1;
+  return `${seats} seats — you + ${others} teammate${others === 1 ? "" : "s"}`;
+}
+
+/** Why an Office order with a different seat count can't use the code. */
+export function promoSeatsMessage(seats: number): string {
+  return `This code is for exactly ${seatsLabel(seats)}.`;
+}
+
 export type PromoRow = {
   code?: string | null;
   discount_type?: string | null;
@@ -137,6 +172,7 @@ export type PromoRow = {
   plan_target?: string | null;
   max_uses?: number | null;
   expires_at?: string | null;
+  seats?: number | null;
 };
 
 /** What the customer is told they're getting ("30% off", "One month free"). */
@@ -178,6 +214,8 @@ export function describePromo(promo: PromoRow): string {
   const parts = [promoLabel(promo), `on ${scopeLabel(promo).toLowerCase()}`];
   const dur = durationLabel(promo);
   if (dur) parts.push(`· ${dur}`);
+  const seats = promoSeats(promo);
+  if (seats) parts.push(`· ${seats} seats`);
   const who = AUDIENCES.find((a) => a.id === (promo.plan_target ?? "free"))?.label;
   if (who && promo.plan_target !== "all") parts.push(`· ${who.toLowerCase()}`);
   if (promo.max_uses) parts.push(`· ${promo.max_uses} redemptions`);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { PICK_PLAN_BELOW } from "@/lib/promo";
+import { PICK_PLAN_BELOW, seatsLabel } from "@/lib/promo";
 
 // ── "Have a promo code?" ─────────────────────────────────────────────────────
 // THE one promo box, shown wherever a Pro or Office purchase starts on the web:
@@ -30,6 +30,9 @@ export type PromoState =
        *  can redeem it (an Apple offer code with the same string), and it is
        *  for the annual plan only. */
       forPro?: boolean; apple?: boolean; annualOnly?: boolean;
+      /** An Office code made for a team of N (lib/promo promoSeats): the
+       *  order is fixed at N seats, so the page locks its seat picker. */
+      seats?: number | null;
     }
   | { status: "refused"; code: string; message: string; grant?: boolean; atCheckout?: boolean };
 
@@ -69,6 +72,7 @@ export function usePromoCode({
         setState({
           status: "applied", code: data.code, label: data.label, detail: data.detail ?? "",
           forPro: data.forPro !== false, apple: data.apple === true, annualOnly: data.annualOnly === true,
+          seats: typeof data.seats === "number" ? data.seats : null,
         });
         return true;
       }
@@ -120,12 +124,14 @@ export function usePromoCode({
   }, []);
 
   const appliedCode = state.status === "applied" ? state.code : undefined;
+  // The Office seat count the applied code fixes, if any.
+  const appliedSeats = state.status === "applied" && state.seats ? state.seats : null;
   // The purchase waits on a check, and stops on a code refused at checkout
   // until the person removes it or continues without it — never a silent
   // full price. A code refused when typed was never attached, so it doesn't.
   const blocksPurchase = state.status === "checking" || (state.status === "refused" && state.atCheckout === true);
 
-  return { state, open, setOpen, input, setInput, apply, remove, switchOnGrant, granting, refuseAtCheckout, appliedCode, blocksPurchase };
+  return { state, open, setOpen, input, setInput, apply, remove, switchOnGrant, granting, refuseAtCheckout, appliedCode, appliedSeats, blocksPurchase };
 }
 
 export type PromoCode = ReturnType<typeof usePromoCode>;
@@ -162,6 +168,7 @@ export default function PromoCodeBox({
             <div className="min-w-0">
               <p className="text-green-300 text-xs font-semibold">✓ {state.code} — {state.label}</p>
               {detail && <p className="text-emerald-200 text-[0.6875rem] mt-0.5">{/^[A-Z]/.test(detail) ? detail : `Off ${detail}.`}</p>}
+              {state.seats ? <p className="text-emerald-200 text-[0.6875rem] mt-0.5">For {seatsLabel(state.seats)}.</p> : null}
             </div>
             <button type="button" onClick={remove} className="shrink-0 text-[0.6875rem] text-gray-400 hover:text-white underline">Remove</button>
           </div>

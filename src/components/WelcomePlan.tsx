@@ -249,7 +249,7 @@ export default function WelcomePlan({
   // The last plan pressed, so "Continue without the code" retries exactly it.
   const lastCheckout = useRef<{ plan: PaidPlan; annual: boolean; seats: number } | null>(null);
 
-  async function checkout(plan: PaidPlan, annual: boolean, seats: number, opts?: { withoutPromo?: boolean }) {
+  async function checkout(plan: PaidPlan, annual: boolean, pickedSeats: number, opts?: { withoutPromo?: boolean }) {
     // A code refused at checkout stays on screen with its two ways out
     // (remove it, or continue without it) — never a full price behind
     // the person's back.
@@ -258,6 +258,9 @@ export default function WelcomePlan({
       return;
     }
     const code = opts?.withoutPromo ? undefined : promo.appliedCode;
+    // An Office code made for a team of N fixes the order at N seats
+    // (lib/promo promoSeats) — the same count the Office card shows.
+    const seats = plan === "office" && code && promo.appliedSeats ? promo.appliedSeats : pickedSeats;
     lastCheckout.current = { plan, annual, seats };
     setLoading(plan);
     setError("");
@@ -303,7 +306,8 @@ export default function WelcomePlan({
   const planName = paidIntent?.plan === "office" ? "Office" : "Pro";
   // What they will pay, from plan.ts — the same arithmetic /checkout and
   // Stripe use (unit price × seats), so this panel never shows another number.
-  const paidSeats = paidIntent?.plan === "office" ? Math.max(PLAN_LIMITS.OFFICE_MIN_SEATS, paidIntent.seats ?? PLAN_LIMITS.OFFICE_MIN_SEATS) : 1;
+  // A code made for a team of N decides the seats (lib/promo promoSeats).
+  const paidSeats = paidIntent?.plan === "office" ? (promo.appliedSeats ?? Math.max(PLAN_LIMITS.OFFICE_MIN_SEATS, paidIntent.seats ?? PLAN_LIMITS.OFFICE_MIN_SEATS)) : 1;
   const paidTotal = paidIntent
     ? paidIntent.plan === "office"
       ? seatSubtotalCents(paidIntent.annual ? PLAN_PRICES.OFFICE_ANNUAL_PER_SEAT_CENTS : PLAN_PRICES.OFFICE_MONTHLY_PER_SEAT_CENTS, paidSeats)
@@ -397,7 +401,7 @@ export default function WelcomePlan({
             <p className="text-gray-400 text-sm mt-1.5">
               {paidIntent.plan === "pro" && trialEligible
                 ? <>You picked Pro · free for your first {TRIAL_DAYS} days, then {formatUsd(paidTotal)}/{paidIntent.annual ? "year" : "month"}. Add a card with Stripe to start your trial.</>
-                : <>You picked {planName}{paidIntent.plan === "office" ? ` · ${paidSeats} seats (incl. you)` : ""} · {formatUsd(paidTotal)}/{paidIntent.annual ? "year" : "month"}. Pay securely with Stripe to unlock it.</>}
+                : <>You picked {planName}{paidIntent.plan === "office" ? ` · ${paidSeats} seats (incl. you)${promo.appliedSeats ? ", set by your code" : ""}` : ""} · {formatUsd(paidTotal)}/{paidIntent.annual ? "year" : "month"}. Pay securely with Stripe to unlock it.</>}
             </p>
             <PromoCodeBox className="mt-4" promo={promo} busy={loading !== null} onContinueWithoutCode={continueWithoutCode} />
             <button
@@ -464,7 +468,7 @@ export default function WelcomePlan({
               </p>
             )}
             {giftPanel}
-            <PlanCards onFree={chooseFree} onPaid={checkout} busy={loading} onIapPurchased={goFree} freeLabel="Continue with Free →" trialEligible={offerTrial} initialTier={initialTier} onLeftForWebsite={() => { leftForWebsite.current = true; }} />
+            <PlanCards onFree={chooseFree} onPaid={checkout} busy={loading} onIapPurchased={goFree} lockedSeats={promo.appliedSeats} freeLabel="Continue with Free →" trialEligible={offerTrial} initialTier={initialTier} onLeftForWebsite={() => { leftForWebsite.current = true; }} />
             {/* Under the plans, like /pricing — the code rides along with
                 whichever paid card is pressed. Web only: the app sells
                 through the App Store, where codes are Apple's (3.1.1). */}

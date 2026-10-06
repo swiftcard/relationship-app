@@ -6,8 +6,10 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   FREE_PERIODS, APPLIES_TO, INTERVAL_TARGETS, DURATIONS, AUDIENCES,
-  MAX_DURATION_MONTHS, promoLabel, describePromo, scopeLabel, durationLabel,
+  MAX_DURATION_MONTHS, MAX_PROMO_SEATS, promoLabel, describePromo, scopeLabel, durationLabel,
+  promoSeats, seatsLabel,
 } from "@/lib/promo";
+import { PLAN_LIMITS } from "@/lib/plan";
 import SentEmailsModal from "./SentEmailsModal";
 
 type Counts = { all: number; free: number; pro: number; office: number };
@@ -20,6 +22,7 @@ type PromoCode = {
   plan_target?: string | null;
   applies_to?: string | null; interval_target?: string | null;
   duration?: string | null; duration_months?: number | null;
+  seats?: number | null;
 };
 type PromoLogEntry = PromoCode & {
   uses_count: number;
@@ -59,16 +62,21 @@ export default function MarketingClient() {
   const [promos, setPromos] = useState<PromoCode[]>([]);
   const [promosReady, setPromosReady] = useState(true);
   // Every question a code answers (lib/promo): what it gives, how long money
-  // off lasts, which plan and billing period it is for, and who may redeem it.
+  // off lasts, which plan and billing period it is for, who may redeem it, and
+  // — on an Office-only code — how many seats the team gets.
   const EMPTY_PROMO = {
     code: "", description: "",
     discount_type: "free_time",
     free_days: "30", discount_percent: "20", discount_amount: "10",
     duration: "once", duration_months: "3",
     applies_to: "any", interval_target: "any", plan_target: "free",
-    max_uses: "", expires_at: "",
+    max_uses: "", expires_at: "", seats: "",
   };
   const [promoForm, setPromoForm] = useState(EMPTY_PROMO);
+  // Free time and a free plan are both counted in days; a free plan bills
+  // nothing, so it has no billing period and no money-off duration.
+  const promoIsGrant = promoForm.discount_type === "grant";
+  const promoCountsDays = promoForm.discount_type === "free_time" || promoIsGrant;
   const [promoBusy, setPromoBusy] = useState(false);
   const [promoError, setPromoError] = useState<string | null>(null);
 
@@ -210,7 +218,10 @@ export default function MarketingClient() {
           ...promoForm,
           // Free time is delivered as a TRIAL (trial_period_days) because a
           // Stripe coupon can only express whole months; money off is a coupon.
-          free_days: promoForm.discount_type === "free_time" ? Number(promoForm.free_days) : null,
+          // A free plan (grant) is counted in days too.
+          free_days: promoForm.discount_type === "free_time" || promoForm.discount_type === "grant" ? Number(promoForm.free_days) : null,
+          // Seats belong to Office-only codes; blank lets the admin choose.
+          seats: promoForm.applies_to === "office" && promoForm.seats ? Number(promoForm.seats) : null,
           discount_percent: promoForm.discount_type === "percent" ? Number(promoForm.discount_percent) : null,
           discount_amount: promoForm.discount_type === "fixed" ? Math.round(Number(promoForm.discount_amount) * 100) : null,
           duration_months: promoForm.duration === "repeating" ? Number(promoForm.duration_months) : null,
@@ -422,15 +433,19 @@ export default function MarketingClient() {
               </div>
               <div>
                 <label className="text-xs text-gray-400 block mb-1">What it gives *</label>
-                <select value={promoForm.discount_type} onChange={(e) => setPromoForm((p) => ({ ...p, discount_type: e.target.value }))} className={inputCls}>
-                  <option value="free_time" className="bg-gray-900">Free time</option>
+                <select value={promoForm.discount_type}
+                  // A free plan opens ONE plan, so "Pro or Office" can't stay picked.
+                  onChange={(e) => setPromoForm((p) => ({ ...p, discount_type: e.target.value, ...(e.target.value === "grant" && p.applies_to === "any" ? { applies_to: "office" } : {}) }))}
+                  className={inputCls}>
+                  <option value="free_time" className="bg-gray-900">Free time (card taken, billed after)</option>
                   <option value="percent" className="bg-gray-900">Percent off</option>
                   <option value="fixed" className="bg-gray-900">Amount off</option>
+                  <option value="grant" className="bg-gray-900">Free plan (no card)</option>
                 </select>
               </div>
 
               {/* The offer itself — one control, whichever kind was picked. */}
-              {promoForm.discount_type === "free_time" ? (
+              {promoCountsDays ? (
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">Free for *</label>
                   <div className="flex gap-2">
@@ -462,7 +477,7 @@ export default function MarketingClient() {
               )}
 
               {/* Money off runs for a while; free time is a one-off trial. */}
-              {promoForm.discount_type !== "free_time" && (
+              {!promoCountsDays && (
                 <div className={promoForm.duration === "repeating" ? "" : "col-span-2"}>
                   <label className="text-xs text-gray-400 block mb-1">How long it lasts *</label>
                   <select value={promoForm.duration} onChange={(e) => setPromoForm((p) => ({ ...p, duration: e.target.value }))} className={inputCls}>
@@ -470,7 +485,7 @@ export default function MarketingClient() {
                   </select>
                 </div>
               )}
-              {promoForm.discount_type !== "free_time" && promoForm.duration === "repeating" && (
+              {!promoCountsDays && promoForm.duration === "repeating" && (
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">Months *</label>
                   <input type="number" min="1" max={MAX_DURATION_MONTHS} value={promoForm.duration_months}
@@ -478,18 +493,37 @@ export default function MarketingClient() {
                 </div>
               )}
 
-              <div>
+              <div className={promoIsGrant ? "col-span-2" : ""}>
                 <label className="text-xs text-gray-400 block mb-1">Which plan *</label>
                 <select value={promoForm.applies_to} onChange={(e) => setPromoForm((p) => ({ ...p, applies_to: e.target.value }))} className={inputCls}>
-                  {APPLIES_TO.map((a) => (<option key={a.id} value={a.id} className="bg-gray-900">{a.label}</option>))}
+                  {APPLIES_TO.filter((a) => !promoIsGrant || a.id !== "any").map((a) => (<option key={a.id} value={a.id} className="bg-gray-900">{a.label}</option>))}
                 </select>
               </div>
-              <div>
-                <label className="text-xs text-gray-400 block mb-1">Billing period *</label>
-                <select value={promoForm.interval_target} onChange={(e) => setPromoForm((p) => ({ ...p, interval_target: e.target.value }))} className={inputCls}>
-                  {INTERVAL_TARGETS.map((i) => (<option key={i.id} value={i.id} className="bg-gray-900">{i.label}</option>))}
-                </select>
-              </div>
+              {!promoIsGrant && (
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">Billing period *</label>
+                  <select value={promoForm.interval_target} onChange={(e) => setPromoForm((p) => ({ ...p, interval_target: e.target.value }))} className={inputCls}>
+                    {INTERVAL_TARGETS.map((i) => (<option key={i.id} value={i.id} className="bg-gray-900">{i.label}</option>))}
+                  </select>
+                </div>
+              )}
+
+              {/* The team's size (owner, 2026-10-06): only the admin types the
+                  code, so the code carries the seats. The order it is used on
+                  is fixed at this many — lib/promo promoSeats. */}
+              {promoForm.applies_to === "office" && (
+                <div className="col-span-2">
+                  <label htmlFor="promo-seats" className="text-xs text-gray-400 block mb-1">Seats <span className="text-gray-600">(incl. the admin)</span></label>
+                  <input id="promo-seats" type="number" min={PLAN_LIMITS.OFFICE_MIN_SEATS} max={MAX_PROMO_SEATS} step="1" value={promoForm.seats}
+                    onChange={(e) => setPromoForm((p) => ({ ...p, seats: e.target.value }))}
+                    placeholder="They choose" className={inputCls} />
+                  <p className="text-[0.6875rem] text-gray-500 mt-1">
+                    {Number(promoForm.seats) >= PLAN_LIMITS.OFFICE_MIN_SEATS
+                      ? `${seatsLabel(Number(promoForm.seats)).replace("you", "the admin")}. The admin enters the code once and the seat count is set — they can't change it on the order. Teammates never enter a code.`
+                      : "15 = the admin + 14 team members. Leave blank to let them choose."}
+                  </p>
+                </div>
+              )}
               <div className="col-span-2">
                 <label className="text-xs text-gray-400 block mb-1">Who can redeem it *</label>
                 <select value={promoForm.plan_target} onChange={(e) => setPromoForm((p) => ({ ...p, plan_target: e.target.value }))} className={inputCls}>
@@ -529,13 +563,16 @@ export default function MarketingClient() {
                     interval_target: promoForm.interval_target,
                     plan_target: promoForm.plan_target,
                     max_uses: promoForm.max_uses ? Number(promoForm.max_uses) : null,
+                    seats: promoForm.seats ? Number(promoForm.seats) : null,
                   })}
                   {promoForm.expires_at ? ` · until ${promoForm.expires_at}` : ""}
                 </p>
                 <p className="text-[0.6875rem] text-gray-500 mt-1.5">
-                  {promoForm.discount_type === "grant"
-                    ? "Customers enter it in the promo box on the Pricing page or the order page — it switches the plan on straight away, no card."
-                    : "Customers enter every code in the SwiftCard promo box — on the Pricing page, or \"Have a promo code?\" on the order page just before payment. Stripe's payment page has no code field."}
+                  {promoIsGrant
+                    ? "Customers enter it in the promo box on the Pricing page or the order page — it switches the plan on straight away, no card. When the days run out the account goes back to Free."
+                    : promoForm.discount_type === "free_time"
+                      ? "Customers enter it in the SwiftCard promo box — on the Pricing page, or \"Have a promo code?\" on the order page. Stripe takes their card, they can cancel any time during the free days, and billing starts when the free days end."
+                      : "Customers enter every code in the SwiftCard promo box — on the Pricing page, or \"Have a promo code?\" on the order page just before payment. Stripe's payment page has no code field."}
                 </p>
               </div>
 
@@ -581,7 +618,7 @@ export default function MarketingClient() {
                       {/* The whole offer in words, so a code is never a mystery
                           in the list (owner, 2026-09-17). */}
                       <p className="text-gray-500 mt-1 text-[0.6875rem]">
-                        {scopeLabel(p)}{durationLabel(p) ? ` · ${durationLabel(p)}` : ""}
+                        {scopeLabel(p)}{promoSeats(p) ? ` · ${promoSeats(p)} seats` : ""}{durationLabel(p) ? ` · ${durationLabel(p)}` : ""}
                         {p.max_uses ? ` · ${p.uses_count ?? 0}/${p.max_uses} redeemed` : ` · ${p.uses_count ?? 0} redeemed`}
                       </p>
                     </div>
@@ -591,7 +628,7 @@ export default function MarketingClient() {
                       <span className="text-green-400 font-semibold">{promoLabel(p)}</span>
                       <span className="text-gray-600">{p.expires_at ? `until ${new Date(p.expires_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "no expiry"}</span>
                       <button
-                        onClick={() => { setPromoSend({ code: p.code, headline: `Here's ${promoLabel(p)} on SwiftCard ${p.applies_to === "office" ? "Office" : "Pro"}`, message: `Use the code below to get ${promoLabel(p).toLowerCase()} on ${scopeLabel(p).toLowerCase()}.`, segment: p.plan_target === "pro" ? "pro" : "free" }); setPromoSendResult(null); }}
+                        onClick={() => { setPromoSend({ code: p.code, headline: `Here's ${promoLabel(p)} on SwiftCard ${p.applies_to === "office" ? "Office" : "Pro"}`, message: `Use the code below to get ${promoLabel(p).toLowerCase()} on ${scopeLabel(p).toLowerCase()}${promoSeats(p) ? ` for ${seatsLabel(promoSeats(p) as number)}` : ""}.`, segment: p.plan_target === "pro" ? "pro" : "free" }); setPromoSendResult(null); }}
                         className="text-blue-400 hover:text-blue-300 transition-colors font-semibold">
                         Email to users
                       </button>
@@ -658,6 +695,7 @@ export default function MarketingClient() {
                           <span className="font-mono font-bold text-white bg-gray-800 px-2 py-0.5 rounded text-xs">{c.code}</span>
                           <span className={`text-[0.5625rem] font-bold px-1.5 py-0.5 rounded-full ${statusCls}`}>{status}</span>
                           <span className="text-green-400 text-xs font-semibold">{promoLabel(c)}</span>
+                          {promoSeats(c) && <span className="text-gray-400 text-xs">· {promoSeats(c)} seats</span>}
                           {c.description && <span className="text-gray-500 text-xs">· {c.description}</span>}
                         </div>
                         <div className="mt-2.5 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5 text-[0.6875rem]">

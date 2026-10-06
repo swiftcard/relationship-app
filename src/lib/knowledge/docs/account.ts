@@ -117,6 +117,25 @@ export const accountDocs = defineDocs([
       "On the \"Choose your plan\" step, tap \"Have a promo code?\" under the plans, enter your code and press \"Apply\". When the box says \"Added to the Pro plan\", the Pro card changes to your code's offer — tap its button and Apple's code page opens with your code already filled in. Apple shows exactly what you get before you confirm, in the app with your Apple account. Come back to SwiftCard and Pro switches on by itself; if it doesn't, tap \"Continue\" under the button. Make sure you use the Pro card's button after applying the code — the code only counts once the button has changed. If Apple can't take your code, the Pro card's button says where to use it instead.",
   },
   {
+    id: "office-promo-code-seats",
+    title: "An Office promo code for a whole team (set team size)",
+    audience: ["visitor", "user", "office-admin"],
+    triggers: [
+      "promo code for my team", "team promo code", "office promo code", "code for my team",
+      "promo code seats", "code set my seats", "cant change seats", "can't change the seats",
+      "seats locked", "team size locked", "set by your promo code", "set by your code",
+      "free month for my team", "does the code cover my team", "do my teammates need the code",
+      "teammates promo code", "code for the whole team",
+    ],
+    answer:
+      "Only the person setting up the team enters the code — teammates never do. Enter it in \"Have a promo code?\" on the Pricing page or on the order page. An Office code can come with a set team size: the Office card then shows \"<N> users · set by your promo code\" under \"Team size\" instead of the size buttons, the order page's Seats row reads \"<N> (incl. you) · set by your code\", and that is the number of seats you're billed for. With a free-time code Stripe takes your card, nothing is charged during the free days, you can cancel any time before they end, and billing for all <N> seats starts when they do.",
+    detail:
+      "The seat count can't be changed on the order while the code is applied — it's the deal the code was made for. Need more people? Subscribe first, then add seats in Settings → Plan and billing → \"Team seats\" at the normal per-seat price. Want a different size? \"Remove\" the code to choose your own, which drops the offer. Seats include you: \"15 seats — you + 14 teammates\" is one admin plus 14 people to invite. Teammates join on your seats and are covered by the same free days; if one tries a code themselves they're told \"Your plan comes with your team seat, so promo codes don't apply to your account.\" A team-size code used from an old link with a different size is refused at checkout with \"This code is for exactly <N> seats — you + <N−1> teammates.\" and offers \"Continue without the code\". In the iPhone app an Office code is checked in the plan step's \"Have a promo code?\" box and used on swiftcard.me (\"Use it on swiftcard.me →\"), where the same team size applies. Some codes switch Office on free with no card at all (\"Switch it on\"): those open an office with the code's seats too, and the account goes back to Free when the days run out unless it subscribes.",
+    commerce: true,
+    nativeAnswer:
+      "Only the person setting up the team enters the code — teammates never need one; they join on the team's seats and are covered by the same offer. Enter it under \"Have a promo code?\" on the \"Choose your plan\" step. An Office code can come with a set team size, and your office is then set up with exactly that many seats, you included. Invite your teammates from the Admin console's Team tab once it's ready.",
+  },
+  {
     id: "trial-days-left",
     title: "How many days are left on a free trial or free Pro",
     audience: ["user"],

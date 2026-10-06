@@ -3,8 +3,10 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { requireAdmin } from "@/lib/admin";
 import {
   MAX_FREE_DAYS, isFreeDays, isDiscountType, isAppliesTo, isIntervalTarget,
-  isPromoDuration, isAudience, MAX_DURATION_MONTHS, type AppliesTo, type IntervalTarget,
+  isPromoDuration, isAudience, MAX_DURATION_MONTHS, MAX_PROMO_SEATS, isPromoSeats,
+  type AppliesTo, type IntervalTarget,
 } from "@/lib/promo";
+import { PLAN_LIMITS } from "@/lib/plan";
 import { appleOfferPlan, deactivateAppleOffer, mirrorPromoToApple } from "@/lib/apple-offer-codes";
 
 // The Stripe PRODUCTS behind each plan, so a coupon can be restricted to the
@@ -54,6 +56,7 @@ export async function POST(req: NextRequest) {
     interval_target = "any",
     duration = "once",
     duration_months,
+    seats,
   } = body;
 
   if (!code) return NextResponse.json({ error: "code is required" }, { status: 400 });
@@ -82,12 +85,35 @@ export async function POST(req: NextRequest) {
   }
 
   const isFreeTime = discount_type === "free_time";
+  // A grant opens the plan for free_days with no card and no Stripe at all
+  // (lib/promo). It is counted in DAYS like free time, and it has to say WHICH
+  // plan it opens — "Pro or Office" would leave that to chance.
+  const isGrant = discount_type === "grant";
+  const countsDays = isFreeTime || isGrant;
+  if (isGrant && applies_to === "any") {
+    return NextResponse.json({ error: "A free-plan code opens one plan — pick Pro only or Office only." }, { status: 400 });
+  }
+
+  // Seats: an Office-only code can fix the order's seat count (lib/promo
+  // promoSeats). On any other code there is no seat count to fix, and saving
+  // one would describe an offer nothing honours.
+  const hasSeats = seats != null && seats !== "";
+  if (hasSeats && applies_to !== "office") {
+    return NextResponse.json({ error: "Seats only apply to Office-only codes." }, { status: 400 });
+  }
+  if (hasSeats && !isPromoSeats(Number(seats))) {
+    return NextResponse.json(
+      { error: `Seats must be a whole number, ${PLAN_LIMITS.OFFICE_MIN_SEATS}–${MAX_PROMO_SEATS} (the admin counts as one).` },
+      { status: 400 },
+    );
+  }
+  const seatCount = hasSeats ? Number(seats) : null;
 
   // ── Validate the offer BEFORE anything is created ───────────────────────────
   // A typo'd value (150%, negative, a 9-month "free trial") must never persist
   // locally even when Stripe rejects it — that leaves an over-generous or broken
   // code sitting in promo_codes looking legitimate.
-  if (isFreeTime) {
+  if (countsDays) {
     if (!isFreeDays(Number(free_days))) {
       return NextResponse.json(
         { error: `Free time must be a whole number of days, 1–${MAX_FREE_DAYS}.` },
@@ -131,9 +157,11 @@ export async function POST(req: NextRequest) {
   // to a trial instead. That also means a free-time code can't be typed on
   // Stripe's page — it's redeemed in the SwiftCard promo box on /pricing, which
   // is where the plan/expiry/usage rules can actually be enforced.
-  let couponId: string | null = stripe_coupon_id ?? null;
+  //
+  // grant → nothing at Stripe either: it never reaches a checkout.
+  let couponId: string | null = isGrant ? null : (stripe_coupon_id ?? null);
   let stripeWarning: string | null = null;
-  if (!isFreeTime && !couponId) {
+  if (!countsDays && !couponId) {
     try {
       const { getStripe } = await import("@/lib/stripe");
       const stripe = getStripe();
@@ -169,20 +197,33 @@ export async function POST(req: NextRequest) {
   const row = {
     code: cleanCode,
     description,
-    discount_percent: isFreeTime ? null : (discount_percent ? Number(discount_percent) : null),
+    discount_percent: countsDays ? null : (discount_percent ? Number(discount_percent) : null),
     discount_type,
-    discount_amount: isFreeTime ? null : (discount_amount ? Number(discount_amount) : null),
-    free_days: isFreeTime ? Number(free_days) : null,
+    discount_amount: countsDays ? null : (discount_amount ? Number(discount_amount) : null),
+    free_days: countsDays ? Number(free_days) : null,
     max_uses: max_uses ? Number(max_uses) : null,
     expires_at: expires_at || null,
     plan_target,
     stripe_coupon_id: couponId,
     applies_to,
-    interval_target,
-    duration: isFreeTime ? "once" : duration,
-    duration_months: !isFreeTime && duration === "repeating" ? Number(duration_months) : null,
+    // A grant has no billing period: nothing is billed.
+    interval_target: isGrant ? "any" : interval_target,
+    duration: countsDays ? "once" : duration,
+    duration_months: !countsDays && duration === "repeating" ? Number(duration_months) : null,
+    // Only written when set, so a code without seats saves even on a schema
+    // that predates supabase/promo-seats.sql.
+    ...(seatCount ? { seats: seatCount } : {}),
   };
   let { data, error } = await admin.from("promo_codes").insert(row).select().single();
+
+  // A code WITH seats must not be saved without them — the admin would then
+  // pick any seat count at checkout, the opposite of what was promised.
+  if (error && seatCount && /seats/i.test(error.message)) {
+    return NextResponse.json(
+      { error: "Seats need the promo-seats.sql migration run first (Supabase → SQL Editor)." },
+      { status: 409 },
+    );
+  }
 
   // The four targeting columns arrive in supabase/promo-targeting.sql. Before
   // it runs, save what the old schema holds rather than refusing the code, and

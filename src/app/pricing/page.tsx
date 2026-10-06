@@ -9,7 +9,7 @@ import SiteFooter from "@/components/site/SiteFooter";
 import ScrollReveal from "@/components/ScrollReveal";
 import ScrollProgress from "@/components/ScrollProgress";
 import { PLAN_LIMITS, TRIAL_DAYS } from "@/lib/plan";
-import { promoLabel, promoFitsPurchase, scopeLabel, type PromoRow } from "@/lib/promo";
+import { promoLabel, promoFitsPurchase, promoSeats, scopeLabel, seatsLabel, type PromoRow } from "@/lib/promo";
 import MobilePlanTabs, { type PlanTier } from "@/components/MobilePlanTabs";
 import {
   BillingToggle, FreePlanCard, ProPlanCard, ProWebPrice, OfficePlanCard, OfficeWebPrice, OfficeSeatPicker, officeTotalLabel,
@@ -54,7 +54,7 @@ export default function PricingPage() {
   const [mobileTier, setMobileTier] = useState<PlanTier>("pro");
 
   const [annual, setAnnual] = useState(false);
-  const [seats, setSeats] = useState<number>(OFFICE_MIN_SEATS);
+  const [pickedSeats, setSeats] = useState<number>(OFFICE_MIN_SEATS);
   const [loading, setLoading] = useState<"pro" | "enterprise" | null>(null);
   const [checkoutErr, setCheckoutErr] = useState<string | null>(null);
   const [promo, setPromo] = useState<PromoState>({ code: "", status: "idle", message: "" });
@@ -148,6 +148,10 @@ export default function PricingPage() {
   const promoRow = promo.status === "valid" ? promo.row ?? {} : null;
   const promoOnPro = !!promoRow && promoFitsPurchase(promoRow, { plan: "pro", interval: annual ? "annual" : "monthly" });
   const promoOnOffice = !!promoRow && promoFitsPurchase(promoRow, { plan: "office", interval: annual ? "annual" : "monthly" });
+  // An Office code made for a team of N fixes the order at N seats (lib/promo
+  // promoSeats): the picker locks to it, and checkout refuses any other count.
+  const promoSeatLock = promoRow ? promoSeats(promoRow) : null;
+  const seats = promoSeatLock ?? pickedSeats;
 
   function handleUpgrade(plan: "pro" | "enterprise") {
     setLoading(plan);
@@ -246,7 +250,7 @@ export default function PricingPage() {
 
           <OfficePlanCard offTab={mobileTier !== "office"} reveal
             price={<OfficeWebPrice annual={annual} seats={seats} />}
-            seatPicker={<OfficeSeatPicker seats={seats} onSeats={setSeats} />}>
+            seatPicker={<OfficeSeatPicker seats={seats} onSeats={setSeats} lockedSeats={promoSeatLock} />}>
             <div {...gate}>
             {onPaidOffice ? (
               // Already paying for Office: seats and billing are changed in
@@ -275,6 +279,7 @@ export default function PricingPage() {
                 {promoRow && (promoRow.applies_to !== "any" || promoRow.interval_target !== "any") && (
                   <p className="text-emerald-700/90 text-xs mt-0.5 font-medium">{scopeLabel(promoRow)}</p>
                 )}
+                {promoSeatLock && <p className="text-emerald-700/90 text-xs mt-0.5 font-medium">For {seatsLabel(promoSeatLock)}</p>}
                 {promoRow && !promoOnPro && !promoOnOffice && (
                   <p className="text-amber-700 text-xs mt-0.5 font-medium">
                     Switch to {promoRow.interval_target === "annual" ? "annual" : "monthly"} billing above to use it.

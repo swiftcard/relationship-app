@@ -8,6 +8,7 @@ import { getAccountEmail } from "@/lib/account-email";
 import { getStripe } from "@/lib/stripe";
 import { PLAN_LIMITS, PLAN_PRICES, TRIAL_DAYS, isPaidPlan } from "@/lib/plan";
 import { checkPromoForPurchase } from "@/lib/promo-check";
+import { promoSeatsMessage } from "@/lib/promo";
 import { recordServerEvent } from "@/lib/server-events";
 import { PLAN_CHOSEN_KEY } from "@/lib/welcome-email";
 import { priceIdForPlan, type BillingInterval } from "@/lib/subscription";
@@ -196,6 +197,13 @@ export async function POST(req: NextRequest) {
       });
       if (!check.ok) {
         return NextResponse.json({ error: check.reason, promoUnusable: true, ...(check.grant ? { grant: true } : {}) }, { status: 409 });
+      }
+      // A code made for a team of N (lib/promo promoSeats) fixes the order at
+      // N seats. The order pages lock their seat picker to it; a request for
+      // any other count (a stale tab, an edited link) is refused HERE, before
+      // the code is claimed — never quietly re-sized to a total nobody saw.
+      if (isOffice && check.source === "swiftcard" && check.seats && quantity !== check.seats) {
+        return NextResponse.json({ error: promoSeatsMessage(check.seats), promoUnusable: true, seats: check.seats }, { status: 409 });
       }
       if (check.source === "stripe") {
         // Made in the Stripe dashboard: Stripe itself enforces its rules.
