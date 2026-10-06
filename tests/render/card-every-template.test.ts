@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { Browser, Page } from "playwright";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
-import { launchBrowser, appCss } from "./harness";
+import { chromium, webkit } from "playwright";
+import { appCss } from "./harness";
 import { SCENARIOS, FONTS, withFont } from "./card-fixtures";
 
 import ClassicPro from "@/components/card-templates/ClassicPro";
@@ -180,12 +181,21 @@ async function probe(page: Page, css: string, Template: React.ComponentType<{ da
   }, { QR_MIN_PX, CEILING_PX });
 }
 
-describe("every template: fills its space, nothing overlaps, the QR is never covered or cut", () => {
+// Both engines: the iPhone app and Safari are WebKit, and a layout that was
+// clean in Chromium squeezed every row in WebKit (owner, 2026-10-05). WebKit
+// runs the three typefaces that differ most, to keep CI inside its budget.
+const ENGINES = [
+  { engine: "Chromium", launch: () => chromium.launch(), fonts: FONTS },
+  { engine: "WebKit", launch: () => webkit.launch(), fonts: FONTS.filter(([n]) => ["default", "serif", "mono"].includes(n)) },
+] as const;
+
+for (const { engine, launch, fonts } of ENGINES) {
+describe(`${engine}: every template fills its space, nothing overlaps, the QR is never covered or cut`, () => {
   let browser: Browser;
   let page: Page;
   let css: string;
   beforeAll(async () => {
-    browser = await launchBrowser();
+    browser = await launch();
     css = await appCss();
     page = await browser.newPage({ viewport: { width: WIDTH + 80, height: 900 } });
   }, 180_000);
@@ -194,7 +204,7 @@ describe("every template: fills its space, nothing overlaps, the QR is never cov
   for (const [tname, Template] of TEMPLATES) {
     it(`${tname}: two fields to every field at the limits, every typeface, both logo shapes`, async () => {
       const failures: string[] = [];
-      for (const [fname, fontFamily] of FONTS) {
+      for (const [fname, fontFamily] of fonts) {
         for (const [sname, base] of SCENARIOS) {
           const shapes: Array<"auto" | "circle"> = base.logoUrl ? ["auto", "circle"] : ["auto"];
           for (const logoShape of shapes) {
@@ -222,12 +232,12 @@ describe("every template: fills its space, nothing overlaps, the QR is never cov
 // them — and the uploaded-design card, whose only live element is the QR.
 const SOCIALS = { instagram: "alexmorgan.realtor", linkedin: "alex-morgan-realtor", twitter: "alexmorganre", tiktok: "alexmorganhomes" };
 
-describe("custom cards: every starting design, two fields to every field, nothing overlaps, QR clear", () => {
+describe(`${engine}: custom cards — every starting design, two fields to every field, nothing overlaps, QR clear`, () => {
   let browser: Browser;
   let page: Page;
   let css: string;
   beforeAll(async () => {
-    browser = await launchBrowser();
+    browser = await launch();
     css = await appCss();
     page = await browser.newPage({ viewport: { width: WIDTH + 80, height: 900 } });
   }, 180_000);
@@ -236,7 +246,7 @@ describe("custom cards: every starting design, two fields to every field, nothin
   for (const key of Object.keys(LAYOUT_PRESETS)) {
     it(`custom "${key}": every content shape, every typeface`, async () => {
       const failures: string[] = [];
-      for (const [fname, fontFamily] of FONTS) {
+      for (const [fname, fontFamily] of fonts) {
         for (const [sname, base] of SCENARIOS) {
           for (const socials of [false, true]) {
             const layout = buildPreset(key);
@@ -287,3 +297,4 @@ describe("custom cards: every starting design, two fields to every field, nothin
     expect([...r.escapes, ...r.overlaps, ...r.qr.filter((m) => !/^QR only/.test(m))]).toEqual([]);
   }, 60_000);
 });
+}

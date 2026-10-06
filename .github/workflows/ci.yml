@@ -88,8 +88,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      # WebKit too: the iPhone app and Safari are WebKit, and a card layout that
+      # was clean in Chromium squeezed every row in WebKit (owner, 2026-10-05) —
+      # tests/render/card-rows-iphone-engine.test.ts measures the cards in both.
+      - name: Install Chromium and WebKit
+        run: npx playwright install --with-deps chromium webkit
 
       - name: Render tests
         run: npm run test:render

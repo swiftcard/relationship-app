@@ -95,7 +95,14 @@ describe("pinned at source", () => {
       expect(read(`src/components/card-templates/${t}.tsx`), t).toMatch(/<ContactRows[\s\S]*?qr=\{\{/);
     }
     // Sized for the height ABOVE the QR, so a card that fit before looks the same.
-    expect(read("src/components/card-templates/shared.tsx")).toMatch(/calc\(\(100cqh - \$\{2 \+ qrCorner\}px\)/);
+    const shared = read("src/components/card-templates/shared.tsx");
+    expect(shared).toMatch(/calc\(\(100cqh - \$\{2 \+ qrCorner\}px\)/);
+    // Container-query height, never a percentage: `100%` does not resolve in
+    // WebKit there, the QR floated to the top and squeezed every row on the
+    // iPhone (owner, 2026-10-05). tests/render/card-rows-iphone-engine.
+    expect(shared).toMatch(/float: "right", width: 0, height: `calc\(100cqh - \$\{corner\}px\)`/);
+    expect(shared).toMatch(/\{ height: "100cqh" \}/);
+    expect(shared).not.toMatch(/calc\(100% - \$\{corner\}px\)/);
   });
 
   it("custom cards size text with one rule, drawn and modelled alike", () => {

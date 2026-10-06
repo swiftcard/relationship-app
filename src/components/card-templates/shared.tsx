@@ -956,12 +956,19 @@ export function ContactRows({ data, palette, qr }: { data: CardData; palette: Ro
     // 1 1 0 — never its content's height, which size containment ignores) and
     // the column's width. 100cqh / 100cqw inside are exactly that box.
     <div data-contact-block style={{ flex: "1 1 0", minHeight: 0, minWidth: 0, alignSelf: "stretch", containerType: "size" }}>
-      <div className={qr ? undefined : "flex flex-col"} style={{ ...vars, ...(qr ? { height: "100%" } : { gap: u(ROW_GAP_U) }), lineHeight: ROW_LH }}>
+      <div className={qr ? undefined : "flex flex-col"} style={{ ...vars, ...(qr ? { height: "100cqh" } : { gap: u(ROW_GAP_U) }), lineHeight: ROW_LH }}>
         {qr && (
           <>
             {/* A zero-width float as tall as the block less the corner pushes
                 the QR's float down into the bottom-right corner. */}
-            <div aria-hidden style={{ float: "right", width: 0, height: `calc(100% - ${corner}px)` }} />
+            {/* 100cqh, NOT 100%: a percentage height inside this flex item
+                does not resolve in WebKit (the iPhone app and Safari), so the
+                spacer collapsed to nothing, the QR floated to the TOP, and
+                every row was squeezed beside it — "MOBILE" dropped under the
+                number and the email wrapped (owner, 2026-10-05, Photo First).
+                The block is a size container, so 100cqh is its height in
+                every engine — the same unit the rows are sized with. */}
+            <div aria-hidden style={{ float: "right", width: 0, height: `calc(100cqh - ${corner}px)` }} />
             <div style={{ float: "right", clear: "right", width: corner, height: corner, display: "flex", alignItems: "flex-end", justifyContent: "flex-end" }}>
               {qr.node}
             </div>
