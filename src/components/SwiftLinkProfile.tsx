@@ -303,6 +303,10 @@ export default function SwiftLinkProfile({
   //   and Safari shows it beneath its bottom toolbar, behind the home indicator
   //   and in the bounce. The canvas now takes the colour at the bottom of the
   //   page: the sheet on a phone, the Look's page colour around the desktop card.
+  // • Once the sheet filled the screen, a glass Look's frosted panel still
+  //   stopped under the last link, leaving the raw wash below it and a visible
+  //   edge across the page. On phones the sheet is a column and the panel grows
+  //   to its bottom; nothing above it moves (measured on four live pages).
   // Never when embedded: that is the designer's preview, inside the app.
   // Hex only: a custom background is client-written, and this goes into a
   // stylesheet, where anything but a plain colour must not reach.
@@ -312,7 +316,7 @@ export default function SwiftLinkProfile({
   const canvasPhone = wash && lastWash
     ? `color-mix(in srgb, ${sheetHex} ${Math.round(glassAlpha * 100)}%, ${hex(lastWash, sheetHex)})`
     : hex(!glassOn && sheetTo ? sheetTo : sheetBg, look.sheet);
-  const canvasCss = embedded ? "" : ` :root:has(main.sc-sl-page), :root:has(main.sc-sl-page) body { background: ${hex(look.page, sheetHex)}; } @media (max-width: 767px) { :root:has(main.sc-sl-page), :root:has(main.sc-sl-page) body { background: ${canvasPhone}; } }`;
+  const canvasCss = embedded ? "" : ` :root:has(main.sc-sl-page), :root:has(main.sc-sl-page) body { background: ${hex(look.page, sheetHex)}; } @media (max-width: 767px) { :root:has(main.sc-sl-page), :root:has(main.sc-sl-page) body { background: ${canvasPhone}; } .sc-sl-fillcol { display: flex; flex-direction: column; } .sc-sl-fillcol > * { flex-shrink: 0; } .sc-sl-fillcol > .sc-sl-body { flex-grow: 1; } }`;
 
   return (
     <main className={embedded ? "" : "sc-sl-page min-h-[100dvh] flex flex-col"} style={{ background: embedded ? "transparent" : look.page }}>
@@ -321,7 +325,7 @@ export default function SwiftLinkProfile({
         className={`sc-sl-sheet relative mx-auto w-full max-w-[430px] overflow-hidden ${
           embedded
             ? "rounded-[30px]"
-            : "grow shrink-0 md:grow-0 min-h-[100dvh] md:min-h-0 md:my-8 md:rounded-[30px] md:shadow-[0_24px_80px_rgba(0,0,0,0.6)]"
+            : "sc-sl-fillcol grow shrink-0 md:grow-0 min-h-[100dvh] md:min-h-0 md:my-8 md:rounded-[30px] md:shadow-[0_24px_80px_rgba(0,0,0,0.6)]"
         }`}
         style={{ background: sheetBg, fontFamily: pageFont }}
       >
@@ -550,7 +554,7 @@ export default function SwiftLinkProfile({
           // the fade ends on, so the seam is invisible and the content reads
           // as emerging from the photo — a curve here drew a visible line
           // through the blend. flatTop (avatar/none) was already square.
-          className={`relative px-4 pb-9 text-center ${flatTop ? "pt-10" : "-mt-10 pt-7"}`}
+          className={`sc-sl-body relative px-4 pb-9 text-center ${flatTop ? "pt-10" : "-mt-10 pt-7"}`}
           style={{
             // Over background media the sheet paints NOTHING — it is the layer
             // the content sits on, and the media is behind it. Painting sheetBg

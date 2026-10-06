@@ -19,7 +19,13 @@ const src = readFileSync(join(process.cwd(), "src/components/SwiftLinkProfile.ts
 describe("Swift Links page fills the phone", () => {
   it("main is a flex column and the sheet grows into it on phones", () => {
     expect(src).toContain(`"sc-sl-page min-h-[100dvh] flex flex-col"`);
-    expect(src).toContain(`"grow shrink-0 md:grow-0 min-h-[100dvh]`);
+    expect(src).toContain(`grow shrink-0 md:grow-0 min-h-[100dvh]`);
+  });
+
+  it("a glass Look's frosted panel runs to the bottom of the screen, no edge across the page", () => {
+    expect(src).toContain(`"sc-sl-fillcol grow shrink-0`);
+    expect(src).toContain("className={`sc-sl-body relative px-4 pb-9");
+    expect(src).toContain(".sc-sl-fillcol > .sc-sl-body { flex-grow: 1; }");
   });
 
   it("the canvas under the page takes the page's colour, only on the public page", () => {
