@@ -7,15 +7,27 @@
 // (2026-10-06). Version 8 rejects any capture where the name, logo or photo
 // didn't paint (lib/capture-verify).
 //
-// Those older pictures are still in storage, and re-capturing only happens
-// when the owner next opens the app. So the server stops trusting them on
-// its own: a card-shares capture written before SHARE_CAPTURES_TRUSTED_SINCE
-// is ignored (the preview falls back to the rendered stand-in, which draws the
-// name and logo itself), and an upload that doesn't declare this version is
-// refused. The cutoff sits just after the v8 deploy, so every older capture
-// falls before it.
+// An upload that doesn't declare this version is refused, so every NEW
+// picture is a verified one.
+//
+// The older pictures are NOT distrusted wholesale. That was tried for an
+// afternoon (2026-10-06) and every link went out as the server-drawn
+// stand-in, which has the right name and logo but not the card's design —
+// "the card preview on the card link has to look exactly like the card. Every
+// little detail. It was like that before but randomly here and there it would
+// just miss something like a logo." (owner). The old pictures ARE the card,
+// exactly; only the ones that actually dropped something are set aside.
+// scripts/qa-share-preview.mjs compared every live card's picture with the
+// real card that day and found exactly the two below. Each is ignored only
+// while its picture predates SHARE_CAPTURES_TRUSTED_SINCE, so the first
+// verified re-capture brings it straight back. Anything the nightly check
+// finds later goes here the same way.
 //
 // Import-free on purpose: the browser capture imports it too.
 
 export const SHARE_CAPTURE_VERSION = 8;
 export const SHARE_CAPTURES_TRUSTED_SINCE = Date.parse("2026-10-06T20:00:00Z");
+export const DROPPED_OLD_CAPTURES: ReadonlySet<string> = new Set([
+  "aaronlavi-nadlanhomesllc", // logo slot empty
+  "aaronlavi-malvecapital",   // logo slot empty
+]);

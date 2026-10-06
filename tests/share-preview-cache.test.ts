@@ -204,8 +204,20 @@ describe("every stand-in template draws the logo", () => {
 });
 
 describe("an image the renderer can't draw costs only that image", () => {
-  it("re-encodes photo and logo to PNG before Satori sees them", () => {
-    expect(og()).toMatch(/sharp\(buf\)[\s\S]{0,200}\.png\(\)/);
+  it("fetches photo and logo through the SSRF-safe, re-encoding fetcher", () => {
+    // fetchVCardPhoto = safeFetch + sharp to PNG/JPEG. The old host allowlist
+    // kept every img.logo.dev logo off the preview (Malve Capital, jakejake).
+    expect(og()).toMatch(/const got = await fetchVCardPhoto\(kind === "logo" \? withLogoSize\(url\) : url, kind\);/);
+    expect(og()).not.toMatch(/ok\.has\(host\)/);
+  });
+
+  it("says on every response what it drew, for the production monitor", () => {
+    const src = og();
+    expect(src).toMatch(/const PREVIEW_HEADER = "X-SC-Preview";/);
+    expect(src).toMatch(/\[PREVIEW_HEADER\]: "capture"/);
+    expect(src).toMatch(/standin\(wantedPhoto && !meta\.photoUrl, wantedLogo && !meta\.logoUrl\)/);
+    expect(src).toMatch(/standin\(wantedPhoto, wantedLogo\)/);
+    expect(src.match(/\[PREVIEW_HEADER\]: "brand"/g)?.length).toBe(2);
   });
 
   it("retries without images before the brand fallback", () => {
@@ -234,31 +246,36 @@ describe("the capture is verified in its pixels, and its presence on the server"
   });
 });
 
-// ── Captures from before the pixel check are never served ───────────────────
+// ── Old captures keep serving; only the ones that dropped something don't ───
 // Production held captures with the logo slot empty (aaronlavi-nadlanhomesllc,
-// 2026-10-06), and re-capturing waits for the owner to open the app. So the
-// server distrusts every share capture older than the v8 cutoff on its own.
+// 2026-10-06). Distrusting EVERY old capture sent every link out as the
+// stand-in, which isn't the card's design — the owner: "the card preview on
+// the card link has to look exactly like the card". So only the captures
+// verified broken are set aside, and only until they're re-captured.
 import { storedCaptureIsCurrent } from "../src/lib/stored-capture";
-import { SHARE_CAPTURE_VERSION, SHARE_CAPTURES_TRUSTED_SINCE } from "../src/lib/share-capture-version";
+import { SHARE_CAPTURE_VERSION, SHARE_CAPTURES_TRUSTED_SINCE, DROPPED_OLD_CAPTURES } from "../src/lib/share-capture-version";
 
-function fakeAdmin(fileWritten: string, cardCreated: string | null) {
+function fakeAdmin(fileWritten: string, cardCreated: string | null, slug = "alex") {
   return {
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: cardCreated ? { created_at: cardCreated } : null }) }) }) }),
-    storage: { from: () => ({ list: async () => ({ data: [{ name: "alex.png", updated_at: fileWritten }], error: null }) }) },
+    storage: { from: () => ({ list: async () => ({ data: [{ name: `${slug}.png`, updated_at: fileWritten }], error: null }) }) },
   } as unknown as Parameters<typeof storedCaptureIsCurrent>[0];
 }
 const before = new Date(SHARE_CAPTURES_TRUSTED_SINCE - 60_000).toISOString();
 const after = new Date(SHARE_CAPTURES_TRUSTED_SINCE + 60_000).toISOString();
 const cardBorn = "2026-01-01T00:00:00Z";
 
-describe("pre-v8 share captures are distrusted server-side", () => {
-  it("a share capture from before the cutoff is not served", async () => {
-    expect(await storedCaptureIsCurrent(fakeAdmin(before, cardBorn), "card-shares", "alex")).toBe(false);
+describe("old share captures: the card exactly, unless known to have dropped something", () => {
+  it("an ordinary old capture keeps serving — it IS the card", async () => {
+    expect(await storedCaptureIsCurrent(fakeAdmin(before, cardBorn), "card-shares", "alex")).toBe(true);
+    expect(await storedCaptureIsCurrent(fakeAdmin(before, null), "card-shares", "alex")).toBe(true);
   });
-  it("…not even for a legacy card with no cards row", async () => {
-    expect(await storedCaptureIsCurrent(fakeAdmin(before, null), "card-shares", "alex")).toBe(false);
+  it("an old capture known to have dropped the logo is set aside…", async () => {
+    expect(DROPPED_OLD_CAPTURES.has("aaronlavi-nadlanhomesllc")).toBe(true);
+    expect(await storedCaptureIsCurrent(fakeAdmin(before, cardBorn, "aaronlavi-nadlanhomesllc"), "card-shares", "aaronlavi-nadlanhomesllc")).toBe(false);
   });
-  it("a capture after the cutoff is served", async () => {
+  it("…until its verified re-capture, which serves again", async () => {
+    expect(await storedCaptureIsCurrent(fakeAdmin(after, cardBorn, "aaronlavi-nadlanhomesllc"), "card-shares", "aaronlavi-nadlanhomesllc")).toBe(true);
     expect(await storedCaptureIsCurrent(fakeAdmin(after, cardBorn), "card-shares", "alex")).toBe(true);
   });
   it("email signatures are a different picture and keep their own rule", async () => {

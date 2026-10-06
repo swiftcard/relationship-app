@@ -3,6 +3,7 @@ import { resolveCardMeta } from "@/lib/resolve-card";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { isCardActive } from "@/lib/card-active";
 import { storedCaptureIsCurrent } from "@/lib/stored-capture";
+import { fetchVCardPhoto, withLogoSize } from "@/lib/contact-photo";
 import { BrandOg, loadBrandOgInputs } from "@/lib/brand-og";
 
 // A pixel-perfect PNG of the real card, captured client-side on the dashboard
@@ -49,57 +50,38 @@ function initialsOf(name: string | null | undefined) {
 // can never throw on a slow/failed image fetch (which would blow up the whole OG
 // render and drop to the brand fallback — a card with no photo at all). On any
 // problem we return null, so the Photo component just draws initials and the
-// card still renders. Bounded by a short timeout so a stuck host can't hang the
-// preview. (Only the Tier-2 rendered path uses this; Tier-1 is a stored PNG.)
-async function embedImage(url: string | null): Promise<string | null> {
+// card still renders. (Only the Tier-2 rendered path uses this; Tier-1 is a
+// stored capture.)
+//
+// The fetch is fetchVCardPhoto, the one Save Contact already uses on the same
+// owner-controlled URLs: safeFetch (no private IPs, DNS pinned, every redirect
+// re-checked), a 4s timeout, a size cap, and sharp re-encoding to PNG (logo)
+// or JPEG (headshot) — the only formats Satori draws.
+//
+// It used to be a bare fetch restricted to our own storage hosts. That kept
+// every logo the logo picker suggests (img.logo.dev) OFF the preview, and a
+// WebP/SVG upload made Satori throw — the "it missed my logo" and "it missed
+// my name" reports (2026-10-06).
+async function embedImage(url: string | null, kind: "headshot" | "logo"): Promise<string | null> {
   if (!url) return null;
-  if (url.startsWith("data:")) return url;
-  if (!/^https?:\/\//.test(url)) return null;
-  // SSRF guard, same as wallet-strip.tsx: the URL is an owner-controlled DB
-  // value and this fetch runs server-side — only touch the hosts our upload
-  // flows write to (Supabase storage + our own domain), and never follow a
-  // redirect off them. Anything else falls back to initials.
-  try {
-    const host = new URL(url).hostname.toLowerCase().replace(/\.$/, "");
-    const ok = new Set<string>();
-    for (const env of [process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me"]) {
-      if (env) try { ok.add(new URL(env).hostname.toLowerCase()); } catch { /* ignore */ }
-    }
-    if (!ok.has(host)) return null;
-  } catch {
-    return null;
-  }
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 2500);
-    const res = await fetch(url, { signal: ctrl.signal, cache: "no-store", redirect: "error" }).finally(() => clearTimeout(t));
-    if (!res.ok) return null;
-    const type = res.headers.get("content-type") || "image/png";
-    if (!/^image\//.test(type)) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.byteLength < 100 || buf.byteLength > 6_000_000) return null;
-    // Re-encode to PNG. Satori draws PNG/JPEG/GIF, but a WebP, AVIF or HEIC
-    // logo (what phones and design tools hand out) made it THROW, and a throw
-    // here used to take the whole card down to the brand fallback — no name,
-    // no logo, just "SwiftCard". sharp also rasterises SVG and shrinks a 4000px
-    // headshot to the size the preview actually draws, which keeps the render
-    // fast enough for a messenger that will not wait.
+  if (/^data:image\/(png|jpe?g);/i.test(url)) return url;
+  if (url.startsWith("data:")) {
+    // A WebP/SVG data URL would throw in Satori; re-encode it the same way.
     try {
+      const comma = url.indexOf(",");
+      const body = url.slice(comma + 1);
+      const bytes = /;base64$/i.test(url.slice(0, comma)) ? Buffer.from(body, "base64") : Buffer.from(decodeURIComponent(body));
       const sharp = (await import("sharp")).default;
-      const png = await sharp(buf)
-        .rotate()
-        .resize({ width: 640, height: 640, fit: "inside", withoutEnlargement: true })
-        .png()
-        .toBuffer();
+      const png = await sharp(bytes).png().toBuffer();
       return `data:image/png;base64,${png.toString("base64")}`;
     } catch {
-      // sharp could not read it. PNG/JPEG still render as they came; anything
-      // else would throw in Satori, so drop it and draw initials instead.
-      return /^image\/(png|jpe?g)$/i.test(type) ? `data:${type};base64,${buf.toString("base64")}` : null;
+      return null;
     }
-  } catch {
-    return null;
   }
+  if (!/^https?:\/\//.test(url)) return null;
+  const got = await fetchVCardPhoto(kind === "logo" ? withLogoSize(url) : url, kind);
+  const mime = got?.mime ?? "";
+  return got && /^image\/(png|jpe?g)$/.test(mime) ? `data:${mime};base64,${got.base64}` : null;
 }
 
 // Guaranteed-renderable branded fallback: the SAME picture the homepage and
@@ -108,6 +90,21 @@ async function embedImage(url: string | null): Promise<string | null> {
 // generic placeholder. Every input it loads is optional and time-bounded,
 // and its text is Latin-1 only, so it can't glyph-fail the way an arbitrary
 // name/company could.
+// What the preview actually drew, on every response, so production can be
+// checked from outside (scripts/qa-share-preview.mjs): "capture" (the stored
+// picture of the real card), "standin" (rendered here, everything it wanted),
+// "standin; missing=logo,photo" (rendered, but a picture it wanted couldn't
+// be embedded) or "brand" (not a live card). Labels only — nothing reads it.
+const PREVIEW_HEADER = "X-SC-Preview";
+function drew(res: Response, what: string): Response {
+  res.headers.set(PREVIEW_HEADER, what);
+  return res;
+}
+function standin(lostPhoto: boolean, lostLogo: boolean): string {
+  const missing = [...(lostLogo ? ["logo"] : []), ...(lostPhoto ? ["photo"] : [])];
+  return missing.length ? `standin; missing=${missing.join(",")}` : "standin";
+}
+
 async function brandFallbackResponse(): Promise<Response> {
   const { fonts, ...inputs } = await loadBrandOgInputs(2500);
   const buf = await new ImageResponse(<BrandOg {...inputs} height={686} />, {
@@ -115,7 +112,7 @@ async function brandFallbackResponse(): Promise<Response> {
     fonts: fonts.length ? fonts : undefined,
   }).arrayBuffer();
   return new Response(buf, {
-    headers: { "Content-Type": "image/png", "Cache-Control": CACHE_DEGRADED },
+    headers: { "Content-Type": "image/png", "Cache-Control": CACHE_DEGRADED, [PREVIEW_HEADER]: "brand" },
   });
 }
 
@@ -436,7 +433,7 @@ function GenericOG(p: Meta) {
 const CACHE_COMPLETE = "public, max-age=600, s-maxage=86400, stale-while-revalidate=604800";
 
 // A DEGRADED preview must not be frozen at the edge for a day. If the headshot
-// or logo failed to embed (embedImage gives up after 2.5s and the card falls
+// or logo failed to embed (embedImage gives up after 4s and the card falls
 // back to initials), caching that for 24h is how "no headshot" becomes
 // permanent — the other half of the report. Keep the old short TTL so the very
 // next scrape retries the image.
@@ -519,7 +516,7 @@ export default async function Image({
         // The best possible preview — a picture of the real card, nothing
         // missing. Cache it hard; the versioned URL handles freshness.
         return new Response(new Uint8Array(jpeg), {
-          headers: { "Content-Type": "image/jpeg", "Cache-Control": CACHE_COMPLETE },
+          headers: { "Content-Type": "image/jpeg", "Cache-Control": CACHE_COMPLETE, [PREVIEW_HEADER]: "capture" },
         });
       }
     }
@@ -548,7 +545,7 @@ export default async function Image({
     // headshot. Only the first is degraded, and only that one must expire fast.
     const wantedPhoto = !!meta.photoUrl;
     const wantedLogo = !!meta.logoUrl;
-    [meta.photoUrl, meta.logoUrl] = await Promise.all([embedImage(meta.photoUrl), embedImage(meta.logoUrl)]);
+    [meta.photoUrl, meta.logoUrl] = await Promise.all([embedImage(meta.photoUrl, "headshot"), embedImage(meta.logoUrl, "logo")]);
     const complete = (!wantedPhoto || !!meta.photoUrl) && (!wantedLogo || !!meta.logoUrl);
 
     // Format the phone ONCE here rather than at each template's <Contact>, so
@@ -572,7 +569,10 @@ export default async function Image({
     let card = drawCard(meta);
     try {
       // Full-bleed: the card fills the ENTIRE frame — no backdrop, no blank space.
-      return await toResponse(<div style={{ width: "100%", height: "100%", display: "flex" }}>{card}</div>, "image/png", complete);
+      return drew(
+        await toResponse(<div style={{ width: "100%", height: "100%", display: "flex" }}>{card}</div>, "image/png", complete),
+        standin(wantedPhoto && !meta.photoUrl, wantedLogo && !meta.logoUrl),
+      );
     } catch (e) {
       // A picture Satori could not draw must cost only that picture. Falling
       // straight to the brand fallback here is how a link went out with no
@@ -580,7 +580,10 @@ export default async function Image({
       // (degraded, so it expires fast and the next fetch retries them).
       if (!meta.photoUrl && !meta.logoUrl) throw e;
       card = drawCard({ ...meta, photoUrl: null, logoUrl: null });
-      return await toResponse(<div style={{ width: "100%", height: "100%", display: "flex" }}>{card}</div>, "image/png", false);
+      return drew(
+        await toResponse(<div style={{ width: "100%", height: "100%", display: "flex" }}>{card}</div>, "image/png", false),
+        standin(wantedPhoto, wantedLogo),
+      );
     }
   } catch {
     /* fall through to the branded fallback */
@@ -595,6 +598,6 @@ export default async function Image({
 
   // ── Tier 4: static solid PNG — literally cannot fail ──────────────────────
   return new Response(SOLID_PNG, {
-    headers: { "Content-Type": "image/png", "Cache-Control": CACHE_DEGRADED },
+    headers: { "Content-Type": "image/png", "Cache-Control": CACHE_DEGRADED, [PREVIEW_HEADER]: "brand" },
   });
 }

@@ -1,5 +1,5 @@
 import type { getAdminSupabase } from "@/lib/supabase-admin";
-import { SHARE_CAPTURES_TRUSTED_SINCE } from "@/lib/share-capture-version";
+import { DROPPED_OLD_CAPTURES, SHARE_CAPTURES_TRUSTED_SINCE } from "@/lib/share-capture-version";
 
 type Admin = ReturnType<typeof getAdminSupabase>;
 
@@ -31,10 +31,10 @@ export async function storedCaptureIsCurrent(
     const file = (files ?? []).find((f) => f.name === `${slug}.png`);
     if (!file) return false;
     const written = Date.parse(String(file.updated_at ?? file.created_at ?? ""));
-    // A share capture from before the pixel-verified capture code may be
-    // missing the name or the logo (lib/share-capture-version). Never serve
-    // one; the rendered stand-in draws the card whole until it's re-captured.
-    if (bucket === "card-shares" && !(written >= SHARE_CAPTURES_TRUSTED_SINCE)) return false;
+    // An old share capture that is KNOWN to have dropped the logo or name
+    // (lib/share-capture-version) is set aside until its verified re-capture;
+    // every other old capture is the card exactly and keeps serving.
+    if (bucket === "card-shares" && DROPPED_OLD_CAPTURES.has(slug.toLowerCase()) && !(written >= SHARE_CAPTURES_TRUSTED_SINCE)) return false;
     // A legacy profile-card has no cards row; its address never changes hands.
     if (!card?.created_at) return true;
     const born = Date.parse(String(card.created_at));
