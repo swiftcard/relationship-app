@@ -24,9 +24,57 @@ export type TransferIdentity = {
   hasLogo?: boolean;
 };
 
+// ── A REDRAW, not an edit (owner, 2026-10-06) ───────────────────────────────
+//
+// Most uploads are a photo of the owner's own paper card. Asked to "edit" that
+// image, the model kept the photo — paper grain, lamp light, shadows, the tilt —
+// and only swapped the text: "it shouldn't copy the actual paper card and just
+// put the details on it. It should copy the actual paper card's color and
+// features and design." So every image prompt now asks for a NEW, clean,
+// digital card drawn from the reference, never a retouch of it; the design is
+// read first into a written spec (true colours, corrected for the room's
+// light); and the output check below rejects anything that still looks like a
+// photograph.
+
+/** What the redraw must never carry over from a photo. One list, used by both
+ *  image prompts and named in the output check, so the three can't drift. */
+const PHOTO_TRAITS =
+  "no paper texture or grain, no lighting, glare, shine or vignette, no shadows, no creases or curl, no perspective or tilt, no blur, no rounded photo corners, nothing around the card";
+
+/** Asked of the vision model before any drawing: the design, in words. */
+export const DESIGN_SPEC_PROMPT = [
+  "This image shows a business card design (it may be a photo of a printed card).",
+  "Describe the DESIGN precisely enough for a graphic designer to redraw it as a",
+  "clean digital file. Plain text, at most 170 words, in this order:",
+  "1. Base colour of the card as #rrggbb — the colour it was PRINTED in. Correct for",
+  "   the room's lighting and white balance: cream or white paper under warm light",
+  "   is still cream or white, not yellow; a shadow does not darken the colour.",
+  "2. Every other colour (bands, panels, shapes, text) as #rrggbb and what it is used for.",
+  "3. Graphic elements — shapes, stripes, borders, patterns, icons, illustrations —",
+  "   with their position (e.g. 'left third', 'top-right corner') and size.",
+  "4. Layout: where the name, title, contact lines, logo and any photo sit, and",
+  "   their alignment.",
+  "5. Typography: serif or sans-serif, weight, ALL CAPS or not, letter-spacing.",
+  "6. Special finishes as their flat look (gold foil = flat gold #c9a24a, embossing =",
+  "   ignore, spot gloss = ignore).",
+  "Do NOT transcribe any of the card's text, names, numbers or addresses.",
+  "Do NOT mention the photo, the table, the hand or the lighting.",
+].join("\n");
+
+/** Model text → a prompt-safe spec block, or "" when it is unusable. */
+export function cleanDesignSpec(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const t = raw.replace(/```[a-z]*|```/gi, "").replace(/\r/g, "").trim();
+  if (t.length < 40) return "";
+  return t.slice(0, 1400);
+}
+
+const specLines = (spec?: string): string[] =>
+  spec ? ["", "THE DESIGN, as read from the reference (colours are the true printed colours — use these exact values):", spec, ""] : [""];
+
 /** One line per fact the model may print — and an explicit "omit" list, because
  *  the single worst failure is the TEMPLATE's details surviving onto the card. */
-export function transferPrompt(id: TransferIdentity): string {
+export function transferPrompt(id: TransferIdentity, spec?: string): string {
   const facts: string[] = [`- Name: ${id.name}`];
   if (id.title?.trim()) facts.push(`- Job title: ${id.title.trim()}`);
   if (id.company?.trim()) facts.push(`- Company: ${id.company.trim()}`);
@@ -40,20 +88,23 @@ export function transferPrompt(id: TransferIdentity): string {
   if (id.hasLogo) refs.push(`The ${id.hasHeadshot ? "SECOND" : "FIRST"} extra image is their company logo — put it wherever the design shows a logo.`);
 
   return [
-    "The first image shows a business card design. Recreate that DESIGN exactly —",
-    "same layout, same fonts, same colours, same graphics, same alignment and",
-    "spacing — but belonging to a different person, whose details are below:",
+    "The first image is a REFERENCE: a business card design, often a photo of a",
+    "printed paper card. Create a brand-new, print-ready DIGITAL business card",
+    "graphic that copies that DESIGN — same layout, same colours, same graphic",
+    "elements, same font style, same alignment and spacing — drawn as clean, crisp,",
+    "flat vector-style artwork, as if exported from a design app. It belongs to a",
+    "different person, whose details are below:",
     "",
     ...facts,
-    "",
+    ...specLines(spec),
     ...refs,
     "",
     "Rules, in order of importance:",
     "- Your output is the card's FACE alone: flat, straight-on, filling the",
-    "  entire canvas edge to edge. If the image is a PHOTOGRAPH of a physical",
-    "  card — held in a hand, lying on a table, at an angle, in a scene — extract",
-    "  the card's printed design and flatten it. Never include hands, fingers,",
-    "  backgrounds, tables, shadows, other cards, or any of the scene.",
+    "  entire canvas edge to edge. Never reproduce the photograph itself —",
+    `  ${PHOTO_TRAITS}. Every colour is a clean, even fill. Never include hands,`,
+    "  fingers, backgrounds, tables, other cards, or any of the scene. A vertical",
+    "  card becomes a horizontal card with the same look.",
     "- FIRST erase every trace of the original owner: their name, initials,",
     "  monogram, job title, company, phone, email, address, handles, and any",
     "  quote or tagline that is theirs. THEN print the details listed above in",
@@ -64,7 +115,7 @@ export function transferPrompt(id: TransferIdentity): string {
     "- Do not add, move, resize or restyle the design's graphics. Do not add a",
     "  QR code, logo or decoration the original does not have.",
     "- Spell every detail exactly as written above, character for character.",
-    "Return only the edited image.",
+    "Return only the new card image.",
   ].join("\n");
 }
 
@@ -398,22 +449,62 @@ export async function renderFaceImage(
 // renderFaceImage overlays the owner's details in real type. No letter is ever
 // model-drawn, so the text can't be wrong; the background is the model's
 // pixel-faithful copy, so the design isn't a flat reconstruction.
-export const STRIP_ARTWORK_PROMPT = [
-  "Reproduce this business card design EXACTLY — same canvas, same background,",
-  "same colors, gradients, panels, shapes, borders, textures and decorative",
-  "artwork, at the same positions.",
-  "REMOVE COMPLETELY: all text and lettering of every kind, all logos and",
-  "wordmarks, all QR codes and barcodes, and all photographs of people.",
-  "Where something was removed, continue the underlying background seamlessly.",
-  "Do NOT add anything new. Output only the cleaned design.",
-].join(" ");
+// "Textures" used to be in this list — which asked for the paper grain of a
+// photographed card by name (2026-10-06). The artwork is redrawn clean now.
+export function stripArtworkPrompt(spec?: string): string {
+  return [
+    "The image is a REFERENCE: a business card design, often a photo of a printed",
+    "paper card. Redraw its ARTWORK as a brand-new, clean, flat DIGITAL graphic —",
+    "same background colour, same colours, gradients, panels, shapes, borders and",
+    "decorative artwork, at the same positions — as crisp vector-style art filling",
+    `the entire canvas, straight-on. Never reproduce the photograph: ${PHOTO_TRAITS}.`,
+    ...specLines(spec),
+    "LEAVE OUT COMPLETELY: all text and lettering of every kind, all logos and",
+    "wordmarks, all QR codes and barcodes, and all photographs of people.",
+    "Where something was left out, continue the underlying background seamlessly.",
+    "Do NOT add anything new. Output only the clean artwork.",
+  ].join("\n");
+}
 
-export const LEAK_SCAN_PROMPT = [
+/** The check every generated image passes: the original owner's contact
+ *  details (leaks) AND whether it still looks like a photo of paper. One vision
+ *  call answers both. */
+export const OUTPUT_CHECK_PROMPT = [
   "Transcribe every email address, every phone number, and every street/postal",
-  "address printed on this business card image. Return ONLY valid JSON:",
-  '{"emails":["..."],"phones":["..."],"addresses":["..."]}',
+  "address printed on this business card image. Then judge the image itself:",
+  "looksLikePhoto = true when it looks like a PHOTOGRAPH of a physical card rather",
+  "than a clean flat digital graphic — visible paper surface or grain, uneven",
+  "lighting, glare or vignette, cast shadows, perspective or tilt, curled or",
+  "physical edges, or anything around the card (table, hand, background). A flat",
+  "digital design that intentionally uses a texture or a photo is still false.",
+  "Return ONLY valid JSON:",
+  '{"emails":["..."],"phones":["..."],"addresses":["..."],"looksLikePhoto":false}',
   "Empty arrays if none. Do not include anything else.",
 ].join("\n");
+
+export type OutputProblems = { leaks: string[]; photo: boolean };
+
+/** Scan JSON → what is wrong with a generated image. Junk reads as clean. */
+export function outputProblems(scan: unknown, id: TransferIdentity): OutputProblems {
+  const photo = !!scan && typeof scan === "object" && (scan as { looksLikePhoto?: unknown }).looksLikePhoto === true;
+  return { leaks: findLeaks(scan, id), photo };
+}
+
+export const hasProblems = (p: OutputProblems): boolean => p.leaks.length > 0 || p.photo;
+
+/** The corrective lines for a retry, naming every problem the check found. */
+export function retrySuffix(p: OutputProblems): string {
+  return [
+    ...(p.leaks.length ? [leakRetrySuffix(p.leaks)] : []),
+    ...(p.photo
+      ? [
+          "",
+          "YOUR PREVIOUS ATTEMPT looked like a photograph of a paper card. Redraw it",
+          `as a clean, flat DIGITAL graphic: ${PHOTO_TRAITS}. Even, solid colours.`,
+        ]
+      : []),
+  ].join("\n");
+}
 
 const digits = (s: string) => s.replace(/\D/g, "");
 

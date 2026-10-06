@@ -89,7 +89,7 @@
 	     photo/logo pickers (ImageUpload). Wording must stay specific — generic
 	     strings are a rejection reason. -->
 	<key>NSCameraUsageDescription</key>
-	<string>SwiftCard uses the camera to scan paper business cards so you can save them as contacts.</string>
+	<string>SwiftCard uses the camera to scan paper business cards so you can save them as contacts, and to photograph your own card so you can copy its design.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>SwiftCard lets you choose a photo or logo from your library for your digital business card.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

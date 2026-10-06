@@ -6,6 +6,7 @@ import { isPaidPlan } from "@/lib/plan";
 import { isRateLimited } from "@/lib/rate-limit";
 import { SCAN_PROMPT, layoutFromScan } from "@/lib/custom-layout";
 import { aiConsentBlock } from "@/lib/ai-consent-server";
+import { prepareCardImage } from "@/lib/card-flatten";
 
 // Photograph the printed card you already carry, and get it back as a starting
 // point for the custom designer.
@@ -21,6 +22,9 @@ import { aiConsentBlock } from "@/lib/ai-consent-server";
 
 const MAX_BASE64 = 10_000_000; // ~7MB of image; a card photo is far smaller
 const ALLOWED_MEDIA = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+// Two vision reads now (find the card, then its layout) — room for both.
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   const userSupabase = await createClient();
@@ -80,9 +84,14 @@ export async function POST(request: NextRequest) {
 
   if (!hasAiProvider()) return NextResponse.json({ error: "no_ai" }, { status: 503 });
 
+  // A photo of a paper card is found and laid flat first (lib/card-flatten),
+  // so the layout is measured on the card itself, not on a tilted shot of a
+  // desk. A screenshot or a scan passes through untouched.
+  const card = await prepareCardImage(imageBase64, mediaType);
+
   const text = (await aiVision({
-    imageBase64,
-    mediaType,
+    imageBase64: card.imageBase64,
+    mediaType: card.mediaType,
     maxTokens: 700,
     json: true,
     prompt: SCAN_PROMPT,

@@ -216,3 +216,77 @@ describe("findLeaks", () => {
     expect(s).toMatch(/must not\s+appear/);
   });
 });
+
+// ── A redraw, never a retouch (owner, 2026-10-06) ────────────────────────────
+// A photo of the owner's own paper card came back as that photo — paper grain,
+// lamp light, tilt — with only the text swapped. Every image prompt now asks
+// for a NEW clean digital card, and the output check rejects a photo look.
+describe("the copy is a clean digital redraw", () => {
+  const id = { name: "Sam Lee", phone: "(415) 555-0137", email: "sam@example.com" };
+
+  it("transferPrompt asks for a new DIGITAL card and forbids the photograph", async () => {
+    const { transferPrompt } = await import("@/lib/design-transfer");
+    const p = transferPrompt(id);
+    expect(p).toMatch(/brand-new, print-ready DIGITAL business card/);
+    expect(p).toMatch(/Never reproduce the photograph itself/);
+    expect(p).toMatch(/no paper texture or grain/);
+    expect(p).not.toMatch(/edited image/);
+  });
+
+  it("the design read rides along when there is one", async () => {
+    const { transferPrompt, stripArtworkPrompt, cleanDesignSpec } = await import("@/lib/design-transfer");
+    const spec = cleanDesignSpec("Base colour #f5f0e6 (cream). Navy #1b2a4a band across the left third, thin gold #c9a24a rule under the name.");
+    expect(spec).toContain("#1b2a4a");
+    expect(transferPrompt(id, spec)).toContain(spec);
+    expect(stripArtworkPrompt(spec)).toContain(spec);
+    // Too short or empty → nothing, and the prompts stand alone.
+    expect(cleanDesignSpec("ok")).toBe("");
+    expect(cleanDesignSpec(null)).toBe("");
+    expect(transferPrompt(id, "")).not.toMatch(/THE DESIGN, as read/);
+  });
+
+  it("the artwork pass no longer asks for textures, and leaves the text out", async () => {
+    const { stripArtworkPrompt } = await import("@/lib/design-transfer");
+    const p = stripArtworkPrompt();
+    expect(p).not.toMatch(/textures/);
+    expect(p).toMatch(/clean, flat DIGITAL graphic/);
+    expect(p).toMatch(/LEAVE OUT COMPLETELY: all text/);
+  });
+
+  it("the output check flags a photo look as well as leaks", async () => {
+    const { outputProblems, hasProblems, retrySuffix, OUTPUT_CHECK_PROMPT } = await import("@/lib/design-transfer");
+    expect(OUTPUT_CHECK_PROMPT).toMatch(/"looksLikePhoto":false/);
+    const photo = outputProblems({ emails: ["sam@example.com"], phones: [], looksLikePhoto: true }, id);
+    expect(photo).toEqual({ leaks: [], photo: true });
+    expect(hasProblems(photo)).toBe(true);
+    expect(retrySuffix(photo)).toMatch(/looked like a photograph of a paper card/);
+    expect(retrySuffix(photo)).not.toMatch(/it kept/);
+
+    const both = outputProblems({ emails: ["old@owner.com"], looksLikePhoto: true }, id);
+    expect(both.leaks).toEqual(["old@owner.com"]);
+    expect(retrySuffix(both)).toMatch(/"old@owner.com"/);
+    expect(retrySuffix(both)).toMatch(/photograph/);
+
+    // Junk or a missing flag reads as clean — never burns a retry.
+    expect(hasProblems(outputProblems(null, id))).toBe(false);
+    expect(hasProblems(outputProblems({ looksLikePhoto: "yes" }, id))).toBe(false);
+  });
+
+  it("the route runs flatten → design read → engines, all through the one check", async () => {
+    const { readFileSync } = await import("node:fs");
+    const route = readFileSync("src/app/api/design-transfer/route.ts", "utf8");
+    const flatten = route.indexOf("prepareCardImage(sourceBase64, sourceMediaType)");
+    const read = route.indexOf("prompt: DESIGN_SPEC_PROMPT");
+    const engine = route.indexOf("transferPrompt(identity, spec)");
+    expect(flatten).toBeGreaterThan(-1);
+    expect(read).toBeGreaterThan(flatten);
+    expect(engine).toBeGreaterThan(read);
+    expect(route).toContain("stripArtworkPrompt(spec)");
+    expect(route.match(/await check\(candidate\)/g)?.length).toBe(2);
+    // The raw upload never reaches an engine — only the prepared card does.
+    expect(route).not.toMatch(/imageBase64: sourceBase64/);
+    const scan = readFileSync("src/app/api/scan-design/route.ts", "utf8");
+    expect(scan).toContain("prepareCardImage(imageBase64, mediaType)");
+    expect(scan).toContain("imageBase64: card.imageBase64");
+  });
+});

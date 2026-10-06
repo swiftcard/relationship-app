@@ -7,8 +7,10 @@ import { isRateLimited } from "@/lib/rate-limit";
 import {
   transferPrompt, transferChecklist, type TransferIdentity,
   PRECISE_SCAN_PROMPT, faceLayoutFromScan, renderFaceImage,
-  LEAK_SCAN_PROMPT, findLeaks, leakRetrySuffix, STRIP_ARTWORK_PROMPT,
+  OUTPUT_CHECK_PROMPT, outputProblems, hasProblems, retrySuffix, stripArtworkPrompt,
+  DESIGN_SPEC_PROMPT, cleanDesignSpec, type OutputProblems,
 } from "@/lib/design-transfer";
+import { prepareCardImage } from "@/lib/card-flatten";
 import { aiConsentBlock } from "@/lib/ai-consent-server";
 
 // "Make it EXACTLY this design, with my details" — the image-editing sibling
@@ -107,10 +109,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "bad_request" }, { status: 400 });
   }
 
-  const imageBase64 = typeof body.imageBase64 === "string" ? body.imageBase64 : "";
-  if (!imageBase64) return NextResponse.json({ error: "no_image" }, { status: 400 });
-  if (imageBase64.length > MAX_BASE64) return NextResponse.json({ error: "image_too_large" }, { status: 413 });
-  const mediaType = typeof body.mediaType === "string" && ALLOWED_MEDIA.has(body.mediaType)
+  const sourceBase64 = typeof body.imageBase64 === "string" ? body.imageBase64 : "";
+  if (!sourceBase64) return NextResponse.json({ error: "no_image" }, { status: 400 });
+  if (sourceBase64.length > MAX_BASE64) return NextResponse.json({ error: "image_too_large" }, { status: 413 });
+  const sourceMediaType = typeof body.mediaType === "string" && ALLOWED_MEDIA.has(body.mediaType)
     ? body.mediaType
     : "image/jpeg";
 
@@ -132,13 +134,49 @@ export async function POST(request: NextRequest) {
 
   if (!hasAiProvider()) return NextResponse.json({ error: "no_ai" }, { status: 503 });
 
-  // The owner's own photo/logo ride along so the model can place them.
-  const [headshot, logo] = await Promise.all([
+  // The owner's own photo/logo ride along so the model can place them. In the
+  // same breath, a PHOTO of a paper card is found and laid flat
+  // (lib/card-flatten): every engine below then sees the card's design — never
+  // the desk, the tilt or the lamp light, which the image model used to carry
+  // onto the copy. A screenshot or a scan passes through untouched.
+  const [headshot, logo, prepared] = await Promise.all([
     fetchReference(body.photoUrl),
     fetchReference(body.logoUrl),
+    prepareCardImage(sourceBase64, sourceMediaType),
   ]);
   identity.hasHeadshot = !!headshot;
   identity.hasLogo = !!logo;
+  const { imageBase64, mediaType } = prepared;
+
+  // The design, read into words first: true printed colours (corrected for
+  // the room's light), shapes, layout, type. Both image prompts carry it, so
+  // the model copies the DESIGN rather than retouching the photo. Empty when
+  // the read fails — the prompts still stand on their own.
+  const spec = cleanDesignSpec(await aiVision({ imageBase64, mediaType, prompt: DESIGN_SPEC_PROMPT, maxTokens: 500 }));
+
+  // Every generated image passes one check: the original owner's details
+  // (leaks) and whether it still looks like a photo of paper.
+  const check = async (img: { data: Buffer; mediaType: string }): Promise<OutputProblems> => {
+    const scan = await aiVision({
+      imageBase64: img.data.toString("base64"),
+      mediaType: img.mediaType,
+      prompt: OUTPUT_CHECK_PROMPT,
+      json: true,
+      maxTokens: 400,
+    });
+    try {
+      const m = scan?.match(/\{[\s\S]*\}/);
+      return m ? outputProblems(JSON.parse(m[0]), identity) : { leaks: [], photo: false };
+    } catch {
+      // Unreadable scan — treat as clean rather than burning a retry.
+      return { leaks: [], photo: false };
+    }
+  };
+  const logProblems = (stage: string, attempt: number, p: OutputProblems) =>
+    console.error(
+      `[design-transfer] ${stage} attempt ${attempt + 1} rejected for ${user.id}:`,
+      [...p.leaks, ...(p.photo ? ["(looks like a photo of paper)"] : [])].join(", "),
+    );
 
   // Two engines, in order of fidelity:
   //  1. Image EDITING (paid Google tier) — pixel-faithful backgrounds. Tried
@@ -156,27 +194,19 @@ export async function POST(request: NextRequest) {
   // unable to prevent (live test 2026-08-19). One corrective retry names the
   // leaked text; a second leak abandons the engine for this request and falls
   // through to measure-and-typeset, which cannot leak by construction.
+  // The same gate now also rejects an output that still looks like a photo of
+  // paper (2026-10-06) — named in the retry, and twice over it falls through
+  // to the hybrid exactly as a leak does.
   let result: { data: Buffer; mediaType: string } | null = null;
-  let lastLeaks: string[] = [];
+  let last: OutputProblems = { leaks: [], photo: false };
   for (let attempt = 0; attempt < 2; attempt++) {
-    const prompt = transferPrompt(identity) + (attempt === 0 ? "" : leakRetrySuffix(lastLeaks));
+    const prompt = transferPrompt(identity, spec) + (attempt === 0 ? "" : retrySuffix(last));
     const candidate = await aiImageEdit({ imageBase64, mediaType, prompt, references });
     if (!candidate) break; // engine unavailable — nothing a retry would change
-    const scan = await aiVision({
-      imageBase64: candidate.data.toString("base64"),
-      mediaType: candidate.mediaType,
-      prompt: LEAK_SCAN_PROMPT,
-      json: true,
-      maxTokens: 400,
-    });
-    let leaks: string[] = [];
-    try {
-      const m = scan?.match(/\{[\s\S]*\}/);
-      leaks = m ? findLeaks(JSON.parse(m[0]), identity) : [];
-    } catch { /* unreadable scan — treat as clean rather than burning a retry */ }
-    if (leaks.length === 0) { result = candidate; break; }
-    console.error(`[design-transfer] leak gate caught attempt ${attempt + 1} for ${user.id}:`, leaks.join(", "));
-    lastLeaks = leaks;
+    const problems = await check(candidate);
+    if (!hasProblems(problems)) { result = candidate; break; }
+    logProblems("full rebuild", attempt, problems);
+    last = problems;
   }
 
   const sharp = (await import("sharp")).default;
@@ -196,23 +226,15 @@ export async function POST(request: NextRequest) {
     // surviving source text, name it, try once more. A clean artwork plus a
     // deterministic owner-text overlay needs no second gate.
     let art: { data: Buffer; mediaType: string } | null = null;
-    let artLeaks: string[] = [];
+    let artLast: OutputProblems = { leaks: [], photo: false };
     for (let attempt = 0; attempt < 2; attempt++) {
-      const prompt = STRIP_ARTWORK_PROMPT + (attempt === 0 ? "" : leakRetrySuffix(artLeaks));
+      const prompt = stripArtworkPrompt(spec) + (attempt === 0 ? "" : retrySuffix(artLast));
       const candidate = await aiImageEdit({ imageBase64, mediaType, prompt });
       if (!candidate) break;
-      const scan = await aiVision({
-        imageBase64: candidate.data.toString("base64"), mediaType: candidate.mediaType,
-        prompt: LEAK_SCAN_PROMPT, json: true, maxTokens: 400,
-      });
-      let leaks: string[] = [];
-      try {
-        const lm = scan?.match(/\{[\s\S]*\}/);
-        leaks = lm ? findLeaks(JSON.parse(lm[0]), identity) : [];
-      } catch { /* unreadable scan — treat as clean */ }
-      if (leaks.length === 0) { art = candidate; break; }
-      console.error(`[design-transfer] hybrid strip leaked attempt ${attempt + 1} for ${user.id}:`, leaks.join(", "));
-      artLeaks = leaks;
+      const problems = await check(candidate);
+      if (!hasProblems(problems)) { art = candidate; break; }
+      logProblems("hybrid artwork", attempt, problems);
+      artLast = problems;
     }
     if (art) {
       const reading = await aiVision({ imageBase64, mediaType, prompt: PRECISE_SCAN_PROMPT, json: true, maxTokens: 2600 });
