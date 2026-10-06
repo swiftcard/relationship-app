@@ -223,7 +223,10 @@ export default function CheckoutClient({ trialEligible = true, officeCoversPro =
   // quoted plan change, and a refused code was sent anyway (bug audit
   // 2026-10-06). The flag is read and cleared once; the start waits.
   const resumeRef = useRef<boolean | null>(null);
-  const promoChecking = promo.state.status === "checking";
+  // An Office code that fixes the team size rewrites ?seats= first (effect
+  // above); starting before that lands would order the old count, which the
+  // server refuses.
+  const promoChecking = promo.state.status === "checking" || (!!codeSeats && codeSeats !== seats && !preview);
   const promoBlocks = promo.blocksPurchase || (promo.state.status === "refused" && !!promoCode);
   useEffect(() => {
     // Native: never auto-resume a Stripe hand-off inside the shell — the
