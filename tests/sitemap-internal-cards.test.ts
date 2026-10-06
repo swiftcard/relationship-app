@@ -22,7 +22,7 @@ describe("our own test cards are not offered to Google", () => {
     // /demo-sales and /demo-realty are linked from the preview page and the
     // marketing components. They are content we chose to publish, and pulling
     // them from the sitemap would be a self-inflicted SEO loss.
-    for (const slug of ["demo-sales", "demo-realty", "swiftcard", "aaronlavi-malvecapital"]) {
+    for (const slug of ["demo-sales", "demo-realty", "swiftcard", "swiftcardinc"]) {
       expect(isInternalCardSlug(slug), `${slug} must stay indexable`).toBe(false);
     }
   });
@@ -37,22 +37,30 @@ describe("our own test cards are not offered to Google", () => {
     const sitemap = read("src/app/sitemap.ts");
     expect(sitemap).toContain("isUnlistedCardSlug");
     // Applied to the card list, not somewhere decorative.
-    const liveFilter = sitemap.slice(sitemap.indexOf("const live ="), sitemap.indexOf("const ownerIds"));
+    const liveFilter = sitemap.slice(sitemap.indexOf("const candidates ="), sitemap.indexOf("const ownerIds"));
     expect(liveFilter).toContain("isUnlistedCardSlug");
   });
 });
 
-describe("the owner's personal cards are unlisted (2026-10-05)", () => {
-  // The founder's name is off GitHub, Product Hunt and every marketing page;
-  // these two cards were the last pages on the domain carrying it, and the
-  // sitemap was handing them to Google.
-  const OWNER_CARDS = ["menashharooni-swiftcardinc", "menash-malvecapital"];
+describe("the founders' personal cards are unlisted (2026-10-05)", () => {
+  // The founders' names are off GitHub, Product Hunt and every marketing page;
+  // their cards were the last pages on the domain carrying them, and the
+  // sitemap was handing them to Google — "swiftcard aaron lavi" found them.
+  const FOUNDER_CARDS = [
+    "menashharooni-swiftcardinc", "menash-malvecapital", "menashharooni-swiftcard",
+    "aaronlavi", "aaronlavi-malvecapital", "aaronlavi-nadlanhomesllc", "aaronlavi-swiftcardinc",
+  ];
 
-  it("recognises both cards, case-insensitively", () => {
-    for (const slug of OWNER_CARDS) {
-      expect(isUnlistedCardSlug(slug)).toBe(true);
+  it("recognises every founder card live today, case-insensitively", () => {
+    for (const slug of FOUNDER_CARDS) {
+      expect(isUnlistedCardSlug(slug), slug).toBe(true);
       expect(isUnlistedCardSlug(slug.toUpperCase())).toBe(true);
     }
+  });
+
+  it("covers a card a founder adds later without an edit", () => {
+    expect(isUnlistedCardSlug("menash-newventure")).toBe(true);
+    expect(isUnlistedCardSlug("aaronlavi-newventure")).toBe(true);
   });
 
   it("still covers the internal test cards", () => {
@@ -60,10 +68,26 @@ describe("the owner's personal cards are unlisted (2026-10-05)", () => {
     expect(isUnlistedCardSlug("iaptest-033f30")).toBe(true);
   });
 
-  it("is an exact match — a customer who shares the first name stays indexable", () => {
-    for (const slug of ["menash", "menash-acme", "demo-sales", "aaronlavi-swiftcardinc", "", null, undefined]) {
+  it("leaves customers, demos and the company card indexable", () => {
+    for (const slug of ["demo-sales", "demo-realty", "swiftcardinc", "levleveducationalfund", "aaron-smith-acme", "demishasmith-remarkitcapital", "", null, undefined]) {
       expect(isUnlistedCardSlug(slug), `${slug} must stay indexable`).toBe(false);
     }
+  });
+
+  it("the sitemap lists only cards whose pages actually serve (2026-10-05 dead /links/ URL)", () => {
+    // A new account that had not chosen a plan was in the sitemap while its
+    // pages 404'd. Every lib/card-active kill-switch rule must be applied to
+    // the card list, from the same owner fields the pages read.
+    const sitemap = read("src/app/sitemap.ts");
+    const section = sitemap.slice(sitemap.indexOf("const candidates ="), sitemap.indexOf("const userPages ="));
+    for (const rule of ["awaitingPlanChoice(", "ownerIsDeleted(", "pickFreeLiveCardIds(", "isPaidPlan("]) {
+      expect(section, `sitemap applies ${rule}`).toContain(rule);
+    }
+    // The owner select carries every field those rules read.
+    for (const field of ["plan", "customization", "created_at", "office_id", "free_live_card_id"]) {
+      expect(section).toMatch(new RegExp(`from\\("profiles"\\)\\.select\\("[^"]*\\b${field}\\b`));
+    }
+    expect(sitemap).toContain("is_offline !== true");
   });
 
   it("the card page and the Swift Links page both serve noindex for them", () => {

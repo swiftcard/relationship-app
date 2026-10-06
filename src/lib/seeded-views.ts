@@ -49,22 +49,24 @@ export function isInternalCardSlug(username: string | null | undefined): boolean
 
 // ── Cards kept out of search on purpose ─────────────────────────────────────
 //
-// The owner's personal cards. They still work when handed to someone (the
-// link, the QR, the NFC tap all open them), but the company presents itself
-// as SwiftCard, not as a person: the founder's name is off GitHub, off Product
-// Hunt and off the marketing pages, and these two cards were the only pages
-// on the domain still carrying it — offered to Google via sitemap.xml and a
-// schema.org Person node. Exact slugs, not a prefix: they are specific cards,
-// and a prefix would catch a future customer who shares the first name.
-const UNLISTED_CARD_SLUGS = new Set(["menashharooni-swiftcardinc", "menash-malvecapital"]);
+// The two founders' personal cards. They still work when handed to someone
+// (the link, the QR, the NFC tap all open them), but the company presents
+// itself as SwiftCard, not as people: the founders' names are off GitHub, off
+// Product Hunt and off the marketing pages, and their cards were the only
+// pages on the domain still carrying them — offered to Google via sitemap.xml
+// and a schema.org Person node, so "swiftcard aaron lavi" found them (owner,
+// 2026-10-05). Matched on the first-name / full-name prefix each founder
+// actually uses for slugs (menashharooni-…, menash-…, aaronlavi, aaronlavi-…),
+// so a card they add later is covered without an edit here.
+const UNLISTED_CARD_PREFIXES = ["menash", "aaronlavi"];
 
 /**
  * True for a card that must not be offered to search engines: left out of
  * sitemap.xml and served with a noindex robots tag (card page and Swift
- * Links page alike). Covers both the internal test cards and the owner's
+ * Links page alike). Covers both the internal test cards and the founders'
  * unlisted personal cards.
  */
 export function isUnlistedCardSlug(username: string | null | undefined): boolean {
   const slug = (username ?? "").toLowerCase();
-  return isInternalCardSlug(slug) || UNLISTED_CARD_SLUGS.has(slug);
+  return isInternalCardSlug(slug) || UNLISTED_CARD_PREFIXES.some((p) => slug.startsWith(p));
 }

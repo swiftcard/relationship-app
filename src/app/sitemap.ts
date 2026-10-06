@@ -73,36 +73,56 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // These pages are public by design (the privacy policy says exactly that),
   // already indexable, and the compounding surface the product's growth loop
   // rides on — a sitemap entry just gets them discovered without waiting for
-  // an external link. Excluded: offline cards (their pages 404) and cards
-  // whose owner soft-deleted their account. DB trouble degrades to the
-  // marketing sitemap rather than a 500 — a broken sitemap.xml can get the
-  // whole file ignored.
+  // an external link. A card is listed only if its pages actually SERVE: the
+  // five lib/card-active kill-switch rules (deleted owner, offline, over the
+  // Free limit, no plan chosen yet) are applied here from the same rows the
+  // pages read. Until 2026-10-05 only two of them were, so a brand-new
+  // account that had not picked a plan was in the sitemap while its /links/
+  // page returned 404 — Google indexed the dead URL and the owner found it in
+  // a search. DB trouble degrades to the marketing sitemap rather than a 500 —
+  // a broken sitemap.xml can get the whole file ignored.
   try {
     const { getAdminSupabase } = await import("@/lib/supabase-admin");
+    const { awaitingPlanChoice, ownerIsDeleted, pickFreeLiveCardIds } = await import("@/lib/card-active");
+    const { isPaidPlan } = await import("@/lib/plan");
     const admin = getAdminSupabase();
     const { data: cards } = await admin
       .from("cards")
-      .select("username, user_id, is_offline, created_at")
+      .select("id, username, user_id, is_offline, created_at")
       .order("created_at", { ascending: true })
       .limit(1000);
-    // Excludes our OWN test cards (App Review, IAP), the owner's unlisted
+    // Excludes our OWN test cards (App Review, IAP), the founders' unlisted
     // personal cards, and offline ones: the first are internal artifacts, not
     // content, and offering them to Google puts junk pages under the domain;
-    // the second carry a name the company does not publish. See lib/seeded-views.
-    const live = (cards ?? []).filter(
+    // the second carry names the company does not publish. See lib/seeded-views.
+    const candidates = (cards ?? []).filter(
       (c) => c.is_offline !== true && c.username && !isUnlistedCardSlug(c.username as string),
     );
-    const ownerIds = [...new Set(live.map((c) => c.user_id))];
+    const ownerIds = [...new Set(candidates.map((c) => c.user_id))];
     const { data: owners } = ownerIds.length
-      ? await admin.from("profiles").select("id, customization").in("id", ownerIds)
+      ? await admin.from("profiles").select("id, plan, customization, created_at, office_id, free_live_card_id").in("id", ownerIds)
       : { data: [] };
-    const deleted = new Set(
-      (owners ?? [])
-        .filter((o) => (o.customization as { _deleted?: boolean } | null)?._deleted === true)
-        .map((o) => o.id),
-    );
-    const userPages = live
-      .filter((c) => !deleted.has(c.user_id))
+    const ownerById = new Map((owners ?? []).map((o) => [o.id as string, o]));
+    // Which of a Free owner's cards serve — the same oldest-first / chosen-card
+    // rule the pages apply, computed once per owner from the ordered card list
+    // (cards arrive oldest first, so grouping preserves the order).
+    const cardIdsByOwner = new Map<string, string[]>();
+    for (const c of cards ?? []) {
+      const list = cardIdsByOwner.get(c.user_id as string) ?? [];
+      list.push(c.id as string);
+      cardIdsByOwner.set(c.user_id as string, list);
+    }
+    const serves = (c: { id: string; user_id: string }) => {
+      const owner = ownerById.get(c.user_id);
+      // An owner row we cannot see is a card we cannot vouch for.
+      if (!owner || ownerIsDeleted(owner.customization)) return false;
+      if (awaitingPlanChoice(owner)) return false;
+      if (isPaidPlan(owner.plan as string | null)) return true;
+      const liveIds = pickFreeLiveCardIds(cardIdsByOwner.get(c.user_id) ?? [], owner.free_live_card_id as string | null);
+      return liveIds.includes(c.id);
+    };
+    const userPages = candidates
+      .filter((c) => serves(c as { id: string; user_id: string }))
       .flatMap((c) => {
         const lastModified = c.created_at ? new Date(c.created_at) : new Date();
         return [
