@@ -53,9 +53,26 @@ export function appCss(): Promise<string> {
       `@import "tailwindcss";\n@source "${srcDir}";`,
     );
     const result = await postcss([tailwind()]).process(widened, { from: cssPath });
-    return result.css;
+    return geistCss() + result.css;
   })();
   return cssPromise;
+}
+
+/**
+ * Geist, as the live site paints it. layout.tsx gets it from next/font, which
+ * sets --font-geist-sans on <html>; the harness has no next/font, so the
+ * variable was undefined — and an undefined var() makes the WHOLE font-family
+ * declaration invalid, not just its first entry. The "sans" card then fell to
+ * the browser's default SERIF: Times New Roman on Windows (narrow, passed) and
+ * a far wider serif on the Linux runner, where the longest address on Logo
+ * First wrapped once more than its sans budget and ran 4px off the card. No
+ * user ever sees that font. The woff2 is the Geist Next itself ships.
+ */
+function geistCss(): string {
+  const woff2 = readFileSync(resolve("node_modules/next/dist/next-devtools/server/font/geist-latin.woff2")).toString("base64");
+  return `@font-face{font-family:"Geist";src:url(data:font/woff2;base64,${woff2}) format("woff2");font-weight:100 900;font-style:normal;font-display:block}
+:root{--font-geist-sans:"Geist"}
+`;
 }
 
 export async function launchBrowser(): Promise<Browser> {

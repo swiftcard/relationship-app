@@ -61,6 +61,8 @@ async function probe(page: Page, css: string, Template: React.ComponentType<{ da
      <body class="sc-app"><div id="h">${markup}</div></body></html>`,
     { waitUntil: "load" },
   );
+  // Measure Geist, never the fallback it swaps out (harness geistCss).
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
   return page.evaluate(({ QR_MIN_PX, CEILING_PX }) => {
     const card = document.querySelector(".sc-card") as HTMLElement;
     const cr = card.getBoundingClientRect();
