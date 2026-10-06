@@ -44,6 +44,12 @@ const nextConfig: NextConfig = {
       static: 180,
     },
   },
+  // The per-card preview route draws the brand picture (lib/brand-og) at
+  // request time when a card can't be shown, reading these from public/.
+  // public/ is not part of a function bundle unless named here.
+  outputFileTracingIncludes: {
+    "/card/[username]/opengraph-image": ["./public/og/**", "./public/brand-icon-192.png"],
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
