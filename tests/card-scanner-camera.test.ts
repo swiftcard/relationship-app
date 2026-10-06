@@ -60,4 +60,10 @@ describe("AddContactModal wiring", () => {
     expect(scan).toContain("opts.prepared");
     expect(scan).toContain("throw new EmptyScanError()");
   });
+
+  it("a camera another app is holding says so, not \"No camera was found\"", () => {
+    expect(camera).toContain('name === "NotReadableError" ? "busy"');
+    expect(camera).not.toMatch(/"NotReadableError"[^\n]*"nocamera"/);
+    expect(camera).toContain("Your camera is being used by another app. Close it and try again.");
+  });
 });

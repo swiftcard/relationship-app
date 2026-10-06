@@ -758,17 +758,15 @@ export function cardAspect(data: CardData, threshold = 7): string {
 // card hid it, because a full card has no spare height to distribute.
 //
 // The rule now, on every template: the details block follows the header after
-// DetailsGap, and the QR is pinned to the bottom by QR_PINNED. The gap is a
-// flex item with an enormous shrink factor and no content, so on a packed card
-// it collapses to nothing BEFORE anything else is squeezed — it can never be
+// DetailsGap (the QR sits in the details block's own corner — ContactRows,
+// 2026-10-05). The gap is a flex item with an enormous shrink factor and no
+// content, so on a packed card it collapses to nothing BEFORE anything else is
+// squeezed — it can never be
 // the reason a detail row is cut off, which the old zero-when-full spacing
 // guaranteed and this must keep guaranteeing (card-detail-fit.test.ts).
 export function DetailsGap({ f }: { f: number }) {
   return <div aria-hidden style={{ flex: `0 1000 ${Math.round(9 * Math.min(f, 1.15))}px`, minHeight: 0 }} />;
 }
-
-/** Pins a column's QR row to the bottom now that the column stacks from the top. */
-export const QR_PINNED: React.CSSProperties = { marginTop: "auto" };
 
 export type RowPalette = {
   accent?: string;      // icon color; omit to have icons inherit each row's text color

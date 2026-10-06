@@ -85,17 +85,12 @@ async function embedImage(url: string | null, kind: "headshot" | "logo"): Promis
   return got && /^image\/(png|jpe?g)$/.test(mime) ? `data:${mime};base64,${got.base64}` : null;
 }
 
-// Guaranteed-renderable branded fallback: the SAME picture the homepage and
-// every marketing page unfurl with (lib/brand-og), at this route's 1200×686
-// frame, so an offline/deleted card or a failed render never shows a
-// generic placeholder. Every input it loads is optional and time-bounded,
-// and its text is Latin-1 only, so it can't glyph-fail the way an arbitrary
-// name/company could.
 // What the preview actually drew, on every response, so production can be
-// checked from outside (scripts/qa-share-preview.mjs): "capture" (the stored
-// picture of the real card), "standin" (rendered here, everything it wanted),
-// "standin; missing=logo,photo" (rendered, but a picture it wanted couldn't
-// be embedded) or "brand" (not a live card). Labels only — nothing reads it.
+// checked from outside: "capture" (the stored picture of the real card),
+// "standin" (rendered here, everything it wanted), "standin; missing=logo,photo"
+// (rendered, but a picture it wanted couldn't be embedded) or "brand" (not a
+// live card). Only the nightly check reads it (scripts/qa-share-preview.mjs,
+// which fails on a missing logo or photo); nothing in the app does.
 const PREVIEW_HEADER = "X-SC-Preview";
 function drew(res: Response, what: string): Response {
   res.headers.set(PREVIEW_HEADER, what);
@@ -106,6 +101,12 @@ function standin(lostPhoto: boolean, lostLogo: boolean): string {
   return missing.length ? `standin; missing=${missing.join(",")}` : "standin";
 }
 
+// Guaranteed-renderable branded fallback: the SAME picture the homepage and
+// every marketing page unfurl with (lib/brand-og), at this route's 1200×686
+// frame, so an offline/deleted card or a failed render never shows a
+// generic placeholder. Every input it loads is optional and time-bounded,
+// and its text is Latin-1 only, so it can't glyph-fail the way an arbitrary
+// name/company could.
 async function brandFallbackResponse(): Promise<Response> {
   const { fonts, ...inputs } = await loadBrandOgInputs(2500);
   const buf = await new ImageResponse(<BrandOg {...inputs} height={686} />, {

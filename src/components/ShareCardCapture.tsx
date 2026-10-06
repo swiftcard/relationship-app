@@ -29,7 +29,7 @@ const TEMPLATE_MAP: Record<string, React.ComponentType<{ data: CardData }>> = {
 };
 
 const NATURAL = 460;   // same natural card width the public page renders at
-const CARD_BG = "#FAF7F2"; // the public card page background (shows at the card's rounded corners)
+const CARD_BG = "#FAF7F2"; // the public card page background, behind the card (corners are square since v9)
 
 // Short stable hash (djb2) so we only re-capture when this card's content changes.
 function hashStr(s: string): string {
@@ -140,7 +140,8 @@ export default function ShareCardCapture({
   const Template = TEMPLATE_MAP[template] ?? ClassicPro;
 
   // Capture-logic version. Bump to force a global re-capture
-  // ("v8" = the name/logo/photo verified in the PIXELS, not just the DOM;
+  // ("v9" = square corners, no drop shadow — the card edge to edge;
+  // "v8" = the name/logo/photo verified in the PIXELS, not just the DOM;
   // "v7" = photo/logo resolved to data URLs BEFORE render, so a re-render can't
   // undo the inlining; "v6" = wait for web fonts + verify each inlined image
   // actually decodes; "v5" = images inlined + reject on missing; "v4" = max-space

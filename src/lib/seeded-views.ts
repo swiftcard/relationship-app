@@ -60,10 +60,14 @@ export function isInternalCardSlug(username: string | null | undefined): boolean
 // Product Hunt and off the marketing pages, and their cards were the only
 // pages on the domain still carrying them — offered to Google via sitemap.xml
 // and a schema.org Person node, so "swiftcard aaron lavi" found them (owner,
-// 2026-10-05). Matched on the first-name / full-name prefix each founder
-// actually uses for slugs (menashharooni-…, menash-…, aaronlavi, aaronlavi-…),
-// so a card they add later is covered without an edit here.
-const UNLISTED_CARD_PREFIXES = ["menash", "aaronlavi"];
+// 2026-10-05). Matched on the name each founder actually uses for slugs —
+// that name exactly, or followed by "-" (menashharooni-…, menash-…, aaronlavi,
+// aaronlavi-…) — so a card they add later is covered without an edit here,
+// but a CUSTOMER whose name merely starts the same ("menashe-cohen",
+// "aaronlavine-realty") is never quietly dropped from search.
+const UNLISTED_CARD_NAMES = ["menashharooni", "menash", "aaronlavi"];
+const isUnlistedName = (slug: string) =>
+  UNLISTED_CARD_NAMES.some((p) => slug === p || slug.startsWith(`${p}-`));
 
 /**
  * True for a card that must not be offered to search engines: left out of
@@ -73,5 +77,5 @@ const UNLISTED_CARD_PREFIXES = ["menash", "aaronlavi"];
  */
 export function isUnlistedCardSlug(username: string | null | undefined): boolean {
   const slug = (username ?? "").toLowerCase();
-  return isInternalCardSlug(slug) || UNLISTED_CARD_PREFIXES.some((p) => slug.startsWith(p));
+  return isInternalCardSlug(slug) || isUnlistedName(slug);
 }

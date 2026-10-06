@@ -68,6 +68,8 @@ describe("SSRF: user-controlled URLs go through safeFetch", () => {
   const routes = [
     "src/app/api/card/[username]/vcard/route.ts",
     "src/app/api/leads/vcard/route.ts",
+    // The link-preview stand-in embeds the same owner-controlled photo/logo.
+    "src/app/card/[username]/opengraph-image.tsx",
   ];
   const strip = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8")
     .replace(/\/\*[\s\S]*?\*\//g, "")

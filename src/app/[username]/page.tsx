@@ -553,9 +553,8 @@ export default async function CardPage({
             above covers the same job. The QRCodeModal component stays: the
             three marketing mockups still use it, and it is still the right
             control on the OWNER's dashboard. */}
-        {/* Always-visible viewer CTA (owner request 2026-08-25): a full-size
-            button matching "Share this card" directly beneath it, on EVERY
-            card. Personalized with the owner's first name and dressed like
+        {/* Viewer CTA (owner request 2026-08-25): a full-size button
+            matching "Share this card" directly beneath it. Personalized with the owner's first name and dressed like
             the signup nudge's hero CTA — gradient, shine sweep, sparkle —
             because this is the page's one conversion ask and it should look
             like the product it sells. Straight into the builder.

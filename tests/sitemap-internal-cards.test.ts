@@ -80,7 +80,16 @@ describe("the founders' personal cards are unlisted (2026-10-05)", () => {
 
   it("covers a card a founder adds later without an edit", () => {
     expect(isUnlistedCardSlug("menash-newventure")).toBe(true);
+    expect(isUnlistedCardSlug("menashharooni-newventure")).toBe(true);
     expect(isUnlistedCardSlug("aaronlavi-newventure")).toBe(true);
+  });
+
+  it("never catches a customer whose name only STARTS like a founder's", () => {
+    // A bare prefix match would have noindexed these and dropped them from the
+    // sitemap without anyone noticing.
+    for (const slug of ["menashe-cohen", "menashecohen-realty", "aaronlavine-realty", "aaronlavin"]) {
+      expect(isUnlistedCardSlug(slug), `${slug} must stay indexable`).toBe(false);
+    }
   });
 
   it("still covers the internal test cards", () => {

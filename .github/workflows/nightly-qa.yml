@@ -44,8 +44,6 @@ jobs:
       # step decides. `|| true` so one red script never hides the others.
       - name: Analytics + notifications end to end
         run: OUT=nightly/probe node scripts/qa-prod-probe.mjs || true
-      # Who gets which notification — bell, team inbox and phone — for Free,
-      # Pro, an Office owner/admin/employee and a lapsed Office owner.
       # Real cards' link previews, as a messenger gets them: the name, and
       # every logo and photo the card shows, actually in the picture
       # (owner, 2026-10-06: "it'll miss my name or it'll miss my logo").
@@ -56,6 +54,8 @@ jobs:
       # 2026-10-06: "they need to have access to still get my card").
       - name: Cards open with no signal
         run: OUT=nightly/offline node scripts/qa-offline.mjs || true
+      # Who gets which notification — bell, team inbox and phone — for Free,
+      # Pro, an Office owner/admin/employee and a lapsed Office owner.
       - name: Notifications for every plan and account type
         run: OUT=nightly/notifications node scripts/qa-notifications.mjs || true
       - name: Health + speed budget

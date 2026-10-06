@@ -31,7 +31,7 @@ import {
  */
 
 type Phase = "starting" | "live" | "error";
-type Failure = "denied" | "nocamera" | "unsupported" | "other";
+type Failure = "denied" | "nocamera" | "busy" | "unsupported" | "other";
 
 /** Largest side of the photo that is sent. A card at this size reads cleanly. */
 const MAX_SIDE = 1400;
@@ -141,7 +141,9 @@ export default function CardScanCamera({
         const name = (err as { name?: string })?.name;
         setFailure(
           name === "NotAllowedError" || name === "SecurityError" ? "denied"
-          : name === "NotFoundError" || name === "OverconstrainedError" || name === "NotReadableError" ? "nocamera"
+          : name === "NotFoundError" || name === "OverconstrainedError" ? "nocamera"
+          // The camera exists but another app (a call, the Camera app) holds it.
+          : name === "NotReadableError" ? "busy"
           : "other",
         );
         setPhase("error");
@@ -258,9 +260,11 @@ export default function CardScanCamera({
         : "Camera access was blocked. Allow the camera for this site in your browser settings."
       : failure === "nocamera"
         ? "No camera was found on this device."
-        : failure === "unsupported"
-          ? "This browser can't open the camera here."
-          : "The camera couldn't start.";
+        : failure === "busy"
+          ? "Your camera is being used by another app. Close it and try again."
+          : failure === "unsupported"
+            ? "This browser can't open the camera here."
+            : "The camera couldn't start.";
 
   return (
     <div
