@@ -384,7 +384,8 @@ describe("Liquid-Glass native styling layer", () => {
 describe("native share + Wallet hand-off", () => {
   it("ShareButton tries the native share sheet first inside the shell", () => {
     const src = read("src/components/ShareButton.tsx");
-    expect(src).toMatch(/detectNativeApp\(\)[\s\S]*?@capacitor\/share/);
+    expect(src).toMatch(/detectNativeApp\(\)[\s\S]*?shareNatively\(/);
+    expect(read("src/lib/native-share.ts")).toMatch(/import\("@capacitor\/share"\)/);
   });
   it("AddToWalletButton opens the pass via the system browser on native", () => {
     const src = read("src/components/AddToWalletButton.tsx");

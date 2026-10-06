@@ -65,10 +65,11 @@ describe("contact Share menu — share from my phone", () => {
     // Drop the trailing `await ` that belongs to navigator.share itself —
     // awaiting the share call is expected; awaiting anything BEFORE it is not.
     const before = body.slice(0, shareAt).replace(/await\s+$/, "");
-    // The one permitted await is the native-shell Capacitor import, which is
-    // unreachable on the web because detectNativeApp() returns false there.
+    // The one permitted await is the native-shell share (lib/native-share.ts),
+    // which is unreachable on the web because detectNativeApp() returns false
+    // there.
     const awaits = [...before.matchAll(/await\s+([A-Za-z_$.]*)/g)].map((m) => m[1]);
-    expect(awaits.filter((a) => !a.startsWith("import") && !a.startsWith("Share."))).toEqual([]);
+    expect(awaits.filter((a) => !a.startsWith("import") && !a.startsWith("Share.") && a !== "shareNatively")).toEqual([]);
   });
 
   it("offers all four share options, with the phone one not gated on the contact's channels", () => {

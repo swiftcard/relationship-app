@@ -6,6 +6,7 @@
 
 import { useState } from "react";
 import { detectNativeApp, useIsNativeApp } from "@/lib/platform";
+import { shareNatively } from "@/lib/native-share";
 
 const PITCH = "I use SwiftCard as my digital business card — one tap to share my info and it auto-saves every contact. Grab a free one:";
 
@@ -57,13 +58,11 @@ export default function GrowShare({ link }: { link: string }) {
     // label on a DIFFERENT button and looks like nothing happened), and when it
     // does exist a rejection was swallowed as "cancelled". The Capacitor plugin
     // is the real native share sheet — the same path ShareButton and
-    // ShareMyInfoButton already take.
+    // ShareMyInfoButton already take. Only a missing plugin falls through:
+    // closing the sheet used to open the web sheet right after it
+    // (lib/native-share.ts).
     if (detectNativeApp()) {
-      try {
-        const { Share } = await import("@capacitor/share");
-        await Share.share({ text: PITCH, url: link });
-        return;
-      } catch { /* plugin missing or user cancelled — fall through */ }
+      if ((await shareNatively({ text: PITCH, url: link })) !== "unavailable") return;
     }
     if (typeof navigator !== "undefined" && navigator.share) {
       try { await navigator.share({ text: PITCH, url: link }); return; } catch { /* cancelled */ }

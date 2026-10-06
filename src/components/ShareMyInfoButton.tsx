@@ -43,6 +43,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { detectNativeApp } from "@/lib/platform";
+import { shareNatively } from "@/lib/native-share";
 import { warmSharePreview } from "@/lib/share-preview";
 
 // Pinned to the SwiftCard domain, NOT window.location.origin — same reason
@@ -285,13 +286,11 @@ export default function ShareMyInfoButton({ firstName, phone, email, cardOwner, 
     const url = `${APP_URL}/${cardOwner}?shared=1`;
     warmSharePreview(url);
 
-    // Native shell: WKWebView often lacks navigator.share.
+    // Native shell: WKWebView often lacks navigator.share. Only a missing
+    // plugin falls through — closing the sheet used to open the web sheet
+    // right after it (lib/native-share.ts).
     if (detectNativeApp()) {
-      try {
-        const { Share } = await import("@capacitor/share");
-        await Share.share({ url });
-        return;
-      } catch { /* fall through to the web paths */ }
+      if ((await shareNatively({ url })) !== "unavailable") return;
     }
     if (typeof navigator !== "undefined" && navigator.share) {
       // Bare URL only — iMessage and most messengers render the rich card

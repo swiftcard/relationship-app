@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { detectNativeApp } from "@/lib/platform";
+import { shareNatively } from "@/lib/native-share";
 import { warmSharePreview } from "@/lib/share-preview";
 import { triggerSignupNudge } from "@/lib/nudge";
 
@@ -55,8 +56,10 @@ export default function ShareButton({
   async function handleShare() {
     if (warm) warmSharePreview(url);
     // Native shell: WKWebView often lacks navigator.share — use the native
-    // share sheet via the Capacitor plugin. Falls through to the web paths on
-    // any failure (plugin missing in an old shell build, user cancel throws).
+    // share sheet via the Capacitor plugin. Falls through to the web paths
+    // only when the plugin is missing (an old shell build). Closing the sheet
+    // ends it: falling through on that opened a second sheet, and the owner
+    // had to close it twice (lib/native-share.ts).
     //
     // The signup nudge fires AFTER the share resolves, never before: firing on
     // tap rendered the popup BEHIND the OS share sheet, where it burned its
@@ -64,13 +67,12 @@ export default function ShareButton({
     // no conversion moment at all. (The popup host only mounts on public
     // pages, so this stays a no-op on the owner's dashboard.)
     if (detectNativeApp()) {
-      try {
-        const { Share } = await import("@capacitor/share");
-        await Share.share({ url });
+      const result = await shareNatively({ url });
+      if (result === "shared") {
         shared();
         triggerSignupNudge("share_card");
-        return;
-      } catch { /* fall through to web share / menu */ }
+      }
+      if (result !== "unavailable") return;
     }
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
