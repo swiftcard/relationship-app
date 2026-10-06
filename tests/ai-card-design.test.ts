@@ -237,7 +237,9 @@ describe("the route's doors: paid, or a first card — Copy stays paid", () => {
   it("the designer: AI design is open wherever the designer is; canScan gates Copy alone", () => {
     expect(designer).toContain("onClick={() => { setAiError(null); setAiOpen(true); }}");
     expect(designer).toContain("disabled={aiBusy || scanning}");
-    expect(designer).toContain("onClick={() => { if (canScan) fileRef.current?.click(); }}");
+    // Copy opens its two ways in (camera / upload) only where canScan allows.
+    expect(designer).toContain("onClick={() => { if (canScan) setCopyChoice((v) => !v); }}");
+    expect(designer).toContain("{copyChoice && canScan && !scanning && (");
     // The route no longer answers 401, so the client has no message for it.
     expect(designer).not.toContain("AI design needs an account");
   });

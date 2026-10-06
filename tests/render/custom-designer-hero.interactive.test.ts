@@ -47,6 +47,10 @@ beforeAll(async () => {
         const spec = fallbackSpec(body.brief, body.avoid ? [body.avoid] : []);
         return new Response(JSON.stringify({ layout: buildDesign(spec, ctx, body.brief) }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
+      if (url.includes("/api/design-transfer")) {
+        const px = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+        return new Response(JSON.stringify({ url: px, checklist: ["Your name is spelled exactly right"] }), { status: 200, headers: { "Content-Type": "application/json" } });
+      }
       return realFetch(input, init);
     }) as any;
 
@@ -123,6 +127,105 @@ describe("the designer is Copy and AI design — nothing else", () => {
     const page = await mount(390, false);
     expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
     await shot(page, "designer-first-card-390");
+    await page.close();
+  });
+});
+
+// ── Copy: take a photo of your card, or upload (owner, 2026-10-06) ──────────
+// Most people copy their OWN paper card. Copy now offers the camera — a
+// card-shaped outline that turns green when the card fits — beside the upload,
+// and only the photographed card is sent to be redrawn.
+describe("Copy: camera or upload", () => {
+  /** A fake back camera: a white card on a dark desk, filling the outline. */
+  async function fakeCamera(page: Page) {
+    await page.evaluate(() => {
+      const c = document.createElement("canvas");
+      c.width = 1280; c.height = 720;
+      const g = c.getContext("2d")!;
+      const draw = () => {
+        g.fillStyle = "#2a2118"; g.fillRect(0, 0, c.width, c.height);
+        g.fillStyle = "#f4f1ea"; g.fillRect(240, 200, 800, 457);
+        g.fillStyle = "#1b2a4a"; g.fillRect(240, 200, 260, 457);
+      };
+      draw();
+      setInterval(draw, 50);
+      (window as never as { tracksStopped: number }).tracksStopped = 0;
+      Object.defineProperty(navigator, "mediaDevices", {
+        configurable: true,
+        value: {
+          getUserMedia: async () => {
+            const stream = c.captureStream(20);
+            for (const t of stream.getTracks()) {
+              const stop = t.stop.bind(t);
+              t.stop = () => { (window as never as { tracksStopped: number }).tracksStopped++; stop(); };
+            }
+            return stream;
+          },
+        },
+      });
+    });
+  }
+
+  it("Copy offers both ways in, and they fit a 390px phone", async () => {
+    const page = await mount(390);
+    await page.getByRole("button", { name: /Copy a card or template you like/ }).click();
+    const take = page.getByRole("button", { name: "Take a photo of your card" });
+    const upload = page.getByRole("button", { name: "Upload an image" });
+    await take.waitFor();
+    expect(await upload.isVisible()).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+    // Each choice sits inside the viewport, uncovered.
+    for (const b of [take, upload]) {
+      const box = (await b.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(390);
+    }
+    await shot(page, "designer-copy-choice-390");
+    await page.close();
+  });
+
+  it("the camera opens, the shutter takes ONLY the card, and it goes to be redrawn", async () => {
+    const page = await mount(390);
+    await fakeCamera(page);
+    await page.getByRole("button", { name: /Copy a card or template you like/ }).click();
+    await page.getByRole("button", { name: "Take a photo of your card" }).click();
+    const cam = page.locator("[data-card-scan-camera]");
+    await cam.waitFor();
+    // The contact scanner's camera, titled for what this one is for.
+    expect(await page.getByRole("dialog", { name: "Photograph your card" }).count()).toBe(1);
+    expect(await cam.innerText()).toContain("Photograph your card");
+    const shutter = page.locator("[data-card-shutter]");
+    await page.waitForFunction(() => !(document.querySelector("[data-card-shutter]") as HTMLButtonElement)?.disabled);
+    await shot(page, "designer-copy-camera-390");
+    // The photo is taken (the shutter, or the steady-green auto-capture) …
+    await shutter.click().catch(() => { /* auto-capture beat the tap */ });
+    await cam.waitFor({ state: "detached" });
+    // … the camera is off …
+    expect(await page.evaluate(() => (window as never as { tracksStopped: number }).tracksStopped)).toBeGreaterThan(0);
+    // … and the card goes to the redraw, as a JPEG no larger than 1400px.
+    await page.getByRole("dialog", { name: "Approve your rebuilt card design" }).waitFor();
+    const sent = await page.evaluate(() => (window as never as { calls: { url: string; body: { imageBase64: string; mediaType: string } }[] }).calls.find((c) => c.url.includes("/api/design-transfer"))!.body);
+    expect(sent.mediaType).toBe("image/jpeg");
+    const dims = await page.evaluate(async (b64) => {
+      const i = new Image(); i.src = `data:image/jpeg;base64,${b64}`; await i.decode();
+      return { w: i.naturalWidth, h: i.naturalHeight };
+    }, sent.imageBase64);
+    expect(Math.max(dims.w, dims.h)).toBeLessThanOrEqual(1400);
+    // Card-shaped, not the whole camera frame.
+    expect(dims.w / dims.h).toBeGreaterThan(1.5);
+    expect(dims.w / dims.h).toBeLessThan(2);
+    await page.close();
+  });
+
+  it("Close shuts the camera and nothing is sent", async () => {
+    const page = await mount(1280);
+    await fakeCamera(page);
+    await page.getByRole("button", { name: /Copy a card or template you like/ }).click();
+    await page.getByRole("button", { name: "Take a photo of your card" }).click();
+    await page.locator("[data-card-scan-camera]").waitFor();
+    await page.getByRole("button", { name: "Close camera" }).click();
+    await page.locator("[data-card-scan-camera]").waitFor({ state: "detached" });
+    expect(await page.evaluate(() => (window as never as { calls: { url: string }[] }).calls.some((c) => c.url.includes("/api/design-transfer")))).toBe(false);
     await page.close();
   });
 });

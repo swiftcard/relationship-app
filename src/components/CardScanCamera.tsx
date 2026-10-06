@@ -45,12 +45,16 @@ export default function CardScanCamera({
   onCapture,
   onClose,
   onPickPhoto,
+  title = "Scan a business card",
 }: {
   /** The cropped JPEG of the card. The camera is already off. */
   onCapture: (photo: Blob) => void;
   onClose: () => void;
   /** Open the photo-library / file picker instead. Called inside the tap. */
   onPickPhoto: () => void;
+  /** The heading and the dialog's name. Custom design's Copy opens this same
+   *  camera to photograph the owner's own card for its design. */
+  title?: string;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -263,7 +267,7 @@ export default function CardScanCamera({
       ref={rootRef}
       role="dialog"
       aria-modal="true"
-      aria-label="Scan a business card"
+      aria-label={title}
       data-card-scan-camera
       className="sc-dark-sheet fixed inset-0 z-[70] overflow-hidden text-white"
       style={{ background: "#000" }}
@@ -370,7 +374,7 @@ export default function CardScanCamera({
             <path d="M1 1l10 10M11 1L1 11" />
           </svg>
         </button>
-        <p className="text-sm font-semibold" style={{ color: "#fff" }}>Scan a business card</p>
+        <p className="text-sm font-semibold" style={{ color: "#fff" }}>{title}</p>
       </div>
 
       {/* Bottom: photo library · shutter. */}

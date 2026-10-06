@@ -7,8 +7,11 @@ import type { DesignHistory } from "@/lib/use-design-history";
 // TWO WAYS IN, ONE CARD (owner, 2026-09-23): "Custom design will just be the
 // copy … or AI design."
 //
-//   • Copy a card or template you like — unchanged: upload a design, approve an
-//     exact rebuild with your details (or take its layout to edit instead).
+//   • Copy a card or template you like — photograph your paper card inside a
+//     green-when-it-fits outline (components/CardScanCamera) or upload a
+//     design; approve a clean digital redraw with your details (or take its
+//     layout to edit instead). The server lays a photo flat and redraws the
+//     DESIGN, never the photo (lib/card-flatten, lib/design-transfer).
 //   • AI design — choose colours, a theme, and whether your headshot and logo go
 //     on it; AI designs the card (components/AiDesignSheet → /api/design-generate
 //     → lib/ai-card-design). "Try another" makes a different one from the same
@@ -33,6 +36,7 @@ import CustomCard, { CustomBlockCard, FaceCard } from "@/components/card-templat
 import CardScaler from "@/components/CardScaler";
 import FreeCardEditor from "@/components/FreeCardEditor";
 import AiDesignSheet from "@/components/AiDesignSheet";
+import CardScanCamera from "@/components/CardScanCamera";
 import { buildPreset, hasBlocks, normalizeCustomLayout } from "@/lib/custom-layout";
 import { compositionOf, freeFromBlocks, type DesignContext } from "@/lib/ai-card-design";
 
@@ -82,6 +86,9 @@ export default function CustomCardDesigner({
    *  upload too, so "Try again" and "make it editable instead" never ask them
    *  to find the same file twice. */
   const [transfer, setTransfer] = useState<{ src: string; b64: string; url: string; checklist: string[] } | null>(null);
+  /** Copy tapped: "Take a photo of your card" or "Upload an image". */
+  const [copyChoice, setCopyChoice] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -130,7 +137,7 @@ export default function CustomCardDesigner({
    *  carries no more information about a card than 1400px does — slow to
    *  upload and billed by the token. Null = the browser can't decode the file
    *  (an iPhone library HEIC, a PDF picked through "All files"). */
-  async function toJpeg(file: File): Promise<{ b64: string; dataUrl: string } | null> {
+  async function toJpeg(file: Blob): Promise<{ b64: string; dataUrl: string } | null> {
     try {
       const dataUrl: string = await new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -268,8 +275,8 @@ export default function CustomCardDesigner({
     }
   }
 
-  /** Entry point from the file input. */
-  async function scanPrintedCard(file: File) {
+  /** Entry point from the file input and the camera. */
+  async function scanPrintedCard(file: Blob) {
     setScanError(null);
     const prepared = await toJpeg(file);
     if (!prepared) {
@@ -377,7 +384,8 @@ export default function CustomCardDesigner({
           <div className={`relative rounded-xl p-[1.5px] ${canScan ? "sc-magic-frame" : "bg-gray-800"}`}>
             <button
               type="button"
-              onClick={() => { if (canScan) fileRef.current?.click(); }}
+              onClick={() => { if (canScan) setCopyChoice((v) => !v); }}
+              aria-expanded={canScan ? copyChoice : undefined}
               disabled={scanning || !canScan}
               className={`relative overflow-hidden w-full rounded-[10.5px] px-3.5 py-3.5 text-left transition-colors ${
                 canScan ? "bg-gray-950 hover:bg-gray-900 disabled:opacity-70" : "bg-gray-950/90 cursor-default"
@@ -408,9 +416,9 @@ export default function CustomCardDesigner({
                   </span>
                   <span className="block text-[0.6875rem] text-gray-400 leading-snug mt-0.5">
                     {teamBrand
-                      ? "Upload a card design you like. We copy its layout as editable blocks, and every teammate's card fills it with their own details."
+                      ? "Take a photo of a card or upload a design you like. We copy its layout as editable blocks, and every teammate's card fills it with their own details."
                       : canScan
-                      ? "Upload a card design you like. We rebuild it exactly — same colors, fonts and layout — with YOUR details on it. You approve a preview before anything changes."
+                      ? "Take a photo of your paper card, or upload a design you like. We redraw it as a clean digital card — same colors, design and layout — with YOUR details on it. You approve a preview before anything changes."
                       : "On Pro, upload a card design you like and we'll rebuild it exactly, with your details on it."}
                   </span>
                 </span>
@@ -418,6 +426,44 @@ export default function CustomCardDesigner({
             </button>
           </div>
         </div>
+
+        {/* Copy's two ways in (owner, 2026-10-06). Most people copy their OWN
+            paper card, so the camera comes first: a card-shaped outline that
+            turns green when the card fits it, and only the card is sent
+            (components/CardScanCamera). Upload stays for a template found
+            online — a photo already in the library can't be re-photographed. */}
+        {copyChoice && canScan && !scanning && (
+          <div className="space-y-1.5" data-copy-choice>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => { setCopyChoice(false); setScanError(null); setCameraOpen(true); }}
+                className="sc-tap flex items-center justify-center gap-1.5 text-[0.78125rem] font-semibold px-2.5 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white"
+              >
+                <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 8.5A2.5 2.5 0 015.5 6h1.6l1.2-1.8A1.5 1.5 0 019.55 3.5h4.9a1.5 1.5 0 011.25.7L16.9 6h1.6A2.5 2.5 0 0121 8.5v9a2.5 2.5 0 01-2.5 2.5h-13A2.5 2.5 0 013 17.5v-9z" />
+                  <circle cx="12" cy="12.5" r="3.5" />
+                </svg>
+                Take a photo of your card
+              </button>
+              <button
+                type="button"
+                onClick={() => { setCopyChoice(false); fileRef.current?.click(); }}
+                className="sc-tap flex items-center justify-center gap-1.5 text-[0.78125rem] font-semibold px-2.5 py-2.5 rounded-lg border bg-gray-800 border-gray-600 text-gray-100 hover:text-white hover:border-gray-400"
+              >
+                <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="16" rx="2.5" />
+                  <circle cx="9" cy="10" r="1.6" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 16l-5-5-8 8" />
+                </svg>
+                Upload an image
+              </button>
+            </div>
+            <p className="text-[0.65625rem] text-gray-500 leading-snug">
+              Lay your card on a plain surface and fit it inside the outline — it turns green when it fits.
+            </p>
+          </div>
+        )}
 
         {/* AI design — the second way in (owner, 2026-09-23). Dressed exactly
             like Copy above, so the two read as a pair: same frame, glow and
@@ -643,6 +689,15 @@ export default function CustomCardDesigner({
             </p>
           </div>
         </>
+      )}
+
+      {cameraOpen && (
+        <CardScanCamera
+          title="Photograph your card"
+          onCapture={(photo) => { setCameraOpen(false); void scanPrintedCard(photo); }}
+          onClose={() => setCameraOpen(false)}
+          onPickPhoto={() => { setCameraOpen(false); fileRef.current?.click(); }}
+        />
       )}
 
       {aiOpen && (
