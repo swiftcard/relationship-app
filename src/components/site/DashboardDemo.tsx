@@ -29,7 +29,7 @@ const DEMO_CARD: CardData = withoutSocials({
 //   • My Cards across the top (View Live Link · Add card · rows with Edit)
 //   • Traffic on the left — no heading, range bar at its left edge, the REAL
 //     TrafficChart (SwiftCard / Swift Links split), unique/repeat line, and
-//     Contacts · Link taps · Best day underneath
+//     Link taps underneath
 //   • on the right, just the card (+ Download), then Share: Show QR · Share
 //     link · Other ways to share · At an event?
 // (Quick Contacts left the real dashboard on 2026-09-29 — its Call / Text /
@@ -54,15 +54,15 @@ const split = (counts: number[], linkShare: number[], start: number, step: numbe
 const SHARE = [0.32, 0.4, 0.36, 0.45, 0.3, 0.38];
 const TRAFFIC = {
   today: {
-    card: "86", link: "41", unique: 92, repeat: 35, taps: 18, best: "Oct 14", bestViews: 127,
+    card: "86", link: "41", unique: 92, repeat: 35, taps: 18,
     buckets: split([0, 0, 0, 0, 0, 0, 1, 2, 5, 7, 9, 11, 8, 10, 12, 9, 14, 11, 8, 7, 5, 3, 2, 3], SHARE, TODAY_START, HOUR),
   },
   week: {
-    card: "1,284", link: "742", unique: 1206, repeat: 820, taps: 214, best: "Oct 13", bestViews: 402,
+    card: "1,284", link: "742", unique: 1206, repeat: 820, taps: 214,
     buckets: split([190, 260, 220, 340, 290, 402, 324], SHARE, TODAY_START - 6 * DAY, DAY),
   },
   month: {
-    card: "5,190", link: "3,020", unique: 5412, repeat: 2798, taps: 961, best: "Oct 13", bestViews: 402,
+    card: "5,190", link: "3,020", unique: 5412, repeat: 2798, taps: 961,
     buckets: split([150, 120, 190, 160, 230, 200, 170, 260, 220, 290, 250, 320, 280, 240, 310, 310, 320, 330, 290, 300, 310, 340, 300, 270, 330, 330, 320, 344, 402, 324], SHARE, TODAY_START - 29 * DAY, DAY),
   },
 } as const;
@@ -74,9 +74,6 @@ const LOCATIONS = [
   { location: "Austin, US", card: 61, link: 40 },
   { location: "London, UK", card: 38, link: 29 },
 ];
-
-// ── Contacts total (the Traffic box's "Contacts" stat) ────────────────────────
-const TOTAL_LEADS = 12;
 
 // ── My Cards — the box across the top of the real dashboard ──────────────────
 const DEMO_CARDS = [
@@ -207,12 +204,9 @@ function TrafficBox() {
         </div>
       )}
 
-      {/* Basic stats footer: contacts · link taps · best day */}
-      <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-gray-800/70 text-[0.6875rem]">
-        <span className="text-gray-500">Contacts <span className="text-gray-200 font-semibold tabular-nums">{TOTAL_LEADS}</span></span>
-        <span className="text-gray-500">Link taps <span className="text-gray-200 font-semibold tabular-nums">{(d ?? TRAFFIC.week).taps.toLocaleString("en-US")}</span></span>
-        <span className="text-gray-500">Best day <span className="text-gray-200 font-semibold">{(d ?? TRAFFIC.week).best}</span> · {(d ?? TRAFFIC.week).bestViews}</span>
-      </div>
+      {/* Footer: link taps */}
+      <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-800/70 text-[0.6875rem]">
+        <span className="text-gray-500">Link taps <span className="text-gray-200 font-semibold tabular-nums">{(d ?? TRAFFIC.week).taps.toLocaleString("en-US")}</span></span>      </div>
     </div>
   );
 }

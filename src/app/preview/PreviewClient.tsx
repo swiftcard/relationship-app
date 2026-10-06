@@ -27,18 +27,15 @@ type DemoCard = {
   template: string;
   accent: string;
   data: CardData;
-  total: string;
   traffic: Record<"today" | "week" | "month", { card: string; links: string }>;
-  bestDay: { label: string; views: number };
   locations: DemoLocation[];
   leads: Lead[];
 };
 
 const CARDS: DemoCard[] = [
   {
-    key: "sales", label: "Sales Card", handle: "demo-sales", template: "modern-bold", accent: "#2563eb", total: "87",
+    key: "sales", label: "Sales Card", handle: "demo-sales", template: "modern-bold", accent: "#2563eb",
     traffic: { today: { card: "142", links: "63" }, week: { card: "1,248", links: "593" }, month: { card: "4,517", links: "2,104" } },
-    bestDay: { label: "Jul 24", views: 316 },
     locations: [
       { location: "New York, US", card: 1834, link: 902 },
       { location: "Chicago, US", card: 1121, link: 486 },
@@ -58,9 +55,8 @@ const CARDS: DemoCard[] = [
     },
   },
   {
-    key: "realestate", label: "Real Estate Card", handle: "demo-realty", template: "local-business", accent: "#d97706", total: "143",
+    key: "realestate", label: "Real Estate Card", handle: "demo-realty", template: "local-business", accent: "#d97706",
     traffic: { today: { card: "231", links: "98" }, week: { card: "2,034", links: "874" }, month: { card: "7,860", links: "3,221" } },
-    bestDay: { label: "Jul 26", views: 489 },
     locations: [
       { location: "San Francisco, US", card: 3105, link: 1240 },
       { location: "Oakland, US", card: 1877, link: 705 },
@@ -516,11 +512,9 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
               )}
             </div>
             )}
-            {/* Basic stats footer — contacts · link taps · best day, like the real box */}
-            <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-gray-800/70 text-[0.6875rem]">
-              <span className="text-gray-500">Contacts <span className="text-gray-200 font-semibold tabular-nums">{card.total}</span></span>
+            {/* Footer — link taps, like the real box */}
+            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-800/70 text-[0.6875rem]">
               <span className="text-gray-500">Link taps <span className="text-gray-200 font-semibold tabular-nums">{linkTaps.toLocaleString("en-US")}</span></span>
-              <span className="text-gray-500">Best day <span className="text-gray-200 font-semibold">{card.bestDay.label}</span> · {card.bestDay.views}</span>
             </div>
           </Box>
           </div>

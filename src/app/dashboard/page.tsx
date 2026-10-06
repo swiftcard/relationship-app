@@ -404,8 +404,8 @@ export default async function DashboardPage({
     // safe: analyticsUsername is verified above to be one of THIS user's cards.
     getAdminSupabase().from("card_views").select("*", { count: "exact", head: true }).eq("username", analyticsUsername).gte("viewed_at", viewsCutoff),
     getAdminSupabase().from("card_views").select("*", { count: "exact", head: true }).eq("username", linkUsername).gte("viewed_at", viewsCutoff),
-    // 60 days of raw view timestamps: powers the best-day stat (30d), the
-    // Traffic bar graph buckets, and the window's unique/repeat split.
+    // 60 days of raw view timestamps: powers the Traffic bar graph buckets
+    // and the window's unique/repeat split.
     // Paged: a single unbounded select is silently capped at the API's max-rows
     // (1000), which made the graph/unique-visitors contradict the exact head
     // counts above on busy cards. Newest-first, so if the cap below is ever hit
@@ -566,21 +566,6 @@ export default async function DashboardPage({
   };
   bellNotifications = hideForReader(bellNotifications ?? [], notifReader);
   bellNotifications = redactForPlan(bellNotifications ?? [], isPro);
-
-  // Basic-panel "best day" (last 30 LOCAL days) — available to every plan.
-  // Keyed by the owner's local calendar day (not UTC) so a busy evening isn't
-  // split across two dates. Cutoff is start of the local day 29 days ago.
-  const thirtyDayCutoff = startOfLocalDayUtc(29, ownerTz, tzNow).toISOString();
-  const dayTally: Record<string, number> = {};
-  for (const v of recentViews ?? []) {
-    if ((v.viewed_at as string) < thirtyDayCutoff) continue;
-    const k = localDayKey(v.viewed_at as string, ownerTz);
-    dayTally[k] = (dayTally[k] ?? 0) + 1;
-  }
-  let bestDay: { date: string; views: number } | null = null;
-  for (const [date, views] of Object.entries(dayTally)) {
-    if (!bestDay || views > bestDay.views) bestDay = { date, views };
-  }
 
   // ── Traffic graph + trend ────────────────────────────────────────────────────
   // Bucket the selected window's views into bars (today → 24 hours, week → 7
@@ -1289,23 +1274,17 @@ export default async function DashboardPage({
                     />
                   </div>
                 )}
-                {/* Basic stats (every plan): contacts captured + link taps + best day.
-                    Link taps join the EXISTING footer line rather than becoming a
-                    new tile — the Traffic box's layout is render-tested, and one
-                    more stat does not justify moving it. Omitted entirely until
-                    there is one, so nothing claims a confident zero for a card
-                    whose links predate tracking. */}
-                <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-gray-800/70 text-[0.6875rem]">
-                  <span className="text-gray-500">Contacts <span className="text-gray-200 font-semibold tabular-nums">{realLeadCount}</span></span>
-                  {linkTaps > 0 && (
+                {/* Link taps (every plan) — the box's one footer stat. Contacts
+                    and Best day were removed from this line (owner, 2026-10-06).
+                    The whole line, divider included, is omitted until there is
+                    a tap: no empty strip at the bottom of the box, and nothing
+                    claims a confident zero for a card whose links predate
+                    tracking. */}
+                {linkTaps > 0 && (
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-800/70 text-[0.6875rem]">
                     <span className="text-gray-500">Link taps <span className="text-gray-200 font-semibold tabular-nums">{linkTaps.toLocaleString("en-US")}</span></span>
-                  )}
-                  {bestDay && bestDay.views > 0 ? (
-                    <span className="text-gray-500">Best day <span className="text-gray-200 font-semibold">{new Date(bestDay.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span> · {bestDay.views.toLocaleString("en-US")}</span>
-                  ) : (
-                    <span className="text-gray-600">No views yet</span>
-                  )}
-                </div>
+                  </div>
+                )}
             </div>
 
             {/* ── RIGHT COLUMN — card panel (desktop; on mobile it's shown under My Cards) ── */}

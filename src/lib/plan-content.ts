@@ -55,8 +55,8 @@ export const PLAN_FEATURES = {
     "Automatic follow-up emails — switch them on for any contact",
     "Send your card back to any contact in one tap",
     // What the Free dashboard really shows (dashboard "Traffic" panel): card
-    // and Swift Links views, link taps, best day. There is no "saves" number.
-    "Basic stats — views of your card and Swift Links, link taps & your best day",
+    // and Swift Links views, link taps. There is no "saves" number.
+    "Basic stats — views of your card and Swift Links & link taps",
     // The Swift Links footer and the "Sent with SwiftCard" email line — the
     // two things Pro removes. The card page's own badge and "Create your free
     // SwiftCard" button stay on every plan, so this does not promise that.

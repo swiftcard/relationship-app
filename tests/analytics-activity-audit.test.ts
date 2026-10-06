@@ -50,9 +50,12 @@ describe("the numbers are right", () => {
   it("link taps are an exact count, not rows capped at 1000", () => {
     expect(code("src/app/dashboard/page.tsx")).toMatch(/\.from\("card_events"\)\s*\.select\("id", \{ count: "exact", head: true \}\)[\s\S]{0,200}?\.eq\("event_type", "clicked_link"\)/);
   });
-  it("the sample contact is not a contact in the footer or the review prompt", () => {
+  it("the sample contact is not a contact in the review prompt", () => {
     const s = code("src/app/dashboard/page.tsx");
-    expect(s).toContain("Contacts <span className=\"text-gray-200 font-semibold tabular-nums\">{realLeadCount}</span>");
+    // The Traffic box's footer no longer shows Contacts or Best day (owner,
+    // 2026-10-06) — link taps are its only stat.
+    expect(s).not.toContain("Contacts <span className=\"text-gray-200 font-semibold tabular-nums\">");
+    expect(s).not.toContain("Best day <span");
     expect(s).toContain("<ReviewPromptTrigger hasLead={realLeadCount > 0} />");
   });
   it("the weekly recap counts views exactly", () => {
