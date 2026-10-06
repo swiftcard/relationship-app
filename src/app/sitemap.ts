@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { isInternalCardSlug } from "@/lib/seeded-views";
+import { isUnlistedCardSlug } from "@/lib/seeded-views";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
@@ -85,11 +85,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .select("username, user_id, is_offline, created_at")
       .order("created_at", { ascending: true })
       .limit(1000);
-    // Excludes our OWN test cards (App Review, IAP) as well as offline ones:
-    // they are internal artifacts, not content, and offering them to Google
-    // puts junk pages under the domain. See lib/seeded-views.
+    // Excludes our OWN test cards (App Review, IAP), the owner's unlisted
+    // personal cards, and offline ones: the first are internal artifacts, not
+    // content, and offering them to Google puts junk pages under the domain;
+    // the second carry a name the company does not publish. See lib/seeded-views.
     const live = (cards ?? []).filter(
-      (c) => c.is_offline !== true && c.username && !isInternalCardSlug(c.username as string),
+      (c) => c.is_offline !== true && c.username && !isUnlistedCardSlug(c.username as string),
     );
     const ownerIds = [...new Set(live.map((c) => c.user_id))];
     const { data: owners } = ownerIds.length

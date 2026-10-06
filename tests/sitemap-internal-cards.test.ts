@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { isInternalCardSlug } from "@/lib/seeded-views";
+import { isInternalCardSlug, isUnlistedCardSlug } from "@/lib/seeded-views";
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 
@@ -35,9 +35,43 @@ describe("our own test cards are not offered to Google", () => {
 
   it("the sitemap actually applies the filter", () => {
     const sitemap = read("src/app/sitemap.ts");
-    expect(sitemap).toContain("isInternalCardSlug");
+    expect(sitemap).toContain("isUnlistedCardSlug");
     // Applied to the card list, not somewhere decorative.
     const liveFilter = sitemap.slice(sitemap.indexOf("const live ="), sitemap.indexOf("const ownerIds"));
-    expect(liveFilter).toContain("isInternalCardSlug");
+    expect(liveFilter).toContain("isUnlistedCardSlug");
+  });
+});
+
+describe("the owner's personal cards are unlisted (2026-10-05)", () => {
+  // The founder's name is off GitHub, Product Hunt and every marketing page;
+  // these two cards were the last pages on the domain carrying it, and the
+  // sitemap was handing them to Google.
+  const OWNER_CARDS = ["menashharooni-swiftcardinc", "menash-malvecapital"];
+
+  it("recognises both cards, case-insensitively", () => {
+    for (const slug of OWNER_CARDS) {
+      expect(isUnlistedCardSlug(slug)).toBe(true);
+      expect(isUnlistedCardSlug(slug.toUpperCase())).toBe(true);
+    }
+  });
+
+  it("still covers the internal test cards", () => {
+    expect(isUnlistedCardSlug("apple-review-7c9e9913")).toBe(true);
+    expect(isUnlistedCardSlug("iaptest-033f30")).toBe(true);
+  });
+
+  it("is an exact match — a customer who shares the first name stays indexable", () => {
+    for (const slug of ["menash", "menash-acme", "demo-sales", "aaronlavi-swiftcardinc", "", null, undefined]) {
+      expect(isUnlistedCardSlug(slug), `${slug} must stay indexable`).toBe(false);
+    }
+  });
+
+  it("the card page and the Swift Links page both serve noindex for them", () => {
+    for (const page of ["src/app/[username]/page.tsx", "src/app/links/[username]/page.tsx"]) {
+      const src = read(page);
+      const meta = src.slice(src.indexOf("export async function generateMetadata"), src.indexOf("export default async function"));
+      expect(meta, `${page} generateMetadata gates robots on the unlisted set`).toContain("isUnlistedCardSlug(username)");
+      expect(meta).toContain("index: false");
+    }
   });
 });

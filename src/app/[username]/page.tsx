@@ -22,6 +22,7 @@ import CustomCard from "@/components/card-templates/CustomCard";
 import { withoutSocials } from "@/components/card-templates/types";
 import type { CardData } from "@/components/card-templates/types";
 import { resolveCardMeta } from "@/lib/resolve-card";
+import { isUnlistedCardSlug } from "@/lib/seeded-views";
 import CardScaler from "@/components/CardScaler";
 import CardTilt from "@/components/CardTilt";
 import { cardPageTheme } from "@/lib/card-page-theme";
@@ -91,6 +92,9 @@ export async function generateMetadata({
     itunes: null,
     // The root URL is canonical; legacy /card/<username> 308s here.
     alternates: { canonical: `${APP_URL}/${username}` },
+    // Unlisted cards (lib/seeded-views) still open from a link, QR or tap but
+    // are never offered to search engines — the same cards sitemap.ts omits.
+    ...(isUnlistedCardSlug(username) ? { robots: { index: false, follow: false } } : {}),
     // Marks a public card page for the iOS shell: NativeAppBridge sends it to
     // Safari if the app's webview ever lands here (links never open in the app).
     other: { [PUBLIC_PAGE_META]: "card" },

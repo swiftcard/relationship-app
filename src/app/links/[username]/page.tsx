@@ -16,6 +16,7 @@ import SwiftLinkProfile from "@/components/SwiftLinkProfile";
 import ReportCardLink from "@/components/ReportCardLink";
 import { safeCssValue, safeFontValue } from "@/lib/custom-layout";
 import { resolveCardMeta } from "@/lib/resolve-card";
+import { isUnlistedCardSlug } from "@/lib/seeded-views";
 import { shareImageUrl } from "@/lib/share-preview";
 import { PUBLIC_PAGE_META } from "@/lib/universal-links";
 
@@ -95,6 +96,8 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
     // The lowercase /links URL is canonical — mixed case 308s there, and query
     // variants (?source=, ?embed=) must consolidate onto one indexed URL.
     alternates: { canonical: `${APP_URL}/links/${username}` },
+    // Same unlisted set as the card page and sitemap.ts (lib/seeded-views).
+    ...(isUnlistedCardSlug(username) ? { robots: { index: false, follow: false } } : {}),
     // Marks a public links page for the iOS shell: NativeAppBridge sends it to
     // Safari if the app's webview ever lands here (links never open in the app).
     other: { [PUBLIC_PAGE_META]: "links" },
