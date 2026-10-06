@@ -223,6 +223,16 @@ const AUDIT = async () => {
   return out;
 };
 
+// Pages that MUST answer 404. A one-segment path is a card URL
+// ([username]/page.tsx), and since 1a43b785 a missing card is a real 404 so
+// Google drops it — the sweep counted that correct status as a failure. Here a
+// 404 is the pass, and anything else is the finding: a 200 means soft 404s
+// (missing cards served as live pages) are back.
+const EXPECTED_404 = new Set(["/this-route-does-not-exist"]);
+const isExpected404 = (url) => {
+  try { return EXPECTED_404.has(new URL(url).pathname); } catch { return false; }
+};
+
 function wirePage(page, screenRef) {
   page.on("pageerror", (e) => note(screenRef.name, "js-error", e.message.split("\n")[0].slice(0, 160)));
   page.on("console", (m) => {
@@ -248,6 +258,8 @@ function wirePage(page, screenRef) {
     if (!u.startsWith(BASE)) return;
     if (r.status() < 400) return;
     if (r.status() === 401 || r.status() === 403) return;  // gating is a feature; audited explicitly
+    // The deliberate not-found page itself (visit() checks its status).
+    if (r.status() === 404 && r.request().resourceType() === "document" && isExpected404(u)) return;
     note(screenRef.name, "http-" + r.status(), `${r.request().method()} ${u.replace(BASE, "")}`);
   });
   page.on("requestfailed", (r) => {
@@ -290,7 +302,9 @@ async function visit(page, screenRef, name, path, opts) {
     note(name, "navigation-failed", `${path} — ${e.message.split("\n")[0]}`);
     return null;
   });
-  if (res && res.status() >= 400) note(name, "page-http-" + res.status(), path);
+  if (res && EXPECTED_404.has(path)) {
+    if (res.status() !== 404) note(name, "soft-404", `${path} answered ${res.status()}, not 404`);
+  } else if (res && res.status() >= 400) note(name, "page-http-" + res.status(), path);
   // Settle before auditing. Back-to-back navigations on production raced the
   // session refresh and audited a login wall where the editor was about to
   // render (2026-09-11); the same run with this pause was clean. A person
@@ -419,6 +433,9 @@ try {
       await page.goBack({ waitUntil: "domcontentloaded" }).catch(() => {});
       await page.waitForTimeout(800);
       await auditPage(page, screenRef, `${tag}-history-back`, { scrollBottom: false });
+      // Named before the navigation, so what the forward load does is filed
+      // under history-forward, not the screen before it.
+      screenRef.name = `${tag}-history-forward`;
       await page.goForward({ waitUntil: "domcontentloaded" }).catch(() => {});
       await page.waitForTimeout(800);
       await auditPage(page, screenRef, `${tag}-history-forward`, { scrollBottom: false });

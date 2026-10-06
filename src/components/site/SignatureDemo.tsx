@@ -128,7 +128,7 @@ function SwiftCardPopup({ onClose }: { onClose: () => void }) {
                 "Create your free SwiftCard" button under it (the "Show QR
                 Code" control was removed from the card page). */}
             <div className={PANEL} style={panelStyle}>
-              <ShareButton url={CARD_URL} text={`Connect with ${FIRST} — save their contact instantly.`} label="Share this card" />
+              <ShareButton url={CARD_URL} text={`Connect with ${FIRST} — save their contact instantly.`} label="Share this card" warm={false} />
               <DemoGetCardButton />
             </div>
           </div>

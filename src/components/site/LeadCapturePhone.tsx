@@ -105,7 +105,7 @@ function LinkExperience() {
             "Show QR Code" control was removed from the card page: a sharer's
             tool sitting in a viewer's flow). */}
         <div className={Panel} style={panelStyle}>
-          <ShareButton url={DEMO_URL} text={`Connect with ${FIRST} — save their contact instantly.`} label="Share this card" />
+          <ShareButton url={DEMO_URL} text={`Connect with ${FIRST} — save their contact instantly.`} label="Share this card" warm={false} />
           <DemoGetCardButton />
         </div>
       </div>

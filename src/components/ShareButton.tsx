@@ -20,6 +20,13 @@ type Props = {
    * everywhere else: a visitor sharing someone else's card is not our user's win.
    */
   ownCard?: boolean;
+  /**
+   * Heat the link preview (lib/share-preview.ts). Off for the marketing demos:
+   * their URL is a made-up card (swiftcard.me/alexmorgan), so on production
+   * every homepage view fetched a card page that answers 404 — wasted server
+   * work, and the nightly sweep's http-404 finding (2026-10-06).
+   */
+  warm?: boolean;
 };
 
 // `title` is accepted for backwards compatibility but intentionally not shared —
@@ -30,6 +37,7 @@ export default function ShareButton({
   label = "Share Card",
   variant = "primary",
   ownCard = false,
+  warm = true,
 }: Props) {
   const [status, setStatus] = useState<"idle" | "copied" | "menu">("idle");
 
@@ -42,10 +50,10 @@ export default function ShareButton({
   // appears, again on tap. See lib/share-preview.ts for the headshot bug this
   // prevents; the tap is the last moment we can act before the messenger
   // fetches the image on its own clock.
-  useEffect(() => { warmSharePreview(url); }, [url]);
+  useEffect(() => { if (warm) warmSharePreview(url); }, [url, warm]);
 
   async function handleShare() {
-    warmSharePreview(url);
+    if (warm) warmSharePreview(url);
     // Native shell: WKWebView often lacks navigator.share — use the native
     // share sheet via the Capacitor plugin. Falls through to the web paths on
     // any failure (plugin missing in an old shell build, user cancel throws).

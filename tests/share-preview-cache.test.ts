@@ -131,8 +131,19 @@ describe("the preview is warmed on every share path", () => {
   const sendRoute = () => readFileSync(join(root, "src/app/api/leads/share-card/route.ts"), "utf8");
 
   it("the Share button warms on mount and again on tap", () => {
-    expect(share()).toMatch(/useEffect\(\(\) => \{ warmSharePreview\(url\); \}, \[url\]\);/);
-    expect(share()).toMatch(/async function handleShare\(\) \{\s*warmSharePreview\(url\);/);
+    expect(share()).toMatch(/useEffect\(\(\) => \{ if \(warm\) warmSharePreview\(url\); \}, \[url, warm\]\);/);
+    expect(share()).toMatch(/async function handleShare\(\) \{\s*if \(warm\) warmSharePreview\(url\);/);
+    // On by default: every real card's Share button keeps warming.
+    expect(share()).toMatch(/warm = true,/);
+  });
+
+  it("the marketing demos don't warm their made-up card (a 404 on every homepage view)", () => {
+    for (const f of ["TemplateGallery", "LeadCapturePhone", "SignatureDemo"]) {
+      const src = readFileSync(join(root, `src/components/site/${f}.tsx`), "utf8");
+      const tags = src.match(/<ShareButton[\s\S]*?\/>/g) ?? [];
+      expect(tags.length, f).toBeGreaterThan(0);
+      for (const tag of tags) expect(tag, f).toMatch(/warm=\{false\}/);
+    }
   });
 
   it("'Share from my phone' on a contact warms before the sheet opens", () => {
