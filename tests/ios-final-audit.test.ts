@@ -283,8 +283,18 @@ describe("2.1 — file downloads hand off to the system browser on native (WKWeb
     expect(read("src/app/office/admin/analytics/EmployeeAnalyticsTable.tsx")).toMatch(/DownloadLink/);
     expect(read("src/components/DownloadLink.tsx")).toMatch(/openFileViaSystemBrowser/);
   });
-  it("QR + card-image downloads fall back to the native share sheet", () => {
-    expect(read("src/components/QRDownloadButton.tsx")).toMatch(/@capacitor\/share/);
-    expect(read("src/components/DownloadCardButton.tsx")).toMatch(/@capacitor\/share/);
+  it("QR + card-image downloads save a PICTURE in the app, never the link", () => {
+    // 2026-10-06: both used to share the card URL in the app. They now hand
+    // the share sheet the PNG as a file ("Save Image" → Photos), with a
+    // press-and-hold sheet when iOS wants a fresh tap.
+    for (const f of ["src/components/QRDownloadButton.tsx", "src/components/DownloadCardButton.tsx"]) {
+      const s = read(f);
+      expect(s, f).not.toMatch(/@capacitor\/share|shareUrl/);
+      expect(s, f).toMatch(/useSavePicture\(\)/);
+    }
+    const lib = read("src/lib/save-image.ts");
+    expect(lib).toMatch(/navigator\.share\(\{ files: \[file\] \}\)/);
+    expect(lib).toMatch(/if \(detectNativeApp\(\)\) return "needs-tap";/);
+    expect(read("src/components/SavePictureSheet.tsx")).toMatch(/className="sc-selectable/);
   });
 });

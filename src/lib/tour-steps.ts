@@ -284,12 +284,11 @@ const STEP_DEFS: TourStepDef[] = [
     path: DASH,
     anchor: "share",
     title: "Share your card",
-    // "Other ways to share" holds the same four things on every viewport — the
-    // link, a card PNG, a QR PNG and NFC — even though the phone and desktop
-    // arrange them differently (the phone shows the two downloads, the desktop
-    // shows the QR picture above its download). Naming the CONTENTS rather than
-    // the layout keeps this true on both without a hedge.
-    body: "Meeting someone? Tap Show QR and let them scan it. Share link sends your card by text, email or any app. Other ways to share has the link to copy, downloads for your card and QR, and NFC. Every share can land a new lead in your contacts.",
+    // "Other ways to share" is one list on every viewport (owner, 2026-10-06):
+    // Apple Wallet, a card PNG and a QR PNG, the link, NFC — in that order.
+    // The copy follows that order. The downloads save a real picture in the
+    // app too (lib/save-image), so "pictures" is literally true there.
+    body: "Meeting someone? Tap Show QR and let them scan it. Share link sends your card by text, email or any app. Other ways to share has Apple Wallet, pictures of your card and QR, the link to copy, and NFC. Every share can land a new lead in your contacts.",
     placement: "right",
   },
 

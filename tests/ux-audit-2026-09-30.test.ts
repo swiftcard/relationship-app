@@ -69,10 +69,15 @@ describe("returning user: open SwiftCard → show my QR", () => {
     expect(read("src/lib/knowledge/docs/product.ts")).toMatch(/\\"Show QR\\" button opens a full-size QR code/);
   });
 
-  it("in the app the QR download button says what it does (it shares a link)", () => {
+  it("the QR download is a PNG everywhere, the app included — never a shared link", () => {
+    // Owner, 2026-10-06: "The Share QR link should not be a Share QR link.
+    // That button should be a Download QR PNG." It now saves the picture
+    // through lib/save-image, which hands the share sheet a FILE.
     const src = read("src/components/QRDownloadButton.tsx");
-    expect(src).toMatch(/useIsNativeApp\(\)/);
-    expect(src).toMatch(/native \? "Share QR link" : "Download QR \(PNG\)"/);
+    expect(src).not.toMatch(/Share QR link/);
+    expect(src).toMatch(/>\s*Download QR \(PNG\)\s*</);
+    expect(src).not.toMatch(/@capacitor\/share|Share\.share\(/);
+    expect(src).toMatch(/useSavePicture\(\)/);
   });
 });
 

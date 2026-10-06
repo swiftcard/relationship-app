@@ -53,7 +53,7 @@ export default function CardPreviewDownload({ data, template, username, previewU
   // Hand the live card node to sibling panels — "Other ways to share" offers a
   // PNG of it on mobile and cannot reach across boxes on its own. No-op when
   // rendered outside a CardCaptureProvider.
-  useRegisterCardCapture({ cardRef, filename, shareUrl: previewUrl });
+  useRegisterCardCapture({ cardRef, filename });
 
   useEffect(() => {
     function recompute() {
@@ -127,11 +127,11 @@ export default function CardPreviewDownload({ data, template, username, previewU
       {/* NO "Preview" link here. It was removed on purpose (2026-07-10) and
           replaced by the "View live card" button in the dashboard header —
           two controls opening the same URL side by side was the thing being
-          fixed. `previewUrl` survives ONLY because DownloadCardButton needs it
-          as the native share target: inside the iOS shell WKWebView can't save
-          a generated PNG, so it shares this link instead of dead-tapping.
-          Passing the prop must never resurrect the link — that regression is
-          exactly what happened once and is now pinned by a test. */}
+          fixed. `previewUrl` now only decides whether the card is live (see
+          below). It was the native share target until 2026-10-06, when the
+          download started saving a real picture in the app too. Passing the
+          prop must never resurrect the link — that regression is exactly what
+          happened once and is now pinned by a test. */}
       {/* MOBILE shows the card full screen to hold up; DESKTOP keeps the PNG
           download. Saving an image you then have to go find in Files is a poor
           way to hand someone your card in person, and you can't hold a monitor
@@ -149,7 +149,7 @@ export default function CardPreviewDownload({ data, template, username, previewU
           with no empty band underneath. There is no "tap to show it full
           screen" hint anywhere (owner, 2026-09-30) — the tour teaches it. */}
       <div className={previewUrl ? "hidden lg:block mt-3" : "mt-3"}>
-        <DownloadCardButton cardRef={cardRef} filename={filename} compact shareUrl={previewUrl} />
+        <DownloadCardButton cardRef={cardRef} filename={filename} compact />
       </div>
 
       {/* The QR printed on the card encodes data.cardUrl. Full screen it is

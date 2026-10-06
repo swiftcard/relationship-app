@@ -1,77 +1,58 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { MiniQR } from "@/components/card-templates/MiniQR";
+import { useSavePicture } from "@/components/SavePictureSheet";
 import { useCardQrStyle } from "@/lib/use-card-qr-style";
-import { detectNativeApp, useIsNativeApp } from "@/lib/platform";
-
-const PNG_PX = 1024;
+import { QR_PNG_PX, renderQrPng } from "@/lib/qr-png";
+import { prefersShareSheet } from "@/lib/save-image";
 
 /**
- * "Download QR (PNG)": the same code the card carries — same rounded
- * drawing, same colours — rendered at 1024px for print. The hidden MiniQR
- * below is the source; its SVG is rasterised on a canvas at download time.
+ * "Download QR (PNG)": the same code Show QR shows — same rounded drawing,
+ * same colours as the card — rendered at 1024px for print. The hidden MiniQR
+ * below is the source; its SVG is rasterised on a canvas (lib/qr-png).
+ *
+ * It saves a PICTURE everywhere, the app included (lib/save-image). In the app
+ * it used to send the card URL under a share-the-link label (owner, 2026-10-06:
+ * "That button should be a Download QR PNG").
  */
 export default function QRDownloadButton({ url, compact = false }: { url: string; compact?: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  // In the app the tap shares the card LINK (see download below), so the
-  // label must not promise a PNG. useIsNativeApp is false until after mount,
-  // so server HTML and first paint agree.
-  const native = useIsNativeApp();
   const qr = useCardQrStyle();
+  const { save, sheet } = useSavePicture();
+  // Drawn ahead on a phone, so the tap can open the share sheet while iOS
+  // still counts it as the tap. Keyed by colour + link, which is the picture.
+  const prepared = useRef<{ key: string; png: Promise<Blob> } | null>(null);
+  const key = `${qr.bg}|${qr.fg}|${url}`;
+
+  function draw(): Promise<Blob> {
+    if (prepared.current?.key === key) return prepared.current.png;
+    const svg = containerRef.current?.querySelector<SVGSVGElement>("[data-qr] svg");
+    const png = svg ? renderQrPng(svg, qr.bg) : Promise.reject(new Error("no qr"));
+    png.catch(() => { if (prepared.current?.png === png) prepared.current = null; });
+    prepared.current = { key, png };
+    return png;
+  }
+
+  useEffect(() => {
+    if (prefersShareSheet()) draw().catch(() => {});
+    // draw reads the refs; key is everything the picture depends on.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
 
   async function download() {
-    // Native shell: a canvas data-URL download can't be saved by WKWebView, so
-    // fall back to the native share sheet with the card link the QR encodes —
-    // the recipient gets the same destination, just as a link.
-    if (detectNativeApp()) {
-      try {
-        const { Share } = await import("@capacitor/share");
-        await Share.share({ url });
-        return;
-      } catch { /* fall through to the canvas download */ }
-    }
-    const tile = containerRef.current?.querySelector<HTMLElement>("[data-qr]");
-    const svg = tile?.querySelector("svg");
-    if (!tile || !svg) return;
     try {
-      const canvas = document.createElement("canvas");
-      canvas.width = PNG_PX;
-      canvas.height = PNG_PX;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      // The tile: background colour, rounded corners, then the code inside
-      // the same padding MiniQR uses (5.5%).
-      const radius = PNG_PX * 0.1;
-      ctx.fillStyle = qr.bg;
-      ctx.beginPath();
-      ctx.roundRect(0, 0, PNG_PX, PNG_PX, radius);
-      ctx.fill();
-      const pad = PNG_PX * 0.055;
-      const inner = PNG_PX - pad * 2;
-      const xml = new XMLSerializer().serializeToString(svg);
-      const blob = new Blob([xml], { type: "image/svg+xml;charset=utf-8" });
-      const objectUrl = URL.createObjectURL(blob);
-      await new Promise<void>((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => { ctx.drawImage(img, pad, pad, inner, inner); resolve(); };
-        img.onerror = () => reject(new Error("svg"));
-        img.src = objectUrl;
-      });
-      URL.revokeObjectURL(objectUrl);
-      const link = document.createElement("a");
-      link.download = "swiftcard-qr.png";
-      link.href = canvas.toDataURL("image/png");
-      link.click();
+      await save(await draw(), "swiftcard-qr.png");
     } catch { /* nothing to save — the button simply stays */ }
   }
 
   return (
     <>
       <div ref={containerRef} className="hidden" aria-hidden="true">
-        <MiniQR size={PNG_PX} bg={qr.bg} fg={qr.fg} url={url} />
+        <MiniQR size={QR_PNG_PX} bg={qr.bg} fg={qr.fg} url={url} />
       </div>
       <button
+        type="button"
         onClick={download}
         className={
           compact
@@ -80,8 +61,9 @@ export default function QRDownloadButton({ url, compact = false }: { url: string
         }
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
-        {native ? "Share QR link" : "Download QR (PNG)"}
+        Download QR (PNG)
       </button>
+      {sheet}
     </>
   );
 }

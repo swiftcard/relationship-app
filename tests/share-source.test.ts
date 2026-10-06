@@ -96,10 +96,15 @@ describe("the mobile card panel swaps QR and download", () => {
     );
   });
 
-  it("in the share modal: card PNG on mobile, QR image on desktop", () => {
+  it("in the share modal: one list at every width, Wallet first, no QR picture", () => {
+    // Owner, 2026-10-06. Show QR already shows the code full size.
     const c = share();
-    expect(c).toMatch(/lg:hidden[\s\S]{0,400}<DownloadCardButton/);
-    expect(c).toMatch(/hidden lg:block[\s\S]{0,200}<QRCard/);
+    expect(c).not.toMatch(/lg:hidden|hidden lg:block|<QRCard/);
+    const at = (s: string) => c.indexOf(`data-share-option="${s}"`);
+    expect(at("wallet")).toBeGreaterThan(-1);
+    expect(at("wallet")).toBeLessThan(at("pictures"));
+    expect(at("pictures")).toBeLessThan(at("link"));
+    expect(at("link")).toBeLessThan(at("nfc"));
   });
 
   it("the card download is labelled, not a bare 'Download'", () => {
@@ -134,7 +139,7 @@ describe("the capture context is scoped per panel copy, not per page", () => {
     // nothing to capture, so the hook has to return null rather than throw.
     const c = code("src/components/CardCaptureContext.tsx");
     expect(c).toMatch(/useContext\(Ctx\)\?\.capture \?\? null/);
-    expect(code("src/components/MoreShareOptions.tsx")).toMatch(/capture \?/);
+    expect(code("src/components/MoreShareOptions.tsx")).toMatch(/\{capture && \(/);
   });
 
   it("registration is undone on unmount", () => {

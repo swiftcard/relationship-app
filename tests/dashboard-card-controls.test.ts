@@ -33,10 +33,12 @@ describe("the dashboard has exactly one way to open your live card", () => {
     expect(preview, "previewUrl is rendering a link again").not.toMatch(/\{previewUrl && \(\s*<a/);
   });
 
-  it("but previewUrl still reaches DownloadCardButton for the native share", () => {
-    // Deleting the prop to kill the link would break iOS sharing — the reason
-    // it was restored in the first place. Keep both facts true at once.
-    expect(preview).toMatch(/shareUrl=\{previewUrl\}/);
+  it("previewUrl still arrives, and the download no longer shares it", () => {
+    // 2026-10-06: the download saves a real PNG in the app too (lib/save-image),
+    // so the link is no longer its native fallback. previewUrl stays because it
+    // decides whether the card is live, i.e. where the download sits.
+    expect(preview).not.toMatch(/shareUrl/);
+    expect(preview).toMatch(/previewUrl \? "hidden lg:block mt-3" : "mt-3"/);
     expect(dashboard).toMatch(/previewUrl=\{cardUrl\}/);
   });
 

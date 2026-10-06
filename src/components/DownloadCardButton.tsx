@@ -1,115 +1,66 @@
 "use client";
 
-import { useState } from "react";
-import { detectNativeApp } from "@/lib/platform";
+import { useEffect, useRef, useState } from "react";
+import { useSavePicture } from "@/components/SavePictureSheet";
+import { captureCardPng } from "@/lib/card-png";
+import { prefersShareSheet } from "@/lib/save-image";
 
 interface Props {
   cardRef: React.RefObject<HTMLDivElement | null>;
   filename?: string;
   compact?: boolean;
-  /** Public card URL — on native, sharing this replaces the PNG download that
-      WKWebView can't save. */
-  shareUrl?: string;
   /** Overrides the idle label. Compact defaults to a bare "Download", which is
       ambiguous where it sits next to "Download QR (PNG)" in the share modal.
       Never overrides the working/error states — those must stay readable. */
   label?: string;
+  /** Capture as soon as this mounts on a phone, so the tap can open the share
+      sheet while iOS still counts it as the tap (lib/save-image). For the
+      share modal, which mounts its buttons only when it opens. */
+  prepare?: boolean;
 }
 
-// Inline every <img> src as a data URL before capturing — html-to-image
-// re-fetches images while rasterizing and can drop them otherwise. Falls back
-// to the same-origin image proxy when a remote host blocks the direct fetch.
-async function inlineImages(el: HTMLElement): Promise<void> {
-  const imgs = Array.from(el.querySelectorAll("img"));
-  await Promise.all(imgs.map(async (img) => {
-    const src = img.currentSrc || img.getAttribute("src") || "";
-    if (!src || src.startsWith("data:")) return;
-    const candidates = [src];
-    if (/^https?:\/\//.test(src)) candidates.push(`/api/img-proxy?url=${encodeURIComponent(src)}`);
-    for (const url of candidates) {
-      try {
-        const res = await fetch(url, { cache: "force-cache" });
-        if (!res.ok) continue;
-        const blob = await res.blob();
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const r = new FileReader();
-          r.onloadend = () => resolve(r.result as string);
-          r.onerror = reject;
-          r.readAsDataURL(blob);
-        });
-        await new Promise<void>((resolve) => {
-          img.onload = () => resolve();
-          img.onerror = () => resolve();
-          img.src = dataUrl;
-          setTimeout(resolve, 3000);
-        });
-        return;
-      } catch { /* try next candidate */ }
-    }
-  }));
-}
-
-export default function DownloadCardButton({ cardRef, filename = "swiftcard.png", compact = false, shareUrl, label: labelOverride }: Props) {
+/**
+ * A picture of the card, exactly as the Your Card box draws it (lib/card-png).
+ * In the app it saves a PICTURE too — it used to share the card link instead,
+ * because WKWebView can't follow a download (owner, 2026-10-06: "it's
+ * literally just supposed to download a perfect picture of their SwiftCard").
+ */
+export default function DownloadCardButton({ cardRef, filename = "swiftcard.png", compact = false, label: labelOverride, prepare = false }: Props) {
   const [status, setStatus] = useState<"idle" | "working" | "error">("idle");
   const loading = status === "working";
+  const { save, sheet } = useSavePicture();
+  const prepared = useRef<Promise<Blob> | null>(null);
+
+  function capture(): Promise<Blob> {
+    if (prepared.current) return prepared.current;
+    const el = cardRef.current;
+    const png = el ? captureCardPng(el) : Promise.reject(new Error("no card"));
+    png.catch(() => { if (prepared.current === png) prepared.current = null; });
+    prepared.current = png;
+    return png;
+  }
+
+  useEffect(() => {
+    if (prepare && prefersShareSheet()) capture().catch(() => {});
+    // Once per mount: the modal remounts this every time it opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prepare]);
 
   async function handleDownload() {
-    const el = cardRef.current;
-    if (!el || loading) return;
-    // Native shell: WKWebView can't save the generated PNG data URL. Share the
-    // public card link via the native share sheet instead — a working action,
-    // not a dead tap. Web keeps the PNG capture below.
-    if (shareUrl && detectNativeApp()) {
-      try {
-        const { Share } = await import("@capacitor/share");
-        await Share.share({ url: shareUrl });
-        return;
-      } catch {
-        // Cancelling the share sheet throws too — and falling through started
-        // the PNG capture below, whose data-URL download does nothing in
-        // WKWebView: a spinner, then nothing. In the app there is no web
-        // fallback worth running; stop here.
-        return;
-      }
-    }
+    if (!cardRef.current || loading) return;
     setStatus("working");
-    // Neutralize any display scaling so the capture is full resolution.
-    const prevTransform = el.style.transform;
     try {
-      el.style.transform = "none";
-      await inlineImages(el);
-      await new Promise((r) => setTimeout(r, 120)); // let reflow settle
-
-      // Same proven recipe as the share/signature captures: html-to-image
-      // (handles Tailwind 4's oklch colors, which html2canvas chokes on) with
-      // the node rendered natively larger — pixelRatio-only upscaling is blurry.
-      const { toPng } = await import("html-to-image");
-      const w = el.offsetWidth || 460;
-      const h = el.offsetHeight || 263;
-      const SCALE = 3;
-      const dataUrl = await Promise.race([
-        toPng(el, {
-          width: w * SCALE,
-          height: h * SCALE,
-          pixelRatio: 1,
-          cacheBust: false,
-          style: { transform: `scale(${SCALE})`, transformOrigin: "top left" },
-        }),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 20000)),
-      ]);
-      if (!dataUrl || dataUrl.length < 5000) throw new Error("blank capture");
-
-      const a = document.createElement("a");
-      a.href = dataUrl;
-      a.download = filename;
-      a.click();
+      const png = await capture();
+      await save(png, filename);
       setStatus("idle");
     } catch {
       // Show it failed instead of silently doing nothing.
       setStatus("error");
       setTimeout(() => setStatus("idle"), 2500);
     } finally {
-      el.style.transform = prevTransform;
+      // The button under the card stays mounted while the card is edited
+      // elsewhere; never hand out yesterday's picture from it.
+      if (!prepare) prepared.current = null;
     }
   }
 
@@ -135,33 +86,41 @@ export default function DownloadCardButton({ cardRef, filename = "swiftcard.png"
   // below it. w-full doesn't care what the parent is.
   if (compact) {
     return (
+      <>
+        <button
+          type="button"
+          onClick={handleDownload}
+          disabled={loading}
+          className={`w-full flex items-center justify-center gap-1.5 text-xs font-semibold border rounded-full py-2 transition-colors disabled:opacity-50 ${
+            status === "error"
+              ? "text-amber-300 bg-amber-950/40 border-amber-800/50"
+              : "text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 border-gray-700"
+          }`}
+        >
+          {loading ? spinner : icon}
+          {label}
+        </button>
+        {sheet}
+      </>
+    );
+  }
+
+  return (
+    <>
       <button
+        type="button"
         onClick={handleDownload}
         disabled={loading}
-        className={`w-full flex items-center justify-center gap-1.5 text-xs font-semibold border rounded-full py-2 transition-colors disabled:opacity-50 ${
+        className={`flex items-center gap-2 w-full justify-center border font-semibold py-2.5 rounded-full transition-colors text-sm disabled:opacity-50 ${
           status === "error"
-            ? "text-amber-300 bg-amber-950/40 border-amber-800/50"
-            : "text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 border-gray-700"
+            ? "text-amber-300 border-amber-800/60"
+            : "border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white"
         }`}
       >
         {loading ? spinner : icon}
         {label}
       </button>
-    );
-  }
-
-  return (
-    <button
-      onClick={handleDownload}
-      disabled={loading}
-      className={`flex items-center gap-2 w-full justify-center border font-semibold py-2.5 rounded-full transition-colors text-sm disabled:opacity-50 ${
-        status === "error"
-          ? "text-amber-300 border-amber-800/60"
-          : "border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white"
-      }`}
-    >
-      {loading ? spinner : icon}
-      {label}
-    </button>
+      {sheet}
+    </>
   );
 }

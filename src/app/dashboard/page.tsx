@@ -772,9 +772,9 @@ export default async function DashboardPage({
           On a phone the card itself is still the full-screen button
           (CardPreviewDownload), and the tour's your-card step teaches it. */}
       <div data-tour="your-card" className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5">
-        {/* previewUrl powers the NATIVE path ONLY: in the iOS shell WKWebView
-            can't save a generated PNG data URL, so DownloadCardButton shares
-            this link via the native share sheet instead of dead-tapping.
+        {/* previewUrl only tells CardPreviewDownload the card is live, which
+            decides where its Download sits. (It was the iOS share target until
+            2026-10-06; downloads now save a real picture in the app.)
             It renders no visible control — opening the card is the job of the
             "View live" button in the My Cards box, and this prop briefly
             resurrected a duplicate "Preview" link that had been deliberately

@@ -6,7 +6,7 @@ export const BRAND_QR = { bg: "#ffffff", fg: "#0d1b3e" };
 
 /**
  * The colours of the QR printed on the card currently on screen — so the Show
- * QR popup, the PNG download and "Other ways to share" show the SAME code
+ * QR popup and the "Download QR (PNG)" picture show the SAME code
  * the card carries (owner, 2026-09-30: "it copies the design of the QR code
  * on their card"). Every template's QR is a MiniQR, and MiniQR labels itself
  * with data-qr-bg / data-qr-fg, so this reads the card's real, final choice —

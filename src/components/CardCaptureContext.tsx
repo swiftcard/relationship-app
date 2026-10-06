@@ -19,8 +19,6 @@ export type CardCapture = {
   /** The live card node the PNG capture rasterizes. */
   cardRef: RefObject<HTMLDivElement | null>;
   filename: string;
-  /** Native-shell share target — WKWebView can't save a generated PNG. */
-  shareUrl?: string;
 };
 
 type Store = { capture: CardCapture | null; register: (c: CardCapture | null) => void };
@@ -38,14 +36,14 @@ export function CardCaptureProvider({ children }: { children: ReactNode }) {
  */
 export function useRegisterCardCapture(capture: CardCapture): void {
   const register = useContext(Ctx)?.register;
-  const { cardRef, filename, shareUrl } = capture;
+  const { cardRef, filename } = capture;
   useEffect(() => {
     if (!register) return;
-    register({ cardRef, filename, shareUrl });
+    register({ cardRef, filename });
     // Unregister on unmount so a consumer can never hold a ref to a card that
     // has left the page — it would capture nothing and look like a dead button.
     return () => register(null);
-  }, [register, cardRef, filename, shareUrl]);
+  }, [register, cardRef, filename]);
 }
 
 /**

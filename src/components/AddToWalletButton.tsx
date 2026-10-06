@@ -47,7 +47,7 @@ export default function AddToWalletButton({ username, className = "" }: { userna
     return (
       <p className={`w-full text-center text-[0.8125rem] text-slate-500 leading-snug ${className}`}>
         Apple Wallet passes are added on your iPhone or iPad. Open SwiftCard there,
-        or use the QR code above.
+        or tap Show QR.
       </p>
     );
   }

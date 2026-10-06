@@ -41,11 +41,12 @@ beforeAll(async () => {
     import { SAMPLE_DATA } from "@/components/card-templates/types";
     import { CardCaptureProvider, useRegisterCardCapture, useCardCapture } from "@/components/CardCaptureContext";
 
-    // Stands in for CardPreviewDownload: registers a real DOM node.
+    // Stands in for CardPreviewDownload: registers a real DOM node, card-sized
+    // and busy enough that its PNG clears the blank-capture guard.
     function FakeCard({ id }: { id: string }) {
       const ref = useRef<HTMLDivElement>(null);
-      useRegisterCardCapture({ cardRef: ref, filename: id + ".png", shareUrl: "${URL}" });
-      return h("div", { ref, "data-card": id, style: { width: 40, height: 20 } }, id);
+      useRegisterCardCapture({ cardRef: ref, filename: id + ".png" });
+      return h("div", { ref, "data-card": id, style: { width: 460, height: 263, background: "repeating-linear-gradient(45deg,#0d1b3e 0 7px,#c9a24b 7px 13px,#fff 13px 17px)", color: "#fff", fontSize: 28 } }, id);
     }
 
     // Renders whatever filename its own provider resolved to — the isolation probe.
@@ -54,10 +55,11 @@ beforeAll(async () => {
       return h("p", { id: "probe-" + id }, c ? c.filename : "NONE");
     }
 
-    (window as any).mount = ({ withCapture, twoPanels }: any) => {
+    (window as any).mount = ({ withCapture, twoPanels, wallet }: any) => {
       const el = document.getElementById("root")!;
+      const walletUsername = wallet ? "alex-morgan" : undefined;
       const panel = (id: string) =>
-        h(CardCaptureProvider, { key: id }, h(FakeCard, { id }), h(Probe, { id }), h(MoreShareOptions, { url: "${URL}" }));
+        h(CardCaptureProvider, { key: id }, h(FakeCard, { id }), h(Probe, { id }), h(MoreShareOptions, { url: "${URL}", walletUsername }));
       let tree;
       if (twoPanels) tree = h("div", null, panel("card-a"), panel("card-b"));
       else if (withCapture) tree = panel("card-a");
@@ -98,7 +100,7 @@ afterAll(async () => {
   if (tmp) rmSync(tmp, { recursive: true, force: true });
 });
 
-async function mount(width: number, opts: { withCapture?: boolean; twoPanels?: boolean }): Promise<Page> {
+async function mount(width: number, opts: { withCapture?: boolean; twoPanels?: boolean; wallet?: boolean }, before?: string): Promise<Page> {
   const css = await appCss();
   const page = await browser.newPage();
   // setViewportSize EXPLICITLY — the constructor option has silently not taken
@@ -109,6 +111,8 @@ async function mount(width: number, opts: { withCapture?: boolean; twoPanels?: b
      <style>body{margin:0;padding:16px;background:#030712}</style></head>
      <body class="sc-app"><div id="root"></div><script>${bundle}</script></body></html>`,
   );
+  // Runs before React mounts, so it can stand in for the iOS shell.
+  if (before) await page.evaluate(before);
   await page.evaluate((o) => (window as unknown as { mount: (x: unknown) => void }).mount(o), opts);
   await page.waitForSelector("button");
   expect(await page.evaluate(() => window.innerWidth)).toBe(width);
@@ -136,16 +140,20 @@ async function openModal(page: Page, index = 0) {
     // copy and reported a present control as missing.
     const visibleBtn = (t: string) =>
       Array.from(modal.querySelectorAll("button")).find((b) => (b.textContent ?? "").includes(t) && shown(b)) ?? null;
-    const qrPanel =
-      Array.from(modal.querySelectorAll("p")).find((p) => p.textContent === "Scan to connect" && shown(p)) ?? null;
+    // The QR PICTURE (not the hidden 1024px source the download draws from):
+    // any visible svg in the modal larger than an icon.
+    const qrImage = Array.from(modal.querySelectorAll("svg")).some((s) => shown(s) && s.getBoundingClientRect().width > 40);
     const top = (el: Element | null) => (el ? Math.round(el.getBoundingClientRect().top) : -1);
     const cardLink = modal.querySelector("span.text-blue-400");
-    const nfc = Array.from(modal.querySelectorAll("p")).find((p) => p.textContent === "NFC card") ?? null;
+    const nfc = modal.querySelector('[data-share-option="nfc"]');
+    const wallet = Array.from(modal.querySelectorAll("a")).find((a) => (a.textContent ?? "").includes("Add to Apple Wallet") && shown(a)) ?? null;
     return {
       downloadCard: !!visibleBtn("Download card (PNG)"),
       downloadQr: !!visibleBtn("Download QR (PNG)"),
-      qrImage: !!qrPanel,
+      shareQrLink: !!visibleBtn("Share QR link"),
+      qrImage,
       order: {
+        wallet: top(wallet),
         cardLink: top(cardLink),
         downloadCard: top(visibleBtn("Download card (PNG)")),
         downloadQr: top(visibleBtn("Download QR (PNG)")),
@@ -158,51 +166,117 @@ async function openModal(page: Page, index = 0) {
 const MOBILE = 375;
 const DESKTOP = 1280;
 
-describe("mobile share modal: card link, download card, download QR, NFC", () => {
-  it("offers BOTH downloads and no QR picture", async () => {
-    const page = await mount(MOBILE, { withCapture: true });
-    try {
-      const m = await openModal(page);
-      expect(m.downloadCard, "the card PNG download is missing").toBe(true);
-      expect(m.downloadQr, "the QR PNG download is missing").toBe(true);
-      expect(m.qrImage, "the QR image is still here — it moved to its own popup").toBe(false);
-    } finally { await page.close(); }
-  }, 90_000);
+// One list at every width (owner, 2026-10-06): Apple Wallet first, then the
+// two pictures, then the card link, then NFC. No QR picture — Show QR has it.
+for (const [name, width] of [["phone", MOBILE], ["computer", DESKTOP]] as const) {
+  describe(`share modal on a ${name}`, () => {
+    it("offers Wallet, BOTH downloads, and no QR picture", async () => {
+      const page = await mount(width, { withCapture: true, wallet: true });
+      try {
+        const m = await openModal(page);
+        expect(m.order.wallet, "Add to Apple Wallet is missing").toBeGreaterThan(-1);
+        expect(m.downloadCard, "the card PNG download is missing").toBe(true);
+        expect(m.downloadQr, "the QR PNG download is missing").toBe(true);
+        expect(m.qrImage, "a QR picture is back in the popup").toBe(false);
+      } finally { await page.close(); }
+    }, 90_000);
 
-  it("in exactly the order asked for", async () => {
-    const page = await mount(MOBILE, { withCapture: true });
-    try {
-      const { order } = await openModal(page);
-      expect(order.cardLink).toBeGreaterThan(-1);
-      expect(order.downloadCard).toBeGreaterThan(order.cardLink);
-      expect(order.downloadQr).toBeGreaterThan(order.downloadCard);
-      expect(order.nfc).toBeGreaterThan(order.downloadQr);
-    } finally { await page.close(); }
-  }, 90_000);
-});
+    it("in exactly the order asked for: Wallet, card, QR, link, NFC", async () => {
+      const page = await mount(width, { withCapture: true, wallet: true });
+      try {
+        const { order } = await openModal(page);
+        expect(order.wallet).toBeGreaterThan(-1);
+        expect(order.downloadCard).toBeGreaterThan(order.wallet);
+        expect(order.downloadQr).toBeGreaterThan(order.downloadCard);
+        expect(order.cardLink).toBeGreaterThan(order.downloadQr);
+        expect(order.nfc).toBeGreaterThan(order.cardLink);
+      } finally { await page.close(); }
+    }, 90_000);
+  });
+}
 
-describe("desktop share modal is untouched", () => {
-  it("keeps the QR image and does NOT gain a card download", async () => {
-    const page = await mount(DESKTOP, { withCapture: true });
-    try {
-      const m = await openModal(page);
-      expect(m.qrImage, "the desktop QR image disappeared").toBe(true);
-      expect(m.downloadQr).toBe(true);
-      expect(m.downloadCard, "a mobile-only control leaked onto desktop").toBe(false);
-    } finally { await page.close(); }
-  }, 90_000);
-});
-
-describe("without a capturable card (the /preview demo) nothing changes", () => {
-  it("keeps the QR image even on mobile, and shows no dead download button", async () => {
+describe("without a capturable card (the /preview demo)", () => {
+  it("offers the QR picture download only — no dead card button", async () => {
     // /preview draws its card in an <iframe>; there is no node to rasterize, so
     // a "Download card" button there would be a guaranteed dead tap.
     const page = await mount(MOBILE, { withCapture: false });
     try {
       const m = await openModal(page);
-      expect(m.qrImage).toBe(true);
       expect(m.downloadCard, "a dead download button on a page with no card").toBe(false);
       expect(m.downloadQr).toBe(true);
+    } finally { await page.close(); }
+  }, 90_000);
+});
+
+// In the iOS app both buttons used to open the share sheet with the card LINK
+// ("Share QR link"). They must hand it the PICTURE: a PNG File, so iOS offers
+// "Save Image". The shell is stood in for by the WKWebView bridge object
+// detectNativeApp() looks for, and navigator.share by a recorder.
+const AS_APP = `
+  window.webkit = { messageHandlers: { bridge: { postMessage() {} } } };
+  window.__shared = [];
+  window.__shareError = null;
+  navigator.canShare = (d) => !!(d && d.files && d.files.length);
+  navigator.share = async (d) => {
+    if (window.__shareError) { const e = new Error("x"); e.name = window.__shareError; throw e; }
+    window.__shared.push({ url: d.url ?? null, files: (d.files || []).map((f) => ({ name: f.name, type: f.type, size: f.size })) });
+  };
+`;
+type Shared = { url: string | null; files: { name: string; type: string; size: number }[] };
+const sharedSoFar = (page: Page) => page.evaluate(() => (window as unknown as { __shared: Shared[] }).__shared);
+
+describe("in the app, the downloads save a picture, never the link", () => {
+  for (const [label, filename] of [["Download QR (PNG)", "swiftcard-qr.png"], ["Download card (PNG)", "card-a.png"]] as const) {
+    it(`${label} shares a PNG file`, async () => {
+      const page = await mount(MOBILE, { withCapture: true }, AS_APP);
+      try {
+        const m = await openModal(page);
+        expect(m.shareQrLink, "the old 'Share QR link' label is back").toBe(false);
+        await page.locator(`button:has-text("${label}")`).click();
+        await page.waitForFunction(() => (window as unknown as { __shared: unknown[] }).__shared.length > 0, null, { timeout: 30_000 });
+        const shared = await sharedSoFar(page);
+        expect(shared).toHaveLength(1);
+        expect(shared[0].url, "it shared a link").toBeNull();
+        expect(shared[0].files).toHaveLength(1);
+        expect(shared[0].files[0].type).toBe("image/png");
+        expect(shared[0].files[0].name).toBe(filename);
+        expect(shared[0].files[0].size).toBeGreaterThan(5000);
+      } finally { await page.close(); }
+    }, 90_000);
+  }
+
+  it("when iOS refuses a stale tap, the picture opens with its own Save button", async () => {
+    const page = await mount(MOBILE, { withCapture: true }, AS_APP);
+    try {
+      await openModal(page);
+      await page.evaluate(() => { (window as unknown as { __shareError: string }).__shareError = "NotAllowedError"; });
+      await page.locator('button:has-text("Download QR (PNG)")').click();
+      const sheet = page.locator('[aria-labelledby="save-picture-title"]');
+      await sheet.waitFor({ timeout: 30_000 });
+      const img = sheet.locator("img");
+      await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth)).toBe(1024);
+      expect(await img.evaluate((el) => el.classList.contains("sc-selectable"))).toBe(true);
+
+      // A fresh tap on Save picture shares the file, and the sheet closes.
+      await page.evaluate(() => { (window as unknown as { __shareError: null }).__shareError = null; });
+      await sheet.locator('button:has-text("Save picture")').click();
+      await sheet.waitFor({ state: "detached" });
+      const shared = await sharedSoFar(page);
+      expect(shared.at(-1)?.files[0]?.type).toBe("image/png");
+    } finally { await page.close(); }
+  }, 90_000);
+});
+
+describe("on a computer, the downloads are ordinary downloads", () => {
+  it("Download QR (PNG) saves swiftcard-qr.png", async () => {
+    const page = await mount(DESKTOP, { withCapture: true });
+    try {
+      await openModal(page);
+      const [download] = await Promise.all([
+        page.waitForEvent("download", { timeout: 30_000 }),
+        page.locator('button:has-text("Download QR (PNG)")').click(),
+      ]);
+      expect(download.suggestedFilename()).toBe("swiftcard-qr.png");
     } finally { await page.close(); }
   }, 90_000);
 });

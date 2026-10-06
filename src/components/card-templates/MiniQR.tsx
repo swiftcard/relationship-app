@@ -5,9 +5,9 @@ import QRCode from "qrcode";
 // co-locating the `qrcode` encoder there risked dragging it into bundles that
 // never render a QR code at all (performance audit).
 //
-// The one QR SwiftCard draws — on every card template, in the Show QR popup,
-// in "Other ways to share", in the downloadable PNG and in the desktop "Scan
-// QR code" popup — so a person's code looks the same everywhere they meet it.
+// The one QR SwiftCard draws — on every card template, in the Show QR popup
+// and in the "Download QR (PNG)" picture — so a person's code looks the same
+// everywhere they meet it.
 //
 // The look (owner, 2026-09-30: "modern and amazing"): the three finder eyes
 // are drawn as soft rounded rings with a rounded pupil, and every data module
