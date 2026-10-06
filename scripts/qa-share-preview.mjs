@@ -115,16 +115,27 @@ try {
     else if (card.name && title.trim() !== String(card.name).trim()) fail(slug, `og:title "${title}" is not the card's name "${card.name}"`);
     const imgUrl = meta(html, "og:image");
     if (!imgUrl) { fail(slug, "no og:image — the link unfurls with no picture"); continue; }
-    let img, type, ms;
+    let img, type, ms, drewHeader;
     try {
       const t0 = Date.now();
       const r = await fetch(imgUrl, { signal: AbortSignal.timeout(30000) });
       ms = Date.now() - t0;
       type = r.headers.get("content-type") ?? "";
+      drewHeader = r.headers.get("x-sc-preview");
       if (!r.ok || !type.startsWith("image/")) { fail(slug, `preview image answered ${r.status} ${type}`); continue; }
       img = Buffer.from(await r.arrayBuffer());
     } catch (e) { fail(slug, `preview image did not arrive: ${e.message}`); continue; }
     if (ms > IMAGE_BUDGET_MS) fail(slug, `preview image took ${ms}ms (budget ${IMAGE_BUDGET_MS}ms) — messengers give up and show none`);
+
+    // The route says what it drew (X-SC-Preview): "capture", "standin",
+    // "standin; missing=logo,photo" or "brand". A stand-in that could not
+    // embed the card's logo or photo (a host it couldn't fetch, a format it
+    // couldn't draw) is exactly "it missed my logo", so it fails here.
+    // Absent header (an older deploy) → this check is skipped, never failed.
+    const drew = drewHeader ?? "";
+    const missingParts = /missing=([a-z,]+)/.exec(drew)?.[1];
+    if (missingParts) fail(slug, `the link preview was drawn without the card's ${missingParts.split(",").join(" and ")}`);
+    if (/^brand\b/.test(drew)) fail(slug, "a LIVE card unfurls as the generic SwiftCard picture (route says brand)");
 
     // ── 2. never the generic picture for a live card ──────────────────────
     if (brandThumb && mad(await thumb(img), brandThumb) < 4) {
