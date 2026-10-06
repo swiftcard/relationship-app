@@ -286,7 +286,7 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
     website: card.data.website,
     cardUrl: withSource(cardUrl, "contact_qr"),
   });
-  const toggleRead =(id: string) => setRead((p) => ({ ...p, [id]: !p[id] }));
+  const toggleRead = (id: string) => setRead((p) => ({ ...p, [id]: !p[id] }));
 
   function copySig() {
     try { navigator.clipboard?.writeText(`${card.data.name}\nhttps://swiftcard.me/${card.handle}`); } catch { /* ignore */ }
