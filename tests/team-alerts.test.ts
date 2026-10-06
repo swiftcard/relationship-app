@@ -105,13 +105,15 @@ describe("the Monday recap", () => {
 
   it("an empty week sends nothing", () => {
     expect(personalRecapCopy({ views: 0, contacts: 0, places: [] })).toBeNull();
-    expect(teamRecapCopy({ views: 0, leads: 0, top: null, quiet: 3 })).toBeNull();
+    expect(teamRecapCopy({ views: 0, leads: 0, quiet: 3 })).toBeNull();
   });
 
-  it("team: totals, who led, who was quiet — and no plan or price words anywhere", () => {
-    const c = teamRecapCopy({ views: 42, leads: 5, top: { name: "Dana Lee", leads: 3, views: 20 }, quiet: 2 })!;
+  it("team: totals and who was quiet — no ranking, and no plan or price words anywhere", () => {
+    const c = teamRecapCopy({ views: 42, leads: 5, quiet: 2 })!;
     expect(c.title).toBe("Team week: 42 views · 5 leads");
-    expect(c.body).toBe("Dana led with 3 leads. 2 teammates had no views.");
+    expect(c.body).toBe("2 teammates had no views.");
+    // Never "Dana led with…" — the recap is the team's week, not a race (owner, 2026-10-06).
+    expect(c.body).not.toMatch(/led with|most views/);
     expect(`${c.title} ${c.body}`).not.toMatch(/pro\b|upgrade|price|plan/i);
   });
 

@@ -217,7 +217,7 @@ function TeamTab() {
       </div>
       <PageHead
         title="Your team"
-        desc="Everyone with a company card, and what those cards are bringing in."
+        desc="Everyone with a company card — their cards, views and contacts in one place."
         action={
           <div className="flex items-center gap-3">
             <span className="text-xs text-gray-500 whitespace-nowrap hidden @xl:block">
@@ -354,7 +354,7 @@ function PersonDrawer({ person, onClose }: { person: Person; onClose: () => void
           <button type="button" className={action}>View live card ↗</button>
           <button type="button" className={action}>Copy card link</button>
           <button type="button" className={action}>Show QR code</button>
-          <button type="button" className={action}>Edit card</button>
+          <button type="button" className={action}>Manage their cards</button>
         </div>
         {person.owner ? (
           <p className="text-[0.6875rem] text-gray-600 pt-4 border-t border-gray-800">
@@ -419,7 +419,7 @@ function AnalyticsTab() {
     <div>
       <PageHead
         title="Analytics"
-        desc="Which employees and cards are generating real engagement and leads."
+        desc="Views, scans, contact downloads and leads for every card on your team."
         action={
           <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-full p-1" role="group" aria-label="Date range">
             {["7 days", "30 days", "90 days"].map((l) => (
@@ -455,7 +455,7 @@ function AnalyticsTab() {
         </div>
       </div>
 
-      <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider mb-2">Team performance</p>
+      <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider mb-2">Your team</p>
       <div className="flex flex-col @xl:flex-row gap-2.5 mb-4">
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by employee or card name…" aria-label="Search employees or cards" className={searchCls} />
         <button type="button" className="text-xs font-semibold text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 px-3.5 py-2.5 rounded-xl transition-colors text-center whitespace-nowrap">

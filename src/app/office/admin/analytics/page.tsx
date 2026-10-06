@@ -77,7 +77,7 @@ export default async function OfficeAnalyticsPage({
   if (loadError) {
     return (
       <div>
-        <PageHead title="Analytics" desc="Which employees and cards are generating real engagement and leads." />
+        <PageHead title="Analytics" desc="Views, scans, contact downloads and leads for every card on your team." />
         <Empty>Couldn&apos;t load analytics right now — try refreshing in a moment.</Empty>
       </div>
     );
@@ -106,7 +106,7 @@ export default async function OfficeAnalyticsPage({
     <div>
       <PageHead
         title="Analytics"
-        desc="Which employees and cards are generating real engagement and leads."
+        desc="Views, scans, contact downloads and leads for every card on your team."
         action={<AnalyticsDateRangePicker current={preset} />}
       />
 
@@ -145,7 +145,7 @@ export default async function OfficeAnalyticsPage({
         </div>
       )}
 
-      <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider mb-2">Team performance</p>
+      <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider mb-2">Your team</p>
       <EmployeeAnalyticsTable employees={employees} range={preset} />
     </div>
   );

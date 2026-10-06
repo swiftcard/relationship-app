@@ -52,44 +52,24 @@ describe("fillDateRange — zero-fills missing UTC days for the chart", () => {
   });
 });
 
-describe("defaultEmployeeSort — most-used cards first, never ranked by leads", () => {
-  it("ranks by card views descending as the primary key", () => {
-    const rows = [
-      { name: "Fewer views", views: 10, contactsSaved: 0 },
-      { name: "More views", views: 90, contactsSaved: 0 },
-    ];
-    expect(defaultEmployeeSort(rows).map((r) => r.name)).toEqual(["More views", "Fewer views"]);
+describe("defaultEmployeeSort — A→Z like a directory, never a ranking", () => {
+  // The console shows an admin everything on their team's cards; it is not a
+  // race between teammates (owner, 2026-10-06).
+  it("orders by name ascending", () => {
+    const rows = [{ name: "Zed" }, { name: "Anna" }, { name: "Mia" }];
+    expect(defaultEmployeeSort(rows).map((r) => r.name)).toEqual(["Anna", "Mia", "Zed"]);
   });
 
-  it("ignores leads entirely — a card is not a lead funnel", () => {
+  it("ignores views, contact downloads and leads entirely", () => {
     const rows = [
-      { name: "Many leads", views: 5, contactsSaved: 0, leads: 50 },
-      { name: "No leads", views: 40, contactsSaved: 0, leads: 0 },
+      { name: "Busy", views: 900, contactsSaved: 80, leads: 50 },
+      { name: "Alex", views: 0, contactsSaved: 0, leads: 0 },
     ];
-    expect(defaultEmployeeSort(rows).map((r) => r.name)).toEqual(["No leads", "Many leads"]);
-  });
-
-  it("breaks a views tie by contact downloads descending", () => {
-    const rows = [
-      { name: "Fewer saves", views: 20, contactsSaved: 1 },
-      { name: "More saves", views: 20, contactsSaved: 5 },
-    ];
-    expect(defaultEmployeeSort(rows).map((r) => r.name)).toEqual(["More saves", "Fewer saves"]);
-  });
-
-  it("breaks a full tie by name ascending", () => {
-    const rows = [
-      { name: "Zed", views: 0, contactsSaved: 0 },
-      { name: "Anna", views: 0, contactsSaved: 0 },
-    ];
-    expect(defaultEmployeeSort(rows).map((r) => r.name)).toEqual(["Anna", "Zed"]);
+    expect(defaultEmployeeSort(rows).map((r) => r.name)).toEqual(["Alex", "Busy"]);
   });
 
   it("does not mutate the input array", () => {
-    const rows = [
-      { name: "B", views: 1, contactsSaved: 0 },
-      { name: "A", views: 2, contactsSaved: 0 },
-    ];
+    const rows = [{ name: "B" }, { name: "A" }];
     const copy = [...rows];
     defaultEmployeeSort(rows);
     expect(rows).toEqual(copy);

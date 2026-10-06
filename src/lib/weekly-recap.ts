@@ -46,21 +46,15 @@ export function personalRecapCopy(input: {
 export function teamRecapCopy(input: {
   views: number;
   leads: number;
-  /** The teammate with the most leads (else views) this week, if anyone did anything. */
-  top: { name: string; leads: number; views: number } | null;
   /** Teammates whose cards had no views at all this week. */
   quiet: number;
 }): { title: string; body: string } | null {
   if (input.views <= 0 && input.leads <= 0) return null;
   const title = `Team week: ${plural(input.views, "view")} · ${plural(input.leads, "lead")}`;
-  const first = input.top ? (input.top.name.trim().split(/\s+/)[0] || "A teammate") : null;
-  const lead = input.top && first
-    ? input.top.leads > 0
-      ? `${first} led with ${plural(input.top.leads, "lead")}.`
-      : `${first} had the most views (${input.top.views.toLocaleString("en-US")}).`
-    : "";
-  const quiet = input.quiet > 0 ? ` ${plural(input.quiet, "teammate")} had no views.` : "";
-  return { title, body: (lead + quiet).trim() || "See the full week in your Admin console." };
+  // No "Dana led with 3 leads": the recap reports the team's week, it does not
+  // rank teammates against each other (owner, 2026-10-06).
+  const quiet = input.quiet > 0 ? `${plural(input.quiet, "teammate")} had no views.` : "";
+  return { title, body: quiet || "See the full week in your Admin console." };
 }
 
 // ── WINDOWS, NOT HOURS ──────────────────────────────────────────────────────

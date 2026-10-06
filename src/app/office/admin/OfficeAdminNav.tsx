@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// Exactly three tabs, in the order an owner uses them: who's on my team →
-// who's contacted us → what do our cards look like. The old Overview/Cards/
+// Four tabs, in the order an owner uses them: who's on my team → how their
+// cards are being used → who's contacted us → what do our cards look like
+// (plus Billing for whoever pays). The old Overview/Cards/
 // Invite tabs are folded in: Team IS the landing page, per-card management
 // lives inside each person, and inviting is a button, not a destination.
 const LINKS = [

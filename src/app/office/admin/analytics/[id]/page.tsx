@@ -69,11 +69,6 @@ export default async function OfficeAnalyticsMemberPage({
     getRecentLeadsForSlugs(slugs, range.since, range.until),
   ]);
   const mine = allMetrics.find((m) => m.userId === id) ?? null;
-  const others = allMetrics.filter((m) => m.userId !== id);
-  const officeAverage = {
-    views: others.length ? others.reduce((s, e) => s + e.views + e.swiftlinkViews, 0) / others.length : 0,
-    contactsSaved: others.length ? others.reduce((s, e) => s + e.contactsSaved, 0) / others.length : 0,
-  };
 
   const chartData = fillDateRange(dailyViews, range.since, range.until, tz);
   const totalViews = (mine?.views ?? 0) + (mine?.swiftlinkViews ?? 0);
@@ -98,11 +93,8 @@ export default async function OfficeAnalyticsMemberPage({
         <StatTile label="SwiftLink views" value={mine?.swiftlinkViews ?? 0} />
       </div>
 
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-6 flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-400">
-        <span>Office average: <span className="text-gray-200 tabular-nums">{officeAverage.views.toFixed(1)}</span> views</span>
-        <span>Office average: <span className="text-gray-200 tabular-nums">{officeAverage.contactsSaved.toFixed(1)}</span> contact downloads</span>
-      </div>
-
+      {/* No "office average" strip: this page shows one person's card, not how
+          they stack up against their colleagues (owner, 2026-10-06). */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-6">
         <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider mb-3">Views over time</p>
         {totalViews === 0 ? <Empty>No views yet for this range.</Empty> : <ViewsChart data={chartData} />}
@@ -135,10 +127,6 @@ export default async function OfficeAnalyticsMemberPage({
           ) : (
             <p className="text-gray-500 text-sm">No card yet.</p>
           )}
-          <p className="text-gray-600 text-[0.6875rem] mt-3 leading-relaxed">
-            Individual SwiftLink click tracking isn&apos;t available yet — only overall Swift Links page visits are
-            tracked (see &quot;SwiftLink views&quot; above).
-          </p>
         </div>
       </div>
 

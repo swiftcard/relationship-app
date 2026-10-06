@@ -85,7 +85,7 @@ export default async function OfficeAdminLayout({ children }: { children: React.
           so a phone user can move between the console and their own dashboard
           without hunting for the small header link. */}
       <MobileNavGate />
-      <AdminGuidedTour />
+      <AdminGuidedTour canBrand={caps.canBrand} canInvite={caps.canInvite} />
       {/* First visit to a REAL office (not the "Name your team" form) kicks off
           the admin tour once. */}
       {officeId && <AdminTourAutoStart />}

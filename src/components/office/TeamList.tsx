@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { QRCodeCanvas } from "qrcode.react";
 import { relativeTime, shortDate } from "@/lib/relative-time";
 import { useDisplayClock } from "@/components/DisplayClock";
@@ -192,10 +193,12 @@ function Drawer({ person, appUrl, caps, self, onClose }: {
                 </button>
               )}
               {caps.canManageCards && (!person.isOwner || caps.viewerIsOwner) && (
-                <a href={`/office/admin/team/${person.userId}`}
+                // Opens the person's page (their cards, each with "View & edit card"),
+                // not an editor — so it is not labelled "Edit card".
+                <Link href={`/office/admin/team/${person.userId}`}
                   className="text-xs font-semibold text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 px-3.5 py-2 rounded-full transition-colors">
-                  Edit card
-                </a>
+                  Manage their cards
+                </Link>
               )}
             </div>
           )}

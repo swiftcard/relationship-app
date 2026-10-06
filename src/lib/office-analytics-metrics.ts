@@ -36,15 +36,13 @@ export function fillDateRange(rows: DailyPoint[], sinceIso: string, untilIso: st
   return out;
 }
 
-export type SortableEmployeeRow = { views: number; contactsSaved: number; name: string };
+export type SortableEmployeeRow = { name: string };
 
-// The employee table's default order: card views, then contact downloads, then
-// name — whose card is getting used. Never leads first: a card is there to make
-// the people a teammate meets save and reach them easily, not to be a lead
-// funnel (a client saving their lawyer's contact isn't a lead). Owner,
-// 2026-10-06; the Conversion rate figure went the same day.
+// The employee table opens A→Z by name, like a directory — never ranked by
+// views, leads or anything else. The console is there so an admin can see
+// everything on their team's cards; it is not a race between teammates (owner,
+// 2026-10-06 — the Conversion rate figure and the office-average comparison went
+// the same day). Any column heading still sorts by that column on a click.
 export function defaultEmployeeSort<T extends SortableEmployeeRow>(rows: T[]): T[] {
-  return [...rows].sort(
-    (a, b) => b.views - a.views || b.contactsSaved - a.contactsSaved || a.name.localeCompare(b.name)
-  );
+  return [...rows].sort((a, b) => a.name.localeCompare(b.name));
 }

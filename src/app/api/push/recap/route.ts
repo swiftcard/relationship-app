@@ -131,12 +131,10 @@ async function teamWeek(admin: Admin, team: { ownerId: string; memberIds: string
   const people = [team.ownerId, ...team.memberIds];
   const slugs = await slugsFor(admin, people);
   const since = new Date(now - 7 * DAY).toISOString();
-  const { data: names } = await admin.from("cards").select("user_id, name").in("user_id", people);
-  const nameOf = new Map<string, string>();
-  for (const c of names ?? []) if (c.name && !nameOf.has(c.user_id as string)) nameOf.set(c.user_id as string, c.name as string);
 
+  // Team totals only — no "who led" (owner, 2026-10-06: the console is a
+  // window onto the team, not a race between teammates).
   let views = 0, leads = 0, quiet = 0;
-  let top: { name: string; leads: number; views: number } | null = null;
   for (const uid of people) {
     const s = slugs.get(uid) ?? [];
     if (!s.length) continue;
@@ -147,11 +145,8 @@ async function teamWeek(admin: Admin, team: { ownerId: string; memberIds: string
     const pv = v ?? 0, pl = l ?? 0;
     views += pv; leads += pl;
     if (uid !== team.ownerId && pv === 0) quiet++;
-    if ((pl > 0 || pv > 0) && (!top || pl > top.leads || (pl === top.leads && pv > top.views))) {
-      top = { name: nameOf.get(uid) ?? "A teammate", leads: pl, views: pv };
-    }
   }
-  return { views, leads, quiet, top };
+  return { views, leads, quiet };
 }
 
 export async function GET(req: NextRequest) {

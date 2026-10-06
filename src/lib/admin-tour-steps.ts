@@ -1,8 +1,8 @@
 import type { TourStep } from "./tour-steps";
 
 // ── Office Admin guided tour: the walkthrough itself ────────────────────────
-// A separate, shorter tour scoped to the Office admin console — Team, Leads,
-// and Branding. Runs independently of the main dashboard tour (own storage
+// A separate, shorter tour scoped to the Office admin console — Team,
+// Analytics, Leads and Branding. Runs independently of the main dashboard tour (own storage
 // keys in tour.ts) so an admin can replay just this one without restarting
 // the whole-app tour.
 
@@ -15,21 +15,21 @@ export const ADMIN_TOUR_STEPS: TourStep[] = [
     id: "admin-welcome",
     path: TEAM,
     title: "Welcome to your Admin console",
-    body: "A quick lap around Team, Leads, and Branding — the three things you manage for your whole office. Use Next and Back, or Skip anytime.",
+    body: "A quick lap around Team, Analytics, Leads and Branding — everything you see and manage for your whole office. Use Next and Back, or Skip anytime.",
   },
   {
     id: "admin-nav-team",
     path: TEAM,
     anchor: "admin-nav-team",
     title: "Team",
-    body: "Your landing page — everyone with a company card, and how their cards are doing. You're on it now.",
+    body: "Your landing page — everyone with a company card, and their cards in one place. You're on it now.",
     placement: "bottom",
   },
   {
     id: "admin-stats",
     path: TEAM,
     anchor: "admin-stats",
-    title: "The four numbers that matter",
+    title: "Your team at a glance",
     body: "Leads captured, card views, how many invited teammates actually finished their card, and how many seats you're paying for vs. using.",
     placement: "bottom",
   },
@@ -78,7 +78,7 @@ export const ADMIN_TOUR_STEPS: TourStep[] = [
     path: TEAM,
     anchor: "admin-nav-analytics",
     title: "Analytics",
-    body: "Views, saves, and leads per teammate — who's actually sharing their card, and which cards are landing. Tap any teammate for their own breakdown.",
+    body: "Views, scans, contact downloads and leads for every card on your team. Tap anyone to see their own page.",
     placement: "bottom",
   },
   {
@@ -155,3 +155,31 @@ export const ADMIN_TOUR_STEPS: TourStep[] = [
     body: "That's Team, Analytics, Leads, and Branding — both the card and the Swift Links halves. Replay this anytime from the Tour button on the Team page.",
   },
 ];
+
+/** The steps a role without the Branding tab never sees — the tab is hidden
+ *  for them and /office/admin/branding redirects. */
+const BRANDING_STEP_IDS = new Set([
+  "admin-nav-branding", "admin-branding-note", "admin-branding-tabs", "admin-branding-form", "admin-branding-links",
+]);
+
+/**
+ * The tour for the person actually taking it. A manager has no Branding tab and
+ * some roles cannot invite, but every admin role got the full list: five
+ * Branding steps aimed at a tab they don't have (each one a ~3-second frozen
+ * search before the engine skipped it), "Invite someone by email" pointing at a
+ * spot with no button, and a closing line about branding both halves.
+ */
+export function adminTourSteps({ canBrand, canInvite }: { canBrand: boolean; canInvite: boolean }): TourStep[] {
+  return ADMIN_TOUR_STEPS.filter(
+    (s) => (canBrand || !BRANDING_STEP_IDS.has(s.id)) && (canInvite || s.id !== "admin-add-member")
+  ).map((s) => {
+    if (canBrand) return s;
+    if (s.id === "admin-welcome") {
+      return { ...s, body: "A quick lap around Team, Analytics and Leads — everything you see and manage for your whole office. Use Next and Back, or Skip anytime." };
+    }
+    if (s.id === "admin-finish") {
+      return { ...s, path: LEADS, body: "That's Team, Analytics and Leads. Replay this anytime from the Tour button on the Team page." };
+    }
+    return s;
+  });
+}

@@ -1,7 +1,7 @@
 "use client";
 
 // Top-left "Tour" control on the Team page — starts the Office admin guided
-// tour (Team → Leads → Branding), independent of the main dashboard tour.
+// tour (Team → Analytics → Leads → Branding, cut to the viewer's role), independent of the main dashboard tour.
 
 import { startAdminTour } from "@/lib/tour";
 

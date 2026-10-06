@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { TOUR_STEPS, buildTourSteps } from "@/lib/tour-steps";
-import { ADMIN_TOUR_STEPS } from "@/lib/admin-tour-steps";
+import { ADMIN_TOUR_STEPS, adminTourSteps } from "@/lib/admin-tour-steps";
 
 // ── A tour that describes a product we no longer ship ────────────────────────
 //
@@ -116,6 +116,32 @@ describe("the Office admin tour covers what Branding actually does now", () => {
   it("does not promise a Leads status an admin can no longer set", () => {
     const leads = ADMIN_TOUR_STEPS.find((s) => s.id === "admin-leads-table")!;
     expect(leads.body).not.toMatch(/contacted|closed|not interested|status/i);
+  });
+});
+
+describe("the Office admin tour is built for the role taking it", () => {
+  it("an owner/admin gets every step", () => {
+    expect(adminTourSteps({ canBrand: true, canInvite: true })).toEqual(ADMIN_TOUR_STEPS);
+  });
+
+  it("a role without the Branding tab is never sent to it or told about it", () => {
+    // OfficeAdminNav hides Branding without canBrand and the page redirects.
+    const steps = adminTourSteps({ canBrand: false, canInvite: true });
+    expect(steps.some((s) => s.path.startsWith("/office/admin/branding"))).toBe(false);
+    expect(steps.some((s) => s.anchor?.includes("branding"))).toBe(false);
+    for (const s of steps) expect(`${s.title} ${s.body}`, s.id).not.toMatch(/branding/i);
+    expect(steps.at(-1)!.id).toBe("admin-finish");
+  });
+
+  it("a role that can't invite is not pointed at an invite button it doesn't have", () => {
+    const steps = adminTourSteps({ canBrand: true, canInvite: false });
+    expect(steps.map((s) => s.id)).not.toContain("admin-add-member");
+  });
+
+  it("nothing in the admin tour ranks teammates against each other", () => {
+    for (const s of ADMIN_TOUR_STEPS) {
+      expect(`${s.title} ${s.body}`, s.id).not.toMatch(/who's actually|cards are landing|numbers that matter|perform|top |most views|led with/i);
+    }
   });
 });
 

@@ -93,7 +93,7 @@ export default async function OfficeTeamPage() {
       </div>
       <PageHead
         title="Your team"
-        desc="Everyone with a company card, and what those cards are bringing in."
+        desc="Everyone with a company card — their cards, views and contacts in one place."
         action={
           <div data-tour="admin-add-member" className="flex items-center gap-3">
             {seats && (
