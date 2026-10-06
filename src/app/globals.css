@@ -564,16 +564,15 @@ body {
    white text must NOT flip dark. Same carve-out as the colored buttons above. */
 [data-sc-theme="light"] .sc-app :is(.bg-slate-900, .bg-slate-800, .bg-purple-500).text-white { color: #FFFFFF !important; }
 
-/* ── Testimonials marquee: two rows auto-scroll opposite ways, pause on hover ── */
+/* ── Testimonials marquee: two rows auto-scroll opposite ways, never pause ── */
 .sc-tmarq {
   overflow: hidden;
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
   mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
 }
-.sc-tmarq-row { display: flex; width: max-content; animation: marquee 52s linear infinite; will-change: transform; }
+.sc-tmarq-row { display: flex; width: max-content; animation: marquee 52s linear infinite; animation-play-state: running !important;
+  will-change: transform; backface-visibility: hidden; }
 .sc-tmarq-row.rev { animation-direction: reverse; }
-/* Pause the whole strip while the visitor reads/interacts with it. */
-.sc-tmarq:hover .sc-tmarq-row { animation-play-state: paused; }
 @media (prefers-reduced-motion: reduce) {
   .sc-tmarq { -webkit-mask-image: none; mask-image: none; overflow-x: auto; }
   .sc-tmarq-row { animation: none !important; }
