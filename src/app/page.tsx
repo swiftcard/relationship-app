@@ -164,7 +164,7 @@ export default function Home() {
                     tiny stars over the face of it, each twinkling on its own slow
                     offset so it shimmers rather than blinks. VERY light on purpose.
                     Inert to the pointer, aria-hidden, stilled by reduced-motion. */}
-                <Link id="hero-cta" href="#cards" className="rd-btn rd-btn-ghost-l rd-btn-lg !bg-white/90 hp-sparkle">
+                <Link id="hero-cta" href="#cards" className="rd-btn rd-btn-ghost-l rd-btn-lg !bg-white/90 hp-sparkle w-full sm:w-auto">
                   See how it works
                   <span className="hp-sparks" aria-hidden="true">
                     {[
@@ -188,9 +188,9 @@ export default function Home() {
                     ))}
                   </span>
                 </Link>
-                <div className="flex gap-2 lg:hidden">
-                  <AppStoreBadge size="lg" />
-                  <GooglePlayBadge size="lg" />
+                <div className="grid grid-cols-2 gap-3 w-full sm:flex sm:w-auto lg:hidden">
+                  <AppStoreBadge size="pair" />
+                  <GooglePlayBadge size="pair" />
                 </div>
                 <div className="hp-ring">
                   <HeroClaim />
