@@ -301,19 +301,14 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
   // sticky right column on desktop, matching the real dashboard's phone layout.
   const cardSharePanel = (
     <>
-      {/* Just the card (real dashboard since 2026-09-30: no heading, hint or
-          caption) — tap it to open the live card — and the small Download.
-          Download is drawn, not wired: there is no account to save to. */}
+      {/* Just the card, as on the real dashboard (no heading, hint or caption
+          since 2026-09-30; no Download under it since 2026-10-07 — the
+          picture is saved from Other ways to share) — tap it to open the live
+          card. */}
       <Box>
         <button type="button" onClick={() => openDemo("card")} aria-label="Open the live card" className="block w-full rounded-xl overflow-hidden ring-1 ring-blue-500/30 hover:ring-blue-500/60 transition-all bg-[#FAF7F2]">
           <CardOnlyPreview key={card.handle} src={`/${card.handle}?embed=card`} />
         </button>
-        <span className="mt-3 w-full flex items-center justify-center gap-1.5 text-xs font-semibold border rounded-full py-2 text-gray-300 bg-gray-800 border-gray-700">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="w-3.5 h-3.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-          </svg>
-          Download
-        </span>
       </Box>
       {/* The same share box the real dashboard shows: Show QR first, then
           Share link, Other ways to share, and "At an event?" (drawn — tagging

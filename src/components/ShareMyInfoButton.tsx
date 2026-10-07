@@ -1,7 +1,7 @@
 "use client";
 
 // "Share my contact information" on a contact's detail view. Small but
-// noticeable: sits beside Call / Save to phone. Tapping it opens a four-way
+// noticeable: sits beside Call / Save contact. Tapping it opens a four-way
 // picker. Every option hands off to the OWNER'S OWN PHONE — nothing is sent
 // through SwiftCard's Twilio number or email sender, and nothing is logged.
 //
@@ -23,7 +23,8 @@
 // reports exactly what was delivered.
 //   • Share from my phone — the OS share sheet with the bare card link, for
 //                       WhatsApp / AirDrop / anything else. Not pre-addressed:
-//                       navigator.share has no recipient field.
+//                       navigator.share has no recipient field. On a computer
+//                       it reads "Copy my card link" and copies it instead.
 //
 // The owner asked for exactly this (2026-09-08): a share should open the
 // contact's thread on his phone, pre-filled, so the message goes from HIS
@@ -45,6 +46,7 @@ import { useEffect, useRef, useState } from "react";
 import { detectNativeApp } from "@/lib/platform";
 import { shareNatively } from "@/lib/native-share";
 import { warmSharePreview } from "@/lib/share-preview";
+import { prefersShareSheet } from "@/lib/save-image";
 
 // Pinned to the SwiftCard domain, NOT window.location.origin — same reason
 // LoginForm pins it. On a Vercel preview host, origin would hand the recipient
@@ -292,13 +294,16 @@ export default function ShareMyInfoButton({ firstName, phone, email, cardOwner, 
     if (detectNativeApp()) {
       if ((await shareNatively({ url })) !== "unavailable") return;
     }
-    if (typeof navigator !== "undefined" && navigator.share) {
+    // A phone opens its share sheet; a computer copies — the same rule as the
+    // dashboard's Share link (lib/save-image prefersShareSheet), so a Mac or
+    // Windows share panel never appears under a label that promises a copy.
+    if (prefersShareSheet() && typeof navigator !== "undefined" && navigator.share) {
       // Bare URL only — iMessage and most messengers render the rich card
       // preview only when the message is just the link.
       try { await navigator.share({ url }); } catch { /* cancelled */ }
       return;
     }
-    // Desktop: no share sheet to open, so put the link on the clipboard.
+    // Computer: put the link on the clipboard.
     try {
       await navigator.clipboard.writeText(url);
       setState("copied");
@@ -311,6 +316,11 @@ export default function ShareMyInfoButton({ firstName, phone, email, cardOwner, 
   // One reason, shown on every option, so the owner learns the cause once
   // instead of finding four separately-broken buttons.
   const darkHint = "This card is turned off — bring it back online in Settings → My Cards";
+  // The fourth option says what it will do ON THIS DEVICE (owner, 2026-10-07):
+  // "Share from my phone · Opens your phone's share sheet" on a computer was
+  // a promise of a sheet that then silently copied the link. Read only while
+  // the menu is open — always after hydration — so server and client agree.
+  const onComputer = open && !prefersShareSheet();
   const OPTIONS: { action: Action; label: string; enabled: boolean; hint: string }[] = [
     { action: "email", label: "Share by email", enabled: !isDark && hasEmail && !!cardUrl, hint: isDark ? darkHint : hasEmail ? `Opens an email to ${firstName}, ready to send` : "No email on this contact" },
     { action: "sms", label: "Share by text", enabled: !isDark && hasPhone && !!cardUrl, hint: isDark ? darkHint : hasPhone ? `Opens a text to ${firstName}, ready to send` : "No phone on this contact" },
@@ -319,7 +329,7 @@ export default function ShareMyInfoButton({ firstName, phone, email, cardOwner, 
     { action: "both", label: "Share by both", enabled: !isDark && hasPhone && hasEmail && !!cardUrl && !!leadId && state !== "sending", hint: isDark ? darkHint : !leadId ? "Open this contact to share by both" : hasPhone && hasEmail ? "Texts and emails them now, from SwiftCard" : "Needs both a phone and an email" },
     // Enabled regardless of what channels the CONTACT has — this shares from
     // the owner's own phone, so it only needs a card link to hand over.
-    { action: "phone", label: "Share from my phone", enabled: !isDark && !!cardOwner, hint: isDark ? darkHint : cardOwner ? "Opens your phone's share sheet" : "No card linked to this contact" },
+    { action: "phone", label: onComputer ? "Copy my card link" : "Share from my phone", enabled: !isDark && !!cardOwner, hint: isDark ? darkHint : !cardOwner ? "No card linked to this contact" : onComputer ? "Copies your card link to paste into an email or message" : "Opens your phone's share sheet" },
   ];
 
   const run = (action: Action) => {

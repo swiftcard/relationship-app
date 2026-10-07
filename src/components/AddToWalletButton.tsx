@@ -1,6 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { MiniQR } from "@/components/card-templates/MiniQR";
 import { detectNativeApp, useIsAndroidApp, useIsIosAppOnMac } from "@/lib/platform";
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
 // "Add to Apple Wallet" download button. On the web it's a plain link to the
 // pass route — the browser hands the .pkpass to Apple Wallet on iPhone/Mac.
@@ -12,8 +16,44 @@ import { detectNativeApp, useIsAndroidApp, useIsIosAppOnMac } from "@/lib/platfo
 // (@capacitor/browser → SFSafariViewController) does — Safari recognizes the
 // pass MIME type and shows Apple's native "Add to Wallet" UI. Web behavior is
 // byte-identical (the intercept only engages inside the shell).
+// WHAT THIS DEVICE CAN DO WITH A PASS (owner, 2026-10-07: every feature has
+// to make sense on the device it is on).
+//   "button"   iPhone, iPad and Mac browsers, and the iPhone app — the pass
+//              opens in Apple Wallet (a Mac's Safari sends it to the iPhone).
+//   "qr"       any other computer (Windows, Linux, ChromeOS): a .pkpass there
+//              is a file nothing can open, so it shows a code to scan with
+//              the iPhone instead — the pass route is public, so the phone
+//              needs no sign-in.
+//   "none"     Android, web or app: no Apple Wallet at all. The whole Wallet
+//              section goes, not just the button (MoreShareOptions).
+// "button" on the server and the first client render, like every platform
+// hook, then the real answer after mount.
+export type WalletMode = "button" | "qr" | "none";
+
+function detectWalletMode(): WalletMode {
+  if (detectNativeApp()) return "button"; // the Android app is caught by useIsAndroidApp
+  const ua = navigator.userAgent;
+  if (/Android/i.test(ua)) return "none";
+  // iPadOS reports itself as a Mac; both are Apple.
+  if (/iPhone|iPad|iPod|Macintosh|Mac OS X/i.test(ua)) return "button";
+  return "qr";
+}
+
+export function useWalletMode(): WalletMode {
+  const androidApp = useIsAndroidApp();
+  const [mode, setMode] = useState<WalletMode>("button");
+  useEffect(() => {
+    // Read from navigator, so only after mount — the same hydration reasoning
+    // as useIsNativeApp.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration-safe by design
+    setMode(detectWalletMode());
+  }, []);
+  return androidApp ? "none" : mode;
+}
+
 export default function AddToWalletButton({ username, className = "" }: { username: string; className?: string }) {
   const href = `/api/wallet/pass?card=${encodeURIComponent(username)}`;
+  const mode = useWalletMode();
   // ON A MAC there is no Apple Wallet for an iOS app to add a pass to: PassKit
   // is not part of the "Designed for iPhone" runtime, so the button opened a
   // sheet that could not finish — a dead end with no explanation. Say what is
@@ -24,8 +64,8 @@ export default function AddToWalletButton({ username, className = "" }: { userna
   // knowledge base says so to anyone who asks). Left alone, this rendered "Add
   // to Apple Wallet" inside an Android app and handed Chrome a .pkpass, which
   // downloads as a file nothing on the device can open — a dead end dressed up
-  // as a feature. Scoped to the APP, not to Android browsers, so nothing about
-  // the website changes.
+  // as a feature. Android BROWSERS have the same dead end, and since
+  // 2026-10-07 useWalletMode answers "none" for them too.
   const androidApp = useIsAndroidApp();
 
   async function handleNativeOpen(e: React.MouseEvent<HTMLAnchorElement>) {
@@ -42,6 +82,7 @@ export default function AddToWalletButton({ username, className = "" }: { userna
   }
 
   if (androidApp) return null;
+  if (mode === "none") return null; // an Android browser: the same dead end
 
   if (onMac) {
     return (
@@ -49,6 +90,22 @@ export default function AddToWalletButton({ username, className = "" }: { userna
         Apple Wallet passes are added on your iPhone or iPad. Open SwiftCard there,
         or tap Show QR.
       </p>
+    );
+  }
+
+  if (mode === "qr") {
+    return (
+      <div className={`flex items-center gap-3 rounded-xl bg-gray-800/60 border border-gray-700/60 p-3 ${className}`}>
+        <div className="shrink-0 rounded-lg bg-white p-1.5">
+          {/* The site address, not this page's origin: the code is read by a
+              phone, which cannot reach a computer's localhost or a page with
+              no origin at all. */}
+          <MiniQR size={84} url={`${APP_URL}${href}`} />
+        </div>
+        <p className="text-gray-300 text-[0.8125rem] leading-snug">
+          Scan this with your iPhone&apos;s camera to add your card to Apple Wallet.
+        </p>
+      </div>
     );
   }
 

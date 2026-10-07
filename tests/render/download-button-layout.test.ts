@@ -17,11 +17,13 @@ import DownloadCardButton from "@/components/DownloadCardButton";
 // Every class involved still "looked right" in the source — flex-1 was still
 // there, it just had no flex parent any more. Only laying it out shows it.
 
-// The dashboard's "Your Card" panel, verbatim from src/app/dashboard/page.tsx,
-// and the wrapper CardPreviewDownload puts the button in.
-const PANEL = "bg-gray-900 border border-gray-800/80 rounded-2xl p-5";
-const WRAPPER = "mt-3";
-// The Wallet button that renders directly beneath it (AddToWalletButton).
+// Where the compact button lives now: "Other ways to share" (MoreShareOptions)
+// — its panel and the "Save as a picture" stack. It used to sit under the card
+// in the dashboard's Your Card box too, on desktop only; that copy was removed
+// (owner, 2026-10-07) because it duplicated this one, which every device has.
+const PANEL = "w-full max-w-sm bg-gray-950 border border-gray-800 rounded-2xl p-5";
+const WRAPPER = "space-y-2";
+// The Wallet button in the same dialog (AddToWalletButton).
 const WALLET = "w-full flex items-center justify-center gap-2 rounded-full py-2.5 text-sm font-semibold text-white bg-black";
 
 // Pathological, not boundary: widths span the narrow sticky sidebar through a
@@ -35,7 +37,7 @@ afterAll(async () => { await browser?.close(); });
 async function measure(panelWidth: number) {
   const css = await appCss();
   const button = renderToStaticMarkup(
-    createElement(DownloadCardButton, { cardRef: createRef<HTMLDivElement>(), compact: true }),
+    createElement(DownloadCardButton, { cardRef: createRef<HTMLDivElement>(), compact: true, label: "Download card (PNG)" }),
   );
   const page = await browser.newPage({ viewportSize: { width: panelWidth + 120, height: 700 } });
   try {
@@ -72,7 +74,7 @@ async function measure(panelWidth: number) {
   }
 }
 
-describe("the dashboard Download button fills its panel", () => {
+describe("the share options' Download card (PNG) button fills its panel", () => {
   it.each(PANEL_WIDTHS)("fills the content width at a %ipx panel", async (panelWidth) => {
     const m = await measure(panelWidth);
     // THE regression: a shrink-wrapped button is a fraction of the row.
@@ -94,6 +96,6 @@ describe("the dashboard Download button fills its panel", () => {
     expect(m.buttonHeight, "Download is no longer the slimmer of the two").toBeLessThan(m.walletHeight);
     // A single line of text-xs in a py-2 pill. Taller means the label wrapped.
     expect(m.buttonHeight).toBeLessThan(40);
-    expect(m.label).toBe("Download");
+    expect(m.label).toBe("Download card (PNG)");
   }, 120_000);
 });

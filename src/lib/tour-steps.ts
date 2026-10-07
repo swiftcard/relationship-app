@@ -265,12 +265,12 @@ const STEP_DEFS: TourStepDef[] = [
     // Editing lives on the dashboard: every card in My Cards has an Edit
     // button (owner, 2026-09-29; it used to be Settings → Cards and sharing).
     // What the card does differs by viewport: on a phone, tapping it opens it
-    // full screen and sideways to hold up (they scan the QR printed on it); a
-    // desktop keeps the PNG download under it. TourContext carries no viewport,
-    // so the full-screen tap is mentioned as a phone aside — true there, simply
-    // absent on a laptop — the same shape the my-cards step uses. The PNG isn't
-    // named here: on a phone it lives one tap deeper in "Other ways to share",
-    // which the next step covers.
+    // full screen and sideways to hold up (they scan the QR printed on it); on
+    // a computer it is just the card. TourContext carries no viewport, so the
+    // full-screen tap is mentioned as a phone aside — true there, simply absent
+    // on a laptop — the same shape the my-cards step uses. The PNG isn't named
+    // here: on every device it lives in "Other ways to share", which the next
+    // step covers.
     body: "Exactly what people see when you share — on a phone, tap it to show it full screen, turn your phone sideways, and they scan the QR code on it. To change the template (Photo First is the most popular), colors, photo or links, tap Edit on it in My Cards.",
     placement: "right",
     interactive: true,

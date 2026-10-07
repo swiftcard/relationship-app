@@ -72,10 +72,17 @@ describe("2.1 — NFC 'Write to a tag' button is hidden on native (manual path o
   const s = read("src/components/NFCWriter.tsx");
   it("imports the hydration-safe hook and gates the button", () => {
     expect(s).toMatch(/useIsNativeApp/);
-    expect(s).toMatch(/\{!isNative && \(/);
+    // 2026-10-07: the button shows only where Web NFC exists (Android Chrome)
+    // and never in the app — iPhone Safari and computers lost the dead button
+    // too. false on the server, so hydration matches.
+    expect(s).toMatch(/useSyncExternalStore\(noSubscribe, hasWebNfc, \(\) => false\) && !isNative/);
+    expect(s).toMatch(/\{canWrite && \(\s*<button/);
   });
   it("keeps the manual copy-link path unconditional (works everywhere)", () => {
     expect(s).toMatch(/Or write it yourself with an NFC app/);
+    expect(s).toMatch(/Write it with a free NFC app on your phone/);
+    // The copy box sits outside every canWrite gate.
+    expect(s).toMatch(/<\/p>\s*<div className="flex items-center gap-2 bg-gray-800\/60[\s\S]{0,200}<CopyButton text=\{tagUrl\} \/>/);
   });
 });
 

@@ -80,10 +80,14 @@ describe("the mobile card panel swaps QR and download", () => {
     expect(code("src/components/CardFullscreen.tsx")).toMatch(/ref=\{cardRef\}\s+inert\s+className="pointer-events-none"/);
   });
 
-  it("on the card: full-screen tap on mobile, download on desktop", () => {
+  it("on the card: full-screen tap on mobile, and no download under it anywhere", () => {
     const c = preview();
     expect(c).toMatch(/onClick=\{\(\) => setFullscreen\(true\)\}[\s\S]{0,160}className="lg:hidden absolute inset-0/);
-    expect(c).toMatch(/hidden lg:block[\s\S]{0,200}<DownloadCardButton/);
+    // Owner, 2026-10-07: the desktop kept a Download under the card after
+    // Other ways to share offered "Download card (PNG)" at every width — two
+    // card downloads on a computer, one on a phone. The card box is just the
+    // card now; the picture is saved from the share options on every device.
+    expect(c, "a Download is back under the dashboard card").not.toMatch(/<DownloadCardButton/);
   });
 
   it("splits at lg, the width where the whole panel moves", () => {

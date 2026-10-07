@@ -7,6 +7,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { detectNativeApp } from "@/lib/platform";
+import { shareNatively } from "@/lib/native-share";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
@@ -19,7 +21,13 @@ type Progress = {
   capReached: boolean;
 };
 
-export default function ReferAFriend({ progress }: { progress: Progress | null }) {
+/**
+ * @param showShare false where the page already shares this same /r/ link —
+ *   /grow, whose "Spread the word" box sits right below. Two share-and-copy
+ *   pairs for one link on one screen was the duplicate (2026-10-07). Settings
+ *   has no such box, so it keeps them.
+ */
+export default function ReferAFriend({ progress, showShare = true }: { progress: Progress | null; showShare?: boolean }) {
   const router = useRouter();
   const [p, setP] = useState<Progress | null>(progress);
   const [claiming, setClaiming] = useState(false);
@@ -37,14 +45,23 @@ export default function ReferAFriend({ progress }: { progress: Progress | null }
     } catch { /* ignore */ }
   }
 
+  // "Share invite" is a PHONE control (sc-phone-only): the app's own sheet,
+  // then a phone browser's. On a computer it is not drawn — the only thing it
+  // could do there is copy, and "Copy link" beside it already does. In the
+  // app it used to try navigator.share only — which WKWebView may not have —
+  // and fall back to copying, so it behaved differently from /grow's button
+  // for the very same link.
   async function share() {
     if (!link) return;
+    if (detectNativeApp()) {
+      if ((await shareNatively({ url: link })) !== "unavailable") return;
+    }
     if (typeof navigator !== "undefined" && navigator.share) {
       // Bare URL → iMessage/WhatsApp show a rich preview of the invite.
       try { await navigator.share({ url: link }); } catch { /* user cancelled */ }
-    } else {
-      try { await navigator.clipboard.writeText(link); setClaimMsg({ ok: true, text: "Link copied — paste it into a text!" }); } catch { /* ignore */ }
+      return;
     }
+    await copyLink();
   }
 
   async function claim() {
@@ -130,25 +147,27 @@ export default function ReferAFriend({ progress }: { progress: Progress | null }
             </div>
           </div>
 
-          {/* The link + share/copy */}
+          {/* The link + share/copy — left to the page's own share box where
+              it has one (showShare). */}
+          {showShare && <>
           <div className="bg-gray-800/60 border border-gray-700/60 rounded-xl px-3 py-2.5 mb-2">
             <p className="text-blue-400 text-[0.75rem] font-mono break-all">{link.replace(/^https?:\/\//, "")}</p>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="flex gap-2">
             <button
               type="button"
               onClick={share}
-              className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold py-2.5 rounded-full transition-colors"
+              className="sc-phone-only flex-1 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold py-2.5 rounded-full transition-colors"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
               </svg>
-              Share / text it
+              Share invite
             </button>
             <button
               type="button"
               onClick={copyLink}
-              className="flex items-center justify-center gap-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-xs font-semibold py-2.5 rounded-full transition-colors"
+              className="flex-1 flex items-center justify-center gap-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-xs font-semibold py-2.5 rounded-full transition-colors"
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-3.5 h-3.5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -156,6 +175,7 @@ export default function ReferAFriend({ progress }: { progress: Progress | null }
               {copied ? "Copied ✓" : "Copy link"}
             </button>
           </div>
+          </>}
         </>
       ) : (
         <p className="text-gray-600 text-xs">Your referral link will appear here once setup finishes.</p>

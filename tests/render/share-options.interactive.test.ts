@@ -89,7 +89,9 @@ beforeAll(async () => {
     format: "iife",
     platform: "browser",
     jsx: "automatic",
-    define: { "process.env.NODE_ENV": '"production"' },
+    // AddToWalletButton reads NEXT_PUBLIC_APP_URL (the Wallet code a Windows
+    // computer shows); Next inlines it, so the bundle has to as well.
+    define: { "process.env.NODE_ENV": '"production"', "process.env.NEXT_PUBLIC_APP_URL": '"https://swiftcard.me"' },
     alias: { "@": resolve("src") },
   });
   bundle = out.outputFiles[0].text;
@@ -100,9 +102,19 @@ afterAll(async () => {
   if (tmp) rmSync(tmp, { recursive: true, force: true });
 });
 
-async function mount(width: number, opts: { withCapture?: boolean; twoPanels?: boolean; wallet?: boolean }, before?: string): Promise<Page> {
+// Apple Wallet depends on the DEVICE, not the width (AddToWalletButton
+// useWalletMode): a button on Apple devices, a code to scan on other
+// computers, nothing on Android. So each page says which device it is.
+const UA = {
+  iphone: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
+  mac: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+  windows: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+  android: "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36",
+} as const;
+
+async function mount(width: number, opts: { withCapture?: boolean; twoPanels?: boolean; wallet?: boolean }, before?: string, device: keyof typeof UA = width < 768 ? "iphone" : "mac"): Promise<Page> {
   const css = await appCss();
-  const page = await browser.newPage();
+  const page = await browser.newPage({ userAgent: UA[device] });
   // setViewportSize EXPLICITLY — the constructor option has silently not taken
   // in this harness before, which inverts every breakpoint assertion.
   await page.setViewportSize({ width, height: 900 });
@@ -141,13 +153,22 @@ async function openModal(page: Page, index = 0) {
     const visibleBtn = (t: string) =>
       Array.from(modal.querySelectorAll("button")).find((b) => (b.textContent ?? "").includes(t) && shown(b)) ?? null;
     // The QR PICTURE (not the hidden 1024px source the download draws from):
-    // any visible svg in the modal larger than an icon.
-    const qrImage = Array.from(modal.querySelectorAll("svg")).some((s) => shown(s) && s.getBoundingClientRect().width > 40);
+    // any visible svg in the modal larger than an icon — outside the Wallet
+    // section, whose scan-with-your-iPhone code on a Windows computer is a
+    // different thing.
+    const walletSection = modal.querySelector('[data-share-option="wallet"]');
+    const qrImage = Array.from(modal.querySelectorAll("svg")).some((s) => shown(s) && s.getBoundingClientRect().width > 40 && !walletSection?.contains(s));
+    const walletQr = !!walletSection && Array.from(walletSection.querySelectorAll("svg")).some((s) => shown(s) && s.getBoundingClientRect().width > 40);
     const top = (el: Element | null) => (el ? Math.round(el.getBoundingClientRect().top) : -1);
     const cardLink = modal.querySelector("span.text-blue-400");
     const nfc = modal.querySelector('[data-share-option="nfc"]');
     const wallet = Array.from(modal.querySelectorAll("a")).find((a) => (a.textContent ?? "").includes("Add to Apple Wallet") && shown(a)) ?? null;
     return {
+      walletSection: !!walletSection,
+      walletButton: !!wallet,
+      walletQr,
+      walletText: walletSection?.textContent ?? "",
+      writeTag: !!visibleBtn("Write to a tag"),
       downloadCard: !!visibleBtn("Download card (PNG)"),
       downloadQr: !!visibleBtn("Download QR (PNG)"),
       shareQrLink: !!visibleBtn("Share QR link"),
@@ -194,6 +215,57 @@ for (const [name, width] of [["phone", MOBILE], ["computer", DESKTOP]] as const)
     }, 90_000);
   });
 }
+
+// Owner, 2026-10-07: everything has to make sense on the device it is on.
+describe("Apple Wallet and NFC make sense on each device", () => {
+  it("iPhone and Mac: the Add to Apple Wallet button", async () => {
+    for (const device of ["iphone", "mac"] as const) {
+      const page = await mount(device === "iphone" ? MOBILE : DESKTOP, { withCapture: true, wallet: true }, undefined, device);
+      try {
+        const m = await openModal(page);
+        expect(m.walletButton, device).toBe(true);
+        expect(m.walletQr, device).toBe(false);
+      } finally { await page.close(); }
+    }
+  }, 90_000);
+
+  it("a Windows computer: a code to scan with the iPhone, not a .pkpass it cannot open", async () => {
+    const page = await mount(DESKTOP, { withCapture: true, wallet: true }, undefined, "windows");
+    try {
+      const m = await openModal(page);
+      expect(m.walletSection).toBe(true);
+      expect(m.walletButton, "a Wallet download on a computer with no Wallet").toBe(false);
+      expect(m.walletQr, "the scan-with-your-iPhone code is missing").toBe(true);
+      expect(m.walletText).toContain("Scan this with your iPhone");
+      expect(m.qrImage, "the Wallet code counted as the card QR picture").toBe(false);
+    } finally { await page.close(); }
+  }, 90_000);
+
+  it("Android: no Apple Wallet section at all", async () => {
+    const page = await mount(MOBILE, { withCapture: true, wallet: true }, undefined, "android");
+    try {
+      const m = await openModal(page);
+      expect(m.walletSection, "an Apple Wallet heading on Android").toBe(false);
+      expect(m.downloadCard).toBe(true);
+    } finally { await page.close(); }
+  }, 90_000);
+
+  it("Write to a tag only where the browser can write one", async () => {
+    // No Web NFC (iPhone, every computer): no button, the NFC-app path instead.
+    let page = await mount(DESKTOP, { withCapture: true });
+    try {
+      const m = await openModal(page);
+      expect(m.writeTag, "a Write to a tag button that can only fail").toBe(false);
+      expect(await page.locator('[data-share-option="nfc"]').textContent()).toContain("Write it with a free NFC app on your phone");
+    } finally { await page.close(); }
+    // Android Chrome has NDEFReader: the button is there.
+    page = await mount(MOBILE, { withCapture: true }, "window.NDEFReader = function () {}", "android");
+    try {
+      const m = await openModal(page);
+      expect(m.writeTag, "Android Chrome lost Write to a tag").toBe(true);
+    } finally { await page.close(); }
+  }, 90_000);
+});
 
 describe("without a capturable card (the /preview demo)", () => {
   it("offers the QR picture download only — no dead card button", async () => {

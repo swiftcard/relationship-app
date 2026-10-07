@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { CardData } from "@/components/card-templates/types";
 import { withoutSocials } from "@/components/card-templates/types";
-import DownloadCardButton from "@/components/DownloadCardButton";
 import CardFullscreen from "@/components/CardFullscreen";
 import { useRegisterCardCapture } from "@/components/CardCaptureContext";
 import { qrScanUrl } from "@/lib/share-source";
@@ -37,10 +36,9 @@ interface Props {
   data: CardData;
   template: string;
   username: string;
-  previewUrl?: string;
 }
 
-export default function CardPreviewDownload({ data, template, username, previewUrl }: Props) {
+export default function CardPreviewDownload({ data, template, username }: Props) {
   const outerRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0);
@@ -51,8 +49,8 @@ export default function CardPreviewDownload({ data, template, username, previewU
   const shown = template === "custom" ? data : withoutSocials(data);
 
   // Hand the live card node to sibling panels — "Other ways to share" offers a
-  // PNG of it on mobile and cannot reach across boxes on its own. No-op when
-  // rendered outside a CardCaptureProvider.
+  // PNG of it (the only card download, on every device) and cannot reach
+  // across boxes on its own. No-op when rendered outside a CardCaptureProvider.
   useRegisterCardCapture({ cardRef, filename, name: data.name });
 
   useEffect(() => {
@@ -124,34 +122,16 @@ export default function CardPreviewDownload({ data, template, username, previewU
         />
       </div>
 
-      {/* NO "Preview" link here. It was removed on purpose (2026-07-10) and
-          replaced by the "View live card" button in the dashboard header —
-          two controls opening the same URL side by side was the thing being
-          fixed. `previewUrl` now only decides whether the card is live (see
-          below). It was the native share target until 2026-10-06, when the
-          download started saving a real picture in the app too. Passing the
-          prop must never resurrect the link — that regression is exactly what
-          happened once and is now pinned by a test. */}
-      {/* MOBILE shows the card full screen to hold up; DESKTOP keeps the PNG
-          download. Saving an image you then have to go find in Files is a poor
-          way to hand someone your card in person, and you can't hold a monitor
-          up to a camera. The download is one tap away in "Other ways to share".
-
-          lg:, not sm:, because lg is where this whole panel changes position
-          (dashboard renders it under My Cards below lg, in the sticky right
-          column above it). Splitting the controls at a different width would
-          put a desktop control inside the mobile-positioned panel.
-
-          Without previewUrl (no live card link yet) the download simply stays
-          at every width rather than leaving an empty slot.
-
-          On a phone nothing follows the card, so the box ends at the card
-          with no empty band underneath. There is no "tap to show it full
-          screen" hint anywhere (owner, 2026-09-30) — the tour teaches it. */}
-      <div className={previewUrl ? "hidden lg:block mt-3" : "mt-3"}>
-        <DownloadCardButton cardRef={cardRef} filename={filename} cardName={data.name} compact />
-      </div>
-
+      {/* JUST THE CARD, on every device. Nothing follows it: no "Preview"
+          link (removed 2026-07-10 — the My Cards box's "View Live Link" opens
+          the card) and no Download button (removed 2026-10-07). The desktop
+          kept a Download here after "Other ways to share → Download card
+          (PNG)" reached every width, so a computer showed two card downloads
+          and a phone one (owner: "we already have other ways to share"). The
+          picture is now saved from that one place everywhere; this component
+          still hands it the card node (useRegisterCardCapture above). There
+          is no "tap to show it full screen" hint (owner, 2026-09-30) — the
+          tour teaches it. */}
       {/* The QR printed on the card encodes data.cardUrl. Full screen it is
           there to be SCANNED, so it carries the same "QR code scan" tag every
           other QR we show carries (lib/share-source) — otherwise each scan

@@ -792,18 +792,14 @@ export default async function DashboardPage({
           On a phone the card itself is still the full-screen button
           (CardPreviewDownload), and the tour's your-card step teaches it. */}
       <div data-tour="your-card" className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5">
-        {/* previewUrl only tells CardPreviewDownload the card is live, which
-            decides where its Download sits. (It was the iOS share target until
-            2026-10-06; downloads now save a real picture in the app.)
-            It renders no visible control — opening the card is the job of the
-            "View live" button in the My Cards box, and this prop briefly
-            resurrected a duplicate "Preview" link that had been deliberately
-            removed. */}
+        {/* Only the card, on every device — no Download under it (owner,
+            2026-10-07). Saving it as a picture is "Other ways to share →
+            Download card (PNG)" below; opening it is "View Live Link" in the
+            My Cards box. */}
         <CardPreviewDownload
           data={cardData}
           template={activeTemplate}
           username={activeUsername}
-          previewUrl={cardUrl}
         />
       </div>
 

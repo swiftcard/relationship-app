@@ -5,7 +5,7 @@ import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import QRDownloadButton from "@/components/QRDownloadButton";
 import CopyButton from "@/components/CopyButton";
 import NFCWriter from "@/components/NFCWriter";
-import AddToWalletButton from "@/components/AddToWalletButton";
+import AddToWalletButton, { useWalletMode } from "@/components/AddToWalletButton";
 import DownloadCardButton from "@/components/DownloadCardButton";
 import { useCardCapture } from "@/components/CardCaptureContext";
 import { qrScanUrl } from "@/lib/share-source";
@@ -37,6 +37,9 @@ export default function MoreShareOptions({ url, walletUsername }: { url: string;
   // renders this modal and draws its card in an <iframe>, so there is nothing
   // to rasterize there — it offers the QR picture only.
   const capture = useCardCapture();
+  // Android has no Apple Wallet: the section goes with its button, rather
+  // than leaving an "Apple Wallet" heading over nothing (AddToWalletButton).
+  const walletMode = useWalletMode();
 
   return (
     <>
@@ -63,7 +66,7 @@ export default function MoreShareOptions({ url, walletUsername }: { url: string;
               {/* Apple Wallet — first (owner, 2026-10-06: "I don't like how
                   it's on the bottom"). It still lives only here, not in the
                   Your Card box beside the primary share action. */}
-              {walletUsername && (
+              {walletUsername && walletMode !== "none" && (
                 <section data-share-option="wallet">
                   <SectionLabel title="Apple Wallet" hint="your card on your iPhone, ready to scan" />
                   <AddToWalletButton username={walletUsername} />
@@ -99,8 +102,9 @@ export default function MoreShareOptions({ url, walletUsername }: { url: string;
               </section>
 
               {/* NFC card / tag — program a physical tag so a tap opens this
-                  card. Writes directly on Android Chrome; everywhere else the
-                  component hands over the link + a free NFC-app path. */}
+                  card. "Write to a tag" exists only on Android Chrome, the one
+                  place a browser can write; everywhere else the component
+                  hands over the link + a free NFC-app path. */}
               <section data-share-option="nfc">
                 <SectionLabel title="NFC card" hint="tap any phone to open your card" />
                 <NFCWriter url={url} />

@@ -33,13 +33,16 @@ describe("the dashboard has exactly one way to open your live card", () => {
     expect(preview, "previewUrl is rendering a link again").not.toMatch(/\{previewUrl && \(\s*<a/);
   });
 
-  it("previewUrl still arrives, and the download no longer shares it", () => {
-    // 2026-10-06: the download saves a real PNG in the app too (lib/save-image),
-    // so the link is no longer its native fallback. previewUrl stays because it
-    // decides whether the card is live, i.e. where the download sits.
+  it("the card box is just the card: no previewUrl, no share link, no download", () => {
+    // 2026-10-06: the download saved a real PNG in the app too (lib/save-image),
+    // so the link stopped being its native fallback. 2026-10-07 (owner): the
+    // desktop-only Download under the card went too — it duplicated "Other
+    // ways to share → Download card (PNG)", which every device already has —
+    // and with it previewUrl, whose last job was deciding where it sat.
     expect(preview).not.toMatch(/shareUrl/);
-    expect(preview).toMatch(/previewUrl \? "hidden lg:block mt-3" : "mt-3"/);
-    expect(dashboard).toMatch(/previewUrl=\{cardUrl\}/);
+    expect(preview).not.toMatch(/previewUrl/);
+    expect(preview).not.toMatch(/<DownloadCardButton/);
+    expect(dashboard).not.toMatch(/previewUrl=\{cardUrl\}/);
   });
 
   it("View live is the one control, and it's still there", () => {

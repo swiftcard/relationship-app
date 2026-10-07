@@ -63,11 +63,14 @@ describe("the homepage dashboard demo", () => {
       // heading or caption, My Cards on top, Show QR leading the Share box.
       for (const gone of ["Your Card", "Exactly what people get", "Download card as image", "vs last week"]) expect(text).not.toContain(gone);
       expect(await page.locator("p", { hasText: /^Traffic$/ }).count()).toBe(0);
+      // Just the card in its box, as on the real dashboard: no Download under
+      // it (owner, 2026-10-07) — the picture is saved from Other ways to share.
+      expect(await page.locator("[data-demo=\"your-card\"]").evaluate((el) => el.textContent?.trim() ?? "")).not.toContain("Download");
       for (const here of ["My Cards", "View Live Link", "Add card", "Show QR", "Share link", "Other ways to share", "At an event? Tag today's contacts", "Unique viewers", "Repeat views", "Link taps"]) expect(text).toContain(here);
       const boxes = await page.evaluate(() => {
         const r = (el: Element | null) => el?.getBoundingClientRect();
         const traffic = [...document.querySelectorAll("button")].find((b) => b.textContent === "Week")!.closest(".rounded-2xl")!;
-        const yourCard = [...document.querySelectorAll("span")].find((p) => p.textContent?.trim() === "Download")!.closest(".rounded-2xl")!;
+        const yourCard = document.querySelector("[data-demo=\"your-card\"]")!;
         return { traffic: r(traffic)!, yourCard: r(yourCard)! };
       });
       // Side by side: Traffic on the left, the card panel to its right, top-aligned.

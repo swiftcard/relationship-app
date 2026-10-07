@@ -135,7 +135,9 @@ export default async function GrowPage() {
           {/* Invite & earn — not on Office (see Settings). */}
           {profile.plan !== "enterprise" && <div>
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Invite friends &amp; earn</p>
-            <ReferAFriend progress={referral} />
+            {/* Its own share/copy pair stays off here: Spread the word, right
+                below, shares this same invite link. */}
+            <ReferAFriend progress={referral} showShare={false} />
           </div>}
 
           {/* Spread the word */}

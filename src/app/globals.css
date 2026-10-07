@@ -1236,6 +1236,15 @@ html.native-app .sc-site-footer { display: none !important; }
 @media (max-width: 767.98px) {
   html.native-app .sc-settings-gear { display: none !important; }
 }
+/* PHONE-ONLY CONTROLS — a "Share" that opens the phone's share sheet. On a
+   computer the same button could only copy the link, beside a Copy button
+   that already does (owner, 2026-10-07: every control has to make sense on
+   the device it is on). The CSS twin of lib/save-image prefersShareSheet —
+   the app, or a coarse pointer — so it is right at first paint, before
+   hydration, with no layout jump. */
+@media not (pointer: coarse) {
+  html:not(.native-app) .sc-phone-only { display: none !important; }
+}
 /* Landscape in the app: the page runs edge to edge (viewport-fit=cover,
    contentInset never), so side content sat under the notch / Dynamic Island
    and the rounded corners. Keep it inside the safe area. env() is 0 on every

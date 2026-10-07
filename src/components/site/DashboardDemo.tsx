@@ -215,21 +215,15 @@ function TrafficBox() {
 function CardSharePanel() {
   return (
     <div className="flex flex-col gap-4">
-      {/* Just the card (owner, 2026-09-30: no heading, hint or caption), and
-          the small Download under it. */}
-      <div className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5">
+      {/* Just the card, as on the real dashboard (owner, 2026-09-30: no
+          heading, hint or caption; 2026-10-07: no Download under it). */}
+      <div data-demo="your-card" className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5">
         {/* The REAL card template, same identity as every marketing demo.
             pointerEvents: none — the template renders tel:/mailto:/https:
             links, and this person doesn't exist. */}
         <div className="rounded-xl overflow-hidden" style={{ pointerEvents: "none" }}>
           <CardScaler><ClassicPro data={DEMO_CARD} /></CardScaler>
         </div>
-        <span className="mt-3 w-full flex items-center justify-center gap-1.5 text-xs font-semibold border rounded-full py-2 text-gray-300 bg-gray-800 border-gray-700">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} className="w-3.5 h-3.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-          </svg>
-          Download
-        </span>
       </div>
 
       {/* Share — Show QR leads, Share link second, then the rest. */}
@@ -307,7 +301,7 @@ function ContactsPageView() {
       </div>
 
       {/* Detail — the real contact view's head: name, where they came from,
-          Mark as read, then Call · Share · Save to phone, and the
+          Mark as read, then Call · Share · Save contact, and the
           Conversation / Contact info tabs. */}
       <div className="border border-gray-800 rounded-2xl p-5 flex flex-col min-w-0">
         <div className="flex items-start gap-3 mb-4">
@@ -336,7 +330,7 @@ function ContactsPageView() {
             Share
           </span>
           <span className="flex items-center justify-center gap-1.5 flex-1 min-w-0 whitespace-nowrap text-xs font-semibold py-2 px-2 rounded-xl bg-gray-800 border border-gray-700 text-gray-200">
-            Save to phone
+            Save contact
           </span>
         </div>
         <div className="flex bg-gray-900 rounded-xl p-1 gap-1 mb-4">

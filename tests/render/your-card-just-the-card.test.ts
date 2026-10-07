@@ -36,7 +36,7 @@ const ENTRY = `
   import { SAMPLE_DATA } from "@/components/card-templates/types";
   createRoot(document.getElementById("root")!).render(
     h("div", { id: "panel", className: ${JSON.stringify(PANEL)} },
-      h(CardPreviewDownload, { data: SAMPLE_DATA, template: "classic-pro", username: "alex", previewUrl: "https://swiftcard.me/alex" }),
+      h(CardPreviewDownload, { data: SAMPLE_DATA, template: "classic-pro", username: "alex" }),
     ),
   );
 `;
@@ -112,7 +112,7 @@ describe.each([320, 360, 390, 430])("phone, %ipx", (width) => {
       const below = m.panel.bottom - m.borderB - m.card.bottom;
       expect(Math.round(above), `space above the card is ${Math.round(above)}px`).toBe(Math.round(m.padT));
       expect(Math.round(below), `space under the card is ${Math.round(below)}px`).toBe(Math.round(m.padB));
-      expect(m.download, "the desktop Download button shows on a phone").toBeNull();
+      expect(m.download, "a Download button is back under the card").toBeNull();
     } finally { await page.close(); }
   });
 
@@ -127,16 +127,21 @@ describe.each([320, 360, 390, 430])("phone, %ipx", (width) => {
   });
 });
 
+// Owner, 2026-10-07: the desktop's Download under the card is gone — it
+// duplicated "Other ways to share → Download card (PNG)", which every device
+// has. A computer now shows the same box a phone does: the card and nothing
+// else, the same padding above and below.
 describe("desktop, 1280px", () => {
-  it("nothing above the card; the Download button still sits under it", async () => {
+  it("just the card, as on a phone: nothing above it and nothing under it", async () => {
     const page = await open(1280);
     try {
       await page.screenshot({ path: "node_modules/.cache/your-card-box-1280.png" });
       const m = await measure(page);
       expect(Math.round(m.card.top - (m.panel.top + m.borderT))).toBe(Math.round(m.padT));
+      const below = m.panel.bottom - m.borderB - m.card.bottom;
+      expect(Math.round(below), `space under the card is ${Math.round(below)}px`).toBe(Math.round(m.padB));
       expect(m.fullscreen, "the phone-only tap target shows on desktop").toBeNull();
-      expect(m.download, "desktop Download button missing").not.toBeNull();
-      expect(m.download!.top).toBeGreaterThan(m.card.bottom);
+      expect(m.download, "a Download button is back under the card on desktop").toBeNull();
     } finally { await page.close(); }
   });
 });
