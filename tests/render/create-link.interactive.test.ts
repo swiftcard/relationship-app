@@ -47,8 +47,8 @@ beforeAll(async () => {
     import * as lib from "@/lib/link-anything";
     import CreateLinkBox from "@/components/CreateLinkBox";
     (window as any).lib = lib;
-    (window as any).mountBox = () => createRoot(document.getElementById("root")!).render(
-      h("div", { className: "max-w-md mx-auto" }, h(CreateLinkBox, { username: "dana", appUrl: "${ORIGIN}" })));
+    (window as any).mountBox = (selfToken?: string) => createRoot(document.getElementById("root")!).render(
+      h("div", { className: "max-w-md mx-auto" }, h(CreateLinkBox, { username: "dana", appUrl: "${ORIGIN}", selfToken: selfToken ?? null })));
   `);
   const out = await build({
     entryPoints: [join(tmp, "entry.tsx")], bundle: true, write: false, format: "iife", platform: "browser", jsx: "automatic",
@@ -243,6 +243,32 @@ for (const engineName of ["chromium", "webkit"] as const) {
         expect(r.src).toBe(w.uploads[0]);
         expect(r.href).toBe(`${ORIGIN}/dana/p/${id}p`);
         expect(r.w).toBe("40");
+      } finally { await w.ctx.close(); }
+    });
+
+    it("the owner's own preview opens through the self-view hop; what's copied keeps the share link", async () => {
+      const w = await open(engine);
+      try {
+        await w.page.evaluate(() => (window as unknown as { mountBox: (t?: string) => void }).mountBox("tok123"));
+        await w.page.locator('[role="textbox"][contenteditable]').waitFor();
+        await w.page.evaluate((html) => {
+          const dt = new DataTransfer();
+          dt.setData("text/html", html);
+          document.querySelector('[role="textbox"][contenteditable]')!.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+        }, FIXTURES.gmail);
+        const copy = w.page.locator("button", { hasText: /^Copy$/ });
+        await copy.waitFor({ timeout: 30_000 });
+        const id = /create-(\d{13})\.png$/.exec(w.uploads[0])![1];
+        const share = `${ORIGIN}/dana/p/${id}p`;
+        const hrefs = await w.page.evaluate(() => Array.from((document.querySelector("[data-create-preview]") as HTMLElement).shadowRoot!.querySelectorAll("a")).map((a) => a.getAttribute("href")));
+        expect(new Set(hrefs)).toEqual(new Set([`${ORIGIN}/api/self-view?to=${encodeURIComponent(`/dana/p/${id}p`)}&t=tok123`]));
+        if (engineName === "chromium") {
+          await copy.click();
+          await w.page.locator("button", { hasText: "Copied ✓ Paste it anywhere" }).waitFor({ timeout: 5000 });
+          const clip = await w.page.evaluate(async () => { const [it] = await navigator.clipboard.read(); return (await it.getType("text/html")).text(); });
+          expect(clip).toContain(`href="${share}"`);
+          expect(clip).not.toContain("self-view");
+        }
       } finally { await w.ctx.close(); }
     });
 

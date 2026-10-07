@@ -24,7 +24,7 @@ import { safeCssValue, safeFontValue } from "@/lib/custom-layout";
 import { isPaidPlan, LINK_STYLE_KEYS, LINK_STRUCTURAL_KEYS } from "@/lib/plan";
 import { pickFreeLiveCardIds } from "@/lib/card-active";
 import { canViewOfficeAdmin, getOfficeSubUserContext } from "@/lib/office-roles";
-import { ownLiveHref } from "@/lib/self-pass";
+import { ownLiveHref, signSelfLink } from "@/lib/self-pass";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
@@ -286,7 +286,7 @@ export default async function SharePage({
                 </p>
               </div>
               {isPro ? (
-                <CreateLinkBox key={activeUsername} username={activeUsername} appUrl={APP_URL} />
+                <CreateLinkBox key={activeUsername} username={activeUsername} appUrl={APP_URL} selfToken={signSelfLink(user.id)} />
               ) : (
                 <PlanGate feature="create-link" nativeCopy="Pro feature — Linking your own signature or a picture to your SwiftCard is only available on the Pro plan">
                   <CreateLocked />

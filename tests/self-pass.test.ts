@@ -144,12 +144,15 @@ describe("the pass cookie", () => {
 });
 
 describe("the redirect can only go to one of our card pages", () => {
-  it.each(["/dana-lee-acme", "/links/dana-lee-acme", "/card/dana-lee-acme", "/dana_lee/"])("allows %s", (p) => {
+  it.each(["/dana-lee-acme", "/links/dana-lee-acme", "/card/dana-lee-acme", "/dana_lee/", "/dana-lee-acme/p/1728330000000p"])("allows %s", (p) => {
     expect(selfViewTarget(p)).toBe(p);
   });
   it.each([
     "https://evil.example/x", "//evil.example", "/\\evil.example", "/links/../admin", "/a/b/c",
     "/dashboard?x=1", "", "/", "javascript:alert(1)", null,
+    // Only the exact Create share-link shape, nothing near it.
+    "/dana/p/1728330000000", "/dana/p/1728330000000x", "/dana/p/../admin", "/links/dana/p/1728330000000p",
+    "/dana/p/1728330000000p/", "/dana/p/1728330000000p?x=1", "//evil.example/p/1728330000000p",
   ])("refuses %s", (p) => {
     expect(selfViewTarget(p as string | null)).toBeNull();
   });

@@ -37,7 +37,7 @@ describe("Links page: Swift Links | Swift Signature switch", () => {
     expect(tabs).toMatch(/\{ id: "create", label: "Create \+", icon: SPARKLES \}/);
     expect(tabs).toContain('h === "links" || h === "signature" || h === "create"');
     expect(tabs).not.toContain("CreateComingSoon");
-    expect(share).toMatch(/\{isPro \? \(\s*<CreateLinkBox key=\{activeUsername\} username=\{activeUsername\} appUrl=\{APP_URL\} \/>/);
+    expect(share).toMatch(/\{isPro \? \(\s*<CreateLinkBox key=\{activeUsername\} username=\{activeUsername\} appUrl=\{APP_URL\} selfToken=\{signSelfLink\(user\.id\)\} \/>/);
     expect(share).toMatch(/<PlanGate feature="create-link" nativeCopy="Pro feature — [^"]+">\s*<CreateLocked \/>/);
   });
 

@@ -101,7 +101,11 @@ export function decodeSelfPass(value: string | null | undefined): string[] {
  */
 export function selfViewTarget(to: string | null | undefined): string | null {
   if (typeof to !== "string") return null;
-  return /^\/(?:(?:links|card)\/)?[a-z0-9][a-z0-9_-]{0,79}\/?$/i.test(to) ? to : null;
+  if (/^\/(?:(?:links|card)\/)?[a-z0-9][a-z0-9_-]{0,79}\/?$/i.test(to)) return to;
+  // A Create + share link (lib/create-link): /<slug>/p/<13 digits><j|p|g>. The
+  // owner's preview of something they linked opens it through here, so their
+  // own click — in the iPhone app it lands in Safari — is never a view.
+  return /^\/[a-z0-9][a-z0-9_-]{0,79}\/p\/\d{13}[jpg]$/i.test(to) ? to : null;
 }
 
 /**

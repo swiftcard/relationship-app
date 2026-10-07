@@ -101,7 +101,16 @@ function LinkedPreview({ html }: { html: string }) {
   return <div ref={ref} data-create-preview className="block min-w-0 overflow-x-auto" />;
 }
 
-export default function CreateLinkBox({ username, appUrl }: { username: string; appUrl: string }) {
+export default function CreateLinkBox({ username, appUrl, selfToken = null }: {
+  username: string;
+  appUrl: string;
+  /** The owner's signed self-view token (lib/self-pass, made on the server).
+   *  The on-screen preview's links go through /api/self-view with it, so the
+   *  owner opening their own creation — in the iPhone app that opens Safari,
+   *  which has never signed in — is never counted as a view or notified. The
+   *  copied HTML keeps the real share link. */
+  selfToken?: string | null;
+}) {
   const [phase, setPhase] = useState<Phase>({ kind: "empty" });
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const [canReadClipboard, setCanReadClipboard] = useState(false);
@@ -239,6 +248,17 @@ export default function CreateLinkBox({ username, appUrl }: { username: string; 
     setPhase({ kind: "empty" });
   }
 
+  /** The share link as the OWNER should open it: through the self-view hop. */
+  function ownHref(url: string): string {
+    if (!selfToken) return url;
+    try {
+      const path = new URL(url).pathname;
+      return `${appUrl.replace(/\/+$/, "")}/api/self-view?to=${encodeURIComponent(path)}&t=${encodeURIComponent(selfToken)}`;
+    } catch {
+      return url;
+    }
+  }
+
   const box = "bg-gray-900 border border-gray-800/80 rounded-2xl p-5";
 
   if (phase.kind === "ready") {
@@ -247,7 +267,7 @@ export default function CreateLinkBox({ username, appUrl }: { username: string; 
       <div className={box}>
         <p className="text-gray-500 text-xs mb-3">How it looks — click anywhere on it to try your link:</p>
         <div className="rounded-xl border border-gray-700/60 bg-white p-4 overflow-hidden">
-          <LinkedPreview html={phase.html} />
+          <LinkedPreview html={relink(phase.html, phase.shareUrl, ownHref(phase.shareUrl))} />
         </div>
         {phase.dropped > 0 && (
           <p className="mt-3 text-[0.6875rem] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1.5 leading-relaxed">

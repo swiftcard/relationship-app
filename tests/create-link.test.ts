@@ -97,6 +97,15 @@ describe("the Create box", () => {
     expect(copy).toContain('"text/plain": new Blob([phase.shareUrl], { type: "text/plain" })');
     expect(copy).not.toMatch(/^\s*async function copy/m);
   });
+  it("the owner's own preview clicks go through the self-view hop — never a view of their own card", () => {
+    // In the iPhone app a link opens Safari, which has never signed in: without
+    // the hop the owner trying their creation counted a view and notified them.
+    expect(box).toContain("<LinkedPreview html={relink(phase.html, phase.shareUrl, ownHref(phase.shareUrl))} />");
+    expect(box).toContain("/api/self-view?to=${encodeURIComponent(path)}&t=${encodeURIComponent(selfToken)}");
+    // …but what is COPIED keeps the real share link for everyone else.
+    expect(box).toContain('"text/html": new Blob([phase.html], { type: "text/html" })');
+  });
+
   it("only shows a remembered creation that is still safe", () => {
     expect(box).toContain("isSafeLinkedHtml(saved.html)");
   });
