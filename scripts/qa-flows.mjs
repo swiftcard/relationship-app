@@ -622,10 +622,15 @@ FLOWS["links-page-switch"] = async () => {
     await dismissOverlays(page);
     if ((await linksTab.getAttribute("aria-selected")) !== "true") fail("links-page-switch", "the page did not open on Swift Links");
     const side = '[role="tabpanel"]:not([hidden])';
-    // The mini phone is the real page: the card's name and bio are in it.
+    // The mini phone is the real page: the card's name and bio are in it. Read
+    // them from the card NOW — the card-edit flows before this one rename it
+    // and rewrite its bio, so the seeded values are long gone by here.
+    const row = (await (await adm(`/rest/v1/cards?id=eq.${cardId}&select=name,customization`)).json().catch(() => null))?.[0];
+    const wantName = (row?.name || "").trim();
+    const wantBio = (row?.customization?.bio || "").trim();
     const mini = await page.locator(side).innerText().catch(() => "");
-    if (!mini.includes("Dana Ellis") || !mini.includes("Principal broker helping")) {
-      fail("links-page-switch", "the Swift Links side's mini phone does not show the card's own page (name + bio)");
+    if (!wantName || !mini.includes(wantName) || (wantBio && !mini.includes(wantBio))) {
+      fail("links-page-switch", `the Swift Links side's mini phone does not show the card's own page (want name ${JSON.stringify(wantName)}, bio ${JSON.stringify(wantBio.slice(0, 40))}; side reads ${JSON.stringify(mini.replace(/\s+/g, " ").slice(0, 160))})`);
     }
     // The link copies, exactly.
     const copyLink = page.locator(`${side} button`, { hasText: /^Copy$/ }).first();
