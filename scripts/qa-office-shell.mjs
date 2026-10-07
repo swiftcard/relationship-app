@@ -269,7 +269,7 @@ try {
       else await page.keyboard.press("Escape");
       await page.waitForTimeout(500);
     } else note("admin-team", "missing-button", "Manage");
-    for (const [label, path, shot] of [["Analytics", "/office/admin/analytics", "admin-analytics"], ["Leads", "/office/admin/leads", "admin-leads"], ["Branding", "/office/admin/branding", "admin-branding"], ["Team", "/office/admin", "admin-team-again"]]) {
+    for (const [label, path, shot] of [["Analytics", "/office/admin/analytics", "admin-analytics"], ["Contacts", "/office/admin/leads", "admin-leads"], ["Branding", "/office/admin/branding", "admin-branding"], ["Team", "/office/admin", "admin-team-again"]]) {
       const l = page.locator(`header nav a:has-text("${label}")`).first();
       if (!(await l.isVisible().catch(() => false))) { note(shot, "missing-nav", label); continue; }
       const b = await l.boundingBox(); if (b && b.y < TOP) note(shot, "nav-under-status-bar", `${label} y=${Math.round(b.y)}`);

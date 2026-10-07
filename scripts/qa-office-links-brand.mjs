@@ -358,7 +358,7 @@ async function adminSetsBrand() {
     await page.click('label:has-text("Keep every Swift Links page matching")');
     await page.waitForTimeout(300);
 
-    await page.click('button:has-text("Save & apply to all Swift Links")');
+    await page.click('button:has-text("Save & apply to team Swift Links")');
     await page.waitForTimeout(3500);
     const saved = await page.innerText("body");
     eq("save reports success", /Applied|Saved|✓/.test(saved), true);
@@ -572,7 +572,7 @@ async function clearingTheBrandGivesItBack() {
     await page.waitForSelector("#office-link-bio", { timeout: 20000 });
     await page.fill("#office-link-bio", "");
     await page.fill("#office-link-ig", "");
-    await page.click('button:has-text("Save & apply to all Swift Links")');
+    await page.click('button:has-text("Save & apply to team Swift Links")');
     await page.waitForTimeout(3500);
 
     const office = (await (await adm(`/rest/v1/offices?id=eq.${officeId}&select=brand_link_bio,brand_link_instagram`)).json())?.[0] ?? {};

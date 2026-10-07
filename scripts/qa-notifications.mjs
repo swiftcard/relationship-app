@@ -16,7 +16,7 @@
 //      the row carries the contact so tapping it opens them. Nobody else gets
 //      that row — an admin never gets a teammate's contacts in their own bell.
 //   2. THE TEAM INBOX (GET /api/office/notifications): a live team's owner and
-//      admin see "First lead for …"; the employee is refused; the lapsed owner
+//      admin see "First contact for …"; the employee is refused; the lapsed owner
 //      is refused and their team gets no row at all.
 //   3. THE PHONE (push_log, which records every push DECISION whether or not a
 //      phone is registered): a "new_lead" decision for each card owner, a
@@ -168,7 +168,7 @@ try {
   }
 
   const firstLead = await waitFor(async () => (await json(`/rest/v1/office_notifications?office_id=eq.${liveOffice}&type=eq.member_first_lead&select=id`))[0]);
-  pass(!!firstLead, `live team: "First lead for Eli" reached the team inbox`);
+  pass(!!firstLead, `live team: "First contact for Eli" reached the team inbox`);
   for (const p of [owner, admin]) {
     const t = await waitFor(async () => (await json(`/rest/v1/push_log?user_id=eq.${p.id}&category=eq.team_alert&select=id`))[0]);
     pass(!!t, `live team: ${p.name} was sent the team alert`);
@@ -195,13 +195,13 @@ try {
   {
     const r = await readAs(owner);
     pass(r.teamStatus === 200, `Office owner: can open the team inbox (${r.teamStatus})`);
-    pass(r.team.some((n) => n.type === "member_first_lead"), `Office owner: sees "First lead for Eli" in the team inbox`);
+    pass(r.team.some((n) => n.type === "member_first_lead"), `Office owner: sees "First contact for Eli" in the team inbox`);
     pass(!r.bell.some((n) => n.type === "new_lead"), `Office owner: the teammate's contact is not in their own bell`);
   }
   {
     const r = await readAs(admin);
     pass(r.teamStatus === 200, `Office admin: can open the team inbox (${r.teamStatus})`);
-    pass(r.team.some((n) => n.type === "member_first_lead"), `Office admin: sees "First lead for Eli" in the team inbox`);
+    pass(r.team.some((n) => n.type === "member_first_lead"), `Office admin: sees "First contact for Eli" in the team inbox`);
   }
   {
     const r = await readAs(emp);
