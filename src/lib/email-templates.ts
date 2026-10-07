@@ -166,7 +166,9 @@ export function welcomeEmail(opts: {
   const safeName = escapeHtml(opts.firstName);
   const safeCardUrl = safeUrlAttr(opts.cardUrl);
   const cardUrlText = escapeHtml(opts.cardUrl);
-  const shareUrl = `${APP_URL}/share`;
+  // #signature: the Links page shows one side at a time and opens on Swift
+  // Links; this step is about the signature, so land on that side.
+  const shareUrl = `${APP_URL}/share#signature`;
   // The Swift Links page lives at /links/<the same slug as the card>.
   const slug = opts.cardUrl.replace(/\/+$/, "").split("/").pop() || "";
   const linksUrl = `${APP_URL}/links/${encodeURIComponent(slug)}`;

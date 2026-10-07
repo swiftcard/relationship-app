@@ -326,6 +326,8 @@ const PRIVATE = [
   ["dashboard", "/dashboard"], ["contacts", "/contacts"], ["share", "/share"],
   ["settings", "/settings/flows"], ["profile", "/profile"], ["upgrade", "/upgrade"],
   ["cards-new", "/cards/new"], ["profile-card", "/profile/card"],
+  // The Links page shows one side at a time; this is its Swift Signature side.
+  ["share-signature", "/share#signature"],
 ];
 
 const WIDTHS = (process.env.WIDTHS || "390,1280").split(",").map(Number);

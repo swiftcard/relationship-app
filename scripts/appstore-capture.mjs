@@ -469,16 +469,15 @@ try {
   await page.waitForTimeout(4000);
   await shot(page, "dashboard-locations", { full: true, wait: 1500 });
 
-  // The Signature is only a button until you open it — the picture of the card
-  // that goes in an email lives behind "Preview & copy".
-  await page.goto(`${BASE}/share`, { waitUntil: "networkidle" }).catch(() => {});
-  const sig = page.locator('button:has-text("Preview & copy")').first();
-  if (await sig.count().catch(() => 0)) {
-    await sig.click().catch(() => {});
+  // The Links page shows one side at a time and opens on Swift Links; #signature
+  // opens the Swift Signature side, where the card-in-an-email is shown in place.
+  await page.goto(`${BASE}/share#signature`, { waitUntil: "networkidle" }).catch(() => {});
+  const sig = page.locator('button:has-text("Copy signature")').first();
+  if (await sig.waitFor({ state: "visible", timeout: 8000 }).then(() => true, () => false)) {
     await page.waitForTimeout(2500);
     await shot(page, "signature", { full: false, noDim: true });
   } else {
-    console.log("  ! signature button not found");
+    console.log("  ! signature side not found");
   }
 
   // A contact opened up, showing the follow-up automations.

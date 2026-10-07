@@ -37,10 +37,11 @@ export type TourStep = {
    */
   interactive?: boolean;
   /**
-   * Settings only. SettingsShell shows ONE section at a time (a desktop panel /
-   * a mobile accordion), so a step whose anchor lives inside a collapsed section
-   * would never be found. Naming the section here makes the engine open it (via
-   * the #hash SettingsShell already listens to) before spotlighting the anchor.
+   * For pages that show ONE section at a time and pick it from the #hash:
+   * Settings (SettingsShell — a desktop panel / a mobile accordion) and the
+   * Links page (LinksPageTabs — Swift Links | Swift Signature). A step whose
+   * anchor lives inside a hidden section would never be found. Naming the
+   * section here makes the engine set that #hash before spotlighting the anchor.
    */
   section?: string;
 };
@@ -308,18 +309,23 @@ const STEP_DEFS: TourStepDef[] = [
         : "Views of your card and Swift Links. Switch Today / Week / Month, or tap Locations for top places.",
   },
   // ── Share page — Swift Links + the email signature ────────────────────────
+  // The page shows one side at a time (LinksPageTabs), so each step names its
+  // side — including the first, or Back from the signature would leave the
+  // Swift Signature side showing under the Swift Links step.
   {
     id: "swift-links",
     path: SHARE,
     anchor: "swift-links",
+    section: "links",
     title: "Swift Links",
-    body: "Your link-in-bio — bio, socials, and links in one page. Drop it in your Instagram or TikTok bio.",
+    body: "Your link-in-bio — bio, socials, and links in one page. Drop it in your Instagram or TikTok bio. Tap Swift Signature at the top to switch.",
     placement: "bottom",
   },
   {
     id: "email-signature",
     path: SHARE,
     anchor: "email-signature",
+    section: "signature",
     title: "Swift Signature",
     body: "Puts your card at the bottom of every email. Copy it once and paste into Gmail or Outlook — and re-copy it whenever you change your card so it stays in sync.",
     placement: "left",

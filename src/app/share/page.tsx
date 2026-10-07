@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { awaitingPlanChoice } from "@/lib/card-active";
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import AppTopNav from "@/components/AppTopNav";
@@ -10,9 +11,14 @@ import HelpWidget from "@/components/HelpWidget";
 import CopyButton from "@/components/CopyButton";
 import EmailSignatureBox from "@/components/EmailSignatureBox";
 import ShareCardResolver from "@/components/ShareCardResolver";
+import LinksPageTabs from "@/components/LinksPageTabs";
+import SwiftLinkLivePreview from "@/components/SwiftLinkLivePreview";
+import type { SwiftLinkStyle } from "@/components/SwiftLinkDesign";
 import { ACTIVE_CARD_COOKIE } from "@/lib/active-card";
 import { buildCardData } from "@/lib/card-data";
-import { isPaidPlan } from "@/lib/plan";
+import { cardHeadshot } from "@/lib/card-media";
+import { safeCssValue, safeFontValue } from "@/lib/custom-layout";
+import { isPaidPlan, LINK_STYLE_KEYS, LINK_STRUCTURAL_KEYS } from "@/lib/plan";
 import { pickFreeLiveCardIds } from "@/lib/card-active";
 import { canViewOfficeAdmin, getOfficeSubUserContext } from "@/lib/office-roles";
 import { ownLiveHref } from "@/lib/self-pass";
@@ -122,6 +128,28 @@ export default async function SharePage({
     accountPhotoUrl: profile.photo_url,
   });
 
+  // The Swift Links side shows the person's REAL page in a mini phone, so they
+  // can see what the link is before they hand it out. Fed exactly as
+  // /links/[username] feeds the live page: the card's own headshot and logo,
+  // the same socials, Array-guarded links, and only the link-design keys (the
+  // whole customization would ship the card's layout to the browser for
+  // nothing), colour/font values CSS-guarded the same way. SwiftLinkLivePreview
+  // then applies the plan rules (Free look snap, links cap) like the live page.
+  const linkCust = (activeCard.customization ?? {}) as Record<string, unknown> & {
+    bio?: string; facebook?: string; snapchat?: string; youtube?: string; links?: unknown; hideCardLink?: boolean;
+  };
+  const linkStyle = Object.fromEntries(
+    [...LINK_STYLE_KEYS, ...LINK_STRUCTURAL_KEYS]
+      .filter((k) => linkCust[k] !== undefined)
+      .map((k) => [k, linkCust[k]]),
+  ) as SwiftLinkStyle;
+  linkStyle.linkBgColor = safeCssValue(linkStyle.linkBgColor);
+  linkStyle.linkTextColor = safeCssValue(linkStyle.linkTextColor);
+  linkStyle.linkButtonColor = safeCssValue(linkStyle.linkButtonColor);
+  linkStyle.linkAccentColor = safeCssValue(linkStyle.linkAccentColor);
+  linkStyle.linkFontFamily = safeFontValue(linkStyle.linkFontFamily);
+  const previewLinks = (Array.isArray(linkCust.links) ? linkCust.links : []) as Parameters<typeof SwiftLinkLivePreview>[0]["links"];
+
   return (
     <main className="sc-app min-h-screen bg-gray-950 px-5 py-10 pb-24 md:pb-10">
       <MobileNavGate showAdmin={showOfficeAdmin} showSite={showSite} />
@@ -157,44 +185,96 @@ export default async function SharePage({
           </p>
         </div>
 
-        <div className="space-y-6">
-          {/* Swift Links */}
-          <div data-tour="swift-links">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Swift Links</p>
-            <div className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5">
-              <p className="text-gray-500 text-xs mb-3 leading-relaxed">
-                A separate link from your card — your bio, socials, and links in one place. Drop it in your Instagram, TikTok, or any social bio.
-              </p>
-              <div className="flex items-center gap-2 bg-gray-800/60 border border-gray-700/60 rounded-xl px-3 py-2.5">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={1.8} className="w-3.5 h-3.5 shrink-0">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
-                </svg>
-                <span className="text-blue-400 text-xs truncate flex-1">{swiftUrl.replace("https://", "")}</span>
-                <CopyButton text={swiftUrl} />
+        {/* One side at a time: Swift Links | Swift Signature. Each side says
+            what it is in one line, shows the real thing, then the actions —
+            two stacked look-alike boxes left first-timers unsure what this
+            page was for (owner, 2026-10-07). */}
+        <LinksPageTabs
+          links={
+            <>
+              {/* The tour spotlights this short intro, not the whole side —
+                  the phone below makes the side taller than a screen. */}
+              <div data-tour="swift-links" className="mb-4">
+                <h2 className="text-base font-semibold text-white">Your link-in-bio page</h2>
+                <p className="text-gray-500 text-sm mt-1 leading-relaxed">
+                  A separate link from your card — your bio, socials, and links in one place. Drop it in your Instagram, TikTok, or any social bio.
+                </p>
               </div>
-              <a href={ownLiveHref(user.id, swiftUrl, APP_URL)} target="_blank" rel="noopener noreferrer" className="mt-2 block text-center text-xs font-semibold text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-full py-2 transition-colors">
-                Open Swift Links →
-              </a>
-            </div>
-          </div>
-
-          {/* Swift Signature (email signature) */}
-          <div id="signature" data-tour="email-signature" className="scroll-mt-24">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Swift Signature</p>
-            <EmailSignatureBox
-              key={activeUsername}
-              cardData={cardData}
-              template={activeTemplate}
-              name={activeSource.name ?? ""}
-              company={activeSource.company ?? ""}
-              cardUrl={cardUrl}
-              previewHref={ownLiveHref(user.id, cardUrl, APP_URL)}
-              username={activeUsername}
-              storageUrl={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/card-signatures/${activeUsername}.png`}
-              ogUrl={`${APP_URL}/${activeUsername}/opengraph-image`}
-            />
-          </div>
-        </div>
+              <div className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5">
+                {/* The real page, shrunk to a mini phone and cut off with a fade
+                    so a long page doesn't push the link off the screen. Tapping
+                    it opens the page: an overlay link, not a wrapping one — the
+                    preview holds the page's own <a> tags, and an <a> inside an
+                    <a> is invalid HTML that breaks hydration. */}
+                <div className="relative w-full max-w-[220px] sm:max-w-[240px] mx-auto mb-4 max-h-[340px] sm:max-h-[380px] overflow-hidden rounded-[30px] [mask-image:linear-gradient(to_bottom,black_78%,transparent)]">
+                  <SwiftLinkLivePreview
+                    name={(activeCard.name as string) || activeUsername}
+                    handle={activeUsername}
+                    company={activeCard.company as string | null}
+                    title={activeCard.title as string | null}
+                    bio={linkCust.bio || ""}
+                    photoUrl={cardHeadshot(activeCard.customization, profile.photo_url)}
+                    logoUrl={(activeCard.logo_url as string | null) ?? null}
+                    socials={{
+                      instagram: activeCard.instagram, tiktok: activeCard.tiktok, linkedin: activeCard.linkedin,
+                      twitter: activeCard.twitter, facebook: linkCust.facebook, snapchat: linkCust.snapchat,
+                      youtube: linkCust.youtube, website: activeCard.website,
+                    }}
+                    links={previewLinks}
+                    style={linkStyle}
+                    paid={isPro}
+                    showCardLink={linkCust.hideCardLink !== true}
+                  />
+                  <a
+                    href={ownLiveHref(user.id, swiftUrl, APP_URL)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Open your Swift Links page"
+                    className="absolute inset-0"
+                  />
+                </div>
+                <div className="flex items-center gap-2 bg-gray-800/60 border border-gray-700/60 rounded-xl px-3 py-2.5">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={1.8} className="w-3.5 h-3.5 shrink-0">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+                  </svg>
+                  <span className="text-blue-400 text-xs truncate flex-1">{swiftUrl.replace("https://", "")}</span>
+                  <CopyButton text={swiftUrl} />
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <a href={ownLiveHref(user.id, swiftUrl, APP_URL)} target="_blank" rel="noopener noreferrer" className="block text-center text-xs font-semibold text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-full py-2 transition-colors">
+                    Open Swift Links →
+                  </a>
+                  {/* Straight to the editor's Socials tab — bio, socials and links. */}
+                  <Link href={`/cards/${activeCard.id}/edit?tab=sharing`} className="block text-center text-xs font-semibold text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-full py-2 transition-colors">
+                    Edit my links
+                  </Link>
+                </div>
+              </div>
+            </>
+          }
+          signature={
+            <>
+              <div data-tour="email-signature" className="mb-4">
+                <h2 className="text-base font-semibold text-white">Your card in every email</h2>
+                <p className="text-gray-500 text-sm mt-1 leading-relaxed">
+                  Copy your Swift Signature and paste it into your email — a clickable link to your card at the bottom of every message you send.
+                </p>
+              </div>
+              <EmailSignatureBox
+                key={activeUsername}
+                cardData={cardData}
+                template={activeTemplate}
+                name={activeSource.name ?? ""}
+                company={activeSource.company ?? ""}
+                cardUrl={cardUrl}
+                previewHref={ownLiveHref(user.id, cardUrl, APP_URL)}
+                username={activeUsername}
+                storageUrl={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/card-signatures/${activeUsername}.png`}
+                ogUrl={`${APP_URL}/${activeUsername}/opengraph-image`}
+              />
+            </>
+          }
+        />
       </div>
     </main>
   );

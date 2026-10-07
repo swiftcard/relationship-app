@@ -415,6 +415,10 @@ const LOGGED_IN = [
   ["settings", "/settings/flows"], ["profile", "/profile"], ["profile-card", "/profile/card"],
   ["upgrade", "/upgrade"], ["cards-new", "/cards/new"], ["welcome", "/welcome"],
   ["email-prefs", "/email/preferences"],
+  // The Links page shows one side at a time; this is its Swift Signature side.
+  // Last on purpose: straight after /share it would be a same-page hash change,
+  // not a load.
+  ["share-signature", "/share#signature"],
 ];
 
 try {

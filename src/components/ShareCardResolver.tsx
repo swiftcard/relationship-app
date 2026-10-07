@@ -19,7 +19,9 @@ export default function ShareCardResolver({ current }: { current: string }) {
       if (new URLSearchParams(window.location.search).has("card")) return;
       const active = localStorage.getItem(ACTIVE_CARD_KEY);
       if (active && active !== current) {
-        router.replace(`/share?card=${encodeURIComponent(active)}`);
+        // Keep the #hash: /share#signature names the Swift Signature side, and
+        // dropping it here landed the person on Swift Links instead.
+        router.replace(`/share?card=${encodeURIComponent(active)}${window.location.hash}`);
       }
     } catch {
       /* storage blocked — keep the server-rendered card */

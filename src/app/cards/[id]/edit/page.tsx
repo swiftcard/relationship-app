@@ -20,14 +20,18 @@ export default async function CardEditPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ claim?: string; integration?: string; joined?: string }>;
+  searchParams: Promise<{ claim?: string; integration?: string; joined?: string; tab?: string }>;
 }) {
   const { id } = await params;
-  const { claim, integration, joined: joinedParam } = await searchParams;
+  const { claim, integration, joined: joinedParam, tab } = await searchParams;
   const joined = joinedParam === "1";
   // Coming back from the LinkedIn consent hop: open the tab that owns the
   // headshot, so the photo importer is actually mounted to receive it.
-  const initialTab = integration === "linkedin" ? ("design" as const) : undefined;
+  // ?tab=sharing is the Links page's "Edit my links": it opens on Socials (bio,
+  // socials and links) instead of making them hunt for it from Card info.
+  const initialTab = integration === "linkedin"
+    ? ("design" as const)
+    : tab === "sharing" ? ("sharing" as const) : undefined;
   const supabase = await createClient();
   // getClaims verifies the token locally, so every read below starts at once;
   // getUser() still runs, in the same batch, rather than as a round trip in

@@ -13,6 +13,8 @@ import { qrScanUrl, withSource } from "@/lib/share-source";
 import { buildContactQr } from "@/lib/contact-qr";
 import type { CardData } from "@/components/card-templates/types";
 import TrafficChart, { type TrafficBucket } from "@/components/TrafficChart";
+import LinksPageTabs from "@/components/LinksPageTabs";
+import CardScaler from "@/components/CardScaler";
 
 type Range = "today" | "week" | "month" | "locations";
 type DemoLocation = { location: string; card: number; link: number };
@@ -297,6 +299,68 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
     setTimeout(() => setLinksCopied(false), 2200);
   }
 
+  // The signature in a sample email + Copy + the setup steps — the same
+  // content the real Links page now shows in place (EmailSignatureBox). One
+  // element for both places it appears here: the Links tab's Swift Signature
+  // side and the "Preview Swift Signature" pop-up from the getting-started steps.
+  const signatureDemo = (
+    <>
+      <p className="text-gray-300 text-xs mb-3">Here&apos;s how it looks at the bottom of an email you send:</p>
+      <div className="rounded-xl border border-gray-700/60 bg-white overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-gray-200 text-[0.75rem] text-gray-400 space-y-0.5">
+          <p><span className="text-gray-400">To:</span> sarah@acme.com</p>
+          <p><span className="text-gray-400">Subject:</span> Great connecting today</p>
+        </div>
+        <div className="px-4 py-3 text-[0.8125rem] text-gray-800 leading-relaxed">
+          <p>Hi Sarah,</p>
+          <p className="mt-2">Really enjoyed chatting earlier. My contact info is below in my signature. Let&apos;s keep in touch!</p>
+          <p className="mt-2">Best,</p>
+          <div className="mt-3">
+            <p className="text-[0.875rem] text-gray-900 mb-1.5"><strong>{card.data.name}</strong> | {card.data.company}</p>
+            <div className="rounded-[10px] overflow-hidden border border-gray-200 w-[240px] max-w-full bg-[#FAF7F2]"><CardOnlyPreview key={`sig-${card.handle}`} src={`/${card.handle}?embed=card`} /></div>
+            <span className="inline-block mt-2 text-[0.875rem] font-bold text-blue-600">Contact me</span>
+          </div>
+        </div>
+      </div>
+      {/* The real box's button, two numbered steps, email-settings buttons
+          and the Gmail / work-Outlook notes (EmailSignatureBox, 5efa1883). */}
+      <button onClick={copySig} className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm py-2.5 rounded-full transition-colors">
+        {copied ? "Copied ✓ Now paste it in your email" : "Copy signature"}
+      </button>
+      <ol className="mt-4 space-y-2.5">
+        <li className="flex gap-2.5">
+          <span className="w-5 h-5 rounded-full bg-gray-800 text-gray-300 text-[0.6875rem] font-bold flex items-center justify-center shrink-0">1</span>
+          <p className="text-gray-300 text-[0.75rem] leading-relaxed">Tap <strong className="text-white">Copy signature</strong> above.</p>
+        </li>
+        <li className="flex gap-2.5">
+          <span className="w-5 h-5 rounded-full bg-gray-800 text-gray-300 text-[0.6875rem] font-bold flex items-center justify-center shrink-0">2</span>
+          <p className="text-gray-300 text-[0.75rem] leading-relaxed">Open your email below, <strong className="text-white">paste</strong> it into the Signature box, and <strong className="text-white">save</strong>.</p>
+        </li>
+      </ol>
+      <div className="grid grid-cols-3 gap-2 mt-3">
+        {[
+          { label: "Gmail", url: "https://mail.google.com/mail/u/0/#settings/general" },
+          { label: "Outlook", url: "https://outlook.live.com/mail/0/options/mail/messageContent" },
+          { label: "Yahoo", url: "https://mail.yahoo.com/d/settings/1" },
+        ].map((p) => (
+          <a key={p.label} href={p.url} target="_blank" rel="noopener noreferrer"
+            className="flex items-center justify-center gap-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-[0.6875rem] font-semibold py-2 rounded-xl transition-colors">
+            {p.label}
+            <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 opacity-60"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" /><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" /></svg>
+          </a>
+        ))}
+      </div>
+      <div className="mt-3 space-y-1.5 text-[0.6875rem] text-gray-500 leading-relaxed">
+        <p><strong className="text-gray-300">Gmail:</strong> scroll down to Signature, paste, then click <strong className="text-gray-300">Save Changes</strong> at the very bottom.</p>
+        <p>
+          <strong className="text-gray-300">Outlook for work or school?</strong>{" "}
+          <a href="https://outlook.office.com/mail/options/mail/messageContent" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline underline-offset-2">Open it here</a> instead.
+        </p>
+        <p>Another email app? Paste it into that app&apos;s signature settings.</p>
+      </div>
+    </>
+  );
+
   // Your Card + Share + other ways to share — shown under My Cards on mobile and in the
   // sticky right column on desktop, matching the real dashboard's phone layout.
   const cardSharePanel = (
@@ -521,9 +585,11 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
         </>)}
 
         {/* Links tab — replica of the real /share page: a narrow centred
-            column with a Links header, the Swift Links section, then the
-            Swift Signature section. This is where both live in the real
-            portal now, so this is where the demo shows them. */}
+            column with a Links header, then the SAME Swift Links | Swift
+            Signature switch (LinksPageTabs — the real component, so the two
+            can't drift). Each side: a one-line intro, the real thing, then its
+            actions. syncHash off: this demo lives inside other pages and must
+            not write their URL. */}
         {portalTab === "links" && (
           <div className="max-w-md mx-auto">
             <div className="mb-6">
@@ -535,53 +601,65 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
               </p>
             </div>
 
-            <div className="space-y-6">
-              {/* Swift Links — same section the real /share page renders */}
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Swift Links</p>
-                <Box>
-                  <p className="text-gray-300 text-xs mb-3 leading-relaxed">
-                    A separate link from your card — your bio, socials, and links in one place. Drop it in your Instagram, TikTok, or any social bio.
-                  </p>
-                  <div className="flex items-center gap-2 bg-gray-800/60 border border-gray-700/60 rounded-xl px-3 py-2.5">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={1.8} className="w-3.5 h-3.5 shrink-0">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
-                    </svg>
-                    <span className="text-blue-400 text-xs truncate flex-1">swiftcard.me/links/{card.handle}</span>
-                    <button type="button" onClick={copyLinksUrl}
-                      className="text-[0.6875rem] font-semibold text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-2.5 py-1 transition-colors shrink-0">
-                      {linksCopied ? "Copied ✓" : "Copy"}
-                    </button>
+            <LinksPageTabs
+              syncHash={false}
+              links={
+                <>
+                  <div className="mb-4">
+                    <h3 className="text-base font-semibold text-white">Your link-in-bio page</h3>
+                    <p className="text-gray-300 text-sm mt-1 leading-relaxed">
+                      A separate link from your card — your bio, socials, and links in one place. Drop it in your Instagram, TikTok, or any social bio.
+                    </p>
                   </div>
-                  <button type="button" onClick={() => openDemo("links")}
-                    className="mt-2 block w-full text-center text-xs font-semibold text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-full py-2 transition-colors">
-                    Open Swift Links →
-                  </button>
-                </Box>
-              </div>
-
-              {/* Swift Signature — a replica of EmailSignatureBox's COLLAPSED
-                  state, which is all the real Links page shows here: a title, a
-                  line of copy, and one blue button that opens the signature in a
-                  mock email. This used to show an inline card preview and a
-                  two-button row that exist nowhere in the real portal, so the
-                  page a visitor was told to trust as "your dashboard" didn't
-                  match the one they'd get. Padding is p-4, not the p-5 Box —
-                  EmailSignatureBox is the one card on this page that uses p-4. */}
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Swift Signature</p>
-                <div className="bg-gray-900 border border-gray-800/80 rounded-2xl p-4">
-                  <p className="text-white font-semibold text-sm">Swift Signature</p>
-                  <p className="text-gray-300 text-[0.6875rem] mt-1 leading-relaxed">
-                    Copy your Swift Signature and paste it into your email — a clickable link to your card at the bottom of every message you send.
-                  </p>
-                  <button type="button" onClick={() => openDemo("signature")}
-                    className="mt-3 w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-2 rounded-full transition-colors">
-                    Preview &amp; copy
-                  </button>
-                </div>
-              </div>
-            </div>
+                  <Box>
+                    {/* The demo account's real Swift Links page in a mini phone
+                        (the portal renders SwiftLinkLivePreview from the
+                        account; the demo has no account, so it frames the live
+                        page — embed=1 records no view). Tapping opens it. */}
+                    <div className="relative w-full max-w-[220px] sm:max-w-[240px] mx-auto mb-4 max-h-[340px] sm:max-h-[380px] overflow-hidden rounded-[30px] [mask-image:linear-gradient(to_bottom,black_78%,transparent)]">
+                      <CardScaler natural={390}>
+                        <iframe key={card.handle} src={`/links/${card.handle}?embed=1`} title={`${card.label} Swift Links preview`} loading="lazy" tabIndex={-1}
+                          style={{ display: "block", width: 390, height: 720, border: 0 }} />
+                      </CardScaler>
+                      <button type="button" onClick={() => openDemo("links")} aria-label="Open Swift Links" className="absolute inset-0" />
+                    </div>
+                    <div className="flex items-center gap-2 bg-gray-800/60 border border-gray-700/60 rounded-xl px-3 py-2.5">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={1.8} className="w-3.5 h-3.5 shrink-0">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+                      </svg>
+                      <span className="text-blue-400 text-xs truncate flex-1">swiftcard.me/links/{card.handle}</span>
+                      <button type="button" onClick={copyLinksUrl}
+                        className="text-[0.6875rem] font-semibold text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg px-2.5 py-1 transition-colors shrink-0">
+                        {linksCopied ? "Copied ✓" : "Copy"}
+                      </button>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <button type="button" onClick={() => openDemo("links")}
+                        className="block w-full text-center text-xs font-semibold text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-full py-2 transition-colors">
+                        Open Swift Links →
+                      </button>
+                      {/* Drawn, like the demo's other Edit buttons. */}
+                      <span className="block text-center text-xs font-semibold text-gray-400 bg-gray-800 border border-gray-700 rounded-full py-2">
+                        Edit my links
+                      </span>
+                    </div>
+                  </Box>
+                </>
+              }
+              signature={
+                <>
+                  <div className="mb-4">
+                    <h3 className="text-base font-semibold text-white">Your card in every email</h3>
+                    <p className="text-gray-300 text-sm mt-1 leading-relaxed">
+                      Copy your Swift Signature and paste it into your email — a clickable link to your card at the bottom of every message you send.
+                    </p>
+                  </div>
+                  {/* The same signature, in place — as EmailSignatureBox now
+                      shows it on the real page (no "Preview & copy" pop-up). */}
+                  <Box>{signatureDemo}</Box>
+                </>
+              }
+            />
           </div>
         )}
 
@@ -709,59 +787,7 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
       {modal === "signature" && (
         <FullScreen title="Swift Signature — your card in every email" onClose={() => setModal(null)}>
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 w-full max-w-md">
-            <p className="text-gray-300 text-xs mb-3">Here&apos;s how it looks at the bottom of an email you send:</p>
-            <div className="rounded-xl border border-gray-700/60 bg-white overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-gray-200 text-[0.75rem] text-gray-400 space-y-0.5">
-                <p><span className="text-gray-400">To:</span> sarah@acme.com</p>
-                <p><span className="text-gray-400">Subject:</span> Great connecting today</p>
-              </div>
-              <div className="px-4 py-3 text-[0.8125rem] text-gray-800 leading-relaxed">
-                <p>Hi Sarah,</p>
-                <p className="mt-2">Really enjoyed chatting earlier. My contact info is below in my signature. Let&apos;s keep in touch!</p>
-                <p className="mt-2">Best,</p>
-                <div className="mt-3">
-                  <p className="text-[0.875rem] text-gray-900 mb-1.5"><strong>{card.data.name}</strong> | {card.data.company}</p>
-                  <div className="rounded-[10px] overflow-hidden border border-gray-200 w-[240px] max-w-full bg-[#FAF7F2]"><CardOnlyPreview key={`sig-${card.handle}`} src={`/${card.handle}?embed=card`} /></div>
-                  <span className="inline-block mt-2 text-[0.875rem] font-bold text-blue-600">Contact me</span>
-                </div>
-              </div>
-            </div>
-            {/* The real box's button, two numbered steps, email-settings buttons
-                and the Gmail / work-Outlook notes (EmailSignatureBox, 5efa1883). */}
-            <button onClick={copySig} className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm py-2.5 rounded-full transition-colors">
-              {copied ? "Copied ✓ Now paste it in your email" : "Copy signature"}
-            </button>
-            <ol className="mt-4 space-y-2.5">
-              <li className="flex gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-gray-800 text-gray-300 text-[0.6875rem] font-bold flex items-center justify-center shrink-0">1</span>
-                <p className="text-gray-300 text-[0.75rem] leading-relaxed">Tap <strong className="text-white">Copy signature</strong> above.</p>
-              </li>
-              <li className="flex gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-gray-800 text-gray-300 text-[0.6875rem] font-bold flex items-center justify-center shrink-0">2</span>
-                <p className="text-gray-300 text-[0.75rem] leading-relaxed">Open your email below, <strong className="text-white">paste</strong> it into the Signature box, and <strong className="text-white">save</strong>.</p>
-              </li>
-            </ol>
-            <div className="grid grid-cols-3 gap-2 mt-3">
-              {[
-                { label: "Gmail", url: "https://mail.google.com/mail/u/0/#settings/general" },
-                { label: "Outlook", url: "https://outlook.live.com/mail/0/options/mail/messageContent" },
-                { label: "Yahoo", url: "https://mail.yahoo.com/d/settings/1" },
-              ].map((p) => (
-                <a key={p.label} href={p.url} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-[0.6875rem] font-semibold py-2 rounded-xl transition-colors">
-                  {p.label}
-                  <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 opacity-60"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" /><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" /></svg>
-                </a>
-              ))}
-            </div>
-            <div className="mt-3 space-y-1.5 text-[0.6875rem] text-gray-500 leading-relaxed">
-              <p><strong className="text-gray-300">Gmail:</strong> scroll down to Signature, paste, then click <strong className="text-gray-300">Save Changes</strong> at the very bottom.</p>
-              <p>
-                <strong className="text-gray-300">Outlook for work or school?</strong>{" "}
-                <a href="https://outlook.office.com/mail/options/mail/messageContent" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline underline-offset-2">Open it here</a> instead.
-              </p>
-              <p>Another email app? Paste it into that app&apos;s signature settings.</p>
-            </div>
+            {signatureDemo}
           </div>
         </FullScreen>
       )}

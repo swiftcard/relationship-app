@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import type { CardData } from "@/components/card-templates/types";
 import { withoutSocials } from "@/components/card-templates/types";
+import { SIGNATURE_STALE_EVENT } from "@/components/LinksPageTabs";
 
 const ClassicPro    = dynamic(() => import("@/components/card-templates/ClassicPro"),    { ssr: false });
 const ModernBold    = dynamic(() => import("@/components/card-templates/ModernBold"),    { ssr: false });
@@ -101,11 +103,13 @@ function CardPreview({ src, ready, status, onLoad, onError }: {
 }) {
   return (
     <div className="rounded-xl border border-gray-700/60 bg-white overflow-hidden relative min-h-[120px] flex items-center justify-center">
+      {/* lazy: the Links page opens on Swift Links with this side hidden, and a
+          hidden lazy image isn't fetched until the side is shown. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} onLoad={onLoad} onError={onError} alt="Your card" className={`w-full block ${ready ? "" : "hidden"}`} />
+      <img src={src} loading="lazy" onLoad={onLoad} onError={onError} alt="Your card" className={`w-full block ${ready ? "" : "hidden"}`} />
       {!ready && (
         <span className="text-gray-400 text-xs py-10">
-          {status === "error" ? "Couldn't generate — reopen to retry" : "Generating your card…"}
+          {status === "error" ? "Couldn't generate your card." : "Generating your card…"}
         </span>
       )}
     </div>
@@ -129,7 +133,6 @@ ${header}
 }
 
 export default function EmailSignatureBox({ cardData, template, name, company, cardUrl, previewHref, username, storageUrl }: Props) {
-  const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [status, setStatus] = useState<"idle" | "working" | "error">("idle");
   const [displaySrc, setDisplaySrc] = useState(storageUrl);
@@ -163,6 +166,11 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
   // fresh (cache-busted) URL. We surface a prompt so they know to do exactly that.
   const copiedKey = `sc_sigcopied_${username}`;
   const [changedSinceCopy, setChangedSinceCopy] = useState(false);
+  // The Links page shows one side at a time, so the re-copy note below can sit
+  // behind the Swift Links side. Tell the switch, which puts a dot on this tab.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(SIGNATURE_STALE_EVENT, { detail: changedSinceCopy }));
+  }, [changedSinceCopy]);
 
   // Photo/logo through a same-origin proxy so html2canvas can read them.
   const proxy = (u?: string | null) => (u && /^https?:\/\//.test(u) ? `/api/img-proxy?url=${encodeURIComponent(u)}` : u ?? null);
@@ -204,7 +212,7 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
         inlined = await inlineImages(el, fallbackSrc);
       }
       // Refuse to ship a signature that's missing the photo/logo — better to
-      // show "couldn't generate, reopen to retry" than silently upload one
+      // show "couldn't generate" and a Try again button than silently upload one
       // that's forgotten pieces of the real card.
       if (!inlined) { setStatus("error"); return null; }
 
@@ -286,6 +294,23 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
     }
   }
 
+  // The capture is seconds of main-thread work on a phone (three passes on
+  // WebKit), and it used to start 500ms in — exactly while the page was
+  // hydrating and the person reaching for a tab, which then did nothing for
+  // several seconds (2026-09-24 speed review). Let the page settle, then start
+  // when the browser is idle. Copy still waits for a fresh image.
+  function scheduleCapture(): () => void {
+    const t = setTimeout(() => {
+      // Already captured from this exact content (the other trigger got there
+      // first) — nothing to redo.
+      if (lastSigRef.current === contentSig && lastUrlRef.current) return;
+      const ric = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+      if (ric) ric(() => { void captureAndUpload(); }, { timeout: 3000 });
+      else void captureAndUpload();
+    }, 1500);
+    return () => clearTimeout(t);
+  }
+
   // On load / whenever THIS card's content changes: regenerate from the real card so the
   // image always matches the currently-selected card. Keyed to username+content hash, so
   // it never reuses or is triggered by a different card.
@@ -311,26 +336,21 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
     } catch { /* ignore */ }
     let prev = "";
     try { prev = carry(hashKey); } catch { /* ignore */ }
-    if (prev !== contentSig) {
-      // The capture is seconds of main-thread work on a phone (three passes on
-      // WebKit), and it used to start 500ms in — exactly while the page was
-      // hydrating and the person reaching for a tab, which then did nothing for
-      // several seconds (2026-09-24 speed review). Let the page settle, then
-      // start when the browser is idle. Copy still waits for a fresh image.
-      const t = setTimeout(() => {
-        const ric = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
-        if (ric) ric(() => { void captureAndUpload(); }, { timeout: 3000 });
-        else void captureAndUpload();
-      }, 1500);
-      return () => clearTimeout(t);
-    }
+    if (prev !== contentSig) return scheduleCapture();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username, contentSig]);
 
-  // Hosted image 404s (never captured) → generate from the real card. No wrong fallback image.
+  // Hosted image 404s (never captured) → generate from the real card. No wrong
+  // fallback image. Deferred like the automatic capture: the preview is on the
+  // page now, not in a pop-up opened by a tap, so a 404 can arrive while the
+  // page is still hydrating.
   function onImgError() {
     setReady(false);
-    if (!capturingRef.current) captureAndUpload();
+    if (capturingRef.current) return;
+    // A fresh capture already exists and THAT failed to load — offer Try again
+    // rather than quietly re-running the same capture.
+    if (lastSigRef.current === contentSig && lastUrlRef.current) { setStatus("error"); return; }
+    scheduleCapture();
   }
 
   async function copy() {
@@ -392,126 +412,106 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
           image capture, and it contains links. aria-hidden alone left them in
           the tab order — you could Tab into a card nobody can see
           (axe: aria-hidden-focus). */}
-      {mounted && (
+      {/* PORTALED to <body>. The Links page shows one side at a time, and this
+          box sits on the Swift Signature side — hidden whenever Swift Links is
+          showing, which is how the page opens. Inside a display:none panel the
+          card has no layout: offsetHeight stays 0 and the capture falls back to
+          a 460×460 square, uploaded as the image every follow-up email embeds
+          (lib/messaging). On <body> it always has its real size. */}
+      {mounted && createPortal(
         <div aria-hidden inert style={{ position: "absolute", left: -10000, top: 0, width: NATURAL, pointerEvents: "none", opacity: 0.01 }}>
           <div ref={cardRef} style={{ width: NATURAL, background: CARD_BG }}>
             <Template data={template === "custom" ? captureData : withoutSocials(captureData)} />
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
-      <div className="bg-gray-900 border border-gray-800/80 rounded-2xl p-4">
-        <p className="text-white font-semibold text-sm">Swift Signature</p>
-        <p className="text-gray-500 text-[0.6875rem] mt-1 leading-relaxed">
-          Copy your Swift Signature and paste it into your email — a clickable link to your card at the bottom of every message you send.
-        </p>
+      {/* The signature, shown in place — it used to sit behind a "Preview &
+          copy" pop-up, so nobody saw what a Swift Signature was until they'd
+          already tapped into it (owner, 2026-10-07). */}
+      <div className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5">
+        {/* Only for someone who already pasted an older design: a first-time
+            copier has nothing to refresh, and the note read as a step. */}
         {changedSinceCopy && (
-          <p className="mt-2 text-[0.6875rem] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1.5 leading-relaxed">
+          <p className="mb-3 text-[0.6875rem] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1.5 leading-relaxed">
             You&apos;ve changed your card design since you last copied your signature. Copy it again and re-paste to refresh it.
           </p>
         )}
-        <button
-          type="button"
-          onClick={() => { if (status === "error" && !ready) captureAndUpload(); setOpen(true); }}
-          className="mt-3 w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs py-2 rounded-full transition-colors"
-        >
-          {changedSinceCopy ? "Update my signature" : "Preview & copy"}
-        </button>
-      </div>
-
-      {open && (
-        <div className="fixed inset-0 z-[90] bg-black/70 backdrop-blur-sm flex items-center justify-center px-4 pt-[max(1rem,calc(env(safe-area-inset-top)+0.5rem))] pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))]"
-          onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
-          {/* max-h + flex-col so the body scrolls on small phones instead of
-              overflowing off-screen; header (with the X) stays pinned. */}
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem)] overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 shrink-0">
-              <p className="text-white font-semibold text-sm">Your Swift Signature</p>
-              <button
-                onClick={() => setOpen(false)}
-                aria-label="Close and return to dashboard"
-                className="w-8 h-8 -mr-1 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 transition-colors text-lg leading-none"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="p-5 overflow-y-auto">
-              <p className="text-gray-500 text-xs mb-3">Here&apos;s how it looks at the bottom of an email you send:</p>
-              <div className="rounded-xl border border-gray-700/60 bg-white overflow-hidden">
-                <div className="px-4 py-2.5 border-b border-gray-200 text-[0.75rem] text-gray-500 space-y-0.5">
-                  <p><span className="text-gray-400">To:</span> sarah@acme.com</p>
-                  <p><span className="text-gray-400">Subject:</span> Great connecting today</p>
-                </div>
-                <div className="px-4 py-3 text-[0.8125rem] text-gray-800 leading-relaxed">
-                  <p>Hi Sarah,</p>
-                  <p className="mt-2">Really enjoyed chatting earlier. My contact info is below in my signature. Let&apos;s keep in touch!</p>
-                  <p className="mt-2">Best,</p>
-                  <div className="mt-3">
-                    <p className="text-[0.875rem] text-gray-900 mb-1.5"><strong>{name}</strong>{company ? ` | ${company}` : ""}</p>
-                    <a href={previewHref ?? cardUrl} target="_blank" rel="noopener noreferrer" className="block w-[300px] max-w-full"><CardPreview src={displaySrc} ready={ready} status={status} onLoad={onLoad} onError={onImgError} /></a>
-                    <a href={previewHref ?? cardUrl} target="_blank" rel="noopener noreferrer" className="inline-block mt-2 text-[0.875rem] font-bold text-blue-600 no-underline">Contact me</a>
-                  </div>
-                </div>
-              </div>
-              <button onClick={copy} disabled={!ready || status === "working"}
-                className="w-full mt-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-sm py-2.5 rounded-full transition-colors">
-                {status === "working" ? "Generating from your card…" : copied ? "Copied ✓ Now paste it in your email" : "Copy signature"}
-              </button>
-              {/* Only for someone who already pasted an older design: a first-time
-                  copier has nothing to refresh, and the note read as a step. */}
-              {changedSinceCopy && (
-                <p className="mt-2 text-[0.6875rem] text-gray-500 leading-relaxed text-center">
-                  Your card changed since you last copied. Copy again and replace the old signature in your email.
-                </p>
-              )}
-
-              {/* Two steps. "Save" is in step 2 on purpose: an unsaved Gmail
-                  signature silently disappears, the most common way this fails. */}
-              <ol className="mt-4 space-y-2.5">
-                <li className="flex gap-2.5">
-                  <span className="w-5 h-5 rounded-full bg-gray-800 text-gray-300 text-[0.6875rem] font-bold flex items-center justify-center shrink-0">1</span>
-                  <p className="text-gray-300 text-[0.75rem] leading-relaxed">Tap <strong className="text-white">Copy signature</strong> above.</p>
-                </li>
-                <li className="flex gap-2.5">
-                  <span className="w-5 h-5 rounded-full bg-gray-800 text-gray-300 text-[0.6875rem] font-bold flex items-center justify-center shrink-0">2</span>
-                  <p className="text-gray-300 text-[0.75rem] leading-relaxed">Open your email below, <strong className="text-white">paste</strong> it into the Signature box, and <strong className="text-white">save</strong>.</p>
-                </li>
-              </ol>
-
-              {/* Open the user's email signature settings directly */}
-              <div className="grid grid-cols-3 gap-2 mt-3">
-                {[
-                  { label: "Gmail", url: "https://mail.google.com/mail/u/0/#settings/general" },
-                  { label: "Outlook", url: "https://outlook.live.com/mail/0/options/mail/messageContent" },
-                  { label: "Yahoo", url: "https://mail.yahoo.com/d/settings/1" },
-                ].map((p) => (
-                  <a
-                    key={p.label}
-                    href={p.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-[0.6875rem] font-semibold py-2 rounded-xl transition-colors"
-                  >
-                    {p.label}
-                    <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 opacity-60"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" /><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" /></svg>
-                  </a>
-                ))}
-              </div>
-              {/* Gmail has no link deeper than the General tab, so say where the
-                  box is and where its Save button hides. Outlook's link lands on
-                  Signatures itself; work accounts live on a different host. */}
-              <div className="mt-3 space-y-1.5 text-[0.6875rem] text-gray-500 leading-relaxed">
-                <p><strong className="text-gray-300">Gmail:</strong> scroll down to Signature, paste, then click <strong className="text-gray-300">Save Changes</strong> at the very bottom.</p>
-                <p>
-                  <strong className="text-gray-300">Outlook for work or school?</strong>{" "}
-                  <a href="https://outlook.office.com/mail/options/mail/messageContent" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline underline-offset-2">Open it here</a> instead.
-                </p>
-                <p>Another email app? Paste it into that app&apos;s signature settings.</p>
-              </div>
+        <p className="text-gray-500 text-xs mb-3">Here&apos;s how it looks at the bottom of an email you send:</p>
+        <div className="rounded-xl border border-gray-700/60 bg-white overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-gray-200 text-[0.75rem] text-gray-500 space-y-0.5">
+            <p><span className="text-gray-400">To:</span> sarah@acme.com</p>
+            <p><span className="text-gray-400">Subject:</span> Great connecting today</p>
+          </div>
+          <div className="px-4 py-3 text-[0.8125rem] text-gray-800 leading-relaxed">
+            <p>Hi Sarah,</p>
+            <p className="mt-2">Really enjoyed chatting earlier. My contact info is below in my signature. Let&apos;s keep in touch!</p>
+            <p className="mt-2">Best,</p>
+            <div className="mt-3">
+              <p className="text-[0.875rem] text-gray-900 mb-1.5"><strong>{name}</strong>{company ? ` | ${company}` : ""}</p>
+              <a href={previewHref ?? cardUrl} target="_blank" rel="noopener noreferrer" className="block w-[300px] max-w-full"><CardPreview src={displaySrc} ready={ready} status={status} onLoad={onLoad} onError={onImgError} /></a>
+              <a href={previewHref ?? cardUrl} target="_blank" rel="noopener noreferrer" className="inline-block mt-2 text-[0.875rem] font-bold text-blue-600 no-underline">Contact me</a>
             </div>
           </div>
         </div>
-      )}
+        {status === "error" && !ready ? (
+          // The capture failed before there was ever an image to copy.
+          <button type="button" onClick={() => { void captureAndUpload(); }}
+            className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm py-2.5 rounded-full transition-colors">
+            Try again
+          </button>
+        ) : (
+          <button type="button" onClick={copy} disabled={!ready || status === "working"}
+            className="w-full mt-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-sm py-2.5 rounded-full transition-colors">
+            {status === "working" ? "Generating from your card…" : copied ? "Copied ✓ Now paste it in your email" : "Copy signature"}
+          </button>
+        )}
+
+        {/* Two steps. "Save" is in step 2 on purpose: an unsaved Gmail
+            signature silently disappears, the most common way this fails. */}
+        <ol className="mt-4 space-y-2.5">
+          <li className="flex gap-2.5">
+            <span className="w-5 h-5 rounded-full bg-gray-800 text-gray-300 text-[0.6875rem] font-bold flex items-center justify-center shrink-0">1</span>
+            <p className="text-gray-300 text-[0.75rem] leading-relaxed">Tap <strong className="text-white">Copy signature</strong> above.</p>
+          </li>
+          <li className="flex gap-2.5">
+            <span className="w-5 h-5 rounded-full bg-gray-800 text-gray-300 text-[0.6875rem] font-bold flex items-center justify-center shrink-0">2</span>
+            <p className="text-gray-300 text-[0.75rem] leading-relaxed">Open your email below, <strong className="text-white">paste</strong> it into the Signature box, and <strong className="text-white">save</strong>.</p>
+          </li>
+        </ol>
+
+        {/* Open the user's email signature settings directly */}
+        <div className="grid grid-cols-3 gap-2 mt-3">
+          {[
+            { label: "Gmail", url: "https://mail.google.com/mail/u/0/#settings/general" },
+            { label: "Outlook", url: "https://outlook.live.com/mail/0/options/mail/messageContent" },
+            { label: "Yahoo", url: "https://mail.yahoo.com/d/settings/1" },
+          ].map((p) => (
+            <a
+              key={p.label}
+              href={p.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-[0.6875rem] font-semibold py-2 rounded-xl transition-colors"
+            >
+              {p.label}
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 opacity-60"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z" /><path d="M5 5a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-3a1 1 0 10-2 0v3H5V7h3a1 1 0 000-2H5z" /></svg>
+            </a>
+          ))}
+        </div>
+        {/* Gmail has no link deeper than the General tab, so say where the
+            box is and where its Save button hides. Outlook's link lands on
+            Signatures itself; work accounts live on a different host. */}
+        <div className="mt-3 space-y-1.5 text-[0.6875rem] text-gray-500 leading-relaxed">
+          <p><strong className="text-gray-300">Gmail:</strong> scroll down to Signature, paste, then click <strong className="text-gray-300">Save Changes</strong> at the very bottom.</p>
+          <p>
+            <strong className="text-gray-300">Outlook for work or school?</strong>{" "}
+            <a href="https://outlook.office.com/mail/options/mail/messageContent" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline underline-offset-2">Open it here</a> instead.
+          </p>
+          <p>Another email app? Paste it into that app&apos;s signature settings.</p>
+        </div>
+      </div>
     </>
   );
 }

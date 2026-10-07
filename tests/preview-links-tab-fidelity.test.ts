@@ -5,64 +5,84 @@ import { join } from "node:path";
 // STRUCTURAL GUARD.
 //
 // /preview sells itself as "this is your dashboard — try it out", so its Links
-// tab has to be the Links page people actually get. It wasn't: the Swift
-// Signature section showed an inline card preview and a "See it in an email" /
-// "Copy signature" button pair, none of which exist in the real portal, where
-// that section is EmailSignatureBox's collapsed state — a title, one line of
-// copy, and a single "Preview & copy" button.
+// tab has to be the Links page people actually get. It once wasn't: the mock
+// showed controls the real portal never had. The homepage's DashboardDemo is a
+// second replica of the same page.
 //
-// The mock is a hand-built replica (it has no logged-in account to render from),
-// so nothing but a test keeps it honest when the real page changes.
+// Since 2026-10-07 the real page is a Swift Links | Swift Signature switch
+// (LinksPageTabs). Each side leads with a one-line intro, then the real thing
+// — a mini phone of the Swift Links page, or the signature in a sample email —
+// then its actions. The signature is shown in place; the old "Preview & copy"
+// pop-up is gone.
+//
+// The replicas are hand-built (they have no logged-in account to render from),
+// so nothing but a test keeps them honest when the real page changes.
 
 const root = process.cwd();
 const read = (p: string) => readFileSync(join(root, p), "utf8");
 
-// Prose ABOUT the replica is not the replica. The preview file carries a comment
-// explaining this very bug that names the old buttons and the real component, so
-// without stripping it the "no longer present" assertions would fail on the
-// comment and the "still present" ones could pass on it.
+// Prose ABOUT the replica is not the replica. The files carry comments naming
+// the old pop-up, so without stripping them the "no longer present" assertions
+// would fail on the comment and the "still present" ones could pass on it.
 function stripComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
 }
 
 const preview = stripComments(read("src/app/preview/PreviewClient.tsx"));
-const share = read("src/app/share/page.tsx");             // the real Links page
-const sigBox = read("src/components/EmailSignatureBox.tsx"); // its Swift Signature section
+const demo = stripComments(read("src/components/site/DashboardDemo.tsx"));
+const share = stripComments(read("src/app/share/page.tsx"));             // the real Links page
+const sigBox = stripComments(read("src/components/EmailSignatureBox.tsx")); // its Swift Signature side
+const tabs = read("src/components/LinksPageTabs.tsx");
 
 // The copy the real page shows, taken FROM the real page — so if the product
-// changes the wording, this test starts failing until the mock is updated too.
+// changes the wording, this test starts failing until the mocks are updated too.
+const SWIFT_LINKS_TITLE = "Your link-in-bio page";
 const SWIFT_LINKS_BLURB =
   "A separate link from your card — your bio, socials, and links in one place. Drop it in your Instagram, TikTok, or any social bio.";
+const SIGNATURE_TITLE = "Your card in every email";
 const SIGNATURE_BLURB =
   "Copy your Swift Signature and paste it into your email — a clickable link to your card at the bottom of every message you send.";
 
-describe("the /preview Links tab matches the real Links page", () => {
+describe("the Links page replicas match the real Links page", () => {
   it("the strings under test really are the real page's strings", () => {
     // Without this, a product copy change would silently make every assertion
-    // below test the mock against a constant that no longer matches anything.
-    expect(share, "the real Links page no longer carries this Swift Links copy").toContain(SWIFT_LINKS_BLURB);
-    expect(sigBox, "EmailSignatureBox no longer carries this description").toContain(SIGNATURE_BLURB);
-    expect(sigBox, "EmailSignatureBox's collapsed button is no longer 'Preview & copy'").toMatch(
-      /"Update my signature" : "Preview & copy"/,
-    );
+    // below test the mocks against a constant that no longer matches anything.
+    for (const s of [SWIFT_LINKS_TITLE, SWIFT_LINKS_BLURB, SIGNATURE_TITLE, SIGNATURE_BLURB, "Open Swift Links →", "Edit my links"]) {
+      expect(share, `the real Links page no longer carries "${s}"`).toContain(s);
+    }
+    expect(tabs).toContain('label: "Swift Links"');
+    expect(tabs).toContain('label: "Swift Signature"');
+    expect(sigBox, "the real signature side lost its Copy signature button").toContain('"Copy signature"');
+    expect(sigBox).toContain("Here&apos;s how it looks at the bottom of an email you send:");
   });
 
-  it("the Swift Links section reads the same as the real one", () => {
-    expect(preview).toContain(SWIFT_LINKS_BLURB);
-    expect(preview).toContain("Open Swift Links →");
+  it("all three use the SAME switch component, not a copy of it", () => {
+    for (const [name, src] of [["/share", share], ["/preview", preview], ["DashboardDemo", demo]] as const) {
+      expect(src, `${name} no longer renders LinksPageTabs`).toMatch(/<LinksPageTabs\b/);
+    }
+    // The replicas sit inside other pages: they must never write that page's URL.
+    expect(preview).toMatch(/<LinksPageTabs\s+syncHash=\{false\}/);
+    expect(demo).toMatch(/<LinksPageTabs\s+syncHash=\{false\}/);
+    expect(share).not.toMatch(/syncHash=\{false\}/);
   });
 
-  it("the Swift Signature section is EmailSignatureBox's collapsed state", () => {
-    expect(preview, "the mock lost the real signature description").toContain(SIGNATURE_BLURB);
-    expect(preview, "the mock's signature button no longer says Preview & copy").toMatch(/Preview &amp; copy/);
-    // The real collapsed box is p-4 while every other card on the page is p-5.
-    expect(preview).toMatch(/bg-gray-900 border border-gray-800\/80 rounded-2xl p-4/);
-    expect(sigBox, "EmailSignatureBox is no longer p-4 — the mock now over-pads")
-      .toContain("bg-gray-900 border border-gray-800/80 rounded-2xl p-4");
+  it("each replica's sides read the same as the real ones", () => {
+    for (const [name, src] of [["/preview", preview], ["DashboardDemo", demo]] as const) {
+      for (const s of [SWIFT_LINKS_TITLE, SWIFT_LINKS_BLURB, SIGNATURE_TITLE, SIGNATURE_BLURB, "Open Swift Links →", "Edit my links", "Copy signature"]) {
+        expect(src, `${name} is missing "${s}"`).toContain(s);
+      }
+    }
+  });
+
+  it("the signature is shown in place — the Preview & copy pop-up is gone everywhere", () => {
+    for (const [name, src] of [["/share", share], ["EmailSignatureBox", sigBox], ["/preview", preview], ["DashboardDemo", demo]] as const) {
+      expect(src, `${name} still offers "Preview & copy"`).not.toMatch(/Preview (&amp;|&) copy/);
+      expect(src, `${name} still says "Update my signature"`).not.toContain("Update my signature");
+    }
   });
 
   it("the invented controls are gone", () => {
-    // These three existed only in the mock. Any of them coming back means the
+    // These existed only in an old mock. Any of them coming back means the
     // demo is showing a portal the customer will never see.
     expect(preview, "'See it in an email' is back — no such control in the portal").not.toContain("See it in an email");
     expect(share, "the real page grew a 'See it in an email' button").not.toContain("See it in an email");

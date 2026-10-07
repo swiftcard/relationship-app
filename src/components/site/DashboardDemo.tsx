@@ -3,10 +3,12 @@
 import { useState } from "react";
 import CardScaler from "@/components/CardScaler";
 import ClassicPro from "@/components/card-templates/ClassicPro";
-import { withoutSocials } from "@/components/card-templates/types";
+import { withoutSocials, SAMPLE_DATA, DEMO_HEADSHOT } from "@/components/card-templates/types";
 import type { CardData } from "@/components/card-templates/types";
 import DemoContactActions from "@/components/site/DemoContactActions";
 import TrafficChart, { type TrafficBucket } from "@/components/TrafficChart";
+import LinksPageTabs from "@/components/LinksPageTabs";
+import SwiftLinkLivePreview from "@/components/SwiftLinkLivePreview";
 
 // Same demo identity as SAMPLE_DATA (card-templates/types.tsx) and every other
 // marketing demo (SwiftLinksPhone, SignatureDemo, TeamsDashboard) — one person,
@@ -346,6 +348,18 @@ function ContactsPageView() {
 }
 
 // ── Links page replica — mirrors the real /share page ────────────────────────
+// The same Swift Links | Swift Signature switch (LinksPageTabs, the real
+// component; syncHash off — it must not write the marketing page's URL). Each
+// side: a one-line intro, the real thing, then the actions — drawn, like every
+// other button here. The mini phone is the REAL Swift Links page renderer
+// (SwiftLinkLivePreview) fed the demo identity, the way the portal feeds it the
+// account's card.
+const DEMO_LINKS = [
+  { emoji: "🏡", label: "Book a viewing", url: "https://coastlinehomes.com" },
+  { emoji: "📋", label: "Current listings", url: "https://coastlinehomes.com" },
+  { emoji: "⭐", label: "Client reviews", url: "https://linkedin.com/in/alexmorgan" },
+];
+
 function LinksPageView() {
   return (
     <div className="max-w-md mx-auto">
@@ -358,39 +372,96 @@ function LinksPageView() {
         </p>
       </div>
 
-      <div className="space-y-5">
-        <div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2.5">Swift Links</p>
-          <div className="bg-gray-900 border border-gray-800/80 rounded-2xl p-4">
-            <p className="text-gray-400 text-xs mb-3 leading-relaxed">
-              A separate link from your card — your bio, socials, and links in one place.
-            </p>
-            <div className="flex items-center gap-2 bg-gray-800/60 border border-gray-700/60 rounded-xl px-3 py-2.5">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={1.8} className="w-3.5 h-3.5 shrink-0">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
-              </svg>
-              <span className="text-blue-400 text-xs truncate flex-1">swiftcard.me/links/alexmorgan</span>
-              <span className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300">Copy</span>
+      <LinksPageTabs
+        syncHash={false}
+        links={
+          <>
+            <div className="mb-4">
+              <h3 className="text-base font-semibold text-white">Your link-in-bio page</h3>
+              <p className="text-gray-400 text-sm mt-1 leading-relaxed">
+                A separate link from your card — your bio, socials, and links in one place. Drop it in your Instagram, TikTok, or any social bio.
+              </p>
             </div>
-            <span className="mt-2 block text-center text-xs font-semibold text-gray-400 bg-gray-800 border border-gray-700 rounded-full py-2">
-              Open Swift Links →
-            </span>
-          </div>
-        </div>
-
-        <div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2.5">Swift Signature</p>
-          <div className="bg-gray-900 border border-gray-800/80 rounded-2xl p-4">
-            <p className="text-white font-semibold text-sm">Swift Signature</p>
-            <p className="text-gray-400 text-[0.6875rem] mt-1 leading-relaxed">
-              Copy your Swift Signature and paste it into your email — a clickable link to your card at the bottom of every message you send.
-            </p>
-            <span className="mt-3 block text-center bg-blue-600 text-white font-semibold text-xs py-2 rounded-full">
-              Preview &amp; copy
-            </span>
-          </div>
-        </div>
-      </div>
+            <div className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5">
+              <div className="relative w-full max-w-[220px] sm:max-w-[240px] mx-auto mb-4 max-h-[340px] sm:max-h-[380px] overflow-hidden rounded-[30px] [mask-image:linear-gradient(to_bottom,black_78%,transparent)]">
+                <SwiftLinkLivePreview
+                  name={SAMPLE_DATA.name}
+                  handle="alexmorgan"
+                  company={SAMPLE_DATA.company}
+                  title={SAMPLE_DATA.title}
+                  bio="Bay Area homes, from first tour to closing day. Let's find yours."
+                  photoUrl={DEMO_HEADSHOT}
+                  socials={{
+                    instagram: SAMPLE_DATA.instagram, tiktok: SAMPLE_DATA.tiktok, linkedin: SAMPLE_DATA.linkedin,
+                    twitter: SAMPLE_DATA.twitter, website: SAMPLE_DATA.website,
+                  }}
+                  links={DEMO_LINKS}
+                  paid
+                />
+              </div>
+              <div className="flex items-center gap-2 bg-gray-800/60 border border-gray-700/60 rounded-xl px-3 py-2.5">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth={1.8} className="w-3.5 h-3.5 shrink-0">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+                </svg>
+                <span className="text-blue-400 text-xs truncate flex-1">swiftcard.me/links/alexmorgan</span>
+                <span className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300">Copy</span>
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <span className="block text-center text-xs font-semibold text-gray-400 bg-gray-800 border border-gray-700 rounded-full py-2">
+                  Open Swift Links →
+                </span>
+                <span className="block text-center text-xs font-semibold text-gray-400 bg-gray-800 border border-gray-700 rounded-full py-2">
+                  Edit my links
+                </span>
+              </div>
+            </div>
+          </>
+        }
+        signature={
+          <>
+            <div className="mb-4">
+              <h3 className="text-base font-semibold text-white">Your card in every email</h3>
+              <p className="text-gray-400 text-sm mt-1 leading-relaxed">
+                Copy your Swift Signature and paste it into your email — a clickable link to your card at the bottom of every message you send.
+              </p>
+            </div>
+            <div className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5">
+              <p className="text-gray-400 text-xs mb-3">Here&apos;s how it looks at the bottom of an email you send:</p>
+              <div className="rounded-xl border border-gray-700/60 bg-white overflow-hidden">
+                <div className="px-4 py-2.5 border-b border-gray-200 text-[0.75rem] text-gray-500 space-y-0.5">
+                  <p><span className="text-gray-400">To:</span> sarah@acme.com</p>
+                  <p><span className="text-gray-400">Subject:</span> Great connecting today</p>
+                </div>
+                <div className="px-4 py-3 text-[0.8125rem] text-gray-800 leading-relaxed">
+                  <p>Hi Sarah,</p>
+                  <p className="mt-2">Really enjoyed chatting earlier. My contact info is below in my signature. Let&apos;s keep in touch!</p>
+                  <p className="mt-2">Best,</p>
+                  <div className="mt-3">
+                    <p className="text-[0.875rem] text-gray-900 mb-1.5"><strong>{DEMO_CARD.name}</strong> | {DEMO_CARD.company}</p>
+                    <div className="w-[240px] max-w-full rounded-[10px] overflow-hidden border border-gray-200" style={{ pointerEvents: "none" }}>
+                      <CardScaler><ClassicPro data={DEMO_CARD} /></CardScaler>
+                    </div>
+                    <span className="inline-block mt-2 text-[0.875rem] font-bold text-blue-600">Contact me</span>
+                  </div>
+                </div>
+              </div>
+              <span className="mt-4 block text-center bg-blue-600 text-white font-semibold text-sm py-2.5 rounded-full">
+                Copy signature
+              </span>
+              <ol className="mt-4 space-y-2.5">
+                <li className="flex gap-2.5">
+                  <span className="w-5 h-5 rounded-full bg-gray-800 text-gray-300 text-[0.6875rem] font-bold flex items-center justify-center shrink-0">1</span>
+                  <p className="text-gray-300 text-[0.75rem] leading-relaxed">Tap <strong className="text-white">Copy signature</strong> above.</p>
+                </li>
+                <li className="flex gap-2.5">
+                  <span className="w-5 h-5 rounded-full bg-gray-800 text-gray-300 text-[0.6875rem] font-bold flex items-center justify-center shrink-0">2</span>
+                  <p className="text-gray-300 text-[0.75rem] leading-relaxed">Open your email, <strong className="text-white">paste</strong> it into the Signature box, and <strong className="text-white">save</strong>.</p>
+                </li>
+              </ol>
+            </div>
+          </>
+        }
+      />
     </div>
   );
 }
