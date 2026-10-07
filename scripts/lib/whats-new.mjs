@@ -9,5 +9,6 @@
 //
 // 1.0.6 / build 17 (2026-10-02). One native change since the live build 16:
 // with no connection the app shows the saved card's QR code instead of a blank
-// screen (ios/App/App/OfflineCard.swift).
-export const WHATS_NEW = "Your QR code now works with no signal. Open SwiftCard without a connection and your card's QR code fills the screen, ready to scan. The app reloads by itself when you're back online.";
+// screen (ios/App/App/OfflineCard.swift). Added 2026-10-06: the unread-count
+// badge on the app icon (ios/App/App/AppBadge.swift).
+export const WHATS_NEW = "Your QR code now works with no signal. Open SwiftCard without a connection and your card's QR code fills the screen, ready to scan. The app reloads by itself when you're back online. The SwiftCard icon now shows how many notifications you haven't read, and clears as you read them.";
