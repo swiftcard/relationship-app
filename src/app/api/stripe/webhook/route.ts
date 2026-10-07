@@ -15,6 +15,7 @@ import { insertNotification } from "@/lib/notify";
 import { sendPushToUser } from "@/lib/push";
 import { stripeDowngradeAllowed } from "@/lib/iap-entitlement";
 import { provisionOfficeForOwner, tearDownOfficeForOwner, officeAccessEndedMessage } from "@/lib/office-billing-sync";
+import { recordOfficeDeparture, type OfficeDepartureReason } from "@/lib/office-departure";
 import { getOfficeSubUserContext } from "@/lib/office-roles";
 import { PLAN_CHOSEN_KEY, sendWelcomeWhenCardLive } from "@/lib/welcome-email";
 import { ledgerAdd, ledgerHas, recordProTrialStarted } from "@/lib/trial-ledger";
@@ -266,12 +267,21 @@ async function sendPaymentFailedEmail(opts: { customerId: string; amountCents: n
 // Cards are NOT taken offline here, unlike a manual removal. Nobody did
 // anything wrong: the company stopped paying. Their card stays live, loses the
 // office branding, and becomes theirs again.
+//
+// The contacts they captured stay with the company, like a manual removal:
+// stamped with the office tag before the row goes inert (lib/office-departure).
+// Without it a seat trim or a lapse made every one of their contacts vanish
+// from the office's Contacts tab (owner, 2026-10-07).
 async function releaseOfficeMember(
   admin: ReturnType<typeof getAdminSupabase>,
   memberRowId: string,
   userId: string | null,
+  officeId: string,
+  reason: OfficeDepartureReason,
 ): Promise<void> {
   if (userId) {
+    // Never throws — it reports, and the release carries on.
+    await recordOfficeDeparture(officeId, userId, reason);
     // Hand the cards back before the membership goes inert, so a failure here
     // cannot leave a card flagged to an office that no longer claims it.
     // Best-effort: a failure here must not stop the membership from going
@@ -1009,7 +1019,7 @@ export async function POST(req: NextRequest) {
                 body: officeAccessEndedMessage(fallback),
               }).catch(() => {});
             }
-            await releaseOfficeMember(admin, m.id as string, m.user_id as string | null);
+            await releaseOfficeMember(admin, m.id as string, m.user_id as string | null, office.id as string, "seats_reduced");
           }
         }
       }
@@ -1167,7 +1177,7 @@ export async function POST(req: NextRequest) {
             // going inert is what the old delete was really after; keeping it
             // is what makes re-subscribing restore the team instead of
             // re-inviting fourteen people one at a time.
-            await releaseOfficeMember(admin, m.id as string, m.user_id as string | null);
+            await releaseOfficeMember(admin, m.id as string, m.user_id as string | null, office.id as string, "office_ended");
           }
         }
       }

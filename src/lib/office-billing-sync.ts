@@ -3,6 +3,7 @@ import { reportError } from "@/lib/report-error";
 import { getOfficeBrand, stripBrandFromUserCards, memberFallbackPlan, seedBrandFromOwnersFirstCard, applyBrandToUserCards } from "@/lib/office-brand";
 import { insertNotification } from "@/lib/notify";
 import { PLAN_CHOSEN_KEY } from "@/lib/welcome-email";
+import { recordOfficeDeparture } from "@/lib/office-departure";
 
 type Admin = ReturnType<typeof getAdminSupabase>;
 
@@ -200,6 +201,10 @@ export async function tearDownOfficeForOwner(admin: Admin, ownerId: string): Pro
   for (const m of members ?? []) {
     const uid = m.user_id as string | null;
     if (uid) {
+      // Their contacts stay with the company, as on a manual removal — so the
+      // team comes back WITH them if the owner returns to Office, even for
+      // someone who has moved on by then (lib/office-departure). Never throws.
+      await recordOfficeDeparture(office.id as string, uid, "office_ended");
       const fallback = await memberFallbackPlan(uid);
       const { data: prof } = await admin.from("profiles").select("customization").eq("id", uid).maybeSingle();
       const cust = (prof?.customization as Record<string, unknown> | null) ?? {};

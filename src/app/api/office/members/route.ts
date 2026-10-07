@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { getOfficeBrand, stripBrandFromUserCards, memberFallbackPlan } from "@/lib/office-brand";
-import { officeLeadTag } from "@/lib/office-leads";
+import { keepContactsWithOffice, slugsHeldBy } from "@/lib/office-departure";
+import { reportError } from "@/lib/report-error";
 import { writeAudit } from "@/lib/audit";
 import { requireOfficeCapability } from "@/lib/office-roles";
 import { insertNotification } from "@/lib/notify";
@@ -57,31 +58,25 @@ export async function DELETE(req: Request) {
 
   // Active member → full removal (revert plan, de-brand, delete row).
   if (member?.user_id) {
-    // Keep the leads they captured visible to the office AFTER their slugs drop
-    // out of the team set — the removal dialog promises "the leads they captured
-    // stay with your company", and without this stamp they'd silently vanish
-    // from the Leads tab the moment the row below is deleted. Tag only leads
-    // that exist NOW: anything they capture after leaving is theirs alone.
+    // Keep the contacts they captured visible to the office AFTER their slugs
+    // drop out of the team set — the removal dialog promises "the contacts they
+    // captured stay with your company", and without this stamp they'd silently
+    // vanish from the Contacts tab the moment the row below is deleted. Stamps
+    // EVERY contact on their cards; this used to stop at the first 1,000
+    // (lib/office-departure). Only contacts that exist NOW: anything they
+    // capture after leaving is theirs alone. Its own try, so a failure here is
+    // reported and never stops the rest of the removal.
     try {
-      const [{ data: prof }, { data: memberCards }] = await Promise.all([
-        supabase.from("profiles").select("username").eq("id", member.user_id).maybeSingle(),
-        supabase.from("cards").select("id, username").eq("user_id", member.user_id),
-      ]);
-      const slugs = Array.from(new Set([
-        (prof?.username as string) ?? "",
-        ...(memberCards ?? []).map((c) => c.username as string),
-      ].filter(Boolean)));
-      removedSlugs = slugs;
-      if (slugs.length) {
-        const tag = officeLeadTag(office.id as string);
-        const { data: theirLeads } = await supabase
-          .from("leads").select("id, tags").in("card_owner", slugs).limit(1000);
-        for (const l of theirLeads ?? []) {
-          const tags = Array.isArray(l.tags) ? (l.tags as string[]) : [];
-          if (tags.includes(tag)) continue;
-          await supabase.from("leads").update({ tags: [...tags, tag] }).eq("id", l.id);
-        }
+      removedSlugs = await slugsHeldBy(member.user_id as string);
+      const kept = await keepContactsWithOffice(office.id as string, member.user_id as string, removedSlugs);
+      if (kept.missed) {
+        await reportError("office.remove-contacts-missed", new Error(`${kept.missed} contacts not stamped`), { officeId: office.id, userId: member.user_id }).catch(() => {});
       }
+    } catch (e) {
+      await reportError("office.remove-contacts-failed", e, { officeId: office.id, userId: member.user_id }).catch(() => {});
+    }
+    try {
+      const { data: memberCards } = await supabase.from("cards").select("id").eq("user_id", member.user_id);
       // "Their cards will be turned off": the office paid for and branded these
       // cards, so they stop serving on removal.
       //

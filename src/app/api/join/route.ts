@@ -5,6 +5,7 @@ import { getOfficeBrand, applyBrandToUserCards, stripBrandFromUserCards, type Of
 import { sendWelcomeWhenCardLive, PLAN_CHOSEN_KEY } from "@/lib/welcome-email";
 import { isInviteExpired } from "@/lib/office-invite";
 import { writeAudit } from "@/lib/audit";
+import { recordOfficeDeparture } from "@/lib/office-departure";
 import { notifyOffice, displayLabelFrom } from "@/lib/office-notify";
 import { alertTeam } from "@/lib/team-alerts";
 import { insertNotification } from "@/lib/notify";
@@ -225,6 +226,13 @@ export async function POST(req: Request) {
     .eq("user_id", user.id)
     .eq("status", "active")
     .neq("office_id", officeId);
+  // Leaving the old team the way a removal does: the contacts they captured
+  // there stay with that company, stamped before the old membership goes
+  // (lib/office-departure). Without this, accepting a new invite made every
+  // one of them vanish from the old company's Contacts tab. Never throws.
+  for (const r of oldRows ?? []) {
+    if (r.office_id) await recordOfficeDeparture(r.office_id as string, user.id, "joined_another_team");
+  }
   await admin
     .from("office_members")
     .delete()
