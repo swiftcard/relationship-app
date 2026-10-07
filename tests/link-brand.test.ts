@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   hostLabel, faviconFor, monogramFor, monogramTint,
-  fullHref, brandBackground,
+  fullHref, brandBackground, iconHost,
 } from "@/lib/link-brand";
 
 const root = process.cwd();
@@ -103,10 +103,25 @@ describe("monogram", () => {
 describe("faviconFor", () => {
   it("is derived from the hostname — no scrape, no /api/link-preview", () => {
     expect(faviconFor("https://levleveducationalfund.org/donate"))
-      .toBe("https://www.google.com/s2/favicons?domain=levleveducationalfund.org&sz=128");
+      .toBe("/api/link-icon?host=levleveducationalfund.org");
+  });
+  it("is one address per site: www and case don't make a second cache entry", () => {
+    expect(faviconFor("https://WWW.Zillow.com/homes")).toBe("/api/link-icon?host=zillow.com");
+    expect(faviconFor("zillow.com")).toBe("/api/link-icon?host=zillow.com");
   });
   it("returns null for junk", () => {
     expect(faviconFor("")).toBeNull();
+    expect(faviconFor("not a url")).toBeNull();
+  });
+});
+
+describe("iconHost", () => {
+  it("accepts real hostnames only", () => {
+    expect(iconHost("calendly.com")).toBe("calendly.com");
+    expect(iconHost("api.leadconnectorhq.com")).toBe("api.leadconnectorhq.com");
+    expect(iconHost("localhost")).toBeNull();
+    expect(iconHost("evil.com/../x")).toBeNull();
+    expect(iconHost(".com")).toBeNull();
   });
 });
 
@@ -253,5 +268,14 @@ describe("the section costs no first-party network", () => {
     // The monogram is painted underneath and only fades out once the image loads.
     expect(c).toMatch(/opacity: showFavicon \? 0 : 1/);
     expect(c).toMatch(/onError=\{\(\) => setFailed\(true\)\}/);
+  });
+
+  // Live 2026-10-07: the mark is server-rendered, the icon loaded before
+  // hydration, onLoad never fired, and every logo sat downloaded at opacity 0
+  // behind its monogram (all rows on WebKit). The mount-time read is the fix.
+  it("adopts an icon that loaded before React was listening", () => {
+    const c = code("src/components/LinkMark.tsx");
+    expect(c).toMatch(/ref=\{imgRef\}/);
+    expect(c).toMatch(/el\?\.complete && el\.naturalWidth > 0\) setLoaded\(true\)/);
   });
 });

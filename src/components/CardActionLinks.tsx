@@ -22,8 +22,9 @@ type CardLink = { emoji?: string; label: string; url: string };
 // button reads as advertising on a professional's card. Ranking is the owner's
 // own ordering, nothing more.
 //
-// Zero network: the marks are favicons derived from the hostname (lazy, over an
-// always-painted monogram), never an og:image scrape.
+// No scrape: the marks are site icons derived from the hostname (lazy, over an
+// always-painted monogram) via the edge-cached /api/link-icon, never an
+// og:image lookup.
 export default function CardActionLinks({
   links,
   trackFor = null,

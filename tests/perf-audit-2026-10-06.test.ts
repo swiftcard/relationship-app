@@ -67,7 +67,7 @@ describe("Swift Links previews", () => {
 
   it("a favicon Google has no icon for falls back instead of showing a broken image", () => {
     const src = code("src/components/SwiftLinkButtons.tsx");
-    const imgs = src.match(/<img src=\{favicon\}[^>]*>/g) ?? [];
+    const imgs = (src.match(/<img\b[\s\S]*?\/>/g) ?? []).filter((t) => t.includes("src={favicon}"));
     expect(imgs.length).toBeGreaterThan(0);
     for (const img of imgs) expect(img).toContain("onError");
   });

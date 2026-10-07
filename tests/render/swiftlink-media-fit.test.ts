@@ -55,7 +55,8 @@ describe("uploaded tile media fits its tile on a 390px page", () => {
         const col = document.getElementById("col")!.getBoundingClientRect();
         const tiles = [...document.querySelectorAll("a")].map((a) => {
           const t = a.getBoundingClientRect();
-          const m = a.querySelector("img, video");
+          // The tile's picture, not the site logo every row now carries.
+          const m = a.querySelector("img.object-cover, video");
           const mb = m?.getBoundingClientRect();
           return {
             label: a.textContent?.trim(),

@@ -26,19 +26,41 @@ export function hostLabel(url: string): string {
   return u.hostname.replace(/^www\./i, "").toLowerCase();
 }
 
+/** The host to ask for a site's icon: lowercased, no "www." — one cache entry
+ *  per site, and the icon is the same for both. Null for anything that is not
+ *  a plausible public hostname. */
+export function iconHost(raw: string): string | null {
+  const h = (raw || "").trim().toLowerCase().replace(/\.$/, "").replace(/^www\./, "");
+  if (!h || h.length > 253 || !h.includes(".")) return null;
+  if (!/^[a-z0-9.-]+$/.test(h) || /^[.-]|[.-]$|\.\./.test(h)) return null;
+  return h;
+}
+
 /**
- * A link's favicon, derived from its hostname alone.
+ * A link's icon (its site's logo), derived from its hostname alone — the one
+ * address every surface uses: the card page's Swift Links box, the Swift Links
+ * page's rows and tiles, and the editor.
  *
- * Deliberately NOT /api/link-preview: that route is a Node-runtime scrape with a
- * 5s abort, a per-instance cache that is cold on every fresh lambda, and an
- * IP rate limit a single conference NAT would exhaust. This page is opened on
- * mobile data seconds after a QR scan, so the section must cost zero first-party
- * requests. Same service and size the scrape route itself falls back to.
+ * It is /api/link-icon, not Google's favicon service directly. Google answers
+ * "no icon" with a 404 that still carries a grey globe, and browsers LOAD it —
+ * so a site Google doesn't know showed a meaningless globe instead of falling
+ * back to the monogram, and there was no way to tell it from a real 16px logo
+ * (Cash App's is one). The route sees the status, tries the site's own icon
+ * and then its parent domain, and answers a real 404 when there is none, so
+ * `onError` finally means "no logo".
+ *
+ * Still deliberately NOT /api/link-preview: that route is a page scrape with a
+ * 5s abort and an IP rate limit a conference NAT would exhaust, and this page
+ * is opened on mobile data seconds after a QR scan. The icon route is keyed by
+ * host and CDN-cached for a week, so a visitor is answered from the edge — and
+ * on the connection the page already has open, instead of two new handshakes
+ * to google.com and gstatic.com.
  */
 export function faviconFor(url: string): string | null {
   const u = toUrl(url);
   if (!u) return null;
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(u.hostname)}&sz=128`;
+  const host = iconHost(u.hostname);
+  return host ? `/api/link-icon?host=${encodeURIComponent(host)}` : null;
 }
 
 /** Single uppercase letter for the monogram shown until (or instead of) a favicon. */

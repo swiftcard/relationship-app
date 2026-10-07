@@ -19,8 +19,8 @@ import { videoThumbnail, videoEmbed } from "@/lib/video";
 import { triggerSignupNudge } from "@/lib/nudge";
 import { trackLinkClick } from "@/lib/track-link-click";
 import { layoutTiles, resolveRowStyle, tileMedia, type SizedLink } from "@/lib/swiftlink-tiles";
-
-type Preview = { image: string | null; favicon: string | null; title: string | null };
+import { faviconFor } from "@/lib/link-brand";
+import { fetchLinkPreview, type LinkPreview as Preview } from "@/lib/link-preview-client";
 
 // Fallback gradients for links with no preview image — picked by index so
 // neighboring tiles differ.
@@ -33,7 +33,7 @@ type Preview = { image: string | null; favicon: string | null; title: string | n
 // the back/forward cache. When autoplay is refused anyway (Low Power Mode),
 // preload="auto" leaves the first frame showing, so the tile still has its
 // image and the link still opens on tap.
-function TileVideo({ src }: { src: string }) {
+function TileVideo({ src, onFail }: { src: string; onFail: () => void }) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     const el = ref.current;
@@ -57,8 +57,27 @@ function TileVideo({ src }: { src: string }) {
       preload="auto"
       disablePictureInPicture
       aria-hidden="true"
+      // A clip that cannot play (deleted upload, unsupported codec) hands the
+      // tile back to the link's own preview rather than leave a black box.
+      onError={onFail}
     />
   );
+}
+
+// The picture a tile shows, in order: the owner's upload, the video's frame,
+// the link's own preview. Each is tried as-is, then once through the
+// same-origin /api/img-proxy (hotlink-protected or http-only images load
+// there), and only then given up for the next — and with none left, the tile
+// is the Look's designed fallback. A tile never shows a broken image.
+type PictureStage = 1 | 2; // 1 = direct load failed, 2 = proxy failed too
+function pickPicture(candidates: (string | null | undefined)[], failed: Record<string, PictureStage>): { src: string; key: string } | null {
+  for (const c of candidates) {
+    if (!c) continue;
+    const stage = failed[c];
+    if (!stage) return { src: c, key: c };
+    if (stage === 1) return { src: `/api/img-proxy?url=${encodeURIComponent(c)}&w=1200`, key: c };
+  }
+  return null;
 }
 
 function fullHref(url: string) {
@@ -135,10 +154,27 @@ export default function SwiftLinkButtons({
   // delete showed one link's picture on another until a refetch landed.
   const [previews, setPreviews] = useState<Record<string, Preview>>({});
   const requestedRef = useRef(new Set<string>());
-  // Favicons Google has no icon for (its faviconV2 endpoint answers 404). The
-  // tile falls back to the emoji / letter instead of a broken-image box.
+  // Each link's icon is its site's logo from /api/link-icon (lib/link-brand
+  // faviconFor) — known from the URL alone, so it starts loading with the page
+  // instead of waiting on the preview scrape, and video links get theirs too
+  // (they never asked for a preview, so their rows used to show a bare glyph).
+  // A site with no logo answers 404 and the row keeps its emoji / link glyph.
   const [brokenFavicons, setBrokenFavicons] = useState<ReadonlySet<string>>(() => new Set());
   const markFaviconBroken = (u: string) => setBrokenFavicons((b) => (b.has(u) ? b : new Set(b).add(u)));
+  // Icons that have actually painted. Until then the fallback shows, so a slow
+  // icon is never an empty circle. Also adopted from the element on mount: this
+  // list is server-rendered, and an icon that loads before hydration fires its
+  // load event before React is listening (the card page's marks sat invisible
+  // for exactly that reason — see LinkMark).
+  const [loadedIcons, setLoadedIcons] = useState<ReadonlySet<string>>(() => new Set());
+  const markIconLoaded = (u: string) => setLoadedIcons((s) => (s.has(u) ? s : new Set(s).add(u)));
+  const adoptIcon = (u: string) => (el: HTMLImageElement | null) => {
+    if (el?.complete && el.naturalWidth > 0) markIconLoaded(u);
+  };
+  // Tile pictures that failed, by their ORIGINAL url — see pickPicture.
+  const [failedPictures, setFailedPictures] = useState<Record<string, PictureStage>>({});
+  const failPicture = (u: string) =>
+    setFailedPictures((f) => (f[u] === 2 ? f : { ...f, [u]: f[u] === 1 ? 2 : 1 }));
   const firstPreviewRunRef = useRef(true);
   // Index of the tile currently playing an inline video, if any.
   const [playing, setPlaying] = useState<number | null>(null);
@@ -220,10 +256,7 @@ export default function SwiftLinkButtons({
         requestedRef.current.add(u);
         // Results are keyed by URL, so a late answer can only ever fill in its
         // own link — no cancellation needed when the list changes.
-        fetch(`/api/link-preview?url=${encodeURIComponent(u)}`)
-          .then((r) => r.json())
-          .then((d: Preview) => setPreviews((p) => ({ ...p, [u]: d })))
-          .catch(() => setPreviews((p) => ({ ...p, [u]: { image: null, favicon: null, title: null } })));
+        fetchLinkPreview(u).then((d) => setPreviews((p) => ({ ...p, [u]: d })));
       }
     }, first ? 0 : 400);
     return () => clearTimeout(timer);
@@ -279,7 +312,23 @@ export default function SwiftLinkButtons({
         const videoThumb = videoThumbnail(link.url);
         const embed = videoEmbed(link.url);
         const pv = previews[href];
-        const favicon = pv?.favicon && !brokenFavicons.has(pv.favicon) ? pv.favicon : null;
+        const icon = faviconFor(link.url);
+        const favicon = icon && !brokenFavicons.has(icon) ? icon : null;
+        const iconShown = !!favicon && loadedIcons.has(favicon);
+        // The logo itself; invisible (but loading) until it has painted.
+        const iconImg = favicon ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            ref={adoptIcon(favicon)}
+            src={favicon}
+            alt=""
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onLoad={() => markIconLoaded(favicon)}
+            onError={() => markFaviconBroken(favicon)}
+            className={`w-[20px] h-[20px] object-contain rounded-full ${iconShown ? "" : "absolute opacity-0"}`}
+          />
+        ) : null;
 
         // ── COMPACT — slim row on the sheet itself ──────────────────────────
         // "compact" is the stock translucent row; buttonStyle solid/outline
@@ -355,19 +404,17 @@ export default function SwiftLinkButtons({
               style={rowStyle}
             >
               <span
-                className={`w-[34px] h-[34px] rounded-full shrink-0 flex items-center justify-center ${variant !== "solid" ? (light ? "bg-black/[0.05]" : "bg-white/10") : ""}`}
+                className={`relative w-[34px] h-[34px] rounded-full shrink-0 flex items-center justify-center ${variant !== "solid" ? (light ? "bg-black/[0.05]" : "bg-white/10") : ""}`}
                 style={iconWell}
               >
-                {favicon ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={favicon} alt="" loading="lazy" onError={() => markFaviconBroken(favicon)} className="w-[20px] h-[20px] object-contain rounded-full" />
-                ) : link.emoji ? (
+                {iconShown ? null : link.emoji ? (
                   <span className="text-[1rem] leading-none">{link.emoji}</span>
                 ) : (
                   <svg viewBox="0 0 24 24" fill="none" stroke={labelColor} strokeOpacity={0.7} strokeWidth={2} className="w-4 h-4">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
                   </svg>
                 )}
+                {iconImg}
               </span>
               <span className="flex-1 min-w-0 text-left text-[0.875rem] font-semibold truncate" style={{ color: labelColor }}>
                 {link.label}
@@ -384,8 +431,13 @@ export default function SwiftLinkButtons({
         // autoplays muted AS the tile (the link still opens on tap). Both are
         // Pro (tileMedia returns null for Free, which never reaches here anyway).
         const media = tileMedia(link, paid);
-        const mediaVideo = media?.type === "video" ? media.url : null;
-        const img = media?.type === "image" ? media.url : videoThumb || pv?.image || null;
+        const mediaVideo = media?.type === "video" && !failedPictures[media.url] ? media.url : null;
+        // No upload → the link's own preview (owner, 2026-10-07: "the default
+        // of that additional link is its preview"), with the fallbacks above.
+        const picture = mediaVideo ? null : pickPicture([media?.type === "image" ? media.url : null, videoThumb, pv?.image], failedPictures);
+        // The picture whose measured tone sets the title colour (unchanged for
+        // an uploaded video: it reads the link's preview, as it always has).
+        const img = mediaVideo ? videoThumb || pv?.image || null : picture?.key ?? null;
         // With no picture the tile is built from this page's own Look — see
         // fallbackTile() in lib/swiftlink-looks. It replaced four hard-coded
         // rainbow gradients that ignored the palette the owner picked.
@@ -433,10 +485,22 @@ export default function SwiftLinkButtons({
           <>
             {/* Uploaded video, image, or branded gradient fallback */}
             {mediaVideo ? (
-              <TileVideo src={mediaVideo} />
-            ) : img ? (
+              <TileVideo src={mediaVideo} onFail={() => setFailedPictures((f) => ({ ...f, [mediaVideo]: 2 }))} />
+            ) : picture ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={img} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+              <img
+                src={picture.src}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover"
+                loading="lazy"
+                // Hotlink guards check the Referer; without one, a site's own
+                // preview picture loads the way it does in Messages.
+                referrerPolicy="no-referrer"
+                // Server-rendered (an upload, a video frame): a failure before
+                // hydration fired no onError, so read it off the element.
+                ref={(el) => { if (el?.complete && el.naturalWidth === 0 && el.getAttribute("src") === picture.src) failPicture(picture.key); }}
+                onError={() => failPicture(picture.key)}
+              />
             ) : (
               // No picture: the branded surface carries the tile on its own.
               // Nothing is centred on it any more. A 36px emoji floating in
@@ -472,22 +536,21 @@ export default function SwiftLinkButtons({
               }}
             />
 
-            {/* Favicon circle, top-left (link.me's iconbox) */}
+            {/* Favicon circle, top-left (link.me's iconbox). Shown once the
+                site's logo has painted (or straight away with an emoji), so a
+                site with no logo never leaves an empty white circle. */}
             {(favicon || link.emoji) && (
               <span
-                className="absolute top-2 left-2 z-[6] w-[30px] h-[30px] rounded-full flex items-center justify-center"
-                style={
-                  lightTile
+                className="absolute top-2 left-2 z-[6] w-[30px] h-[30px] rounded-full flex items-center justify-center transition-opacity duration-200"
+                style={{
+                  ...(lightTile
                     ? { background: "rgba(255,255,255,0.92)", boxShadow: "0 1px 3px rgba(15,23,42,0.18), inset 0 0 0 1px rgba(15,23,42,0.08)" }
-                    : { background: "rgba(255,255,255,0.95)", boxShadow: "0 1px 3px rgba(0,0,0,0.28)" }
-                }
+                    : { background: "rgba(255,255,255,0.95)", boxShadow: "0 1px 3px rgba(0,0,0,0.28)" }),
+                  opacity: iconShown || link.emoji ? 1 : 0,
+                }}
               >
-                {favicon ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={favicon} alt="" loading="lazy" onError={() => markFaviconBroken(favicon)} className="w-[20px] h-[20px] object-contain rounded-full" />
-                ) : (
-                  <span className="text-[0.9375rem] leading-none">{link.emoji}</span>
-                )}
+                {!iconShown && link.emoji && <span className="text-[0.9375rem] leading-none">{link.emoji}</span>}
+                {iconImg}
               </span>
             )}
 
