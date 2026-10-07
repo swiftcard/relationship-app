@@ -7,7 +7,7 @@ import { withoutSocials, SAMPLE_DATA, DEMO_HEADSHOT } from "@/components/card-te
 import type { CardData } from "@/components/card-templates/types";
 import DemoContactActions from "@/components/site/DemoContactActions";
 import TrafficChart, { type TrafficBucket } from "@/components/TrafficChart";
-import LinksPageTabs from "@/components/LinksPageTabs";
+import LinksPageTabs, { CreateComingSoon } from "@/components/LinksPageTabs";
 import SwiftLinkLivePreview from "@/components/SwiftLinkLivePreview";
 
 // Same demo identity as SAMPLE_DATA (card-templates/types.tsx) and every other
@@ -461,6 +461,7 @@ function LinksPageView() {
             </div>
           </>
         }
+        create={<CreateComingSoon as="h3" />}
       />
     </div>
   );

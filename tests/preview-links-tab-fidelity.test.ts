@@ -52,6 +52,7 @@ describe("the Links page replicas match the real Links page", () => {
     }
     expect(tabs).toContain('label: "Swift Links"');
     expect(tabs).toContain('label: "Swift Signature"');
+    expect(tabs).toContain('label: "Create +"');
     expect(sigBox, "the real signature side lost its Copy signature button").toContain('"Copy signature"');
     expect(sigBox).toContain("Here&apos;s how it looks at the bottom of an email you send:");
   });
@@ -64,6 +65,10 @@ describe("the Links page replicas match the real Links page", () => {
     expect(preview).toMatch(/<LinksPageTabs\s+syncHash=\{false\}/);
     expect(demo).toMatch(/<LinksPageTabs\s+syncHash=\{false\}/);
     expect(share).not.toMatch(/syncHash=\{false\}/);
+    // The Create + side: the same shared placeholder everywhere (h3 in the
+    // replicas, whose page title is already an h2).
+    expect(preview).toContain('create={<CreateComingSoon as="h3" />}');
+    expect(demo).toContain('create={<CreateComingSoon as="h3" />}');
   });
 
   it("each replica's sides read the same as the real ones", () => {

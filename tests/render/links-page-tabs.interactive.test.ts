@@ -168,33 +168,53 @@ const shown = (page: Page, sel: string) =>
     return getComputedStyle(el).display !== "none" && r.width > 0 && r.height > 0;
   }, sel);
 
-describe("Links page: Swift Links | Swift Signature switch", () => {
-  for (const width of [390, 1280]) {
+/** Per tab: its box, its label's box, and whether the label is one line. */
+const measureTabs = (page: Page) =>
+  page.evaluate(() => {
+    const tabs = [...document.querySelectorAll('[role="tab"]')] as HTMLElement[];
+    return tabs.map((t) => {
+      const label = t.querySelector("[data-tab-label]") as HTMLElement;
+      const tr = t.getBoundingClientRect(), lr = label.getBoundingClientRect();
+      const lh = parseFloat(getComputedStyle(label).lineHeight) || parseFloat(getComputedStyle(label).fontSize) * 1.25;
+      return {
+        text: label.textContent,
+        w: Math.round(tr.width), h: Math.round(tr.height),
+        // Overflowing its tab, horizontally — the "cut off" the owner would see.
+        spills: lr.left < tr.left - 0.5 || lr.right > tr.right + 0.5 || label.scrollWidth > label.clientWidth + 1,
+        oneLine: label.offsetHeight <= lh * 1.5,
+      };
+    });
+  });
+
+describe("Links page: Swift Links | Swift Signature | Create + switch", () => {
+  for (const width of [320, 360, 375, 390, 1280]) {
     for (const theme of ["light", "dark"] as const) {
       it(`fits, reads and starts on Swift Links at ${width}px (${theme})`, async () => {
         const page = await mount(width, { theme });
         try {
+          const tabsM = await measureTabs(page);
           const m = await page.evaluate(() => {
             const tabs = [...document.querySelectorAll('[role="tab"]')] as HTMLElement[];
             const list = document.querySelector('[role="tablist"]') as HTMLElement;
-            const label = (t: HTMLElement) => t.querySelector("span.truncate") as HTMLElement;
             const bg = (el: Element) => getComputedStyle(el).backgroundColor;
             return {
               overflow: document.documentElement.scrollWidth - window.innerWidth,
-              widths: tabs.map((t) => Math.round(t.getBoundingClientRect().width)),
-              heights: tabs.map((t) => Math.round(t.getBoundingClientRect().height)),
-              clipped: tabs.filter((t) => label(t).scrollWidth > label(t).clientWidth + 1).map((t) => t.textContent),
               selected: tabs.map((t) => t.getAttribute("aria-selected")),
               activeBg: bg(tabs[0]),
               inactiveColor: getComputedStyle(tabs[1]).color,
               listBg: bg(list),
             };
           });
+          expect(tabsM.map((t) => t.text)).toEqual(["Swift Links", "Swift Signature", "Create +"]);
           expect(m.overflow, "the page scrolls sideways").toBeLessThanOrEqual(0);
-          expect(Math.abs(m.widths[0] - m.widths[1]), `tabs are not two equal halves: ${m.widths}`).toBeLessThanOrEqual(1);
-          expect(Math.min(...m.heights), "tabs too small to tap").toBeGreaterThanOrEqual(36);
-          expect(m.clipped, "a tab label is cut off").toEqual([]);
-          expect(m.selected).toEqual(["true", "false"]);
+          const ws = tabsM.map((t) => t.w);
+          expect(Math.max(...ws) - Math.min(...ws), `tabs are not three equal parts: ${ws}`).toBeLessThanOrEqual(1);
+          expect(Math.min(...tabsM.map((t) => t.h)), "tabs too small to tap").toBeGreaterThanOrEqual(36);
+          expect(tabsM.filter((t) => t.spills).map((t) => t.text), "a tab label is cut off").toEqual([]);
+          if (width >= 360) {
+            expect(tabsM.filter((t) => !t.oneLine).map((t) => t.text), `a label wraps at ${width}px`).toEqual([]);
+          }
+          expect(m.selected).toEqual(["true", "false", "false"]);
           // blue-600 — Tailwind v4 computes it in oklch.
           expect(m.activeBg, "the selected side is not the blue pill").toMatch(/^oklch\(0\.546 0\.245 262\.881\)$|^rgb\(37, 99, 235\)$/);
           expect(m.inactiveColor, "the unselected label is invisible on its background").not.toBe(m.listBg);
@@ -225,15 +245,47 @@ describe("Links page: Swift Links | Swift Signature switch", () => {
     } finally { await page.close(); }
   });
 
-  it("arrow keys move between sides", async () => {
+  it("arrow keys move through all three sides, and wrap", async () => {
     const page = await mount(1280);
     try {
       await page.focus("#links-tab-links");
       await page.keyboard.press("ArrowRight");
       expect(await page.getAttribute("#links-tab-signature", "aria-selected")).toBe("true");
       expect(await page.evaluate(() => document.activeElement?.id)).toBe("links-tab-signature");
-      await page.keyboard.press("ArrowLeft");
+      await page.keyboard.press("ArrowRight");
+      expect(await page.getAttribute("#links-tab-create", "aria-selected")).toBe("true");
+      await page.keyboard.press("ArrowRight");
       expect(await page.getAttribute("#links-tab-links", "aria-selected")).toBe("true");
+      await page.keyboard.press("ArrowLeft");
+      expect(await page.getAttribute("#links-tab-create", "aria-selected")).toBe("true");
+      await page.keyboard.press("Home");
+      expect(await page.getAttribute("#links-tab-links", "aria-selected")).toBe("true");
+    } finally { await page.close(); }
+  });
+
+  it("Create + shows its coming-soon card, keeps its side in the URL, and leads nowhere", async () => {
+    const page = await mount(390);
+    try {
+      await page.click("#links-tab-create");
+      expect(await shown(page, "#links-panel-create")).toBe(true);
+      expect(await shown(page, "#links-panel-links")).toBe(false);
+      expect(await shown(page, "#links-panel-signature")).toBe(false);
+      expect(await page.evaluate(() => location.hash)).toBe("#create");
+      const side = await page.evaluate(() => {
+        const p = document.getElementById("links-panel-create")!;
+        return { text: p.innerText, actions: p.querySelectorAll("a, button, input").length, heading: p.querySelector("h2")?.textContent };
+      });
+      expect(side.heading).toBe("Create +");
+      expect(side.text).toContain("Something new is coming here soon.");
+      expect(side.actions, "the placeholder has something to tap").toBe(0);
+    } finally { await page.close(); }
+  });
+
+  it("/share#create opens on the Create + side", async () => {
+    const page = await mount(390, { hash: "#create" });
+    try {
+      expect(await shown(page, "#links-panel-create")).toBe(true);
+      expect(await page.getAttribute("#links-tab-create", "aria-selected")).toBe("true");
     } finally { await page.close(); }
   });
 
@@ -291,19 +343,27 @@ describe("Links page: Swift Links | Swift Signature switch", () => {
     } finally { await page.close(); }
   });
 
-  it("a stale signature puts a dot on the Swift Signature tab", async () => {
-    const page = await mount(390);
-    try {
-      expect(await page.locator("#links-tab-signature >> text=(needs updating)").count()).toBe(0);
-      await page.evaluate(() => window.dispatchEvent(new CustomEvent((window as unknown as { SIGNATURE_STALE_EVENT: string }).SIGNATURE_STALE_EVENT, { detail: true })));
-      expect(await page.locator("#links-tab-signature >> text=(needs updating)").count()).toBe(1);
-      const clipped = await page.evaluate(() => {
-        const l = document.querySelector("#links-tab-signature span.truncate") as HTMLElement;
-        return l.scrollWidth > l.clientWidth + 1;
-      });
-      expect(clipped, "the dot pushed the label into an ellipsis at phone width").toBe(false);
-    } finally { await page.close(); }
-  });
+  for (const width of [360, 390]) {
+    it(`a stale signature puts a dot on the Swift Signature tab without moving anything (${width}px)`, async () => {
+      const page = await mount(width);
+      try {
+        expect(await page.locator("#links-tab-signature >> text=(needs updating)").count()).toBe(0);
+        const before = await measureTabs(page);
+        await page.evaluate(() => window.dispatchEvent(new CustomEvent((window as unknown as { SIGNATURE_STALE_EVENT: string }).SIGNATURE_STALE_EVENT, { detail: true })));
+        expect(await page.locator("#links-tab-signature >> text=(needs updating)").count()).toBe(1);
+        const after = await measureTabs(page);
+        expect(after.map((t) => t.w), "the dot changed a tab's width").toEqual(before.map((t) => t.w));
+        expect(after.filter((t) => t.spills || !t.oneLine).map((t) => t.text), "the dot pushed a label out of line").toEqual([]);
+        // The dot is visible, inside the Signature tab.
+        const dot = await page.evaluate(() => {
+          const tab = document.getElementById("links-tab-signature")!.getBoundingClientRect();
+          const d = document.querySelector("#links-tab-signature .bg-amber-400")!.getBoundingClientRect();
+          return d.width > 0 && d.left >= tab.left && d.right <= tab.right && d.top >= tab.top && d.bottom <= tab.bottom;
+        });
+        expect(dot).toBe(true);
+      } finally { await page.close(); }
+    });
+  }
 });
 
 // The Swift Signature side's one job: a Copy button that is simply ready.

@@ -20,15 +20,37 @@ describe("Links page: Swift Links | Swift Signature switch", () => {
     expect(tabs).toContain('role="tab"');
     expect(tabs).toContain("aria-selected={on}");
     expect(tabs).toContain("aria-controls={`links-panel-${t.id}`}");
-    expect(tabs.match(/role="tabpanel"/g)?.length).toBe(2);
+    expect(tabs.match(/role="tabpanel"/g)?.length).toBe(3);
+    expect(tabs).toContain("grid grid-cols-3");
     // Arrow keys move between sides, with a roving tabindex.
     expect(tabs).toMatch(/ArrowRight[\s\S]*ArrowLeft/);
     expect(tabs).toContain("tabIndex={on ? 0 : -1}");
   });
 
-  it("keeps BOTH sides mounted and hides the other — nothing resets on a switch", () => {
+  it("keeps EVERY side mounted and hides the others — nothing resets on a switch", () => {
     expect(tabs).toContain('hidden={tab !== "links"}');
     expect(tabs).toContain('hidden={tab !== "signature"}');
+    expect(tabs).toContain('hidden={tab !== "create"}');
+  });
+
+  it("Create + is the third tab: a coming-soon card that leads nowhere, until it's defined", () => {
+    expect(tabs).toMatch(/\{ id: "create", label: "Create \+", icon: SPARKLES \}/);
+    expect(tabs).toContain('h === "links" || h === "signature" || h === "create"');
+    // The real page passes nothing, so it gets the shared placeholder.
+    expect(tabs).toContain("create = <CreateComingSoon />");
+    expect(share).not.toMatch(/create=\{/);
+    const placeholder = tabs.slice(tabs.indexOf("export function CreateComingSoon"), tabs.indexOf("export const SIGNATURE_STALE_EVENT"));
+    expect(placeholder).toContain("Something new is coming here soon.");
+    expect(placeholder, "the placeholder must not link or act").not.toMatch(/href=|onClick|<button|<a\b/);
+  });
+
+  it("labels are never cut off: no truncate, and the narrow-phone sizing is in place", () => {
+    expect(tabs).toContain('<span data-tab-label className="text-center">');
+    expect(tabs).not.toMatch(/data-tab-label[^>]*truncate/);
+    expect(tabs).toContain("text-xs min-[375px]:text-[0.8125rem] sm:text-sm");
+    expect(tabs).toContain('className="hidden sm:block w-4 h-4 shrink-0"');
+    // The stale dot is a corner badge, taking no width.
+    expect(tabs).toContain('className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-amber-400"');
   });
 
   it("the #hash picks the side — read in an effect, written without a history entry", () => {

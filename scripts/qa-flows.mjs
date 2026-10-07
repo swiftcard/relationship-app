@@ -648,6 +648,16 @@ FLOWS["links-page-switch"] = async () => {
     await sigTab.waitFor({ state: "visible", timeout: 20000 }).catch(() => {});
     await page.waitForTimeout(1200);
     if ((await sigTab.getAttribute("aria-selected").catch(() => null)) !== "true") fail("links-page-switch", "a reload went back to Swift Links instead of staying on Swift Signature");
+    // The third side, Create +: a coming-soon card for now (owner, 2026-10-07).
+    const createTab = page.locator('[role="tab"]', { hasText: "Create +" }).first();
+    if (!(await createTab.isVisible().catch(() => false))) fail("links-page-switch", "no Create + tab on the switch");
+    else {
+      await createTab.click();
+      await page.waitForTimeout(400);
+      const createText = await page.locator(side).innerText().catch(() => "");
+      if (!createText.includes("Something new is coming here soon.")) fail("links-page-switch", "Create + did not show its coming-soon card");
+      if (!page.url().endsWith("#create")) fail("links-page-switch", `Create + did not keep its side in the URL (at ${page.url().replace(BASE, "")})`);
+    }
     // Back to Swift Links, then Edit my links → the editor, on Socials.
     await linksTab.click();
     await page.waitForTimeout(300);
@@ -658,7 +668,7 @@ FLOWS["links-page-switch"] = async () => {
     const onSocials = /bg-blue-600/.test((await socials.getAttribute("class").catch(() => "")) || "");
     if (!page.url().includes(`/cards/${cardId}/edit`)) fail("links-page-switch", `"Edit my links" went to ${page.url().replace(BASE, "")}`);
     else if (!onSocials) fail("links-page-switch", "\"Edit my links\" opened the editor but not on its Socials tab");
-    if (!failures.some((f) => f.flow === "links-page-switch")) pass("links-page-switch", "opens on Swift Links (real page in the phone), Copy/Open/Edit right, switch flips + keeps the side");
+    if (!failures.some((f) => f.flow === "links-page-switch")) pass("links-page-switch", "opens on Swift Links (real page in the phone), Copy/Open/Edit right, all three sides switch + keep their side");
   } finally { await ctx.close(); }
 };
 

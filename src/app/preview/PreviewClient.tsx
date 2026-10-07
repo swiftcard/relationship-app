@@ -13,7 +13,7 @@ import { qrScanUrl, withSource } from "@/lib/share-source";
 import { buildContactQr } from "@/lib/contact-qr";
 import type { CardData } from "@/components/card-templates/types";
 import TrafficChart, { type TrafficBucket } from "@/components/TrafficChart";
-import LinksPageTabs from "@/components/LinksPageTabs";
+import LinksPageTabs, { CreateComingSoon } from "@/components/LinksPageTabs";
 import CardScaler from "@/components/CardScaler";
 
 type Range = "today" | "week" | "month" | "locations";
@@ -659,6 +659,7 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
                   <Box>{signatureDemo}</Box>
                 </>
               }
+              create={<CreateComingSoon as="h3" />}
             />
           </div>
         )}
