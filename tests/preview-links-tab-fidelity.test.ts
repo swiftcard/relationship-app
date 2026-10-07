@@ -65,10 +65,20 @@ describe("the Links page replicas match the real Links page", () => {
     expect(preview).toMatch(/<LinksPageTabs\s+syncHash=\{false\}/);
     expect(demo).toMatch(/<LinksPageTabs\s+syncHash=\{false\}/);
     expect(share).not.toMatch(/syncHash=\{false\}/);
-    // The Create + side: the same shared placeholder everywhere (h3 in the
-    // replicas, whose page title is already an h2).
-    expect(preview).toContain('create={<CreateComingSoon as="h3" />}');
-    expect(demo).toContain('create={<CreateComingSoon as="h3" />}');
+    // The Create + side: one shared demo (components/CreateDemo) in both
+    // replicas, reading the way the real side reads.
+    expect(preview).toMatch(/create=\{<CreateDemo person=\{/);
+    expect(demo).toMatch(/create=\{<CreateDemo person=\{/);
+    const createDemo = read("src/components/CreateDemo.tsx");
+    for (const s of ["Link anything to your SwiftCard", "Paste your email signature or add a picture. It keeps its exact look, and a click anywhere on it opens your SwiftCard."]) {
+      expect(share, `the real Create side lost "${s}"`).toContain(s);
+      expect(createDemo, `the demo Create side lost "${s}"`).toContain(s);
+    }
+    const box = read("src/components/CreateLinkBox.tsx");
+    for (const s of ["it pastes just as you see it, and a click anywhere opens your SwiftCard.", "it pastes as your link, showing this as its preview. A tap opens your SwiftCard."]) {
+      expect(box).toContain(s);
+      expect(createDemo).toContain(s);
+    }
   });
 
   it("each replica's sides read the same as the real ones", () => {

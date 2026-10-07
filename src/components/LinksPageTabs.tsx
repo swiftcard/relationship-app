@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 // The Links page's sides — Swift Links | Swift Signature | Create + — one at a
-// time. (Create + was added 2026-10-07 as a named placeholder; see TABS.)
+// time. (Create + — link anything to your SwiftCard — 2026-10-07; see TABS.)
 //
 // The page used to stack both as two near-identical grey boxes, and a first-time
 // user couldn't tell what either was for (owner, 2026-10-07). A switch makes it
@@ -30,28 +30,11 @@ const TABS: { id: LinksTab; label: string; icon: ReactNode }[] = [
     label: "Swift Signature",
     icon: <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />,
   },
-  // Owner, 2026-10-07: a third tab, named now, defined later. Until then its
-  // side is CreateComingSoon below. Sparkles, not a plus icon — the label
-  // already ends in "+".
+  // Owner, 2026-10-07: link anything — paste a signature or drop a picture
+  // and every part of it opens your SwiftCard (components/CreateLinkBox).
+  // Sparkles, not a plus icon — the label already ends in "+".
   { id: "create", label: "Create +", icon: SPARKLES },
 ];
-
-/** The Create + side until the owner says what it becomes: one card, no
- *  buttons or links, so nothing on it leads anywhere. Shared by the real page
- *  and both replicas. `as`: the replicas' page title is already an h2. */
-export function CreateComingSoon({ as: Heading = "h2" }: { as?: "h2" | "h3" }) {
-  return (
-    <div className="bg-gray-900 border border-gray-800/80 rounded-2xl px-6 py-10 text-center">
-      <div className="mx-auto w-12 h-12 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} aria-hidden className="w-6 h-6 text-blue-500">
-          {SPARKLES}
-        </svg>
-      </div>
-      <Heading className="mt-4 text-base font-semibold text-white">Create +</Heading>
-      <p className="mt-1 text-gray-500 text-sm leading-relaxed">Something new is coming here soon.</p>
-    </div>
-  );
-}
 
 /** Fired by EmailSignatureBox with `detail: boolean` — true while the card has
  *  changed since the signature was last copied. The re-copy note lives on the
@@ -62,13 +45,14 @@ export const SIGNATURE_STALE_EVENT = "sc:signature-stale";
 export default function LinksPageTabs({
   links,
   signature,
-  create = <CreateComingSoon />,
+  create,
   syncHash = true,
 }: {
   links: ReactNode;
   signature: ReactNode;
-  /** The Create + side. Defaults to the coming-soon card. */
-  create?: ReactNode;
+  /** The Create + side: CreateLinkBox on the real page, CreateDemo in the
+   *  replicas. */
+  create: ReactNode;
   /** The real page keeps the side in the URL hash (#links / #signature /
    *  #create) so a reload, a shared link and the guided tour all land on the
    *  right side. The replicas live inside other pages and must never touch

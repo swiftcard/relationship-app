@@ -33,15 +33,12 @@ describe("Links page: Swift Links | Swift Signature switch", () => {
     expect(tabs).toContain('hidden={tab !== "create"}');
   });
 
-  it("Create + is the third tab: a coming-soon card that leads nowhere, until it's defined", () => {
+  it("Create + is the third tab: the real Create box for Pro/Office, gated for Free", () => {
     expect(tabs).toMatch(/\{ id: "create", label: "Create \+", icon: SPARKLES \}/);
     expect(tabs).toContain('h === "links" || h === "signature" || h === "create"');
-    // The real page passes nothing, so it gets the shared placeholder.
-    expect(tabs).toContain("create = <CreateComingSoon />");
-    expect(share).not.toMatch(/create=\{/);
-    const placeholder = tabs.slice(tabs.indexOf("export function CreateComingSoon"), tabs.indexOf("export const SIGNATURE_STALE_EVENT"));
-    expect(placeholder).toContain("Something new is coming here soon.");
-    expect(placeholder, "the placeholder must not link or act").not.toMatch(/href=|onClick|<button|<a\b/);
+    expect(tabs).not.toContain("CreateComingSoon");
+    expect(share).toMatch(/\{isPro \? \(\s*<CreateLinkBox key=\{activeUsername\} username=\{activeUsername\} appUrl=\{APP_URL\} \/>/);
+    expect(share).toMatch(/<PlanGate feature="create-link" nativeCopy="Pro feature — [^"]+">\s*<CreateLocked \/>/);
   });
 
   it("labels are never cut off: no truncate, and the narrow-phone sizing is in place", () => {

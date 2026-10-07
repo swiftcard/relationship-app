@@ -653,14 +653,15 @@ FLOWS["links-page-switch"] = async () => {
     await sigTab.waitFor({ state: "visible", timeout: 20000 }).catch(() => {});
     await page.waitForTimeout(1200);
     if ((await sigTab.getAttribute("aria-selected").catch(() => null)) !== "true") fail("links-page-switch", "a reload went back to Swift Links instead of staying on Swift Signature");
-    // The third side, Create +: a coming-soon card for now (owner, 2026-10-07).
+    // The third side, Create + (link anything — its own flow, create-link,
+    // drives it; here it only has to be there and show its box).
     const createTab = page.locator('[role="tab"]', { hasText: "Create +" }).first();
     if (!(await createTab.isVisible().catch(() => false))) fail("links-page-switch", "no Create + tab on the switch");
     else {
       await createTab.click();
       await page.waitForTimeout(400);
       const createText = await page.locator(side).innerText().catch(() => "");
-      if (!createText.includes("Something new is coming here soon.")) fail("links-page-switch", "Create + did not show its coming-soon card");
+      if (!createText.includes("Paste or drop it here") && !createText.includes("Link anything with Pro")) fail("links-page-switch", "Create + showed neither its paste box nor its Pro card");
       if (!page.url().endsWith("#create")) fail("links-page-switch", `Create + did not keep its side in the URL (at ${page.url().replace(BASE, "")})`);
     }
     // Back to Swift Links, then Edit my links → the editor, on Socials.
@@ -725,6 +726,93 @@ FLOWS["signature-copy"] = async () => {
     if (!shows) fail("signature-copy", "the signature preview never appeared (stuck on \"Generating your card…\")");
     await page.screenshot({ path: `${OUT}/signature-copy.png` }).catch(() => {});
   } finally { await ctx.close(); }
+};
+
+// ── N. Create + : link anything to your SwiftCard ───────────────────────────
+// The owner's promise (2026-10-07): paste a signature (or a picture), and it
+// comes back looking the same with every part opening the card; one Copy works
+// anywhere; in texts the link previews as the thing itself. Real page, real
+// upload, real share link, real link preview — then the uploads are deleted.
+FLOWS["create-link"] = async () => {
+  const { ctx, page } = await newPage();
+  const uploaded = [];
+  page.on("response", async (r) => {
+    if (!r.url().includes("/api/upload") || r.request().method() !== "POST") return;
+    const url = (await r.json().catch(() => null))?.url;
+    if (url) uploaded.push(url);
+  });
+  try {
+    await ctx.grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(BASE).origin });
+    await login(page);
+    await dismissOverlays(page);
+    await page.goto(`${BASE}/share#create`, { waitUntil: "domcontentloaded" });
+    const side = '[role="tabpanel"]:not([hidden])';
+    const box = page.locator(`${side} [role="textbox"][contenteditable]`).first();
+    if (!(await box.waitFor({ state: "visible", timeout: 20000 }).then(() => true, () => false))) {
+      fail("create-link", "/share#create shows no paste box for a Pro account");
+      return;
+    }
+    await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+    // A small signature with its own link and a pasted (data:) picture.
+    const dot = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAHklEQVR4nGP4z8BQz0AEYBxVSFUAAB0uB/kVdpxVAAAAAElFTkSuQmCC";
+    await page.evaluate((png) => {
+      const html = `<table style="font-family:Arial;color:#0f2a4a"><tr><td><img src="data:image/png;base64,${png}" width="16" height="16"></td><td><b style="font-size:15px">QA Signature Name</b><br><a href="https://example.com" style="color:#1155cc">example.com</a></td></tr></table>`;
+      const dt = new DataTransfer();
+      dt.setData("text/html", html);
+      dt.setData("text/plain", "QA Signature Name");
+      document.querySelector('[role="tabpanel"]:not([hidden]) [role="textbox"][contenteditable]').dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+    }, dot);
+    const copy = page.locator(`${side} button`, { hasText: /^Copy$/ }).first();
+    if (!(await copy.waitFor({ state: "visible", timeout: 60000 }).then(() => true, () => false))) {
+      const said = await page.locator(`${side} [role="alert"]`).innerText().catch(() => "");
+      fail("create-link", `a pasted signature never became ready${said ? ` — the box says ${JSON.stringify(said)}` : ""}`);
+      return;
+    }
+    const preview = await page.evaluate((sel) => {
+      const root = document.querySelector(`${sel} [data-create-preview]`)?.shadowRoot;
+      return root ? { text: root.textContent || "", hrefs: Array.from(root.querySelectorAll("a")).map((a) => a.getAttribute("href")), imgs: Array.from(root.querySelectorAll("img")).map((i) => i.getAttribute("src")) } : null;
+    }, side);
+    const share = preview?.hrefs?.[0] || "";
+    const m = new RegExp(`^${BASE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/${uname}/p/(\\d{13}[jpg])$`).exec(share);
+    if (!preview || !preview.text.includes("QA Signature Name")) fail("create-link", "the linked preview lost the signature's words");
+    else if (!m) fail("create-link", `every part should open a /${uname}/p/<id> share link — got ${JSON.stringify(share)} (the preview picture was not made?)`);
+    else if (new Set(preview.hrefs).size !== 1) fail("create-link", `parts open different links: ${JSON.stringify([...new Set(preview.hrefs)])}`);
+    else if (preview.hrefs.some((h) => h.includes("example.com"))) fail("create-link", "an old link survived");
+    else if (!preview.imgs.every((s) => /^https:\/\//.test(s || ""))) fail("create-link", `a pasted picture was not stored: ${JSON.stringify(preview.imgs)}`);
+    if (uploaded.length !== 2) fail("create-link", `expected 2 uploads (the pasted picture + the preview picture), saw ${uploaded.length}`);
+    await copy.click();
+    await page.locator(`${side} button`, { hasText: "Copied ✓ Paste it anywhere" }).waitFor({ timeout: 8000 }).catch(() => {});
+    const clip = await page.evaluate(async () => {
+      for (const it of await navigator.clipboard.read()) {
+        if (it.types.includes("text/html")) return { html: await (await it.getType("text/html")).text(), text: it.types.includes("text/plain") ? await (await it.getType("text/plain")).text() : "" };
+      }
+      return null;
+    }).catch(() => null);
+    if (!clip) fail("create-link", "Copy put nothing on the clipboard");
+    else if (share && (!clip.html.includes(`href="${share}"`) || clip.text !== share)) fail("create-link", `the clipboard doesn't carry the linked signature + its share link (text: ${JSON.stringify(clip.text)})`);
+    // The share link: the card, with the linked picture as its link preview.
+    if (m) {
+      const res = await page.request.get(share);
+      const html = await res.text();
+      const og = /<meta property="og:image" content="([^"]+)"/.exec(html)?.[1]?.replace(/&amp;/g, "&");
+      if (res.status() !== 200) fail("create-link", `the share link answered ${res.status()}`);
+      else if (!og || !og.includes(`/${uname}/p/${m[1]}/opengraph-image`)) fail("create-link", `the share link's preview image isn't the linked picture: ${JSON.stringify(og)}`);
+      else {
+        const img = await page.request.get(og);
+        const type = img.headers()["content-type"] || "";
+        if (img.status() !== 200 || !/^image\//.test(type)) fail("create-link", `the preview image answered ${img.status()} ${type}`);
+        else if (img.headers()["x-sc-preview"] !== "linked") fail("create-link", `the preview fell back to the card instead of the linked picture (${img.headers()["x-sc-preview"] || "no marker"})`);
+      }
+    }
+    if (!failures.some((f) => f.flow === "create-link")) pass("create-link", "pasted signature linked everywhere, pictures stored, Copy carries HTML + share link, link previews as the picture");
+  } finally {
+    await ctx.close();
+    // The pictures this flow made, so production storage keeps nothing of it.
+    for (const url of uploaded) {
+      const path = url.split("/card-uploads/")[1]?.split("?")[0];
+      if (path) await adm(`/storage/v1/object/card-uploads/${path}`, { method: "DELETE" }).catch(() => {});
+    }
+  }
 };
 
 // ── K. Create account through the form itself ───────────────────────────────

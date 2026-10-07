@@ -17,6 +17,10 @@ export const SOURCE_LABELS: Record<string, string> = {
   // records (links/[username]/page.tsx). Without an entry here that fell through
   // to the raw-slug fallback and printed a lowercase "swift links" to real users.
   swift_links: "Swift Links",
+  // Opened from something the owner linked on the Links page's Create + side
+  // (a pasted signature or a picture) — every click on it, and the share link
+  // it pastes into texts, carry this (src/app/[username]/p/[id]).
+  create_link: "Create link",
   manual: "Added by hand",        // the user typed the contact in themselves
   imported: "CSV import",
   scanner: "Card scanner",
@@ -41,6 +45,7 @@ const SOURCE_PHRASES: Record<string, string> = {
   contact_qr: "from the contact they saved",
   text_message: "from a text message",
   instagram_bio: "from your Instagram bio",
+  create_link: "from something you linked with Create",
 };
 export function sourcePhrase(source: string | null | undefined): string {
   if (!source || source === "direct_link" || source === "unknown") return "";

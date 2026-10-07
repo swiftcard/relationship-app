@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase-server";
 import { isRateLimited } from "@/lib/rate-limit";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { clientIpFromHeaders } from "@/lib/client-ip";
+import { isPaidProfile, PLAN_COLUMNS } from "@/lib/effective-plan";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
@@ -91,9 +92,17 @@ export async function POST(req: Request) {
   // the DB-write branches below never see them. Videos do NOT come through
   // here for a link tile or a page background: they exceed the request-body
   // limit and go straight to storage via /api/upload/link-video.
-  if (field !== "photo" && field !== "logo" && field !== "hero" && field !== "link" && field !== "pagebg" && field !== "cardbg") return NextResponse.json({ error: "Invalid field" }, { status: 400 });
+  // "create" is a picture for the Links page's Create + side (lib/create-link):
+  // something the owner linked to their card, whose file name becomes its
+  // share link's id. Pro and Office only, so never a guest's.
+  if (field !== "photo" && field !== "logo" && field !== "hero" && field !== "link" && field !== "pagebg" && field !== "cardbg" && field !== "create") return NextResponse.json({ error: "Invalid field" }, { status: 400 });
   if (!ALLOWED.includes(file.type)) return NextResponse.json({ error: "Invalid file type" }, { status: 400 });
   if (file.size > MAX_BYTES) return NextResponse.json({ error: "File too large (max 5 MB)" }, { status: 400 });
+  if (field === "create") {
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { data: planRow } = await getAdminSupabase().from("profiles").select(PLAN_COLUMNS).eq("id", user.id).maybeSingle();
+    if (!isPaidProfile(planRow)) return NextResponse.json({ error: "pro_required" }, { status: 403 });
+  }
 
   // Resize + compress at upload. Phone photos arrive at 3-5MB / 4000px+ — storing
   // originals made every card page, signature and share capture slow. 1000px is
@@ -129,9 +138,14 @@ export async function POST(req: Request) {
       // long edge is stretched to the full scroll height (often 3-4x the
       // viewport) rather than to a tile. 1600 is the most the 5 MB cap will
       // carry at a sane JPEG quality.
-      const MAXDIM = field === "photo" ? 1000 : field === "pagebg" ? 1600 : field === "cardbg" ? 1400 : field === "hero" || field === "link" ? 1200 : 800;
+      // "create" is shown up to 600px wide in an email (lib/create-link) and as
+      // a 1200px link preview — 1600 keeps both sharp.
+      const MAXDIM = field === "photo" ? 1000 : field === "pagebg" || field === "create" ? 1600 : field === "cardbg" ? 1400 : field === "hero" || field === "link" ? 1200 : 800;
       const img = sharp(Buffer.from(arrayBuffer)).rotate().resize(MAXDIM, MAXDIM, { fit: "inside", withoutEnlargement: true });
-      if (field === "logo") {
+      // A linked picture keeps its look: transparency (a logo, a signature
+      // snapshot) and crisp text stay PNG; photos become JPEG like the rest.
+      const keepPng = field === "create" && (file.type === "image/png" || (await sharp(Buffer.from(arrayBuffer)).metadata()).hasAlpha === true);
+      if (field === "logo" || keepPng) {
         body = await img.png({ compressionLevel: 9 }).toBuffer();
         contentType = "image/png";
         ext = "png";
@@ -180,7 +194,7 @@ export async function POST(req: Request) {
   // customization (linkHeroImage / links[i].media / linkBgMedia). Returned
   // here unconditionally so a caller that forgets defer=true can never fall
   // through and clobber logo_url.
-  if (field === "hero" || field === "link" || field === "pagebg") {
+  if (field === "hero" || field === "link" || field === "pagebg" || field === "create") {
     return NextResponse.json({ url: publicUrl });
   }
 

@@ -12,6 +12,9 @@ import CopyButton from "@/components/CopyButton";
 import EmailSignatureBox from "@/components/EmailSignatureBox";
 import ShareCardResolver from "@/components/ShareCardResolver";
 import LinksPageTabs from "@/components/LinksPageTabs";
+import CreateLinkBox from "@/components/CreateLinkBox";
+import CreateLocked from "@/components/CreateLocked";
+import { PlanGate } from "@/components/PlanGate";
 import SwiftLinkLivePreview from "@/components/SwiftLinkLivePreview";
 import type { SwiftLinkStyle } from "@/components/SwiftLinkDesign";
 import { ACTIVE_CARD_COOKIE } from "@/lib/active-card";
@@ -272,6 +275,23 @@ export default async function SharePage({
                 storageUrl={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/card-signatures/${activeUsername}.png`}
                 ogUrl={`${APP_URL}/${activeUsername}/opengraph-image`}
               />
+            </>
+          }
+          create={
+            <>
+              <div className="mb-4">
+                <h2 className="text-base font-semibold text-white">Link anything to your SwiftCard</h2>
+                <p className="text-gray-500 text-sm mt-1 leading-relaxed">
+                  Paste your email signature or add a picture. It keeps its exact look, and a click anywhere on it opens your SwiftCard.
+                </p>
+              </div>
+              {isPro ? (
+                <CreateLinkBox key={activeUsername} username={activeUsername} appUrl={APP_URL} />
+              ) : (
+                <PlanGate feature="create-link" nativeCopy="Pro feature — Linking your own signature or a picture to your SwiftCard is only available on the Pro plan">
+                  <CreateLocked />
+                </PlanGate>
+              )}
             </>
           }
         />

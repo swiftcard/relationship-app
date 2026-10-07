@@ -32,6 +32,7 @@ beforeAll(async () => {
     import LinksPageTabs, { SIGNATURE_STALE_EVENT } from "@/components/LinksPageTabs";
     import SwiftLinkLivePreview from "@/components/SwiftLinkLivePreview";
     import EmailSignatureBox from "@/components/EmailSignatureBox";
+    import CreateLinkBox from "@/components/CreateLinkBox";
     import { SAMPLE_DATA } from "@/components/card-templates/types";
 
     const links = h("div", null,
@@ -61,7 +62,7 @@ beforeAll(async () => {
       }));
 
     (window as any).SIGNATURE_STALE_EVENT = SIGNATURE_STALE_EVENT;
-    createRoot(document.getElementById("root")!).render(h("div", { className: "max-w-md mx-auto" }, h(LinksPageTabs, { links, signature })));
+    createRoot(document.getElementById("root")!).render(h("div", { className: "max-w-md mx-auto" }, h(LinksPageTabs, { links, signature, create: h(CreateLinkBox, { username: "alexmorgan", appUrl: "${ORIGIN}" }) })));
   `);
 
   const out = await build({
@@ -263,7 +264,7 @@ describe("Links page: Swift Links | Swift Signature | Create + switch", () => {
     } finally { await page.close(); }
   });
 
-  it("Create + shows its coming-soon card, keeps its side in the URL, and leads nowhere", async () => {
+  it("Create + shows the paste box and keeps its side in the URL", async () => {
     const page = await mount(390);
     try {
       await page.click("#links-tab-create");
@@ -273,11 +274,12 @@ describe("Links page: Swift Links | Swift Signature | Create + switch", () => {
       expect(await page.evaluate(() => location.hash)).toBe("#create");
       const side = await page.evaluate(() => {
         const p = document.getElementById("links-panel-create")!;
-        return { text: p.innerText, actions: p.querySelectorAll("a, button, input").length, heading: p.querySelector("h2")?.textContent };
+        const box = p.querySelector('[role="textbox"][contenteditable]') as HTMLElement | null;
+        return { text: p.innerText, box: !!box && box.getBoundingClientRect().height > 100 };
       });
-      expect(side.heading).toBe("Create +");
-      expect(side.text).toContain("Something new is coming here soon.");
-      expect(side.actions, "the placeholder has something to tap").toBe(0);
+      expect(side.text).toContain("Paste or drop it here");
+      expect(side.text).toContain("Choose a picture");
+      expect(side.box, "no paste target to tap on").toBe(true);
     } finally { await page.close(); }
   });
 

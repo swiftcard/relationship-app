@@ -24,7 +24,7 @@ export const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"
 export const VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
 
 /** Fields /api/upload accepts for a deferred (no DB write) image upload. */
-export type UploadField = "hero" | "link" | "pagebg" | "cardbg";
+export type UploadField = "hero" | "link" | "pagebg" | "cardbg" | "create";
 
 export type UploadedMedia = { url: string; type: "image" | "video" };
 
