@@ -36,6 +36,12 @@ describe("isSignupSource", () => {
     expect(isSignupSource(null)).toBe(false);
     expect(isSignupSource(undefined)).toBe(false);
   });
+
+  it("accepts the Alignable and ActiveRain campaign links without eating /compare/ alt_ sources", () => {
+    expect(isSignupSource("al_offer")).toBe(true);
+    expect(isSignupSource("ar_open_house")).toBe(true);
+    expect(isSignupSource("alt_blinq")).toBe(true);
+  });
 });
 
 describe("nudgeCopy", () => {

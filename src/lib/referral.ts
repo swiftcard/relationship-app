@@ -59,8 +59,8 @@ const LANDING_SOURCE = /^(for|alt)_[a-z0-9_]{1,48}$/;
 // post, so the admin can see WHICH Reel brought the signups). Until 2026-10-02
 // nothing social was accepted here, so every signup from Instagram was
 // recorded as "direct" and no post could be told from another.
-export const CAMPAIGN_PLATFORMS = { ig: "Instagram", fb: "Facebook", li: "LinkedIn", tt: "TikTok", yt: "YouTube", pin: "Pinterest", rd: "Reddit" } as const;
-const CAMPAIGN_SOURCE = /^(ig|fb|li|tt|yt|pin|rd)_[a-z0-9_]{1,48}$/;
+export const CAMPAIGN_PLATFORMS = { ig: "Instagram", fb: "Facebook", li: "LinkedIn", tt: "TikTok", yt: "YouTube", pin: "Pinterest", rd: "Reddit", al: "Alignable", ar: "ActiveRain" } as const;
+const CAMPAIGN_SOURCE = /^(ig|fb|li|tt|yt|pin|rd|al|ar)_[a-z0-9_]{1,48}$/;
 export type SignupSource =
   | (typeof SIGNUP_SOURCES)[number]
   | `for_${string}` | `alt_${string}`
