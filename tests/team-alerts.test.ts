@@ -110,7 +110,7 @@ describe("the Monday recap", () => {
 
   it("team: totals and who was quiet — no ranking, and no plan or price words anywhere", () => {
     const c = teamRecapCopy({ views: 42, leads: 5, quiet: 2 })!;
-    expect(c.title).toBe("Team week: 42 views · 5 leads");
+    expect(c.title).toBe("Team week: 42 views · 5 new contacts");
     expect(c.body).toBe("2 teammates had no views.");
     // Never "Dana led with…" — the recap is the team's week, not a race (owner, 2026-10-06).
     expect(c.body).not.toMatch(/led with|most views/);

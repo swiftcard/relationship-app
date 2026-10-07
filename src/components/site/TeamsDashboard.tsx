@@ -27,11 +27,11 @@ import { FOLLOW_UP_COPY, FOLLOW_UP_STATES, type FollowUpState } from "@/lib/lead
 import { MEMBER_STATUS_LABEL, type MemberStatus } from "@/lib/member-status";
 
 // A replica of the REAL Office admin at /office/admin — same shell, same four
-// tabs (Team, Analytics, Leads, Branding), same labels. Copied from:
+// tabs (Team, Analytics, Contacts, Branding), same labels. Copied from:
 //   - app/office/admin/layout.tsx + OfficeAdminNav.tsx (header, stripe, tabs)
 //   - app/office/admin/page.tsx + components/office/TeamList.tsx (Team)
 //   - app/office/admin/analytics/page.tsx + EmployeeAnalyticsTable.tsx
-//   - app/office/admin/leads/LeadsTable.tsx (Leads, follow-up badges)
+//   - app/office/admin/leads/LeadsTable.tsx (Contacts, follow-up badges)
 //   - app/office/admin/branding/page.tsx + OfficeBranding.tsx (Card) +
 //     OfficeLinksBranding.tsx (Links)
 // The branding form renders the product's OWN pure controls — TemplatePicker,
@@ -71,7 +71,9 @@ const isTemplateId = (v: string): v is TemplateId => v in TEMPLATE_COMPONENTS;
 type Person = {
   id: string; name: string; title: string; email: string; photo: string;
   views: number; leads: number; cards: number; lastActive: string; status: MemberStatus; owner?: boolean;
-  // Analytics (last 30 days) — views/leads match the Team tab.
+  // Analytics (last 30 days). views = card views, leads = contacts captured,
+  // contacts = contact downloads, swiftlink = Swift Link views — the Team tab
+  // shows the same four ALL TIME (allTime below).
   unique: number; scans: number; contacts: number; swiftlink: number; card: string;
 };
 
@@ -86,8 +88,10 @@ const PEOPLE: Person[] = [
 const INVITE = { name: "Priya Shah", email: "priya@coastlinerealty.com", sent: "Sep 12" };
 
 const sum = (f: (p: Person) => number) => PEOPLE.reduce((s, p) => s + f(p), 0);
-const LEADS_MONTH = sum((p) => p.leads);
-const VIEWS_MONTH = sum((p) => p.views);
+// The Team tab's numbers are all time (as in the real console); the fictional
+// team has about three months of history behind its last 30 days.
+const allTime = (n: number) => n * 3;
+const CONTACTS_ALL_TIME = allTime(sum((p) => p.leads));
 
 // ── Fictional leads ─────────────────────────────────────────────────────────
 
@@ -135,8 +139,8 @@ const TRAFFIC = [
   { source: "instagram_bio", views: 145 },
 ];
 
-type Tab = "Team" | "Analytics" | "Leads" | "Branding";
-const TABS: Tab[] = ["Team", "Analytics", "Leads", "Branding"];
+type Tab = "Team" | "Analytics" | "Contacts" | "Branding";
+const TABS: Tab[] = ["Team", "Analytics", "Contacts", "Branding"];
 
 // ── Shared bits (OfficeUI) ──────────────────────────────────────────────────
 
@@ -200,8 +204,6 @@ const searchCls = "flex-1 bg-gray-900 border border-gray-800 rounded-xl px-3.5 p
 
 function TeamTab() {
   const [open, setOpen] = useState<Person | null>(null);
-  const invited = PEOPLE.filter((p) => !p.owner).length + 1;
-  const activated = PEOPLE.filter((p) => !p.owner && p.cards > 0).length;
   const seatsUsed = PEOPLE.length + 1;
   const seatsPurchased = 8;
 
@@ -222,6 +224,7 @@ function TeamTab() {
           <div className="flex items-center gap-3">
             <span className="text-xs text-gray-500 whitespace-nowrap hidden @xl:block">
               <span className="text-gray-300 font-semibold tabular-nums">{seatsUsed} of {seatsPurchased}</span> seats in use
+              <span className="tabular-nums"> · {seatsPurchased - seatsUsed} unused</span>
             </span>
             <button type="button" className="bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold px-4 py-2 rounded-full transition-colors shrink-0">
               + Add team member
@@ -230,19 +233,23 @@ function TeamTab() {
         }
       />
 
-      <div className="grid grid-cols-1 @xl:grid-cols-2 @3xl:grid-cols-4 gap-3 mb-6">
-        <BigStat label="Leads captured this month" value={LEADS_MONTH.toLocaleString("en-US")} explainer="People who shared their info with your team" />
-        <BigStat label="Card views this month" value={VIEWS_MONTH.toLocaleString("en-US")} explainer="Times someone opened one of your team's cards" />
-        <BigStat label="Team activation rate" value={`${Math.round((activated / invited) * 100)}%`} sub={`${activated} of ${invited}`} explainer="People you invited who have a live card up" />
-        <BigStat label="Seats in use" value={`${seatsUsed}`} sub={`of ${seatsPurchased}`} explainer={`You're paying for ${seatsPurchased - seatsUsed} seats nobody is using`} />
+      <div className="mb-6">
+        <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider mb-2">All time</p>
+        <div className="grid grid-cols-1 @xl:grid-cols-2 @3xl:grid-cols-4 gap-3">
+          <BigStat label="Card views" value={allTime(sum((p) => p.views))} explainer="Times someone opened a teammate's card" />
+          <BigStat label="Swift Link views" value={allTime(sum((p) => p.swiftlink))} explainer="Visits to your team's Swift Links pages" />
+          <BigStat label="Contacts captured" value={CONTACTS_ALL_TIME} explainer="People who shared their info, plus contacts your team scanned or added" />
+          <BigStat label="Contact downloads" value={allTime(sum((p) => p.contacts))} explainer="Times someone downloaded a teammate's contact card" />
+        </div>
       </div>
 
       <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
         <div className="hidden @3xl:grid grid-cols-12 gap-3 px-5 py-2.5 border-b border-gray-800 bg-gray-900/60 text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider">
-          <p className="col-span-4">Person</p>
-          <p className="col-span-1 text-right">Views</p>
-          <p className="col-span-1 text-right">Leads</p>
-          <p className="col-span-2">Last active</p>
+          <p className="col-span-3">Person</p>
+          <p className="col-span-1 text-right">Card views</p>
+          <p className="col-span-1 text-right">Link views</p>
+          <p className="col-span-1 text-right">Contacts</p>
+          <p className="col-span-2 pl-4">Last active</p>
           <p className="col-span-2">Status</p>
           <p className="col-span-2 text-right">Actions</p>
         </div>
@@ -250,7 +257,7 @@ function TeamTab() {
           {/* A to Z, like the real Team tab (lib/office-analytics). */}
           {defaultEmployeeSort(PEOPLE).map((p) => (
             <div key={p.id} className="grid grid-cols-12 gap-3 px-5 py-3.5 items-center border-t border-gray-800 first:border-t-0 hover:bg-gray-800/40 transition-colors">
-              <button type="button" onClick={() => setOpen(p)} className="col-span-12 @3xl:col-span-4 min-w-0 flex items-center gap-3 text-left" aria-label={`Open ${p.name}'s details`}>
+              <button type="button" onClick={() => setOpen(p)} className="col-span-12 @3xl:col-span-3 min-w-0 flex items-center gap-3 text-left" aria-label={`Open ${p.name}'s details`}>
                 <Avatar name={p.name} photo={p.photo} />
                 <span className="min-w-0">
                   <span className="flex items-center gap-2">
@@ -261,13 +268,18 @@ function TeamTab() {
                   <span className="block text-[0.6875rem] text-gray-600 truncate">{p.email}</span>
                 </span>
               </button>
-              <p className="col-span-4 @3xl:col-span-1 text-sm text-gray-300 tabular-nums @3xl:text-right">
-                <span className="@3xl:hidden text-gray-600 text-[0.6875rem]">Views </span>{p.views.toLocaleString("en-US")}
+              {([
+                ["Card views", allTime(p.views)],
+                ["Link views", allTime(p.swiftlink)],
+                ["Contacts", allTime(p.leads)],
+              ] as const).map(([k, v]) => (
+                <p key={k} className="col-span-4 @3xl:col-span-1 text-sm text-gray-300 tabular-nums @3xl:text-right">
+                  <span className="@3xl:hidden block text-gray-600 text-[0.6875rem]">{k}</span>{v.toLocaleString("en-US")}
+                </p>
+              ))}
+              <p className="col-span-12 @3xl:col-span-2 @3xl:pl-4 text-xs text-gray-500">
+                <span className="@3xl:hidden text-gray-600">Last active </span>{p.lastActive}
               </p>
-              <p className="col-span-4 @3xl:col-span-1 text-sm text-gray-300 tabular-nums @3xl:text-right">
-                <span className="@3xl:hidden text-gray-600 text-[0.6875rem]">Leads </span>{p.leads.toLocaleString("en-US")}
-              </p>
-              <p className="col-span-4 @3xl:col-span-2 text-xs text-gray-500">{p.lastActive}</p>
               <div className="col-span-6 @3xl:col-span-2"><StatusChip status={p.status} /></div>
               <div className="col-span-6 @3xl:col-span-2 flex @3xl:justify-end">
                 <button type="button" onClick={() => setOpen(p)} className={pill}>Manage</button>
@@ -276,7 +288,7 @@ function TeamTab() {
           ))}
           {/* A pending invitation lives in the same list as real people. */}
           <div className="grid grid-cols-12 gap-3 px-5 py-3.5 items-center border-t border-gray-800">
-            <div className="col-span-12 @3xl:col-span-4 min-w-0 flex items-center gap-3">
+            <div className="col-span-12 @3xl:col-span-3 min-w-0 flex items-center gap-3">
               <Avatar name={INVITE.name} />
               <div className="min-w-0">
                 <p className="text-sm text-white font-medium truncate">{INVITE.name}</p>
@@ -284,9 +296,10 @@ function TeamTab() {
                 <p className="text-[0.6875rem] text-gray-600">Invited {INVITE.sent}</p>
               </div>
             </div>
-            <p className="col-span-4 @3xl:col-span-1 text-sm text-gray-600 @3xl:text-right">—</p>
-            <p className="col-span-4 @3xl:col-span-1 text-sm text-gray-600 @3xl:text-right">—</p>
-            <p className="col-span-4 @3xl:col-span-2 text-xs text-gray-600">—</p>
+            <p className="hidden @3xl:block col-span-1 text-sm text-gray-600 text-right">—</p>
+            <p className="hidden @3xl:block col-span-1 text-sm text-gray-600 text-right">—</p>
+            <p className="hidden @3xl:block col-span-1 text-sm text-gray-600 text-right">—</p>
+            <p className="hidden @3xl:block col-span-2 pl-4 text-xs text-gray-600">—</p>
             <div className="col-span-6 @3xl:col-span-2"><StatusChip status="invite_sent" /></div>
             <div className="col-span-12 @3xl:col-span-2 flex @3xl:justify-end">
               <span className="inline-flex items-center gap-2 flex-wrap justify-end">
@@ -304,14 +317,11 @@ function TeamTab() {
 }
 
 // TeamList's BigStat (the trend line was removed from the real one 2026-08-26).
-function BigStat({ label, value, explainer, sub }: { label: string; value: string; explainer: string; sub?: string }) {
+function BigStat({ label, value, explainer }: { label: string; value: number; explainer: string }) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-4">
       <p className="text-xs text-gray-500">{label}</p>
-      <div className="flex items-baseline gap-2 mt-1 flex-wrap">
-        <p className="text-[1.75rem] font-bold text-white tabular-nums leading-none">{value}</p>
-        {sub && <span className="text-xs text-gray-600 font-medium">{sub}</span>}
-      </div>
+      <p className="text-[1.75rem] font-bold text-white tabular-nums leading-none mt-1">{value.toLocaleString("en-US")}</p>
       <p className="text-[0.6875rem] text-gray-600 mt-1.5 leading-snug">{explainer}</p>
     </div>
   );
@@ -336,14 +346,16 @@ function PersonDrawer({ person, onClose }: { person: Person; onClose: () => void
           <button type="button" onClick={onClose} aria-label="Close" className="text-gray-500 hover:text-white text-2xl leading-none px-1 shrink-0">×</button>
         </div>
         <div className="mb-4"><StatusChip status={person.status} /></div>
-        <div className="grid grid-cols-3 gap-2 mb-5">
-          {[
-            ["Card views", person.views.toLocaleString("en-US")],
-            ["Leads", person.leads.toLocaleString("en-US")],
-            ["Cards", String(person.cards)],
-          ].map(([k, v]) => (
+        <p className="text-[0.625rem] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">All time</p>
+        <div className="grid grid-cols-2 gap-2 mb-5">
+          {([
+            ["Card views", allTime(person.views)],
+            ["Swift Link views", allTime(person.swiftlink)],
+            ["Contacts captured", allTime(person.leads)],
+            ["Contact downloads", allTime(person.contacts)],
+          ] as const).map(([k, v]) => (
             <div key={k} className="rounded-xl border border-gray-800 bg-gray-950/50 px-3 py-2.5">
-              <p className="text-white font-bold tabular-nums">{v}</p>
+              <p className="text-white font-bold tabular-nums">{v.toLocaleString("en-US")}</p>
               <p className="text-[0.625rem] text-gray-500 mt-0.5">{k}</p>
             </div>
           ))}
@@ -379,13 +391,13 @@ type SortKey = "name" | "card" | "views" | "unique" | "scans" | "leads" | "conta
 const COLUMNS: { key: SortKey | "last"; label: string; hint: string }[] = [
   { key: "name", label: "Employee", hint: "Team member name" },
   { key: "card", label: "Card", hint: "Their card, or how many cards they own" },
-  { key: "views", label: "Views", hint: "Times their card was opened — repeat visits count; reloads within a visit don't" },
-  { key: "unique", label: "Unique visitors", hint: "Distinct visitors in the selected range" },
-  { key: "scans", label: "Scans", hint: "Views attributed to a QR code scan or NFC tap" },
-  { key: "leads", label: "Leads", hint: "People who shared their contact info" },
+  { key: "views", label: "Card views", hint: "Times their card was opened — repeat visits count; reloads within a visit don't" },
+  { key: "swiftlink", label: "Swift Link views", hint: "Visits to their Swift Links page" },
+  { key: "leads", label: "Contacts captured", hint: "People who shared their info, plus contacts they scanned or added" },
   { key: "contacts", label: "Contact downloads", hint: "Visitors who downloaded this card as a contact" },
-  { key: "swiftlink", label: "SwiftLink views", hint: "Visits to their Swift Links page" },
-  { key: "last", label: "Last activity", hint: "Most recent view, lead, or contact save" },
+  { key: "unique", label: "Unique visitors", hint: "Distinct visitors in the selected range" },
+  { key: "scans", label: "QR & NFC scans", hint: "Views that came from a QR code scan or an NFC tap" },
+  { key: "last", label: "Last activity", hint: "Most recent view, contact, or contact download" },
 ];
 
 function AnalyticsTab() {
@@ -393,8 +405,6 @@ function AnalyticsTab() {
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
-  const totalViews = sum((p) => p.views + p.swiftlink);
-  const totalLeads = sum((p) => p.leads);
 
   const rows = useMemo(() => {
     const base = PEOPLE.map((p) => ({ ...p, contactsSaved: p.contacts }));
@@ -420,7 +430,7 @@ function AnalyticsTab() {
     <div>
       <PageHead
         title="Analytics"
-        desc="Views, scans, contact downloads and leads for every card on your team."
+        desc="Views, contacts and contact downloads for every card on your team, by date."
         action={
           <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-full p-1" role="group" aria-label="Date range">
             {["7 days", "30 days", "90 days"].map((l) => (
@@ -431,16 +441,17 @@ function AnalyticsTab() {
       />
 
       <div className="grid grid-cols-2 @3xl:grid-cols-4 gap-3 mb-6">
-        <StatTile label="Total views" value={totalViews} hint="+21% vs prior period" />
-        <StatTile label="Unique visitors" value={2231} hint="Distinct visitors across the whole team" />
-        <StatTile label="Card/QR scans" value={sum((p) => p.scans)} hint="+14% vs prior period" />
-        <StatTile label="Leads captured" value={totalLeads} hint="+18% vs prior period" />
+        <StatTile label="Card views" value={sum((p) => p.views)} hint="+21% vs prior period" />
+        <StatTile label="Swift Link views" value={sum((p) => p.swiftlink)} hint="+12% vs prior period" />
+        <StatTile label="Contacts captured" value={sum((p) => p.leads)} hint="+18% vs prior period" />
         <StatTile label="Contact downloads" value={sum((p) => p.contacts)} hint="+9% vs prior period" />
-        <StatTile label="SwiftLink views" value={sum((p) => p.swiftlink)} hint="Visits to a Swift Links page" />
+        <StatTile label="Unique visitors" value={2231} hint="Distinct visitors across the whole team" />
+        <StatTile label="QR & NFC scans" value={sum((p) => p.scans)} hint="+14% vs prior period" />
       </div>
 
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-6">
-        <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider mb-3">Views over time</p>
+        <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider">Views over time</p>
+        <p className="text-[0.6875rem] text-gray-600 mt-0.5 mb-3">Card and Swift Link views together</p>
         <ViewsChart data={DAILY_VIEWS} />
       </div>
 
@@ -493,11 +504,11 @@ function AnalyticsTab() {
                   <td className="px-4 py-3 whitespace-nowrap text-white font-medium">{r.name}</td>
                   <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{r.card}</td>
                   <td className="px-4 py-3 text-gray-300 tabular-nums">{r.views}</td>
+                  <td className="px-4 py-3 text-gray-300 tabular-nums">{r.swiftlink}</td>
+                  <td className="px-4 py-3 text-gray-300 tabular-nums">{r.leads}</td>
+                  <td className="px-4 py-3 text-gray-300 tabular-nums">{r.contacts}</td>
                   <td className="px-4 py-3 text-gray-300 tabular-nums">{r.unique}</td>
                   <td className="px-4 py-3 text-gray-300 tabular-nums">{r.scans}</td>
-                  <td className="px-4 py-3 text-gray-300 tabular-nums font-semibold">{r.leads}</td>
-                  <td className="px-4 py-3 text-gray-300 tabular-nums">{r.contacts}</td>
-                  <td className="px-4 py-3 text-gray-300 tabular-nums">{r.swiftlink}</td>
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{r.lastActive}</td>
                 </tr>
               ))}
@@ -509,14 +520,14 @@ function AnalyticsTab() {
   );
 }
 
-// ── Leads ───────────────────────────────────────────────────────────────────
+// ── Contacts (the /leads route) ─────────────────────────────────────────────
 
 function LeadsTab() {
   const [rows, setRows] = useState<Lead[]>(LEADS);
   const [person, setPerson] = useState("all");
   const [followUp, setFollowUp] = useState<"all" | FollowUpState>("all");
   const [query, setQuery] = useState("");
-  const total = LEADS_MONTH;
+  const total = CONTACTS_ALL_TIME;
   const hasMore = rows.length < LEADS.length + MORE_LEADS.length;
 
   const people = useMemo(() => Array.from(new Set(rows.map((l) => l.by))).sort(), [rows]);
@@ -530,10 +541,10 @@ function LeadsTab() {
 
   return (
     <div>
-      <PageHead title="Leads" desc={`Everyone who shared their info with your team — ${total.toLocaleString()} so far.`} />
+      <PageHead title="Contacts" desc={`Everyone your team has met — people who shared their info, plus contacts your team scanned or added — ${total.toLocaleString()} so far.`} />
       <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
         <p className="text-[0.6875rem] text-gray-500">
-          {`Showing ${rows.length} of ${total.toLocaleString()} leads`}
+          {`Showing ${rows.length} of ${total.toLocaleString()} contacts`}
           {visible.length !== rows.length && ` · ${visible.length} match your filters`}
         </p>
         <button type="button" className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-300 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors">
@@ -545,7 +556,7 @@ function LeadsTab() {
       </div>
 
       <div className="flex flex-col @xl:flex-row gap-2.5 mb-4">
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by contact name…" aria-label="Search leads by contact name" className={searchCls} />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by contact name…" aria-label="Search contacts by name" className={searchCls} />
         <select value={person} onChange={(e) => setPerson(e.target.value)} aria-label="Filter by team member" className={`${selectCls} @xl:w-48`}>
           <option value="all">Everyone on the team</option>
           {people.map((p) => <option key={p} value={p}>{p}</option>)}
@@ -881,9 +892,9 @@ function CardBranding() {
 
         <div className="flex items-center gap-3 flex-wrap">
           <button type="button" onClick={save} className="bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold px-5 py-2.5 rounded-full transition-colors">
-            Save &amp; apply to all cards
+            Save &amp; apply to team cards
           </button>
-          {saved && <span className="text-green-400 text-sm font-medium" role="status">Applied to every card ✓</span>}
+          {saved && <span className="text-green-400 text-sm font-medium" role="status">Applied to your team&apos;s cards ✓</span>}
         </div>
       </div>
     </div>
@@ -1046,9 +1057,9 @@ function LinksBranding() {
 
         <div className="flex items-center gap-3 flex-wrap">
           <button type="button" onClick={save} className="bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold px-5 py-2.5 rounded-full transition-colors">
-            Save &amp; apply to all Swift Links
+            Save &amp; apply to team Swift Links
           </button>
-          {saved && <span className="text-green-400 text-xs font-semibold">Applied to every page ✓</span>}
+          {saved && <span className="text-green-400 text-xs font-semibold">Applied to your team&apos;s pages ✓</span>}
         </div>
       </div>
 
@@ -1099,7 +1110,7 @@ export default function TeamsDashboard() {
         <span className="w-3 h-3 rounded-full bg-[#ff5f57]" /><span className="w-3 h-3 rounded-full bg-[#febc2e]" /><span className="w-3 h-3 rounded-full bg-[#28c840]" />
         <div className="ml-3 flex-1 max-w-[280px] h-6 rounded-md bg-white border border-slate-200 flex items-center px-3 gap-1.5">
           <svg viewBox="0 0 24 24" className="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" strokeWidth={2}><rect x="4" y="10" width="16" height="10" rx="2" /><path d="M8 10V7a4 4 0 018 0v3" /></svg>
-          <span className="text-slate-500 text-[0.6875rem]">swiftcard.me/office/admin{tab === "Team" ? "" : `/${tab.toLowerCase()}`}</span>
+          <span className="text-slate-500 text-[0.6875rem]">swiftcard.me/office/admin{tab === "Team" ? "" : `/${tab === "Contacts" ? "leads" : tab.toLowerCase()}`}</span>
         </div>
       </div>
 
@@ -1146,7 +1157,7 @@ export default function TeamsDashboard() {
           <div className="px-5 pt-6 pb-10">
             {tab === "Team" && <TeamTab />}
             {tab === "Analytics" && <AnalyticsTab />}
-            {tab === "Leads" && <LeadsTab />}
+            {tab === "Contacts" && <LeadsTab />}
             {tab === "Branding" && <BrandingTab />}
           </div>
         </div>

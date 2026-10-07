@@ -17,21 +17,29 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 // The "▲ X% vs last month" trend line was removed here the same day it was
 // removed from the Pro dashboard (owner request 2026-08-26): the counts stay,
 // the per-tile percentage comparison goes.
-function BigStat({ label, value, explainer, sub }: {
+function BigStat({ label, value, explainer }: {
   label: string;
-  value: string;
+  value: number;
   explainer: string;
-  sub?: string;
 }) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-4">
       <p className="text-xs text-gray-500">{label}</p>
-      <div className="flex items-baseline gap-2 mt-1 flex-wrap">
-        <p className="text-[1.75rem] font-bold text-white tabular-nums leading-none">{value}</p>
-        {sub && <span className="text-xs text-gray-600 font-medium">{sub}</span>}
-      </div>
+      <p className="text-[1.75rem] font-bold text-white tabular-nums leading-none mt-1">{value.toLocaleString("en-US")}</p>
       <p className="text-[0.6875rem] text-gray-600 mt-1.5 leading-snug">{explainer}</p>
     </div>
+  );
+}
+
+// "3 of 5 seats in use · 2 unused" — the seat figures live on this one line,
+// beside the button that spends a seat. (The fourth tile that repeated them
+// went with the tile row's rework, owner 2026-10-06.)
+function SeatLine({ seats }: { seats: { used: number; purchased: number; available: number } }) {
+  return (
+    <>
+      <span className="text-gray-300 font-semibold tabular-nums">{seats.used} of {seats.purchased}</span> seats in use
+      {seats.available > 0 && <span className="tabular-nums"> · {seats.available} unused</span>}
+    </>
   );
 }
 
@@ -66,7 +74,10 @@ export default async function OfficeTeamPage() {
   const seatCap = (office.seats as number | null) ?? PLAN_LIMITS.OFFICE_MIN_SEATS;
 
   const [overview, brand] = await Promise.all([
-    getTeamOverview(officeId, ownerId, seatCap).catch(() => null),
+    getTeamOverview(officeId, ownerId, seatCap).catch((e) => {
+      console.error("Office team overview failed to load:", e);
+      return null;
+    }),
     getOfficeBrand(officeId).catch(() => null),
   ]);
 
@@ -79,11 +90,14 @@ export default async function OfficeTeamPage() {
     // from the owner's first card, so it existed (and this showed done) before
     // anyone had opened the page (2026-09-16 audit).
     hasBrand: !!brand && (office.brand_locks as { saved?: boolean } | null)?.saved === true,
-    memberRowCount: people.filter((p) => !p.isOwner).length + invites.length,
+    // Every invitation ever sent, whatever became of it — counting only the
+    // people on the team TODAY brought the finished checklist back the moment
+    // the last teammate was removed.
+    memberRowCount: overview?.memberRowsEver ?? people.filter((p) => !p.isOwner).length + invites.length,
     liveEmployeeCards: people.filter((p) => !p.isOwner && p.liveCards > 0).length,
   });
 
-  const activation = overview?.stats.activation;
+  const totals = overview?.totals;
   const hasRows = people.length > 0 || invites.length > 0;
 
   return (
@@ -98,7 +112,7 @@ export default async function OfficeTeamPage() {
           <div data-tour="admin-add-member" className="flex items-center gap-3">
             {seats && (
               <span className="text-xs text-gray-500 whitespace-nowrap hidden sm:block">
-                <span className="text-gray-300 font-semibold tabular-nums">{seats.used} of {seats.purchased}</span> seats in use
+                <SeatLine seats={seats} />
               </span>
             )}
             {caps.canInvite && <AddMemberButton canManageSeats={caps.canManageSeats} />}
@@ -107,7 +121,7 @@ export default async function OfficeTeamPage() {
       />
       {seats && (
         <p className="text-xs text-gray-500 -mt-2 mb-5 sm:hidden">
-          <span className="text-gray-300 font-semibold tabular-nums">{seats.used} of {seats.purchased}</span> seats in use
+          <SeatLine seats={seats} />
         </p>
       )}
 
@@ -128,6 +142,10 @@ export default async function OfficeTeamPage() {
             <Step n={1} done={setup.brandingDone}>
               {setup.brandingDone ? (
                 <span className="text-sm text-gray-500 line-through">Set up your company branding</span>
+              ) : !caps.canBrand ? (
+                // Not a link for a role without Branding: the page sends them
+                // straight back here, so the arrow was a dead end.
+                <span className="text-sm text-gray-400">Set up your company branding</span>
               ) : (
                 <>
                   <Link href="/office/admin/branding" className="text-sm font-semibold text-purple-400 hover:text-purple-300 transition-colors">
@@ -163,39 +181,23 @@ export default async function OfficeTeamPage() {
         </div>
       )}
 
-      {/* The four numbers. */}
-      {overview && hasRows && (
-        <div data-tour="admin-stats" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-          <BigStat
-            label="Leads captured this month"
-            value={overview.stats.leadsThisMonth.current.toLocaleString("en-US")}
-            explainer="People who shared their info with your team"
-          />
-          <BigStat
-            label="Card views this month"
-            value={overview.stats.viewsThisMonth.current.toLocaleString("en-US")}
-            explainer="Times someone opened one of your team's cards"
-          />
-          <BigStat
-            label="Team activation rate"
-            value={activation?.pct != null ? `${activation.pct}%` : "—"}
-            sub={activation && activation.invited > 0 ? `${activation.activated} of ${activation.invited}` : undefined}
-            explainer={
-              activation && activation.invited > 0
-                ? "People you invited who have a live card up"
-                : "Invite someone and this shows how many finished their card"
-            }
-          />
-          <BigStat
-            label="Seats in use"
-            value={seats ? `${seats.used}` : "—"}
-            sub={seats ? `of ${seats.purchased}` : undefined}
-            explainer={
-              seats && seats.available > 0
-                ? `You're paying for ${seats.available} seat${seats.available === 1 ? "" : "s"} nobody is using`
-                : "Every seat you're paying for is being used"
-            }
-          />
+      {!overview && (
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 text-center mb-6">
+          <p className="text-sm text-gray-400">Couldn&apos;t load your team&apos;s numbers — refresh in a moment.</p>
+        </div>
+      )}
+
+      {/* The four numbers, all time — the sum of the rows below, counted the
+          way each person's own dashboard counts them (owner, 2026-10-06). */}
+      {totals && hasRows && (
+        <div data-tour="admin-stats" className="mb-6">
+          <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider mb-2">All time</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <BigStat label="Card views" value={totals.views} explainer="Times someone opened a teammate's card" />
+            <BigStat label="Swift Link views" value={totals.swiftlinkViews} explainer="Visits to your team's Swift Links pages" />
+            <BigStat label="Contacts captured" value={totals.leads} explainer="People who shared their info, plus contacts your team scanned or added" />
+            <BigStat label="Contact downloads" value={totals.contactsSaved} explainer="Times someone downloaded a teammate's contact card" />
+          </div>
         </div>
       )}
 
@@ -212,7 +214,7 @@ export default async function OfficeTeamPage() {
             caps={{ canInvite: caps.canInvite, canRemove: caps.canRemove, canManageCards: caps.canManageCards, canManageSeats: caps.canManageSeats, viewerIsOwner }}
           />
         ) : (
-          setup.allDone && (
+          overview && setup.allDone && (
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-10 text-center">
               <p className="text-gray-400 text-sm mb-1">Your team is empty right now.</p>
               <p className="text-gray-600 text-xs mb-4">Invite someone and their card shows up here.</p>

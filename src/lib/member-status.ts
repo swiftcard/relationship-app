@@ -21,8 +21,11 @@ export type MemberStatus =
 export const MEMBER_STATUS_LABEL: Record<MemberStatus, string> = {
   active: "Active",
   card_incomplete: "Card not completed",
-  card_deactivated: "Card deactivated",
-  idle: "Not using it yet",
+  // "Offline" is the word on the card page and its "Take offline" button.
+  card_deactivated: "Card offline",
+  // Not "Not using it yet": this is also someone who used their card daily
+  // until two weeks ago, and it can sit on the owner's own row.
+  idle: "No recent activity",
   invite_sent: "Pending",
   invite_expired: "Invite expired",
 };

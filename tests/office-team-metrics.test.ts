@@ -1,9 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
-  computeActivation,
   computeSetupProgress,
   memberStatus,
-  deltaPct,
   ACTIVE_WINDOW_MS,
 } from "@/lib/office-team";
 import { computeAttention } from "@/lib/office-attention";
@@ -14,34 +12,9 @@ import type { SeatUsage } from "@/lib/office-seats";
 const now = 1_700_000_000_000;
 const DAY = 24 * 60 * 60 * 1000;
 
-describe("computeActivation — invited people who actually got a card up", () => {
-  it("is null with nobody invited (0/0 is not 0%)", () => {
-    expect(computeActivation({ activatedMembers: 0, invitedTotal: 0 }).pct).toBeNull();
-  });
-
-  it("reports the real fraction", () => {
-    expect(computeActivation({ activatedMembers: 2, invitedTotal: 4 })).toEqual({ activated: 2, invited: 4, pct: 50 });
-    expect(computeActivation({ activatedMembers: 3, invitedTotal: 3 }).pct).toBe(100);
-  });
-
-  it("nobody activated yet is a real 0%, not a null", () => {
-    expect(computeActivation({ activatedMembers: 0, invitedTotal: 3 }).pct).toBe(0);
-  });
-});
-
-describe("deltaPct — no month-over-month claim on a thin baseline", () => {
-  it("suppresses the arrow when last month is too small to conclude from", () => {
-    expect(deltaPct(2, 1)).toBeNull();  // "+100%" off one event is noise
-    expect(deltaPct(10, 0)).toBeNull(); // growth from nothing is undefined
-    expect(deltaPct(4, 4)).toBeNull();
-  });
-
-  it("reports once there's a real baseline", () => {
-    expect(deltaPct(10, 5)).toBe(100);
-    expect(deltaPct(5, 10)).toBe(-50);
-    expect(deltaPct(10, 10)).toBe(0);
-  });
-});
+// The activation-rate and month-over-month helpers went with the Team tab's
+// old tiles (owner, 2026-10-06): its four numbers are now all-time totals —
+// see tests/office-console-numbers.test.ts.
 
 describe("memberStatus — the six states an owner sees", () => {
   const base = { liveCards: 1, totalCards: 1, now };
@@ -91,7 +64,8 @@ const seats = (over: Partial<SeatUsage> = {}): SeatUsage => ({
 
 const person = (over: Partial<TeamPerson> = {}): TeamPerson => ({
   kind: "member", userId: "u1", name: "Dana Lee", username: "dana", isOwner: false,
-  cards: 1, views: 10, leads: 1, memberRowId: "m1", title: null, email: null, photoUrl: null,
+  cardName: "Dana Lee", cardCount: 1, views: 10, swiftlinkViews: 0, scans: 0, uniqueVisitors: 0,
+  leads: 1, contactsSaved: 0, lastActivityAt: null, memberRowId: "m1", title: null, email: null, photoUrl: null,
   lastActiveAt: new Date(now).toISOString(), liveCards: 1, totalCards: 1, status: "active",
   ...over,
 });

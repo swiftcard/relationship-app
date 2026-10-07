@@ -434,9 +434,9 @@ export default function OfficeBranding({ office }: { office: Brand }) {
             disabled={status === "saving"}
             className="bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold px-5 py-2.5 rounded-full transition-colors disabled:opacity-50"
           >
-            {status === "saving" ? "Saving…" : "Save & apply to all cards"}
+            {status === "saving" ? "Saving…" : "Save & apply to team cards"}
           </button>
-          {status === "saved" && <span className="text-green-400 text-sm font-medium" role="status">Applied to every card ✓</span>}
+          {status === "saved" && <span className="text-green-400 text-sm font-medium" role="status">Applied to your team&apos;s cards ✓</span>}
           {status === "error" && (
             <span className="text-red-400 text-sm" role="alert">Something went wrong — please try again.</span>
           )}

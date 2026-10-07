@@ -70,26 +70,26 @@ describe("the office Leads table", () => {
     const page = await render(browser, 1280, FULL);
     try {
       const text = await page.innerText("body");
-      expect(text).toContain("Showing 8 of 1,240 leads");
+      expect(text).toContain("Showing 8 of 1,240 contacts");
       expect(text).toContain("Export all as CSV");
       expect(text).toContain("Load more — 1,232 to go");
     } finally { await page.close(); }
   });
 
-  it("says 'All N leads' once nothing is left to fetch", async () => {
+  it("says 'All N contacts' once nothing is left to fetch", async () => {
     const leads = Array.from({ length: 4 }, (_, i) => mk(i));
     const page = await render(browser, 1280, { leads, total: 4, hasMore: false });
     try {
       const text = await page.innerText("body");
-      expect(text).toContain("All 4 leads");
+      expect(text).toContain("All 4 contacts");
       expect(text).not.toContain("Load more");
     } finally { await page.close(); }
   });
 
-  it("keeps the export reachable with one lead and with none", async () => {
+  it("keeps the export reachable with one contact and with none", async () => {
     const one = await render(browser, 390, { leads: [mk(0)], total: 1, hasMore: false });
     try {
-      expect(await one.innerText("body")).toContain("All 1 lead");
+      expect(await one.innerText("body")).toContain("All 1 contact");
     } finally { await one.close(); }
 
     const none = await render(browser, 390, { leads: [], total: 0, hasMore: false });
@@ -97,7 +97,7 @@ describe("the office Leads table", () => {
       const text = await none.innerText("body");
       // No total bar, no export, no Load more — just the empty state, so a
       // brand-new office is not handed a download of nothing.
-      expect(text).toContain("No leads yet");
+      expect(text).toContain("No contacts yet");
       expect(text).not.toContain("Export all as CSV");
       expect(text).not.toContain("Load more");
     } finally { await none.close(); }

@@ -60,7 +60,7 @@ describe("Branding → Links", () => {
         expect(t, `missing section: ${s}`).toContain(s);
       }
       expect(t).toContain("Keep every Swift Links page matching");
-      expect(t).toContain("Save & apply to all Swift Links");
+      expect(t).toContain("Save & apply to team Swift Links");
       // Exactly one save button, like the Card tab.
       const saves = await page.$$eval("button", (bs) => bs.filter((b) => /Save & apply/.test(b.textContent ?? "")).length);
       expect(saves).toBe(1);

@@ -4,14 +4,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 // Four tabs, in the order an owner uses them: who's on my team → how their
-// cards are being used → who's contacted us → what do our cards look like
+// cards are being used → who we've met → what do our cards look like
 // (plus Billing for whoever pays). The old Overview/Cards/
 // Invite tabs are folded in: Team IS the landing page, per-card management
 // lives inside each person, and inviting is a button, not a destination.
 const LINKS = [
   { href: "/office/admin", label: "Team", tour: "admin-nav-team" },
   { href: "/office/admin/analytics", label: "Analytics", tour: "admin-nav-analytics" },
-  { href: "/office/admin/leads", label: "Leads", tour: "admin-nav-leads" },
+  // "Contacts", as in the rest of the app: someone saving a lawyer's number
+  // is not a sales lead (owner, 2026-10-06). The URL stays /leads so links in
+  // old notifications and bookmarks keep working.
+  { href: "/office/admin/leads", label: "Contacts", tour: "admin-nav-leads" },
   { href: "/office/admin/branding", label: "Branding", tour: "admin-nav-branding" },
 ];
 

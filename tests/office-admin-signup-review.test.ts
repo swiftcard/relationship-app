@@ -106,10 +106,13 @@ describe("the sample contact is never a team lead", () => {
   // office side counted it: a pre-ticked "Capture your first lead", "1 team
   // lead is waiting" pushed to a brand-new owner, and a teammate's real first
   // lead counting 2 so the first-lead alert never fired.
+  // office-analytics and office-team COUNT contacts through the
+  // office_employee_lead_stats SQL function (pinned below); the queries left
+  // here are the recent-contacts list and the last-activity scan.
   const files: [string, number][] = [
-    ["src/lib/office-analytics.ts", 3],
+    ["src/lib/office-analytics.ts", 1],
     ["src/lib/office-leads.ts", 1],
-    ["src/lib/office-team.ts", 2],
+    ["src/lib/office-team.ts", 1],
     ["src/lib/team-alerts.ts", 1],
     ["src/app/api/push/recap/route.ts", 4],
   ];
@@ -122,6 +125,11 @@ describe("the sample contact is never a team lead", () => {
       expect(excluded).toBe(n);
     });
   }
+
+  it("the SQL that counts every console contact figure leaves it out too", () => {
+    expect(code("src/lib/office-analytics.ts")).toContain('admin.rpc("office_employee_lead_stats"');
+    expect(code("supabase/office-analytics-accuracy.sql")).toContain("AND NOT ('demo' = ANY(coalesce(tags, '{}'::text[])))");
+  });
 });
 
 describe("the rest of the journey", () => {

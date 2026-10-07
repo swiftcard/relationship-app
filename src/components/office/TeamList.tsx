@@ -153,14 +153,17 @@ function Drawer({ person, appUrl, caps, self, onClose }: {
 
           <div className="mb-4"><StatusChip status={person.status} /></div>
 
-          <div className="grid grid-cols-3 gap-2 mb-5">
+          {/* The Team tab's four numbers for this one person, all time. */}
+          <p className="text-[0.625rem] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">All time</p>
+          <div className="grid grid-cols-2 gap-2 mb-5">
             {[
-              ["Card views", person.views.toLocaleString("en-US")],
-              ["Leads", person.leads.toLocaleString("en-US")],
-              ["Cards", String(person.totalCards)],
+              ["Card views", person.views],
+              ["Swift Link views", person.swiftlinkViews],
+              ["Contacts captured", person.leads],
+              ["Contact downloads", person.contactsSaved],
             ].map(([k, v]) => (
               <div key={k} className="rounded-xl border border-gray-800 bg-gray-950/50 px-3 py-2.5">
-                <p className="text-white font-bold tabular-nums">{v}</p>
+                <p className="text-white font-bold tabular-nums">{v.toLocaleString("en-US")}</p>
                 <p className="text-[0.625rem] text-gray-500 mt-0.5">{k}</p>
               </div>
             ))}
@@ -241,10 +244,12 @@ export default function TeamList({ people, invites, appUrl, caps, self }: {
     <>
       <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
         <div className="hidden lg:grid grid-cols-12 gap-3 px-5 py-2.5 border-b border-gray-800 bg-gray-900/60 text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider">
-          <p className="col-span-4">Person</p>
-          <p className="col-span-1 text-right">Views</p>
-          <p className="col-span-1 text-right">Leads</p>
-          <p className="col-span-2">Last active</p>
+          {/* All time, like the four numbers above — and counted the same way. */}
+          <p className="col-span-3">Person</p>
+          <p className="col-span-1 text-right">Card views</p>
+          <p className="col-span-1 text-right">Link views</p>
+          <p className="col-span-1 text-right">Contacts</p>
+          <p className="col-span-2 pl-4">Last active</p>
           <p className="col-span-2">Status</p>
           <p className="col-span-2 text-right">Actions</p>
         </div>
@@ -254,7 +259,7 @@ export default function TeamList({ people, invites, appUrl, caps, self }: {
             <div key={p.userId} className="grid grid-cols-12 gap-3 px-5 py-3.5 items-center hover:bg-gray-800/40 transition-colors">
               <button
                 onClick={() => setOpen(p)}
-                className="col-span-12 lg:col-span-4 min-w-0 flex items-center gap-3 text-left"
+                className="col-span-12 lg:col-span-3 min-w-0 flex items-center gap-3 text-left"
                 aria-label={`Open ${p.name}'s details`}
               >
                 <Avatar name={p.name} photoUrl={p.photoUrl} />
@@ -268,13 +273,17 @@ export default function TeamList({ people, invites, appUrl, caps, self }: {
                 </span>
               </button>
 
-              <p className="col-span-4 lg:col-span-1 text-sm text-gray-300 tabular-nums lg:text-right">
-                <span className="lg:hidden text-gray-600 text-[0.6875rem]">Views </span>{p.views.toLocaleString("en-US")}
-              </p>
-              <p className="col-span-4 lg:col-span-1 text-sm text-gray-300 tabular-nums lg:text-right">
-                <span className="lg:hidden text-gray-600 text-[0.6875rem]">Leads </span>{p.leads.toLocaleString("en-US")}
-              </p>
-              <p className="col-span-4 lg:col-span-2 text-xs text-gray-500">
+              {([
+                ["Card views", p.views],
+                ["Link views", p.swiftlinkViews],
+                ["Contacts", p.leads],
+              ] as const).map(([k, v]) => (
+                <p key={k} className="col-span-4 lg:col-span-1 text-sm text-gray-300 tabular-nums lg:text-right">
+                  <span className="lg:hidden block text-gray-600 text-[0.6875rem]">{k}</span>{v.toLocaleString("en-US")}
+                </p>
+              ))}
+              <p className="col-span-12 lg:col-span-2 lg:pl-4 text-xs text-gray-500">
+                <span className="lg:hidden text-gray-600">Last active </span>
                 {p.lastActiveAt ? relativeTime(p.lastActiveAt, clock.now) : "No activity yet"}
               </p>
               <div className="col-span-6 lg:col-span-2"><StatusChip status={p.status} /></div>
@@ -291,23 +300,25 @@ export default function TeamList({ people, invites, appUrl, caps, self }: {
 
           {invites.map((inv) => (
             <div key={inv.memberRowId} className="grid grid-cols-12 gap-3 px-5 py-3.5 items-center">
-              <div className="col-span-12 lg:col-span-4 min-w-0 flex items-center gap-3">
+              <div className="col-span-12 lg:col-span-3 min-w-0 flex items-center gap-3">
                 <Avatar name={inv.name || inv.email} photoUrl={null} />
                 <div className="min-w-0">
                   {/* Show WHO the invite went to: their name (when the admin
                       gave one) as the headline, the email under it. */}
                   <p className="text-sm text-white font-medium truncate">{inv.name || inv.email}</p>
                   {inv.name && <p className="text-[0.6875rem] text-gray-500 truncate">{inv.email}</p>}
-                  <p className="text-[0.6875rem] text-gray-600">
-                    {inv.status === "invite_expired"
-                      ? "Invitation expired"
-                      : `Invited ${shortDate(inv.sentAt, clock.timeZone)}`}
-                  </p>
+                  {/* An expired invite says so once, in its status chip. */}
+                  {inv.status !== "invite_expired" && (
+                    <p className="text-[0.6875rem] text-gray-600">Invited {shortDate(inv.sentAt, clock.timeZone)}</p>
+                  )}
                 </div>
               </div>
-              <p className="col-span-4 lg:col-span-1 text-sm text-gray-600 lg:text-right">—</p>
-              <p className="col-span-4 lg:col-span-1 text-sm text-gray-600 lg:text-right">—</p>
-              <p className="col-span-4 lg:col-span-2 text-xs text-gray-600">—</p>
+              {/* No card yet, so nothing to count — the dashes only hold the
+                  columns on a computer; a phone skips them. */}
+              <p className="hidden lg:block col-span-1 text-sm text-gray-600 text-right">—</p>
+              <p className="hidden lg:block col-span-1 text-sm text-gray-600 text-right">—</p>
+              <p className="hidden lg:block col-span-1 text-sm text-gray-600 text-right">—</p>
+              <p className="hidden lg:block col-span-2 pl-4 text-xs text-gray-600">—</p>
               <div className="col-span-6 lg:col-span-2"><StatusChip status={inv.status} /></div>
               <div className="col-span-12 lg:col-span-2 flex lg:justify-end">
                 {caps.canInvite && (

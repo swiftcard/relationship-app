@@ -63,7 +63,7 @@ export default async function OfficeBrandingPage() {
             The company details your card had — name, logo, website, and any office phone, fax and address — plus
             its card design and Swift Links design are filled in below. Your name, title, photo, mobile and email
             stay on your card only.
-            Your team&apos;s cards use it as it is now — check it over, change anything you like, and tap <strong>Save</strong>.
+            Your team&apos;s cards use it as it is now — check it over, change anything you like, and tap <strong>Save &amp; apply to team cards</strong> at the bottom.
           </p>
         </div>
       )}

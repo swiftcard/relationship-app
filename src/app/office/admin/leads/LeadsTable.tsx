@@ -140,8 +140,8 @@ export default function LeadsTable({
         <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
           <p className="text-[0.6875rem] text-gray-500">
             {!hasMore
-              ? `All ${knownTotal.toLocaleString()} lead${knownTotal === 1 ? "" : "s"}`
-              : `Showing ${rows.length.toLocaleString()} of ${knownTotal.toLocaleString()} leads`}
+              ? `All ${knownTotal.toLocaleString()} contact${knownTotal === 1 ? "" : "s"}`
+              : `Showing ${rows.length.toLocaleString()} of ${knownTotal.toLocaleString()} contacts`}
             {visible.length !== rows.length && ` · ${visible.length.toLocaleString()} match your filters`}
           </p>
           {/* DownloadLink, not fetch() and not next/link: the browser handles
@@ -151,7 +151,7 @@ export default function LeadsTable({
               dead tap. Same component the personal contacts export uses. */}
           <DownloadLink
             href="/api/office/leads/export"
-            title="Download every lead your team has captured"
+            title="Download every contact your team has captured"
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-300 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
           >
             <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5" aria-hidden="true">
@@ -168,7 +168,7 @@ export default function LeadsTable({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by contact name…"
-          aria-label="Search leads by contact name"
+          aria-label="Search contacts by name"
           className="flex-1 bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
         />
         <select
@@ -199,7 +199,7 @@ export default function LeadsTable({
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-10 text-center">
           <p className="text-gray-400 text-sm">
             {knownTotal === 0
-              ? "No leads yet — leads appear here automatically when someone shares their info with any of your team's cards."
+              ? "No contacts yet — they appear here automatically when someone shares their info with any of your team's cards, or a teammate scans or adds one."
               : hasMore
               // Filters only see what is loaded, so "nothing matches" would be
               // a lie while there are still pages to fetch.

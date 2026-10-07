@@ -5,7 +5,7 @@ import { FOLLOW_UP_STATES, type FollowUpState } from "@/lib/lead-followup";
 import { PageHead } from "@/components/office/OfficeUI";
 import LeadsTable from "./LeadsTable";
 
-export const metadata = { title: "Leads — Admin — SwiftCard" };
+export const metadata = { title: "Contacts — Admin — SwiftCard" };
 
 export default async function OfficeLeadsPage({
   searchParams,
@@ -27,12 +27,12 @@ export default async function OfficeLeadsPage({
   return (
     <div>
       <PageHead
-        title="Leads"
+        title="Contacts"
         // The EXACT total, not the number loaded. This said "600 so far"
         // permanently once the office passed the old cap — and the Team tab's
         // per-person counts were uncapped, so the two tabs disagreed with no
         // way to reconcile them.
-        desc={`Everyone who shared their info with your team${page.total ? ` — ${page.total.toLocaleString()} so far` : ""}.`}
+        desc={`Everyone your team has met — people who shared their info, plus contacts your team scanned or added${page.total ? ` — ${page.total.toLocaleString()} so far` : ""}.`}
       />
       <div data-tour="admin-leads-table">
         <LeadsTable leads={page.leads} total={page.total} hasMore={page.hasMore} initialFollowUp={initialFollowUp} />

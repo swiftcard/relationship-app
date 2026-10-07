@@ -25,15 +25,16 @@ function esc(v: string | number | null | undefined): string {
   return `"${safe.replace(/"/g, '""')}"`;
 }
 
+// The Analytics table's columns, in its order and with its names.
 const HEADER = [
   "Employee",
   "Card",
   "Card views",
-  "Unique visitors",
-  "QR/NFC scans",
-  "Leads captured",
+  "Swift Link views",
+  "Contacts captured",
   "Contact downloads",
-  "SwiftLink views",
+  "Unique visitors",
+  "QR & NFC scans",
   "Most recent activity",
 ].join(",");
 
@@ -43,11 +44,11 @@ export function buildEmployeeAnalyticsCsv(rows: EmployeeCsvRow[]): string {
       esc(r.name),
       esc(r.cardName),
       esc(r.views),
-      esc(r.uniqueVisitors),
-      esc(r.scans),
+      esc(r.swiftlinkViews),
       esc(r.leads),
       esc(r.contactsSaved),
-      esc(r.swiftlinkViews),
+      esc(r.uniqueVisitors),
+      esc(r.scans),
       esc(r.lastActivityAt ? new Date(r.lastActivityAt).toLocaleDateString() : ""),
     ].join(",")
   );

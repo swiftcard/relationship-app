@@ -41,7 +41,10 @@ export default function ManageBillingButton() {
         disabled={loading}
         className="w-full text-center text-xs font-semibold text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-full py-2.5 transition-colors disabled:opacity-50"
       >
-        {loading ? "Opening…" : "Manage subscription & payment"}
+        {/* Not "Manage subscription & payment": inside the subscription panel
+            this sat under a button with exactly that label, so the same words
+            opened two different things. This one is the Stripe portal. */}
+        {loading ? "Opening…" : "Payment method & invoices"}
       </button>
       {error && <p className="text-red-400 text-xs mt-1.5 text-center">{error}</p>}
     </div>

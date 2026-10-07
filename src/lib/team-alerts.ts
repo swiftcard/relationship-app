@@ -176,8 +176,8 @@ export async function announceFirstLeadIfTeammate(userId: string, memberName: st
     const first = (memberName ?? "").trim().split(/\s+/)[0] || "A teammate";
     await alertTeam(officeId, {
       type: "member_first_lead",
-      title: `First lead for ${first} 🎉`,
-      body: `${first}'s card just captured its first lead. It's in the Leads tab.`,
+      title: `First contact for ${first} 🎉`,
+      body: `${first}'s card just captured its first contact. It's in the Contacts tab.`,
       meta: { userId },
       push: {},
       skipPushFor: [userId],
@@ -229,11 +229,11 @@ export function whoList(people: { name: string; n?: number }[], max = 3): string
  */
 export function noFollowUpCopy(people: { name: string; n: number }[]): { title: string; body: string; pushBody: string } {
   const total = people.reduce((s, p) => s + p.n, 0);
-  const title = total === 1 ? "1 team lead has no follow-up yet" : `${total} team leads have no follow-up yet`;
+  const title = total === 1 ? "1 team contact has no follow-up yet" : `${total} team contacts have no follow-up yet`;
   const who = whoList(people);
   return {
     title,
-    body: `A day after they came in, nothing is set up for these: ${who}. They're filtered for you in Leads.`,
+    body: `A day after they came in, nothing is set up for these: ${who}. They're filtered for you in Contacts.`,
     pushBody: `Waiting on: ${who}.`,
   };
 }

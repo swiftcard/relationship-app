@@ -34,9 +34,16 @@ async function getOfficeTeam(admin: Admin, officeId: string, ownerId: string): P
   }
   const teamIds = Array.from(new Set([ownerId, ...verified]));
 
+  // Cards in a FIXED order — the company card first, then oldest first. With
+  // no order the database could hand them back differently on each load, and
+  // slugs[0] below is the card a person's row shows and links to (View, Copy
+  // and the QR code), so it could swap to another of the owner's cards between
+  // two refreshes.
   const [{ data: profiles }, { data: cards }] = await Promise.all([
     admin.from("profiles").select("id, name, username").in("id", teamIds),
-    admin.from("cards").select("user_id, username, label, name").in("user_id", teamIds),
+    admin.from("cards").select("user_id, username, label, name").in("user_id", teamIds)
+      .order("is_office_card", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: true }),
   ]);
   const profileById = new Map((profiles ?? []).map((p) => [p.id as string, p]));
   const cardsByUser = new Map<string, { username: string; label: string | null; name: string | null }[]>();
@@ -98,35 +105,56 @@ function laterTimestamp(a: string | null, b: string | null | undefined): string 
 // are keyed by card username; leads by card_owner (username). Historical rows
 // for ex-members simply drop out of the current team set (they left with their
 // cards) — nothing is deleted.
+//
+// ONE SOURCE FOR EVERY NUMBER (owner, 2026-10-06). The Team tab, a person's
+// page, a card's page and the Analytics tab all count through
+// getOfficeEmployeeMetricsForTeam — the same SQL functions, the same rules.
+// Before, the Team side ran its own head counts that folded Swift Links views
+// into "Card views" while the Analytics table kept them apart, so the same
+// person showed two different view counts on two tabs and neither matched the
+// "SwiftCard views" on their own dashboard. Every console number now means
+// exactly what the member's dashboard means: card views and Swift Link views
+// separately, contacts without the sample contact, contact downloads.
 
-export type EmployeeAnalytics = {
-  userId: string;
-  name: string;
-  username: string;
-  isOwner: boolean;
+// "All time" for the Team tab and the person/card pages: from before the first
+// SwiftCard row existed to tomorrow, so a view recorded while the page renders
+// is still inside the window.
+export const ALL_TIME_SINCE = "2000-01-01T00:00:00.000Z";
+export function allTimeUntil(now = Date.now()): string {
+  return new Date(now + 24 * 60 * 60 * 1000).toISOString();
+}
+
+export type OfficeTotals = {
+  members: number;
   cards: number;
+  /** Card views only — Swift Link views are their own number. */
   views: number;
+  swiftlinkViews: number;
+  /** Contacts captured (not the sample contact). */
   leads: number;
+  /** Contact downloads. */
+  contactsSaved: number;
 };
 
 export type OfficeAnalytics = {
-  totals: { members: number; cards: number; views: number; leads: number };
-  employees: EmployeeAnalytics[];
+  totals: OfficeTotals;
+  employees: EmployeeMetrics[];
 };
 
-async function countViews(admin: ReturnType<typeof getAdminSupabase>, usernames: string[]): Promise<number> {
-  if (!usernames.length) return 0;
-  // card_views also logs the Swift Links surface as "<username>__links".
-  const keys = usernames.flatMap((u) => [u, `${u}__links`]);
-  const { count } = await admin.from("card_views").select("*", { count: "exact", head: true }).in("username", keys);
-  return count ?? 0;
+export function sumOfficeTotals(rows: EmployeeMetrics[]): Omit<OfficeTotals, "members"> {
+  return {
+    cards: rows.reduce((s, e) => s + e.cardCount, 0),
+    views: rows.reduce((s, e) => s + e.views, 0),
+    swiftlinkViews: rows.reduce((s, e) => s + e.swiftlinkViews, 0),
+    leads: rows.reduce((s, e) => s + e.leads, 0),
+    contactsSaved: rows.reduce((s, e) => s + e.contactsSaved, 0),
+  };
 }
 
-async function countLeads(admin: ReturnType<typeof getAdminSupabase>, usernames: string[]): Promise<number> {
-  if (!usernames.length) return 0;
-  // Not the sample contact every new card starts with (lib/demo-contact).
-  const { count } = await admin.from("leads").select("*", { count: "exact", head: true }).in("card_owner", usernames).not("tags", "cs", "{demo}");
-  return count ?? 0;
+// A single card as a one-card "member", so per-card figures go through the
+// same metrics function as everything else.
+function cardAsMember(c: { id: string; username: string; label: string | null; name: string | null }): OfficeTeamMember {
+  return { userId: c.id, name: c.name || c.username, username: c.username, isOwner: false, cardSlugs: [{ username: c.username, label: c.label, name: c.name }] };
 }
 
 // ── One person's detail ──────────────────────────────────────────────────────
@@ -141,7 +169,9 @@ export type MemberCardStat = {
   label: string | null;
   isOffline: boolean;
   views: number;
+  swiftlinkViews: number;
   leads: number;
+  contactsSaved: number;
 };
 
 export type MemberDetail = {
@@ -149,8 +179,7 @@ export type MemberDetail = {
   name: string;
   email: string | null;
   username: string;
-  joinedAt: string | null;
-  totals: { cards: number; views: number; leads: number; views30: number };
+  totals: { cards: number; views: number; swiftlinkViews: number; leads: number; contactsSaved: number };
   cards: MemberCardStat[];
   recentLeads: { id: string; name: string; email: string | null; created_at: string; card_owner: string }[];
 };
@@ -158,136 +187,119 @@ export type MemberDetail = {
 export async function getMemberDetail(userId: string): Promise<MemberDetail | null> {
   const admin = getAdminSupabase();
 
-  const { data: prof } = await admin
-    .from("profiles")
-    .select("id, name, username, email")
-    .eq("id", userId)
-    .maybeSingle();
-  if (!prof) return null;
-
-  // is_offline may not exist pre-migration → select * and read defensively.
-  const { data: cardRows } = await admin.from("cards").select("*").eq("user_id", userId).order("created_at", { ascending: true });
-  const cards = (cardRows ?? []) as Record<string, unknown>[];
-
-  const usernames = Array.from(new Set([
-    (prof.username as string) ?? "",
-    ...cards.map((c) => c.username as string),
-  ].filter(Boolean)));
-
-  const [views, leads, views30, recentLeads] = await Promise.all([
-    countViews(admin, usernames),
-    countLeads(admin, usernames),
-    countViewsSince(admin, usernames, 30),
-    usernames.length
-      ? admin.from("leads").select("id, name, email, created_at, card_owner").in("card_owner", usernames).not("tags", "cs", "{demo}")
-          .order("created_at", { ascending: false }).limit(10).then((r) => r.data ?? [])
-      : Promise.resolve([]),
+  const [{ data: prof }, { data: cardRows }, { data: memberRow }] = await Promise.all([
+    admin.from("profiles").select("id, name, username, email").eq("id", userId).maybeSingle(),
+    // is_offline may not exist pre-migration → select * and read defensively.
+    // Same order as getOfficeTeam, so this page and the Team tab pick the same
+    // card first and count the same slugs.
+    admin.from("cards").select("*").eq("user_id", userId)
+      .order("is_office_card", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: true }),
+    admin.from("office_members").select("invite_name, invite_email").eq("user_id", userId).eq("status", "active").limit(1).maybeSingle(),
   ]);
+  if (!prof) return null;
+  const cards = (cardRows ?? []) as Record<string, unknown>[];
+  const slugs = cards.map((c) => ({
+    id: c.id as string,
+    username: c.username as string,
+    label: (c.label as string | null) ?? null,
+    name: (c.name as string | null) ?? null,
+  }));
 
-  // Per-card views/leads, so the admin can see which card is actually working.
-  // All cards' queries fire together instead of one-card-at-a-time — a
-  // member with N cards previously paid for 2N SERIALIZED round trips here
-  // (performance audit).
-  const perCard: MemberCardStat[] = await Promise.all(
-    cards.map(async (c) => {
-      const u = c.username as string;
-      const [v, l] = await Promise.all([countViews(admin, [u]), countLeads(admin, [u])]);
-      return {
-        id: c.id as string,
-        username: u,
-        name: (c.name as string | null) ?? null,
-        label: (c.label as string | null) ?? null,
-        isOffline: c.is_offline === true,
-        views: v,
-        leads: l,
-      };
-    })
-  );
+  // Built exactly as getOfficeTeam builds a person, so the slugs counted here
+  // are the slugs the Team tab counted for this same row.
+  const member: OfficeTeamMember = {
+    userId,
+    name: (prof.name as string) || "",
+    username: slugs[0]?.username || (prof.username as string) || "",
+    isOwner: false,
+    cardSlugs: slugs.map(({ username, label, name }) => ({ username, label, name })),
+  };
+  const until = allTimeUntil();
+  const [[mine], perCardRows, recentLeads] = await Promise.all([
+    getOfficeEmployeeMetricsForTeam([member], ALL_TIME_SINCE, until),
+    getOfficeEmployeeMetricsForTeam(slugs.map(cardAsMember), ALL_TIME_SINCE, until),
+    getRecentLeadsForSlugs(memberSlugs(member), ALL_TIME_SINCE, until, 10),
+  ]);
+  const perCardById = new Map(perCardRows.map((r) => [r.userId, r]));
+
+  // The same name the Team tab shows: profiles.name is empty for normal
+  // signups, so the page header read "dana-3f9a2c" while the roster said
+  // "Dana Lee". The card's name, then the name and address they were invited
+  // with, and the account handle only as a last resort.
+  const name =
+    (prof.name as string) ||
+    slugs[0]?.name ||
+    (memberRow?.invite_name as string | null) ||
+    (memberRow?.invite_email as string | null) ||
+    (prof.username as string) ||
+    "Member";
 
   return {
     userId,
-    name: (prof.name as string) || (prof.username as string) || "Member",
+    name,
     // Auth signup email — the account's identity, not the card's contact email.
     email: await getAccountEmail(userId, prof.email as string | null),
-    username: (prof.username as string) || "",
-    joinedAt: null,
-    totals: { cards: cards.length, views, leads, views30 },
-    cards: perCard,
-    recentLeads: recentLeads as MemberDetail["recentLeads"],
+    username: member.username,
+    totals: {
+      cards: cards.length,
+      views: mine?.views ?? 0,
+      swiftlinkViews: mine?.swiftlinkViews ?? 0,
+      leads: mine?.leads ?? 0,
+      contactsSaved: mine?.contactsSaved ?? 0,
+    },
+    cards: cards.map((c) => {
+      const r = perCardById.get(c.id as string);
+      return {
+        id: c.id as string,
+        username: c.username as string,
+        name: (c.name as string | null) ?? null,
+        label: (c.label as string | null) ?? null,
+        isOffline: c.is_offline === true,
+        views: r?.views ?? 0,
+        swiftlinkViews: r?.swiftlinkViews ?? 0,
+        leads: r?.leads ?? 0,
+        contactsSaved: r?.contactsSaved ?? 0,
+      };
+    }),
+    recentLeads,
   };
 }
 
-// Stats for ONE card slug — the card-detail page. No authorization here; the
-// caller must already have proven the card belongs to their office.
-export async function getCardStats(username: string): Promise<{ views: number; views30: number; leads: number }> {
-  const admin = getAdminSupabase();
-  const [views, views30, leads] = await Promise.all([
-    countViews(admin, [username]),
-    countViewsSince(admin, [username], 30),
-    countLeads(admin, [username]),
-  ]);
-  return { views, views30, leads };
+// Stats for ONE card slug, all time — the card-detail page. No authorization
+// here; the caller must already have proven the card belongs to their office.
+export async function getCardStats(card: { id: string; username: string; label?: string | null; name?: string | null }): Promise<{ views: number; swiftlinkViews: number; leads: number; contactsSaved: number }> {
+  const [r] = await getOfficeEmployeeMetricsForTeam(
+    [cardAsMember({ id: card.id, username: card.username, label: card.label ?? null, name: card.name ?? null })],
+    ALL_TIME_SINCE,
+    allTimeUntil(),
+  );
+  return { views: r?.views ?? 0, swiftlinkViews: r?.swiftlinkViews ?? 0, leads: r?.leads ?? 0, contactsSaved: r?.contactsSaved ?? 0 };
 }
 
-async function countViewsSince(admin: ReturnType<typeof getAdminSupabase>, usernames: string[], days: number): Promise<number> {
-  if (!usernames.length) return 0;
-  const keys = usernames.flatMap((u) => [u, `${u}__links`]);
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-  const { count } = await admin
-    .from("card_views")
-    .select("*", { count: "exact", head: true })
-    .in("username", keys)
-    .gte("viewed_at", since);
-  return count ?? 0;
-}
-
-// Build the analytics for an office. `ownerId` is offices.owner_id.
+// The Team tab: every person's ALL-TIME numbers, plus the team's totals, which
+// are the sum of those rows — so the four tiles can never disagree with the
+// roster under them. `ownerId` is offices.owner_id.
 export async function getOfficeAnalytics(officeId: string, ownerId: string): Promise<OfficeAnalytics> {
   const admin = getAdminSupabase();
   const team = await getOfficeTeam(admin, officeId, ownerId);
-
-  // Per-member counts run for the WHOLE team at once. Awaiting each member in
-  // sequence made the /office/admin landing page cost 2 serial round trips per
-  // seat — roughly 1.5-2s of pure latency for a 20-seat office, growing linearly
-  // with the team. Same queries, same results, just not one-at-a-time.
-  const employees: EmployeeAnalytics[] = await Promise.all(
-    team.map(async (m) => {
-      const usernames = memberSlugs(m);
-      const [views, leads] = await Promise.all([countViews(admin, usernames), countLeads(admin, usernames)]);
-      return {
-        userId: m.userId,
-        name: m.name,
-        username: m.username,
-        isOwner: m.isOwner,
-        cards: m.cardSlugs.length,
-        views,
-        leads,
-      };
-    }),
-  );
+  const employees = await getOfficeEmployeeMetricsForTeam(team, ALL_TIME_SINCE, allTimeUntil());
 
   // A to Z, like a directory — never ranked by views or leads. The console is
   // not a race between teammates (owner, 2026-10-06); this is the Team tab's
   // order, the same one the Analytics table opens on.
   const sorted = defaultEmployeeSort(employees);
 
-  const totals = {
-    members: team.length,
-    cards: employees.reduce((s, e) => s + e.cards, 0),
-    views: employees.reduce((s, e) => s + e.views, 0),
-    leads: employees.reduce((s, e) => s + e.leads, 0),
-  };
+  const totals = { members: team.length, ...sumOfficeTotals(employees) };
 
   return { totals, employees: sorted };
 }
 
 // ── Office Analytics Dashboard (date-ranged, RPC-backed) ─────────────────────
-// Everything below replaces the per-employee query LOOP above with real
-// GROUP BY aggregates (via the SQL functions in
+// Real GROUP BY aggregates (via the SQL functions in
 // supabase/office-analytics-dashboard.sql), so this stays fast for an office
 // with hundreds of employees — one query per function call, independent of
-// team size. getOfficeAnalytics/getMemberDetail above are left untouched for
-// their current callers (the Team page and its member-detail page).
+// team size. The all-time Team-tab figures above go through the same function.
 
 export type EmployeeMetrics = {
   userId: string;

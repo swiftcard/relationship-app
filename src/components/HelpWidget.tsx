@@ -33,13 +33,13 @@ const NATIVE_SUGGESTIONS = SUGGESTIONS.filter((s) => s !== "How do I upgrade to 
 const ADMIN_GREETING: Msg = {
   role: "assistant",
   content:
-    "Hi! I'm your Admin Console assistant. Ask me where to find things or how to do them across your Team, Analytics, Leads, and Branding tabs — e.g. \"How do I invite a teammate?\" or \"Where do I set our company branding?\"",
+    "Hi! I'm your Admin Console assistant. Ask me where to find things or how to do them across your Team, Analytics, Contacts, and Branding tabs — e.g. \"How do I invite a teammate?\" or \"Where do I set our company branding?\"",
 };
 
 const ADMIN_SUGGESTIONS = [
   "How do I invite a teammate?",
   "Where do I set our company branding?",
-  "Where are all our leads?",
+  "Where are all our team's contacts?",
   "How do I see per-person analytics?",
 ];
 

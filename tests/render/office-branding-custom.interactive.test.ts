@@ -143,8 +143,8 @@ describe("Office Branding offers a custom design for the whole team", () => {
     const { page, saves } = await rig(BASE);
     await page.click("button[aria-label='Custom design']");
     await page.waitForSelector("text=Copy a card or template you like");
-    await page.click("text=Save & apply to all cards");
-    await page.waitForSelector("text=Applied to every card");
+    await page.click("text=Save & apply to team cards");
+    await page.waitForSelector("text=Applied to your team's cards");
     expect(saves).toHaveLength(1);
     expect(saves[0].template).toBe("custom");
     const layout = saves[0].customLayout as Record<string, unknown>;
@@ -158,8 +158,8 @@ describe("Office Branding offers a custom design for the whole team", () => {
     const { page, saves } = await rig({ ...BASE, brand_template: "custom", brand_custom_layout: { faceImage: FACE, blocks: [] } });
     await page.waitForSelector("text=Copy a card or template you like");
     expect(await page.$$eval(`img[src="${FACE}"]`, (els) => els.length)).toBe(0);
-    await page.click("text=Save & apply to all cards");
-    await page.waitForSelector("text=Applied to every card");
+    await page.click("text=Save & apply to team cards");
+    await page.waitForSelector("text=Applied to your team's cards");
     expect("faceImage" in (saves[0].customLayout as object)).toBe(false);
     await page.context().close();
   });
@@ -167,8 +167,8 @@ describe("Office Branding offers a custom design for the whole team", () => {
   it("switching back to a template saves no layout", async () => {
     const { page, saves } = await rig({ ...BASE, brand_template: "custom" });
     await page.click("button[aria-label='Modern Bold']");
-    await page.click("text=Save & apply to all cards");
-    await page.waitForSelector("text=Applied to every card");
+    await page.click("text=Save & apply to team cards");
+    await page.waitForSelector("text=Applied to your team's cards");
     expect(saves[0].template).toBe("modern-bold");
     expect("customLayout" in saves[0]).toBe(false);
     await page.context().close();

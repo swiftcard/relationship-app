@@ -250,7 +250,7 @@ export default function OfficeNotificationBell({
               {notifications.length === 0 ? (
                 <div className="px-4 py-8 text-center">
                   <p className="text-gray-400 text-sm">No team updates yet</p>
-                  <p className="text-gray-600 text-xs mt-1">Who joins, a teammate&apos;s first lead, leads with no follow-up, team milestones and your team&apos;s week show up here. Your own card&apos;s notifications stay in the bell on your dashboard.</p>
+                  <p className="text-gray-600 text-xs mt-1">Who joins, a teammate&apos;s first contact, contacts with no follow-up, team milestones and your team&apos;s week show up here. Your own card&apos;s notifications stay in the bell on your dashboard.</p>
                 </div>
               ) : (
                 notifications.map((n) => (

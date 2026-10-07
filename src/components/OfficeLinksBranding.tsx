@@ -382,9 +382,9 @@ export default function OfficeLinksBranding({ office }: { office: OfficeRow }) {
             disabled={status === "saving"}
             className="bg-purple-600 hover:bg-purple-500 text-white text-sm font-semibold px-5 py-2.5 rounded-full transition-colors disabled:opacity-50"
           >
-            {status === "saving" ? "Saving…" : "Save & apply to all Swift Links"}
+            {status === "saving" ? "Saving…" : "Save & apply to team Swift Links"}
           </button>
-          {status === "saved" && <span className="text-green-400 text-xs font-semibold">Applied to every page ✓</span>}
+          {status === "saved" && <span className="text-green-400 text-xs font-semibold">Applied to your team&apos;s pages ✓</span>}
           {status === "error" && <span className="text-red-400 text-xs font-semibold">Couldn&apos;t save — try again</span>}
         </div>
       </div>

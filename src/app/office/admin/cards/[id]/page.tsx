@@ -22,7 +22,7 @@ export default async function OfficeCardDetailPage({ params }: { params: Promise
   const card = cards.find((c) => c.id === id);
   if (!card) notFound();
 
-  const stats = await getCardStats(card.username).catch(() => ({ views: 0, views30: 0, leads: 0 }));
+  const stats = await getCardStats(card).catch(() => ({ views: 0, swiftlinkViews: 0, leads: 0, contactsSaved: 0 }));
 
   return (
     <div>
@@ -45,10 +45,13 @@ export default async function OfficeCardDetailPage({ params }: { params: Promise
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-8">
+      {/* This card alone, all time — counted like everything else in the console. */}
+      <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider mb-2">All time</p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
         <StatTile label="Card views" value={stats.views} />
-        <StatTile label="Views (30d)" value={stats.views30} />
-        <StatTile label="Leads captured" value={stats.leads} />
+        <StatTile label="Swift Link views" value={stats.swiftlinkViews} />
+        <StatTile label="Contacts captured" value={stats.leads} />
+        <StatTile label="Contact downloads" value={stats.contactsSaved} />
       </div>
 
       <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider mb-2">Details</p>

@@ -50,10 +50,19 @@ export default async function OfficeMemberPage({ params }: { params: Promise<{ i
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-8">
+      {/* The Team tab's four numbers for this person, all time — the same
+          figures as their row there. By date: their Analytics page. */}
+      <div className="flex items-baseline justify-between gap-3 mb-2">
+        <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider">All time</p>
+        <Link href={`/office/admin/analytics/${m.userId}`} className="text-xs font-semibold text-purple-400 hover:text-purple-300 transition-colors">
+          See their analytics by date →
+        </Link>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
         <StatTile label="Card views" value={m.totals.views} hint="Times someone opened their card" />
-        <StatTile label="Views · last 30 days" value={m.totals.views30} />
-        <StatTile label="Leads captured" value={m.totals.leads} hint="People who shared their info" />
+        <StatTile label="Swift Link views" value={m.totals.swiftlinkViews} hint="Visits to their Swift Links page" />
+        <StatTile label="Contacts captured" value={m.totals.leads} hint="Shared their info, or scanned or added by them" />
+        <StatTile label="Contact downloads" value={m.totals.contactsSaved} hint="Times someone downloaded their contact card" />
       </div>
 
       {/* Their cards, with the actions an owner actually needs. */}
@@ -70,9 +79,9 @@ export default async function OfficeMemberPage({ params }: { params: Promise<{ i
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="text-sm text-white font-medium truncate">{c.label || c.name || "Their card"}</p>
-                  {c.isOffline ? <Badge tone="gray">Turned off</Badge> : <Badge tone="green">Live</Badge>}
+                  {c.isOffline ? <Badge tone="gray">Offline</Badge> : <Badge tone="green">Live</Badge>}
                 </div>
-                <p className="text-xs text-gray-500 tabular-nums mt-0.5">{c.views} views · {c.leads} leads</p>
+                <p className="text-xs text-gray-500 tabular-nums mt-0.5">{c.views.toLocaleString("en-US")} card views · {c.swiftlinkViews.toLocaleString("en-US")} link views · {c.leads.toLocaleString("en-US")} contacts</p>
               </div>
               {caps.canManageCards && (!isOwner || viewerIsOwner) && (
                 <Link
@@ -87,10 +96,10 @@ export default async function OfficeMemberPage({ params }: { params: Promise<{ i
         </div>
       )}
 
-      {/* The people this person has brought in. */}
-      <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider mb-2">Leads they captured</p>
+      {/* The latest people this person has collected; the Contacts tab has them all. */}
+      <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider mb-2">Recent contacts</p>
       {m.recentLeads.length === 0 ? (
-        <Empty>No leads yet — leads appear here when someone shares their info on this person&apos;s card.</Empty>
+        <Empty>No contacts yet — they appear here when someone shares their info on this person&apos;s card, or they scan or add one.</Empty>
       ) : (
         <div className="bg-gray-900 border border-gray-800 rounded-2xl divide-y divide-gray-800 overflow-hidden">
           {m.recentLeads.map((l) => (

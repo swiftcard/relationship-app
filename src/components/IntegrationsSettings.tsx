@@ -611,7 +611,7 @@ export default function IntegrationsSettings({ googleConnected, hubspotConnected
       {teamCrmNames.length > 0 && (
         <div className="rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4">
           <p className="text-blue-900 text-sm font-semibold">
-            Your team already sends leads to {teamCrmNames.join(" and ")}
+            Your team already sends contacts to {teamCrmNames.join(" and ")}
           </p>
           <p className="text-blue-800/80 text-xs mt-1 leading-relaxed">
             Your admin set this up — your contacts go there automatically and there&apos;s nothing

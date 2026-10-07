@@ -50,7 +50,7 @@ export function teamRecapCopy(input: {
   quiet: number;
 }): { title: string; body: string } | null {
   if (input.views <= 0 && input.leads <= 0) return null;
-  const title = `Team week: ${plural(input.views, "view")} · ${plural(input.leads, "lead")}`;
+  const title = `Team week: ${plural(input.views, "view")} · ${plural(input.leads, "new contact")}`;
   // No "Dana led with 3 leads": the recap reports the team's week, it does not
   // rank teammates against each other (owner, 2026-10-06).
   const quiet = input.quiet > 0 ? `${plural(input.quiet, "teammate")} had no views.` : "";

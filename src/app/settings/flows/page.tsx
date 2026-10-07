@@ -172,16 +172,28 @@ export default async function FlowSettingsPage({
     salesforce: "Salesforce",
   };
   let teamCrmNames: string[] = [];
+  // Which team, and who runs it. A member is told "ask your Office admin" in a
+  // dozen places (their card's managed fields, the cards list, the help
+  // assistant) and nothing they could see named the team or that person.
+  let teamInfo: { name: string; admin: string | null } | null = null;
   if (officeCtx && !officeCtx.isOwner && officeCtx.ownerId) {
-    const [{ data: ownerIntegrations }, { data: ownerZap }] = await Promise.all([
+    const [{ data: ownerIntegrations }, { data: ownerZap }, { data: officeRow }, { data: ownerCard }] = await Promise.all([
       admin
         .from("integrations")
         .select("provider")
         .eq("user_id", officeCtx.ownerId),
       // The owner's Zapier webhook is inherited the same way (resolveZapierTarget),
       // so it belongs in the same sentence — unless this member saved their own.
-      admin.from("profiles").select("zapier_webhook_url").eq("id", officeCtx.ownerId).maybeSingle(),
+      admin.from("profiles").select("zapier_webhook_url, name").eq("id", officeCtx.ownerId).maybeSingle(),
+      admin.from("offices").select("name").eq("id", officeCtx.officeId).maybeSingle(),
+      // The owner's name as the world sees it: profiles.name is empty for a
+      // normal signup, which writes the name to the card.
+      admin.from("cards").select("name").eq("user_id", officeCtx.ownerId).order("created_at", { ascending: true }).limit(1).maybeSingle(),
     ]);
+    teamInfo = {
+      name: (officeRow?.name as string | null)?.trim() || "your team",
+      admin: (ownerZap?.name as string | null)?.trim() || (ownerCard?.name as string | null)?.trim() || null,
+    };
     teamCrmNames = (ownerIntegrations ?? [])
       .map((i) => CRM_LABEL[i.provider as string])
       .filter(Boolean);
@@ -242,6 +254,7 @@ export default async function FlowSettingsPage({
             plan={profile.plan ?? "free"}
             isPro={isPro}
             billingNote={isOfficeSubUser && !showBilling ? "team" : showBilling ? "below" : "none"}
+            team={teamInfo}
             freePeriod={freePeriod}
             defaultOpen
           />

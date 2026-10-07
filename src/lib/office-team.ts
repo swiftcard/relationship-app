@@ -1,29 +1,21 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
-import { getOfficeAnalytics, type EmployeeAnalytics } from "@/lib/office-analytics";
+import { getOfficeAnalytics, type EmployeeMetrics, type OfficeTotals } from "@/lib/office-analytics";
 import { getOfficeSeatUsage, type SeatUsage } from "@/lib/office-seats";
 import { isInviteExpired } from "@/lib/office-invite";
 import type { MemberStatus } from "@/lib/member-status";
 
-// ── Team-tab data: monthly stats, per-person activity, setup progress ───────
+// ── Team-tab data: all-time totals, per-person activity, setup progress ─────
 // Everything the Team tab shows beyond what getOfficeAnalytics already counts.
 // Scoped to ONE office; callers must have passed requireOfficeAdmin first.
 //
-// "This month" is the CALENDAR month (what a small-business owner means by it),
-// compared against the previous calendar month.
+// The four numbers at the top are ALL TIME (owner, 2026-10-06) and are the sum
+// of the roster rows under them — card views, Swift Link views, contacts
+// captured, contact downloads, counted exactly as the Analytics tab and the
+// member's own dashboard count them (see getOfficeAnalytics). The old "this
+// month" tiles used the UTC calendar month and folded Swift Links views into
+// "card views", so they matched nothing else on screen.
 
 export const ACTIVE_WINDOW_MS = 14 * 24 * 60 * 60 * 1000; // idle after 14 quiet days
-
-// A month-over-month arrow needs a baseline worth comparing against. Going from
-// 1 lead to 2 is "+100%", which reads like a trend and is really just noise —
-// so below this many events last month we show the number with no delta at all.
-const MIN_BASELINE_FOR_DELTA = 5;
-
-export type MonthStat = {
-  current: number;
-  previous: number;
-  // null when last month is zero or too thin to draw a conclusion from.
-  deltaPct: number | null;
-};
 
 // The status vocabulary now lives in lib/member-status (client-safe).
 // Re-exported so existing server-side importers are untouched — but a CLIENT
@@ -32,7 +24,7 @@ export type MonthStat = {
 export { MEMBER_STATUS_LABEL } from "@/lib/member-status";
 export type { MemberStatus } from "@/lib/member-status";
 
-export type TeamPerson = EmployeeAnalytics & {
+export type TeamPerson = EmployeeMetrics & {
   kind: "member";
   memberRowId: string | null; // office_members.id — null for the owner (no row)
   title: string | null;
@@ -57,46 +49,15 @@ export type TeamInvite = {
 };
 
 export type TeamOverview = {
-  stats: {
-    leadsThisMonth: MonthStat;
-    viewsThisMonth: MonthStat;
-    activation: ActivationRate;
-    seats: SeatUsage;
-  };
+  stats: { seats: SeatUsage };
   people: TeamPerson[];
   invites: TeamInvite[];
-  totals: { members: number; cards: number; views: number; leads: number };
+  /** All-time team totals — the sum of `people`. */
+  totals: OfficeTotals;
+  /** Every office_members row this office has ever had, any status — the
+   *  setup checklist's "invite someone" step stays ticked after people leave. */
+  memberRowsEver: number;
 };
-
-function monthStartIso(offset: 0 | 1, now: Date): string {
-  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - offset, 1));
-  return d.toISOString();
-}
-
-export function deltaPct(current: number, previous: number): number | null {
-  if (previous < MIN_BASELINE_FOR_DELTA) return null;
-  return Math.round(((current - previous) / previous) * 100);
-}
-
-// ── Team activation rate ─────────────────────────────────────────────────────
-// "Team members with a completed live card ÷ total invited team members."
-// The OWNER is excluded from both sides: they aren't invited, and they always
-// have a card (their card is the brand), so including them would inflate the
-// rate toward 100% and hide the exact problem this measures — people who were
-// invited and never finished. Pure so it's unit-testable.
-
-export type ActivationRate = {
-  activated: number;
-  invited: number;
-  // null when nobody has been invited yet — 0/0 is not "0% activated".
-  pct: number | null;
-};
-
-export function computeActivation(input: { activatedMembers: number; invitedTotal: number }): ActivationRate {
-  const activated = Math.max(0, input.activatedMembers);
-  const invited = Math.max(0, input.invitedTotal);
-  return { activated, invited, pct: invited > 0 ? Math.round((activated / invited) * 100) : null };
-}
 
 export function memberStatus(input: {
   liveCards: number;
@@ -157,28 +118,6 @@ export async function getTeamOverview(
   const perUserSlugs = await slugsByUser(userIds);
   const allSlugs = Array.from(new Set(userIds.flatMap((id) => perUserSlugs.get(id) ?? [])));
 
-  const now = new Date();
-  const thisMonth = monthStartIso(0, now);
-  const lastMonth = monthStartIso(1, now);
-
-  // Month counts: cheap head-count queries instead of pulling rows.
-  const countViews = async (from: string, to?: string) => {
-    if (!allSlugs.length) return 0;
-    let q = admin.from("card_views").select("*", { count: "exact", head: true })
-      .in("username", viewKeys(allSlugs)).gte("viewed_at", from);
-    if (to) q = q.lt("viewed_at", to);
-    const { count } = await q;
-    return count ?? 0;
-  };
-  const countLeads = async (from: string, to?: string) => {
-    if (!allSlugs.length) return 0;
-    let q = admin.from("leads").select("*", { count: "exact", head: true })
-      .in("card_owner", allSlugs).not("tags", "cs", "{demo}").gte("created_at", from);
-    if (to) q = q.lt("created_at", to);
-    const { count } = await q;
-    return count ?? 0;
-  };
-
   // Per-person latest activity: newest view + newest lead on their slugs.
   //
   // TWO QUERIES FOR THE WHOLE TEAM, not two per person. This used to be two
@@ -224,14 +163,9 @@ export async function getTeamOverview(
   };
 
   const [
-    viewsCur, viewsPrev, leadsCur, leadsPrev,
     { data: memberRows }, { data: profileRows }, { data: cardRows },
     seats,
   ] = await Promise.all([
-    countViews(thisMonth),
-    countViews(lastMonth, thisMonth),
-    countLeads(thisMonth),
-    countLeads(lastMonth, thisMonth),
     admin.from("office_members")
       // invited_at, NOT created_at: office_members has no created_at column, and
       // naming a missing column fails the ENTIRE select — which returned null
@@ -339,21 +273,12 @@ export async function getTeamOverview(
       status: isInviteExpired(r) ? ("invite_expired" as const) : ("invite_sent" as const),
     }));
 
-  // Activation: everyone invited (accepted or still pending), against those who
-  // actually got a live card up. The owner is on neither side — see computeActivation.
-  const invitedTotal = people.filter((p) => !p.isOwner).length + invites.length;
-  const activatedMembers = people.filter((p) => !p.isOwner && p.liveCards > 0).length;
-
   return {
-    stats: {
-      leadsThisMonth: { current: leadsCur, previous: leadsPrev, deltaPct: deltaPct(leadsCur, leadsPrev) },
-      viewsThisMonth: { current: viewsCur, previous: viewsPrev, deltaPct: deltaPct(viewsCur, viewsPrev) },
-      activation: computeActivation({ activatedMembers, invitedTotal }),
-      seats,
-    },
+    stats: { seats },
     people,
     invites,
     totals: analytics.totals,
+    memberRowsEver: rows.length,
   };
 }
 

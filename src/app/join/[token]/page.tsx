@@ -198,9 +198,10 @@ export default async function JoinPage({
   // onboarding (e.g. an email link opened in another browser). /api/join would
   // answer "finish creating your account" with no way to do it; onboarding
   // provisions the profile and brings them straight back here.
-  const [{ data: profile }, { data: ownedOffice }] = await Promise.all([
+  const [{ data: profile }, { data: ownedOffice }, { count: existingCards }] = await Promise.all([
     admin.from("profiles").select("id").eq("id", user.id).maybeSingle(),
     admin.from("offices").select("id").eq("owner_id", user.id).maybeSingle(),
+    admin.from("cards").select("id", { count: "exact", head: true }).eq("user_id", user.id),
   ]);
   if (!profile) redirect(`/onboarding?next=${encodeURIComponent(`/join/${token}`)}`);
 
@@ -209,7 +210,7 @@ export default async function JoinPage({
     return (
       <DeadEnd
         title="You already run a team"
-        message={`${user.email} owns a SwiftCard Office team, so it can't also join ${officeName ?? "another team"}. Ask the admin to invite a different email address, or transfer or close your team first.`}
+        message={`${user.email} owns a SwiftCard Office team, so it can't also join ${officeName ?? "another team"}. Ask the admin to invite a different email address, or end your Office plan first (Settings → Plan and billing).`}
         href="/dashboard"
         cta="Go to my dashboard →"
       />
@@ -231,6 +232,17 @@ export default async function JoinPage({
             <span className="text-xs font-bold text-green-400">Free — {officeName ?? "your team"} covers it</span>
           </div>
         </div>
+
+        {/* Said BEFORE they accept (owner, 2026-10-06): an existing card comes
+            with its history, and the team's admin console lists every contact
+            on a teammate's card. Nobody with no card yet has anything to see. */}
+        {(existingCards ?? 0) > 0 && (
+          <p className="text-gray-500 text-xs leading-relaxed mb-5">
+            {existingCards === 1 ? "Your card becomes your" : "Your cards become"} {officeName ?? "team"} {existingCards === 1 ? "card" : "cards"}, with
+            the company look. The team&apos;s admin will see the contacts on {existingCards === 1 ? "it" : "them"} — your
+            private notes stay yours.
+          </p>
+        )}
 
         <JoinButton token={token} />
 

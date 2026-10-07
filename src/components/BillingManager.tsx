@@ -51,6 +51,9 @@ type Sub = {
   /** Office sub-user viewing their OWN leftover subscription — render the
       trimmed personal view, never the plan manager (see the GET route). */
   personalSubOnly?: boolean;
+  /** A delegated billing admin looking at the ORGANISATION's subscription
+      (api/stripe/subscription) — the owner's seat is not "you" for them. */
+  managingOrgBilling?: boolean;
 };
 
 const CANCEL_REASONS = [
@@ -519,7 +522,7 @@ function SeatManager({ sub, onChanged }: { sub: Sub; onChanged: () => Promise<vo
         <p className="text-[0.6875rem] text-gray-500">{available} available · min {sub.minSeats}</p>
       </div>
       <p className="text-[0.6875rem] text-gray-500 mb-2">
-        {current} purchased · you + {active} active + {pending} pending = {used} used
+        {current} purchased · {sub.managingOrgBilling ? "owner" : "you"} + {active} active + {pending} pending = {used} used
       </p>
 
       {/* Scheduled reduction banner (spec §5) — current vs future clearly distinct */}
@@ -560,7 +563,7 @@ function SeatManager({ sub, onChanged }: { sub: Sub; onChanged: () => Promise<vo
       )}
       {msg && <p className="text-[0.6875rem] text-gray-400 mt-2">{msg}</p>}
       {floor > sub.minSeats && seats <= floor && (
-        <p className="text-[0.6875rem] text-gray-600 mt-1.5">Remove members or revoke invitations to go below {floor} seats.</p>
+        <p className="text-[0.6875rem] text-gray-600 mt-1.5">Remove members or retract invitations to go below {floor} seats.</p>
       )}
     </div>
   );

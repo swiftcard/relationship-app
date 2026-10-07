@@ -179,7 +179,7 @@ describe("the table says what is on screen and what is not", () => {
 
   it("the header shows the EXACT total, not the loaded count", () => {
     expect(page).toMatch(/page\.total \? ` — \$\{page\.total\.toLocaleString\(\)\} so far`/);
-    expect(table).toMatch(/Showing \$\{rows\.length\.toLocaleString\(\)\} of \$\{knownTotal\.toLocaleString\(\)\} leads/);
+    expect(table).toMatch(/Showing \$\{rows\.length\.toLocaleString\(\)\} of \$\{knownTotal\.toLocaleString\(\)\} contacts/);
   });
 
   it("offers Load more with how many remain", () => {

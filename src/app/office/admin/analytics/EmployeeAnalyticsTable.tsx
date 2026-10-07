@@ -13,16 +13,18 @@ type SortKey = keyof Pick<
   "name" | "cardName" | "views" | "uniqueVisitors" | "scans" | "leads" | "contactsSaved" | "swiftlinkViews" | "lastActivityAt"
 >;
 
+// Same names and order as the tiles above, the Team tab and the CSV — and the
+// same numbers as each person's own dashboard for the same days.
 const COLUMNS: { key: SortKey; label: string; hint: string }[] = [
   { key: "name", label: "Employee", hint: "Team member name" },
   { key: "cardName", label: "Card", hint: "Their card, or how many cards they own" },
-  { key: "views", label: "Views", hint: "Times their card was opened — repeat visits count; reloads within a visit don't" },
-  { key: "uniqueVisitors", label: "Unique visitors", hint: "Distinct visitors in the selected range" },
-  { key: "scans", label: "Scans", hint: "Views attributed to a QR code scan or NFC tap" },
-  { key: "leads", label: "Leads", hint: "People who shared their contact info" },
+  { key: "views", label: "Card views", hint: "Times their card was opened — repeat visits count; reloads within a visit don't" },
+  { key: "swiftlinkViews", label: "Swift Link views", hint: "Visits to their Swift Links page" },
+  { key: "leads", label: "Contacts captured", hint: "People who shared their info, plus contacts they scanned or added" },
   { key: "contactsSaved", label: "Contact downloads", hint: "Visitors who downloaded this card as a contact. Whether they then tapped Add in their phone's contact sheet is not something any app can see." },
-  { key: "swiftlinkViews", label: "SwiftLink views", hint: "Visits to their Swift Links page" },
-  { key: "lastActivityAt", label: "Last activity", hint: "Most recent view, lead, or contact save" },
+  { key: "uniqueVisitors", label: "Unique visitors", hint: "Distinct visitors in the selected range" },
+  { key: "scans", label: "QR & NFC scans", hint: "Views that came from a QR code scan or an NFC tap" },
+  { key: "lastActivityAt", label: "Last activity", hint: "Most recent view, contact, or contact download" },
 ];
 
 // Client-side search + sort over the (already server-authorized, date-ranged)
@@ -110,17 +112,17 @@ export default function EmployeeAnalyticsTable({ employees, range }: { employees
               {visible.map((r) => (
                 <tr key={r.userId} className="hover:bg-gray-800/40 transition-colors">
                   <td className="px-4 py-3 whitespace-nowrap">
-                    <Link href={`/office/admin/analytics/${r.userId}`} className="text-white font-medium hover:text-purple-300 transition-colors">
+                    <Link href={`/office/admin/analytics/${r.userId}?range=${encodeURIComponent(range)}`} className="text-white font-medium hover:text-purple-300 transition-colors">
                       {r.name}
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{r.cardName}</td>
                   <td className="px-4 py-3 text-gray-300 tabular-nums">{r.views}</td>
+                  <td className="px-4 py-3 text-gray-300 tabular-nums">{r.swiftlinkViews}</td>
+                  <td className="px-4 py-3 text-gray-300 tabular-nums">{r.leads}</td>
+                  <td className="px-4 py-3 text-gray-300 tabular-nums">{r.contactsSaved}</td>
                   <td className="px-4 py-3 text-gray-300 tabular-nums">{r.uniqueVisitors}</td>
                   <td className="px-4 py-3 text-gray-300 tabular-nums">{r.scans}</td>
-                  <td className="px-4 py-3 text-gray-300 tabular-nums font-semibold">{r.leads}</td>
-                  <td className="px-4 py-3 text-gray-300 tabular-nums">{r.contactsSaved}</td>
-                  <td className="px-4 py-3 text-gray-300 tabular-nums">{r.swiftlinkViews}</td>
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
                     {r.lastActivityAt ? relativeTime(r.lastActivityAt, clock.now) : "No activity yet"}
                   </td>

@@ -2,7 +2,7 @@ import type { TourStep } from "./tour-steps";
 
 // ── Office Admin guided tour: the walkthrough itself ────────────────────────
 // A separate, shorter tour scoped to the Office admin console — Team,
-// Analytics, Leads and Branding. Runs independently of the main dashboard tour (own storage
+// Analytics, Contacts and Branding. Runs independently of the main dashboard tour (own storage
 // keys in tour.ts) so an admin can replay just this one without restarting
 // the whole-app tour.
 
@@ -15,7 +15,7 @@ export const ADMIN_TOUR_STEPS: TourStep[] = [
     id: "admin-welcome",
     path: TEAM,
     title: "Welcome to your Admin console",
-    body: "A quick lap around Team, Analytics, Leads and Branding — everything you see and manage for your whole office. Use Next and Back, or Skip anytime.",
+    body: "A quick lap around Team, Analytics, Contacts and Branding — everything you see and manage for your whole office. Use Next and Back, or Skip anytime.",
   },
   {
     id: "admin-nav-team",
@@ -30,7 +30,7 @@ export const ADMIN_TOUR_STEPS: TourStep[] = [
     path: TEAM,
     anchor: "admin-stats",
     title: "Your team at a glance",
-    body: "Leads captured, card views, how many invited teammates actually finished their card, and how many seats you're paying for vs. using.",
+    body: "Your team's totals, all time: card views, Swift Link views, contacts captured and contact downloads — the sum of everyone listed below.",
     placement: "bottom",
   },
   {
@@ -62,11 +62,11 @@ export const ADMIN_TOUR_STEPS: TourStep[] = [
     title: "Team notifications",
     // Team news, rolled up (lib/team-alerts, 2026-09-22) — never each lead or
     // view a teammate gets; those stay on that teammate's own bell.
-    body: "Your team's news lands here — who joined or left, leads still waiting after a day, a teammate's first lead, team milestones and Monday's recap. The important ones reach your phone too, at most two a day.",
+    body: "Your team's news lands here — who joined, invitations declined or expired, contacts still waiting for a follow-up after a day, a teammate's first contact, team milestones and Monday's recap. The important ones reach your phone too, at most two a day.",
     placement: "bottom",
   },
   // Analytics is one of the console's four tabs. The tour used to walk past it
-  // to Leads, so an office admin finished a "tour of the console" without ever
+  // to Leads (now Contacts), so an office admin finished a "tour of the console" without ever
   // being told a whole section existed — and the closing step then claimed the
   // console was Team, Leads and Branding.
   //
@@ -78,23 +78,23 @@ export const ADMIN_TOUR_STEPS: TourStep[] = [
     path: TEAM,
     anchor: "admin-nav-analytics",
     title: "Analytics",
-    body: "Views, scans, contact downloads and leads for every card on your team. Tap anyone to see their own page.",
+    body: "The same numbers by date — 7, 30 or 90 days — for the whole team and for each person. Tap anyone to see their own page.",
     placement: "bottom",
   },
   {
     id: "admin-nav-leads",
     path: TEAM,
     anchor: "admin-nav-leads",
-    title: "Leads",
-    body: "Tap here to see everyone across your whole team who's shared their info.",
+    title: "Contacts",
+    body: "Tap here to see everyone your whole team has met — people who shared their info, plus contacts teammates scanned or added.",
     placement: "bottom",
   },
   {
     id: "admin-leads-table",
     path: LEADS,
     anchor: "admin-leads-table",
-    title: "Every lead, whoever captured it",
-    body: "One combined list for the whole office — who they are, which teammate's card they came from, and when. No lead gets lost when someone leaves.",
+    title: "Every contact, whoever captured it",
+    body: "One combined list for the whole office — who they are, which teammate's card they came from, and when. No contact gets lost when someone leaves.",
     placement: "top",
   },
   {
@@ -152,7 +152,7 @@ export const ADMIN_TOUR_STEPS: TourStep[] = [
     id: "admin-finish",
     path: BRANDING,
     title: "You're all set",
-    body: "That's Team, Analytics, Leads, and Branding — both the card and the Swift Links halves. Replay this anytime from the Tour button on the Team page.",
+    body: "That's Team, Analytics, Contacts, and Branding — both the card and the Swift Links halves. Replay this anytime from the Tour button on the Team page.",
   },
 ];
 
@@ -175,10 +175,10 @@ export function adminTourSteps({ canBrand, canInvite }: { canBrand: boolean; can
   ).map((s) => {
     if (canBrand) return s;
     if (s.id === "admin-welcome") {
-      return { ...s, body: "A quick lap around Team, Analytics and Leads — everything you see and manage for your whole office. Use Next and Back, or Skip anytime." };
+      return { ...s, body: "A quick lap around Team, Analytics and Contacts — everything you see and manage for your whole office. Use Next and Back, or Skip anytime." };
     }
     if (s.id === "admin-finish") {
-      return { ...s, path: LEADS, body: "That's Team, Analytics and Leads. Replay this anytime from the Tour button on the Team page." };
+      return { ...s, path: LEADS, body: "That's Team, Analytics and Contacts. Replay this anytime from the Tour button on the Team page." };
     }
     return s;
   });

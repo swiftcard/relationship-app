@@ -592,7 +592,7 @@ export function RemoveMemberButton({ memberId, personName, canManageSeats, onPer
           <p className="text-gray-300 text-sm mb-4 leading-relaxed">
             {first}&apos;s company cards will be turned off and your company branding comes off them.{" "}
             {first} moves to their own plan — Free, or their own Pro if they pay for it — and loses
-            access to your team. The leads {first} captured stay with your company. {first} keeps
+            access to your team. The contacts {first} captured stay with your company. {first} keeps
             the cards and can bring them back online in Settings → Cards and sharing. Their seat stays
             yours for your next hire.
           </p>
@@ -710,7 +710,7 @@ export function DeleteMemberAccountButton({ memberId, personName, onPersonPage =
           ) : (
             <>
               <ul className="text-gray-300 text-sm mb-4 leading-relaxed space-y-1.5 list-disc pl-4">
-                <li>{first} is removed from your team and their seat is freed. The leads they captured stay with your company.</li>
+                <li>{first} is removed from your team and their seat is freed. The contacts they captured stay with your company.</li>
                 <li>Their SwiftCard account is deleted: their cards, Swift Links page, contacts and history disappear now, and are permanently removed after 30 days.</li>
                 <li>Any subscription they pay for themselves is stopped.</li>
                 <li>We email them, and they can reopen the account within 30 days by signing in.</li>

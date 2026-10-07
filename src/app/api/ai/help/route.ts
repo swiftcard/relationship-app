@@ -34,7 +34,10 @@ type ChatMessage = { role: "user" | "assistant"; content: string };
 // is answered normally, with MEMBER_RULES added to the LLM's instructions.
 // Tied to PLAN context: a bare "cancel", "pay", "bill" or "plan" also means
 // "cancel a follow-up", a PayPal link, a contact named Bill, "plan a meeting".
-const MEMBER_PLAN_QUESTION = /\b(upgrad\w*|downgrad\w*|pro plan|go pro|(my|our|the|a|which|what|free|pro|office|team) plan|plans|pric(e|es|ing)|how much|cost\w*|billing|subscri\w*|payment|pay for|trial|invoice|receipt|refund|cancel (my |the )?(plan|subscription)|charged?|refer\w*|free month|promo|discount|coupon|limits?|locked|unlock\w*)\b/i;
+// Not "locked"/"unlock": for a member that is their CARD DESIGN, which their
+// team can lock ("why is my design locked?"), and the plan answer told them
+// there was nothing to upgrade instead of who sets the look.
+const MEMBER_PLAN_QUESTION = /\b(upgrad\w*|downgrad\w*|pro plan|go pro|(my|our|the|a|which|what|free|pro|office|team) plan|plans|pric(e|es|ing)|how much|cost\w*|billing|subscri\w*|payment|pay for|trial|invoice|receipt|refund|cancel (my |the )?(plan|subscription)|charged?|refer\w*|free month|promo|discount|coupon|limits?)\b/i;
 const MEMBER_PLAN_ANSWER =
   "Your SwiftCard plan comes with your team seat — your organization covers it, so there's nothing for you to upgrade, choose or pay. For anything about the team's plan, ask your team admin.";
 // Docs a team member is never answered from: everything commerce (plans,
@@ -47,7 +50,7 @@ const MEMBER_GREETING_ANSWER =
   "Hi! I can help you find your way around SwiftCard. Try asking \"How do I share my card?\", \"Where do I change my card design?\" or \"Where are my contacts?\"";
 const MEMBER_SETTINGS = /\b(settings?|preferences)\b/i;
 const MEMBER_SETTINGS_ANSWER =
-  "Settings is the gear icon at the top right (or the Settings tab in the bottom bar on a phone). Your sections: Profile (your email and sign out), Cards and sharing (your card's status and your share links — to change your card, tap Edit on it in My Cards on the dashboard), Notifications and preferences (push alerts and CRM integrations), Security (your password) and Help. Your plan comes with your team seat, so there is no billing section — your team admin handles that.";
+  "Settings is the gear icon at the top right (or the Settings tab in the bottom bar on a phone). Your sections: Profile (your email, your team and its Office admin, your devices, and sign out), Cards and sharing (your card's status and your share links — to change your card, tap Edit on it in My Cards on the dashboard), Notifications and preferences (push alerts and CRM integrations), Security (your password) and Help. Your plan comes with your team seat, so there is nothing to pay — Plan and billing only appears if you still have a Pro subscription of your own from before you joined, so you can cancel it.";
 const MEMBER_FALLBACK =
   "I can help with editing your card, designs, sharing, Swift Links, contacts, analytics and notifications. Try asking \"How do I share my card?\" or \"Where are my contacts?\" — anything about your team's plan or company details goes to your team admin.";
 const MEMBER_RULES = `

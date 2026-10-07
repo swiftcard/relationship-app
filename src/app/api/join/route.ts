@@ -146,7 +146,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error:
-          "You already own a SwiftCard Office team, so you can't also join another one. Transfer or close your team first, or accept this invite from a different account.",
+          "You already own a SwiftCard Office team, so you can't also join another one. End your Office plan first (Settings → Plan and billing), or accept this invite from a different account.",
       },
       { status: 409 }
     );

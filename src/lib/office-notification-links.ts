@@ -20,8 +20,11 @@ const PATHS: Record<string, string> = {
   members_no_card: TEAM,
   member_first_lead: LEADS,
   leads_waiting: LEADS_NO_FOLLOW_UP_PATH,
-  team_milestone: ANALYTICS,
-  team_weekly_recap: ANALYTICS,
+  // Milestones are all-time totals, which are the Team tab's four numbers;
+  // Analytics only goes back 90 days.
+  team_milestone: TEAM,
+  // The recap is the team's WEEK, so it opens Analytics on 7 days.
+  team_weekly_recap: `${ANALYTICS}?range=7d`,
 };
 
 /** The admin page a team notification is about; the Team tab when unknown. */

@@ -17,12 +17,15 @@ type Props = {
    *  days left are shown here — the dashboard announces them on the account's
    *  first day only. No price, no link: the same on the web and in the app. */
   freePeriod?: FreePeriod | null;
+  /** A team member's team and the person who runs it — the "Office admin"
+   *  every "ask your Office admin" message means. Null for everyone else. */
+  team?: { name: string; admin: string | null } | null;
 };
 
 // Account basics (email, card count, current plan at a glance). Subscription
 // management — Change Plan / Cancel / Keep / seats — lives in its own Billing
 // section (BillingManager), so this stays a simple read-only summary.
-export default function GeneralSettings({ email, cardCount, plan, isPro, defaultOpen = false, billingNote = "below", freePeriod = null }: Props) {
+export default function GeneralSettings({ email, cardCount, plan, isPro, defaultOpen = false, billingNote = "below", freePeriod = null, team = null }: Props) {
   const [open, setOpen] = useState(defaultOpen);
   const planLabel = plan === "enterprise" ? "Office" : isPro ? "Pro" : "Free";
   const ref = useRef<HTMLDivElement>(null);
@@ -67,6 +70,18 @@ export default function GeneralSettings({ email, cardCount, plan, isPro, default
             <span className="text-gray-500 text-xs shrink-0">Cards</span>
             <span className="text-white text-xs font-medium truncate">{cardCount} card{cardCount === 1 ? "" : "s"}</span>
           </div>
+          {team && (
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-gray-500 text-xs shrink-0">Team</span>
+              <span className="text-white text-xs font-medium truncate">{team.name}</span>
+            </div>
+          )}
+          {team?.admin && (
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-gray-500 text-xs shrink-0">Office admin</span>
+              <span className="text-white text-xs font-medium truncate">{team.admin}</span>
+            </div>
+          )}
           <div className="flex items-center justify-between gap-3">
             <span className="text-gray-500 text-xs shrink-0">Plan</span>
             <span className={`text-[0.6875rem] font-bold px-2 py-0.5 rounded-full ${plan === "enterprise" ? "bg-purple-600 text-white" : isPro ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400"}`}>
@@ -94,7 +109,7 @@ export default function GeneralSettings({ email, cardCount, plan, isPro, default
           {/* Named as it is on screen — there is no "Billing" section — and
               true for Free too, which has no subscription to "manage". */}
           {billingNote === "below" && <p className="text-gray-600 text-[0.6875rem] pt-2">{isPro ? "Manage your subscription" : "See or change your plan"} under Plan and billing below.</p>}
-          {billingNote === "team" && <p className="text-gray-600 text-[0.6875rem] pt-2">Your plan is provided by your team — nothing to manage or pay.</p>}
+          {billingNote === "team" && <p className="text-gray-600 text-[0.6875rem] pt-2">Your plan is provided by {team?.name ?? "your team"} — nothing to manage or pay. Questions about your card or your seat go to {team?.admin ?? "your Office admin"}.</p>}
         </div>
       )}
     </div>

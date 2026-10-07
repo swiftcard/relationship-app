@@ -77,13 +77,16 @@ export default async function OfficeAnalyticsPage({
   if (loadError) {
     return (
       <div>
-        <PageHead title="Analytics" desc="Views, scans, contact downloads and leads for every card on your team." />
+        <PageHead title="Analytics" desc="Views, contacts and contact downloads for every card on your team, by date." />
         <Empty>Couldn&apos;t load analytics right now — try refreshing in a moment.</Empty>
       </div>
     );
   }
 
-  const totalViews = employees.reduce((s, e) => s + e.views + e.swiftlinkViews, 0);
+  // Card views and Swift Link views stay two numbers, as on each member's own
+  // dashboard ("SwiftCard views" / "Swift Link views"); the old "Total views"
+  // tile added them together and matched nothing a member could see.
+  const totalViews = employees.reduce((s, e) => s + e.views, 0);
   // TRUE distinct across the whole team when the RPC exists; summing the
   // per-employee figures (the fallback) counts a visitor who opened several
   // colleagues' cards once per colleague.
@@ -94,36 +97,37 @@ export default async function OfficeAnalyticsPage({
   const totalContacts = employees.reduce((s, e) => s + e.contactsSaved, 0);
   const totalSwiftlinkViews = employees.reduce((s, e) => s + e.swiftlinkViews, 0);
 
-  const prevTotalViews = prevEmployees.reduce((s, e) => s + e.views + e.swiftlinkViews, 0);
+  const prevTotalViews = prevEmployees.reduce((s, e) => s + e.views, 0);
+  const prevTotalSwiftlinkViews = prevEmployees.reduce((s, e) => s + e.swiftlinkViews, 0);
   const prevTotalScans = prevEmployees.reduce((s, e) => s + e.scans, 0);
   const prevTotalLeads = prevEmployees.reduce((s, e) => s + e.leads, 0);
   const prevTotalContacts = prevEmployees.reduce((s, e) => s + e.contactsSaved, 0);
 
   const chartData = fillDateRange(dailyViews, range.since, range.until, tz);
-  const isEmpty = totalViews === 0 && totalLeads === 0 && totalContacts === 0;
+  const isEmpty = totalViews === 0 && totalSwiftlinkViews === 0 && totalLeads === 0 && totalContacts === 0;
 
   return (
     <div>
       <PageHead
         title="Analytics"
-        desc="Views, scans, contact downloads and leads for every card on your team."
+        desc="Views, contacts and contact downloads for every card on your team, by date."
         action={<AnalyticsDateRangePicker current={preset} />}
       />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        {/* "Total views" — it has always included Swift Links views (the
-            SwiftLink tile below is a breakdown of the same number), so the
-            label says so instead of implying cards only. */}
-        <StatTile label="Total views" value={totalViews} hint={deltaLabel(totalViews, prevTotalViews)} />
-        <StatTile label="Unique visitors" value={totalUnique} hint={officeUnique != null ? "Distinct visitors across the whole team" : "Summed per employee"} />
-        <StatTile label="Card/QR scans" value={totalScans} hint={deltaLabel(totalScans, prevTotalScans)} />
-        <StatTile label="Leads captured" value={totalLeads} hint={deltaLabel(totalLeads, prevTotalLeads)} />
+        {/* The Team tab's four numbers first, for the chosen days, then the
+            two that only make sense over a date range. */}
+        <StatTile label="Card views" value={totalViews} hint={deltaLabel(totalViews, prevTotalViews)} />
+        <StatTile label="Swift Link views" value={totalSwiftlinkViews} hint={deltaLabel(totalSwiftlinkViews, prevTotalSwiftlinkViews)} />
+        <StatTile label="Contacts captured" value={totalLeads} hint={deltaLabel(totalLeads, prevTotalLeads)} />
         <StatTile label="Contact downloads" value={totalContacts} hint={deltaLabel(totalContacts, prevTotalContacts)} />
-        <StatTile label="SwiftLink views" value={totalSwiftlinkViews} hint="Visits to a Swift Links page" />
+        <StatTile label="Unique visitors" value={totalUnique} hint={officeUnique != null ? "Distinct visitors across the whole team" : "Summed per employee"} />
+        <StatTile label="QR & NFC scans" value={totalScans} hint={deltaLabel(totalScans, prevTotalScans)} />
       </div>
 
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-6">
-        <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider mb-3">Views over time</p>
+        <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider">Views over time</p>
+        <p className="text-[0.6875rem] text-gray-600 mt-0.5 mb-3">Card and Swift Link views together</p>
         {isEmpty ? (
           <Empty>No activity yet for this range — this fills in once your team&apos;s cards start getting views.</Empty>
         ) : (

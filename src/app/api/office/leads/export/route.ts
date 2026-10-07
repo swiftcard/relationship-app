@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
   return new NextResponse(csv, {
     headers: {
       "Content-Type": "text/csv",
-      "Content-Disposition": `attachment; filename="swiftcard-team-leads-${stamp}.csv"`,
+      "Content-Disposition": `attachment; filename="swiftcard-team-contacts-${stamp}.csv"`,
       // Never cached: it is a snapshot of live customer data.
       "Cache-Control": "no-store",
     },

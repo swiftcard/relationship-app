@@ -346,8 +346,10 @@ export async function GET(req: NextRequest) {
         }
 
         // Team milestones — all-time totals, each round number once, ever.
+        // CARD views only (no "__links" keys): the milestone says "card views"
+        // and opens the Team tab, whose Card views tile counts the card alone.
         const [{ count: totalViews }, { count: totalLeads }] = await Promise.all([
-          admin.from("card_views").select("id", { count: "exact", head: true }).in("username", viewKeys(slugs)),
+          admin.from("card_views").select("id", { count: "exact", head: true }).in("username", slugs),
           admin.from("leads").select("id", { count: "exact", head: true }).in("card_owner", slugs).not("tags", "cs", "{demo}"),
         ]);
         const { data: ms } = await admin.from("office_notifications").select("meta")
@@ -367,8 +369,8 @@ export async function GET(req: NextRequest) {
           const ladder = kind === "leads" ? TEAM_LEAD_MILESTONES : TEAM_VIEW_MILESTONES;
           await alertTeam(team.officeId, {
             type: "team_milestone",
-            title: `Your team passed ${formatCount(hit)} ${kind === "leads" ? "leads" : "card views"} 🎉`,
-            body: kind === "leads" ? "Every lead your team has captured, all time." : "Every view across your team's cards, all time.",
+            title: `Your team passed ${formatCount(hit)} ${kind === "leads" ? "contacts" : "card views"} 🎉`,
+            body: kind === "leads" ? "Every contact your team has captured, all time." : "Every view of your team's cards, all time.",
             // Record every rung reached, so a jump past several never announces the lower ones later.
             meta: { kind, n: hit, also: ladder.filter((x) => x < hit) },
             ...(push ? { push: {} } : {}),

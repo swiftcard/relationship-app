@@ -28,7 +28,7 @@ describe("a team push says it is the team's", () => {
 
   it("the line reaches the iPhone as the subtitle, in the team's own group", () => {
     const { body } = buildApnsAlert({
-      title: "First lead for Mia 🎉", subtitle: "Team · Harbor Realty", body: "Mia's card just captured its first lead.",
+      title: "First contact for Mia 🎉", subtitle: "Team · Harbor Realty", body: "Mia's card just captured its first contact.",
       url: "https://swiftcard.me/office/admin/leads", tag: "team-member_first_lead-u1", thread: teamPushThread("o1"),
     }, "me.swiftcard.app");
     const aps = JSON.parse(body).aps;
@@ -66,8 +66,10 @@ describe("every team notification opens the page it is about", () => {
     expect(officeNotificationPath("invite_declined")).toBe("/office/admin");
     expect(officeNotificationPath("member_first_lead")).toBe("/office/admin/leads");
     expect(officeNotificationPath("leads_waiting")).toBe(LEADS_NO_FOLLOW_UP_PATH);
-    expect(officeNotificationPath("team_milestone")).toBe("/office/admin/analytics");
-    expect(officeNotificationPath("team_weekly_recap")).toBe("/office/admin/analytics");
+    // Milestones are all-time totals — the Team tab's four numbers; the recap
+    // is the team's week, so Analytics opens on 7 days.
+    expect(officeNotificationPath("team_milestone")).toBe("/office/admin");
+    expect(officeNotificationPath("team_weekly_recap")).toBe("/office/admin/analytics?range=7d");
     expect(officeNotificationPath("something_new")).toBe("/office/admin");
     expect(code("src/lib/team-alerts.ts")).toContain("alert.push!.path ?? officeNotificationPath(alert.type)");
   });
@@ -97,12 +99,13 @@ describe("grouped news says who", () => {
     expect(firstNameOf("", "A teammate")).toBe("A teammate");
   });
 
-  it("leads with no follow-up: one notice for the team, naming whose they are", () => {
+  it("contacts with no follow-up: one notice for the team, naming whose they are", () => {
     const c = noFollowUpCopy([{ name: "Mia", n: 2 }, { name: "Sam", n: 1 }]);
-    expect(c.title).toBe("3 team leads have no follow-up yet");
+    // "contacts", never "leads" — the console's word since 2026-10-06.
+    expect(c.title).toBe("3 team contacts have no follow-up yet");
     expect(c.body).toContain("Mia (2) and Sam (1)");
     expect(c.pushBody).toBe("Waiting on: Mia (2) and Sam (1).");
-    expect(noFollowUpCopy([{ name: "Mia", n: 1 }]).title).toBe("1 team lead has no follow-up yet");
+    expect(noFollowUpCopy([{ name: "Mia", n: 1 }]).title).toBe("1 team contact has no follow-up yet");
   });
 
   it("teammates with no card", () => {

@@ -72,12 +72,14 @@ export default async function OfficeAnalyticsMemberPage({
   const mine = myMetrics[0] ?? null;
 
   const chartData = fillDateRange(dailyViews, range.since, range.until, tz);
-  const totalViews = (mine?.views ?? 0) + (mine?.swiftlinkViews ?? 0);
+  // Both surfaces — only to decide whether the chart (which plots both) is empty.
+  const anyViews = (mine?.views ?? 0) + (mine?.swiftlinkViews ?? 0);
   const mostActiveCard = cardBreakdown[0] ?? null;
 
   return (
     <div>
-      <Link href="/office/admin/analytics" className="text-xs text-gray-500 hover:text-gray-300 transition-colors">
+      {/* Back to the same date range the admin came from. */}
+      <Link href={`/office/admin/analytics?range=${preset}`} className="text-xs text-gray-500 hover:text-gray-300 transition-colors">
         ← Back to Analytics
       </Link>
 
@@ -86,19 +88,22 @@ export default async function OfficeAnalyticsMemberPage({
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <StatTile label="Total views" value={totalViews} hint="Repeat visits count; reloads within a visit don't" />
-        <StatTile label="Unique visitors" value={mine?.uniqueVisitors ?? 0} />
-        <StatTile label="Scans" value={mine?.scans ?? 0} hint="QR code or NFC tap" />
-        <StatTile label="Leads captured" value={mine?.leads ?? 0} />
+        {/* The same tiles, names and order as the team's Analytics page —
+            and the same two view numbers as this person's own dashboard. */}
+        <StatTile label="Card views" value={mine?.views ?? 0} hint="Repeat visits count; reloads within a visit don't" />
+        <StatTile label="Swift Link views" value={mine?.swiftlinkViews ?? 0} />
+        <StatTile label="Contacts captured" value={mine?.leads ?? 0} />
         <StatTile label="Contact downloads" value={mine?.contactsSaved ?? 0} />
-        <StatTile label="SwiftLink views" value={mine?.swiftlinkViews ?? 0} />
+        <StatTile label="Unique visitors" value={mine?.uniqueVisitors ?? 0} />
+        <StatTile label="QR & NFC scans" value={mine?.scans ?? 0} />
       </div>
 
       {/* No "office average" strip: this page shows one person's card, not how
           they stack up against their colleagues (owner, 2026-10-06). */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-6">
-        <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider mb-3">Views over time</p>
-        {totalViews === 0 ? <Empty>No views yet for this range.</Empty> : <ViewsChart data={chartData} />}
+        <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider">Views over time</p>
+        <p className="text-[0.6875rem] text-gray-600 mt-0.5 mb-3">Card and Swift Link views together</p>
+        {anyViews === 0 ? <Empty>No views yet for this range.</Empty> : <ViewsChart data={chartData} />}
       </div>
 
       <div className="grid md:grid-cols-2 gap-4 mb-6">
@@ -123,7 +128,7 @@ export default async function OfficeAnalyticsMemberPage({
           {mostActiveCard ? (
             <div>
               <p className="text-white font-medium">{mostActiveCard.label}</p>
-              <p className="text-gray-500 text-xs mt-0.5 tabular-nums">{mostActiveCard.views} views this range</p>
+              <p className="text-gray-500 text-xs mt-0.5 tabular-nums">{mostActiveCard.views} card views this range</p>
             </div>
           ) : (
             <p className="text-gray-500 text-sm">No card yet.</p>
@@ -131,9 +136,9 @@ export default async function OfficeAnalyticsMemberPage({
         </div>
       </div>
 
-      <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider mb-2">Recent lead activity</p>
+      <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider mb-2">Recent contacts</p>
       {recentLeads.length === 0 ? (
-        <Empty>No leads yet in this range.</Empty>
+        <Empty>No new contacts in this range.</Empty>
       ) : (
         <div className="bg-gray-900 border border-gray-800 rounded-2xl divide-y divide-gray-800 overflow-hidden">
           {recentLeads.map((l) => (

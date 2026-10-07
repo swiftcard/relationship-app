@@ -41,10 +41,10 @@ export const NATIVE_FALLBACK =
   "I can help with creating & editing cards, designs, sharing, Swift Links, contacts, analytics, notifications, and account settings. Try asking something like \"How do I change my design?\", \"Where are my contacts?\", or \"How do I share my card?\"";
 
 export const OFFICE_ADMIN_FALLBACK =
-  "I'm your Admin Console assistant. I can help you find things in the Team, Analytics, Leads, and Branding tabs — like inviting a teammate, setting company branding, seeing per-person analytics, or exporting your team's leads. Try asking \"How do I invite someone?\" or \"Where do I set our branding?\" — or reach the team via the Contact page in the footer.";
+  "I'm your Admin Console assistant. I can help you find things in the Team, Analytics, Contacts, and Branding tabs — like inviting a teammate, setting company branding, seeing per-person analytics, or exporting your team's contacts. Try asking \"How do I invite someone?\" or \"Where do I set our branding?\" — or reach the team via the Contact page in the footer.";
 
 export const OFFICE_ADMIN_NATIVE_FALLBACK =
-  "I'm your Admin Console assistant. I can help you find things in the Team, Analytics, Leads, and Branding tabs — like inviting a teammate, setting company branding, seeing per-person analytics, or exporting your team's leads. Try asking \"How do I invite someone?\" or \"Where do I set our branding?\"";
+  "I'm your Admin Console assistant. I can help you find things in the Team, Analytics, Contacts, and Branding tabs — like inviting a teammate, setting company branding, seeing per-person analytics, or exporting your team's contacts. Try asking \"How do I invite someone?\" or \"Where do I set our branding?\"";
 
 export const SALES_FALLBACK =
   "I can help with questions about SwiftCard — what it is, pricing, and how it works. For anything else, reach the team at swiftcard.me/contact. Want to see it in action? You can build a free card in about 60 seconds at swiftcard.me/cards/new.";

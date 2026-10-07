@@ -18,7 +18,7 @@ describe("buildEmployeeAnalyticsCsv", () => {
     const csv = buildEmployeeAnalyticsCsv([baseRow]);
     const lines = csv.split("\n");
     expect(lines[0]).toBe(
-      "Employee,Card,Card views,Unique visitors,QR/NFC scans,Leads captured,Contact downloads,SwiftLink views,Most recent activity"
+      "Employee,Card,Card views,Swift Link views,Contacts captured,Contact downloads,Unique visitors,QR & NFC scans,Most recent activity"
     );
     expect(lines).toHaveLength(2);
   });
