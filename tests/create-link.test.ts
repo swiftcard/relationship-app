@@ -68,6 +68,15 @@ describe("the share link page", () => {
     expect(page).toMatch(/if \(!isCreateId\(id\)\) notFound\(\);/);
   });
 
+  it("names its own picture as the og/twitter image — explicitly", () => {
+    // Left for the file convention to fill, the live page shipped with no
+    // og:image at all (2026-10-07).
+    expect(page).toContain("const image = `${APP_URL}/${username}/p/${id}/opengraph-image`;");
+    expect(page).toContain("images: [{ url: image, width: 1200, height: 630, alt }]");
+    expect(page).toContain("twitter: { ...base.twitter, images: [image] }");
+    expect(page).not.toContain("images: undefined");
+  });
+
   it("previews as the owner's own picture, and only theirs", () => {
     expect(preview).toContain("getAdminSupabase().storage.from(\"card-uploads\").download(`${ownerId}/${file}`)");
     expect(preview).toContain("if (!(await resolveCardMeta(username))) return null;");

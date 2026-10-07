@@ -24,16 +24,22 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const username = raw.toLowerCase();
   if (!isCreateId(id)) return { title: "SwiftCard", robots: { index: false, follow: false } };
   const base = await cardMetadata({ params: Promise.resolve({ username }) });
+  // The picture is this folder's opengraph-image route, named EXPLICITLY.
+  // Leaving openGraph.images empty for the file convention to fill did not
+  // work: once a page sets openGraph itself, the file's image was never added
+  // — the share link went out with no picture at all (seen live, 2026-10-07).
+  // Same explicit-URL pattern as the card page's own metadata.
+  const image = `${APP_URL}/${username}/p/${id}/opengraph-image`;
+  const alt = `Tap to open ${(typeof base.openGraph?.title === "string" ? base.openGraph.title : null) ?? "their"} SwiftCard`;
   return {
     ...base,
     // One canonical page per card; these are its shareable copies.
     alternates: { canonical: `${APP_URL}/${username}` },
     robots: { index: false, follow: true },
-    // The image itself comes from the opengraph-image / twitter-image files in
-    // this folder — file-based metadata wins over these objects by design, and
-    // the deepest folder's file is the one used.
-    ...(base.openGraph ? { openGraph: { ...base.openGraph, url: `${APP_URL}/${username}/p/${id}`, images: undefined } } : {}),
-    ...(base.twitter ? { twitter: { ...base.twitter, images: undefined } } : {}),
+    ...(base.openGraph
+      ? { openGraph: { ...base.openGraph, url: `${APP_URL}/${username}/p/${id}`, images: [{ url: image, width: 1200, height: 630, alt }] } }
+      : {}),
+    ...(base.twitter ? { twitter: { ...base.twitter, images: [image] } } : {}),
   };
 }
 
