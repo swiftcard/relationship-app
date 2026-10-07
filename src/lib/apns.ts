@@ -266,7 +266,7 @@ export function buildApnsAlert(payload: ApnsAlertPayload, topic: string): {
       alert: { title: payload.title, ...(payload.subtitle ? { subtitle: payload.subtitle } : {}), body: payload.body },
       ...(silent ? { "interruption-level": "passive" } : { sound: "default" }),
       "thread-id": payload.thread ?? payload.tag ?? "swiftcard",
-      ...(typeof payload.badge === "number" ? { badge: Math.max(0, Math.min(99, Math.round(payload.badge))) } : {}),
+      ...(typeof payload.badge === "number" ? { badge: clampBadge(payload.badge) } : {}),
     },
     // Custom key: the in-app destination. NativeAppBridge navigates here when
     // the user taps the notification.
@@ -290,6 +290,38 @@ export function buildApnsAlert(payload: ApnsAlertPayload, topic: string): {
       ...(collapseId ? { "apns-collapse-id": collapseId } : {}),
     },
     body,
+  };
+}
+
+/** The icon's red number as Apple gets it: a whole number, 0…99. */
+function clampBadge(n: number): number {
+  return Math.max(0, Math.min(99, Math.round(n)));
+}
+
+/**
+ * A push that does NOTHING but set the app icon's red number (lib/push.ts
+ * syncAppBadge). No alert, no sound: iOS applies `aps.badge` itself and shows
+ * nothing — no banner, no lock-screen entry, no Notification Center row — and
+ * the app's code never runs, which is why it works on every build ever shipped,
+ * not only the ones carrying AppBadge.swift.
+ *
+ * Still push type "alert": Apple's word for anything that alerts, sounds OR
+ * BADGES ("background" is the content-available kind, which must carry none of
+ * the three and is throttled for hours). Priority 10 is allowed because it
+ * badges, and wanted: the number should be right by the time the person is
+ * back on the home screen, not whenever the phone next feels like it.
+ */
+export function buildApnsBadge(count: number, topic: string): {
+  headers: Record<string, string>;
+  body: string;
+} {
+  return {
+    headers: {
+      "apns-topic": topic,
+      "apns-push-type": "alert",
+      "apns-priority": "10",
+    },
+    body: JSON.stringify({ aps: { badge: clampBadge(count) } }),
   };
 }
 
@@ -323,9 +355,27 @@ export async function sendApnsDetailed(
   payload: ApnsAlertPayload,
   post: typeof apnsPostTo = apnsPostTo,
 ): Promise<ApnsPostDetail & { env: ApnsEnv }> {
-  const deviceToken = endpoint.slice(APNS_PREFIX.length);
   const topic = process.env.APPLE_PUSH_TOPIC || APNS_TOPIC_DEFAULT;
-  const { headers, body } = buildApnsAlert(payload, topic);
+  return deliverToToken(endpoint, buildApnsAlert(payload, topic), post);
+}
+
+/** Set the icon's red number on one phone — see buildApnsBadge. Same two-host
+ *  rule and same answers as an alert, so the caller prunes "gone" the same way. */
+export async function sendApnsBadge(
+  endpoint: string,
+  count: number,
+  post: typeof apnsPostTo = apnsPostTo,
+): Promise<ApnsPostDetail & { env: ApnsEnv }> {
+  const topic = process.env.APPLE_PUSH_TOPIC || APNS_TOPIC_DEFAULT;
+  return deliverToToken(endpoint, buildApnsBadge(count, topic), post);
+}
+
+async function deliverToToken(
+  endpoint: string,
+  { headers, body }: { headers: Record<string, string>; body: string },
+  post: typeof apnsPostTo,
+): Promise<ApnsPostDetail & { env: ApnsEnv }> {
+  const deviceToken = endpoint.slice(APNS_PREFIX.length);
 
   const first: ApnsEnv = tokenEnv.get(deviceToken) ?? configuredApnsEnv();
   const other: ApnsEnv = first === "production" ? "sandbox" : "production";

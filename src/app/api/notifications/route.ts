@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { isPaidUser, redactForPlan } from "@/lib/notification-privacy";
 import { hideForReader, notificationReader } from "@/lib/office-account-notifications";
+import { syncPhoneBadgeAfter } from "@/lib/app-badge-sync";
 
 export async function GET() {
   const supabase = await createClient();
@@ -90,6 +91,8 @@ export async function PATCH(req: NextRequest) {
     if (error) return NextResponse.json({ error: "Couldn't update notifications." }, { status: 500 });
   }
 
+  // The iPhone icon's red number follows the bell (lib/app-badge-sync).
+  syncPhoneBadgeAfter(req, user.id);
   return NextResponse.json({ success: true });
 }
 
@@ -114,5 +117,7 @@ export async function DELETE(req: NextRequest) {
     if (error) return NextResponse.json({ error: "Couldn't clear notifications." }, { status: 500 });
   }
 
+  // A dismissed unread row lowers the count too (lib/app-badge-sync).
+  syncPhoneBadgeAfter(req, user.id);
   return NextResponse.json({ success: true });
 }

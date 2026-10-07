@@ -4,6 +4,7 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { getOwnerUsernames } from "@/lib/owner-usernames";
 import { ownsLead } from "@/lib/lead-access";
 import { VIEW_VISIT_WINDOW_MS } from "@/lib/view-window";
+import { syncPhoneBadgeAfter } from "@/lib/app-badge-sync";
 
 // "Wrong person?" on a named alert (warm-lead plan §2.1 step 5).
 //
@@ -66,6 +67,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .gte("viewed_at", new Date(at - VIEW_VISIT_WINDOW_MS).toISOString());
   }
   await admin.from("notifications").delete().eq("id", notificationId).eq("user_id", user.id);
+  // The alert leaves the bell, so its count leaves the iPhone icon too.
+  syncPhoneBadgeAfter(req, user.id);
 
   return NextResponse.json({ unbound: visitorIds.length });
 }

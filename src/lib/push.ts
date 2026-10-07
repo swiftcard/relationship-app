@@ -1,6 +1,6 @@
 import webpush from "web-push";
 import { getAdminSupabase } from "@/lib/supabase-admin";
-import { isApnsEndpoint, sendApnsDetailed } from "@/lib/apns";
+import { isApnsEndpoint, sendApnsBadge, sendApnsDetailed } from "@/lib/apns";
 import { isFcmEndpoint, sendFcmDetailed } from "@/lib/fcm";
 import { reportError as reportServerError } from "@/lib/report-error";
 import { assertSafeUrl } from "@/lib/safe-fetch";
@@ -238,25 +238,13 @@ export async function sendPushToUser(userId: string, payload: {
   // The same line carries "Team · <office>" on an Office admin's team news
   // (payload.context); a card tag wins, as the more specific of the two.
   const line = cardLine ?? (payload.context?.trim() || null);
-  // THE ICON'S RED NUMBER (iOS only; 2026-10-06 notification audit): the
-  // unread rows the app's bell would count — the same types it hides in the
-  // app (lib/native-notification-copy) and, for a paid reader, the Free-state
-  // rows it never shows (lib/notification-privacy). The app re-sets the exact
-  // number from the bell as it is read (lib/app-badge), so this only has to be
-  // right when the push lands. A failed count sends no badge, never a wrong one.
-  let badge: number | undefined;
-  if (subs.some((s) => isApnsEndpoint(s.endpoint))) {
-    try {
-      const excluded = ["referral_claim", ...NATIVE_HIDDEN_TYPES, ...(paid ? FREE_STATE_TYPES : [])];
-      const { count, error } = await admin
-        .from("notifications")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", userId)
-        .eq("read", false)
-        .not("type", "in", `(${excluded.join(",")})`);
-      if (!error) badge = count ?? 0;
-    } catch { /* no badge this time */ }
-  }
+  // THE ICON'S RED NUMBER (iOS only; 2026-10-06 notification audit) — see
+  // unreadBadgeCount. The app re-sets the exact number from the bell as it is
+  // read (lib/app-badge), and reading on the website re-sends it
+  // (syncAppBadge), so this only has to be right when the push lands.
+  const badge = subs.some((s) => isApnsEndpoint(s.endpoint))
+    ? await unreadBadgeCount(admin, userId, paid)
+    : undefined;
   const apnsPayload = { ...payload, ...(line ? { subtitle: line } : {}), ...(badge !== undefined ? { badge } : {}) };
   const webPayload = line ? { ...payload, body: `${line}\n${payload.body}` } : payload;
 
@@ -364,4 +352,72 @@ export async function sendPushToUser(userId: string, payload: {
   // throttle doesn't hold back the next attempt on the strength of a no-op.
   await log(delivered ? (isUpdate ? "rollup" : "sent") : "failed", delivered);
   return results;
+}
+
+/**
+ * THE ICON'S RED NUMBER: the unread rows the app's bell would count — the same
+ * types it hides in the app (lib/native-notification-copy) and, for a paid
+ * reader, the Free-state rows it never shows (lib/notification-privacy). Every
+ * push and every badge sync reads it here, so the two can never disagree.
+ * A failed count is undefined: send no badge, never a wrong one.
+ */
+async function unreadBadgeCount(
+  admin: ReturnType<typeof getAdminSupabase>,
+  userId: string,
+  paid: boolean,
+): Promise<number | undefined> {
+  try {
+    const excluded = ["referral_claim", ...NATIVE_HIDDEN_TYPES, ...(paid ? FREE_STATE_TYPES : [])];
+    const { count, error } = await admin
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("read", false)
+      .not("type", "in", `(${excluded.join(",")})`);
+    return error ? undefined : (count ?? 0);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * TELL THE PHONE THE NEW NUMBER after the bell changes on the WEBSITE — read,
+ * marked unread, dismissed, cleared — on a computer or in a phone's browser.
+ *
+ * Every push sets the icon to the unread count, so without this a notification
+ * read anywhere but the app left its number on the phone: the owner read and
+ * cleared the bell and the "1" stayed (2026-10-07). Reading inside the app
+ * needs none of this — the app sets the icon itself (lib/app-badge).
+ *
+ * A badge-only push (lib/apns buildApnsBadge): nothing shown, nothing heard,
+ * and it works on every installed build. It is not a notification, so it is not
+ * in push_log, no cap counts it, and quiet hours do not hold it — the person is
+ * awake, they just read something. Best-effort: on any failure the icon keeps
+ * its number until the next push carries the right one.
+ */
+export async function syncAppBadge(userId: string): Promise<void> {
+  try {
+    const admin = getAdminSupabase();
+    const { data: subs } = await admin
+      .from("push_subscriptions")
+      .select("endpoint")
+      .eq("user_id", userId);
+    const phones = (subs ?? []).filter((s) => isApnsEndpoint(s.endpoint as string));
+    if (!phones.length) return;
+
+    const { data: profile } = await admin
+      .from("profiles")
+      .select(PLAN_COLUMNS)
+      .eq("id", userId)
+      .maybeSingle();
+    const count = await unreadBadgeCount(admin, userId, isPaidProfile(profile));
+    if (count === undefined) return;
+
+    await Promise.all(phones.map(async (s) => {
+      const endpoint = s.endpoint as string;
+      const r = await sendApnsBadge(endpoint, count);
+      // Same pruning rule as an alert: only Apple saying the phone is gone.
+      if (r.result === "gone") await admin.from("push_subscriptions").delete().eq("endpoint", endpoint);
+    }));
+  } catch { /* the next push carries the right number */ }
 }
