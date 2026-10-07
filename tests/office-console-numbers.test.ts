@@ -151,6 +151,8 @@ describe("contacts, not leads — anywhere an admin reads it", () => {
     "src/app/office/admin/team/[id]/page.tsx",
     "src/app/office/admin/cards/[id]/page.tsx",
     "src/components/office/TeamList.tsx",
+    "src/components/office/ContactDrawer.tsx",
+    "src/lib/office-contact-timeline.ts",
     "src/components/office/TeamActions.tsx",
     "src/components/office/OfficeNotificationBell.tsx",
     "src/lib/admin-tour-steps.ts",

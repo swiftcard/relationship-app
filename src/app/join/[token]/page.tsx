@@ -235,14 +235,20 @@ export default async function JoinPage({
 
         {/* Said BEFORE they accept (owner, 2026-10-06): an existing card comes
             with its history, and the team's admin console lists every contact
-            on a teammate's card. Nobody with no card yet has anything to see. */}
-        {(existingCards ?? 0) > 0 && (
-          <p className="text-gray-500 text-xs leading-relaxed mb-5">
-            {existingCards === 1 ? "Your card becomes your" : "Your cards become"} {officeName ?? "team"} {existingCards === 1 ? "card" : "cards"}, with
-            the company look. The team&apos;s admin will see the contacts on {existingCards === 1 ? "it" : "them"} — your
-            private notes stay yours.
-          </p>
-        )}
+            on a teammate's card. Since 2026-10-07 an admin can also open a
+            contact and read the messages and activity between them — from the
+            day this person joins until the day they leave — so EVERY invitee
+            is told, not only those bringing a card. */}
+        <p className="text-gray-500 text-xs leading-relaxed mb-5">
+          {(existingCards ?? 0) > 0 && (
+            <>
+              {existingCards === 1 ? "Your card becomes your" : "Your cards become"} {officeName ?? "team"} {existingCards === 1 ? "card" : "cards"}, with
+              the company look, and the team&apos;s admin will see the contacts on {existingCards === 1 ? "it" : "them"}.{" "}
+            </>
+          )}
+          While you&apos;re on the team, its admin can see the contacts you make and the messages and activity
+          with them — your private notes stay yours.
+        </p>
 
         <JoinButton token={token} />
 

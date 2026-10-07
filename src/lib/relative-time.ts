@@ -46,3 +46,17 @@ export function shortDate(iso: string | null | undefined, timeZone?: string): st
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", ...(timeZone ? { timeZone } : {}) });
 }
+
+// "Oct 3, 2026, 2:15 PM" — the exact moment, for a record someone may need to
+// quote back ("when exactly did they share their info?"). Same `timeZone` rule
+// as shortDate: pass the display clock's zone wherever this renders on both the
+// server and the client.
+export function shortDateTime(iso: string | null | undefined, timeZone?: string): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-US", {
+    month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
+    ...(timeZone ? { timeZone } : {}),
+  });
+}

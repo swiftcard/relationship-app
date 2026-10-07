@@ -50,6 +50,11 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ ok: true, revoked: true });
   }
 
+  // The card addresses they held when they left, recorded with the removal so
+  // the console can still date their stint after a card is renamed or deleted
+  // (lib/office-contact-detail: history stops at the removal).
+  let removedSlugs: string[] = [];
+
   // Active member → full removal (revert plan, de-brand, delete row).
   if (member?.user_id) {
     // Keep the leads they captured visible to the office AFTER their slugs drop
@@ -66,6 +71,7 @@ export async function DELETE(req: Request) {
         (prof?.username as string) ?? "",
         ...(memberCards ?? []).map((c) => c.username as string),
       ].filter(Boolean)));
+      removedSlugs = slugs;
       if (slugs.length) {
         const tag = officeLeadTag(office.id as string);
         const { data: theirLeads } = await supabase
@@ -151,6 +157,6 @@ export async function DELETE(req: Request) {
     .eq("office_id", office.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await writeAudit({ action: "member.removed", actorId: user.id, orgId: office.id as string, targetId: (member.user_id as string) ?? memberId });
+  await writeAudit({ action: "member.removed", actorId: user.id, orgId: office.id as string, targetId: (member.user_id as string) ?? memberId, metadata: { slugs: removedSlugs } });
   return NextResponse.json({ ok: true });
 }

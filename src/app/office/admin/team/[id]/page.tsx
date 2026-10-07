@@ -103,13 +103,20 @@ export default async function OfficeMemberPage({ params }: { params: Promise<{ i
       ) : (
         <div className="bg-gray-900 border border-gray-800 rounded-2xl divide-y divide-gray-800 overflow-hidden">
           {m.recentLeads.map((l) => (
-            <div key={l.id} className="flex items-center justify-between gap-3 px-5 py-3">
+            // Opens this contact's details on the Contacts tab (when, how, whose,
+            // and the history). No prefetch: each link would render that page.
+            <Link
+              key={l.id}
+              href={`/office/admin/leads?contact=${l.id}`}
+              prefetch={false}
+              className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-gray-800/40 transition-colors"
+            >
               <div className="min-w-0">
                 <p className="text-sm text-gray-200 truncate">{l.name}</p>
                 <p className="text-xs text-gray-500 truncate">{l.email ?? "No email left"}</p>
               </div>
               <p className="text-xs text-gray-600 shrink-0 whitespace-nowrap">{relativeTime(l.created_at)}</p>
-            </div>
+            </Link>
           ))}
         </div>
       )}

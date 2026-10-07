@@ -121,6 +121,7 @@ describe("admin console times hydrate cleanly (React error 418)", () => {
     for (const f of [
       "src/components/office/TeamList.tsx",
       "src/app/office/admin/leads/LeadsTable.tsx",
+      "src/components/office/ContactDrawer.tsx",
       "src/app/office/admin/analytics/EmployeeAnalyticsTable.tsx",
     ]) {
       const s = code(f);

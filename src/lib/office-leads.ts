@@ -75,11 +75,14 @@ function officeLeadFilter(slugs: string[], tag: string): string {
   return safe.length ? `card_owner.in.(${safe.join(",")}),${byTag}` : byTag;
 }
 
-/** Everyone on the team, as slug → the person's display name. */
-async function officeSlugMap(officeId: string): Promise<Map<string, string>> {
+/** Who a card slug belongs to: the person's display name and account id. */
+export type OfficeSlugOwner = { name: string; userId: string };
+
+/** Everyone on the team, as slug → the person (display name + account id). */
+async function officeSlugMap(officeId: string): Promise<Map<string, OfficeSlugOwner>> {
   const admin = getAdminSupabase();
   const teamIds = await getOfficeUserIds(officeId);
-  const bySlug = new Map<string, string>();
+  const bySlug = new Map<string, OfficeSlugOwner>();
   if (!teamIds.length) return bySlug;
   const [{ data: profiles }, { data: cards }] = await Promise.all([
     admin.from("profiles").select("id, username, name").in("id", teamIds),
@@ -87,16 +90,46 @@ async function officeSlugMap(officeId: string): Promise<Map<string, string>> {
   ]);
   const nameByUser = new Map((profiles ?? []).map((p) => [p.id as string, (p.name as string) || ""]));
   for (const p of profiles ?? []) {
-    if (p.username) bySlug.set(p.username as string, (p.name as string) || (p.username as string));
+    if (p.username) bySlug.set(p.username as string, { name: (p.name as string) || (p.username as string), userId: p.id as string });
   }
   for (const c of cards ?? []) {
     if (!c.username) continue;
     // The CARD's name before the account handle: profiles.name is empty for
     // every account created through normal signup.
     const person = nameByUser.get(c.user_id as string) || (c.name as string) || (c.username as string);
-    bySlug.set(c.username as string, person);
+    bySlug.set(c.username as string, { name: person, userId: c.user_id as string });
   }
   return bySlug;
+}
+
+/**
+ * The team's slug map, for callers outside this module that need to answer
+ * "whose card is this?" the same way the Contacts tab does (the contact detail
+ * drawer). One resolution, one definition of the team.
+ */
+export async function resolveOfficeContactScope(officeId: string): Promise<Map<string, OfficeSlugOwner>> {
+  return officeSlugMap(officeId);
+}
+
+/**
+ * THE office boundary, as a query: every contact this office can see, minus the
+ * sample contact. The Contacts table, its export and the single-contact drawer
+ * all start here, so the rule that separates one office's contacts from
+ * another's exists exactly once — the drawer adds `.eq("id", …)` on top and can
+ * never drift into a looser copy of the filter.
+ */
+export function scopedOfficeLeads(
+  officeId: string,
+  slugs: string[],
+  select: string,
+) {
+  return getAdminSupabase()
+    .from("leads")
+    .select(select, { count: "exact" })
+    .or(officeLeadFilter(slugs, officeLeadTag(officeId)))
+    // Not the sample contact every new card starts with (lib/demo-contact) —
+    // it listed "Jordan Rivera" as the new team's first lead.
+    .not("tags", "cs", "{demo}");
 }
 
 /**
@@ -109,24 +142,19 @@ async function officeSlugMap(officeId: string): Promise<Map<string, string>> {
  */
 async function fetchLeadPage(
   officeId: string,
-  bySlug: Map<string, string>,
+  bySlug: Map<string, OfficeSlugOwner>,
   opts: { limit?: number; offset?: number },
 ): Promise<OfficeLeadPage> {
-  const admin = getAdminSupabase();
   const limit = Math.min(Math.max(1, Math.floor(opts.limit ?? OFFICE_LEADS_PAGE)), 500);
   const offset = Math.max(0, Math.floor(opts.offset ?? 0));
   const slugs = Array.from(bySlug.keys());
 
   const select = "id, name, email, phone, status, created_at, card_owner, tags, follow_up_sequence";
-  const { data, count } = await admin
-    .from("leads")
-    .select(select, { count: "exact" })
-    .or(officeLeadFilter(slugs, officeLeadTag(officeId)))
-    // Not the sample contact every new card starts with (lib/demo-contact) —
-    // it listed "Jordan Rivera" as the new team's first lead.
-    .not("tags", "cs", "{demo}")
+  const { data: rows, count } = await scopedOfficeLeads(officeId, slugs, select)
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
+  // `select` is a variable, so PostgREST can't infer the row type from it.
+  const data = rows as unknown as Record<string, unknown>[] | null;
 
   const leads: OfficeLead[] = (data ?? []).map((row) => {
     const slug = (row.card_owner as string) ?? "";
@@ -140,7 +168,7 @@ async function fetchLeadPage(
       card_owner: slug,
       // A departed member's slug isn't in the map — label honestly instead of
       // leaking the slug.
-      capturedBy: bySlug.get(slug) ?? "Former team member",
+      capturedBy: bySlug.get(slug)?.name ?? "Former team member",
       tags: (row.tags as string[] | null) ?? null,
       followUp: followUpState(
         row.follow_up_sequence as FollowUpStep[] | null,

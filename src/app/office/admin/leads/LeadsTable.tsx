@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { relativeTime } from "@/lib/relative-time";
 import { useDisplayClock } from "@/components/DisplayClock";
 // The status vocabulary comes from lib/lead-status, NOT lib/office-leads:
@@ -9,7 +9,9 @@ import { useDisplayClock } from "@/components/DisplayClock";
 // OfficeLead stays a TYPE import, which the compiler erases entirely.
 import { FOLLOW_UP_COPY, FOLLOW_UP_STATES, type FollowUpState } from "@/lib/lead-followup";
 import type { OfficeLead } from "@/lib/office-leads";
+import type { OfficeContactDetail } from "@/lib/office-contact-timeline";
 import DownloadLink from "@/components/DownloadLink";
+import ContactDrawer, { FollowUpBadge, isPlainClick } from "@/components/office/ContactDrawer";
 
 // Client-side filter + search over the (already server-authorized) team leads.
 // Filtering in the browser keeps it instant with zero round-trips, and the
@@ -26,28 +28,26 @@ import DownloadLink from "@/components/DownloadLink";
 // teammate who would do the contacting. The column now shows the contact's
 // follow-up state, which is derived from what their automations are actually
 // doing (lib/lead-followup.ts) and is the same thing that teammate sees.
+//
+// EVERY ROW OPENS THE CONTACT (owner, 2026-10-07): when and how they were
+// added, which teammate they belong to, and the history between them, in a
+// drawer over the list — so the filters and the pages already loaded are still
+// there when it closes. Each row is a real link to ?contact=<id>, which the page
+// renders with the drawer open: it works before hydration and in a new tab.
+// Once hydrated, a plain click opens the drawer in place and pushes the same
+// URL, so Back closes it.
 
 type Row = OfficeLead & { pending?: boolean; failed?: boolean };
 
-// The badge's colours, kept beside the copy they belong to.
-const FOLLOW_UP_TONE: Record<FollowUpState, string> = {
-  none: "bg-gray-500/10 text-gray-400 border-gray-500/20",
-  running: "bg-green-500/10 text-green-400 border-green-500/20",
-  paused: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-  done: "bg-blue-500/10 text-blue-300 border-blue-500/20",
-};
-const FOLLOW_UP_DOT: Record<FollowUpState, string> = {
-  none: "bg-gray-500",
-  running: "bg-green-400",
-  paused: "bg-amber-400",
-  done: "bg-blue-400",
-};
+const LIST_PATH = "/office/admin/leads";
 
 export default function LeadsTable({
   leads,
   total,
   hasMore: initialHasMore,
   initialFollowUp,
+  initialContactId,
+  initialContact,
 }: {
   leads: OfficeLead[];
   /** EXACT number of leads the office has, which may exceed what is loaded. */
@@ -55,6 +55,10 @@ export default function LeadsTable({
   hasMore: boolean;
   /** Opened from a notification about one follow-up state (?followUp=none). */
   initialFollowUp?: FollowUpState;
+  /** ?contact=<id> — open this contact's drawer on load. */
+  initialContactId?: string | null;
+  /** That contact, already loaded on the server. */
+  initialContact?: OfficeContactDetail | null;
 }) {
   const [rows, setRows] = useState<Row[]>(leads);
   const [person, setPerson] = useState<string>("all");
@@ -85,6 +89,40 @@ export default function LeadsTable({
   // The exact total, refreshed from each page so a long session does not keep
   // quoting the figure from first render.
   const [knownTotal, setKnownTotal] = useState(total);
+  // The contact whose drawer is open. Mirrors ?contact= in the address bar.
+  const [openId, setOpenId] = useState<string | null>(initialContactId ?? null);
+  // Whether WE pushed the history entry the drawer is on — then closing is
+  // Back, so the history doesn't fill with open/close pairs. A drawer that
+  // arrived by link replaces its entry instead.
+  const pushed = useRef(false);
+
+  // Back / Forward move the drawer with the address bar.
+  useEffect(() => {
+    const onPop = () => {
+      pushed.current = false;
+      setOpenId(new URLSearchParams(window.location.search).get("contact"));
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  function openContact(e: MouseEvent<HTMLAnchorElement>, id: string) {
+    if (!isPlainClick(e)) return;
+    e.preventDefault();
+    window.history.pushState(null, "", contactHref(id, followUp));
+    pushed.current = true;
+    setOpenId(id);
+  }
+
+  const closeContact = useCallback(() => {
+    if (pushed.current) {
+      pushed.current = false;
+      window.history.back();
+      return;
+    }
+    setOpenId(null);
+    window.history.replaceState(null, "", listHref(followUp));
+  }, [followUp]);
 
   // Built from the LOADED rows, so a teammate whose leads are all further down
   // appears in the filter as soon as their first one loads.
@@ -218,15 +256,16 @@ export default function LeadsTable({
           </div>
           <div className="divide-y divide-gray-800">
             {visible.map((l) => {
-              // Fall back rather than throw. `followUp` is derived server-side,
-              // so a row without it means a stale payload or an older cached
-              // page — and a whole team's lead list going blank over one missing
-              // derived field would be a far worse failure than showing "No
-              // follow-up" for a moment.
-              const state = l.followUp ?? "none";
-              const fu = FOLLOW_UP_COPY[state] ?? FOLLOW_UP_COPY.none;
+              // A missing derived `followUp` reads "No follow-up" (FollowUpBadge
+              // falls back) — never a blank list over one stale field. The whole
+              // row is the link to this contact's details.
               return (
-                <div key={l.id} className="grid grid-cols-12 gap-3 px-5 py-3 items-center">
+                <a
+                  key={l.id}
+                  href={contactHref(l.id, followUp)}
+                  onClick={(e) => openContact(e, l.id)}
+                  className="grid grid-cols-12 gap-3 px-5 py-3 items-center hover:bg-gray-800/40 transition-colors"
+                >
                   <div className="col-span-12 lg:col-span-3 min-w-0">
                     <p className="text-sm text-white truncate">{l.name}</p>
                   </div>
@@ -241,18 +280,12 @@ export default function LeadsTable({
                       teammate who owns them sees on the contact itself. There
                       is nothing for an admin to mark, so nothing can go stale. */}
                   <div className="col-span-6 lg:col-span-2 min-w-0">
-                    <span
-                      title={fu.hint}
-                      className={`inline-flex items-center gap-1.5 text-[0.6875rem] font-semibold px-2 py-0.5 rounded-full border ${FOLLOW_UP_TONE[state]}`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${FOLLOW_UP_DOT[state]}`} aria-hidden="true" />
-                      {fu.label}
-                    </span>
+                    <FollowUpBadge state={l.followUp} />
                   </div>
                   <p className="col-span-6 lg:col-span-2 text-xs text-gray-600 whitespace-nowrap">
                     {relativeTime(l.created_at, clock.now)}
                   </p>
-                </div>
+                </a>
               );
             })}
           </div>
@@ -285,9 +318,31 @@ export default function LeadsTable({
       {knownTotal > 0 && (
         <p className="text-[0.6875rem] text-gray-600 mt-3">
           Follow-up is whatever the contact&apos;s own email and text automations are doing — your
-          teammate sets those on the contact, and this follows along.
+          teammate sets those on the contact, and this follows along. Click a contact to see when and
+          how they were added and their history.
         </p>
+      )}
+
+      {/* Unmounted when closed, never parked off-screen. Keyed on the contact,
+          so opening another one never shows the last one's details. */}
+      {openId && (
+        <ContactDrawer
+          key={openId}
+          contactId={openId}
+          initial={initialContact}
+          closeHref={listHref(followUp)}
+          onClose={closeContact}
+        />
       )}
     </div>
   );
+}
+
+// The list's own address, keeping the follow-up filter a notification set.
+function listHref(fu: "all" | FollowUpState): string {
+  return fu !== "all" ? `${LIST_PATH}?followUp=${fu}` : LIST_PATH;
+}
+
+function contactHref(id: string, fu: "all" | FollowUpState): string {
+  return `${LIST_PATH}?contact=${encodeURIComponent(id)}${fu !== "all" ? `&followUp=${fu}` : ""}`;
 }

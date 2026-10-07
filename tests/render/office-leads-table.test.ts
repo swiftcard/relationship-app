@@ -116,3 +116,92 @@ describe("the office Leads table", () => {
     } finally { await page.close(); }
   });
 });
+
+// ── The contact drawer (owner, 2026-10-07) ───────────────────────────────────
+// A row opens one contact: when and how they were added, whose they are, and
+// the history between that teammate and them. Rendered open, as a ?contact=
+// link arrives from the server, with the longest things a phone has to hold:
+// an unbroken address, a long link name, and a message full of URL.
+const DETAIL = {
+  id: "l0",
+  name: "Priya Ramanathan-Venkataraman",
+  email: "averyverylongcontactaddress0@subdomain.example.com",
+  phone: "+1 555 0100",
+  company: "Ramanathan & Associates International Realty Group",
+  location: "San Francisco, CA",
+  createdAt: new Date(Date.now() - 3 * 864e5).toISOString(),
+  source: "qr_code",
+  arrivalSource: null,
+  message: "Great meeting you at the expo — send me the listing please",
+  owner: { name: "Dana Admin", userId: "u-dana", isFormer: false, isOfficeOwner: false },
+  followUp: "running" as const,
+  upcomingSteps: [{ channel: "email" as const, sendsAt: new Date(Date.now() + 5 * 864e5).toISOString(), paused: false }],
+  history: { shown: true, hiddenBecause: null, from: null, until: null },
+  events: [
+    { id: "e1", event_type: "viewed_card", source: "qr_code", created_at: new Date(Date.now() - 3 * 864e5 - 6e4).toISOString(), surface: "card" },
+    { id: "e2", event_type: "downloaded_vcard", source: "qr_code", created_at: new Date(Date.now() - 3 * 864e5 + 6e4).toISOString() },
+    { id: "e3", event_type: "clicked_link", source: null, created_at: new Date(Date.now() - 2 * 864e5).toISOString(), target_label: "Schedule a private showing this weekend" },
+  ],
+  messages: [
+    { id: "m1", direction: "out" as const, channel: "email", body: "Hi Priya — here is the listing: https://www.example.com/listings/2026/very-long-path/that-never-breaks-on-its-own", status: "delivered", created_at: new Date(Date.now() - 2 * 864e5).toISOString() },
+    { id: "m2", direction: "in" as const, channel: "sms", body: "Thanks! Can we see it Saturday?", status: "received", created_at: new Date(Date.now() - 864e5).toISOString() },
+  ],
+};
+
+describe("the contact drawer", () => {
+  let browser: Browser;
+  beforeAll(async () => { browser = await launchBrowser(); }, 120_000);
+  afterAll(async () => { await browser?.close(); });
+
+  for (const width of [390, 1280]) {
+    it(`shows when, how, whose and the history, and fits at ${width}px`, async () => {
+      const page = await render(browser, width, { ...FULL, initialContactId: "l0", initialContact: DETAIL });
+      try {
+        const res = await page.evaluate(() => {
+          const aside = document.querySelector("aside")!;
+          const limit = window.innerWidth + 1;
+          const spills: string[] = [];
+          aside.querySelectorAll("*").forEach((el) => {
+            const r = el.getBoundingClientRect();
+            if (r.width > 0 && (r.right > limit || r.left < -1)) spills.push(`${el.tagName}.${el.className}`.slice(0, 60));
+          });
+          const close = document.querySelector('a[aria-label="Close"]') as HTMLElement | null;
+          const cr = close?.getBoundingClientRect();
+          return {
+            spills,
+            text: aside.innerText,
+            closeHref: close?.getAttribute("href"),
+            closeVisible: !!cr && cr.width > 0 && cr.top >= 0 && cr.right <= window.innerWidth,
+          };
+        });
+        expect(res.spills, `the drawer spills at ${width}px`).toEqual([]);
+        expect(res.closeVisible, "the close control must be on screen").toBe(true);
+        // A link, so it works before hydration — back to the plain list.
+        expect(res.closeHref).toBe("/office/admin/leads");
+        // Section labels are uppercased by CSS, which innerText reports.
+        expect(res.text).toMatch(/Belongs to/i);
+        expect(res.text).toContain("Dana Admin");
+        expect(res.text).toMatch(/How they were added/i);
+        expect(res.text).toContain("Shared their info on Dana's card");
+        expect(res.text).toContain("Via QR code scan");
+        expect(res.text).toContain("Priya downloaded Dana's contact card");
+        expect(res.text).toContain("Priya tapped Dana's Schedule a private showing this weekend link");
+        expect(res.text).toContain("Delivered");
+        expect(res.text).toContain("Thanks! Can we see it Saturday?");
+        expect(res.text).toContain("private notes on this contact are never shown");
+        expect(res.text).not.toMatch(/\blead(s)?\b/i);
+      } finally { await page.close(); }
+    });
+  }
+
+  it("rows are links to the contact, so they work before the page hydrates", async () => {
+    const page = await render(browser, 1280, FULL);
+    try {
+      const hrefs = await page.evaluate(() =>
+        [...document.querySelectorAll("a")].map((a) => a.getAttribute("href") ?? "").filter((h) => h.includes("contact=")),
+      );
+      expect(hrefs).toContain("/office/admin/leads?contact=l0");
+      expect(hrefs.length).toBe(FULL.leads.length);
+    } finally { await page.close(); }
+  });
+});
