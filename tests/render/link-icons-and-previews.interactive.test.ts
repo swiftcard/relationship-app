@@ -129,16 +129,19 @@ async function run(type: BrowserType) {
       return route.fulfill({ status: 204, body: "" }); // tracking beacons etc.
     });
 
+    // Requests still on the wire. A tile walks its fallback chain one request
+    // at a time (preview lookup → picture → proxy → designed tile), and while
+    // the lookup is out there is no <img> at all — so "every image complete"
+    // is trivially true mid-chain (a busy machine read the dead tile there).
+    let inFlight = 0;
+    page.on("request", () => { inFlight++; });
+    page.on("requestfinished", () => { inFlight--; });
+    page.on("requestfailed", () => { inFlight--; });
+
     await page.goto("https://app.test/");
     await page.waitForFunction(() => (window as never as { __hydrated?: boolean }).__hydrated === true, null, { timeout: 30_000 });
-    // Settle: every image answered (the fallbacks swap src, so this can take
-    // a few rounds), then the 200ms cross-fades finish. A fixed sleep read a
-    // logo mid-fade on CI — both it and its monogram half-visible.
-    await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 20_000 });
-    await page.waitForTimeout(400);
-    await page.waitForFunction(() => document.getAnimations().every((a) => !(a instanceof CSSTransition) || a.playState === "finished"), null, { timeout: 10_000 });
 
-    return await page.evaluate(() => {
+    const snapshot = () => page.evaluate(() => {
       const visible = (el: Element | null) => !!el && Number(getComputedStyle(el).opacity) >= 0.5 && getComputedStyle(el).visibility !== "hidden";
       const rowOf = (box: string, label: string) =>
         [...document.querySelectorAll(`#${box} a, #${box} button`)].find((a) => a.textContent?.includes(label)) ?? null;
@@ -173,8 +176,30 @@ async function run(type: BrowserType) {
         dead: tile("Dead picture"),
         good: tile("Good picture"),
         broken,
+        settled:
+          [...document.images].every((i) => i.complete) &&
+          // The 200ms cross-fades: read mid-fade on CI, a logo and its
+          // monogram were both half-visible.
+          document.getAnimations().every((a) => !(a instanceof CSSTransition) || a.playState === "finished"),
       };
     });
+
+    // Settle on what the page DOES, not on a clock: nothing on the wire, every
+    // image answered, no fade running, and two reads 250ms apart identical.
+    // Never on the expected values, so a real regression still reads as one.
+    const deadline = Date.now() + 20_000;
+    let prev = "";
+    for (;;) {
+      const snap = await snapshot();
+      const key = JSON.stringify(snap);
+      if ((inFlight === 0 && snap.settled && key === prev) || Date.now() > deadline) {
+        const { settled: _settled, ...result } = snap;
+        void _settled;
+        return result;
+      }
+      prev = inFlight === 0 && snap.settled ? key : "";
+      await page.waitForTimeout(250);
+    }
   } finally {
     await browser.close();
   }
