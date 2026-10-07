@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
   // Everyone with a device, paged (PostgREST stops at 1,000 silently).
   const withDevice = new Set<string>();
   for (let from = 0; ; from += PAGE) {
-    const { data } = await admin.from("push_subscriptions").select("user_id").order("user_id").range(from, from + PAGE - 1);
+    const { data } = await admin.from("push_subscriptions").select("user_id").order("id").range(from, from + PAGE - 1);
     for (const r of data ?? []) if (r.user_id) withDevice.add(r.user_id as string);
     if (!data || data.length < PAGE) break;
   }
