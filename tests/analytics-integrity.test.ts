@@ -67,7 +67,7 @@ describe("a recorded view is a real visit", () => {
   });
 
   it("rate-limits per IP and card", () => {
-    expect(route).toMatch(/isRateLimited\(`card-events:\$\{ip\}:\$\{card_owner_username\}`/);
+    expect(route).toMatch(/isRateLimited\(`card-events:\$\{ip\}:\$\{card_owner_username\}:\$\{event_type\}`/);
   });
 
   it("counts one visitor once per VISIT window, and survives the race", () => {

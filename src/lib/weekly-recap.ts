@@ -9,9 +9,10 @@ import { localHour } from "@/lib/push-policy";
 // the person's own zone (api/push/recap):
 //
 //   everyone      "Your week: 14 views · 2 contacts" / "Top spot in Austin, TX ·
-//                 4 places in all." — on a Free lock screen the place is shaded
-//                 ("Top spot in ▒▒▒▒▒, ▒▒ · 4 places in all.", teaseLocation)
-//                 and blurred in the bell. The place is MARKED here, so every
+//                 4 places in all." — on a Free lock screen the WHOLE marked
+//                 phrase, place count included, becomes one fixed shade
+//                 ("Top spot in ▒▒▒▒▒, ▒▒.",
+//                 teaseLocation) and is blurred in the bell. The place is MARKED here, so every
 //                 existing privacy rule applies with no new code.
 //   Office admin  the TEAM's week instead of their own — never both, one
 //                 Monday push each.

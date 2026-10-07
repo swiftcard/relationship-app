@@ -154,7 +154,16 @@ export function hasMarkedPlace(text: string): boolean {
 // Matching a trailing fragment is only safe because the caller applies this to
 // those types alone (lib/notification-privacy.ts) — "in" is far too common a
 // word to go hunting for in an arbitrary sentence.
-const LEGACY_TAIL = /(\s)(near\s+|in\s+the\s+|in\s+)([^.!?]+?)(\s+area)?([.!?]?)$/;
+//
+// THE NAME MAY CONTAIN A PERIOD (2026-10-06). It used to be [^.!?], so "near
+// St. Louis, MO." / "Ft. Lauderdale" / "Washington, D.C." could not match at
+// all and the place went to a Free account in plain text. And because the
+// match is anchored to the END but starts at the FIRST "near"/"in", a sentence
+// that carries more after the place (the 09-09→09-11 milestone rows: "…near
+// Austin, TX. That's 50 views on /slug. …") now over-redacts the rest of the
+// sentence instead of under-redacting the place. Losing a tip is fine; leaking
+// the place is the bug.
+const LEGACY_TAIL = /(\s)(near\s+|in\s+the\s+|in\s+)([^!?]+?)(\s+area)?([.!?]?)$/;
 
 export function redactLegacyPlace(text: string): string {
   return text.replace(LEGACY_TAIL, (_m, space: string, prep: string, name: string, area = "", end = "") =>

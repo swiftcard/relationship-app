@@ -52,7 +52,7 @@ const db: Record<string, Row[]> = { cards: [], profiles: [], user_devices: [], c
 /** A cut-down PostgREST builder: enough of the chain for the queries this
  *  pipeline actually issues, and nothing more. */
 function table(name: string) {
-  const filters: { op: "eq" | "gte"; col: string; val: unknown }[] = [];
+  const filters: { op: "eq" | "gte" | "lte"; col: string; val: unknown }[] = [];
   let order: { col: string; asc: boolean } | null = null;
   let limit = Infinity;
   let mode: "select" | "update" = "select";
@@ -60,7 +60,7 @@ function table(name: string) {
 
   const rows = () => {
     let out = (db[name] ?? []).filter((r) =>
-      filters.every((f) => (f.op === "eq" ? r[f.col] === f.val : String(r[f.col]) >= String(f.val))),
+      filters.every((f) => (f.op === "eq" ? r[f.col] === f.val : f.op === "gte" ? String(r[f.col]) >= String(f.val) : String(r[f.col]) <= String(f.val))),
     );
     if (order) {
       const { col, asc } = order;
@@ -78,6 +78,7 @@ function table(name: string) {
     select: () => q,
     eq: (col: string, val: unknown) => { filters.push({ op: "eq", col, val }); return q; },
     gte: (col: string, val: unknown) => { filters.push({ op: "gte", col, val }); return q; },
+    lte: (col: string, val: unknown) => { filters.push({ op: "lte", col, val }); return q; },
     order: (col: string, opts?: { ascending?: boolean }) => {
       order = { col, asc: opts?.ascending !== false };
       return q;
@@ -164,6 +165,9 @@ async function view(opts: {
   source?: string | null;
   at?: number;
   fromCookie?: boolean;
+  /** visit-identity's "minted": the browser handed up no id of its own.
+   *  Defaults to true only when no visitor id is supplied. */
+  minted?: boolean;
 }) {
   const ip = opts.ip ?? "203.0.113.7";
   const ua = opts.ua ?? "Mozilla/5.0 (iPhone; CPU iPhone OS 26_4 like Mac OS X) Safari/605.1.15";
@@ -183,6 +187,7 @@ async function view(opts: {
       source: opts.source ?? "direct_link",
       ip,
       identityFromCookie: opts.fromCookie ?? false,
+      identityMinted: opts.minted ?? opts.visitorId === null,
     });
   } finally {
     if (opts.at != null) vi.useRealTimers();
@@ -275,13 +280,13 @@ describe("one page visit that fires several tracking calls", () => {
     expect(viewRows()).toHaveLength(1);
   });
 
-  it("STILL records exactly one view when the browser hands up a fresh id every load", async () => {
-    // The four-views-per-visit bug, reproduced: four loads, four brand-new
-    // localStorage ids, one browser, one card, inside one visit window. Before
-    // the device key this was four rows and four "unique visitors".
+  it("STILL records exactly one view when the browser can keep no id and one is minted every load", async () => {
+    // The four-views-per-visit bug, reproduced: four loads, four server-minted
+    // ids (no cookie, no localStorage), one browser, one card, one visit window.
+    // Before the device key this was four rows and four "unique visitors".
     const outcomes = [];
     for (const id of ["fresh-1111", "fresh-2222", "fresh-3333", "fresh-4444"]) {
-      outcomes.push((await view({ visitorId: id })).outcome);
+      outcomes.push((await view({ visitorId: id, minted: true })).outcome);
     }
     expect(outcomes).toEqual(["recorded", "deduped", "deduped", "deduped"]);
     expect(viewRows()).toHaveLength(1);
@@ -303,8 +308,18 @@ describe("one page visit that fires several tracking calls", () => {
     expect(viewRows().every((r) => r.device_key == null)).toBe(true);
   });
 
-  it("a cookie-less browser still carries the device key, so its fresh-id reloads stay one visit", async () => {
-    await view({ visitorId: "fresh-aaaa" });
+  // 2026-10-06. The first-time case: no cookie yet, but each phone hands up its
+  // own localStorage id. Same Wi-Fi, same iOS build, same card, seconds apart —
+  // the QR passed around a room. These are two people and must be two views.
+  it("two FIRST-TIME visitors on one Wi-Fi with identical phones are two views", async () => {
+    expect((await view({ visitorId: "first-time-a" })).outcome).toBe("recorded");
+    expect((await view({ visitorId: "first-time-b" })).outcome).toBe("recorded");
+    expect(viewRows()).toHaveLength(2);
+    expect(viewRows().every((r) => r.device_key == null)).toBe(true);
+  });
+
+  it("a browser that could keep no id still carries the device key, so its minted reloads stay one visit", async () => {
+    await view({ visitorId: "fresh-aaaa", minted: true });
     expect(viewRows()[0].device_key).toMatch(/^[0-9a-f]{32}$/);
   });
 
@@ -583,7 +598,7 @@ describe("the pipeline is wired the way the tests assume", () => {
     expect(recordSrc).toMatch(/identityMinted = false/);
     expect(eventsSrc).toMatch(/identityMinted: visitIdentity\.minted/);
     expect(eventsSrc).toMatch(/identityFromCookie: !visitIdentity\.setCookie/);
-    expect(recordSrc).toMatch(/device_key: identityFromCookie \? null : deviceKey/);
+    expect(recordSrc).toMatch(/device_key: identityMinted \? deviceKey : null/);
   });
 
   it("owner exclusion has two signals and neither of them is an IP", () => {

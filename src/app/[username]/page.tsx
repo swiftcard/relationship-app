@@ -1,4 +1,5 @@
 import { profilePageJsonLd, jsonLdScript } from "@/lib/brand";
+import { forwardQuery } from "@/lib/forward-query";
 import { notFound, permanentRedirect } from "next/navigation";
 import { cookies } from "next/headers";
 import type { Metadata } from "next";
@@ -121,11 +122,12 @@ export default async function CardPage({
   searchParams,
 }: {
   params: Promise<{ username: string }>;
-  searchParams: Promise<{ source?: string | string[]; embed?: string; shared?: string; save?: string }>;
+  searchParams: Promise<{ source?: string | string[]; embed?: string; shared?: string; save?: string; [key: string]: string | string[] | undefined }>;
 }) {
   const { username: rawUsername } = await params;
   const username = rawUsername.toLowerCase();
-  const { source: rawSource, embed, shared, save } = await searchParams;
+  const query = await searchParams;
+  const { source: rawSource, embed, shared, save } = query;
   // A repeated query param (?source=a&source=b) arrives as an array — passing
   // that through used to reach the card_views insert as a non-text value and
   // fail the whole row. First value wins; bounded like the API's own cap.
@@ -135,14 +137,8 @@ export default async function CardPage({
   // canonical tag pointed the right way, but a 308 is definitive and
   // consolidates every signal onto one URL). Query params ride along —
   // ?source= drives real attribution and must survive the hop.
-  if (rawUsername !== username) {
-    const qs = new URLSearchParams();
-    for (const [k, v] of Object.entries({ source: sourceParam, embed, shared, save })) {
-      if (typeof v === "string" && v) qs.set(k, v);
-    }
-    const q = qs.toString();
-    permanentRedirect(q ? `/${username}?${q}` : `/${username}`);
-  }
+  // EVERY param, not a hand-picked list (?ct= used to be dropped here).
+  if (rawUsername !== username) permanentRedirect(forwardQuery(`/${username}`, query));
   const source = (sourceParam ?? "direct_link").slice(0, 48);
   // ?save=1 — arrived by scanning the desktop QR. The card renders normally and
   // ScanSaveContact hands the phone the contact on top of it, so dismissing the
@@ -183,7 +179,9 @@ export default async function CardPage({
     // the card's current URL — printed QRs and old shares must keep working.
     const { findSlugAlias } = await import("@/lib/slug-alias");
     const alias = await findSlugAlias(username);
-    if (alias) permanentRedirect(`/${alias}`);
+    // The query rides along: a renamed card's printed QR / NFC / Wallet pass
+    // must keep its ?source=, and ?save=1 must still save (lib/forward-query).
+    if (alias) permanentRedirect(forwardQuery(`/${alias}`, query));
     notFound();
   }
 

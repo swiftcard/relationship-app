@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { cardSlug, prettyCardSlug } from "@/lib/slug";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase-server";
+import { readPushPrefs } from "@/lib/push-policy";
 import { safeTimeZone, localDayKey, startOfLocalDayUtc } from "@/lib/tz-days";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { ensureUserCards } from "@/lib/ensure-cards";
@@ -52,7 +53,8 @@ import { PlanGate, PlanNotice } from "@/components/PlanGate";
 import CardSelectionPersist from "@/components/CardSelectionPersist";
 import TourContextPersist from "@/components/TourContextPersist";
 import { Suspense } from "react";
-import { PLAN_LIMITS, LOCKED_LEAD_TAG, isPaidPlan, describeFreeDesignChanges, proLinkFeaturesInUse } from "@/lib/plan";
+import { PLAN_LIMITS, LOCKED_LEAD_TAG, describeFreeDesignChanges, proLinkFeaturesInUse } from "@/lib/plan";
+import { isPaidProfile } from "@/lib/effective-plan";
 import { pickFreeLiveCardIds } from "@/lib/card-active";
 import { redactForPlan } from "@/lib/notification-privacy";
 import { hideForReader } from "@/lib/office-account-notifications";
@@ -156,7 +158,8 @@ export default async function DashboardPage({
   const activeUsername = (activeCard?.username ?? "") as string;
   const analyticsUsername = activeUsername;
 
-  const isPro = isPaidPlan(profile.plan);
+  // effectivePlan: an expired timed grant is Free now, not at the next cron.
+  const isPro = isPaidProfile(profile);
   const isEnterprise = profile.plan === "enterprise";
   const isAdmin = ADMIN_EMAILS.includes(user.email?.toLowerCase() ?? "");
 
@@ -375,7 +378,11 @@ export default async function DashboardPage({
   // day using the tz the browser reported (sc_tz cookie); absent it (first
   // paint, cookies off), we fall back to UTC — same as the old behaviour, so no
   // regression. tzNow is a single "now" so every window below is consistent.
-  const ownerTz = safeTimeZone(cookieStore.get("sc_tz")?.value);
+  //
+  // 2026-10-06: before the cookie exists, the zone the app already LEARNED for
+  // push quiet hours (customization._push.timezone) is used, so a first load
+  // isn't a day off for an owner west of UTC. UTC only when neither exists.
+  const ownerTz = safeTimeZone(cookieStore.get("sc_tz")?.value ?? readPushPrefs(profile.customization).timezone);
   const tzNow = new Date();
   // Days-back that yields the required number of LOCAL day buckets, today
   // included: month → 30 buckets (today + 29 prior), week → 7, today → 1.
@@ -411,7 +418,9 @@ export default async function DashboardPage({
     // counts above on busy cards. Newest-first, so if the cap below is ever hit
     // it's the OLDEST tail of the window that's dropped.
     (async () => {
-      const PAGE = 1000, MAX_PAGES = 10;
+      // 50 pages (50k rows in 60 days) — was 10, which a busy card could
+      // outgrow, leaving the chart below the exact headline counts.
+      const PAGE = 1000, MAX_PAGES = 50;
       // visitor_id rides along so the window's unique-viewer / repeat-view
       // split can be computed from the same rows the graph is built from.
       const all: { viewed_at: string; username: string; visitor_id: string | null }[] = [];
@@ -433,10 +442,23 @@ export default async function DashboardPage({
     // 1000-row cap, so a busy card's "all time" top locations were computed
     // from an arbitrary 1000-row slice. Newest-first so if the page cap is
     // ever hit it's the oldest tail that drops.
-    viewsRange === "locations"
+    // Free never renders the list (the tab is an upsell), so it never reads it
+    // either — the places don't even leave the database for a Free request.
+    viewsRange === "locations" && isPro
       ? (async () => {
+          // ONE AGGREGATE, NOT RAW ROWS (2026-10-06). The paged read below
+          // stopped at 10k rows, so a busy card's "all time" list was really
+          // its newest 10k views. card_location_counts (supabase/
+          // analytics-final-review-2026-10-06.sql) groups in the database;
+          // the paged read stays only as the fallback for an unmigrated DB.
+          const agg = await getAdminSupabase().rpc("card_location_counts", {
+            p_usernames: [analyticsUsername, linkUsername],
+          });
+          if (!agg.error && Array.isArray(agg.data)) {
+            return { data: agg.data as { username: string; location: string | null; geo_accuracy?: string | null; n?: number }[] };
+          }
           const PAGE = 1000, MAX_PAGES = 10;
-          const all: { username: string; location: string | null; geo_accuracy?: string | null }[] = [];
+          const all: { username: string; location: string | null; geo_accuracy?: string | null; n?: number }[] = [];
           // geo_accuracy rides along so the tab can say "Near Great Neck, NY"
           // or "New York (approximate)" instead of printing a state-level guess
           // as if it were a town. Selecting a column that isn't migrated yet
@@ -573,7 +595,11 @@ export default async function DashboardPage({
   // matches the views inside it. Day buckets key off localDayKey; hour buckets
   // (today) index off local-midnight. Each bar carries the real instant of its
   // start (local midnight / local hour) so the chart axis reads correctly.
-  const bucketCount = viewsRange === "month" ? 30 : viewsRange === "week" ? 7 : 24;
+  // TODAY HAS AS MANY HOURS AS THE LOCAL DAY ACTUALLY HAS (2026-10-06): 23 on
+  // the spring-forward day, 25 on the fall-back day. A fixed 24 folded the last
+  // real hour of a 25-hour day into the 11 PM bar.
+  const hoursToday = Math.max(23, Math.min(25, Math.round((startOfLocalDayUtc(-1, ownerTz, tzNow).getTime() - windowStart) / 36e5)));
+  const bucketCount = viewsRange === "month" ? 30 : viewsRange === "week" ? 7 : hoursToday;
   const trafficBars: number[] = Array.from({ length: bucketCount }, () => 0);
   // Per-surface split of the same buckets, so a bar can say "1 card · 1 links"
   // instead of an undifferentiated "2 views".
@@ -650,9 +676,11 @@ export default async function DashboardPage({
   // with the SwiftCard vs Swift Links split per location. All-time totals.
   let topLocations: { location: string; card: number; link: number; total: number }[] = [];
   if (viewsRange === "locations") {
-    const rows = ((locViewsRes.data ?? []) as { username: string; location: string | null; geo_accuracy?: string | null }[])
-      .map((v) => ({ username: v.username, loc: v.location?.trim(), acc: (v.geo_accuracy ?? null) as GeoAccuracy | null }))
-      .filter((v): v is { username: string; loc: string; acc: GeoAccuracy | null } => !!v.loc);
+    // A row is either one raw view (fallback path) or one aggregated group
+    // carrying its count `n` (card_location_counts).
+    const rows = ((locViewsRes.data ?? []) as { username: string; location: string | null; geo_accuracy?: string | null; n?: number | string }[])
+      .map((v) => ({ username: v.username, loc: v.location?.trim(), acc: (v.geo_accuracy ?? null) as GeoAccuracy | null, n: Math.max(1, Number(v.n ?? 1) || 1) }))
+      .filter((v): v is { username: string; loc: string; acc: GeoAccuracy | null; n: number } => !!v.loc);
     // "Great Neck, US" (written before views carried the state) and
     // "Great Neck, NY" are one place, not two rows — see locationAliases.
     const alias = locationAliases(rows.map((v) => v.loc));
@@ -661,7 +689,7 @@ export default async function DashboardPage({
       const loc = alias.get(v.loc) ?? v.loc;
       const slot = (locMap[loc] ??= { card: 0, link: 0, acc: [] });
       slot.acc.push(v.acc);
-      if (v.username === linkUsername) slot.link++; else slot.card++;
+      if (v.username === linkUsername) slot.link += v.n; else slot.card += v.n;
     }
     topLocations = Object.entries(locMap)
       .map(([location, c]) => ({

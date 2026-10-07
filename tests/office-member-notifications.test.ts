@@ -29,7 +29,7 @@ describe("a team member sees the place a view came from", () => {
     const notice = cardEventNotice({ eventType: "viewed_card", surface: "card", location: "New York, NY", geoAccuracy: "city" })!;
     expect(stripLocationMarks(notice.body)).toContain("New York");
     expect(teaseLocation(notice.body)).not.toContain("New York"); // what a Free phone would get instead
-    expect(code("src/lib/push.ts")).toContain("const paid = isPaidPlan(plan);");
+    expect(code("src/lib/push.ts")).toContain("const paid = isPaidProfile(profile);");
   });
 });
 

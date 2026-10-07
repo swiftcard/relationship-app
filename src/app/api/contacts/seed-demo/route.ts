@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { seedDemoContact } from "@/lib/demo-contact";
+import { isPaidProfile, PLAN_COLUMNS } from "@/lib/effective-plan";
+import { redactPlaceLabel } from "@/lib/location-privacy";
 
 export const runtime = "nodejs";
 
@@ -40,5 +42,11 @@ export async function POST(req: NextRequest) {
   if ((count ?? 0) > 0) return NextResponse.json({ seeded: false });
 
   const contact = await seedDemoContact(cardOwner);
-  return NextResponse.json({ seeded: !!contact, contact });
+  // Same rule as the contacts page: a Free account is never handed a place
+  // name, not even the sample contact's made-up one (2026-10-06).
+  const { data: profile } = await admin.from("profiles").select(PLAN_COLUMNS).eq("id", user.id).maybeSingle();
+  const safe = contact && !isPaidProfile(profile) && "location" in contact
+    ? { ...contact, location: redactPlaceLabel((contact as { location?: string | null }).location) }
+    : contact;
+  return NextResponse.json({ seeded: !!contact, contact: safe });
 }

@@ -51,7 +51,7 @@ describe("a contact locked behind the Free cap is never named", () => {
 
   it("the events route marks it — only for a locked contact on a Free account", () => {
     const src = read("src/app/api/card-events/route.ts");
-    expect(src).toMatch(/nameLocked: !!ownersOwnContact && isLockedContact\(ownersOwnContact\) && !isPaidPlan\(owner\.plan/);
+    expect(src).toMatch(/nameLocked: !!ownersOwnContact && isLockedContact\(ownersOwnContact\) && !isPaidProfile\(owner\)/);
   });
 
   it("an SMS reply from a locked contact on Free shows neither name nor words", () => {

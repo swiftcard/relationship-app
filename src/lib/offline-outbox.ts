@@ -15,7 +15,8 @@
 // An answer from the server, even an error, is handled exactly as before.
 // A replay of a request that did land after all is absorbed by the
 // server's own dedupe: the 5-minute same-phone window in /api/leads, and the
-// visit window in /api/card-events.
+// visit window in /api/card-events — which, since 2026-10-06, is measured
+// around the X-SC-Queued-At time the replay carries, not the replay time.
 
 export const OUTBOX_KEY = "sc_outbox_v1";
 const QUEUEABLE = new Set(["/api/leads", "/api/card-events"]);
@@ -111,7 +112,11 @@ export async function flushOutbox(): Promise<void> {
         try {
           res = await fetch(item.url, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            // WHEN IT REALLY HAPPENED. Without this the server filed a replayed
+            // view at the replay time, at the replay network's location, and —
+            // past the visit window — counted and pushed it as a new visit.
+            // /api/card-events files it at this time with no place instead.
+            headers: { "Content-Type": "application/json", "X-SC-Queued-At": String(item.at) },
             body: item.body,
             keepalive: true,
           });

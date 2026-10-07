@@ -2,7 +2,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
-import { resolveOfficeContext, roleHasCapability, type OfficeRole } from "@/lib/office-roles";
+import { resolveOfficeContext, roleHasCapability, officeOwnerStillOnOffice, type OfficeRole } from "@/lib/office-roles";
 import { seedBrandFromOwnersFirstCard } from "@/lib/office-brand";
 
 // ── One gate for every /office/admin page ────────────────────────────────────
@@ -71,6 +71,10 @@ export const requireOfficeAdmin = cache(async (): Promise<OfficeAdminCtx> => {
   // has no business here.
   const role: OfficeRole = ctx ? ctx.role : "owner";
   if (ctx && !ctx.isOwner && !roleHasCapability(role, "view_org_analytics")) redirect("/dashboard");
+  // A manager whose office OWNER is no longer on Office gets nothing either —
+  // the console must agree with requireOfficeCapability, which already refuses
+  // every office API in that state (2026-10-06 final analytics review).
+  if (ctx && !ctx.isOwner && !(await officeOwnerStillOnOffice(ctx.ownerId))) redirect("/dashboard");
 
   // Reads go through the service-role client: the offices RLS policies are
   // mutually recursive with office_members, so a user-scoped read raises

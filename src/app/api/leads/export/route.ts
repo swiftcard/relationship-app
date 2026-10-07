@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveDownloadUserId } from "@/lib/download-auth";
 import { isRateLimited } from "@/lib/rate-limit";
 import { getAdminSupabase } from "@/lib/supabase-admin";
-import { isPaidPlan } from "@/lib/plan";
+
+import { isPaidProfile } from "@/lib/effective-plan";
 
 export async function GET(req: NextRequest) {
   // Session OR a signed ?dl= token — the iOS shell opens this in the system
@@ -17,13 +18,13 @@ export async function GET(req: NextRequest) {
 
   const admin = getAdminSupabase();
   const [{ data: profile }, { data: cards }] = await Promise.all([
-    admin.from("profiles").select("username, plan").eq("id", userId).single(),
+    admin.from("profiles").select("username, plan, plan_expires_at, stripe_subscription_id, customization").eq("id", userId).single(),
     admin.from("cards").select("username").eq("user_id", userId),
   ]);
   if (!profile) return NextResponse.json({ error: "No profile" }, { status: 404 });
 
   // CSV export is a Pro/Office feature.
-  if (!isPaidPlan(profile.plan)) {
+  if (!isPaidProfile(profile)) {
     return NextResponse.json(
       { code: "EXPORT_PRO_ONLY", error: "upgrade", message: "CSV export is a Pro feature. Upgrade to export your contacts.", upgrade: "/upgrade" },
       { status: 402 }

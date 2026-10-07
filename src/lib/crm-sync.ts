@@ -10,6 +10,7 @@ import { syncLeadToHighLevel } from "./sync-highlevel";
 import { syncLeadToSalesforce } from "./sync-salesforce";
 import type { CrmLead, CrmSyncOptions } from "./crm-connection";
 import { reportError } from "./report-error";
+import { isPaidProfile, PLAN_COLUMNS } from "./effective-plan";
 
 // ── One way out to every CRM destination ─────────────────────────────────────
 //
@@ -36,6 +37,18 @@ export const CRM_WEBHOOK_TIMEOUT_MS = 5000;
  * allSettled, not all: one provider being down must not cancel the others.
  */
 export async function syncLeadToAllCrms(lead: CrmLead, capturedBy: string, opts?: CrmSyncOptions): Promise<void> {
+  // THE PLAN IS CHECKED HERE TOO (2026-10-06). Every caller already re-checks
+  // it at send time, but a native CRM token survives a downgrade and a lead
+  // carries its location ("Met: … · Austin, TX"). One forgotten check in a
+  // future caller would keep streaming a Free account's contacts — places
+  // included — into a Pro-only destination. Same rule as Zapier, which has
+  // always checked inside resolveZapierTarget. Unknown plan → don't send.
+  try {
+    const { data } = await getAdminSupabase().from("profiles").select(PLAN_COLUMNS).eq("id", capturedBy).maybeSingle();
+    if (!isPaidProfile(data)) return;
+  } catch {
+    return;
+  }
   const run = (label: string, p: Promise<void>) => p.catch((e) => console.error(`[crm-sync] ${label} sync error:`, e));
   await Promise.allSettled([
     run("Google", syncLeadToGoogle(lead, capturedBy, opts)),

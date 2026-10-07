@@ -139,7 +139,12 @@ export async function resolveGeo(req: NextRequest, ip: string): Promise<GeoResul
   const second = await secondOpinion(ip);
   const org = second?.org ?? null;
   const isRelay = !!org && RELAY_OR_HOSTING.test(org);
-  const base = reconcileDetailed(edge, second);
+  // A relay can't support a town, so it gets the REGION rung's LABEL too, not
+  // just its accuracy (2026-10-06). Downgrading only the accuracy kept
+  // "Newark, NJ" as the label, which then rendered "Newark (approximate)" /
+  // "in the Newark area" — a town presented as a region — and in the Locations
+  // tab one relay row demoted a whole group of confirmed "Newark, NJ" views.
+  const base = reconcileDetailed(edge, second, { townUnsupported: isRelay });
   return {
     label: base.label,
     // A relay or cloud egress can never support a town: Private Relay promises
@@ -169,8 +174,14 @@ export function reconcile(edge: GeoGuess, second: GeoGuess | null): string | nul
 export function reconcileDetailed(
   edge: GeoGuess,
   second: GeoGuess | null,
+  opts: { townUnsupported?: boolean } = {},
 ): { label: string | null; accuracy: GeoAccuracy | null } {
   if (!second) {
+    // A relay with no second opinion: one unconfirmed database naming the
+    // RELAY's town. Only the country is worth saying.
+    if (opts.townUnsupported && edge.city) {
+      return edge.country ? { label: edge.country, accuracy: "country" } : { label: null, accuracy: null };
+    }
     // One database, unconfirmed. A town from a single source is exactly the
     // claim the Bolton Landing incident disproved, so it is never "city".
     const label = formatLocation(edge);
@@ -208,6 +219,8 @@ export function reconcileDetailed(
 
   // A carrier gateway serves a whole region; naming its town is a coin toss.
   if (second.org && CELLULAR.test(second.org)) return regional();
+  // Same for a privacy relay / cloud egress: the town is the relay's, not theirs.
+  if (opts.townUnsupported) return regional();
 
   if (edge.city && second.city) {
     // The edge keeps its spelling of the town (accents survive), but the region

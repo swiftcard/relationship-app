@@ -10,7 +10,8 @@ import { ensureUserCards } from "@/lib/ensure-cards";
 import { SwiftCardIcon } from "@/components/SwiftCardLogo";
 import GrowLinkButton from "@/components/GrowLinkButton";
 import SettingsLinkButton from "@/components/SettingsLinkButton";
-import { isPaidPlan, LOCKED_LEAD_TAG, PLAN_LIMITS } from "@/lib/plan";
+import { LOCKED_LEAD_TAG, PLAN_LIMITS } from "@/lib/plan";
+import { isPaidProfile } from "@/lib/effective-plan";
 import { redactPlaceLabel } from "@/lib/location-privacy";
 import UpgradeButton from "@/components/UpgradeButton";
 import { canViewOfficeAdmin, getOfficeSubUserContext } from "@/lib/office-roles";
@@ -57,7 +58,7 @@ export default async function ContactsPage({
     supabase.auth.getUser(),
     searchParams,
     cookies(),
-    supabase.from("profiles").select("username, plan, customization").eq("id", authedUserId).single(),
+    supabase.from("profiles").select("username, plan, customization, plan_expires_at, stripe_subscription_id").eq("id", authedUserId).single(),
     cardsQuery(),
   ]);
   if (!user) redirect("/login");
@@ -132,7 +133,8 @@ export default async function ContactsPage({
 
   // Free plan: leads captured beyond the 5/month cap are locked — hide them here
   // too (same as the dashboard) so they're never revealed until the account is Pro.
-  const paid = isPaidPlan(profile.plan);
+  // effectivePlan: an expired timed grant is Free now, not at the next cron.
+  const paid = isPaidProfile(profile);
   // Locations are a Pro feature, and this panel printed the lead's own
   // `location` column in plain text to everybody — the same leak the
   // notification bodies had, on every contact a Free account opened. The real
@@ -262,7 +264,7 @@ export default async function ContactsPage({
             {contactCount === 1 ? "Contact" : "Contacts"}
           </h1>
           {(leads?.length ?? 0) > 0 && (
-            isPaidPlan(profile.plan) ? (
+            paid ? (
               <DownloadLink
                 href={exportHref}
                 title="Export your contacts as CSV"

@@ -1,4 +1,5 @@
 import { profilePageJsonLd, jsonLdScript } from "@/lib/brand";
+import { forwardQuery } from "@/lib/forward-query";
 import { notFound, permanentRedirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { cache } from "react";
@@ -115,21 +116,16 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
   };
 }
 
-export default async function SwiftLinksPage({ params, searchParams }: { params: Promise<{ username: string }>; searchParams: Promise<{ embed?: string; source?: string | string[] }> }) {
+export default async function SwiftLinksPage({ params, searchParams }: { params: Promise<{ username: string }>; searchParams: Promise<{ embed?: string; source?: string | string[]; [key: string]: string | string[] | undefined }> }) {
   const { username: rawUsername } = await params;
   const username = rawUsername.toLowerCase();
-  const { embed, source: rawSource } = await searchParams;
+  const query = await searchParams;
+  const { embed, source: rawSource } = query;
 
   // Mixed case 308s to the lowercase canonical, params preserved — ?source=
   // drives attribution and ?embed=1 is the /preview frame.
-  if (rawUsername !== username) {
-    const firstSource = Array.isArray(rawSource) ? rawSource[0] : rawSource;
-    const qs = new URLSearchParams();
-    if (typeof embed === "string" && embed) qs.set("embed", embed);
-    if (typeof firstSource === "string" && firstSource) qs.set("source", firstSource);
-    const q = qs.toString();
-    permanentRedirect(q ? `/links/${username}?${q}` : `/links/${username}`);
-  }
+  // EVERY param rides along (lib/forward-query), not just embed + source.
+  if (rawUsername !== username) permanentRedirect(forwardQuery(`/links/${username}`, query));
   const isEmbed = embed === "1"; // rendered inside the /preview demo — don't log a view or nudge
   // Real traffic-source attribution, like the card page: a QR/NFC tag pointing
   // at /links/<slug>?source=qr_code used to be flattened to "swift_links", so
@@ -142,7 +138,7 @@ export default async function SwiftLinksPage({ params, searchParams }: { params:
   if (!cardOrLegacy) {
     const { findSlugAlias } = await import("@/lib/slug-alias");
     const alias = await findSlugAlias(username);
-    if (alias) permanentRedirect(`/links/${alias}`);
+    if (alias) permanentRedirect(forwardQuery(`/links/${alias}`, query));
     notFound();
   }
 

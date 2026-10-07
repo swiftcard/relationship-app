@@ -176,6 +176,23 @@ describe("nothing else has to remember", () => {
     expect(redactPlaces(once)).toBe(once);
     expect(redactLegacyPlace("Someone viewed your card near █████.")).toContain("█");
   });
+
+  // 2026-10-06 final analytics review: places with a period in their name, and
+  // the milestone rows where the place sat mid-sentence, used to slip through.
+  it.each([
+    ["Someone viewed your card near St. Louis, MO.", "St. Louis"],
+    ["Someone viewed your card near Ft. Lauderdale, FL.", "Lauderdale"],
+    ["Someone viewed your Swift Links in the Washington, D.C. area.", "Washington"],
+    ["Someone viewed your card near Mt. Vernon, NY.", "Vernon"],
+    ["Someone viewed your card near Austin, TX. That's 50 views on /dana. Add it to your email signature.", "Austin"],
+    ["Someone viewed your card near Great Neck, US.", "Great Neck"],
+    ["Someone viewed your card in the New York area.", "New York"],
+  ])("a legacy row never leaks the place: %s", (body, place) => {
+    const out = redactLegacyPlace(body);
+    expect(out).not.toContain(place);
+    expect(out).toContain("█");
+    expect(out.startsWith("Someone viewed your")).toBe(true);
+  });
 });
 
 // ── The contacts panel, added 2026-09-11 ────────────────────────────────────

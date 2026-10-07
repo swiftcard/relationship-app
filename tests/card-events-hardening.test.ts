@@ -59,7 +59,7 @@ describe("one visit → one event → one notification", () => {
   it("a no-visitor-id caller is capped to one event per IP per window", () => {
     // The target is in the key so a visitor with no browser id can still tap
     // more than one link in half an hour.
-    expect(route).toMatch(/events-anon:\$\{ip\}:\$\{card_owner_username\}:\$\{event_type\}:\$\{target \?\? ""\}`, 1, VIEW_VISIT_WINDOW_MS/);
+    expect(route).toMatch(/events-anon:\$\{ip\}:\$\{card_owner_username\}:\$\{event_type\}:\$\{target \?\? ""\}:\$\{target_label \?\? ""\}`, 1, VIEW_VISIT_WINDOW_MS/);
   });
 
   it("a failed insert means NO notification — the row and the push must never disagree", () => {
@@ -80,7 +80,7 @@ describe("one visit → one event → one notification", () => {
   });
 
   it("created_at is set explicitly — the dedup window and conversation sort filter on it", () => {
-    expect(route).toMatch(/created_at: new Date\(\)\.toISOString\(\)/);
+    expect(route).toMatch(/created_at: new Date\(replayAt \?\? Date\.now\(\)\)\.toISOString\(\)/);
   });
 });
 
@@ -97,7 +97,7 @@ describe("the notification carries the right context", () => {
     // card_views and card_events used to resolve the location independently and
     // rely on a per-IP cache to agree. The event now takes the exact object
     // recordView used; only a vCard save (which records no view) resolves its own.
-    expect(route).toMatch(/const geo = viewGeo \?\? \(await resolveGeo\(req, ip\)\)/);
+    expect(route).toMatch(/const liveGeo = viewGeo \?\? \(await resolveGeo\(req, ip\)\)/);
   });
 
   it("records WHICH PAGE the event happened on", () => {

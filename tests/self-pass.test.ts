@@ -34,6 +34,7 @@ function table(name: string) {
     select: () => q,
     eq: (col: string, val: unknown) => { filters.push({ col, val }); return q; },
     gte: () => q,
+    lte: () => q,
     order: () => q,
     limit: () => q,
     update: () => q,

@@ -4,7 +4,7 @@ import { isApnsEndpoint, sendApnsDetailed } from "@/lib/apns";
 import { isFcmEndpoint, sendFcmDetailed } from "@/lib/fcm";
 import { reportError as reportServerError } from "@/lib/report-error";
 import { assertSafeUrl } from "@/lib/safe-fetch";
-import { isPaidPlan } from "@/lib/plan";
+import { isPaidProfile, PLAN_COLUMNS } from "@/lib/effective-plan";
 import { stripLocationMarks, teaseLocation } from "@/lib/location-privacy";
 import { genericNames, stripNameMarks } from "@/lib/contact-privacy";
 import { NATIVE_HIDDEN_TYPES } from "@/lib/native-notification-copy";
@@ -73,12 +73,13 @@ export async function sendPushToUser(userId: string, payload: {
   // log only — see the note above.
   const { data: profile } = await admin
     .from("profiles")
-    .select("plan, customization")
+    .select(PLAN_COLUMNS)
     .eq("id", userId)
     .maybeSingle();
   const prefs = readPushPrefs(profile?.customization);
   const plan = (profile?.plan as string | null) ?? "free";
-  const paid = isPaidPlan(plan);
+  // effectivePlan: an expired timed grant is Free now, not at the next cron.
+  const paid = isPaidProfile(profile);
 
   const log = async (outcome: string, endpointCount = 0) => {
     try {

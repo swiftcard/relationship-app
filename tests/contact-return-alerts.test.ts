@@ -176,7 +176,7 @@ describe("a contact's name is Pro, decided on read", () => {
   // used to name, went with Quick Contacts on 2026-09-29).
   it("a Free push for a returning contact opens the card's dashboard, not the contact", () => {
     const src = readFileSync(join(process.cwd(), "src/app/api/card-events/route.ts"), "utf8");
-    expect(src).toMatch(/url: returning && isPaidPlan\(owner\.plan/);
+    expect(src).toMatch(/url: returning && isPaidProfile\(owner\)/);
     expect(src).toMatch(/: `\$\{APP_URL\}\/dashboard\?card=\$\{encodeURIComponent\(card_owner_username\)\}`,/);
     expect(src).not.toMatch(/view=notifications/);
     expect(readFileSync(join(process.cwd(), "src/app/api/push/catchup/route.ts"), "utf8")).not.toMatch(/view=notifications/);
@@ -204,7 +204,7 @@ describe("wired the way the rules assume", () => {
   const catchup = read("src/app/api/push/catchup/route.ts");
 
   it("only a returning, unlocked, known contact is named — and upgrading unlocks it", () => {
-    expect(events).toMatch(/contact\.kind === "known" && isReturnVisit\(contact\) && \(!isLockedContact\(contact\) \|\| isPaidPlan\(owner\.plan as string \| null\)\) \? contact : null/);
+    expect(events).toMatch(/contact\.kind === "known" && isReturnVisit\(contact\) && \(!isLockedContact\(contact\) \|\| isPaidProfile\(owner\)\) \? contact : null/);
   });
 
   it("a returning contact's push opens their contact — under the card they were captured on", () => {

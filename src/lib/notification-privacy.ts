@@ -1,5 +1,5 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
-import { isPaidPlan } from "@/lib/plan";
+import { isPaidProfile, PLAN_COLUMNS } from "@/lib/effective-plan";
 import { hasMarkedPlace, redactLegacyPlace, redactPlaces, stripLocationMarks } from "@/lib/location-privacy";
 import { hasMarkedName, redactNames, stripNameMarks } from "@/lib/contact-privacy";
 
@@ -89,8 +89,9 @@ export function redactForPlan<T extends NotificationRow>(rows: T[], paid: boolea
 export async function isPaidUser(userId: string): Promise<boolean> {
   try {
     const { data } = await getAdminSupabase()
-      .from("profiles").select("plan").eq("id", userId).maybeSingle();
-    return isPaidPlan(data?.plan as string | null);
+      .from("profiles").select(PLAN_COLUMNS).eq("id", userId).maybeSingle();
+    // effectivePlan: an expired timed grant is Free now, not at the next cron.
+    return isPaidProfile(data);
   } catch {
     // Unknown plan: assume FREE. Withholding a place name from a paying
     // customer for one poll is recoverable; handing it to a Free account is the

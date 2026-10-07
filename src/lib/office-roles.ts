@@ -173,6 +173,13 @@ export async function resolveBillingSubjectId(userId: string): Promise<string> {
   return userId;
 }
 
+/** Is this office's OWNER still on a paid Office plan? The offices row outlives
+ *  the subscription on purpose, so membership alone can never answer this. */
+export async function officeOwnerStillOnOffice(ownerId: string): Promise<boolean> {
+  const { data } = await getAdminSupabase().from("profiles").select("plan").eq("id", ownerId).maybeSingle();
+  return isOfficePlan(data?.plan as string | null);
+}
+
 // Authorize: does this user have `cap` in some office? Returns the office context
 // on success, or null on failure (caller returns 403). SERVER-SIDE only.
 export async function requireOfficeCapability(userId: string, cap: Capability): Promise<OfficeContext | null> {
@@ -255,5 +262,8 @@ export async function canViewOfficeAdmin(userId: string, plan: string | null | u
   if (plan !== "enterprise") return false;
   const ctx = await resolveOfficeContext(userId);
   if (!ctx) return true; // Office plan, no office yet → they're the owner-to-be
-  return ctx.isOwner || roleHasCapability(ctx.role, "view_org_analytics");
+  if (ctx.isOwner) return true;
+  // A manager of an office whose OWNER has lapsed sees nothing — the same rule
+  // requireOfficeCapability applies to every office API (2026-10-06).
+  return roleHasCapability(ctx.role, "view_org_analytics") && (await officeOwnerStillOnOffice(ctx.ownerId));
 }

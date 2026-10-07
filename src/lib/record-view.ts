@@ -40,12 +40,17 @@ export async function recordView(opts: {
    *  Defaults false: a caller that does not know must never drop a real visit. */
   identityMinted?: boolean;
   /** True when the request carried a valid sc_vid cookie (visit-identity's
-   *  setCookie === false). Such a row is never given a device key, so the
-   *  device-bucket unique index can't merge it with a different person. */
+   *  setCookie === false). Informational since 2026-10-06: the device key is
+   *  now stored for minted identities only (see viewRow.device_key). */
   identityFromCookie?: boolean;
   /** The known contact this browser is bound to (lib/known-contact.ts), or
    *  null. Stamped as card_views.lead_id — never inferred here. */
   leadId?: string | null;
+  /** When this activity actually HAPPENED, for a request the offline outbox
+   *  kept and replayed later (epoch ms). The row is filed at that time and
+   *  carries no location: the network it arrives on now is not where the
+   *  visitor was then. Null/absent for every live request. */
+  replayAt?: number | null;
   source: string | null;
   ip: string;
 }): Promise<{
@@ -56,7 +61,8 @@ export async function recordView(opts: {
   geo?: GeoResult | null;
   milestone?: MilestoneNotice | null;
 }> {
-  const { req, visitorId, deviceKey = null, identityMinted = false, identityFromCookie = false, leadId = null, source, ip } = opts;
+  const { req, visitorId, deviceKey = null, identityMinted = false, leadId = null, replayAt = null, source, ip } = opts;
+  const happenedAt = replayAt ?? Date.now();
   const username = opts.username.toLowerCase();
 
   // Only record views for cards that actually serve. Blocks spam inflation of
@@ -80,7 +86,12 @@ export async function recordView(opts: {
   // used to be computed and thrown away, which is why a state-level guess and a
   // confirmed town were indistinguishable once stored — see request-geo.ts and
   // lib/location-display.ts.
-  const geo = await resolveGeo(req, ip);
+  const liveGeo = await resolveGeo(req, ip);
+  // A REPLAY KEEPS THE GATES, LOSES THE PLACE (2026-10-06). The hosting check
+  // below still judges the network it arrives on; but that network is where
+  // the phone found signal again, not where the card was opened — so a replayed
+  // row records no location rather than a wrong one.
+  const geo: GeoResult = replayAt ? { ...liveGeo, label: null, accuracy: null, source: null } : liveGeo;
   const location = geo.label;
   const supabase = getAdminSupabase();
 
@@ -102,7 +113,11 @@ export async function recordView(opts: {
   // and — because the per-IP backstop used to live in an `else` — skipped the
   // only other check there was. Now the device key is consulted whenever the
   // identity key found nothing, so a storage-less client is still one visit.
-  const since = new Date(Date.now() - VIEW_VISIT_WINDOW_MS).toISOString();
+  // Around WHEN IT HAPPENED: for a replay that is the original time, so a
+  // request that did land before (its response was what got lost) dedupes
+  // against its own row instead of becoming a second view days later.
+  const since = new Date(happenedAt - VIEW_VISIT_WINDOW_MS).toISOString();
+  const until = new Date(happenedAt + VIEW_VISIT_WINDOW_MS).toISOString();
   const recentBy = async (column: "visitor_id" | "device_key", value: string) => {
     const { data, error } = await supabase
       .from("card_views")
@@ -110,6 +125,7 @@ export async function recordView(opts: {
       .eq("username", username)
       .eq(column, value)
       .gte("viewed_at", since)
+      .lte("viewed_at", until)
       .order("viewed_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -154,7 +170,7 @@ export async function recordView(opts: {
     location,
     visitor_id: visitorId,
     source,
-    viewed_at: new Date().toISOString(),
+    viewed_at: new Date(happenedAt).toISOString(),
     // Added by supabase/analytics-accuracy.sql. The label alone cannot say
     // whether "New York, US" is a city or the state two disagreeing databases
     // fell back to, which is how the Locations tab came to show a region as if
@@ -175,7 +191,14 @@ export async function recordView(opts: {
     // the key, so the second insert hit 23505 and was counted as a duplicate.
     // For a known contact (who always carries the cookie after sharing their
     // details) that swallowed the very visit a re-engagement alert is about.
-    device_key: identityFromCookie ? null : deviceKey,
+    //
+    // 2026-10-06 — NARROWED TO MINTED IDENTITIES ONLY. "No cookie" also covers
+    // every FIRST-TIME visitor: the tracker always hands up its localStorage id
+    // and the cookie only arrives on the response. So two strangers scanning
+    // the same QR in one room for the first time still collided here. The key
+    // now exists only for a browser that could supply no id at all — the case
+    // it was built for, and the same rule the lookup above already uses.
+    device_key: identityMinted ? deviceKey : null,
     // Added by supabase/warm-lead-alerts.sql. Only present when the owner
     // knows who this is, so the anonymous common path never depends on it.
     ...(leadId ? { lead_id: leadId } : {}),

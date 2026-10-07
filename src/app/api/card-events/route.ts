@@ -20,7 +20,8 @@ import { recordView } from "@/lib/record-view";
 import { resolveKnownContact, touchContactDevice } from "@/lib/known-contact";
 import { bindViaLink, isContactToken } from "@/lib/contact-links";
 import { contactReturnNotice, isLockedContact, isReturnVisit } from "@/lib/contact-return-notify";
-import { isPaidPlan } from "@/lib/plan";
+
+import { isPaidProfile } from "@/lib/effective-plan";
 import { isLockedLead } from "@/lib/lead-access";
 import { isPaidUser } from "@/lib/notification-privacy";
 import { notifyVisit, visitKey } from "@/lib/visit-notify";
@@ -78,7 +79,10 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    const card_owner_username = str(body?.card_owner_username, 80);
+    // Lowercased like recordView does: slugs are canonical-lowercase in the DB
+    // (card-slug-format), and the card_events row, its dedupe and isCardActive
+    // must key on the same string the card_views row does.
+    const card_owner_username = str(body?.card_owner_username, 80)?.toLowerCase() ?? null;
     const client_visitor_id = str(body?.visitor_id, 64);
     const event_type = str(body?.event_type, 40);
     const source = str(body?.source, 48);
@@ -116,6 +120,16 @@ export async function POST(req: NextRequest) {
     // client's id is ADOPTED into it on first sight so no existing visitor
     // loses their history, and the device key below covers the browser that
     // can keep neither. See lib/visit-identity.ts.
+    // ── A request the offline outbox kept and is only now delivering ─────────
+    // lib/offline-outbox.ts stamps when it really happened. Trusted only inside
+    // the outbox's own 7-day life and never in the future; anything else is a
+    // live request. A replay is filed at its real time, with no location, and
+    // never pushes once it is older than a visit (2026-10-06 final review).
+    const queuedAt = Number(req.headers.get("x-sc-queued-at"));
+    const replayAt = Number.isFinite(queuedAt) && queuedAt > 0 && queuedAt < Date.now() - 5000 && Date.now() - queuedAt <= 7 * 24 * 3600 * 1000
+      ? queuedAt : null;
+    const staleReplay = replayAt != null && Date.now() - replayAt > VIEW_VISIT_WINDOW_MS;
+
     const visitIdentity = resolveVisitIdentity(req, client_visitor_id);
     const visitor_id = visitIdentity.visitorId;
 
@@ -156,7 +170,16 @@ export async function POST(req: NextRequest) {
     // looped to flood that owner's notifications.
     const ip = clientIp(req)
       ?? "unknown";
-    if (await isRateLimited(`card-events:${ip}:${card_owner_username}`, 20, 10 * 60 * 1000)) {
+    //
+    // ONE BUDGET PER EVENT KIND (2026-10-06). It used to be a single 20-per-10-
+    // minutes pot for everything, keyed only on IP — so on conference Wi-Fi or
+    // an iCloud Private Relay egress, a handful of real people viewing, tapping
+    // links and saving the contact exhausted it and every later real view was
+    // dropped as "rate_limited". Views are already deduped per visitor and
+    // pushes are separately capped per IP per hour, so this only has to stop a
+    // flood, not shape normal traffic.
+    const RATE_BUDGET: Record<string, number> = { viewed_card: 60, clicked_link: 60, downloaded_vcard: 20 };
+    if (await isRateLimited(`card-events:${ip}:${card_owner_username}:${event_type}`, RATE_BUDGET[event_type] ?? 20, 10 * 60 * 1000)) {
       return decided("rate_limited", { rateLimited: true });
     }
 
@@ -270,6 +293,7 @@ export async function POST(req: NextRequest) {
         // carries no device key and can never be merged with someone else's.
         identityFromCookie: !visitIdentity.setCookie,
         leadId: knownLeadId,
+        replayAt,
         source,
         ip,
       });
@@ -286,6 +310,31 @@ export async function POST(req: NextRequest) {
       }
       viewOutcome = "recorded";
       viewGeo = recordedGeo ?? null;
+    } else if (event_type === "downloaded_vcard") {
+      // A SAVE IS ALSO A VIEW (2026-10-06). Scanning the desktop QR (?save=1)
+      // hands the phone the vCard at ~0.7s, the "Add to Contacts" sheet hides
+      // the page, and the tracker's 2.5s visible dwell never completes — so the
+      // owner saw "saved your contact" with no view behind it, and saves could
+      // outnumber views. Anyone who saved the contact opened the page. Same
+      // recorder, same surface key, same dedupe: if the tracker already counted
+      // this visit it is a no-op. It never notifies on its own — the save's
+      // notification below is this visit's one buzz.
+      const viewsKey = surface === "links" ? `${card_owner_username}__links` : card_owner_username;
+      const { outcome, geo: recordedGeo } = await recordView({
+        req,
+        username: viewsKey,
+        visitorId: visitor_id,
+        deviceKey: deviceKeyFor({ ip, userAgent: req.headers.get("user-agent"), username: viewsKey }),
+        identityMinted: visitIdentity.minted,
+        identityFromCookie: !visitIdentity.setCookie,
+        leadId: knownLeadId,
+        replayAt,
+        source,
+        ip,
+      });
+      // Datacenter egress: recordView refused it as hosting — the save is
+      // refused for the same reason just below; reuse its geo either way.
+      if (recordedGeo) viewGeo = outcome === "recorded" ? recordedGeo : null;
     }
 
     // ONE VISIT = ONE EVENT. The same visitor re-touching
@@ -296,7 +345,7 @@ export async function POST(req: NextRequest) {
     // how one visit used to produce duplicate pushes. Uses the same window as
     // /api/views (view-window.ts) so the dashboard, the contact timeline, and
     // the push notification always agree on whether a view happened.
-    const windowStart = new Date(Date.now() - VIEW_VISIT_WINDOW_MS).toISOString();
+    const windowStart = new Date((replayAt ?? Date.now()) - VIEW_VISIT_WINDOW_MS).toISOString();
     if (viewOutcome === "recorded") {
       // Already deduped against card_views above (surface-aware).
     } else if (visitor_id) {
@@ -321,7 +370,11 @@ export async function POST(req: NextRequest) {
       // expression, so a comma or quote inside one would change the query's
       // shape instead of failing to match (the same reasoning the events GET
       // below already spells out).
-      const byTarget = target ? base.eq("target", target) : base.is("target", null);
+      // And the LABEL: link targets are bare hosts, so two different buttons
+      // pointing at zillow.com ("Listings", "Sold homes") share a target and
+      // the second tap was swallowed as a duplicate of the first.
+      const byHost = target ? base.eq("target", target) : base.is("target", null);
+      const byTarget = target_label ? byHost.eq("target_label", target_label) : byHost.is("target_label", null);
       const { data: dup, error: dupErr } = await (
         surface === "card"
           ? byTarget.or("surface.is.null,surface.eq.card")
@@ -348,7 +401,7 @@ export async function POST(req: NextRequest) {
       // per (IP, card, type) per window so a stripped-down client can't spam.
       // The target is part of the key so a visitor with no id can still tap more
       // than one link in half an hour.
-      if (await isRateLimited(`events-anon:${ip}:${card_owner_username}:${event_type}:${target ?? ""}`, 1, VIEW_VISIT_WINDOW_MS)) {
+      if (await isRateLimited(`events-anon:${ip}:${card_owner_username}:${event_type}:${target ?? ""}:${target_label ?? ""}`, 1, VIEW_VISIT_WINDOW_MS)) {
         return decided("deduped", { deduped: true }, { classificationReason: "no_visitor_id_ip_window" });
       }
     }
@@ -382,8 +435,24 @@ export async function POST(req: NextRequest) {
     // For a view this is the IDENTICAL object recordView used, so the two rows
     // cannot drift. For a vCard save (which records no view) it is resolved
     // here, and the per-IP cache in request-geo makes that a cache hit anyway.
-    const geo = viewGeo ?? (await resolveGeo(req, ip));
+    const liveGeo = viewGeo ?? (await resolveGeo(req, ip));
+    // A replay records no place (see replayAt above); the hosting gate below
+    // still judges the network the request actually arrived on.
+    const geo: GeoResult = replayAt ? { ...liveGeo, label: null, accuracy: null, source: null } : liveGeo;
     const location = geo.label;
+
+    // DATACENTER TRAFFIC IS NOT A PERSON — for taps and saves too (2026-10-06).
+    // recordView has always refused cloud-hosting egress for views; a link tap
+    // or a vCard download from the same render farm still recorded, and a save
+    // sends the owner a "saved your contact" push. Same gate, same reason.
+    if (!viewGeo && liveGeo.isHosting) {
+      return decided("hosting", { hosting: true }, {
+        geoAccuracy: geo.accuracy,
+        geoSource: geo.source,
+        isRelay: geo.isRelay,
+        classificationReason: "cloud_hosting_egress",
+      });
+    }
 
     const row = {
       card_owner_username,
@@ -399,7 +468,7 @@ export async function POST(req: NextRequest) {
       // Explicit, like card_views.viewed_at — the dedup window above and the
       // conversation sort both filter on this; no dependency on a column
       // DEFAULT existing in production.
-      created_at: new Date().toISOString(),
+      created_at: new Date(replayAt ?? Date.now()).toISOString(),
       // ── The columns supabase/analytics-accuracy.sql adds ──────────────────
       // WHICH PAGE. Without this, card_events could not tell a Swift Links view
       // from a card view: the visit-bucket unique index rejected the second
@@ -484,10 +553,13 @@ export async function POST(req: NextRequest) {
       // table first (multi-card accounts), then the legacy profile slug.
       const { data: cardRow } = await admin.from("cards").select("user_id").eq("username", card_owner_username).maybeSingle();
       const { data: owner } = cardRow?.user_id
-        ? await admin.from("profiles").select("id, plan, customization").eq("id", cardRow.user_id).maybeSingle()
-        : await admin.from("profiles").select("id, plan, customization").eq("username", card_owner_username).maybeSingle();
+        ? await admin.from("profiles").select("id, plan, customization, plan_expires_at, stripe_subscription_id").eq("id", cardRow.user_id).maybeSingle()
+        : await admin.from("profiles").select("id, plan, customization, plan_expires_at, stripe_subscription_id").eq("username", card_owner_username).maybeSingle();
 
-      if (owner?.id) {
+      // Days-old news is not a lock-screen moment: a stale replay is recorded
+      // (the chart and the contact timeline are true) but never notifies.
+      if (staleReplay) notified = "suppressed";
+      if (owner?.id && !staleReplay) {
         const isView = event_type === "viewed_card";
 
         // Is this the very first view this card has ever had?
@@ -521,24 +593,33 @@ export async function POST(req: NextRequest) {
         // one buzz. Every notifyVisit below uses this key, so a milestone or a
         // download in the same visit upgrades the same row.
         const returning =
-          contact.kind === "known" && isReturnVisit(contact) && (!isLockedContact(contact) || isPaidPlan(owner.plan as string | null)) ? contact : null;
+          contact.kind === "known" && isReturnVisit(contact) && (!isLockedContact(contact) || isPaidProfile(owner)) ? contact : null;
         const visitWho = returning ? `lead:${returning.leadId}` : visitor_id;
         let returnNotice: ReturnType<typeof contactReturnNotice> = null;
         if (returning) {
           // "3rd visit this week": distinct visits, all of their browsers — the
           // card_views rows this contact's lead_id is stamped on.
-          const { count, error: visitsErr } = await admin
+          //
+          // VISITS, NOT ROWS (2026-10-06). Opening the card and then the Swift
+          // Links page in one sitting writes two rows (one per surface), which
+          // read as "2nd visit". Rows in the same 30-minute visit bucket — the
+          // same bucket card_view_bucket() uses — are one visit.
+          const { data: visitRows, error: visitsErr } = await admin
             .from("card_views")
-            .select("id", { count: "exact", head: true })
+            .select("viewed_at")
             .eq("lead_id", returning.leadId)
-            .gte("viewed_at", new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString());
+            .gte("viewed_at", new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString())
+            .limit(500);
+          const count = new Set(
+            (visitRows ?? []).map((r) => Math.floor(new Date(r.viewed_at as string).getTime() / VIEW_VISIT_WINDOW_MS)),
+          ).size;
           returnNotice = contactReturnNotice({
             contact: returning,
             eventType: event_type as "viewed_card" | "downloaded_vcard" | "clicked_link",
             surface,
             linkName: target_label ?? target,
             visitsThisWeek: visitsErr ? 1 : Math.max(count ?? 1, 1),
-            paid: isPaidPlan(owner.plan as string | null),
+            paid: isPaidProfile(owner),
           });
         }
 
@@ -559,7 +640,7 @@ export async function POST(req: NextRequest) {
           nameConfirmed: !!sessionViewer,
           // A locked contact on Free falls through to here (returning is null
           // above) — and used to be named in full.
-          nameLocked: !!ownersOwnContact && isLockedContact(ownersOwnContact) && !isPaidPlan(owner.plan as string | null),
+          nameLocked: !!ownersOwnContact && isLockedContact(ownersOwnContact) && !isPaidProfile(owner),
           repeatVisits: isView && !firstEver && !returning && visitor_id
             ? await countRecentVisits(admin, card_owner_username, visitor_id, surface)
             : undefined,
@@ -652,7 +733,7 @@ export async function POST(req: NextRequest) {
               // card's dashboard, where the row waits in the bell with the name
               // still blurred (the dashboard's own notifications list went with
               // Quick Contacts, 2026-09-29).
-              url: returning && isPaidPlan(owner.plan as string | null)
+              url: returning && isPaidProfile(owner)
                 // The contact lives under the card they were CAPTURED on,
                 // which may be another of this owner's cards: opening it
                 // under this card showed a contact missing from that card's
@@ -739,7 +820,11 @@ export async function POST(req: NextRequest) {
                 // Who just visited, the number they took the card past, and one
                 // thing to go and do about it. The third sentence is the reason
                 // a milestone is worth writing at all — see lib/milestones.ts.
-                body: `${notice.body} That's ${milestone.reached.toLocaleString("en-US")} views on /${milestone.slug}. ${milestone.body}`,
+                // "across your card and Swift Links" because that is what the
+                // number counts (lib/milestones.ts sums both surfaces) — the
+                // dashboard shows them split, so "views on /slug" named a total
+                // the owner could find nowhere (2026-10-06 final review).
+                body: `${notice.body} That's ${milestone.reached.toLocaleString("en-US")} views across your card and Swift Links. ${milestone.body}`,
                 url: `${APP_URL}/dashboard?card=${encodeURIComponent(card_owner_username)}`,
               },
             });
@@ -807,6 +892,17 @@ export async function GET(req: NextRequest) {
       }
       visitorId = (lead.visitor_id as string | null) ?? null;
       leadCreatedAt = (lead.created_at as string | null) ?? null;
+    } else if (visitorId && !(await isPaidUser(user.id))) {
+      // The older visitor-id path gets the SAME lock (2026-10-06): a Free
+      // account asking by browser id must not read the activity of a contact
+      // it can't see on the lead_id path.
+      const { data: sameBrowser } = await admin
+        .from("leads")
+        .select("tags")
+        .in("card_owner", usernames)
+        .eq("visitor_id", visitorId)
+        .limit(20);
+      if ((sameBrowser ?? []).some((l) => isLockedLead(l))) return NextResponse.json([], { status: 200 });
     }
 
     // WHAT COUNTS AS THIS CONTACT'S ACTIVITY (2026-09-23 audit: the section
