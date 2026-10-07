@@ -772,10 +772,20 @@ FLOWS["create-link"] = async () => {
       const root = document.querySelector(`${sel} [data-create-preview]`)?.shadowRoot;
       return root ? { text: root.textContent || "", hrefs: Array.from(root.querySelectorAll("a")).map((a) => a.getAttribute("href")), imgs: Array.from(root.querySelectorAll("img")).map((i) => i.getAttribute("src")) } : null;
     }, side);
-    const share = preview?.hrefs?.[0] || "";
+    // On screen the owner's preview opens the share link through /api/self-view
+    // (their own click is never a view); the share link itself is its `to`.
+    const shown = preview?.hrefs?.[0] || "";
+    let share = shown;
+    let hop = null;
+    try {
+      const u = new URL(shown);
+      if (u.pathname === "/api/self-view") { hop = u; share = `${u.origin}${u.searchParams.get("to") || ""}`; }
+    } catch {}
     const m = new RegExp(`^${BASE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/${uname}/p/(\\d{13}[jpg])$`).exec(share);
     if (!preview || !preview.text.includes("QA Signature Name")) fail("create-link", "the linked preview lost the signature's words");
-    else if (!m) fail("create-link", `every part should open a /${uname}/p/<id> share link — got ${JSON.stringify(share)} (the preview picture was not made?)`);
+    else if (!m) fail("create-link", `every part should open a /${uname}/p/<id> share link — got ${JSON.stringify(shown)} (the preview picture was not made?)`);
+    else if (!hop && /swiftcard\.me/.test(BASE)) fail("create-link", `the preview opens the share link directly, not through /api/self-view — the owner's own click would count as a view (${JSON.stringify(shown)})`);
+    else if (hop && !hop.searchParams.get("t")) fail("create-link", `the preview's /api/self-view link carries no owner token: ${JSON.stringify(shown)}`);
     else if (new Set(preview.hrefs).size !== 1) fail("create-link", `parts open different links: ${JSON.stringify([...new Set(preview.hrefs)])}`);
     else if (preview.hrefs.some((h) => h.includes("example.com"))) fail("create-link", "an old link survived");
     else if (!preview.imgs.every((s) => /^https:\/\//.test(s || ""))) fail("create-link", `a pasted picture was not stored: ${JSON.stringify(preview.imgs)}`);
@@ -792,6 +802,11 @@ FLOWS["create-link"] = async () => {
     else if (share && (!clip.html.includes(`href="${share}"`) || clip.text !== share)) fail("create-link", `the clipboard doesn't carry the linked signature + its share link (text: ${JSON.stringify(clip.text)})`);
     // The share link: the card, with the linked picture as its link preview.
     if (m) {
+      if (hop) {
+        const via = await page.request.get(shown, { maxRedirects: 0 });
+        const to = via.headers()["location"] || "";
+        if (via.status() !== 303 || new URL(to, shown).pathname !== `/${uname}/p/${m[1]}`) fail("create-link", `the preview's self-view hop answered ${via.status()} → ${JSON.stringify(to)} instead of the share link`);
+      }
       const res = await page.request.get(share);
       const html = await res.text();
       const og = /<meta property="og:image" content="([^"]+)"/.exec(html)?.[1]?.replace(/&amp;/g, "&");
