@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { DEVICE_COOKIE, DEVICE_COOKIE_MAX_AGE, DEVICE_LIMIT, deviceLabel, isDeviceId, newDeviceId } from "@/lib/device";
 import { COOKIE_MAX_AGE, SRC_COOKIE, isSignupSource } from "@/lib/referral";
+import { resolveDownloadTarget } from "@/lib/download-link";
 
 // See the soft-delete guard below for why this exists and why 60s is safe.
 const deletedCheckCache = new Map<string, { deleted: boolean; at: number }>();
@@ -31,6 +32,36 @@ export async function proxy(request: NextRequest) {
     const shell = (request.headers.get("user-agent") ?? "").includes("SwiftCardApp") ||
       request.cookies.get("sc_shell")?.value === "1";
     return shell ? NextResponse.redirect(new URL("/dashboard", request.url)) : NextResponse.next();
+  }
+
+  // /download — the smart store link (lib/download-link). Decided here, on the
+  // User-Agent, before any HTML: an iPhone or Android visitor gets a 307
+  // straight to its store with the link's utm/query tags carried across, so
+  // the phone never paints a page and then jumps. Everything else — a
+  // computer, an unknown or missing UA, a crawler or link unfurler, a device
+  // whose store URL is not configured — falls through to the static page at
+  // src/app/download/page.tsx, which shows both stores. Same shape as /pricing
+  // above: no auth work, so the website's other routes are untouched.
+  //
+  // The native shell is sent to /dashboard like /pricing: "get the app" from
+  // inside the app is at best a no-op and at worst a trip to the App Store.
+  //
+  // Loop-proof by construction: the only redirect targets are the two store
+  // origins (lib/app-store), and a target on OUR origin is refused and shown
+  // the page instead — a misconfigured env var can never bounce /download to
+  // /download. `no-store` keeps a device-specific 307 out of any shared cache.
+  if (request.nextUrl.pathname === "/download") {
+    const shell = (request.headers.get("user-agent") ?? "").includes("SwiftCardApp") ||
+      request.cookies.get("sc_shell")?.value === "1";
+    // (Before any session work, so there are no rotated cookies to carry —
+    // the plain redirect is correct here, as it is for /pricing.)
+    const dashboard = new URL("/dashboard", request.url);
+    if (shell) return NextResponse.redirect(dashboard);
+    const target = resolveDownloadTarget(request.headers.get("user-agent"), request.nextUrl.search);
+    if (!target || new URL(target).origin === request.nextUrl.origin) return NextResponse.next();
+    const res = NextResponse.redirect(target, 307);
+    res.headers.set("Cache-Control", "private, no-store");
+    return res;
   }
 
   let supabaseResponse = NextResponse.next({ request });
@@ -336,6 +367,8 @@ export const config = {
     "/checkout/:path*",
     "/join/:path*",
     "/share/:path*",
+    // The smart store link: phones are redirected before any HTML (see top).
+    "/download",
     // App requests only: redirected to /dashboard before any HTML (see top).
     "/pricing",
   ],

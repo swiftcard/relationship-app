@@ -290,3 +290,11 @@
    data-acct-ready once it knows (or gives up). Signed out, or with no JS,
    nothing here applies and the static page shows as-is. */
 html[data-sc-authed] [data-acct-gate]:not([data-acct-ready]) { visibility: hidden; }
+
+/* swiftcard.me/download shows BOTH stores. The site rule in globals.css hides
+   one store per visitor (data-sc-os), but this page is where someone came to
+   download for a phone the page cannot see — so both badges stay visible here
+   and nowhere else (see src/app/download/page.tsx). Same !important weight,
+   more specificity, so it wins regardless of stylesheet order. */
+:root .hp-download-stores .sc-appstore-badge.sc-store-play,
+:root .hp-download-stores .sc-appstore-badge.sc-store-apple { display: inline-flex !important; }
