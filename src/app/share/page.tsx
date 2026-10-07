@@ -1,13 +1,10 @@
 import { redirect } from "next/navigation";
 import { awaitingPlanChoice } from "@/lib/card-active";
 import { cookies } from "next/headers";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
-import { SwiftCardIcon } from "@/components/SwiftCardLogo";
-import DashboardLink from "@/components/DashboardLink";
-import GrowLinkButton from "@/components/GrowLinkButton";
-import SettingsLinkButton from "@/components/SettingsLinkButton";
+import AppTopNav from "@/components/AppTopNav";
+import { isAdminEmail } from "@/lib/admin";
 import MobileNavGate from "@/components/MobileNavGate";
 import HelpWidget from "@/components/HelpWidget";
 import CopyButton from "@/components/CopyButton";
@@ -108,6 +105,8 @@ export default async function SharePage({
   // resolveOfficeContext is per-request cached and already warm from the batch
   // above, so this is effectively free.
   const showOfficeAdmin = await canViewOfficeAdmin(user.id, profile.plan);
+  // The site-owner console tab ("Site"), on this page's bar as on every other.
+  const showSite = isAdminEmail(user.email);
 
   const cardUrl = `${APP_URL}/${activeUsername}?source=email_signature`;
   const swiftUrl = `${APP_URL}/links/${activeUsername}`;
@@ -125,48 +124,22 @@ export default async function SharePage({
 
   return (
     <main className="sc-app min-h-screen bg-gray-950 px-5 py-10 pb-24 md:pb-10">
-      <MobileNavGate showAdmin={showOfficeAdmin} />
+      <MobileNavGate showAdmin={showOfficeAdmin} showSite={showSite} />
       <HelpWidget floating member={!!officeSubUser} />
 
       {/* Top accent stripe */}
       <div className="sc-top-stripe fixed top-0 left-0 right-0 z-40 h-0.5 bg-gradient-to-r from-blue-600 via-violet-500 to-blue-400" />
 
-      {/* Sticky nav */}
-      <nav className="sc-app fixed top-0.5 left-0 right-0 z-30 bg-gray-950/95 backdrop-blur border-b border-gray-800/60">
-        <div className="max-w-5xl mx-auto px-5 h-14 flex items-center justify-between gap-4">
-          <DashboardLink className="flex items-center gap-2 shrink-0">
-            <SwiftCardIcon size={28} />
-            <span className="font-bold text-white text-sm tracking-tight hidden sm:block">SwiftCard</span>
-          </DashboardLink>
-
-          <div className="hidden md:flex items-center gap-0.5">
-            <DashboardLink className="text-sm px-3 py-1.5 rounded-lg transition-colors text-gray-400 hover:text-white hover:bg-gray-800/60">
-              Dashboard
-            </DashboardLink>
-            {[
-              { href: "/contacts", label: "Contacts", active: false },
-              { href: "/share", label: "Links", active: true },
-            ].map(({ href, label, active }) => (
-              <Link key={href} href={href}
-                className={`text-sm px-3 py-1.5 rounded-lg transition-colors ${active ? "text-white font-medium bg-gray-800" : "text-gray-400 hover:text-white hover:bg-gray-800/60"}`}>
-                {label}
-              </Link>
-            ))}
-            {showOfficeAdmin && (
-              <Link href="/office/admin" className="text-sm text-purple-400 hover:text-purple-300 hover:bg-gray-800/60 px-3 py-1.5 rounded-lg transition-colors font-medium">
-                Admin
-              </Link>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Mobile has Settings in the bottom tab bar — hide the top-bar gear below md, same as the dashboard. */}
-            <span className="hidden md:flex items-center"><SettingsLinkButton /></span>
-            {!officeSubUser && <GrowLinkButton />}
-            <DashboardLink className="text-sm text-gray-500 hover:text-white transition-colors">← Dashboard</DashboardLink>
-          </div>
-        </div>
-      </nav>
+      {/* Sticky nav — the one every app page shares (AppTopNav). No
+          "← Dashboard" beside the logo and the Dashboard tab any more: they
+          already go there, and so does the Home tab on a phone. */}
+      <AppTopNav
+        active="links"
+        card={activeUsername}
+        showAdmin={showOfficeAdmin}
+        showSite={showSite}
+        showGrow={!officeSubUser}
+      />
 
       {/* Ensure the page reflects the currently selected card when the URL
           didn't carry one. */}

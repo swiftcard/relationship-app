@@ -46,13 +46,12 @@ function srcFiles(dir = join(root, "src"), out: string[] = []): string[] {
  *   data-tour={tour}            — MobileNav maps over a config array whose
  *                                 entries carry `tour: "nav-contacts"`
  *
- * Deliberate limitation: src/app/dashboard/page.tsx:616 builds its desktop nav
- * anchors as `data-tour={`nav-${label.toLowerCase()}`}`, which no static scan
- * can resolve. Those three (nav-dashboard/-contacts/-links) are still covered
- * here because MobileNav declares the same anchors as literals — every one of
- * them renders in BOTH navs. If a future anchor exists ONLY as a computed
- * string, this test cannot see it and will report a false failure; the fix then
- * is to give it a literal, not to weaken this.
+ * Deliberate limitation: an anchor built as a computed string (the dashboard's
+ * desktop nav once used `data-tour={`nav-${label.toLowerCase()}`}`) is
+ * invisible to a static scan. The shared top bar (AppTopNav) now writes every
+ * nav anchor as a literal, as MobileNav does. If a future anchor exists ONLY as
+ * a computed string, this test cannot see it and will report a false failure;
+ * the fix then is to give it a literal, not to weaken this.
  */
 const anchorIndex: Map<string, string[]> = (() => {
   const index = new Map<string, string[]>();

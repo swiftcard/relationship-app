@@ -22,8 +22,7 @@ import GuestDraftClaim from "@/components/GuestDraftClaim";
 import { SwiftCardIcon } from "@/components/SwiftCardLogo";
 import UpgradeButton from "@/components/UpgradeButton";
 import ShareButton from "@/components/ShareButton";
-import GrowLinkButton from "@/components/GrowLinkButton";
-import SettingsLinkButton from "@/components/SettingsLinkButton";
+import AppTopNav from "@/components/AppTopNav";
 import ShareCardCapture from "@/components/ShareCardCapture";
 import TrafficChart from "@/components/TrafficChart";
 import TimezoneCookie from "@/components/TimezoneCookie";
@@ -878,68 +877,28 @@ export default async function DashboardPage({
       {/* Top accent stripe */}
       <div className="sc-top-stripe fixed top-0 left-0 right-0 z-40 h-0.5 bg-gradient-to-r from-blue-600 via-violet-500 to-blue-400" />
 
-      {/* Sticky navbar */}
-      <nav className="sc-app fixed top-0.5 left-0 right-0 z-30 bg-gray-950/95 backdrop-blur border-b border-gray-800/60">
-        <div className="max-w-5xl mx-auto px-5 h-14 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 shrink-0">
-            <Link href={`/dashboard?card=${activeUsername}`} className="flex items-center gap-2">
-              <SwiftCardIcon size={28} />
-              <span className="font-bold text-white text-sm tracking-tight hidden sm:block">SwiftCard</span>
-            </Link>
-            {isEnterprise ? (
-              <span className="text-[0.625rem] font-bold px-2 py-0.5 rounded-full bg-purple-600 text-white">Office</span>
-            ) : (
-              <span className={`text-[0.625rem] font-bold px-2 py-0.5 rounded-full ${isPro ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400"}`}>
-                {isPro ? "Pro" : "Free"}
-              </span>
-            )}
-          </div>
-
-          <div className="hidden md:flex items-center gap-0.5">
-            {[
-              { href: `/dashboard?card=${activeUsername}`, label: "Dashboard", active: true },
-              { href: `/contacts?card=${activeUsername}`, label: "Contacts", active: false },
-              { href: `/share?card=${activeUsername}`, label: "Links", active: false },
-            ].map(({ href, label, active }) => (
-              <Link key={href} href={href} data-tour={`nav-${label.toLowerCase()}`}
-                className={`text-sm px-3 py-1.5 rounded-lg transition-colors ${active ? "text-white font-medium bg-gray-800" : "text-gray-400 hover:text-white hover:bg-gray-800/60"}`}>
-                {label}
-              </Link>
-            ))}
-            {canSeeOfficeAdmin && (
-              <Link href="/office/admin" data-tour="nav-admin" className="text-sm text-purple-400 hover:text-purple-300 hover:bg-gray-800/60 px-3 py-1.5 rounded-lg transition-colors font-medium">
-                Admin
-              </Link>
-            )}
-            {/* Site-owner console — a different thing entirely from the Office
-                "Admin" above, so it's labelled separately to keep them apart. */}
-            {isAdmin && (
-              <Link href="/admin" className="text-sm text-blue-400 hover:text-blue-300 hover:bg-gray-800/60 px-3 py-1.5 rounded-lg transition-colors font-medium">
-                Site
-              </Link>
-            )}
-          </div>
-
-          {/* Sign out used to end this cluster; it now lives in Settings →
-              Profile, where it is confirmed before it fires. With the button
-              and its divider gone, these icons are the last thing in the bar,
-              so -mr-1.5 pulls them back out to the container's right edge:
-              each icon sits centred in a 36px hit target with ~6px of visual
-              padding, which without the nudge reads as a gap the logo on the
-              left does not have. Small on purpose — the tap targets stay
-              whole and inside the nav. */}
-          <div className="flex items-center gap-2 shrink-0 -mr-1.5">
-            {/* Mobile already has Settings in the bottom tab bar (MobileNav) —
-                same /settings/flows destination — so this top-bar gear is
-                redundant clutter on small screens; keep it for desktop, which
-                has no bottom tab bar. */}
-            <span data-tour="nav-settings" className="hidden md:flex items-center"><SettingsLinkButton /></span>
-            {!isOfficeMember && <span data-tour="nav-grow" className="flex items-center"><GrowLinkButton /></span>}
-            <span data-tour="theme" className="flex items-center"><ThemeToggle /></span>
-            <span data-tour="notif-bell" className="flex items-center"><NotificationBell initialNotifications={bellNotifications ?? []} cardLabels={cardLabels} /></span>
-          </div>
-        </div>
-      </nav>
+      {/* Sticky navbar — the one every app page shares (AppTopNav). The
+          dashboard adds its plan badge by the logo, and the theme toggle and
+          notification bell at the end of the right-hand cluster. Sign out
+          lives in Settings → Profile, where it is confirmed before it fires. */}
+      <AppTopNav
+        active="dashboard"
+        card={activeUsername}
+        showAdmin={canSeeOfficeAdmin}
+        showSite={isAdmin}
+        showGrow={!isOfficeMember}
+        badge={isEnterprise ? (
+          <span className="text-[0.625rem] font-bold px-2 py-0.5 rounded-full bg-purple-600 text-white">Office</span>
+        ) : (
+          <span className={`text-[0.625rem] font-bold px-2 py-0.5 rounded-full ${isPro ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400"}`}>
+            {isPro ? "Pro" : "Free"}
+          </span>
+        )}
+        extras={<>
+          <span data-tour="theme" className="flex items-center"><ThemeToggle /></span>
+          <span data-tour="notif-bell" className="flex items-center"><NotificationBell initialNotifications={bellNotifications ?? []} cardLabels={cardLabels} /></span>
+        </>}
+      />
 
       <MobileNavGate showAdmin={canSeeOfficeAdmin} showSite={isAdmin} />
       <HelpWidget floating member={isOfficeMember} />

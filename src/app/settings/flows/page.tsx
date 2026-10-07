@@ -21,10 +21,8 @@ import NativeHidden from "@/components/NativeHidden";
 import { APP_STORE_URL, APP_STORE_WRITE_REVIEW_URL, PLAY_STORE_URL } from "@/lib/app-store";
 import RateUsLink from "@/components/RateUsLink";
 import AppStoreBadge, { GooglePlayBadge } from "@/components/AppStoreBadge";
-import { SwiftCardIcon } from "@/components/SwiftCardLogo";
-import DashboardLink from "@/components/DashboardLink";
-import GrowLinkButton from "@/components/GrowLinkButton";
-import SettingsLinkButton from "@/components/SettingsLinkButton";
+import AppTopNav from "@/components/AppTopNav";
+import { isAdminEmail } from "@/lib/admin";
 import { ensureUserCards } from "@/lib/ensure-cards";
 import { parseCardScope } from "@/lib/crm-scope";
 import MobileNavGate from "@/components/MobileNavGate";
@@ -126,9 +124,10 @@ export default async function FlowSettingsPage({
   // own cards): a bare /share could come back from the client router cache
   // rendered for another card (isolation audit 2026-09-24).
   const activeCookie = (await cookies()).get(ACTIVE_CARD_COOKIE)?.value ?? null;
-  const shareHref = activeCookie && (cards ?? []).some((c) => c.username === activeCookie)
-    ? `/share?card=${encodeURIComponent(activeCookie)}`
-    : "/share";
+  const navCard = activeCookie && (cards ?? []).some((c) => c.username === activeCookie) ? activeCookie : null;
+  const shareHref = navCard ? `/share?card=${encodeURIComponent(navCard)}` : "/share";
+  // The site-owner console tab ("Site"), on this page's bar as on every other.
+  const showSite = isAdminEmail(user.email);
 
   // These two need profile.plan, so they follow the batch — together, one trip.
   const [officeCtx, isOfficeAdmin] = await Promise.all([
@@ -529,50 +528,20 @@ export default async function FlowSettingsPage({
 
   return (
     <main className="sc-app min-h-screen bg-gray-950 px-5 py-10 pb-24 md:pb-10">
-      <MobileNavGate showAdmin={isOfficeAdmin} />
+      <MobileNavGate showAdmin={isOfficeAdmin} showSite={showSite} />
 
       {/* Top accent stripe */}
       <div className="sc-top-stripe fixed top-0 left-0 right-0 z-40 h-0.5 bg-gradient-to-r from-blue-600 via-violet-500 to-blue-400" />
 
-      {/* Sticky nav */}
-      <nav className="sc-app fixed top-0.5 left-0 right-0 z-30 bg-gray-950/95 backdrop-blur border-b border-gray-800/60">
-        <div className="max-w-5xl mx-auto px-5 h-14 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 shrink-0">
-            <DashboardLink className="flex items-center gap-2">
-              <SwiftCardIcon size={28} />
-              <span className="font-bold text-white text-sm tracking-tight hidden sm:block">SwiftCard</span>
-            </DashboardLink>
-          </div>
-
-          <div className="hidden md:flex items-center gap-0.5">
-            <DashboardLink className="text-sm px-3 py-1.5 rounded-lg transition-colors text-gray-400 hover:text-white hover:bg-gray-800/60">
-              Dashboard
-            </DashboardLink>
-            {[
-              { href: "/contacts",  label: "Contacts" },
-              { href: shareHref, label: "Links" },
-            ].map(({ href, label }) => (
-              <Link key={href} href={href}
-                className="text-sm px-3 py-1.5 rounded-lg transition-colors text-gray-400 hover:text-white hover:bg-gray-800/60">
-                {label}
-              </Link>
-            ))}
-            {isOfficeAdmin && (
-              <Link href="/office/admin" className="text-sm text-purple-400 hover:text-purple-300 hover:bg-gray-800/60 px-3 py-1.5 rounded-lg transition-colors font-medium">
-                Admin
-              </Link>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <SettingsLinkButton />
-            {!isOfficeSubUser && <GrowLinkButton />}
-            <DashboardLink className="text-sm text-gray-500 hover:text-white transition-colors">
-              ← Dashboard
-            </DashboardLink>
-          </div>
-        </div>
-      </nav>
+      {/* Sticky nav — the one every app page shares (AppTopNav). No
+          "← Dashboard" beside the logo and the Dashboard tab any more: they
+          already go there, and so does the Home tab on a phone. */}
+      <AppTopNav
+        card={navCard}
+        showAdmin={isOfficeAdmin}
+        showSite={showSite}
+        showGrow={!isOfficeSubUser}
+      />
 
       <div className="max-w-4xl mx-auto pt-20">
         <div className="mb-8">

@@ -2,10 +2,10 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
 import { getReferralProgress } from "@/lib/referral-server";
-import { getOfficeSubUserContext } from "@/lib/office-roles";
+import { canViewOfficeAdmin, getOfficeSubUserContext } from "@/lib/office-roles";
+import { isAdminEmail } from "@/lib/admin";
 import { publicCardSlug } from "@/lib/owner-usernames";
-import { SwiftCardIcon } from "@/components/SwiftCardLogo";
-import DashboardLink from "@/components/DashboardLink";
+import AppTopNav from "@/components/AppTopNav";
 import MobileNavGate from "@/components/MobileNavGate";
 import HelpWidget from "@/components/HelpWidget";
 import ReferAFriend from "@/components/ReferAFriend";
@@ -13,7 +13,6 @@ import NativeHidden from "@/components/NativeHidden";
 import RateUsCard from "@/components/RateUsCard";
 import { APP_STORE_ID } from "@/lib/app-store";
 import GrowShare from "@/components/GrowShare";
-import SettingsLinkButton from "@/components/SettingsLinkButton";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
@@ -43,7 +42,12 @@ export default async function GrowPage() {
   // enforced here so the page can't be opened by URL.
   if (await getOfficeSubUserContext(user.id)) redirect("/dashboard");
 
-  const referral = await getReferralProgress(user.id);
+  const [referral, showOfficeAdmin] = await Promise.all([
+    getReferralProgress(user.id),
+    canViewOfficeAdmin(user.id, profile.plan),
+  ]);
+  // The site-owner console tab ("Site"), on this page's bar as on every other.
+  const showSite = isAdminEmail(user.email);
   const inviteLink = referral?.code ? `${APP_URL}/r/${referral.code}` : APP_URL;
 
   const secondary: { label: string; sub: string; href: string; external?: boolean; icon: React.ReactNode }[] = [
@@ -71,44 +75,16 @@ export default async function GrowPage() {
 
   return (
     <main className="sc-app min-h-screen bg-gray-950 px-5 py-10 pb-24 md:pb-10">
-      <MobileNavGate />
+      <MobileNavGate showAdmin={showOfficeAdmin} showSite={showSite} />
       <HelpWidget floating />
 
       {/* Top accent stripe */}
       <div className="sc-top-stripe fixed top-0 left-0 right-0 z-40 h-0.5 bg-gradient-to-r from-blue-600 via-violet-500 to-blue-400" />
 
-      {/* Sticky nav */}
-      <nav className="sc-app fixed top-0.5 left-0 right-0 z-30 bg-gray-950/95 backdrop-blur border-b border-gray-800/60">
-        <div className="max-w-5xl mx-auto px-5 h-14 flex items-center justify-between gap-4">
-          <DashboardLink className="flex items-center gap-2 shrink-0">
-            <SwiftCardIcon size={28} />
-            <span className="font-bold text-white text-sm tracking-tight hidden sm:block">SwiftCard</span>
-          </DashboardLink>
-
-          <div className="hidden md:flex items-center gap-0.5">
-            <DashboardLink className="text-sm px-3 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/60 transition-colors">
-              Dashboard
-            </DashboardLink>
-            {[
-              { href: "/contacts", label: "Contacts" },
-              { href: "/share", label: "Links" },
-            ].map(({ href, label }) => (
-              <Link key={href} href={href}
-                className="text-sm px-3 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800/60 transition-colors">
-                {label}
-              </Link>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Mobile has Settings in the bottom tab bar — hide the top-bar gear below md, same as the dashboard. */}
-            <span className="hidden md:flex items-center"><SettingsLinkButton /></span>
-            <DashboardLink className="text-sm text-gray-500 hover:text-white transition-colors">
-              ← Dashboard
-            </DashboardLink>
-          </div>
-        </div>
-      </nav>
+      {/* Sticky nav — the one every app page shares (AppTopNav). This
+          page's copy had no "Admin" and a "← Dashboard" beside the logo and
+          the Dashboard tab, which already go there. */}
+      <AppTopNav showAdmin={showOfficeAdmin} showSite={showSite} showGrow />
 
       <div className="max-w-sm mx-auto pt-20">
         {/* Header */}

@@ -7,15 +7,13 @@ import ContactsClient from "@/components/ContactsClient";
 import MobileNavGate from "@/components/MobileNavGate";
 import HelpWidget from "@/components/HelpWidget";
 import { ensureUserCards } from "@/lib/ensure-cards";
-import { SwiftCardIcon } from "@/components/SwiftCardLogo";
-import GrowLinkButton from "@/components/GrowLinkButton";
-import SettingsLinkButton from "@/components/SettingsLinkButton";
+import AppTopNav from "@/components/AppTopNav";
+import { isAdminEmail } from "@/lib/admin";
 import { LOCKED_LEAD_TAG, PLAN_LIMITS } from "@/lib/plan";
 import { isPaidProfile } from "@/lib/effective-plan";
 import { redactPlaceLabel } from "@/lib/location-privacy";
 import UpgradeButton from "@/components/UpgradeButton";
 import { canViewOfficeAdmin, getOfficeSubUserContext } from "@/lib/office-roles";
-import Link from "next/link";
 import DownloadLink from "@/components/DownloadLink";
 import { PlanGate, PlanNotice } from "@/components/PlanGate";
 import { IapProPill } from "@/components/NativePaywall";
@@ -160,13 +158,13 @@ export default async function ContactsPage({
   // showOfficeAdmin resolved in the batch above — the same gate the
   // /office/admin page itself applies, kept for the app-shell "Admin" item.
 
-  // Carry the selected card back to the dashboard so it doesn't flip to the first card.
+  // Carry the selected card back to the dashboard so it doesn't flip to the
+  // first card. Links names its card too (AppTopNav): a bare /share could come
+  // back from the client router cache still rendered for the card viewed
+  // before (isolation audit 2026-09-24).
   const dashCard = selectedCardParam ?? cardList[0]?.username;
-  const dashHref = dashCard ? `/dashboard?card=${dashCard}` : "/dashboard";
-  // Links names its card too: a bare /share could come back from the client
-  // router cache still rendered for the card viewed before (isolation audit
-  // 2026-09-24).
-  const shareHref = dashCard ? `/share?card=${dashCard}` : "/share";
+  // The site-owner console tab ("Site"), on this page's bar as on every other.
+  const showSite = isAdminEmail(user.email);
 
   // The header count and the Export button must describe the LIST BELOW. That
   // list shows EVERY card's contacts until one is picked — ContactsClient gets
@@ -188,48 +186,24 @@ export default async function ContactsPage({
 
   return (
     <div className="sc-app min-h-screen bg-gray-950 flex flex-col pb-16 md:pb-0">
-      <MobileNavGate showAdmin={showOfficeAdmin} />
+      <MobileNavGate showAdmin={showOfficeAdmin} showSite={showSite} />
       <HelpWidget floating member={!!officeSubUser} />
       {/* Top accent stripe */}
       <div className="sc-top-stripe fixed top-0 left-0 right-0 z-40 h-0.5 bg-gradient-to-r from-blue-600 via-violet-500 to-blue-400" />
 
-      {/* Sticky nav */}
-      <nav className="sc-app fixed top-0.5 left-0 right-0 z-30 bg-gray-950/95 backdrop-blur border-b border-gray-800">
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between gap-6">
-          <div className="flex items-center gap-3 shrink-0">
-            <Link href={dashHref} className="flex items-center gap-2">
-              <SwiftCardIcon size={28} />
-              <span className="font-bold text-white text-base tracking-tight">SwiftCard</span>
-            </Link>
-          </div>
-
-          <div className="hidden sm:flex items-center gap-1">
-            <Link href={dashHref} className="text-sm text-gray-400 hover:text-white hover:bg-gray-800 px-3 py-1.5 rounded-lg transition-colors">
-              Dashboard
-            </Link>
-            <Link href="/contacts" className="text-sm text-white font-medium px-3 py-1.5 rounded-lg bg-gray-800">
-              Contacts
-            </Link>
-            <Link href={shareHref} className="text-sm text-gray-400 hover:text-white hover:bg-gray-800 px-3 py-1.5 rounded-lg transition-colors">
-              Links
-            </Link>
-            {showOfficeAdmin && (
-              <Link href="/office/admin" className="text-sm text-purple-400 hover:text-purple-300 hover:bg-gray-800 px-3 py-1.5 rounded-lg transition-colors font-medium">
-                Admin
-              </Link>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Mobile has Settings in the bottom tab bar — hide the top-bar gear below md, same as the dashboard. */}
-            <span className="hidden md:flex items-center"><SettingsLinkButton /></span>
-            {!officeSubUser && <GrowLinkButton />}
-            <Link href={dashHref} className="text-sm text-gray-400 hover:text-white transition-colors">
-              ← Dashboard
-            </Link>
-          </div>
-        </div>
-      </nav>
+      {/* Sticky nav — the one every app page shares (AppTopNav). It used
+          to be this page's own copy, the only one that switched at sm: rather
+          than md:, so between 640 and 767px it showed its tabs AND the bottom
+          tab bar; it also carried a "← Dashboard" beside the logo and the
+          Dashboard tab, which already go there. */}
+      <AppTopNav
+        active="contacts"
+        card={dashCard}
+        showAdmin={showOfficeAdmin}
+        showSite={showSite}
+        showGrow={!officeSubUser}
+        wide
+      />
 
       {/* Header */}
       {/* px-6 belongs INSIDE max-w-6xl, matching the list container below

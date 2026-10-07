@@ -24,9 +24,13 @@ describe("a team member has one company card", () => {
 
 describe("nothing to buy, nothing to refer", () => {
   it("members see no Help-us-grow heart anywhere (the page sends them away)", () => {
-    expect(read("src/app/dashboard/page.tsx")).toContain('{!isOfficeMember && <span data-tour="nav-grow"');
-    expect(read("src/app/contacts/page.tsx")).toContain("{!officeSubUser && <GrowLinkButton />}");
-    expect(read("src/app/share/page.tsx")).toContain("{!officeSubUser && <GrowLinkButton />}");
+    // One shared top bar since 2026-10-07 (AppTopNav): the heart is drawn
+    // only when the page says showGrow, and every page says it for non-members.
+    expect(read("src/components/AppTopNav.tsx")).toContain('{showGrow && <span data-tour="nav-grow"');
+    expect(read("src/app/dashboard/page.tsx")).toContain("showGrow={!isOfficeMember}");
+    expect(read("src/app/contacts/page.tsx")).toContain("showGrow={!officeSubUser}");
+    expect(read("src/app/share/page.tsx")).toContain("showGrow={!officeSubUser}");
+    expect(read("src/app/settings/flows/page.tsx")).toContain("showGrow={!isOfficeSubUser}");
   });
   it("members never reach checkout — including a billing_admin", () => {
     expect(read("src/app/checkout/page.tsx")).toContain('if (user && (await getOfficeSubUserContext(user.id))) redirect("/dashboard");');
