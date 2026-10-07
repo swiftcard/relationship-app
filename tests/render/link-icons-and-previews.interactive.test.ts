@@ -64,15 +64,22 @@ beforeAll(async () => {
   tmp = mkdtempSync(join(cache, "linkicons-"));
   writeFileSync(join(tmp, "entry.tsx"), `
     import { hydrateRoot } from "react-dom/client";
-    import { createElement as h } from "react";
+    import { createElement as h, useEffect } from "react";
     import CardActionLinks from "@/components/CardActionLinks";
     import SwiftLinkButtons from "@/components/SwiftLinkButtons";
     const p = ${JSON.stringify(PROPS)};
-    hydrateRoot(document.getElementById("root")!, h("div", null,
-      h("div", { id: "card-box", style: { width: 360 } }, h(CardActionLinks, { links: p.card })),
-      h("div", { id: "links-box", style: { width: 360 } }, h(SwiftLinkButtons, { links: p.links, paid: true })),
-    ));
-    (window as any).__hydrated = true;
+    // The flag is raised from an effect of the ROOT, which runs after every
+    // child's effects — so "hydrated" means hydration actually committed, not
+    // merely that hydrateRoot() was called (it schedules the work for later,
+    // and on a slow CI runner later is over a second).
+    function Root() {
+      useEffect(() => { (window as any).__hydrated = true; }, []);
+      return h("div", null,
+        h("div", { id: "card-box", style: { width: 360 } }, h(CardActionLinks, { links: p.card })),
+        h("div", { id: "links-box", style: { width: 360 } }, h(SwiftLinkButtons, { links: p.links, paid: true })),
+      );
+    }
+    hydrateRoot(document.getElementById("root")!, h(Root));
   `);
   const out = await build({
     entryPoints: [join(tmp, "entry.tsx")], bundle: true, write: false, format: "iife", jsx: "automatic",
@@ -124,10 +131,15 @@ async function run(type: BrowserType) {
 
     await page.goto("https://app.test/");
     await page.waitForFunction(() => (window as never as { __hydrated?: boolean }).__hydrated === true, null, { timeout: 30_000 });
-    await page.waitForTimeout(1500);
+    // Settle: every image answered (the fallbacks swap src, so this can take
+    // a few rounds), then the 200ms cross-fades finish. A fixed sleep read a
+    // logo mid-fade on CI — both it and its monogram half-visible.
+    await page.waitForFunction(() => [...document.images].every((i) => i.complete), null, { timeout: 20_000 });
+    await page.waitForTimeout(400);
+    await page.waitForFunction(() => document.getAnimations().every((a) => !(a instanceof CSSTransition) || a.playState === "finished"), null, { timeout: 10_000 });
 
     return await page.evaluate(() => {
-      const visible = (el: Element | null) => !!el && getComputedStyle(el).opacity !== "0" && getComputedStyle(el).visibility !== "hidden";
+      const visible = (el: Element | null) => !!el && Number(getComputedStyle(el).opacity) >= 0.5 && getComputedStyle(el).visibility !== "hidden";
       const rowOf = (box: string, label: string) =>
         [...document.querySelectorAll(`#${box} a, #${box} button`)].find((a) => a.textContent?.includes(label)) ?? null;
 
