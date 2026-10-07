@@ -600,6 +600,118 @@ FLOWS["mobile-tabs"] = async () => {
   } finally { await ctx.close(); }
 };
 
+// ── L. The Links page switch: Swift Links | Swift Signature ─────────────────
+// The page opens on Swift Links with the person's real page in a mini phone,
+// the link copies, Open goes to their page, Edit opens the editor on Socials,
+// and the switch flips to Swift Signature, keeps it in the URL and through a
+// reload (owner, 2026-10-07: "make sure those two toggles are working perfectly").
+FLOWS["links-page-switch"] = async () => {
+  const { ctx, page } = await newPage();
+  try {
+    await ctx.grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(BASE).origin });
+    await login(page);
+    await dismissOverlays(page);
+    await page.goto(`${BASE}/share`, { waitUntil: "domcontentloaded" });
+    const linksTab = page.locator('[role="tab"]', { hasText: "Swift Links" }).first();
+    const sigTab = page.locator('[role="tab"]', { hasText: "Swift Signature" }).first();
+    if (!(await linksTab.waitFor({ state: "visible", timeout: 20000 }).then(() => true, () => false))) {
+      fail("links-page-switch", "/share shows no Swift Links | Swift Signature switch");
+      return;
+    }
+    await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+    await dismissOverlays(page);
+    if ((await linksTab.getAttribute("aria-selected")) !== "true") fail("links-page-switch", "the page did not open on Swift Links");
+    const side = '[role="tabpanel"]:not([hidden])';
+    // The mini phone is the real page: the card's name and bio are in it.
+    const mini = await page.locator(side).innerText().catch(() => "");
+    if (!mini.includes("Dana Ellis") || !mini.includes("Principal broker helping")) {
+      fail("links-page-switch", "the Swift Links side's mini phone does not show the card's own page (name + bio)");
+    }
+    // The link copies, exactly.
+    const copyLink = page.locator(`${side} button`, { hasText: /^Copy$/ }).first();
+    await copyLink.click();
+    await page.waitForTimeout(500);
+    const copied = await page.evaluate(() => navigator.clipboard.readText()).catch((e) => `read failed: ${e.message}`);
+    if (copied !== `https://swiftcard.me/links/${uname}`) fail("links-page-switch", `the link's Copy put ${JSON.stringify(copied)} on the clipboard`);
+    // Open goes to their own Swift Links page (through /api/self-view, which
+    // carries the target encoded, so the owner's own open never counts).
+    const openHref = await page.locator(`${side} a`, { hasText: "Open Swift Links" }).first().getAttribute("href").catch(() => null);
+    if (!openHref || !decodeURIComponent(openHref).includes(`/links/${uname}`)) fail("links-page-switch", `"Open Swift Links →" points at ${JSON.stringify(openHref)}`);
+    // The switch: flips, says so in the URL, and survives a reload.
+    await sigTab.click();
+    await page.waitForTimeout(400);
+    const flipped = (await sigTab.getAttribute("aria-selected")) === "true"
+      && await page.locator(`${side} button`, { hasText: /Copy signature|Copied|Generating|Copying/ }).first().isVisible().catch(() => false);
+    if (!flipped) fail("links-page-switch", "tapping Swift Signature did not show the signature side");
+    if (!page.url().endsWith("#signature")) fail("links-page-switch", `the URL did not keep the side (at ${page.url().replace(BASE, "")})`);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await sigTab.waitFor({ state: "visible", timeout: 20000 }).catch(() => {});
+    await page.waitForTimeout(1200);
+    if ((await sigTab.getAttribute("aria-selected").catch(() => null)) !== "true") fail("links-page-switch", "a reload went back to Swift Links instead of staying on Swift Signature");
+    // Back to Swift Links, then Edit my links → the editor, on Socials.
+    await linksTab.click();
+    await page.waitForTimeout(300);
+    await page.locator(`${side} a`, { hasText: "Edit my links" }).first().click();
+    await page.waitForURL(/\/cards\/[^/]+\/edit\?tab=sharing/, { timeout: 30000 }).catch(() => {});
+    const socials = page.locator("button", { hasText: /^Socials$/ }).first();
+    await socials.waitFor({ state: "visible", timeout: 20000 }).catch(() => {});
+    const onSocials = /bg-blue-600/.test((await socials.getAttribute("class").catch(() => "")) || "");
+    if (!page.url().includes(`/cards/${cardId}/edit`)) fail("links-page-switch", `"Edit my links" went to ${page.url().replace(BASE, "")}`);
+    else if (!onSocials) fail("links-page-switch", "\"Edit my links\" opened the editor but not on its Socials tab");
+    if (!failures.some((f) => f.flow === "links-page-switch")) pass("links-page-switch", "opens on Swift Links (real page in the phone), Copy/Open/Edit right, switch flips + keeps the side");
+  } finally { await ctx.close(); }
+};
+
+// ── M. Swift Signature: Copy is ready, and one tap copies ───────────────────
+// The Links page's Swift Signature side once sat on "Generating your card…"
+// with Copy greyed out for good (2026-10-07: its preview was lazy-loaded while
+// hidden until loaded, so it never loaded). Unit and render tests pin the
+// pieces; this opens the real page as its owner, taps Copy ONCE, and reads
+// back what actually landed on the clipboard.
+FLOWS["signature-copy"] = async () => {
+  const { ctx, page } = await newPage();
+  try {
+    await ctx.grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(BASE).origin });
+    await login(page);
+    await dismissOverlays(page);
+    const t0 = Date.now();
+    await page.goto(`${BASE}/share#signature`, { waitUntil: "domcontentloaded" });
+    const side = '[role="tabpanel"]:not([hidden])';
+    const btn = page.locator(`${side} button`, { hasText: "Copy signature" }).first();
+    if (!(await btn.waitFor({ state: "visible", timeout: 20000 }).then(() => true, () => false))) {
+      fail("signature-copy", "/share#signature never showed a Copy signature button");
+      return;
+    }
+    let enabled = false;
+    for (let i = 0; i < 25 && !(enabled = await btn.isEnabled().catch(() => false)); i++) await page.waitForTimeout(200);
+    if (!enabled) { fail("signature-copy", "Copy signature is greyed out — the button must be ready as soon as the side shows"); return; }
+    const readyMs = Date.now() - t0;
+    await dismissOverlays(page);
+    await btn.click();
+    const after = page.locator(`${side} button`, { hasText: /Copied ✓|Couldn.t copy/ }).first();
+    await after.waitFor({ state: "visible", timeout: 30000 }).catch(() => {});
+    const label = (await after.innerText().catch(() => "")).trim();
+    if (!label.startsWith("Copied ✓")) {
+      fail("signature-copy", `one tap did not copy — the button says ${JSON.stringify(label || (await btn.innerText().catch(() => "")))}`);
+      return;
+    }
+    const html = await page.evaluate(async () => {
+      for (const it of await navigator.clipboard.read()) if (it.types.includes("text/html")) return (await it.getType("text/html")).text();
+      return "";
+    }).catch((e) => `read failed: ${e.message}`);
+    if (!html.includes(`card-signatures/${uname}.png`)) fail("signature-copy", `the copied signature has no card image for /${uname}: ${JSON.stringify(html.slice(0, 160))}`);
+    else if (!html.includes(`/${uname}?source=email_signature`)) fail("signature-copy", "the copied signature does not link to the card");
+    else pass("signature-copy", `Copy ready in ${readyMs}ms; one tap copied the card image + link`);
+    // The preview shows the card it copied.
+    const shows = await page.waitForFunction((sel) => {
+      const img = document.querySelector(`${sel} img[alt="Your card"]`);
+      return !!img && img.complete && img.naturalWidth > 0;
+    }, side, { timeout: 15000 }).then(() => true, () => false);
+    if (!shows) fail("signature-copy", "the signature preview never appeared (stuck on \"Generating your card…\")");
+    await page.screenshot({ path: `${OUT}/signature-copy.png` }).catch(() => {});
+  } finally { await ctx.close(); }
+};
+
 // ── K. Create account through the form itself ───────────────────────────────
 // Every other flow seeds its account through the admin API. This one is the
 // screen a real person meets: the typo hint, the second password box, and a
@@ -694,6 +806,8 @@ try {
       await adm(`/rest/v1/card_views?username=in.(${uname},${uname}__links)`, { method: "DELETE" });
       await adm(`/rest/v1/card_events?username=in.(${uname},${uname}__links)`, { method: "DELETE" });
       await adm(`/rest/v1/leads?card_owner=eq.${uname}`, { method: "DELETE" });
+      // The signature image signature-copy generated for the throwaway card.
+      await adm(`/storage/v1/object/card-signatures/${uname}.png`, { method: "DELETE" }).catch(() => {});
       await adm(`/rest/v1/notifications?user_id=eq.${userId}`, { method: "DELETE" });
       await adm(`/rest/v1/cards?user_id=eq.${userId}`, { method: "DELETE" });
       await adm(`/rest/v1/profiles?id=eq.${userId}`, { method: "DELETE" });

@@ -99,21 +99,32 @@ async function inlineImages(el: HTMLElement, fallbackSrc: Map<string, string>): 
 }
 
 function CardPreview({ src, ready, status, onLoad, onError }: {
-  src: string; ready: boolean; status: "idle" | "working" | "error"; onLoad: () => void; onError: () => void;
+  src: string | null; ready: boolean; status: "idle" | "working" | "error"; onLoad: () => void; onError: () => void;
 }) {
   return (
     <div className="rounded-xl border border-gray-700/60 bg-white overflow-hidden relative min-h-[120px] flex items-center justify-center">
-      {/* lazy: the Links page opens on Swift Links with this side hidden, and a
-          hidden lazy image isn't fetched until the side is shown. */}
+      {/* Loaded EAGERLY, never loading="lazy": this image is display:none until
+          it has loaded (the placeholder shows instead), and a browser never
+          fetches a lazy image that isn't displayed — so it never loaded, and
+          the box sat on "Generating your card…" for good (2026-10-07). Eager,
+          it loads while the page still shows Swift Links, ready for the switch. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} loading="lazy" onLoad={onLoad} onError={onError} alt="Your card" className={`w-full block ${ready ? "" : "hidden"}`} />
+      {src && <img src={src} onLoad={onLoad} onError={onError} alt="Your card" className={`w-full block ${ready ? "" : "hidden"}`} />}
       {!ready && (
-        <span className="text-gray-400 text-xs py-10">
-          {status === "error" ? "Couldn't generate your card." : "Generating your card…"}
+        <span className="text-gray-400 text-xs py-10 px-4 text-center">
+          {status === "error" ? "Couldn't generate your card. Tap Copy signature to try again." : "Generating your card…"}
         </span>
       )}
     </div>
   );
+}
+
+/** A short, stable tag for a content hash — the version on a hosted image URL
+ *  whose exact capture time this device didn't record. */
+function sigTag(sig: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < sig.length; i++) h = Math.imul(h ^ sig.charCodeAt(i), 16777619);
+  return (h >>> 0).toString(36);
 }
 
 // Name and company are owner- (or office-) typed and go into HTML the user
@@ -133,13 +144,26 @@ ${header}
 }
 
 export default function EmailSignatureBox({ cardData, template, name, company, cardUrl, previewHref, username, storageUrl }: Props) {
-  const [copied, setCopied] = useState(false);
-  const [status, setStatus] = useState<"idle" | "working" | "error">("idle");
-  const [displaySrc, setDisplaySrc] = useState(storageUrl);
-  const [ready, setReady] = useState(false);
+  // The Copy button is ALWAYS ready (owner, 2026-10-07: "it's a very simple
+  // button to click"). It never waits on the preview and is never greyed out by
+  // a capture running in the background: one tap copies straight away when the
+  // image is current, and otherwise asks for the copy in that same tap and
+  // lets the browser wait for the one capture it needs.
+  const [copyState, setCopyState] = useState<"idle" | "copying" | "generating" | "copied" | "error">("idle");
+  // The preview and the capture behind it — what the picture shows, never
+  // whether you may tap Copy.
+  const [capture, setCapture] = useState<"idle" | "working" | "error">("idle");
+  // null until mounted: the src is chosen on the client (a device that already
+  // holds a fresh image shows that one), so the server never starts a fetch of
+  // a URL the client immediately swaps out.
+  const [displaySrc, setDisplaySrc] = useState<string | null>(null);
+  const [previewReady, setPreviewReady] = useState(false);
   const [mounted, setMounted] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
-  const capturingRef = useRef(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+  // The one capture in flight, shared by everyone who needs it (the automatic
+  // refresh, a 404'd preview, a tap on Copy) — never two at once.
+  const captureRef = useRef<Promise<string | null> | null>(null);
   // False once this box has left the screen: an automatic capture still in
   // flight stops at its next checkpoint instead of running on under the next page.
   const aliveRef = useRef(true);
@@ -148,7 +172,10 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
     return () => { aliveRef.current = false; };
   }, []);
   const lastUrlRef = useRef<string | null>(null);
-  const lastSigRef = useRef<string | null>(null); // content hash of the last successful capture
+  const lastSigRef = useRef<string | null>(null); // content hash the image at lastUrlRef was captured from
+  // True when lastUrlRef came from a capture made on this page (not from
+  // device memory): if THAT image fails to load, capturing again won't help.
+  const capturedHereRef = useRef(false);
   const Template = TEMPLATE_MAP[template] ?? ClassicPro;
   // Freshness is keyed to THIS card's username + a hash of its own content (+ a code
   // version). Re-captures exactly when the CARD IMAGE's content changes — card
@@ -159,6 +186,11 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
   // the photo or in a fallback font.
   const contentSig = signatureContentSig(cardData, template, cardUrl);
   const hashKey = `sc_sighash_${username}`;
+  // The cache-busted URL of the last image this device captured, kept with the
+  // hash above. When the hash still matches the card, that image IS the card:
+  // Copy uses it at once instead of capturing again (which, on a phone, was
+  // seconds of work on every first tap — and on an iPhone made that tap fail).
+  const urlKey = `sc_sigurl_${username}`;
   // Separate from hashKey (which tracks the last CAPTURE): this tracks the last
   // content the user actually COPIED into their email. If the card design has
   // changed since then, the signature already pasted in their inbox is stale —
@@ -180,17 +212,15 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
     logoUrl: proxy((cardData as { logoUrl?: string | null }).logoUrl),
   } as CardData;
 
-  async function captureAndUpload(): Promise<string | null> {
+  async function runCapture(): Promise<string | null> {
     // Never capture/upload without a real card identity (defensive: the dashboard
     // only renders this with a selected card, but guard against any path collision).
     if (!username || !/^[a-z0-9-]{1,40}$/i.test(username)) return null;
     if (!aliveRef.current) return null;
-    if (capturingRef.current) return null;
-    capturingRef.current = true;
-    setStatus("working");
+    setCapture("working");
     try {
       const el = cardRef.current;
-      if (!el) return null;
+      if (!el) { setCapture("error"); return null; }
       // Wait for the lazy-loaded template to actually render…
       for (let i = 0; i < 80 && el.offsetHeight < 150; i++) await new Promise((r) => setTimeout(r, 100));
       // …then inline the photo/logo as data URLs so they always embed (this is
@@ -212,9 +242,9 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
         inlined = await inlineImages(el, fallbackSrc);
       }
       // Refuse to ship a signature that's missing the photo/logo — better to
-      // show "couldn't generate" and a Try again button than silently upload one
+      // say "couldn't generate" and let a tap try again than silently upload one
       // that's forgotten pieces of the real card.
-      if (!inlined) { setStatus("error"); return null; }
+      if (!inlined) { setCapture("error"); return null; }
 
       // NO modifications to the card here — the signature is a PIXEL-EXACT copy of
       // the real SwiftCard: same fonts, sizes, placement, photo, logo, and the QR
@@ -272,42 +302,54 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
       }
       if (!(await stillWanted())) return null;
       const dataUrl = await toPng(el, opts);
-      if (!dataUrl || dataUrl.length < 5000) { setStatus("error"); return null; } // blank guard
+      if (!dataUrl || dataUrl.length < 5000) { setCapture("error"); return null; } // blank guard
       if (!aliveRef.current) return null;
       const res = await fetch("/api/card-signature", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dataUrl, username }),
       });
-      if (!res.ok) { setStatus("error"); return null; }
+      if (!res.ok) { setCapture("error"); return null; }
 
       const url = `${storageUrl}?t=${Date.now()}`;
       lastUrlRef.current = url;
       lastSigRef.current = contentSig;
+      capturedHereRef.current = true;
       setDisplaySrc(url);
-      setStatus("idle");
-      try { localStorage.setItem(hashKey, contentSig); } catch { /* ignore */ }
+      setCapture("idle");
+      try {
+        localStorage.setItem(hashKey, contentSig);
+        localStorage.setItem(urlKey, url);
+      } catch { /* ignore */ }
       return url;
     } catch {
-      setStatus("error");
+      setCapture("error");
       return null;
-    } finally {
-      capturingRef.current = false;
     }
   }
+
+  // Start a capture, or join the one already running.
+  function captureAndUpload(): Promise<string | null> {
+    if (captureRef.current) return captureRef.current;
+    const p = runCapture().finally(() => { captureRef.current = null; });
+    captureRef.current = p;
+    return p;
+  }
+
+  const isFresh = () => lastSigRef.current === contentSig && !!lastUrlRef.current;
 
   // The capture is seconds of main-thread work on a phone (three passes on
   // WebKit), and it used to start 500ms in — exactly while the page was
   // hydrating and the person reaching for a tab, which then did nothing for
-  // several seconds (2026-09-24 speed review). Let the page settle, then start
-  // when the browser is idle. Copy still waits for a fresh image.
-  function scheduleCapture(): () => void {
+  // several seconds (2026-09-24 speed review). In the background, let the page
+  // settle and start when the browser is idle; when the person is looking at
+  // this side (delay 0), start now. Copy never waits for this — it joins it.
+  function scheduleCapture(delay = 1500): () => void {
     const t = setTimeout(() => {
-      // Already captured from this exact content (the other trigger got there
-      // first) — nothing to redo.
-      if (lastSigRef.current === contentSig && lastUrlRef.current) return;
+      // Already current (another trigger got there first) — nothing to redo.
+      if (isFresh() || captureRef.current) return;
       const ric = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
-      if (ric) ric(() => { void captureAndUpload(); }, { timeout: 3000 });
+      if (ric && delay > 0) ric(() => { void captureAndUpload(); }, { timeout: 3000 });
       else void captureAndUpload();
-    }, 1500);
+    }, delay);
     return () => clearTimeout(t);
   }
 
@@ -335,73 +377,110 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
       setChangedSinceCopy(!!copied && copied !== contentSig);
     } catch { /* ignore */ }
     let prev = "";
-    try { prev = carry(hashKey); } catch { /* ignore */ }
-    if (prev !== contentSig) return scheduleCapture();
+    let savedUrl = "";
+    try {
+      prev = carry(hashKey);
+      savedUrl = localStorage.getItem(urlKey) || "";
+    } catch { /* ignore */ }
+    if (prev === contentSig) {
+      // This device captured this exact content: the hosted image is the card.
+      // Copy can use it at once. (A capture from before the URL was remembered
+      // gets a version tag from the content, so mail apps still fetch it fresh.)
+      const url = savedUrl.startsWith(`${storageUrl}?`) ? savedUrl : `${storageUrl}?v=${sigTag(contentSig)}`;
+      lastUrlRef.current = url;
+      lastSigRef.current = contentSig;
+      capturedHereRef.current = false;
+      setDisplaySrc(url);
+      return;
+    }
+    // Unknown or changed content: show whatever is hosted now (usually the
+    // card already) and refresh it in the background.
+    setDisplaySrc(storageUrl);
+    return scheduleCapture();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username, contentSig]);
 
-  // Hosted image 404s (never captured) → generate from the real card. No wrong
-  // fallback image. Deferred like the automatic capture: the preview is on the
-  // page now, not in a pop-up opened by a tap, so a 404 can arrive while the
-  // page is still hydrating.
+  // The hosted image didn't load — never captured (404), or gone. Generate it
+  // from the real card; no wrong fallback image. Straight away when this side
+  // is on screen, in the background (deferred, as above) when it isn't.
   function onImgError() {
-    setReady(false);
-    if (capturingRef.current) return;
-    // A fresh capture already exists and THAT failed to load — offer Try again
-    // rather than quietly re-running the same capture.
-    if (lastSigRef.current === contentSig && lastUrlRef.current) { setStatus("error"); return; }
-    scheduleCapture();
+    setPreviewReady(false);
+    if (captureRef.current) return; // a capture is on its way; its image replaces this one
+    if (capturedHereRef.current && isFresh()) {
+      // We just uploaded it and it still won't load: capturing again won't
+      // help. Copy still works — the email fetches the image itself.
+      setCapture("error");
+      return;
+    }
+    // Device memory said this image was current, but it isn't there: forget
+    // that and make a new one.
+    lastUrlRef.current = null;
+    lastSigRef.current = null;
+    try { localStorage.removeItem(hashKey); } catch { /* ignore */ }
+    const onScreen = !!boxRef.current && boxRef.current.offsetParent !== null;
+    scheduleCapture(onScreen ? 0 : 1500);
   }
 
-  async function copy() {
-    setStatus("working");
-    // Wait out any in-flight capture, then ensure the image we copy was captured from
-    // THIS card's current content (re-capture if the card changed since last capture).
-    for (let i = 0; i < 80 && capturingRef.current; i++) await new Promise((r) => setTimeout(r, 100));
-    if (lastSigRef.current !== contentSig || !lastUrlRef.current) await captureAndUpload();
-    const img = lastUrlRef.current;
-    if (!img) { setStatus("error"); return; }
-    const html = buildSignatureHtml(name, company, cardUrl, img);
-
-    // THE BUTTON USED TO LIE. Both writes below can reject — WebKit only allows
-    // a clipboard write inside the user-gesture task, and by this point we have
-    // spent up to 8 seconds polling, re-rendering the card and uploading it, so
-    // the gesture is long gone. Both rejections were swallowed and `copied` was
-    // set unconditionally, so the user saw "Copied ✓", pasted into Gmail, got
-    // nothing, and blamed the paste.
-    //
-    // Now the failure is surfaced: `error` tells them to try again, and a second
-    // tap succeeds because the capture is cached by then (lastUrlRef is set, so
-    // the slow path above is skipped and the write lands inside the gesture).
-    let ok = false;
-    try {
-      await navigator.clipboard.write([
-        new ClipboardItem({
-          "text/html": new Blob([html], { type: "text/html" }),
-          "text/plain": new Blob([`${name}\n${cardUrl}`], { type: "text/plain" }),
-        }),
-      ]);
-      ok = true;
-    } catch {
-      try {
-        await navigator.clipboard.writeText(html);
-        ok = true;
-      } catch {
-        ok = false;
-      }
-    }
-    if (!ok) { setStatus("error"); return; }
-
-    setStatus("idle");
-    setCopied(true);
+  function finishCopy(ok: boolean) {
+    if (!aliveRef.current) return;
+    if (!ok) { setCopyState("error"); return; }
+    setCopyState("copied");
     // They now hold a signature that matches the current design — clear the
     // "re-copy" prompt and remember what content they copied.
     setChangedSinceCopy(false);
     try { localStorage.setItem(copiedKey, contentSig); } catch { /* ignore */ }
-    setTimeout(() => setCopied(false), 2500);
+    setTimeout(() => { if (aliveRef.current) setCopyState((s) => (s === "copied" ? "idle" : s)); }, 2500);
   }
 
-  const onLoad = () => { setReady(true); setStatus("idle"); };
+  // NOT async up front: the clipboard write must be REQUESTED inside the tap.
+  // WebKit (the iPhone app, Safari) only allows a clipboard write during the
+  // user gesture, and this used to await a capture of several seconds first —
+  // so the first tap failed and only a second one worked. When the image is
+  // current the write happens at once; when it isn't, the HTML goes into the
+  // ClipboardItem as a PROMISE, which the browser holds the tap open for.
+  //
+  // THE BUTTON USED TO LIE, too: rejections were swallowed and "Copied ✓"
+  // shown regardless. A failed write says so, and the next tap tries again.
+  function copy() {
+    if (copyState === "copying" || copyState === "generating") return;
+    const text = () => new Blob([`${name}\n${cardUrl}`], { type: "text/plain" });
+    const html = (img: string) => new Blob([buildSignatureHtml(name, company, cardUrl, img)], { type: "text/html" });
+    const fresh = isFresh() ? lastUrlRef.current : null;
+    setCopyState(fresh ? "copying" : "generating");
+    const urlP: Promise<string | null> = fresh ? Promise.resolve(fresh) : captureAndUpload();
+    const need = <T,>(make: (u: string) => T) => urlP.then((u) => { if (!u) throw new Error("no signature image"); return make(u); });
+
+    let write: Promise<void>;
+    try {
+      const item = fresh
+        ? new ClipboardItem({ "text/html": html(fresh), "text/plain": text() })
+        : new ClipboardItem({ "text/html": need(html), "text/plain": need(() => text()) });
+      write = navigator.clipboard.write([item]);
+    } catch (e) {
+      write = Promise.reject(e);
+    }
+    write.then(
+      () => finishCopy(true),
+      async () => {
+        // A browser without promise-valued ClipboardItems (or one that refused
+        // the first write): wait for the image, then try the plain forms.
+        const u = await urlP.catch(() => null);
+        if (!u) return finishCopy(false);
+        try {
+          await navigator.clipboard.write([new ClipboardItem({ "text/html": html(u), "text/plain": text() })]);
+          return finishCopy(true);
+        } catch { /* next */ }
+        try {
+          await navigator.clipboard.writeText(buildSignatureHtml(name, company, cardUrl, u));
+          return finishCopy(true);
+        } catch {
+          return finishCopy(false);
+        }
+      },
+    );
+  }
+
+  const onLoad = () => { setPreviewReady(true); };
 
   return (
     <>
@@ -430,7 +509,7 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
       {/* The signature, shown in place — it used to sit behind a "Preview &
           copy" pop-up, so nobody saw what a Swift Signature was until they'd
           already tapped into it (owner, 2026-10-07). */}
-      <div className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5">
+      <div ref={boxRef} className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5">
         {/* Only for someone who already pasted an older design: a first-time
             copier has nothing to refresh, and the note read as a step. */}
         {changedSinceCopy && (
@@ -450,23 +529,22 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
             <p className="mt-2">Best,</p>
             <div className="mt-3">
               <p className="text-[0.875rem] text-gray-900 mb-1.5"><strong>{name}</strong>{company ? ` | ${company}` : ""}</p>
-              <a href={previewHref ?? cardUrl} target="_blank" rel="noopener noreferrer" className="block w-[300px] max-w-full"><CardPreview src={displaySrc} ready={ready} status={status} onLoad={onLoad} onError={onImgError} /></a>
+              <a href={previewHref ?? cardUrl} target="_blank" rel="noopener noreferrer" className="block w-[300px] max-w-full"><CardPreview src={displaySrc} ready={previewReady} status={capture} onLoad={onLoad} onError={onImgError} /></a>
               <a href={previewHref ?? cardUrl} target="_blank" rel="noopener noreferrer" className="inline-block mt-2 text-[0.875rem] font-bold text-blue-600 no-underline">Contact me</a>
             </div>
           </div>
         </div>
-        {status === "error" && !ready ? (
-          // The capture failed before there was ever an image to copy.
-          <button type="button" onClick={() => { void captureAndUpload(); }}
-            className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm py-2.5 rounded-full transition-colors">
-            Try again
-          </button>
-        ) : (
-          <button type="button" onClick={copy} disabled={!ready || status === "working"}
-            className="w-full mt-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold text-sm py-2.5 rounded-full transition-colors">
-            {status === "working" ? "Generating from your card…" : copied ? "Copied ✓ Now paste it in your email" : "Copy signature"}
-          </button>
-        )}
+        {/* Always tappable — never waits on the preview or a background
+            capture. It only pauses while its own copy is in hand. */}
+        <button type="button" onClick={copy} disabled={copyState === "copying" || copyState === "generating"}
+          aria-live="polite"
+          className="w-full mt-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white font-semibold text-sm py-2.5 rounded-full transition-colors">
+          {copyState === "generating" ? "Generating from your card…"
+            : copyState === "copying" ? "Copying…"
+            : copyState === "copied" ? "Copied ✓ Now paste it in your email"
+            : copyState === "error" ? "Couldn't copy — tap to try again"
+            : "Copy signature"}
+        </button>
 
         {/* Two steps. "Save" is in step 2 on purpose: an unsaved Gmail
             signature silently disappears, the most common way this fails. */}

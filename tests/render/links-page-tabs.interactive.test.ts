@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { build } from "esbuild";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
-import type { Browser, Page } from "playwright";
+import { webkit, type Browser, type Page } from "playwright";
 import { appCss, launchBrowser } from "./harness";
 
 // INTERACTION + LAYOUT test for the Links page switch (Swift Links | Swift
@@ -12,12 +12,13 @@ import { appCss, launchBrowser } from "./harness";
 // phone and desktop width, in the light theme (the default) and dark.
 //
 // Served from a real origin (page.route), not setContent: the switch keeps its
-// side in location.hash, which about:blank does not have.
+// side in location.hash, which about:blank does not have. HTTPS, because the
+// clipboard API only exists in a secure context — as on swiftcard.me.
 
 let browser: Browser;
 let bundle: string;
 let tmp: string;
-const ORIGIN = "http://links.test";
+const ORIGIN = "https://links.test";
 
 beforeAll(async () => {
   browser = await launchBrowser();
@@ -106,6 +107,58 @@ async function mount(width: number, opts: { theme?: "light" | "dark"; hash?: str
   expect(await page.evaluate(() => window.innerWidth)).toBe(width);
   return page;
 }
+
+// A real (1×1) PNG for the hosted signature image.
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+
+/**
+ * The Swift Signature side as a person meets it, in a context that can be
+ * reused for a second visit (same localStorage) and whose clipboard can be read
+ * back. `hosted`: whether a signature image is already in storage. `upload`:
+ * whether capturing a new one succeeds. Uploads make the hosted image exist,
+ * as they do in production.
+ */
+async function mountSignature(opts: { hosted: boolean; upload?: "ok" | "fail"; width?: number; engine?: Browser }) {
+  const css = await appCss();
+  const ctx = await (opts.engine ?? browser).newContext({ viewport: { width: opts.width ?? 390, height: 900 } });
+  // Chromium needs the grant; WebKit has no such permission (it fails the next
+  // newPage) and allows writes inside a tap on its own, as on an iPhone.
+  if (!opts.engine) await ctx.grantPermissions(["clipboard-read", "clipboard-write"], { origin: ORIGIN });
+  const html = `<!doctype html><html data-sc-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style>
+     <style>body{margin:0;padding:16px 20px}</style></head>
+     <body class="sc-app bg-gray-950"><div id="root"></div><script>${bundle}</script></body></html>`;
+  const state = { hosted: opts.hosted, posts: 0 };
+  await ctx.route(`${ORIGIN}/**`, (route) => {
+    const req = route.request();
+    const u = req.url();
+    if (u.includes("/sig/")) return state.hosted
+      ? route.fulfill({ status: 200, contentType: "image/png", body: PNG })
+      : route.fulfill({ status: 404, body: "" });
+    if (u.includes("/api/card-signature")) {
+      state.posts++;
+      if (opts.upload === "fail") return route.fulfill({ status: 500, body: "{}" });
+      state.hosted = true;
+      return route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
+    }
+    if (u.includes("/api/")) return route.fulfill({ status: 200, body: "{}" });
+    return route.fulfill({ status: 200, contentType: "text/html", body: html });
+  });
+  const page = await ctx.newPage();
+  const open = async () => {
+    await page.goto(`${ORIGIN}/share#signature`);
+    await page.waitForSelector('[role="tab"]');
+  };
+  await open();
+  return { ctx, page, state, open };
+}
+
+const copyButton = (page: Page) => page.locator("#links-panel-signature button").filter({ hasText: /Copy signature|Copied|Couldn.t copy|Generating|Copying/ }).first();
+const readClipboardHtml = (page: Page) =>
+  page.evaluate(async () => {
+    const items = await navigator.clipboard.read();
+    for (const it of items) if (it.types.includes("text/html")) return (await it.getType("text/html")).text();
+    return "";
+  });
 
 const shown = (page: Page, sel: string) =>
   page.evaluate((s) => {
@@ -250,5 +303,152 @@ describe("Links page: Swift Links | Swift Signature switch", () => {
       });
       expect(clipped, "the dot pushed the label into an ellipsis at phone width").toBe(false);
     } finally { await page.close(); }
+  });
+});
+
+// The Swift Signature side's one job: a Copy button that is simply ready.
+// (Owner, 2026-10-07: it sat on "Generating your card…" with Copy greyed out —
+// the preview image was lazy-loaded while hidden until loaded, so it never
+// loaded at all.)
+describe("Swift Signature: Copy is ready and copies on the first tap", () => {
+  it("the preview appears and Copy is tappable straight away when a signature exists", async () => {
+    const { ctx, page } = await mountSignature({ hosted: true });
+    try {
+      const btn = copyButton(page);
+      await expect.poll(() => btn.isEnabled(), { timeout: 2000 }).toBe(true);
+      expect((await btn.innerText()).trim()).toBe("Copy signature");
+      await page.waitForFunction(() => {
+        const img = document.querySelector('#links-panel-signature img[alt="Your card"]') as HTMLImageElement | null;
+        return !!img && img.complete && img.naturalWidth > 0 && getComputedStyle(img).display !== "none";
+      }, null, { timeout: 4000 });
+      expect(await page.locator("#links-panel-signature >> text=Generating your card").count()).toBe(0);
+    } finally { await ctx.close(); }
+  });
+
+  it("the preview also loads while the page opens on Swift Links, ready for the switch", async () => {
+    const { ctx, page } = await mountSignature({ hosted: true });
+    try {
+      await page.goto(`${ORIGIN}/share`);
+      await page.waitForSelector('[role="tab"]');
+      await page.waitForTimeout(1200);
+      await page.click("#links-tab-signature");
+      // No wait-and-see: the image was fetched in the background.
+      const ready = await page.evaluate(() => {
+        const img = document.querySelector('#links-panel-signature img[alt="Your card"]') as HTMLImageElement | null;
+        return !!img && img.complete && img.naturalWidth > 0;
+      });
+      expect(ready, "the hidden side never fetched its preview").toBe(true);
+    } finally { await ctx.close(); }
+  });
+
+  it("one tap copies the signature — the right HTML, with the card image and link", async () => {
+    const { ctx, page, state } = await mountSignature({ hosted: true });
+    try {
+      const btn = copyButton(page);
+      await expect.poll(() => btn.isEnabled(), { timeout: 2000 }).toBe(true);
+      await btn.click();
+      await expect.poll(async () => (await btn.innerText()).trim(), { timeout: 20_000 }).toBe("Copied ✓ Now paste it in your email");
+      const html = await readClipboardHtml(page);
+      expect(html).toContain(`${ORIGIN}/sig/alexmorgan.png?`);
+      expect(html).toContain('alt="Alex Morgan — business card"');
+      expect(html).toContain("https://swiftcard.me/alexmorgan?source=email_signature");
+      expect(html).toContain("Contact me");
+      // A first visit on this device captured once (content unknown here), never twice.
+      expect(state.posts).toBeLessThanOrEqual(1);
+    } finally { await ctx.close(); }
+  });
+
+  it("the next visit on the same device copies instantly, with no new capture", async () => {
+    const { ctx, page, state, open } = await mountSignature({ hosted: true });
+    try {
+      // First visit: let the background capture finish and record this content.
+      await expect.poll(() => state.posts, { timeout: 20_000 }).toBe(1);
+      await page.waitForTimeout(500);
+      await open();
+      const before = state.posts;
+      const btn = copyButton(page);
+      await expect.poll(() => btn.isEnabled(), { timeout: 2000 }).toBe(true);
+      const t0 = Date.now();
+      await btn.click();
+      await expect.poll(async () => (await btn.innerText()).trim(), { timeout: 3000 }).toBe("Copied ✓ Now paste it in your email");
+      expect(Date.now() - t0, "copy waited on a capture it didn't need").toBeLessThan(2000);
+      await page.waitForTimeout(2500);
+      expect(state.posts, "an unchanged card was captured again").toBe(before);
+      expect(await readClipboardHtml(page)).toContain(`${ORIGIN}/sig/alexmorgan.png?`);
+    } finally { await ctx.close(); }
+  });
+
+  it("never captured before: one tap generates the card and copies it", async () => {
+    const { ctx, page, state } = await mountSignature({ hosted: false });
+    try {
+      const btn = copyButton(page);
+      expect(await btn.isEnabled(), "Copy is greyed out before the first capture").toBe(true);
+      await btn.click();
+      await expect.poll(async () => (await btn.innerText()).trim(), { timeout: 20_000 }).toBe("Copied ✓ Now paste it in your email");
+      expect(state.posts).toBe(1);
+      expect(await readClipboardHtml(page)).toContain(`${ORIGIN}/sig/alexmorgan.png?`);
+      // …and the preview now shows the card it generated.
+      await page.waitForFunction(() => {
+        const img = document.querySelector('#links-panel-signature img[alt="Your card"]') as HTMLImageElement | null;
+        return !!img && img.complete && img.naturalWidth > 0;
+      }, null, { timeout: 5000 });
+    } finally { await ctx.close(); }
+  });
+
+  it("a failed capture never strands the button", async () => {
+    const { ctx, page } = await mountSignature({ hosted: false, upload: "fail" });
+    try {
+      const btn = copyButton(page);
+      await btn.click();
+      await expect.poll(async () => (await btn.innerText()).trim(), { timeout: 20_000 }).toBe("Couldn't copy — tap to try again");
+      expect(await btn.isEnabled()).toBe(true);
+      expect(await page.locator("#links-panel-signature >> text=Couldn't generate your card").count()).toBe(1);
+    } finally { await ctx.close(); }
+  });
+});
+
+// The same, in WebKit — the engine of the iPhone app and Safari, which only
+// allows a clipboard write during the tap itself and needs three capture
+// passes. The first tap must work there too.
+describe("Swift Signature in WebKit (the iPhone app's engine)", () => {
+  let wk: Browser;
+  beforeAll(async () => { wk = await webkit.launch(); }, 120_000);
+  afterAll(async () => { await wk?.close(); });
+
+  it("the preview appears and Copy is ready straight away", async () => {
+    const { ctx, page } = await mountSignature({ hosted: true, engine: wk });
+    try {
+      const btn = copyButton(page);
+      await expect.poll(() => btn.isEnabled(), { timeout: 2000 }).toBe(true);
+      await page.waitForFunction(() => {
+        const img = document.querySelector('#links-panel-signature img[alt="Your card"]') as HTMLImageElement | null;
+        return !!img && img.complete && img.naturalWidth > 0 && getComputedStyle(img).display !== "none";
+      }, null, { timeout: 4000 });
+    } finally { await ctx.close(); }
+  });
+
+  it("the first tap copies, even when the card has to be generated in that tap", async () => {
+    const { ctx, page, state } = await mountSignature({ hosted: false, engine: wk });
+    try {
+      const btn = copyButton(page);
+      await btn.click();
+      await expect.poll(async () => (await btn.innerText()).trim(), { timeout: 30_000 }).toBe("Copied ✓ Now paste it in your email");
+      expect(state.posts).toBe(1);
+    } finally { await ctx.close(); }
+  });
+
+  it("a returning visit copies at once", async () => {
+    const { ctx, page, state, open } = await mountSignature({ hosted: true, engine: wk });
+    try {
+      await expect.poll(() => state.posts, { timeout: 30_000 }).toBe(1);
+      await page.waitForTimeout(500);
+      await open();
+      const before = state.posts;
+      const btn = copyButton(page);
+      await btn.click();
+      await expect.poll(async () => (await btn.innerText()).trim(), { timeout: 3000 }).toBe("Copied ✓ Now paste it in your email");
+      await page.waitForTimeout(2500);
+      expect(state.posts).toBe(before);
+    } finally { await ctx.close(); }
   });
 });

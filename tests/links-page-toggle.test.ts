@@ -59,11 +59,38 @@ describe("Links page: Swift Links | Swift Signature switch", () => {
   it("the signature is in place: no pop-up, and a 404'd image never captures during hydration", () => {
     expect(sig).not.toMatch(/useState\(false\);\s*\/\/.*open|const \[open, setOpen\]/);
     expect(sig).not.toContain('className="fixed inset-0');
-    const onImgError = sig.slice(sig.indexOf("function onImgError()"), sig.indexOf("async function copy()"));
-    expect(onImgError).toContain("scheduleCapture()");
+    const onImgError = sig.slice(sig.indexOf("function onImgError()"), sig.indexOf("function finishCopy("));
+    // Deferred in the background, immediate only when the side is on screen.
+    expect(onImgError).toContain("scheduleCapture(onScreen ? 0 : 1500)");
     expect(onImgError).not.toMatch(/\bcaptureAndUpload\(\)/);
-    // The hosted image waits until the Signature side is actually shown.
-    expect(sig).toContain('loading="lazy"');
+  });
+
+  it("the preview image is never lazy — it is hidden until loaded, and a hidden lazy image never loads", () => {
+    // 2026-10-07: loading="lazy" + display:none-until-loaded left the box on
+    // "Generating your card…" for good, with Copy greyed out.
+    const img = sig.match(/<img src=\{src\}[^>]*\/>/)?.[0] ?? "";
+    expect(img, "preview <img> not found").not.toBe("");
+    expect(img).not.toContain("loading=");
+  });
+
+  it("Copy is always tappable and asks for the clipboard inside the tap", () => {
+    // Never gated on the preview or a background capture…
+    expect(sig).toContain('disabled={copyState === "copying" || copyState === "generating"}');
+    expect(sig).not.toMatch(/disabled=\{!ready/);
+    // …and the write is requested synchronously, with the image as a promise
+    // when it still has to be generated (WebKit only allows it in the tap).
+    const copy = sig.slice(sig.indexOf("  function copy() {"), sig.indexOf("const onLoad"));
+    expect(copy).not.toMatch(/^\s*async function copy/m);
+    expect(copy).toContain('new ClipboardItem({ "text/html": need(html), "text/plain": need(() => text()) })');
+    expect(copy.indexOf("navigator.clipboard.write([item])")).toBeLessThan(copy.indexOf("write.then("));
+    // One capture at a time, shared.
+    expect(sig).toMatch(/if \(captureRef\.current\) return captureRef\.current;/);
+  });
+
+  it("a device that captured this exact card copies without capturing again", () => {
+    expect(sig).toContain("const urlKey = `sc_sigurl_${username}`;");
+    expect(sig).toMatch(/if \(prev === contentSig\) \{[\s\S]*?lastUrlRef\.current = url;[\s\S]*?lastSigRef\.current = contentSig;/);
+    expect(sig).toContain("localStorage.setItem(urlKey, url);");
   });
 
   it("the re-copy warning still reaches someone on the Swift Links side", () => {
