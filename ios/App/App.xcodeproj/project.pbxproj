@@ -21,6 +21,7 @@
 		AA0000000000000000000018 /* ExternalPurchase.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000019 /* ExternalPurchase.swift */; };
 		AA0000000000000000000030 /* AppReview.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000031 /* AppReview.swift */; };
 		AA0000000000000000000050 /* OfflineCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000051 /* OfflineCard.swift */; };
+		AA0000000000000000000060 /* AppBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000061 /* AppBadge.swift */; };
 		AA0000000000000000000014 /* WidgetBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000015 /* WidgetBridge.swift */; };
 		AA000000000000000000000E /* SwiftCardWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000A /* SwiftCardWidget.swift */; };
 		AA000000000000000000000F /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000B /* PrivacyInfo.xcprivacy */; };
@@ -80,6 +81,7 @@
 		AA0000000000000000000019 /* ExternalPurchase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalPurchase.swift; sourceTree = "<group>"; };
 		AA0000000000000000000031 /* AppReview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppReview.swift; sourceTree = "<group>"; };
 		AA0000000000000000000051 /* OfflineCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineCard.swift; sourceTree = "<group>"; };
+		AA0000000000000000000061 /* AppBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBadge.swift; sourceTree = "<group>"; };
 		AA0000000000000000000015 /* WidgetBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetBridge.swift; sourceTree = "<group>"; };
 		AA0000000000000000000002 /* SwiftCardWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SwiftCardWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA000000000000000000000A /* SwiftCardWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftCardWidget.swift; sourceTree = "<group>"; };
@@ -218,6 +220,7 @@
 				AA0000000000000000000019 /* ExternalPurchase.swift */,
 				AA0000000000000000000031 /* AppReview.swift */,
 				AA0000000000000000000051 /* OfflineCard.swift */,
+				AA0000000000000000000061 /* AppBadge.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -442,6 +445,7 @@
 				AA0000000000000000000018 /* ExternalPurchase.swift in Sources */,
 				AA0000000000000000000030 /* AppReview.swift in Sources */,
 				AA0000000000000000000050 /* OfflineCard.swift in Sources */,
+				AA0000000000000000000060 /* AppBadge.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -31,6 +31,7 @@ public class MainActivity extends BridgeActivity {
         // it with registerPluginInstance in MainViewController.swift. Miss this
         // and the plugin is simply undefined in JS, with no error anywhere.
         registerPlugin(ExternalPurchasePlugin.class);
+        registerPlugin(AppSettingsPlugin.class);
         super.onCreate(savedInstanceState);
         applyWindowInsets();
 

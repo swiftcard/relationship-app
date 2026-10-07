@@ -557,6 +557,9 @@ export async function POST(req: NextRequest) {
           // A session is proof of who this is; a remembered name is not, and
           // the copy now says which it has (lib/card-event-notify.ts).
           nameConfirmed: !!sessionViewer,
+          // A locked contact on Free falls through to here (returning is null
+          // above) — and used to be named in full.
+          nameLocked: !!ownersOwnContact && isLockedContact(ownersOwnContact) && !isPaidPlan(owner.plan as string | null),
           repeatVisits: isView && !firstEver && !returning && visitor_id
             ? await countRecentVisits(admin, card_owner_username, visitor_id, surface)
             : undefined,

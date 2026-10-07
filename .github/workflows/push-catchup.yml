@@ -70,6 +70,24 @@ jobs:
           echo
           [ "$code" = "200" ]
 
+      # Same schedule, same secret: the ONE "getting started" push — once ever,
+      # days 2–7 after signup, only if no card has been opened yet, 10am–7pm
+      # local (lib/activation-nudge.ts). Marked before sending, so reruns are
+      # no-ops.
+      - name: Getting-started push for brand-new accounts
+        if: always()
+        env:
+          SECRET: ${{ secrets.PUSH_CATCHUP_SECRET }}
+        run: |
+          body=$(mktemp)
+          code=$(curl -sS --max-time 90 -o "$body" -w "%{http_code}" \
+            -H "Authorization: Bearer $SECRET" \
+            https://swiftcard.me/api/push/activation)
+          echo "HTTP $code"
+          cat "$body"
+          echo
+          [ "$code" = "200" ]
+
       # Same schedule, same secret: accounts due for permanent deletion. An
       # account the owner asked to remove completely (_deletion.purgeNow) goes
       # within the hour instead of waiting for the daily run; everything else

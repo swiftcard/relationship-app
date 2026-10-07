@@ -228,6 +228,8 @@ export type ApnsAlertPayload = {
   /** Notification group (thread-id); the tag when unset. Team news shares one
    *  thread per office, so it stacks apart from the personal notifications. */
   thread?: string;
+  /** The app icon's red number: the person's unread notifications (0 clears it). */
+  badge?: number;
 };
 
 /**
@@ -264,6 +266,7 @@ export function buildApnsAlert(payload: ApnsAlertPayload, topic: string): {
       alert: { title: payload.title, ...(payload.subtitle ? { subtitle: payload.subtitle } : {}), body: payload.body },
       ...(silent ? { "interruption-level": "passive" } : { sound: "default" }),
       "thread-id": payload.thread ?? payload.tag ?? "swiftcard",
+      ...(typeof payload.badge === "number" ? { badge: Math.max(0, Math.min(99, Math.round(payload.badge))) } : {}),
     },
     // Custom key: the in-app destination. NativeAppBridge navigates here when
     // the user taps the notification.

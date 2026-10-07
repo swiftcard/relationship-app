@@ -25,8 +25,7 @@ no modal, no interstitial:
 - **Pause everything for 30 days**;
 - **Unsubscribe from all marketing emails** — a body-size, full-contrast link,
   above the fold on a 375px screen;
-- clicking it expands an inline panel offering *Monthly digest only* and
-  *Pause 30 days* before **No thanks, unsubscribe me**, which completes the
+- clicking it expands an inline panel offering *Pause 30 days* before **No thanks, unsubscribe me**, which completes the
   opt-out on that click;
 - afterwards the page becomes "You're unsubscribed." plus an **optional**
   one-tap reason survey that gates nothing.
@@ -55,7 +54,10 @@ if (!(await canSendMarketing(userId, "promotions"))) continue;   // one recipien
 const allowed = await marketingAudience(ids, "product_updates"); // a campaign
 ```
 
-Categories: `lead_tips`, `product_updates`, `digest`, `promotions`.
+Categories: `lead_tips`, `product_updates`, `digest`, `promotions`. Only
+`product_updates` and `promotions` have a switch on the page: nothing sends a
+lead-tips or digest email yet, so those rows (and the "Monthly digest only"
+offer) were removed on 2026-10-06. The flags are still stored.
 
 It returns false when **any** of these is true — full opt-out (either flag), a
 `paused_until` in the future, or the category switch being off. It **fails
@@ -88,7 +90,7 @@ It is append-only by policy: an audit trail you can delete is not proof.
 
 ## Analytics
 
-`email_preferences_saved`, `email_paused_30d`, `email_digest_only_chosen`,
+`email_preferences_saved`, `email_paused_30d`,
 `email_full_unsubscribe`, `email_unsubscribe_reason_given` — registered in
 `src/lib/events.ts`. Opt-out events carry the source in `variant`
 (`footer` | `one_click_header`).

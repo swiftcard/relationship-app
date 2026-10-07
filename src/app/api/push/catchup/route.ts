@@ -4,7 +4,7 @@ import { sendPushToUser } from "@/lib/push";
 import { isPaidPlan } from "@/lib/plan";
 import { unlockedLeadBody } from "@/lib/notification-privacy";
 import {
-  localHour, quietWindowStart, readPushPrefs, QUIET_END_HOUR, QUIET_WINDOW_MS, type PushCategory,
+  localHour, quietWindowStart, readPushPrefs, QUIET_END_HOUR, QUIET_WINDOW_MS, DEFAULT_TIMEZONE, type PushCategory,
 } from "@/lib/push-policy";
 import { contactMayPush } from "@/lib/contact-return-notify";
 import { hasMarkedName } from "@/lib/contact-privacy";
@@ -78,6 +78,8 @@ const RANK: Record<PushCategory, number> = {
   // personal bell row this reads — listed so the ranking is total.
   team_alert: 2.5,
   weekly_recap: 0.5,
+  // Push-only, sent 10am–7pm local; writes no bell row, so never held.
+  getting_started: 0.25,
 };
 
 // Team news an admin's phone was sent (lib/team-alerts `push`), and so could
@@ -195,13 +197,11 @@ export async function GET(req: NextRequest) {
 
       // Nothing was ever held for someone who switched quiet hours off.
       if (prefs.quietHours === false) continue;
-      // NO TIMEZONE, NO CATCH-UP. The send path falls back to UTC when it does
-      // not know someone's zone, and guessing here would be worse than the gap
-      // it fills: 8am UTC is 4am on the east coast, so the notification meant to
-      // rescue a lead from silence would instead be the 4am buzz the quiet-hours
-      // rule exists to prevent. TimezoneSync learns the zone on the next launch;
-      // until then this person is simply skipped.
-      if (!prefs.timezone) continue;
+      // An unknown zone used to mean no catch-up at all — and the send path
+      // was holding their evenings in UTC, so that news was simply lost. Both
+      // now assume DEFAULT_TIMEZONE (lib/push-policy.ts) until TimezoneSync
+      // learns the real one, so what was held is announced at a sane hour.
+      const tz = prefs.timezone || DEFAULT_TIMEZONE;
       // A WINDOW, NOT AN HOUR (2026-10-05). The scheduler is a GitHub cron
       // that runs a few times a day, not hourly — 01:42, 08:35 and 18:04 UTC on
       // 2026-10-05 — so an 8–9am slot was usually missed and the catch-up
@@ -209,7 +209,7 @@ export async function GET(req: NextRequest) {
       // quiet hours start again), still once a day (the mark below), and still
       // only for news that is UNREAD: open the app first and there is nothing
       // to send.
-      const hour = localHour(now, prefs.timezone) % 24;
+      const hour = localHour(now, tz) % 24;
       if (hour < QUIET_END_HOUR || hour >= CATCHUP_LAST_HOUR) continue;
       counts.atEight++;
 
@@ -236,11 +236,11 @@ export async function GET(req: NextRequest) {
         .eq("read", false)
         // The real 10pm boundary in their zone, not `now − 10h`: a cron that
         // runs late must still read the whole night (see quietWindowStart).
-        .gte("created_at", new Date(quietWindowStart(now, prefs.timezone)).toISOString())
+        .gte("created_at", new Date(quietWindowStart(now, tz)).toISOString())
         // …and BEFORE quiet hours ended. Now that this can run in the
         // afternoon, a row written at 10am — pushed live, nothing held — must
         // not be announced again as "while you were away".
-        .lt("created_at", new Date(quietWindowStart(now, prefs.timezone) + QUIET_WINDOW_MS).toISOString())
+        .lt("created_at", new Date(quietWindowStart(now, tz) + QUIET_WINDOW_MS).toISOString())
         .order("created_at", { ascending: false })
         .limit(50);
 
@@ -254,7 +254,7 @@ export async function GET(req: NextRequest) {
 
       // Their team's held news, under the Team alerts switch.
       if (prefs.team_alert !== false) {
-        const since = quietWindowStart(now, prefs.timezone);
+        const since = quietWindowStart(now, tz);
         for (const t of teamRowsFor.get(userId) ?? []) {
           const at = new Date(t.created_at).getTime();
           if (at < since || at >= since + QUIET_WINDOW_MS) continue; // held overnight only
@@ -327,6 +327,12 @@ export async function GET(req: NextRequest) {
           // must not reach a paid lock screen as "— open to unlock".
           : paid && top.row.type === "new_lead"
             ? unlockedLeadBody(String(top.row.body ?? ""))
+          // A returning contact on Free: the live push says only this
+          // (contact-return-notify pushBody). The bell body carries where you
+          // met and how often — the morning must not say more than the night
+          // would have (2026-10-06 notification audit).
+          : !paid && top.category === "contact_return"
+            ? "Open SwiftCard to see who"
             : String(top.row.body ?? ""),
         // The same screen the live push opens: a new contact or a reply opens
         // THAT contact (the bell row carries lead_id since 2026-10-02); one

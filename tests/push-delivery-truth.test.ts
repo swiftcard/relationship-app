@@ -241,8 +241,9 @@ describe("turning notifications on", () => {
   });
 
   it("after a 'Don't Allow', iOS never asks again — the way back is one tap", () => {
-    expect(src).toContain('window.location.href = "app-settings:"');
-    expect(src).toContain("Open iPhone Settings");
+    expect(read("src/lib/app-settings.ts")).toContain('window.location.href = "app-settings:"');
+    expect(src).toContain("openAppNotificationSettings()");
+    expect(src).toContain('"Open iPhone Settings"');
   });
 
   it("a switch that shows ON re-confirms this device with the server, once per session", () => {
@@ -253,7 +254,7 @@ describe("turning notifications on", () => {
   });
 
   it("the next native build shows a banner while the app is open", () => {
-    expect(read("capacitor.config.ts")).toMatch(/PushNotifications: \{\s*\n\s*presentationOptions: \["alert", "sound"\],/);
+    expect(read("capacitor.config.ts")).toMatch(/PushNotifications: \{\s*\n\s*presentationOptions: \["badge", "alert", "sound"\],/);
   });
 });
 

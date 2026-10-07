@@ -2,6 +2,7 @@ import { sourcePhrase } from "@/lib/source-labels";
 import { locationPhrase } from "@/lib/location-display";
 import type { GeoAccuracy } from "@/lib/request-geo";
 import { ordinal } from "@/lib/contact-return-notify";
+import { markName } from "@/lib/contact-privacy";
 
 // What the owner is told when someone touches their card.
 //
@@ -73,12 +74,23 @@ export function cardEventNotice(input: {
    * the where. Every plan — it is a fact about the visit, not a Pro detail.
    */
   repeatVisits?: number;
+  /**
+   * The name belongs to a contact LOCKED behind the Free cap. The Contacts
+   * page does not list them, so this sentence must not name them either: the
+   * name is wrapped in the NAME mark (lib/contact-privacy.ts) — blocks in a
+   * Free bell, "A contact" on the lock screen, the name again after an
+   * upgrade. Unhedged on purpose: "Looks like a contact" is not a sentence.
+   * (2026-10-06 notification audit: this path printed the locked name.)
+   */
+  nameLocked?: boolean;
 }): CardEventNotice | null {
   const { eventType } = input;
   const name = (input.visitorName ?? "").trim();
   // Hedged when the name is only an association, so the sentence claims exactly
   // what is known. "Someone" remains the wording when there is no name at all.
-  const who = !name ? "Someone" : input.nameConfirmed ? name : `Looks like ${name}`;
+  const who = !name ? "Someone"
+    : input.nameLocked ? markName(name)
+    : input.nameConfirmed ? name : `Looks like ${name}`;
   const source = input.source ?? null;
   // Coarse context makes the notification concrete ("near the conference you're
   // at") — but only at the precision actually held. "near New York, US" was

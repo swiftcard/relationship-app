@@ -31,7 +31,7 @@ describe("the phone rules", () => {
     expect(decidePush({ category: "team_alert", prefs, cappedSentToday: DAILY_CAP, teamAlertSentToday: 0 }).send).toBe(true);
     const push = read("src/lib/push.ts");
     expect(push).toMatch(/!OWN_CAP\.includes\(cat\)/);
-    expect(read("src/lib/push-policy.ts")).toMatch(/OWN_CAP: PushCategory\[\] = \["contact_return", "team_alert", "weekly_recap"\]/);
+    expect(read("src/lib/push-policy.ts")).toMatch(/OWN_CAP: PushCategory\[\] = \["contact_return", "team_alert", "weekly_recap", "getting_started"\]/);
   });
 
   it("the weekly recap is not eaten by a busy Sunday", () => {

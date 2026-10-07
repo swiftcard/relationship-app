@@ -425,6 +425,22 @@ export default function NativeAppBridge() {
         // prompts, never binds an account that didn't opt in itself.
         try {
           const perm = await PushNotifications.checkPermissions();
+          // ANDROID: the channel every FCM message names (lib/fcm.ts
+          // FCM_CHANNEL_ID) was only created by the enable tap. Android drops
+          // a notification whose channel is missing, so make sure it exists on
+          // every launch where push is allowed — idempotent, same settings as
+          // EnablePushButton (2026-10-06 notification audit).
+          if (perm.receive === "granted" && detectNativePlatform() === "android") {
+            try {
+              await PushNotifications.createChannel({
+                id: "swiftcard-alerts",
+                name: "Card activity",
+                description: "New leads, card views and team news",
+                importance: 4,
+                visibility: 1,
+              });
+            } catch { /* an existing channel is not an error */ }
+          }
           const pushUid = localStorage.getItem("swiftcard_push_uid");
           if (perm.receive === "granted" && pushUid) {
             const { createBrowserClient } = await import("@supabase/ssr");

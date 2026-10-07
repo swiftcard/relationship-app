@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import EnablePushButton, { usePushState } from "@/components/EnablePushButton";
 import AppStoreBadge from "@/components/AppStoreBadge";
 import { APP_STORE_URL } from "@/lib/app-store";
-import { detectNativeApp } from "@/lib/platform";
+import { detectNativeApp, detectNativePlatform } from "@/lib/platform";
 import { pushAskCopy, type AskDevice } from "@/lib/push-ask";
 import {
   askDecision, askEnabledFor, askPushOn, askSnoozed, askStopped, claimAsk, confirmEnabledFromAsk, laterAsk, stopAsk,
@@ -80,7 +80,7 @@ export default function PushAskCallout({ ask }: { ask: PushAsk }) {
   const device: AskDevice = ask.mode === "app"
     ? "iphone-browser"
     : detectNativeApp() || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ? "phone" : "computer";
-  const copy = pushAskCopy(device, { denied: ask.mode === "settings" });
+  const copy = pushAskCopy(device, { denied: ask.mode === "settings", android: detectNativePlatform() === "android" });
 
   return (
     // Inset to the text column of the row above it (dot + gap), same colour as

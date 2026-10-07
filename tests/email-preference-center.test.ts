@@ -234,17 +234,23 @@ describe("the page keeps the opt-out two clicks away and visible", () => {
     expect(done).toMatch(/REASONS\.map/);
   });
 
-  it("offers the two alternatives before the exit, but never instead of it", () => {
-    expect(ui).toMatch(/Before you go, would one of these work instead\?/);
-    expect(ui).toMatch(/Monthly digest only/);
+  it("offers a pause before the exit, but never instead of it", () => {
+    expect(ui).toMatch(/Before you go, would a break work instead\?/);
     expect(ui).toMatch(/Pause 30 days/);
   });
 
-  it("emits the five analytics events, with the source on the opt-out", () => {
+  // 2026-10-06 notification audit: no switch, and no "digest only" offer, for
+  // an email nothing in the product sends.
+  it("offers no switch for an email that is never sent", () => {
+    expect(ui).not.toMatch(/Weekly analytics digest/);
+    expect(ui).not.toMatch(/Lead alerts and follow-up tips/);
+    expect(ui).not.toMatch(/Monthly digest only/);
+  });
+
+  it("emits the four analytics events, with the source on the opt-out", () => {
     for (const e of [
       "email_preferences_saved",
       "email_paused_30d",
-      "email_digest_only_chosen",
       "email_full_unsubscribe",
       "email_unsubscribe_reason_given",
     ]) {

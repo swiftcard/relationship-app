@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { detectNativeApp, detectNativePlatform } from "@/lib/platform";
 import { nativePushPrefix } from "@/lib/push-device";
+import { canOpenAppSettings, openAppNotificationSettings } from "@/lib/app-settings";
 import { notePushOn, stopAsk } from "@/lib/push-ask-client";
 
 type State = "loading" | "unsupported" | "ios-install" | "native" | "denied" | "subscribed" | "idle" | "working" | "error";
@@ -578,27 +579,41 @@ export default function EnablePushButton({
       // to the system, which opens SwiftCard's own page in Settings. If a
       // shell build cannot follow it nothing happens, and the written path
       // still stands. Remembered, so coming back allowed turns push on.
-      const openSettings = (
+      // Android has no settings URL; builds 1.0.1+ carry the AppSettings
+      // plugin (lib/app-settings.ts), older ones get the written path only.
+      // It used to say "Open iPhone Settings" there and the button did
+      // nothing (2026-10-06 notification audit).
+      const android = detectNativePlatform() === "android";
+      const openSettings = canOpenAppSettings() ? (
         <button
           type="button"
           onClick={() => {
             wentToSettings.current = true;
-            try { window.location.href = "app-settings:"; } catch { /* ignore */ }
+            openAppNotificationSettings();
           }}
           className={`${compact ? "" : "mt-2 "}inline-flex items-center justify-center rounded-full bg-amber-500/15 border border-amber-500/30 px-4 py-2 text-xs font-semibold text-amber-300`}
         >
-          Open iPhone Settings
+          {android ? "Open Settings" : "Open iPhone Settings"}
         </button>
+      ) : null;
+      const writtenPath = android ? (
+        <>
+          Notifications are turned off for SwiftCard. Open your phone&apos;s{" "}
+          <strong>Settings</strong> → <strong>Apps</strong> → <strong>SwiftCard</strong> →{" "}
+          <strong>Notifications</strong>, switch them on, then come back here.
+        </>
+      ) : (
+        <>
+          Notifications are turned off for SwiftCard. Open the iPhone{" "}
+          <strong>Settings</strong> app → <strong>SwiftCard</strong> →{" "}
+          <strong>Notifications</strong>, switch <strong>Allow Notifications</strong> on,
+          then come back here.
+        </>
       );
-      if (compact) return openSettings;
+      if (compact && openSettings) return openSettings;
       return (
         <div className="text-center">
-          <p className="text-amber-400 text-xs leading-relaxed">
-            Notifications are turned off for SwiftCard. Open the iPhone{" "}
-            <strong>Settings</strong> app → <strong>SwiftCard</strong> →{" "}
-            <strong>Notifications</strong>, switch <strong>Allow Notifications</strong> on,
-            then come back here.
-          </p>
+          <p className="text-amber-400 text-xs leading-relaxed">{writtenPath}</p>
           {openSettings}
         </div>
       );

@@ -24,10 +24,13 @@ export type Prefs = {
   marketing_opt_out: boolean;
 };
 
+// Only emails that are actually SENT get a switch (2026-10-06 notification
+// audit). The lead-tips and weekly-digest rows were listed here with no
+// sender anywhere in the product — a promise nobody kept.
+// Their stored flags stay in Prefs so nothing breaks; bring a row back the day
+// its email exists.
 const CATEGORIES: { key: keyof Prefs; label: string; frequency: string }[] = [
-  { key: "lead_tips", label: "Lead alerts and follow-up tips", frequency: "2× a month" },
   { key: "product_updates", label: "Product updates", frequency: "1× a month" },
-  { key: "digest", label: "Weekly analytics digest", frequency: "Weekly" },
   { key: "promotions", label: "Offers and promotions", frequency: "Occasional" },
 ];
 
@@ -205,25 +208,9 @@ export default function PreferenceCenter({
       {panelOpen && (
         <div className="mt-4 rounded-xl p-4" style={{ background: "#F8FAFC", border: `1px solid ${LINE}` }}>
           <p className="text-sm font-semibold" style={{ color: INK }}>
-            Before you go, would one of these work instead?
+            Before you go, would a break work instead?
           </p>
           <div className="mt-3 space-y-2">
-            <button
-              type="button"
-              disabled={!!busy}
-              onClick={async () => {
-                const ok = await post("digest_only");
-                if (ok) {
-                  setPanelOpen(false);
-                  setNote("You'll get the monthly digest only.");
-                  track("email_digest_only_chosen");
-                }
-              }}
-              className="w-full rounded-full py-2.5 text-sm font-semibold disabled:opacity-60"
-              style={{ background: "#fff", color: INK, border: `1px solid ${LINE}` }}
-            >
-              Monthly digest only
-            </button>
             <button
               type="button"
               disabled={!!busy}

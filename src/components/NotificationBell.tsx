@@ -1,5 +1,6 @@
 "use client";
 
+import { setAppBadge } from "@/lib/app-badge";
 import { Fragment, useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -102,6 +103,11 @@ export default function NotificationBell({
     : notifications;
   const unread = shown.filter((n) => !n.read).length;
   const readCount = shown.filter((n) => n.read).length;
+  // The app icon's red number follows the bell: reading here clears it
+  // (lib/app-badge; a no-op on the web and on app builds before 1.0.6).
+  useEffect(() => {
+    if (isNative) setAppBadge(unread);
+  }, [isNative, unread]);
   const askId = pickAskCandidate(shown);
   const ask = usePushAsk("bell", askId, open);
 

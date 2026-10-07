@@ -1,6 +1,7 @@
 import { createBrowserClient } from "@supabase/ssr";
 import { clearPersonScopedState, LAST_AUTH_UID_KEY } from "@/lib/account-state";
 import { unbindDevicePush } from "@/lib/push-device";
+import { setAppBadge } from "@/lib/app-badge";
 
 // ── The ONE way this device lets go of a person ──────────────────────────────
 //
@@ -15,6 +16,8 @@ export async function releaseDevice(opts: { serverAlreadySignedOut?: boolean } =
   // Push first: the previous account's alerts must stop reaching this lock
   // screen. Bounded internally, never throws.
   await unbindDevicePush();
+  // …and their unread count must not stay on the app icon (lib/app-badge).
+  setAppBadge(0);
   if (!opts.serverAlreadySignedOut) {
     try {
       await createBrowserClient(

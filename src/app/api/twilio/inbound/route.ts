@@ -5,6 +5,9 @@ import { addOptOut, removeOptOut, normalizePhone, logMessage } from "@/lib/messa
 import { sendPushToUser } from "@/lib/push";
 import { insertNotification } from "@/lib/notify";
 import { reportError } from "@/lib/report-error";
+import { isLockedLead } from "@/lib/lead-access";
+import { isPaidPlan } from "@/lib/plan";
+import { markName } from "@/lib/contact-privacy";
 
 const STOP_WORDS = new Set(["stop", "stopall", "unsubscribe", "cancel", "end", "quit", "stop all"]);
 const START_WORDS = new Set(["start", "unstop", "yes", "unsubscribe off"]);
@@ -106,14 +109,14 @@ export async function POST(req: NextRequest) {
       const spread = `%${digits.split("").join("%")}%`;
       const { data: leads } = await admin
         .from("leads")
-        .select("id, card_owner, phone, name")
+        .select("id, card_owner, phone, name, tags")
         .ilike("phone", spread)
         .limit(1000);
       const matches = (leads ?? []).filter((l) => l.phone && normalizePhone(l.phone) === digits);
 
-      let target: { id: string; card_owner: string | null; name?: string | null } | null = null;
+      let target: { id: string; card_owner: string | null; name?: string | null; tags?: unknown } | null = null;
       if (matches.length === 1) {
-        target = matches[0] as { id: string; card_owner: string | null; name?: string | null };
+        target = matches[0] as { id: string; card_owner: string | null; name?: string | null; tags?: unknown };
       } else if (matches.length > 1) {
         const { data: lastOut } = await admin
           .from("lead_messages")
@@ -126,7 +129,7 @@ export async function POST(req: NextRequest) {
           .maybeSingle();
         const winnerId = lastOut?.lead_id as string | undefined;
         target = winnerId
-          ? ((matches.find((m) => m.id === winnerId) ?? null) as { id: string; card_owner: string | null; name?: string | null } | null)
+          ? ((matches.find((m) => m.id === winnerId) ?? null) as { id: string; card_owner: string | null; name?: string | null; tags?: unknown } | null)
           : null;
       }
 
@@ -157,10 +160,17 @@ export async function POST(req: NextRequest) {
           const { data: cardRow } = await admin
             .from("cards").select("user_id").eq("username", target.card_owner).maybeSingle();
           const { data: owner } = cardRow?.user_id
-            ? await admin.from("profiles").select("id").eq("id", cardRow.user_id).maybeSingle()
-            : await admin.from("profiles").select("id").eq("username", target.card_owner).maybeSingle();
+            ? await admin.from("profiles").select("id, plan").eq("id", cardRow.user_id).maybeSingle()
+            : await admin.from("profiles").select("id, plan").eq("username", target.card_owner).maybeSingle();
           if (owner?.id) {
-            const who = (target.name || "").trim() || "A contact";
+            // A contact locked behind the Free cap is hidden on the Contacts
+            // page, so neither their name nor their words go on the bell or the
+            // lock screen (2026-10-06 notification audit). Sequences are Pro,
+            // but one started before a downgrade can still draw a reply.
+            const hidden = isLockedLead(target) && !isPaidPlan(owner.plan as string | null);
+            const rawWho = (target.name || "").trim();
+            const who = !rawWho ? "A contact" : hidden ? markName(rawWho) : rawWho;
+            const shownText = hidden ? "Open SwiftCard to read their reply." : bodyText;
             // /contacts?lead=<id> opens THAT conversation. It is the link the
             // in-app bell already uses; /dashboard?lead= (my first attempt)
             // reads no such param and would have dumped them on the dashboard.
@@ -176,14 +186,14 @@ export async function POST(req: NextRequest) {
               title: `${who} replied`,
               // The message itself, trimmed by push-policy to the lock-screen
               // budget. Seeing the actual words is why this is worth a buzz.
-              body: bodyText.replace(/\s+/g, " ").trim().slice(0, 300),
+              body: shownText.replace(/\s+/g, " ").trim().slice(0, 300),
             }, { allowRepeat: true }).catch(() => false);
             // Never buzz for a row that was not written (notify.ts's contract):
             // a rejected duplicate means someone already announced this reply.
             if (wrote) await sendPushToUser(owner.id as string, {
               category: "lead_reply",
               title: `${who} replied`,
-              body: bodyText,
+              body: shownText,
               url,
               tag: `lead-reply-${target.id}`,
               cardOwner: target.card_owner,

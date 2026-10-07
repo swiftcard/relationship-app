@@ -7,8 +7,10 @@ import { assertSafeUrl } from "@/lib/safe-fetch";
 import { isPaidPlan } from "@/lib/plan";
 import { stripLocationMarks, teaseLocation } from "@/lib/location-privacy";
 import { genericNames, stripNameMarks } from "@/lib/contact-privacy";
+import { NATIVE_HIDDEN_TYPES } from "@/lib/native-notification-copy";
+import { FREE_STATE_TYPES } from "@/lib/notification-privacy";
 import {
-  decidePush, fitBody, fitBodyKeepingPlace, readPushPrefs, pushCardTag, cardTagLine, MAX_TITLE_CHARS, OWN_CAP, UNCAPPED, VIEW_ROLLUP_TAG,
+  decidePush, fitBody, fitBodyKeepingPlace, readPushPrefs, pushCardTag, cardTagLine, MAX_TITLE_CHARS, OWN_CAP, UNCAPPED, VIEW_ROLLUP_TAG, SOFT_CAP_CATEGORIES,
   type PushCategory, type PushCardRow,
 } from "@/lib/push-policy";
 
@@ -103,6 +105,7 @@ export async function sendPushToUser(userId: string, payload: {
   let contactReturnSentToday = 0;
   let sameContactSentToday = 0;
   let teamAlertSentToday = 0;
+  let softSentToday = 0;
   // Every view that reached this function since the hour's alert: the alert
   // itself, the silent updates after it, and the ones the update throttle held
   // back. That total is what the running-count banner says, so it must count
@@ -129,6 +132,7 @@ export async function sendPushToUser(userId: string, payload: {
       if (outcome === "sent" && !UNCAPPED.includes(cat) && !OWN_CAP.includes(cat)) cappedSentToday++;
       if (outcome === "sent" && cat === "contact_return") contactReturnSentToday++;
       if (outcome === "sent" && cat === "team_alert") teamAlertSentToday++;
+      if (outcome === "sent" && SOFT_CAP_CATEGORIES.includes(cat)) softSentToday++;
       if (cat !== "card_view") continue;
       if (outcome === "sent" && (!lastViewPushAt || at > lastViewPushAt)) lastViewPushAt = at;
       if (outcome === "rollup" && (!lastViewUpdateAt || at > lastViewUpdateAt)) lastViewUpdateAt = at;
@@ -157,7 +161,7 @@ export async function sendPushToUser(userId: string, payload: {
 
   const verdict = decidePush({
     category: payload.category, prefs, cappedSentToday, lastViewPushAt, lastViewUpdateAt,
-    contactReturnSentToday, sameContactSentToday, teamAlertSentToday,
+    contactReturnSentToday, sameContactSentToday, teamAlertSentToday, softSentToday,
     catchup: payload.catchup === true,
   });
   if (!verdict.send) {
@@ -233,7 +237,26 @@ export async function sendPushToUser(userId: string, payload: {
   // The same line carries "Team · <office>" on an Office admin's team news
   // (payload.context); a card tag wins, as the more specific of the two.
   const line = cardLine ?? (payload.context?.trim() || null);
-  const apnsPayload = { ...payload, ...(line ? { subtitle: line } : {}) };
+  // THE ICON'S RED NUMBER (iOS only; 2026-10-06 notification audit): the
+  // unread rows the app's bell would count — the same types it hides in the
+  // app (lib/native-notification-copy) and, for a paid reader, the Free-state
+  // rows it never shows (lib/notification-privacy). The app re-sets the exact
+  // number from the bell as it is read (lib/app-badge), so this only has to be
+  // right when the push lands. A failed count sends no badge, never a wrong one.
+  let badge: number | undefined;
+  if (subs.some((s) => isApnsEndpoint(s.endpoint))) {
+    try {
+      const excluded = ["referral_claim", ...NATIVE_HIDDEN_TYPES, ...(paid ? FREE_STATE_TYPES : [])];
+      const { count, error } = await admin
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("read", false)
+        .not("type", "in", `(${excluded.join(",")})`);
+      if (!error) badge = count ?? 0;
+    } catch { /* no badge this time */ }
+  }
+  const apnsPayload = { ...payload, ...(line ? { subtitle: line } : {}), ...(badge !== undefined ? { badge } : {}) };
   const webPayload = line ? { ...payload, body: `${line}\n${payload.body}` } : payload;
 
   // Native iOS devices register with an "apns:<token>" endpoint and go through

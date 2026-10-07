@@ -208,11 +208,14 @@ export type AskDevice = "phone" | "computer" | "iphone-browser";
  * still remind them — at the same moment, within the same budget — but with
  * the button that actually works there. Never a price, never "Pro".
  */
-export function pushAskCopy(device: AskDevice, opts: { denied?: boolean } = {}): { title: string; sub: string } {
+export function pushAskCopy(device: AskDevice, opts: { denied?: boolean; android?: boolean } = {}): { title: string; sub: string } {
   if (opts.denied) {
     return {
       title: "Notifications are off for SwiftCard",
-      sub: "Turn them on in iPhone Settings so the next contact reaches your phone.",
+      // Android is not an iPhone (2026-10-06 notification audit).
+      sub: opts.android
+        ? "Turn them on in Settings → Apps → SwiftCard so the next contact reaches your phone."
+        : "Turn them on in iPhone Settings so the next contact reaches your phone.",
     };
   }
   if (device === "iphone-browser") {

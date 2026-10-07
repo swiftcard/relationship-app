@@ -37,6 +37,8 @@ class MainViewController: CAPBridgeViewController {
         // Same reason again: app-local plugins are never auto-discovered, and
         // src/lib/app-review.ts fails closed — no plugin, no prompt, no error.
         bridge?.registerPluginInstance(AppReviewPlugin())
+        // And again: src/lib/app-badge.ts is a no-op without it.
+        bridge?.registerPluginInstance(AppBadgePlugin())
 
         // No scroll indicators: the flashing bar on the right of every scroll
         // is drawn by iOS on the webview's scroll view — CSS can't reach it.

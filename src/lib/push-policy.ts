@@ -33,6 +33,12 @@ import { PHRASE_MARK } from "@/lib/location-privacy";
 // EXPLICITLY NOT: marketing, tips, product news, streaks, referral rewards,
 // daily digests, "you're doing great" — none of it.
 //
+// THE ONE EXCEPTION (owner, 2026-10-06): getting_started — ONCE EVER, in the
+// first week, only if no card has been opened yet, and it says how to share
+// (lib/activation-nudge.ts). A brand-new account whose card nobody has seen
+// otherwise never hears from SwiftCard at all; this is activation, not a
+// re-engagement drip. It never repeats and never mentions numbers.
+//
 // A VIEW MILESTONE IS NOT A SIXTH CATEGORY. It still cannot cause a push: no
 // milestone has ever rung a phone and none may. What it now does is retitle the
 // card_view push THAT WAS ALREADY GOING OUT for the view that crossed it — same
@@ -67,7 +73,8 @@ export type PushCategory =
   | "meeting_booked"
   | "billing_problem"
   | "weekly_recap"
-  | "team_alert";
+  | "team_alert"
+  | "getting_started";
 
 export const PUSH_CATEGORIES: PushCategory[] = [
   "new_lead",
@@ -79,6 +86,7 @@ export const PUSH_CATEGORIES: PushCategory[] = [
   "billing_problem",
   "weekly_recap",
   "team_alert",
+  "getting_started",
 ];
 
 /**
@@ -99,6 +107,8 @@ export const LIVE_CATEGORIES: PushCategory[] = [
   "billing_problem",
   "weekly_recap",
   "team_alert",
+  // getting_started is NOT listed: it fires once ever, in the first week, so a
+  // switch for it would be one nobody could ever see do anything.
 ];
 
 /** Only an Office admin (owner, or a role that sees team analytics) is shown this switch — nobody else can receive it. */
@@ -118,6 +128,7 @@ export const PUSH_CATEGORY_COPY: Record<PushCategory, { label: string; hint: str
   billing_problem: { label: "Billing problems", hint: "A payment failed and your plan is at risk" },
   weekly_recap: { label: "Weekly recap", hint: "Your week in numbers, once, on Monday morning" },
   team_alert: { label: "Team alerts", hint: "Leads waiting a day, a teammate's first lead, team milestones — at most two a day" },
+  getting_started: { label: "Getting started", hint: "Once, in your first week, if your card hasn't been opened yet" },
   // NOTE: quiet hours apply to this one too — see decidePush().
 };
 
@@ -141,6 +152,7 @@ export const DEFAULT_PUSH_PREFS: Record<PushCategory, boolean> = {
   billing_problem: true,
   weekly_recap: true,
   team_alert: true,
+  getting_started: true,
 };
 
 export const DAILY_CAP = 5;          // excludes UNCAPPED and OWN_CAP categories
@@ -154,13 +166,24 @@ export const DAILY_CAP = 5;          // excludes UNCAPPED and OWN_CAP categories
  * Owner decision D4 (2026-09-18): one push per contact per day, five a day in
  * all. Everything past that still reaches the bell.
  */
-export const OWN_CAP: PushCategory[] = ["contact_return", "team_alert", "weekly_recap"];
+export const OWN_CAP: PushCategory[] = ["contact_return", "team_alert", "weekly_recap", "getting_started"];
 /**
  * Team alerts: at most two a day per admin, whatever the team size. A team of
  * twenty must never mean twenty interruptions (owner, 2026-09-22: "we don't
  * want their account to get spammed"). Past two, the admin bell still has it.
  */
 export const TEAM_ALERT_DAILY_CAP = 2;
+/**
+ * ONE CEILING OVER THE SEPARATE CAPS (2026-10-06 notification audit). Each
+ * cap above only limits itself, so a busy day could stack 5 views/downloads +
+ * 5 returning contacts + 2 team alerts = 12 buzzes before a single lead. These
+ * are the "nice to know" interruptions; past eight in 24h they go to the bell
+ * only. Leads, replies, billing, the 8am catch-up and the Monday recap are the
+ * earned moments and stay outside it; a silent count update is not an
+ * interruption and never counts.
+ */
+export const SOFT_CAP_CATEGORIES: PushCategory[] = ["card_view", "contact_saved", "contact_return", "team_alert"];
+export const SOFT_DAILY_CEILING = 8;
 export const CONTACT_RETURN_DAILY_CAP = 5;
 export const CONTACT_RETURN_PER_CONTACT_DAILY_CAP = 1;
 export const QUIET_START_HOUR = 22;  // 10pm local
@@ -205,14 +228,13 @@ export function readPushPrefs(customization: unknown): PushPrefs {
 /**
  * The local hour for a person, from an IANA timezone.
  *
- * Falls back to UTC when we have not learned their zone yet. That is the honest
- * failure: a wrong quiet-hours window is better than none, and the browser
- * reports the zone the first time they open the app.
+ * Falls back to DEFAULT_TIMEZONE when we have not learned their zone yet. The
+ * browser reports the real zone the first time they open the app.
  */
 export function localHour(now: number, timezone: string | null | undefined): number {
   try {
     const fmt = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone || "UTC",
+      timeZone: timezone || DEFAULT_TIMEZONE,
       hour: "numeric",
       hour12: false,
     });
@@ -221,6 +243,17 @@ export function localHour(now: number, timezone: string | null | undefined): num
     return new Date(now).getUTCHours();
   }
 }
+
+/**
+ * The zone assumed until the app reports a real one. It used to be UTC, which
+ * for the (US) user base silenced 6pm–4am Eastern and — because the morning
+ * catch-up refused to guess — dropped that evening's news for good
+ * (2026-10-06 notification audit). New York matches the weekly recap's
+ * fallback (lib/weekly-recap.ts) and is right or an hour or three off for
+ * nearly everyone; TimezoneSync corrects it on the next dashboard load.
+ * An unparseable zone still falls back to UTC (the catch branches).
+ */
+export const DEFAULT_TIMEZONE = "America/New_York";
 
 /** 10pm–8am in the person's own timezone. */
 export function inQuietHours(now: number, timezone: string | null | undefined): boolean {
@@ -241,7 +274,7 @@ export function inQuietHours(now: number, timezone: string | null | undefined): 
 export function quietWindowStart(now: number, timezone: string | null | undefined): number {
   try {
     const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone || "UTC",
+      timeZone: timezone || DEFAULT_TIMEZONE,
       hour: "numeric", minute: "numeric", second: "numeric", hour12: false,
     }).formatToParts(new Date(now));
     const at = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
@@ -269,6 +302,8 @@ export type PolicyInput = {
   sameContactSentToday?: number;
   /** team_alert pushes sent in the last 24h. */
   teamAlertSentToday?: number;
+  /** Alerts sent in the last 24h across SOFT_CAP_CATEGORIES. */
+  softSentToday?: number;
   /**
    * THE 8AM CATCH-UP, and nothing else. It is one notification a morning,
    * already rationed by its own once-per-12h mark (api/push/catchup) — which it
@@ -348,6 +383,10 @@ export function decidePush(input: PolicyInput): PolicyResult {
     return { send: true, mode: "update" };
   }
 
+  if (SOFT_CAP_CATEGORIES.includes(category) && (input.softSentToday ?? 0) >= SOFT_DAILY_CEILING) {
+    return { send: false, reason: "daily_cap" };
+  }
+
   // A returning contact has its own caps and never counts against DAILY_CAP.
   if (category === "contact_return") {
     if ((input.sameContactSentToday ?? 0) >= CONTACT_RETURN_PER_CONTACT_DAILY_CAP) {
@@ -368,6 +407,8 @@ export function decidePush(input: PolicyInput): PolicyResult {
   // Once a week by construction (api/push/recap marks it before sending); it
   // must not be eaten by a busy Sunday, and must not eat Monday's leads.
   if (category === "weekly_recap") return { send: true, mode: "alert" };
+  // Once EVER by construction (api/push/activation marks it before sending).
+  if (category === "getting_started") return { send: true, mode: "alert" };
 
   if (!UNCAPPED.includes(category) && cappedSentToday >= DAILY_CAP) {
     return { send: false, reason: "daily_cap" };

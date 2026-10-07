@@ -205,7 +205,7 @@ describe("who the 8am catch-up is for", () => {
 
   it("only news held DURING quiet hours — never a row already pushed live in the morning", () => {
     const src = readFileSync(join(process.cwd(), "src/app/api/push/catchup/route.ts"), "utf8");
-    expect(src).toContain('.lt("created_at", new Date(quietWindowStart(now, prefs.timezone) + QUIET_WINDOW_MS).toISOString())');
+    expect(src).toContain('.lt("created_at", new Date(quietWindowStart(now, tz) + QUIET_WINDOW_MS).toISOString())');
     expect(src).toContain("if (at < since || at >= since + QUIET_WINDOW_MS) continue;");
   });
 
@@ -233,11 +233,16 @@ describe("who the 8am catch-up is for", () => {
     expect(pushes).toHaveLength(0);
   });
 
-  it("skips anyone whose timezone we have not learned — 8am UTC is 4am in New York", async () => {
+  // 2026-10-06 audit: skipping them lost every evening held in UTC for good.
+  // An unknown zone is now New York (lib/push-policy DEFAULT_TIMEZONE) —
+  // never UTC, so it is never the 4am buzz quiet hours exist to prevent.
+  it("assumes New York when we have not learned the timezone — 8am there counts, 4am does not", async () => {
     profile = { plan: "free", customization: {} };
     const res = await run();
-    expect(await res.json()).toMatchObject({ atEight: 0, sent: 0 });
-    expect(pushes).toHaveLength(0);
+    expect(await res.json()).toMatchObject({ atEight: 1 });
+    vi.setSystemTime(new Date("2026-09-11T08:00:00.000Z")); // 8am UTC = 4am New York
+    const early = await run();
+    expect(await early.json()).toMatchObject({ atEight: 0 });
   });
 
   it("skips anyone who switched quiet hours off — nothing was ever held for them", async () => {
@@ -325,7 +330,7 @@ describe("the window is exactly quiet hours", () => {
     // 3am and read it all does not need it again.
     const src = readFileSync(join(process.cwd(), "src/app/api/push/catchup/route.ts"), "utf8");
     expect(src).toMatch(/\.eq\("read", false\)/);
-    expect(src).toMatch(/quietWindowStart\(now, prefs\.timezone\)/);
+    expect(src).toMatch(/quietWindowStart\(now, tz\)/);
   });
 
   it("anchors on the real 10pm, so a cron that runs late still reads the whole night", () => {

@@ -244,12 +244,12 @@ describe("one ask on screen, and every way of saying no is honoured", () => {
     expect(src).toMatch(/deniedInApp \? "settings" : "switch"/);
     expect(src).toMatch(/\|\| deniedInApp;/);
     expect(src).toContain('<EnablePushButton compact={ask.mode === "settings"} onDone={() => confirmEnabledFromAsk(id)} />');
-    expect(src).toMatch(/pushAskCopy\(device, \{ denied: ask\.mode === "settings" \}\)/);
+    expect(src).toMatch(/pushAskCopy\(device, \{ denied: ask\.mode === "settings", android: detectNativePlatform\(\) === "android" \}\)/);
     // The compact button is the same one Settings shows, and it is the ONLY
     // thing rendered in that mode — no amber paragraph under a reminder.
     const btn = read("src/components/EnablePushButton.tsx");
-    expect(btn).toMatch(/if \(compact\) return openSettings;/);
-    expect(btn).toContain('window.location.href = "app-settings:"');
+    expect(btn).toMatch(/if \(compact && openSettings\) return openSettings;/);
+    expect(read("src/lib/app-settings.ts")).toContain('window.location.href = "app-settings:"');
   });
 
   it("coming back from Settings allowed turns push on by itself — and only when they went there from here", () => {
