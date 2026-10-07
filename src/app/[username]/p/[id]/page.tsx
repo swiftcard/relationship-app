@@ -30,7 +30,8 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   // — the share link went out with no picture at all (seen live, 2026-10-07).
   // Same explicit-URL pattern as the card page's own metadata.
   const image = `${APP_URL}/${username}/p/${id}/opengraph-image`;
-  const alt = `Tap to open ${(typeof base.openGraph?.title === "string" ? base.openGraph.title : null) ?? "their"} SwiftCard`;
+  const name = typeof base.openGraph?.title === "string" ? base.openGraph.title : null;
+  const alt = name ? `Tap to open ${name}'s SwiftCard` : "Tap to open their SwiftCard";
   return {
     ...base,
     // One canonical page per card; these are its shareable copies.
