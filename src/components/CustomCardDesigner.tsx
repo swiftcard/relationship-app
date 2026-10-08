@@ -9,9 +9,13 @@ import type { DesignHistory } from "@/lib/use-design-history";
 //
 //   • Copy a card or template you like — photograph your paper card inside a
 //     green-when-it-fits outline (components/CardScanCamera) or upload a
-//     design; approve a clean digital redraw with your details (or take its
-//     layout to edit instead). The server lays a photo flat and redraws the
-//     DESIGN, never the photo (lib/card-flatten, lib/design-transfer).
+//     design. The server cuts the card out of the picture, redraws its ARTWORK
+//     as a clean digital image and measures where everything sat; what comes
+//     back is a free design — that artwork under your own details as real
+//     elements — which you approve in a preview and then edit like any AI
+//     design (lib/card-flatten, lib/design-transfer). Since 2026-10-08 nothing
+//     is a frozen picture any more; a card saved with the old exact-copy image
+//     (faceImage) still renders exactly as approved.
 //   • AI design — choose colours, a theme, and whether your headshot and logo go
 //     on it; AI designs the card (components/AiDesignSheet → /api/design-generate
 //     → lib/ai-card-design). "Try another" makes a different one from the same
@@ -32,7 +36,7 @@ import type { DesignHistory } from "@/lib/use-design-history";
 
 import { useEffect, useRef, useState } from "react";
 import type { AiDesignBrief, CardData, CustomLayout } from "@/components/card-templates/types";
-import CustomCard, { CustomBlockCard, FaceCard } from "@/components/card-templates/CustomCard";
+import CustomCard, { CustomBlockCard, FaceCard, FreeCard } from "@/components/card-templates/CustomCard";
 import CardScaler from "@/components/CardScaler";
 import FreeCardEditor from "@/components/FreeCardEditor";
 import AiDesignSheet from "@/components/AiDesignSheet";
@@ -82,10 +86,11 @@ export default function CustomCardDesigner({
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [scanNote, setScanNote] = useState<string | null>(null);
-  /** A generated exact-copy awaiting the owner's verdict. Holds the source
-   *  upload too, so "Try again" and "make it editable instead" never ask them
-   *  to find the same file twice. */
-  const [transfer, setTransfer] = useState<{ src: string; b64: string; url: string; checklist: string[] } | null>(null);
+  /** A copied design awaiting the owner's verdict: the editable layout the
+   *  server built (artwork + their details). Holds the source upload too, so
+   *  "Try again" never asks them to find the same file twice. `artwork` is
+   *  false when the artwork pass failed and only the measured layout came. */
+  const [transfer, setTransfer] = useState<{ src: string; b64: string; layout: CustomLayout; artwork: boolean; checklist: string[] } | null>(null);
   /** Copy tapped: "Take a photo of your card" or "Upload an image". */
   const [copyChoice, setCopyChoice] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -163,10 +168,11 @@ export default function CustomCardDesigner({
     }
   }
 
-  /** The EXACT copy: the model rebuilds the uploaded design carrying the
-   *  owner's own details, and the owner approves a preview before anything
-   *  touches the card. The upload's b64 is kept so "Try again" doesn't make
-   *  them find the file twice. */
+  /** The copy: the server cuts the card out of the picture, redraws its
+   *  artwork and measures it, and answers with an editable free design
+   *  carrying the owner's own details. The owner approves a preview before
+   *  anything touches the card. The upload's b64 is kept so "Try again"
+   *  doesn't make them find the file twice. */
   async function transferDesign(source: { b64: string; dataUrl: string }) {
     setScanError(null);
     setScanNote(null);
@@ -207,12 +213,12 @@ export default function CustomCardDesigner({
         );
         return;
       }
-      const { url, checklist } = (await res.json()) as { url?: string; checklist?: string[] };
-      if (!url) {
+      const { layout: copied, artwork, checklist } = (await res.json()) as { layout?: CustomLayout; artwork?: boolean; checklist?: string[] };
+      if (!copied?.elements?.length) {
         setScanError("Couldn't rebuild that design. Try again, or try a cleaner image.");
         return;
       }
-      setTransfer({ src: source.dataUrl, b64: source.b64, url, checklist: checklist ?? [] });
+      setTransfer({ src: source.dataUrl, b64: source.b64, layout: normalizeCustomLayout(copied), artwork: artwork === true, checklist: checklist ?? [] });
     } catch (e) {
       setScanError(
         (e as { name?: string })?.name === "AbortError"
@@ -226,8 +232,9 @@ export default function CustomCardDesigner({
     }
   }
 
-  /** The old path — copy the LAYOUT into editable blocks, never any contents.
-   *  Offered from the preview as "make it editable instead". */
+  /** The TEAM path — copy the LAYOUT alone (colours, font, panel) as a design
+   *  every member's card fills with their own details. Never the artwork image
+   *  or one person's arrangement; see teamBrand. */
   async function scanLayoutOnly(b64: string) {
     setScanError(null);
     setScanNote(null);
@@ -418,7 +425,7 @@ export default function CustomCardDesigner({
                     {teamBrand
                       ? "Take a photo of a card or upload a design you like. We copy its layout as editable blocks, and every teammate's card fills it with their own details."
                       : canScan
-                      ? "Take a photo of your paper card, or upload a design you like. We redraw it as a clean digital card — same colors, design and layout — with YOUR details on it. You approve a preview before anything changes."
+                      ? "Take a photo of your paper card, or upload a design you like. We find the card in the picture and redraw it as a clean digital card — same colors, artwork and layout — with YOUR details and logo on it. Approve the preview, then move, resize and restyle anything."
                       : "On Pro, upload a card design you like and we'll rebuild it exactly, with your details on it."}
                   </span>
                 </span>
@@ -566,12 +573,12 @@ export default function CustomCardDesigner({
           </div>
         )}
 
-        {/* ── The approval gate. An image model fumbles small text often enough
-               that nothing may auto-apply: the owner compares the original and
-               the rebuild side by side, walks the checklist, and only their
-               tap writes the card. ── */}
+        {/* ── The approval gate. The owner compares the original and the copy
+               side by side — the copy is the REAL card renderer drawing the
+               editable design, so what they approve is what lands on the
+               canvas — and only their tap writes the card. ── */}
         {transfer && (
-          <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-4 pt-[max(1rem,calc(env(safe-area-inset-top)+0.5rem))] pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))]" role="dialog" aria-modal="true" aria-label="Approve your rebuilt card design">
+          <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-4 pt-[max(1rem,calc(env(safe-area-inset-top)+0.5rem))] pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))]" role="dialog" aria-modal="true" aria-label="Approve your copied card design">
             <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-2xl w-full max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem)] overflow-y-auto p-4 sm:p-5 space-y-4">
               <p className="text-sm font-semibold text-white">Your card, in that design — check it before it goes on</p>
               <div className="grid grid-cols-2 gap-3">
@@ -582,13 +589,21 @@ export default function CustomCardDesigner({
                 </div>
                 <div>
                   <p className="text-[0.65625rem] text-gray-500 mb-1.5">Rebuilt with your details</p>
-                  {/* eslint-disable-next-line @next/next/no-img-element -- our storage URL */}
-                  <img src={transfer.url} alt="Rebuilt with your details" className="w-full rounded-lg border border-blue-500/50" />
+                  <div className="rounded-lg border border-blue-500/50 overflow-hidden" data-transfer-preview>
+                    <CardScaler>
+                      <FreeCard data={{ ...data, customization: { ...(data.customization ?? {}), customLayout: transfer.layout } }} layout={transfer.layout} placeholder />
+                    </CardScaler>
+                  </div>
                 </div>
               </div>
+              {!transfer.artwork && (
+                <p className="text-[0.6875rem] text-amber-400" role="status">
+                  We copied the layout and colours but couldn&apos;t redraw the artwork cleanly this time — Try again for the artwork, or use this and restyle it.
+                </p>
+              )}
               {transfer.checklist.length > 0 && (
                 <div className="rounded-lg bg-gray-950 border border-gray-800 px-3 py-2.5">
-                  <p className="text-[0.6875rem] font-semibold text-gray-300 mb-1">Look closely — AI rebuilds can misspell:</p>
+                  <p className="text-[0.6875rem] font-semibold text-gray-300 mb-1">Look closely:</p>
                   <ul className="space-y-0.5">
                     {transfer.checklist.map((item) => (
                       <li key={item} className="text-[0.6875rem] text-gray-400 flex gap-1.5">
@@ -602,9 +617,10 @@ export default function CustomCardDesigner({
                 <button
                   type="button"
                   onClick={() => {
-                    commit({ ...layout, faceImage: transfer.url });
+                    // A copy replaces any old frozen exact-copy image too.
+                    commit({ ...transfer.layout, faceImage: undefined });
                     setTransfer(null);
-                    setScanNote("Exact design applied. Your live QR sits bottom-right; remove the design any time.");
+                    setScanNote("Design copied. Tap anything on the card to move it, resize it or change its font and colour — or Undo.");
                   }}
                   className="text-[0.78125rem] font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg px-4 py-2"
                 >
@@ -617,14 +633,6 @@ export default function CustomCardDesigner({
                   className="text-[0.78125rem] font-semibold text-gray-200 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 disabled:opacity-60"
                 >
                   Try again
-                </button>
-                <button
-                  type="button"
-                  disabled={scanning}
-                  onClick={() => { const t = transfer; setTransfer(null); if (t) void scanLayoutOnly(t.b64); }}
-                  className="text-[0.75rem] text-gray-400 hover:text-gray-200 px-2 py-2"
-                >
-                  Make it editable blocks instead
                 </button>
                 <button
                   type="button"

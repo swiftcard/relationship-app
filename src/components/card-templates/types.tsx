@@ -148,6 +148,14 @@ export type CustomLayout = {
    */
   faceImage?: string;
   /**
+   * COPY A CARD (2026-10-08): the copied design's ARTWORK — colours, panels,
+   * shapes, borders, with every letter, logo and face left out — as an image
+   * under a free design's elements. The owner's details sit on top as real
+   * elements, so the copy is edited like any AI design (drag, resize,
+   * restyle) and no letter is ever model-drawn. Same URL guard as faceImage.
+   */
+  bgImage?: string;
+  /**
    * Set on a design made by AI design: the choices it was made from. Only
    * used by the designer ("Try another"); the card never reads it.
    */

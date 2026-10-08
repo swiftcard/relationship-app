@@ -25,6 +25,8 @@ export type ResolvedCustomDesign = {
   fontFamily: string;
   /** Design transfer: the card IS this image, so no palette can be derived. */
   faceImage?: string;
+  /** Copy a card: the artwork under a free design — its colours live in pixels too. */
+  bgImage?: string;
 };
 
 export type ResolvedCardMeta = {
@@ -121,6 +123,7 @@ export async function resolveCardMeta(username: string): Promise<ResolvedCardMet
             panelTextColor: l.panelTextColor,
             fontFamily: l.fontFamily,
             faceImage: l.faceImage,
+            bgImage: l.bgImage,
           };
         })()
       : null;

@@ -356,6 +356,18 @@ export function FreeCard({ data, layout, placeholder = false }: { data: CardData
       }}
     >
       <div aria-hidden style={{ width: 0, paddingBottom: `${(100 / 1.75).toFixed(3)}%` }} />
+      {/* A copied card's artwork (Copy a card): the design's colours and shapes
+          as a picture, under the owner's own elements. No data-el, so the
+          editor treats a tap on it as "nothing selected". */}
+      {layout.bgImage && (
+        // eslint-disable-next-line @next/next/no-img-element -- storage URL, sized by the box
+        <img
+          src={layout.bgImage}
+          alt=""
+          draggable={false}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", maxWidth: "none" }}
+        />
+      )}
       {layout.elements.map((el) => (
         <FreeElement key={el.id} el={el} data={data} layout={layout} placeholder={placeholder} />
       ))}

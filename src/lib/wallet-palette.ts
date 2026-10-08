@@ -563,7 +563,7 @@ const TEMPLATES: Record<string, (style: TemplateStyle) => RawLook> = {
 export type SampledSurface = { top: string; bottom: string };
 
 function resolveLook(meta: Meta, sampled?: SampledSurface | null): RawLook {
-  if (meta.custom?.faceImage && sampled) return faceLook(meta.custom, sampled);
+  if ((meta.custom?.faceImage || meta.custom?.bgImage) && sampled) return faceLook(meta.custom, sampled);
   if (meta.custom) return customLook(meta.custom);
   if (meta.template === "custom") return customLook(DEFAULT_CUSTOM);
   // The card page renders Classic Pro for a missing or retired template id.

@@ -18,22 +18,32 @@ import { aiVision } from "@/lib/ai";
 
 export type Pt = [number, number];
 
-/** Asked of the vision model. Corners in PERCENT of the image. */
+/** Asked of the vision model. Corners in PERCENT of the image.
+ *
+ *  Corners are asked for in EVERY case (2026-10-08). A flat design used to pass
+ *  through whole, and a template screenshot is rarely just the card: a mockup
+ *  on a grey backdrop with a drop shadow, a web page with the card in the
+ *  middle, a Pinterest tile with two cards and a caption. All of that was
+ *  copied as if it were the card — "it uses the whole picture as the card". */
 export const LOCATE_CARD_PROMPT = [
   "Look at this image. Is it a PHOTOGRAPH of a physical business card (paper or",
   "plastic, lying on something, held, at any angle), or is it already a FLAT",
-  "digital design (a screenshot, an exported template, a scan cropped to the card)?",
+  "digital design (a screenshot, an exported template, a mockup, a scan)?",
   "",
   "Return ONLY valid JSON:",
   '{"kind":"photo_of_physical_card"|"flat_design",',
   ' "corners":[[x,y],[x,y],[x,y],[x,y]]}',
   "",
-  "corners = the four corners of the card itself (the paper's outer edge, not",
-  "the printed artwork), as PERCENT of the image width (x) and height (y), 0-100,",
-  "in order: top-left, top-right, bottom-right, bottom-left. For a rounded",
-  "corner, give where the two straight edges would meet. If several cards are",
-  "visible, use the one that is largest and most in focus. For a flat_design,",
-  "corners may be omitted.",
+  "corners = the four corners of ONE business card's face — the card's own outer",
+  "edge, where the card ends and whatever is around it begins (a table, a hand,",
+  "a mockup backdrop, a drop shadow, a web page, white margin, a caption) — as",
+  "PERCENT of the image width (x) and height (y), 0-100, in order: top-left,",
+  "top-right, bottom-right, bottom-left. For a rounded corner, give where the two",
+  "straight edges would meet. If several cards are visible, use the one that is",
+  "largest and most in focus (for a front-and-back pair, the FRONT: the side with",
+  "the name). Do NOT trace a panel, a photo or a logo inside the card — only the",
+  "card's full face. If the card fills the whole image exactly, return",
+  "[[0,0],[100,0],[100,100],[0,100]]. Always give corners.",
 ].join("\n");
 
 /** A 3×3 projective transform (row-major, h[8] = 1) mapping `from[i]` → `to[i]`. */
@@ -74,16 +84,36 @@ const dist = (a: Pt, b: Pt) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 /**
  * Model reading → four corners in PIXELS, ordered TL, TR, BR, BL — or null
  * when the reading is unusable (not four points, not convex, too small) or
- * there is nothing to flatten (a flat design, or a card that already fills a
- * straight frame). Whitelist + reorder: the model's own order is not trusted.
+ * there is nothing to crop (a card that already fills a straight frame).
+ * Whitelist + reorder: the model's own order is not trusted.
+ *
+ * Both kinds are cropped now: a photo is warped flat, and a flat design with
+ * anything around the card (mockup, margins, a page) is cut to the card.
  */
 export function cardQuadFromScan(raw: unknown, imgW: number, imgH: number): Pt[] | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as { kind?: unknown; corners?: unknown };
-  if (r.kind !== "photo_of_physical_card") return null;
-  if (!Array.isArray(r.corners) || r.corners.length !== 4) return null;
+  if (r.kind !== "photo_of_physical_card" && r.kind !== "flat_design") return null;
+  return quadFromCorners(r.corners, imgW, imgH);
+}
+
+/** Share of the image the quad covers, 0-1 (shoelace). */
+export function quadCoverage(q: Pt[], imgW: number, imgH: number): number {
+  let area = 0;
+  for (let i = 0; i < 4; i++) area += q[i][0] * q[(i + 1) % 4][1] - q[(i + 1) % 4][0] * q[i][1];
+  return Math.abs(area) / 2 / (imgW * imgH);
+}
+
+/**
+ * Four percent corners (any order) → the pixel quad to crop to, or null when
+ * the corners are junk, the region is a speck, or it already IS the frame.
+ * Shared by the source read above and the output check in lib/design-transfer
+ * (a generated card drawn small on a backdrop is cropped the same way).
+ */
+export function quadFromCorners(corners: unknown, imgW: number, imgH: number): Pt[] | null {
+  if (!Array.isArray(corners) || corners.length !== 4) return null;
   const pts: Pt[] = [];
-  for (const c of r.corners) {
+  for (const c of corners) {
     if (!Array.isArray(c) || c.length < 2) return null;
     const [x, y] = c;
     if (typeof x !== "number" || typeof y !== "number" || !Number.isFinite(x) || !Number.isFinite(y)) return null;
@@ -111,12 +141,9 @@ export function cardQuadFromScan(raw: unknown, imgW: number, imgH: number): Pt[]
     if (sign && s !== sign) return null;
     sign = s;
   }
-  // Shoelace area: a card that is a speck in the photo is a misreading (or
-  // too small to copy from anyway).
-  let area = 0;
-  for (let i = 0; i < 4; i++) area += q[i][0] * q[(i + 1) % 4][1] - q[(i + 1) % 4][0] * q[i][1];
-  area = Math.abs(area) / 2;
-  if (area < imgW * imgH * 0.12) return null;
+  // A card that is a speck in the photo is a misreading (or too small to copy
+  // from anyway).
+  if (quadCoverage(q, imgW, imgH) < 0.12) return null;
   // Already flat and filling the frame (a scan, a camera crop that landed
   // well): nothing to straighten — warping would only soften it.
   const slack = Math.max(imgW, imgH) * 0.025;
@@ -165,8 +192,26 @@ export function warpQuad(
 }
 
 /**
- * The routes' entry point. Returns the card laid flat as a JPEG when the image
- * is a photo of a physical card, otherwise the image unchanged. Never throws.
+ * Cut an image to a pixel quad, laid flat at the quad's own proportions
+ * (flatSize). Works on any decodable image; alpha is dropped. Returns null when
+ * the warp is degenerate. Used on the source upload AND on every generated
+ * card, which the image model likes to draw small on a backdrop.
+ */
+export async function cropToQuad(image: Buffer, quad: Pt[], format: "jpeg" | "png"): Promise<Buffer | null> {
+  const sharp = (await import("sharp")).default;
+  const raw = await sharp(image).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { w, h } = flatSize(quad);
+  const flat = warpQuad(raw.data, raw.info.width, raw.info.height, raw.info.channels, quad, w, h);
+  if (!flat) return null;
+  const out = sharp(Buffer.from(flat), { raw: { width: w, height: h, channels: raw.info.channels as 3 } });
+  return format === "png" ? out.png().toBuffer() : out.jpeg({ quality: 90 }).toBuffer();
+}
+
+/**
+ * The routes' entry point. Returns the card cut out and laid flat as a JPEG
+ * whenever the image holds more than the card (a photo of a card on a desk, a
+ * mockup, a page with the card in it), otherwise the image unchanged. Never
+ * throws.
  */
 export async function prepareCardImage(
   imageBase64: string,
@@ -189,13 +234,8 @@ export async function prepareCardImage(
     let quad: Pt[] | null = null;
     try { quad = m ? cardQuadFromScan(JSON.parse(m[0]), upright.info.width, upright.info.height) : null; } catch { quad = null; }
     if (!quad) return unchanged;
-    const raw = await sharp(upright.data).raw().toBuffer({ resolveWithObject: true });
-    const { w, h } = flatSize(quad);
-    const flat = warpQuad(raw.data, raw.info.width, raw.info.height, raw.info.channels, quad, w, h);
-    if (!flat) return unchanged;
-    const jpeg = await sharp(Buffer.from(flat), { raw: { width: w, height: h, channels: raw.info.channels as 3 } })
-      .jpeg({ quality: 90 })
-      .toBuffer();
+    const jpeg = await cropToQuad(upright.data, quad, "jpeg");
+    if (!jpeg) return unchanged;
     return { imageBase64: jpeg.toString("base64"), mediaType: "image/jpeg", flattened: true };
   } catch (e) {
     console.error("[card-flatten] failed, using the original image:", e);

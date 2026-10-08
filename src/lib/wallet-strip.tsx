@@ -491,10 +491,12 @@ export async function renderPassStrips(
  * every card, and there is no tier where the pass silently stops matching.
  */
 export async function buildWalletDesign(meta: Meta): Promise<WalletDesign> {
-  // A design-transfer card's colours only exist as pixels — sample them.
+  // A design-transfer card's colours only exist as pixels — sample them. The
+  // same goes for a copied card's artwork under a free design.
   let sampled: SampledSurface | null = null;
-  if (meta.custom?.faceImage) {
-    const got = await fetchImage(meta.custom.faceImage);
+  const pixels = meta.custom?.faceImage ?? meta.custom?.bgImage;
+  if (pixels) {
+    const got = await fetchImage(pixels);
     if (got) sampled = await sampleSurface(got.buf);
   }
 

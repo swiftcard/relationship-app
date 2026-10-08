@@ -5,21 +5,22 @@ import { aiImageEdit, aiVision, hasAiProvider } from "@/lib/ai";
 import { isPaidPlan } from "@/lib/plan";
 import { isRateLimited } from "@/lib/rate-limit";
 import {
-  transferPrompt, transferChecklist, type TransferIdentity,
-  PRECISE_SCAN_PROMPT, faceLayoutFromScan, renderFaceImage,
+  transferChecklist, type TransferIdentity,
+  PRECISE_SCAN_PROMPT, faceLayoutFromScan, freeLayoutFromFace,
   OUTPUT_CHECK_PROMPT, outputProblems, hasProblems, retrySuffix, stripArtworkPrompt,
-  DESIGN_SPEC_PROMPT, cleanDesignSpec, type OutputProblems,
+  DESIGN_SPEC_PROMPT, cleanDesignSpec, SOURCE_FACTS_PROMPT, sourceFacts, EMPTY_FACTS,
+  type OutputProblems, type SourceFacts,
 } from "@/lib/design-transfer";
-import { prepareCardImage } from "@/lib/card-flatten";
+import { cropToQuad, prepareCardImage } from "@/lib/card-flatten";
 import { aiConsentBlock } from "@/lib/ai-consent-server";
 
-// "Make it EXACTLY this design, with my details" — the image-editing sibling
-// of /api/scan-design. scan-design reads a photographed card's LAYOUT so the
-// block designer can approximate it; this one has the image model REBUILD the
-// design itself, carrying the owner's own name/contacts/headshot/logo, and
-// returns a stored image for the owner to approve or regenerate. Nothing here
-// publishes anything: the client only writes customization.customLayout
-// .faceImage after the owner approves the preview.
+// "Copy a card or template you like" — the design in the picture, re-issued to
+// the owner as an EDITABLE card. The answer is a free design (lib/design-
+// transfer freeLayoutFromFace): the model's clean redraw of the ARTWORK as the
+// card's background image, and the owner's details, headshot and logo as real
+// elements at the measured positions. Nothing here publishes anything: the
+// client commits the layout only after the owner approves the preview, and
+// the owner can drag, resize and restyle every element from then on.
 //
 // Same gates as scan-design (auth → Pro → rate limit), tighter rate limit
 // because an image generation costs roughly an order of magnitude more than a
@@ -46,25 +47,30 @@ function allowedImageHost(url: string): boolean {
   }
 }
 
-async function fetchReference(url: unknown): Promise<{ imageBase64: string; mediaType: string } | null> {
-  if (typeof url !== "string" || !/^https:\/\//.test(url) || !allowedImageHost(url)) return null;
+/** The owner's own photo/logo exist? (They are placed by the renderer from the
+ *  card's own URLs; the route only needs to know whether to make a slot.) */
+async function referenceExists(url: unknown): Promise<boolean> {
+  if (typeof url !== "string" || !/^https:\/\//.test(url) || !allowedImageHost(url)) return false;
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 4000);
     const res = await fetch(url, { signal: ctrl.signal, cache: "no-store", redirect: "error" }).finally(() => clearTimeout(t));
-    if (!res.ok) return null;
-    const type = res.headers.get("content-type") || "image/jpeg";
-    if (!/^image\//.test(type)) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (buf.byteLength < 100 || buf.byteLength > 6_000_000) return null;
-    return { imageBase64: buf.toString("base64"), mediaType: type };
+    if (!res.ok || !/^image\//.test(res.headers.get("content-type") || "")) return false;
+    const buf = await res.arrayBuffer();
+    return buf.byteLength >= 100;
   } catch {
-    return null;
+    return false;
   }
 }
 
 const s = (v: unknown, max = 200): string | null =>
   typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null;
+
+const parseJson = (text: string | null): unknown => {
+  const m = text?.match(/\{[\s\S]*\}/);
+  if (!m) return null;
+  try { return JSON.parse(m[0]); } catch { return null; }
+};
 
 export async function POST(request: NextRequest) {
   const userSupabase = await createClient();
@@ -117,9 +123,9 @@ export async function POST(request: NextRequest) {
     : "image/jpeg";
 
   // The identity comes from the CLIENT, not the DB row: the designer runs
-  // inside an edit form full of unsaved changes, and the face has to show what
-  // the form says, not what was last saved. It's the owner describing
-  // themselves to their own card — nothing here is trusted anywhere else.
+  // inside an edit form full of unsaved changes, and the card has to show what
+  // the form says, not what was last saved. It only decides which slots to
+  // make and what the leak gate may allow — nothing here is trusted elsewhere.
   const id = (body.identity ?? {}) as Record<string, unknown>;
   const identity: TransferIdentity = {
     name: s(id.name, 120) ?? "",
@@ -134,195 +140,113 @@ export async function POST(request: NextRequest) {
 
   if (!hasAiProvider()) return NextResponse.json({ error: "no_ai" }, { status: 503 });
 
-  // The owner's own photo/logo ride along so the model can place them. In the
-  // same breath, a PHOTO of a paper card is found and laid flat
-  // (lib/card-flatten): every engine below then sees the card's design — never
-  // the desk, the tilt or the lamp light, which the image model used to carry
-  // onto the copy. A screenshot or a scan passes through untouched.
-  const [headshot, logo, prepared] = await Promise.all([
-    fetchReference(body.photoUrl),
-    fetchReference(body.logoUrl),
+  // The CARD is found inside the picture and cut out flat (lib/card-flatten):
+  // a photo on a desk, a mockup on a backdrop, a page with the card in it — every
+  // read and the redraw below see the card's face and nothing else. In the same
+  // breath, whether the owner has a photo/logo to make a slot for.
+  const [hasHeadshot, hasLogo, prepared] = await Promise.all([
+    referenceExists(body.photoUrl),
+    referenceExists(body.logoUrl),
     prepareCardImage(sourceBase64, sourceMediaType),
   ]);
-  identity.hasHeadshot = !!headshot;
-  identity.hasLogo = !!logo;
+  identity.hasHeadshot = hasHeadshot;
+  identity.hasLogo = hasLogo;
   const { imageBase64, mediaType } = prepared;
 
-  // The design, read into words first: true printed colours (corrected for
-  // the room's light), shapes, layout, type. Both image prompts carry it, so
-  // the model copies the DESIGN rather than retouching the photo. Empty when
-  // the read fails — the prompts still stand on their own.
-  const spec = cleanDesignSpec(await aiVision({ imageBase64, mediaType, prompt: DESIGN_SPEC_PROMPT, maxTokens: 500 }));
-
-  // Every generated image passes one check: the original owner's details
-  // (leaks) and whether it still looks like a photo of paper.
-  const check = async (img: { data: Buffer; mediaType: string }): Promise<OutputProblems> => {
-    const scan = await aiVision({
-      imageBase64: img.data.toString("base64"),
-      mediaType: img.mediaType,
-      prompt: OUTPUT_CHECK_PROMPT,
-      json: true,
-      maxTokens: 400,
-    });
-    try {
-      const m = scan?.match(/\{[\s\S]*\}/);
-      return m ? outputProblems(JSON.parse(m[0]), identity) : { leaks: [], photo: false };
-    } catch {
-      // Unreadable scan — treat as clean rather than burning a retry.
-      return { leaks: [], photo: false };
-    }
-  };
-  const logProblems = (stage: string, attempt: number, p: OutputProblems) =>
+  // Three reads of the flat card, at once:
+  //  • the design in words (true printed colours, shapes) — rides in the
+  //    artwork prompt so the model copies the DESIGN, not the photo;
+  //  • what the ORIGINAL says — names, company, the logo's brand, contacts —
+  //    so the output check can recognise any of it surviving;
+  //  • the measurement — where every text, photo and logo sits — which is
+  //    where the owner's own elements will go.
+  const [specRaw, factsRaw, measureRaw] = await Promise.all([
+    aiVision({ imageBase64, mediaType, prompt: DESIGN_SPEC_PROMPT, maxTokens: 500 }),
+    aiVision({ imageBase64, mediaType, prompt: SOURCE_FACTS_PROMPT, json: true, maxTokens: 600 }),
+    aiVision({ imageBase64, mediaType, prompt: PRECISE_SCAN_PROMPT, json: true, maxTokens: 2600 }),
+  ]);
+  const spec = cleanDesignSpec(specRaw);
+  const facts: SourceFacts = factsRaw ? sourceFacts(parseJson(factsRaw)) : EMPTY_FACTS;
+  const face = faceLayoutFromScan(parseJson(measureRaw));
+  if (!face) {
+    // Name which stage died — reading missing vs JSON-less vs validator-null
+    // were indistinguishable the first time this failed in production.
     console.error(
-      `[design-transfer] ${stage} attempt ${attempt + 1} rejected for ${user.id}:`,
-      [...p.leaks, ...(p.photo ? ["(looks like a photo of paper)"] : [])].join(", "),
+      `[design-transfer] measurement failed for ${user.id}:`,
+      measureRaw === null ? "aiVision returned null" : `unusable: ${String(measureRaw).slice(0, 300)}`,
     );
-
-  // Two engines, in order of fidelity:
-  //  1. Image EDITING (paid Google tier) — pixel-faithful backgrounds. Tried
-  //     first so the feature upgrades itself the day billing appears; on the
-  //     free tier it answers 429 in under two seconds, so trying costs nothing.
-  //  2. Measure-and-typeset (vision, FREE tier) — the model only MEASURES the
-  //     design (surfaces, positions, colors, sizes) and we typeset the owner's
-  //     details ourselves. Backgrounds are reconstructed rather than copied,
-  //     but the text can never be misspelled: no letter is model-drawn.
-  const references = [...(headshot ? [headshot] : []), ...(logo ? [logo] : [])];
-
-  // Engine 1 with the LEAK GATE: generate, then have a vision pass transcribe
-  // every email/phone on the OUTPUT. Anything that isn't the owner's is the
-  // original card's data surviving — the one failure the prompt alone proved
-  // unable to prevent (live test 2026-08-19). One corrective retry names the
-  // leaked text; a second leak abandons the engine for this request and falls
-  // through to measure-and-typeset, which cannot leak by construction.
-  // The same gate now also rejects an output that still looks like a photo of
-  // paper (2026-10-06) — named in the retry, and twice over it falls through
-  // to the hybrid exactly as a leak does.
-  let result: { data: Buffer; mediaType: string } | null = null;
-  let last: OutputProblems = { leaks: [], photo: false };
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const prompt = transferPrompt(identity, spec) + (attempt === 0 ? "" : retrySuffix(last));
-    const candidate = await aiImageEdit({ imageBase64, mediaType, prompt, references });
-    if (!candidate) break; // engine unavailable — nothing a retry would change
-    const problems = await check(candidate);
-    if (!hasProblems(problems)) { result = candidate; break; }
-    logProblems("full rebuild", attempt, problems);
-    last = problems;
+    return NextResponse.json({ error: "generation_failed" }, { status: 502 });
   }
 
   const sharp = (await import("sharp")).default;
 
-  // ── Hybrid engine: model-copied ARTWORK + our own typesetting ──────────────
-  // Runs when the full rebuild leaked twice (or the editor produced nothing).
-  // The model reproduces the design with all text/logos/faces stripped — it is
-  // pixel-faithful at artwork, it only fails at lettering — and the owner's
-  // details are typeset over it in real type from the vision measurement of
-  // the original. Text cannot be misspelled or leaked: no letter is
-  // model-drawn. The composite still passes the leak gate below in case the
-  // strip pass left source text behind.
-  let hybridUsed = false;
-  if (!result) {
-    // The strip pass disobeys on the first try about as often as the full
-    // rebuild does — same corrective-retry treatment: scan the ARTWORK for
-    // surviving source text, name it, try once more. A clean artwork plus a
-    // deterministic owner-text overlay needs no second gate.
-    let art: { data: Buffer; mediaType: string } | null = null;
-    let artLast: OutputProblems = { leaks: [], photo: false };
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const prompt = stripArtworkPrompt(spec) + (attempt === 0 ? "" : retrySuffix(artLast));
-      const candidate = await aiImageEdit({ imageBase64, mediaType, prompt });
-      if (!candidate) break;
-      const problems = await check(candidate);
-      if (!hasProblems(problems)) { art = candidate; break; }
-      logProblems("hybrid artwork", attempt, problems);
-      artLast = problems;
-    }
-    if (art) {
-      const reading = await aiVision({ imageBase64, mediaType, prompt: PRECISE_SCAN_PROMPT, json: true, maxTokens: 2600 });
-      const m = reading?.match(/\{[\s\S]*\}/);
-      let hybridLayout = null;
-      try { hybridLayout = m ? faceLayoutFromScan(JSON.parse(m[0])) : null; } catch { /* fall through */ }
-      if (hybridLayout) {
-        try {
-          const toDataUri = (r: { imageBase64: string; mediaType: string } | null) =>
-            r ? `data:${r.mediaType};base64,${r.imageBase64}` : null;
-          const overlay = await renderFaceImage(hybridLayout, identity, {
-            headshot: toDataUri(headshot), logo: toDataUri(logo),
-          }, { overlayOnly: true });
-          const bg = await sharp(art.data).resize(1400, 800, { fit: "cover" }).png().toBuffer();
-          const composite = await sharp(bg).composite([{ input: await sharp(overlay).png().toBuffer() }]).png().toBuffer();
-          result = { data: composite, mediaType: "image/png" };
-          hybridUsed = true;
-        } catch (e) {
-          console.error("[design-transfer] hybrid composite failed:", e);
-        }
-      }
-    }
-  }
-  void hybridUsed;
-
-  let png: Buffer;
-  if (result) {
-    try {
-      // Normalise to the card's own shape. cover-crop, not pad: the model was
-      // told to keep the canvas, so drift is slivers, and bars read as broken.
-      png = await sharp(result.data).resize(1400, 800, { fit: "cover" }).png().toBuffer();
-    } catch (e) {
-      console.error("[design-transfer] sharp normalise failed:", e);
-      return NextResponse.json({ error: "generation_failed" }, { status: 502 });
-    }
-  } else {
-    const reading = await aiVision({
-      imageBase64,
-      mediaType,
-      prompt: PRECISE_SCAN_PROMPT,
+  // Every generated image passes one check: anything readable left on it
+  // (text, a logo, a face), whether it still looks like a photo of paper, and
+  // where the card sits in the frame. A card drawn with a margin or on a
+  // backdrop is cut out here; one drawn small in a scene is a rejection.
+  const check = async (img: { data: Buffer; mediaType: string }): Promise<{ problems: OutputProblems; image: Buffer | null }> => {
+    const meta = await sharp(img.data).metadata();
+    const scan = parseJson(await aiVision({
+      imageBase64: img.data.toString("base64"),
+      mediaType: img.mediaType,
+      prompt: OUTPUT_CHECK_PROMPT,
       json: true,
-      maxTokens: 2600,
-    });
-    const match = reading?.match(/\{[\s\S]*\}/);
-    let layout = null;
-    try {
-      layout = match ? faceLayoutFromScan(JSON.parse(match[0])) : null;
-    } catch (e) {
-      console.error("[design-transfer] vision JSON parse failed:", e, (match?.[0] ?? "").slice(0, 200));
+      maxTokens: 600,
+    }));
+    const { quad, ...problems } = outputProblems(scan, identity, facts, { artwork: true, width: meta.width ?? 100, height: meta.height ?? 100 });
+    if (hasProblems(problems)) return { problems, image: null };
+    let image: Buffer | null = img.data;
+    if (quad) {
+      try { image = (await cropToQuad(img.data, quad, "png")) ?? img.data; } catch { image = img.data; }
     }
-    if (!layout) {
-      // Name which stage died — reading missing vs JSON-less vs validator-null
-      // were indistinguishable the first time this failed in production.
-      console.error(
-        `[design-transfer] both engines failed for ${user.id}:`,
-        reading === null ? "aiVision returned null" : match ? `validator rejected: ${match[0].slice(0, 300)}` : `no JSON in: ${String(reading).slice(0, 200)}`,
-      );
-      return NextResponse.json({ error: "generation_failed" }, { status: 502 });
-    }
-    try {
-      const toDataUri = (r: { imageBase64: string; mediaType: string } | null) =>
-        r ? `data:${r.mediaType};base64,${r.imageBase64}` : null;
-      const face = await renderFaceImage(layout, identity, {
-        headshot: toDataUri(headshot),
-        logo: toDataUri(logo),
-      });
-      png = await sharp(face).png().toBuffer();
-    } catch (e) {
-      console.error("[design-transfer] face render failed:", e);
-      return NextResponse.json({ error: "generation_failed" }, { status: 502 });
-    }
+    return { problems, image };
+  };
+
+  // ── The artwork: generate, check, name what was wrong, try once more ──────
+  // The strip pass disobeys on the first try often enough (it keeps the logo,
+  // a line of text, the paper look, or draws the card on a backdrop) that one
+  // corrective retry naming the problem is worth its cost. Twice over, the
+  // design still comes back — as measured panels and colours, with no artwork
+  // image — and the owner can Try again for the artwork.
+  let art: Buffer | null = null;
+  let last: OutputProblems = { leaks: [], photo: false, scene: false };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const prompt = stripArtworkPrompt(spec) + (attempt === 0 ? "" : retrySuffix(last));
+    const candidate = await aiImageEdit({ imageBase64, mediaType, prompt });
+    if (!candidate) break; // engine unavailable — nothing a retry would change
+    const { problems, image } = await check(candidate);
+    if (image) { art = image; break; }
+    console.error(
+      `[design-transfer] artwork attempt ${attempt + 1} rejected for ${user.id}:`,
+      [...problems.leaks, ...(problems.photo ? ["(looks like a photo of paper)"] : []), ...(problems.scene ? ["(card drawn small in a scene)"] : [])].join(", "),
+    );
+    last = problems;
   }
 
   // Stored immediately (bucket is public, like every card image): the preview
-  // <img> needs a URL either way, and an unapproved file is just an orphan —
-  // the same deal the deferred photo/logo uploads already accept.
-  const path = `${user.id}/face-${Date.now()}.png`;
-  const { error: upErr } = await adminSupabase.storage
-    .from("card-uploads")
-    .upload(path, png, { contentType: "image/png", upsert: false });
-  if (upErr) {
-    console.error("[design-transfer] storage upload failed:", upErr.message);
-    return NextResponse.json({ error: "storage_failed" }, { status: 502 });
+  // needs a URL either way, and an unapproved file is just an orphan — the
+  // same deal the deferred photo/logo uploads already accept.
+  let bgImage: string | null = null;
+  if (art) {
+    try {
+      // The card's own shape. cover-crop, not pad: the model was told to fill
+      // the canvas and the check cut the card out, so drift is slivers.
+      const png = await sharp(art).resize(1400, 800, { fit: "cover" }).png().toBuffer();
+      const path = `${user.id}/art-${Date.now()}.png`;
+      const { error: upErr } = await adminSupabase.storage
+        .from("card-uploads")
+        .upload(path, png, { contentType: "image/png", upsert: false });
+      if (upErr) console.error("[design-transfer] storage upload failed:", upErr.message);
+      else bgImage = adminSupabase.storage.from("card-uploads").getPublicUrl(path).data.publicUrl;
+    } catch (e) {
+      console.error("[design-transfer] artwork normalise failed:", e);
+    }
   }
-  const { data: pub } = adminSupabase.storage.from("card-uploads").getPublicUrl(path);
 
+  const layout = freeLayoutFromFace(face, identity, { bgImage });
   return NextResponse.json({
-    url: pub.publicUrl,
+    layout,
+    artwork: !!bgImage,
     checklist: transferChecklist(identity),
   });
 }

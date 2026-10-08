@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyHomography, cardQuadFromScan, flatSize, homography, warpQuad, type Pt } from "@/lib/card-flatten";
+import { applyHomography, cardQuadFromScan, flatSize, homography, quadCoverage, warpQuad, LOCATE_CARD_PROMPT, type Pt } from "@/lib/card-flatten";
 
 // A photo of a paper card is found and laid flat before anything is redrawn
 // (owner, 2026-10-06: a loosely shot card should still copy its design, not
@@ -31,9 +31,22 @@ describe("cardQuadFromScan", () => {
     const q = cardQuadFromScan(photo([[80, 75], [20, 25], [15, 70], [85, 20]]), W, H)!;
     expect(q).toEqual([[200, 200], [850, 160], [800, 600], [150, 560]]);
   });
-  it("nothing to flatten: a flat design, or a card already filling the frame", () => {
+  it("nothing to cut: no corners, or a card already filling the frame", () => {
     expect(cardQuadFromScan({ kind: "flat_design" }, W, H)).toBeNull();
     expect(cardQuadFromScan(photo([[0, 0], [100, 0], [100, 100], [0, 100]]), W, H)).toBeNull();
+    expect(cardQuadFromScan({ kind: "flat_design", corners: [[0, 0], [100, 0], [100, 100], [0, 100]] }, W, H)).toBeNull();
+  });
+  it("a flat design with anything around the card is cut to the card too (2026-10-08)", () => {
+    // A template mockup: the card on a backdrop with margins. It used to pass
+    // through whole, and the whole picture became "the card".
+    const q = cardQuadFromScan({ kind: "flat_design", corners: [[15, 20], [85, 20], [85, 80], [15, 80]] }, W, H);
+    expect(q).toEqual([[150, 160], [850, 160], [850, 640], [150, 640]]);
+    expect(quadCoverage(q!, W, H)).toBeCloseTo(0.42, 2);
+    // Any other kind is a misreading.
+    expect(cardQuadFromScan({ kind: "painting", corners: [[15, 20], [85, 20], [85, 80], [15, 80]] }, W, H)).toBeNull();
+    // The prompt always asks for corners, and names what counts as "around".
+    expect(LOCATE_CARD_PROMPT).toMatch(/Always give corners/);
+    expect(LOCATE_CARD_PROMPT).toMatch(/mockup backdrop, a drop shadow, a web page/);
   });
   it("rejects junk: wrong count, non-numbers, wild values, specks, collapsed corners", () => {
     expect(cardQuadFromScan(photo([[10, 10], [90, 10], [90, 90]]), W, H)).toBeNull();

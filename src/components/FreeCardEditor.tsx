@@ -517,6 +517,19 @@ export default function FreeCardEditor({ layout, data, commit, undo, canvasClass
             </>
           ) : (
             <>
+              {/* A copied card's artwork sits under everything (Copy a card).
+                  Removing it leaves the background colour and every element. */}
+              {layout.bgImage && (
+                <div className="flex gap-2 items-center">
+                  <span className={`${rowLabel} pt-0`}>Artwork</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[0.75rem] text-gray-300">Copied from your card</span>
+                    <button type="button" onClick={() => commit({ ...layout, bgImage: undefined })} className={`${chip} ${chipOff}`}>
+                      Remove artwork
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="flex gap-2">
                 <span className={rowLabel}>Background</span>
                 {colorRow(

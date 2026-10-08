@@ -958,6 +958,9 @@ export function normalizeCustomLayout(raw: unknown): CustomLayout {
     panelTextColor: safeCssOpt(l.panelTextColor),
     fontFamily: safeFont(l.fontFamily, fallback.fontFamily),
     faceImage: safeFaceImage(l.faceImage),
+    // The copied artwork under a free design — an <img src> for every visitor,
+    // exactly like faceImage, so it passes the same host guard.
+    bgImage: safeFaceImage(l.bgImage),
   };
 
   if (Array.isArray(l.blocks) && l.blocks.length) {
