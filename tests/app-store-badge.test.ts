@@ -52,7 +52,7 @@ describe("one look, the header's", () => {
   it("has no tones left to drift apart", () => {
     expect(src).not.toMatch(/tones*[=?:]/);
     expect(src).not.toMatch(/TONES/);
-    for (const [f] of CONSUMERS) expect(read(f), f).not.toMatch(/<AppStoreBadge[^>]*tone=/);
+    for (const [f] of CONSUMERS) expect(read(f), f).not.toMatch(/<(AppStoreBadge|StoreBadges)[^>]*\btone=/);
   });
 
   it("takes its colours from one CSS rule, never a Tailwind colour class a theme can remap", () => {
@@ -85,7 +85,7 @@ describe("one look, the header's", () => {
     expect(src).not.toMatch(/md: {/);
     for (const [f] of CONSUMERS) {
       if (f === "src/app/page.tsx") continue;
-      expect(read(f), f).not.toMatch(/<AppStoreBadge[^>]*size="(md|lg)"/);
+      expect(read(f), f).not.toMatch(/<(AppStoreBadge|StoreBadges)[^>]*size="(md|lg)"/);
     }
   });
 });
@@ -136,7 +136,7 @@ describe("placement", () => {
     expect(cta).toBeGreaterThan(-1);
     expect(src.slice(cta)).toContain("See how it works");
     // Order: the button, then the badge, then the claim box.
-    const badge = src.indexOf("<AppStoreBadge", cta);
+    const badge = src.indexOf("<StoreBadges", cta);
     expect(badge, "the badge must come after the CTA").toBeGreaterThan(cta);
     expect(src.indexOf("<HeroClaim", cta), "the claim box stays last").toBeGreaterThan(badge);
     expect(src.slice(badge, badge + 120)).toContain('className="lg:hidden"');
@@ -148,7 +148,7 @@ describe("placement", () => {
   // that does fit was a compromise nobody asked for.
   it("nav: the badge is in the desktop cluster and nowhere else", () => {
     const nav = read("src/components/site/SiteNav.tsx");
-    const uses = [...nav.matchAll(/<AppStoreBadge/g)];
+    const uses = [...nav.matchAll(/<StoreBadges/g)];
     expect(uses).toHaveLength(1);
 
     // It must live inside the `hidden lg:flex` cluster, which is what keeps it
@@ -158,12 +158,13 @@ describe("placement", () => {
     expect(desktopStart).toBeGreaterThan(-1);
     expect(mobileStart).toBeGreaterThan(desktopStart);
     const desktopCluster = nav.slice(desktopStart, mobileStart);
-    expect(desktopCluster).toContain("<AppStoreBadge");
+    expect(desktopCluster).toContain("<StoreBadges");
     // Ahead of Log in, behind Get started free.
-    expect(desktopCluster.indexOf("<AppStoreBadge")).toBeLessThan(desktopCluster.indexOf('href="/login"'));
-    expect(desktopCluster.indexOf('href="/cards/new"')).toBeGreaterThan(desktopCluster.indexOf("<AppStoreBadge"));
+    expect(desktopCluster.indexOf("<StoreBadges")).toBeLessThan(desktopCluster.indexOf('href="/login"'));
+    expect(desktopCluster.indexOf('href="/cards/new"')).toBeGreaterThan(desktopCluster.indexOf("<StoreBadges"));
 
     // Nothing in the mobile bar or the menu sheet.
+    expect(nav.slice(mobileStart)).not.toContain("<StoreBadges");
     expect(nav.slice(mobileStart)).not.toContain("<AppStoreBadge");
   });
 
@@ -196,12 +197,16 @@ describe("self-activating contract", () => {
   // listing exists, so a badge can be placed anywhere without shipping a dead
   // link. Every variant must honour it — a new one that forgets would render a
   // link to nowhere.
-  it("renders nothing when NEXT_PUBLIC_APP_STORE_URL is unset", async () => {
+  it("renders nothing when no store URL is set", async () => {
     vi.stubEnv("NEXT_PUBLIC_APP_STORE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_PLAY_STORE_URL", "");
     const { renderToStaticMarkup } = await import("react-dom/server");
     const { createElement: h } = await import("react");
     const mod = await import("@/components/AppStoreBadge");
     expect(renderToStaticMarkup(h(mod.default))).toBe("");
+    expect(renderToStaticMarkup(h(mod.GooglePlayBadge))).toBe("");
+    expect(renderToStaticMarkup(h(mod.GetTheAppBadge))).toBe("");
+    expect(renderToStaticMarkup(h(mod.StoreBadges))).toBe("");
     expect(renderToStaticMarkup(h(mod.GetTheAppCard))).toBe("");
   });
 
@@ -246,19 +251,19 @@ describe("the hero badge and the nav badge are complements", () => {
 
   it("the hero carries a phone-only badge beside See how it works", () => {
     const row = hero.slice(hero.indexOf('id="hero-cta"') - 900, hero.indexOf("<HeroClaim"));
-    expect(row, "the badge must sit in the same row as the CTA").toContain("<AppStoreBadge");
-    expect(row).toMatch(/<AppStoreBadge[^>]*className="lg:hidden"/);
+    expect(row, "the badges must sit in the same row as the CTA").toContain("<StoreBadges");
+    expect(row).toMatch(/<StoreBadges[^>]*className="lg:hidden"/);
     // size="lg" is the one built for this slot — 50px tall, matching the
     // .rd-btn-lg beside it to the pixel. Any other size and the two sit a
     // couple of pixels off, which is the sort of thing you cannot unsee.
-    expect(row).toMatch(/<AppStoreBadge[^>]*size="lg"/);
+    expect(row).toMatch(/<StoreBadges[^>]*size="lg"/);
   });
 
   it("the nav badge stays desktop-only, so the two never both show", () => {
     // Anchored on the badge and read BACKWARDS to its wrapper: the file has
     // more than one `hidden lg:flex`, and slicing from the first found the
     // desktop links row instead of the button cluster.
-    const at = nav.indexOf("<AppStoreBadge");
+    const at = nav.indexOf("<StoreBadges");
     expect(at, "the nav must still carry a badge").toBeGreaterThan(-1);
     const before = nav.slice(0, at);
     const wrapper = before.lastIndexOf('<div className="hidden lg:flex');
@@ -276,22 +281,60 @@ describe("the hero badge and the nav badge are complements", () => {
   });
 });
 
-// One store per visitor (owner, 2026-10-06): the boot script tags <html
-// data-sc-os> before paint and CSS shows Google Play only on Android, the App
-// Store everywhere else — so iPhone and desktop look exactly as before Play.
-describe("phones see only their own store", () => {
+// One store per visitor (owner, 2026-10-06; computers 2026-10-08): the boot
+// script tags <html data-sc-os> before paint from lib/store-os, and CSS shows
+// Google Play only on Android, the App Store on iPhone/iPad/Mac, and the
+// "Get the app" button (→ /download, QR + both stores) on any other computer.
+// Behaviour (which UA gets which value) is tested in tests/store-os.test.ts
+// and, in a real browser, tests/render/store-badges-per-device.test.ts; this
+// pins the wiring.
+describe("every device sees exactly one store badge", () => {
   const boot = read("src/app/layout.tsx");
   const css = read("src/app/globals.css");
   const badge = read("src/components/AppStoreBadge.tsx");
-  it("the boot script tags the OS before paint and keeps the tag", () => {
-    expect(boot).toContain("setAttribute('data-sc-os','android')");
-    expect(boot).toContain("setAttribute('data-sc-os','ios')");
+  it("the boot script takes the decision from lib/store-os, before paint, and keeps the tag", () => {
+    expect(boot).toContain('import { storeOsBoot } from "@/lib/store-os"');
+    expect(boot).toMatch(/storeOsBoot\(\{ apple: APP_STORE_URL !== null, play: PLAY_STORE_URL !== null \}\) \+/);
+    // No second, hand-written copy of the detection left in the layout.
+    expect(boot).not.toMatch(/data-sc-os','(android|ios)'/);
+    // Inside the beforeInteractive sc-boot script, ahead of the observer that
+    // restores the attribute after a React root re-render.
+    const script = boot.slice(boot.indexOf('id="sc-boot"'));
+    expect(script.indexOf("storeOsBoot(")).toBeGreaterThan(-1);
+    expect(script.indexOf("storeOsBoot(")).toBeLessThan(script.indexOf("new MutationObserver"));
     expect(boot).toContain("a==='data-sc-os'");
     expect(boot).toMatch(/attributeFilter:\[[^\]]*'data-sc-os'/);
   });
-  it("each badge carries its store class and CSS hides the other store", () => {
+  it("each badge carries its store class and CSS hides the two that don't belong", () => {
     expect(badge).toContain("sc-appstore-badge sc-store-apple");
     expect(badge).toContain("sc-appstore-badge sc-store-play");
-    expect(css).toContain(':root:not([data-sc-os="android"]) .sc-store-play, [data-sc-os="android"] .sc-store-apple { display: none !important; }');
+    expect(badge).toContain("sc-appstore-badge sc-store-get");
+    // The Get badge takes the Apple badge's place only where it stands beside
+    // it; StoreBadges marks that Apple badge so the rule can tell.
+    expect(badge).toMatch(/<AppStoreBadge size=\{size\} className=\{`sc-store-paired \$\{className\}`/);
+    expect(css).toContain(
+      ':root:not([data-sc-os="android"]) .sc-store-play,\n' +
+      ':root:not([data-sc-os="other"]) .sc-store-get,\n' +
+      '[data-sc-os="android"] .sc-store-apple,\n' +
+      '[data-sc-os="other"] .sc-store-apple.sc-store-paired { display: none !important; }',
+    );
+  });
+  it("the Get badge is a same-site link to /download that hides in the shell", () => {
+    const block = badge.slice(badge.indexOf("export function GetTheAppBadge"), badge.indexOf("export function StoreBadges"));
+    expect(block).toContain('href="/download"');
+    expect(block).not.toContain('target="_blank"');
+    expect(block).toMatch(/<NativeHidden>/);
+    expect(block).toContain("rd-appstore-shine");
+  });
+  it("every download row renders the trio through StoreBadges, and /download alone keeps the explicit pair", () => {
+    for (const [f] of CONSUMERS) {
+      const src = read(f);
+      // No hand-placed Play badge anywhere — it only ever comes from StoreBadges.
+      expect(src, f).not.toContain("<GooglePlayBadge");
+    }
+    const dl = read("src/app/download/page.tsx");
+    expect(dl).toContain("<AppStoreBadge");
+    expect(dl).toContain("<GooglePlayBadge");
+    expect(dl).not.toContain("<StoreBadges");
   });
 });

@@ -20,7 +20,7 @@ import TakeTourButton from "@/components/TakeTourButton";
 import NativeHidden from "@/components/NativeHidden";
 import { APP_STORE_URL, APP_STORE_WRITE_REVIEW_URL, PLAY_STORE_URL } from "@/lib/app-store";
 import RateUsLink from "@/components/RateUsLink";
-import AppStoreBadge, { GooglePlayBadge } from "@/components/AppStoreBadge";
+import AppStoreBadge, { StoreBadges } from "@/components/AppStoreBadge";
 import AppTopNav from "@/components/AppTopNav";
 import { isAdminEmail } from "@/lib/admin";
 import { ensureUserCards } from "@/lib/ensure-cards";
@@ -456,8 +456,7 @@ export default async function FlowSettingsPage({
                 {/* The shared badge — the header's look (owner, 2026-09-18),
                     not the blue "App Store" chip that stood here. */}
                 <div className="flex flex-wrap items-center justify-end gap-2.5 shrink-0">
-                  <AppStoreBadge />
-                  <GooglePlayBadge />
+                  <StoreBadges />
                 </div>
               </div>
             </NativeHidden>

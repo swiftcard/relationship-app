@@ -3,7 +3,7 @@ import { SwiftCardIcon } from "@/components/SwiftCardLogo";
 import HomeLink from "@/components/site/HomeLink";
 import SalesChat from "@/components/site/SalesChat";
 import NativeHidden from "@/components/NativeHidden";
-import AppStoreBadge, { GooglePlayBadge } from "@/components/AppStoreBadge";
+import { StoreBadges } from "@/components/AppStoreBadge";
 import RateUsLink from "@/components/RateUsLink";
 
 // Marketing footer — real routes only, no invented content.
@@ -103,8 +103,7 @@ export default function SiteFooter({ light = false }: { light?: boolean }) {
                 reading the marketing site in a browser is exactly who should
                 see it, and the whole footer is already hidden in the shell. */}
             <div className="mt-4 flex flex-wrap items-center gap-2.5">
-              <AppStoreBadge size="sm" />
-              <GooglePlayBadge size="sm" />
+              <StoreBadges size="sm" />
               {/* A second button beside the badge, not a grey line under it
                   (owner, 2026-09-22: "it should be easier to find"). Same
                   radius and height as the sm badge so the pair reads as one

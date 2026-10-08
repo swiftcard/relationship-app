@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { APP_STORE_URL, PLAY_STORE_URL } from "@/lib/app-store";
 import NativeHidden from "@/components/NativeHidden";
 
@@ -140,6 +141,76 @@ export function GooglePlayBadge({ size = "sm", className = "" }: { size?: Size; 
   );
 }
 
+/** A QR-code mark, sized like AppleGlyph: "scan this with your phone". White
+ *  by attribute, like the Apple mark — no colour utility a theme could remap. */
+function QrGlyph({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={`${className ?? ""} shrink-0`} fill="#fff" fillRule="evenodd">
+      <path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm1 1h2v2H6V6zm7-3h8v8h-8V3zm2 2v4h4V5h-4zm1 1h2v2h-2V6zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm1 1h2v2H6v-2zm7-3h3v3h-3v-3zm5 0h3v3h-3v-3zm-5 5h3v3h-3v-3zm5 0h3v3h-3v-3zm-2.5-2.5h2v2h-2v-2z" />
+    </svg>
+  );
+}
+
+// What the top line of the "Get the app" badge promises — only the stores that
+// exist (lib/app-store's self-activating contract), decided at build time.
+const GET_THE_APP_TOP = APP_STORE_URL && PLAY_STORE_URL ? "iPhone & Android" : PLAY_STORE_URL ? "Android" : "iPhone & iPad";
+
+/**
+ * "Get the app" — the badge a computer with no store of its own sees.
+ *
+ * A Windows, Linux or Chromebook visitor can't install from the App Store or
+ * Google Play, so where the other two badges stand this one takes their place
+ * (CSS, by data-sc-os="other") and opens /download: the page with the QR code
+ * to scan and both store buttons. Same pill, same sizes, same shine, so the
+ * row it sits in doesn't move by a pixel between devices. A same-site Link,
+ * not a store URL, so it stays in this tab. Never inside the shell, where
+ * /download is a trip to /dashboard anyway (src/proxy.ts).
+ */
+export function GetTheAppBadge({ size = "sm", className = "", onClick }: { size?: Size; className?: string; onClick?: () => void }) {
+  if (!APP_STORE_URL && !PLAY_STORE_URL) return null;
+  const s = SIZES[size];
+  return (
+    <NativeHidden>
+      <Link
+        href="/download"
+        onClick={onClick}
+        className={`sc-appstore-badge sc-store-get relative overflow-hidden inline-flex items-center ${s.gap} ${s.radius} ${s.pad} transition-colors ${className}`}
+      >
+        <QrGlyph className={s.glyph} />
+        <span className="leading-tight">
+          <span className={`sc-asb-top block ${s.top}`}>{GET_THE_APP_TOP}{" "}</span>
+          <span className={`sc-asb-main block font-semibold ${s.main} tracking-tight`}>Get the&nbsp;app</span>
+        </span>
+        <span className="rd-appstore-shine" aria-hidden="true" />
+      </Link>
+    </NativeHidden>
+  );
+}
+
+/**
+ * THE download row: all three badges, of which the visitor sees exactly one.
+ *
+ * Every place that offers the app renders this and nothing else — the hero,
+ * the header, the footer, the post-signup popup, Settings, the "card is live"
+ * card. The boot script (lib/store-os) tags <html data-sc-os> before paint and
+ * one rule in globals.css hides the two that don't belong, so no device ever
+ * sees two and nothing flashes. A fragment, not a wrapper, so each caller's
+ * row keeps its own flex/gap/wrap exactly as it was.
+ *
+ * `sc-store-paired` marks the Apple badge as one that has a Get-the-app twin
+ * to stand in for it on a Windows/Linux computer; a standalone AppStoreBadge
+ * (Rate-us surfaces) has no twin and is left alone by that rule.
+ */
+export function StoreBadges({ size = "sm", className = "", onClick }: { size?: Size; className?: string; onClick?: () => void }) {
+  return (
+    <>
+      <AppStoreBadge size={size} className={`sc-store-paired ${className}`.trim()} onClick={onClick} />
+      <GooglePlayBadge size={size} className={className} />
+      <GetTheAppBadge size={size} className={className} onClick={onClick} />
+    </>
+  );
+}
+
 /**
  * The "you just made a card — now get the app" block.
  *
@@ -167,11 +238,10 @@ export function GetTheAppCard({ className = "" }: { className?: string }) {
           Share your card with a tap, keep it in Apple Wallet, and see who viewed it — right from your phone.
         </p>
         <div className="mt-3.5 flex flex-wrap justify-center gap-2.5">
-          {/* The header's badge, like every other one. Its colours are fixed
-              (globals.css .sc-appstore-badge), so it reads on this card's
-              light AND dark screens (/welcome, the builder). */}
-          <AppStoreBadge />
-          <GooglePlayBadge />
+          {/* The header's badges, like every other row. Their colours are
+              fixed (globals.css .sc-appstore-badge), so they read on this
+              card's light AND dark screens (/welcome, the builder). */}
+          <StoreBadges />
         </div>
       </div>
     </NativeHidden>

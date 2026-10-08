@@ -12,7 +12,8 @@ import AnalyticsProvider from "@/components/AnalyticsProvider";
 import SiteAnalytics from "@/components/SiteAnalytics";
 import ClientErrorReporter from "@/components/ClientErrorReporter";
 import { ORGANIZATION_JSONLD, WEBSITE_JSONLD, jsonLdScript } from "@/lib/brand";
-import { APP_STORE_ID } from "@/lib/app-store";
+import { APP_STORE_ID, APP_STORE_URL, PLAY_STORE_URL } from "@/lib/app-store";
+import { storeOsBoot } from "@/lib/store-os";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
 // The marketing DISPLAY face (design batch 2, 2026-09-11). Headlines on the
@@ -151,11 +152,13 @@ export default function RootLayout({
               // rather than flash the new-customer trial (see home.css). Only a
               // cookie NAME is read; the check that counts is server-side.
               "if(/(^|;\\s*)sb-[^=]*-auth-token/.test(document.cookie))document.documentElement.setAttribute('data-sc-authed','');" +
-              // Which phone this is, before paint, so the store badges can show
-              // only the visitor's own store (Android → Google Play, everything
-              // else → App Store) with no flash of the other. iPadOS reports
-              // itself as a Mac, so a touch "Mac" counts as iOS.
-              "var U=navigator.userAgent;if(/Android/i.test(U))document.documentElement.setAttribute('data-sc-os','android');else if(/iPhone|iPad|iPod/.test(U)||(/Macintosh/.test(U)&&navigator.maxTouchPoints>1))document.documentElement.setAttribute('data-sc-os','ios');" +
+              // Which store this visitor has, before paint, so the badges can
+              // show only that one — Android → Google Play; iPhone, iPad, Mac →
+              // App Store; a Windows/Linux computer → "Get the app" — with no
+              // flash of another. The rules (and their user-agent matrix test)
+              // live in lib/store-os; this is that decision as an inline string,
+              // with the stores that actually exist baked in at build time.
+              storeOsBoot({ apple: APP_STORE_URL !== null, play: PLAY_STORE_URL !== null }) +
               // React 19 strips EVERY attribute off <html> when a hydration
               // mismatch makes it client-render the root, so the light theme
               // dropped to dark "at random" (owner, 2026-09-24: going back to
