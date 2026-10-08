@@ -86,11 +86,17 @@ if (!res.ok) {
   process.exit(1);
 }
 console.log("checklist:", (body.checklist ?? []).join(" · "));
-console.log("image URL:", body.url);
+// Since 2026-10-08 the answer is an EDITABLE layout: the artwork as bgImage,
+// the owner's details as elements.
+const L = body.layout ?? {};
+console.log(`artwork: ${body.artwork}  bgImage: ${L.bgImage ?? "—"}`);
+for (const e of L.elements ?? []) console.log(`  ${e.id.padEnd(9)} ${e.type.padEnd(6)} x${e.x} y${e.y}`);
+if (!L.elements?.length) { console.log("✗ no elements"); process.exit(1); }
+if (!L.bgImage) { console.log("✗ no artwork came back (layout-only fallback)"); process.exit(1); }
 
-// Fetch the result so a broken storage URL can't masquerade as success.
-const img = await fetch(body.url);
+// Fetch the artwork so a broken storage URL can't masquerade as success.
+const img = await fetch(L.bgImage);
 const bytes = Buffer.from(await img.arrayBuffer());
-console.log(`result fetch: ${img.status}, ${(bytes.length / 1024).toFixed(0)}KB, ${img.headers.get("content-type")}`);
+console.log(`artwork fetch: ${img.status}, ${(bytes.length / 1024).toFixed(0)}KB, ${img.headers.get("content-type")}`);
 if (!img.ok || bytes.length < 10_000) process.exit(1);
-console.log("\n✅ E2E PASS — the pipeline generates, stores and serves a rebuilt design.");
+console.log("\n✅ E2E PASS — the pipeline measures, redraws, stores and serves an editable copy.");

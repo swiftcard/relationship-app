@@ -31,9 +31,13 @@ export const LOCATE_CARD_PROMPT = [
   "digital design (a screenshot, an exported template, a mockup, a scan)?",
   "",
   "Return ONLY valid JSON:",
-  '{"kind":"photo_of_physical_card"|"flat_design",',
+  '{"kind":"photo_of_physical_card"|"flat_design","fillsFrame":true|false,',
   ' "corners":[[x,y],[x,y],[x,y],[x,y]]}',
   "",
+  "fillsFrame = true ONLY when the card's four edges coincide with the image's",
+  "four edges — nothing but card is visible. If ANY table, hand, backdrop, margin,",
+  "shadow, page or second card shows on ANY side, or the card is tilted at all,",
+  "fillsFrame is false.",
   "corners = the four corners of ONE business card's face — the card's own outer",
   "edge, where the card ends and whatever is around it begins (a table, a hand,",
   "a mockup backdrop, a drop shadow, a web page, white margin, a caption) — as",
@@ -42,9 +46,17 @@ export const LOCATE_CARD_PROMPT = [
   "straight edges would meet. If several cards are visible, use the one that is",
   "largest and most in focus (for a front-and-back pair, the FRONT: the side with",
   "the name). Do NOT trace a panel, a photo or a logo inside the card — only the",
-  "card's full face. If the card fills the whole image exactly, return",
+  "card's full face. Only when fillsFrame is true, return",
   "[[0,0],[100,0],[100,100],[0,100]]. Always give corners.",
 ].join("\n");
+
+/** What the reading said the image is — the route decides fallbacks by it. */
+export type CardImageKind = "photo" | "flat" | "unknown";
+
+export function cardKindFromScan(raw: unknown): CardImageKind {
+  const k = raw && typeof raw === "object" ? (raw as { kind?: unknown }).kind : null;
+  return k === "photo_of_physical_card" ? "photo" : k === "flat_design" ? "flat" : "unknown";
+}
 
 /** A 3×3 projective transform (row-major, h[8] = 1) mapping `from[i]` → `to[i]`. */
 export function homography(from: Pt[], to: Pt[]): number[] | null {
@@ -216,8 +228,8 @@ export async function cropToQuad(image: Buffer, quad: Pt[], format: "jpeg" | "pn
 export async function prepareCardImage(
   imageBase64: string,
   mediaType: string,
-): Promise<{ imageBase64: string; mediaType: string; flattened: boolean }> {
-  const unchanged = { imageBase64, mediaType, flattened: false };
+): Promise<{ imageBase64: string; mediaType: string; flattened: boolean; kind: CardImageKind }> {
+  const unchanged = { imageBase64, mediaType, flattened: false, kind: "unknown" as CardImageKind };
   try {
     const sharp = (await import("sharp")).default;
     // One upright, EXIF-free copy, so the pixels we warp are exactly the
@@ -231,14 +243,73 @@ export async function prepareCardImage(
     const b64 = upright.data.toString("base64");
     const reading = await aiVision({ imageBase64: b64, mediaType: "image/jpeg", prompt: LOCATE_CARD_PROMPT, json: true, maxTokens: 300 });
     const m = reading?.match(/\{[\s\S]*\}/);
-    let quad: Pt[] | null = null;
-    try { quad = m ? cardQuadFromScan(JSON.parse(m[0]), upright.info.width, upright.info.height) : null; } catch { quad = null; }
-    if (!quad) return unchanged;
+    let parsed: unknown = null;
+    try { parsed = m ? JSON.parse(m[0]) : null; } catch { parsed = null; }
+    const kind = cardKindFromScan(parsed);
+    const quad = parsed ? cardQuadFromScan(parsed, upright.info.width, upright.info.height) : null;
+    // One line per read, always: when a copy comes out with the desk still on
+    // it, this is the only way to tell a lazy reading from a rejected one.
+    console.log(`[card-flatten] locate: ${JSON.stringify(parsed)?.slice(0, 160) ?? "no JSON"} → ${quad ? "crop" : "unchanged"}`);
+    if (!quad) return { ...unchanged, kind };
     const jpeg = await cropToQuad(upright.data, quad, "jpeg");
-    if (!jpeg) return unchanged;
-    return { imageBase64: jpeg.toString("base64"), mediaType: "image/jpeg", flattened: true };
+    if (!jpeg) return { ...unchanged, kind };
+    return { imageBase64: jpeg.toString("base64"), mediaType: "image/jpeg", flattened: true, kind };
   } catch (e) {
     console.error("[card-flatten] failed, using the original image:", e);
     return unchanged;
   }
+}
+
+// ── Painting the content out ourselves ──────────────────────────────────────
+//
+// Asked to redraw a card "without its text", the image model keeps a line or
+// the logo about half the time on a busy card (live, 2026-10-08: the email,
+// phone and website on the first try, the street address on the second). We
+// already MEASURE where every text, logo and photo sits, so the boxes are
+// filled with the surface colour around them before the model ever sees the
+// card: there is nothing left to keep. The fill is flat, which is exactly what
+// the model is then asked to continue. On a flat design the masked card is
+// also a usable artwork by itself — the real design minus its content.
+
+export type PctBox = { x: number; y: number; w: number; h: number };
+
+/** The colour just outside a box: the four edge midpoints, the closest pair averaged. */
+function surroundColour(px: Uint8Array, W: number, H: number, ch: number, b: { l: number; t: number; r: number; b: number }, gap: number): [number, number, number] {
+  const at = (x: number, y: number): [number, number, number] => {
+    const cx = Math.min(W - 1, Math.max(0, Math.round(x))), cy = Math.min(H - 1, Math.max(0, Math.round(y)));
+    const i = (cy * W + cx) * ch;
+    return [px[i], px[i + 1], px[i + 2]];
+  };
+  const mx = (b.l + b.r) / 2, my = (b.t + b.b) / 2;
+  const s = [at(b.l - gap, my), at(b.r + gap, my), at(mx, b.t - gap), at(mx, b.b + gap)];
+  let best: [number, number] = [0, 1], bd = Infinity;
+  for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) {
+    const d = Math.hypot(s[i][0] - s[j][0], s[i][1] - s[j][1], s[i][2] - s[j][2]);
+    if (d < bd) { bd = d; best = [i, j]; }
+  }
+  const a = s[best[0]], c = s[best[1]];
+  return [Math.round((a[0] + c[0]) / 2), Math.round((a[1] + c[1]) / 2), Math.round((a[2] + c[2]) / 2)];
+}
+
+/**
+ * Fill each box (percent of the image) with the colour found just outside it.
+ * Boxes grow by `pad` percent on every side so descenders and anti-aliased
+ * edges go too. Returns a JPEG; never throws past sharp's own decode errors.
+ */
+export async function maskRegions(image: Buffer, boxes: PctBox[], pad = 1.2): Promise<Buffer> {
+  const sharp = (await import("sharp")).default;
+  const raw = await sharp(image).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { width: W, height: H, channels: ch } = raw.info;
+  const px = new Uint8Array(raw.data.buffer, raw.data.byteOffset, raw.data.byteLength);
+  const rects: string[] = [];
+  for (const b of boxes) {
+    const l = Math.max(0, ((b.x - pad) / 100) * W), t = Math.max(0, ((b.y - pad) / 100) * H);
+    const r = Math.min(W, ((b.x + b.w + pad) / 100) * W), bt = Math.min(H, ((b.y + b.h + pad) / 100) * H);
+    if (r - l < 2 || bt - t < 2) continue;
+    const [cr, cg, cb] = surroundColour(px, W, H, ch, { l, t, r, b: bt }, Math.max(3, W * 0.004));
+    rects.push(`<rect x="${l.toFixed(1)}" y="${t.toFixed(1)}" width="${(r - l).toFixed(1)}" height="${(bt - t).toFixed(1)}" fill="rgb(${cr},${cg},${cb})"/>`);
+  }
+  if (!rects.length) return sharp(image).removeAlpha().jpeg({ quality: 92 }).toBuffer();
+  const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">${rects.join("")}</svg>`);
+  return sharp(image).removeAlpha().composite([{ input: svg }]).jpeg({ quality: 92 }).toBuffer();
 }

@@ -8,10 +8,10 @@ import {
   transferChecklist, type TransferIdentity,
   PRECISE_SCAN_PROMPT, faceLayoutFromScan, freeLayoutFromFace,
   OUTPUT_CHECK_PROMPT, outputProblems, hasProblems, retrySuffix, stripArtworkPrompt,
-  DESIGN_SPEC_PROMPT, cleanDesignSpec, SOURCE_FACTS_PROMPT, sourceFacts, EMPTY_FACTS,
+  DESIGN_SPEC_PROMPT, cleanDesignSpec, SOURCE_FACTS_PROMPT, sourceFacts, EMPTY_FACTS, maskBoxes,
   type OutputProblems, type SourceFacts,
 } from "@/lib/design-transfer";
-import { cropToQuad, prepareCardImage } from "@/lib/card-flatten";
+import { cropToQuad, maskRegions, prepareCardImage } from "@/lib/card-flatten";
 import { aiConsentBlock } from "@/lib/ai-consent-server";
 
 // "Copy a card or template you like" — the design in the picture, re-issued to
@@ -202,17 +202,34 @@ export async function POST(request: NextRequest) {
     return { problems, image };
   };
 
+  // ── Paint the content out ourselves, THEN ask for the redraw ──────────────
+  // Every measured text, logo and photo box is filled with the surface colour
+  // around it (lib/card-flatten maskRegions). The model then redraws a card
+  // that already has nothing on it — it kept a line or the logo about half the
+  // time when asked to leave them out (live, 2026-10-08). Falls back to the
+  // unmasked card if the paint-out itself fails.
+  let masked: { imageBase64: string; mediaType: string } | null = null;
+  try {
+    const boxes = maskBoxes(face);
+    if (boxes.length) {
+      const m = await maskRegions(Buffer.from(imageBase64, "base64"), boxes);
+      masked = { imageBase64: m.toString("base64"), mediaType: "image/jpeg" };
+    }
+  } catch (e) {
+    console.error("[design-transfer] mask failed, redrawing the unmasked card:", e);
+  }
+  const source = masked ?? { imageBase64, mediaType };
+
   // ── The artwork: generate, check, name what was wrong, try once more ──────
-  // The strip pass disobeys on the first try often enough (it keeps the logo,
-  // a line of text, the paper look, or draws the card on a backdrop) that one
-  // corrective retry naming the problem is worth its cost. Twice over, the
-  // design still comes back — as measured panels and colours, with no artwork
-  // image — and the owner can Try again for the artwork.
+  // One corrective retry naming the problem; twice over, a FLAT design falls
+  // back to the painted-out card itself (the real design minus its content),
+  // and a photo — which must never come back as a photo — to the measured
+  // panels and colours with no artwork image. "Try again" re-rolls.
   let art: Buffer | null = null;
   let last: OutputProblems = { leaks: [], photo: false, scene: false };
   for (let attempt = 0; attempt < 2; attempt++) {
-    const prompt = stripArtworkPrompt(spec) + (attempt === 0 ? "" : retrySuffix(last));
-    const candidate = await aiImageEdit({ imageBase64, mediaType, prompt });
+    const prompt = stripArtworkPrompt(spec, { masked: !!masked }) + (attempt === 0 ? "" : retrySuffix(last));
+    const candidate = await aiImageEdit({ imageBase64: source.imageBase64, mediaType: source.mediaType, prompt });
     if (!candidate) break; // engine unavailable — nothing a retry would change
     const { problems, image } = await check(candidate);
     if (image) { art = image; break; }
@@ -222,6 +239,14 @@ export async function POST(request: NextRequest) {
     );
     last = problems;
   }
+  let artworkFrom: "redraw" | "masked-source" | "none" = art ? "redraw" : "none";
+  if (!art && masked && prepared.kind === "flat") {
+    // The painted-out original passes the same gate as a redraw would: if the
+    // measurement missed a line, it is still on there and must not ship.
+    const { image } = await check({ data: Buffer.from(masked.imageBase64, "base64"), mediaType: "image/jpeg" });
+    if (image) { art = image; artworkFrom = "masked-source"; }
+  }
+  console.log(`[design-transfer] ${user.id}: source ${prepared.kind}${prepared.flattened ? " (cropped)" : ""}, masked ${maskBoxes(face).length} boxes, artwork from ${artworkFrom}`);
 
   // Stored immediately (bucket is public, like every card image): the preview
   // needs a URL either way, and an unapproved file is just an orphan — the

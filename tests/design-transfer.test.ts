@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import {
-  stripArtworkPrompt, transferChecklist, cleanDesignSpec, faceLayoutFromScan, freeLayoutFromFace,
+  stripArtworkPrompt, transferChecklist, cleanDesignSpec, faceLayoutFromScan, freeLayoutFromFace, maskBoxes,
   findLeaks, artworkLeaks, outputProblems, hasProblems, retrySuffix, leakRetrySuffix, sourceFacts,
   OUTPUT_CHECK_PROMPT, SOURCE_FACTS_PROMPT, PRECISE_SCAN_PROMPT, DESIGN_SPEC_PROMPT, EMPTY_FACTS,
 } from "@/lib/design-transfer";
@@ -36,6 +36,11 @@ describe("the artwork prompt", () => {
     expect(p).toMatch(/fills the\s+ENTIRE canvas edge to edge/);
     expect(p).toMatch(/no drop\s+shadow, no table, no second card/);
     expect(p).toMatch(/no paper texture or grain/);
+  });
+
+  it("tells the model the blanked rectangles are deliberate when the card was painted out first", () => {
+    expect(stripArtworkPrompt("", { masked: true })).toMatch(/have been blanked\s+on purpose/);
+    expect(stripArtworkPrompt("")).not.toMatch(/blanked/);
   });
 
   it("the design read rides along when there is one, and never describes the logo", () => {
@@ -120,6 +125,20 @@ describe("faceLayoutFromScan: the measurement validator", () => {
     expect(out.elements.find((e) => e.kind === "phone")!.icon).toBe(true);
     expect(PRECISE_SCAN_PROMPT).toMatch(/"font":"sans"\|"serif"\|"display"\|"elegant"\|"mono"\|"rounded"/);
     expect(PRECISE_SCAN_PROMPT).toMatch(/"icon": true when a small symbol/);
+  });
+
+  it("keeps the extra content boxes for painting out, drops a box that is most of the card", () => {
+    const out = faceLayoutFromScan({
+      background: "#ffffff",
+      elements: [{ kind: "name", x: 10, y: 10, w: 40, h: 8 }, { kind: "logo", x: 70, y: 10, w: 20, h: 20 }],
+      extra: [{ x: 10, y: 80, w: 30, h: 5 }, { x: 0, y: 0, w: 100, h: 60 }, "junk", { x: 50, y: 50 }],
+    })!;
+    expect(out.extra).toEqual([{ x: 10, y: 80, w: 30, h: 5 }]);
+    // Everything measured, plus the extras, is a box to paint out.
+    expect(maskBoxes(out)).toEqual([
+      { x: 10, y: 10, w: 40, h: 8 }, { x: 70, y: 10, w: 20, h: 20 }, { x: 10, y: 80, w: 30, h: 5 },
+    ]);
+    expect(PRECISE_SCAN_PROMPT).toMatch(/extra = the box of EVERY other piece of content/);
   });
 
   it("synthesizes a name slot when the reading lacks one — never rejects for it", () => {
@@ -383,7 +402,7 @@ describe("the route", () => {
   it("cuts the card out, reads it three ways at once, draws artwork only, and answers a layout", () => {
     const flatten = route.indexOf("prepareCardImage(sourceBase64, sourceMediaType)");
     const reads = route.indexOf("prompt: DESIGN_SPEC_PROMPT");
-    const art = route.indexOf("stripArtworkPrompt(spec)");
+    const art = route.indexOf("stripArtworkPrompt(spec, { masked");
     expect(flatten).toBeGreaterThan(-1);
     expect(reads).toBeGreaterThan(flatten);
     expect(art).toBeGreaterThan(reads);
@@ -392,6 +411,14 @@ describe("the route", () => {
     // The artwork is checked in artwork mode against the source facts, and cut to the card.
     expect(route).toMatch(/outputProblems\(scan, identity, facts, \{ artwork: true/);
     expect(route).toContain("cropToQuad(img.data, quad, \"png\")");
+    // The content is painted out BEFORE the model draws, and the model is told so;
+    // a flat design falls back to the painted-out card, through the same gate.
+    const mask = route.indexOf("maskRegions(Buffer.from(imageBase64");
+    expect(mask).toBeGreaterThan(reads);
+    expect(mask).toBeLessThan(art);
+    expect(route).toContain("stripArtworkPrompt(spec, { masked: !!masked })");
+    expect(route).toMatch(/imageBase64: source\.imageBase64, mediaType: source\.mediaType/);
+    expect(route).toMatch(/if \(!art && masked && prepared\.kind === "flat"\)/);
     // No model-drawn text any more: the full rebuild and the server-side typesetter are gone.
     expect(route).not.toMatch(/transferPrompt|renderFaceImage/);
     expect(route).toContain("freeLayoutFromFace(face, identity, { bgImage })");

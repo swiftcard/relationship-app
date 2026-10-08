@@ -131,7 +131,7 @@ export const EMPTY_FACTS: SourceFacts = { names: [], companies: [], brands: [], 
 // The model reproduces ONLY the artwork. The owner's details, headshot and logo
 // go on as our own elements, so nothing here may keep a letter, a logo or a
 // face: where the original had one, the background continues underneath.
-export function stripArtworkPrompt(spec?: string): string {
+export function stripArtworkPrompt(spec?: string, opts: { masked?: boolean } = {}): string {
   return [
     "The image is a REFERENCE: a business card design, often a photo of a printed",
     "paper card. Redraw its ARTWORK as a brand-new, clean, flat DIGITAL graphic —",
@@ -139,6 +139,14 @@ export function stripArtworkPrompt(spec?: string): string {
     "decorative artwork, at the same positions and sizes — as crisp vector-style",
     `art, straight-on. Never reproduce the photograph: ${PHOTO_TRAITS}.`,
     ...specLines(spec),
+    ...(opts.masked
+      ? [
+          "Flat rectangles where text, a logo or a photo used to be have been blanked",
+          "on purpose. Treat them as empty background: continue the surface through",
+          "them seamlessly and do NOT draw anything back into them.",
+          "",
+        ]
+      : []),
     "LEAVE OUT COMPLETELY, with no trace: all text and lettering of every kind",
     "(names, titles, numbers, addresses, slogans, initials, monograms), every logo,",
     "emblem, brand mark, icon and wordmark, every QR code and barcode, and every",
@@ -187,7 +195,19 @@ export type FaceLayout = {
   serif?: boolean;
   font?: FaceFont;
   elements: FaceElement[];
+  /** Every OTHER piece of content (slogans, initials, QR, icons, handles) —
+   *  only so it can be painted out before the artwork pass. */
+  extra: { x: number; y: number; w: number; h: number }[];
 };
+
+/** The boxes to paint out before the model sees the card: every measured
+ *  element (text, logo, photo) and every extra piece of content. */
+export function maskBoxes(face: FaceLayout): { x: number; y: number; w: number; h: number }[] {
+  return [
+    ...face.elements.map((e) => ({ x: e.x, y: e.y, w: e.w, h: e.h })),
+    ...face.extra,
+  ];
+}
 
 /** What the vision model is asked for. Measurements only — it never invents
  *  content, because the renderer only prints the owner's own values. */
@@ -199,10 +219,12 @@ export const PRECISE_SCAN_PROMPT = [
   '{"background":"#rrggbb","font":"sans"|"serif"|"display"|"elegant"|"mono"|"rounded",',
   ' "panels":[{"x":0,"y":0,"w":35,"h":100,"color":"#rrggbb"}],',
   ' "elements":[{"kind":"name","x":40,"y":18,"w":50,"h":10,"align":"left",',
-  '   "color":"#rrggbb","weight":"bold","size":"xl","caps":false,"round":false,"icon":false}]}',
+  '   "color":"#rrggbb","weight":"bold","size":"xl","caps":false,"round":false,"icon":false}],',
+  ' "extra":[{"x":0,"y":0,"w":10,"h":5}]}',
   "",
   "All x,y,w,h are PERCENT of the card (0-100), x,y = top-left corner of the",
-  "element's own box (the text's ink, the photo's frame).",
+  "element's own box (the text's ink, the photo's frame). Boxes must cover the",
+  "whole of the element: the full width of the text line, the full logo.",
   "background = the card's base surface. panels = every OTHER solid surface:",
   "  colored bands, side panels, footer bars, accent stripes (thin bars are",
   "  panels with small h or w).",
@@ -217,6 +239,10 @@ export const PRECISE_SCAN_PROMPT = [
   '"caps": true when the text is in ALL CAPS. "icon": true when a small symbol',
   '  (phone, envelope, globe, pin) sits just before a contact line.',
   '"round": true when the photo/logo is displayed in a circle.',
+  "extra = the box of EVERY other piece of content not listed in elements: a",
+  "  slogan or tagline, initials or a monogram, a second logo or wordmark, social",
+  "  handles, a QR code, a fax line, decorative lettering, a map pin. Not panels",
+  "  or stripes. Empty when there is nothing else.",
   "Measure carefully — where things sit is the whole job. Omit what is not there.",
 ].join("\n");
 
@@ -350,7 +376,15 @@ export function faceLayoutFromScan(raw: unknown): FaceLayout | null {
     });
   }
   const font = typeof r.font === "string" && FONTS.has(r.font as FaceFont) ? (r.font as FaceFont) : r.serif === true ? "serif" : undefined;
-  return { background, panels, serif: font === "serif" || font === "elegant", font, elements };
+  const extra = (Array.isArray(r.extra) ? r.extra : []).slice(0, 12).flatMap((b) => {
+    if (!b || typeof b !== "object") return [];
+    const q = b as Record<string, unknown>;
+    if (typeof q.w !== "number" || typeof q.h !== "number") return [];
+    const box = { x: clamp(q.x, 0, 100, 0), y: clamp(q.y, 0, 100, 0), w: clamp(q.w, 0.5, 100, 0.5), h: clamp(q.h, 0.5, 100, 0.5) };
+    // A box that is most of the card is a misreading (the model boxed a panel).
+    return box.w * box.h > 2500 ? [] : [box];
+  });
+  return { background, panels, serif: font === "serif" || font === "elegant", font, elements, extra };
 }
 
 // ── The measured layout → a free design the owner can edit ──────────────────
@@ -520,14 +554,17 @@ export const OUTPUT_CHECK_PROMPT = [
   "  lighting, glare or vignette, cast shadows, perspective or tilt, curled or",
   "  physical edges. A flat digital design that intentionally uses a texture or a",
   "  photo is still false.",
+  "- fillsFrame: true ONLY when the card's four edges coincide with the image's",
+  "  four edges and the card is perfectly straight. If any backdrop, margin,",
+  "  shadow, table or mockup surround shows on any side, or the card is tilted",
+  "  or in perspective, fillsFrame is false.",
   "- cardCorners: the four corners of the card's face within THIS image, as",
   "  PERCENT of the image width and height, in order top-left, top-right,",
-  "  bottom-right, bottom-left. If the card fills the whole image edge to edge,",
-  "  [[0,0],[100,0],[100,100],[0,100]]. If it is drawn smaller — on a backdrop,",
-  "  with a margin, with a drop shadow, as a mockup — give the card's own edge.",
+  "  bottom-right, bottom-left. Only when fillsFrame is true,",
+  "  [[0,0],[100,0],[100,100],[0,100]]; otherwise the card's own edge.",
   "Return ONLY valid JSON:",
   '{"emails":[],"phones":[],"addresses":[],"websites":[],"names":[],"companies":[],',
-  ' "logos":[],"looksLikePhoto":false,"cardCorners":[[0,0],[100,0],[100,100],[0,100]]}',
+  ' "logos":[],"looksLikePhoto":false,"fillsFrame":true,"cardCorners":[[0,0],[100,0],[100,100],[0,100]]}',
   "Empty arrays if none. Do not include anything else.",
 ].join("\n");
 

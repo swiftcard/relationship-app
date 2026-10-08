@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyHomography, cardQuadFromScan, flatSize, homography, quadCoverage, warpQuad, LOCATE_CARD_PROMPT, type Pt } from "@/lib/card-flatten";
+import { applyHomography, cardKindFromScan, cardQuadFromScan, flatSize, homography, maskRegions, quadCoverage, warpQuad, LOCATE_CARD_PROMPT, type Pt } from "@/lib/card-flatten";
 
 // A photo of a paper card is found and laid flat before anything is redrawn
 // (owner, 2026-10-06: a loosely shot card should still copy its design, not
@@ -64,6 +64,36 @@ describe("flatSize", () => {
     expect(flatSize([[0, 0], [400, 0], [400, 700], [0, 700]])).toEqual({ w: 800, h: 1400 });
     // A wildly long reading is clamped to a real card shape.
     expect(flatSize([[0, 0], [1000, 0], [1000, 100], [0, 100]])).toEqual({ w: 1400, h: 700 });
+  });
+});
+
+describe("maskRegions", () => {
+  it("fills each box with the colour around it, so the content is gone and the surface continues", async () => {
+    const sharp = (await import("sharp")).default;
+    // A navy left panel, a cream field, black "text" on the field and a white
+    // "logo" on the panel.
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200">
+      <rect width="400" height="200" fill="#f5f0e6"/><rect width="120" height="200" fill="#1b2a4a"/>
+      <rect x="160" y="60" width="200" height="30" fill="#000000"/><rect x="30" y="60" width="60" height="60" fill="#ffffff"/></svg>`;
+    const src = await sharp(Buffer.from(svg)).png().toBuffer();
+    const out = await maskRegions(src, [{ x: 40, y: 30, w: 50, h: 15 }, { x: 7.5, y: 30, w: 15, h: 30 }]);
+    const raw = await sharp(out).raw().toBuffer({ resolveWithObject: true });
+    const px = (x: number, y: number) => { const i = (y * raw.info.width + x) * raw.info.channels; return [raw.data[i], raw.data[i + 1], raw.data[i + 2]]; };
+    // Where the text was: cream. Where the logo was: navy. Elsewhere untouched.
+    expect(px(260, 75)[0]).toBeGreaterThan(230);
+    expect(px(260, 75)[2]).toBeGreaterThan(200);
+    expect(px(60, 90)[2]).toBeGreaterThan(px(60, 90)[0] + 20);
+    expect(px(60, 90)[0]).toBeLessThan(60);
+    expect(px(380, 180)[0]).toBeGreaterThan(230);
+    expect(px(10, 10)[0]).toBeLessThan(60);
+    // No boxes → the image passes through (re-encoded).
+    expect((await maskRegions(src, [])).length).toBeGreaterThan(100);
+  });
+  it("the card finder makes the model commit to fillsFrame, and the kind is reported", () => {
+    expect(LOCATE_CARD_PROMPT).toMatch(/fillsFrame = true ONLY when/);
+    expect(cardKindFromScan({ kind: "photo_of_physical_card" })).toBe("photo");
+    expect(cardKindFromScan({ kind: "flat_design" })).toBe("flat");
+    expect(cardKindFromScan(null)).toBe("unknown");
   });
 });
 
