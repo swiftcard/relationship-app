@@ -71,11 +71,11 @@ describe("codes reach Apple on their own", () => {
   });
 
   it("a used-up code never reaches Apple", () => {
-    expect(lib).toMatch(/if \(usedUp\) return \{ ok: false/);
+    expect(lib).toMatch(/if \(promoUsedUp\(promo\)\) return \{ ok: false/);
   });
 
   it("deactivating a code turns Apple's copy off too", () => {
-    expect(lib).toMatch(/attributes: \{ active: false \}/);
+    expect(lib).toMatch(/export async function deactivateAppleOffer[\s\S]*await setOfferActive\(offerId, false\)/);
     const del = read("src/app/api/admin/promo-codes/route.ts");
     expect(del.slice(del.indexOf("export async function DELETE("))).toMatch(/await deactivateAppleOffer\(promo\.apple_offer_code_id/);
   });
@@ -138,5 +138,98 @@ describe("the app's Pro card acts on an applied code", () => {
   it("the box doesn't offer a second button for a code the Pro card already uses", () => {
     expect(read("src/components/PromoCodeBox.tsx")).toMatch(/website\.proCardAbove\s*\?/);
     expect(src).toMatch(/proCardAbove: !!code\.forPro/);
+  });
+});
+
+// ── 2026-10-08: the first run with a real key ────────────────────────────────
+//
+// The red "App Store Connect isn't connected" line was the ASC_* vars missing
+// from Vercel — and once they were there, Apple refused the first body. What
+// Apple taught us is pinned in apple-offer-codes-asc.test.ts; what the admin
+// sees, and how redemptions stay ONE count across both platforms, is here.
+
+import { appleCodeStatus, appleWebOnlyReason, appleCodeCount, promoUsedUp } from "@/lib/apple-offer-plan";
+
+describe("the admin is told where each code works", () => {
+  const live = { ...DEMISHA, apple_offer_code_id: "offer-1", apple_offer_error: null, uses_count: 1 };
+
+  it("a free-time Pro code on Apple is live on both", () => {
+    expect(appleCodeStatus(live).state).toBe("live");
+  });
+
+  it("not on Apple yet → pending, with Apple's own refusal word for word", () => {
+    const s = appleCodeStatus({ ...live, apple_offer_code_id: null, apple_offer_error: "409 Invalid number of codes" });
+    expect(s.state).toBe("pending");
+    expect(s.detail).toContain("409 Invalid number of codes");
+    expect(s.detail).toContain("swiftcard.me");
+  });
+
+  it("a capped code with nothing left is off on Apple", () => {
+    expect(appleCodeStatus({ ...live, max_uses: 3, uses_count: 3 }).state).toBe("off");
+  });
+
+  it("Office, money off, a free plan and dashed codes are website only — each with its reason", () => {
+    expect(appleCodeStatus({ ...live, applies_to: "office" })).toMatchObject({ state: "web_only", detail: expect.stringContaining("Office") });
+    expect(appleWebOnlyReason({ ...DEMISHA, discount_type: "percent", free_days: null, discount_percent: 30 })).toMatch(/money off/);
+    expect(appleWebOnlyReason({ ...DEMISHA, discount_type: "grant" })).toMatch(/free-plan code/);
+    expect(appleWebOnlyReason({ ...DEMISHA, code: "APPLE-PRO" })).toMatch(/letters and numbers/);
+    expect(appleWebOnlyReason({ ...DEMISHA, free_days: 7 })).toMatch(/REPLACE/);
+    expect(appleWebOnlyReason(DEMISHA)).toBeNull();
+  });
+
+  it("the list shows a website badge and an Apple badge per code, and the create form says it before saving", () => {
+    const src = read("src/app/admin/marketing/MarketingClient.tsx");
+    expect(src).toContain("Website ✓");
+    expect(src).toMatch(/live: \{ label: "Apple ✓"/);
+    expect(src).toMatch(/pending: \{ label: "Apple pending"/);
+    expect(src).toMatch(/web_only: \{ label: "Website only"/);
+    expect(src).toContain('data-testid="promo-platforms"');
+    expect(src).toContain("Website and iPhone app.");
+  });
+
+  it("a missing key is said ONCE with the exact fix, and the server reports it on the list", () => {
+    const src = read("src/app/admin/marketing/MarketingClient.tsx");
+    expect(src).toContain('data-testid="asc-not-connected"');
+    for (const v of ["ASC_KEY_ID", "ASC_ISSUER_ID", "ASC_PRIVATE_KEY"]) expect(src).toContain(v);
+    expect(src).toContain("App Manager");
+    expect(read("src/app/api/admin/promo-codes/route.ts")).toMatch(/apple: \{ connected: ascConfigured\(\) \}/);
+  });
+});
+
+describe("redemptions are one count across the website and Apple", () => {
+  it("Apple can't hold a cap under 500, so the count sent is clamped and the cap is ours to enforce", () => {
+    expect(appleCodeCount({ max_uses: 200, uses_count: 0 })).toBe(500);
+    expect(appleCodeCount({ max_uses: 3, uses_count: 2 })).toBe(500);
+    expect(appleCodeCount({ max_uses: null })).toBe(10000);
+    expect(appleCodeCount({ max_uses: 90000, uses_count: 0 })).toBe(25000);
+    expect(promoUsedUp({ max_uses: 3, uses_count: 3 })).toBe(true);
+    expect(promoUsedUp({ max_uses: null, uses_count: 900 })).toBe(false);
+  });
+
+  it("the RevenueCat webhook counts the event's offer_code against the SwiftCard code, on the purchase that started it", () => {
+    const route = read("src/app/api/iap/revenuecat/route.ts");
+    expect(route).toContain("offer_code");
+    expect(route).toMatch(/applied === "grant" && typeof event\.offer_code === "string"/);
+    expect(route).toContain('type === "INITIAL_PURCHASE"');
+    expect(route).toContain("recordAppleRedemption(admin, { code: event.offer_code, userId: uid })");
+  });
+
+  it("an Apple redemption is one row per account, claims a use atomically, and shuts the Apple copy at the cap", () => {
+    const lib = read("src/lib/apple-offer-codes.ts");
+    const fn = lib.slice(lib.indexOf("export async function recordAppleRedemption"), lib.indexOf("export async function mirrorPendingPromosToApple"));
+    expect(fn).toContain('.from("promo_code_redemptions")');
+    expect(fn).toMatch(/error\.code !== "23505"/);
+    expect(fn).toContain("claimPromoUse(admin, promo.id as string)");
+    expect(fn).toMatch(/if \(usedUp && promo\.apple_offer_code_id\) \{\s*await deactivateAppleOffer/);
+  });
+
+  it("the daily run also turns off Apple copies of codes that ran out on the website", () => {
+    expect(read("src/app/api/reminders/route.ts")).toContain("await turnOffUsedUpAppleOffers()");
+    expect(read("src/lib/apple-offer-codes.ts")).toMatch(/export async function turnOffUsedUpAppleOffers/);
+  });
+
+  it("the app is never offered Apple for a code with nothing left", () => {
+    const lib = read("src/lib/apple-offer-codes.ts");
+    expect(lib).toMatch(/export function appleRedeemable[\s\S]*!promoUsedUp\(promo\)/);
   });
 });

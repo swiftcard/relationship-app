@@ -75,11 +75,42 @@ describe("mirrorPromoToApple against App Store Connect", () => {
       included: [{ type: "subscriptionOfferCodePrices", relationships: { territory: { data: { type: "territories", id: "USA" } } } }],
     });
     expect(custom.path).toBe("/subscriptionOfferCodeCustomCodes");
-    // The same cap as the website: 3 uses, 1 already spent.
+    // 2 uses left on the website; Apple can't hold a cap under 500 (live
+    // probe 2026-10-08: "The given number of codes 2 is invalid"), so it gets
+    // Apple's minimum and the cap is enforced by the webhook ledger instead.
     expect(custom.body).toMatchObject({
-      data: { attributes: { customCode: "DEMISHA", numberOfCodes: 2 }, relationships: { offerCode: { data: { id: "offer-new" } } } },
+      data: { attributes: { customCode: "DEMISHA", numberOfCodes: 500 }, relationships: { offerCode: { data: { id: "offer-new" } } } },
     });
     expect(updates).toEqual([{ values: { apple_offer_code_id: "offer-new", apple_offer_error: null }, id: "row-1" }]);
+  });
+
+  it("inline price rows use Apple's ${local-id} form — a plain id is refused live (409, 2026-10-08)", async () => {
+    await mirrorPromoToApple(DEMISHA);
+    const offer = posts()[0].body as { data: { relationships: { prices: { data: { id: string }[] } } }; included: { id: string }[] };
+    expect(offer.data.relationships.prices.data.map((p) => p.id)).toEqual(["${price-USA}"]);
+    expect(offer.included.map((p) => p.id)).toEqual(["${price-USA}"]);
+  });
+
+  it("the redemption count stays inside Apple's 500–25,000: uncapped → 10,000, a huge cap → 25,000", async () => {
+    await mirrorPromoToApple({ ...DEMISHA, max_uses: null, uses_count: 0 });
+    await mirrorPromoToApple({ ...DEMISHA, max_uses: 100000, uses_count: 0 });
+    const counts = posts().filter((c) => c.path === "/subscriptionOfferCodeCustomCodes").map((c) => (c.body as { data: { attributes: { numberOfCodes: number } } }).data.attributes.numberOfCodes);
+    expect(counts).toEqual([10000, 25000]);
+  });
+
+  it("the code's expiry goes on Apple's custom code as a date", async () => {
+    await mirrorPromoToApple({ ...DEMISHA, expires_at: "2027-04-30T00:00:00+00:00" });
+    const custom = posts().find((c) => c.path === "/subscriptionOfferCodeCustomCodes")!.body as { data: { attributes: { expirationDate?: string } } };
+    expect(custom.data.attributes.expirationDate).toBe("2027-04-30");
+  });
+
+  it("an offer found switched off on Apple is switched back on for an active code", async () => {
+    existingOffers = [{ id: "offer-old", attributes: { name: "SwiftCard DEMISHA", active: false } as { name: string } }];
+    existingCustomCodes = [{ id: "cc-old", attributes: { customCode: "DEMISHA" } }];
+    expect(await mirrorPromoToApple(DEMISHA)).toEqual({ ok: true });
+    const patch = calls.find((c) => c.method === "PATCH");
+    expect(patch?.path).toBe("/subscriptionOfferCodes/offer-old");
+    expect(patch?.body).toMatchObject({ data: { attributes: { active: true } } });
   });
 
   it("signs every request with an ES256 App Store Connect token", async () => {

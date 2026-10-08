@@ -7,6 +7,7 @@ import { decideRcEvent, type PlanSource, appleGrantPatch, sandboxEventAllowed } 
 import { recordProTrialStarted } from "@/lib/trial-ledger";
 import { markProEnded } from "@/lib/pro-ended";
 import { rcProActive } from "@/lib/revenuecat-rest";
+import { recordAppleRedemption } from "@/lib/apple-offer-codes";
 
 // ── RevenueCat webhook: the durable path from an App Store purchase to the
 //    profiles.plan column ─────────────────────────────────────────────────────
@@ -138,6 +139,9 @@ export async function POST(req: NextRequest) {
         original_app_user_id?: string;
         environment?: string;
         period_type?: string;
+        /** The Apple offer code redeemed for this purchase, when there was one
+         *  (the SwiftCard promo code's string — lib/apple-offer-codes). */
+        offer_code?: string | null;
         cancel_reason?: string;
         transferred_from?: unknown;
         transferred_to?: unknown;
@@ -198,7 +202,19 @@ export async function POST(req: NextRequest) {
     if (applied === "sandbox_not_allowed" || applied === "no_profile") {
       return NextResponse.json({ ok: true, skipped: applied });
     }
-    return NextResponse.json({ ok: true, applied });
+    // ── A promo code redeemed through Apple ──────────────────────────────────
+    // The SwiftCard code lives on Apple under the same string (lib/apple-
+    // offer-codes), and Apple counts its own redemptions — this is the ONE
+    // ledger: the use is counted against the code like a website redemption,
+    // once per account, and the Apple copy is turned off when the cap is hit.
+    // Only the purchase that started the offer counts (an INITIAL_PURCHASE,
+    // or a lapsed subscriber's RENEWAL); the offer_code rides along on every
+    // later renewal of that subscription too.
+    let promo: string | undefined;
+    if (applied === "grant" && typeof event.offer_code === "string" && event.offer_code.trim() && (type === "INITIAL_PURCHASE" || type === "RENEWAL" || type === "NON_RENEWING_PURCHASE" || type === "UNCANCELLATION")) {
+      promo = await recordAppleRedemption(admin, { code: event.offer_code, userId: uid });
+    }
+    return NextResponse.json({ ok: true, applied, ...(promo ? { promo } : {}) });
   } catch {
     // A failed lookup must be retried by RevenueCat, not acknowledged.
     return NextResponse.json({ error: "lookup_failed" }, { status: 500 });

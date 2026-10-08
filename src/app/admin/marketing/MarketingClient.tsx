@@ -10,6 +10,7 @@ import {
   promoSeats, seatsLabel,
 } from "@/lib/promo";
 import { PLAN_LIMITS } from "@/lib/plan";
+import { appleCodeStatus, appleWebOnlyReason, type AppleCodeStatus } from "@/lib/apple-offer-plan";
 import SentEmailsModal from "./SentEmailsModal";
 
 type Counts = { all: number; free: number; pro: number; office: number };
@@ -23,6 +24,9 @@ type PromoCode = {
   applies_to?: string | null; interval_target?: string | null;
   duration?: string | null; duration_months?: number | null;
   seats?: number | null;
+  /** The code's Apple copy (lib/apple-offer-codes): the offer's id once it's
+   *  on Apple, or Apple's own refusal while it isn't. */
+  apple_offer_code_id?: string | null; apple_offer_error?: string | null;
 };
 type PromoLogEntry = PromoCode & {
   uses_count: number;
@@ -42,6 +46,25 @@ type DomainStatus = {
 // without it (Stripe refused it at creation) can't take anything off.
 function codeReady(p: { discount_type: string | null; stripe_coupon_id?: string | null }): boolean {
   return p.discount_type === "free_time" || p.discount_type === "grant" || !!p.stripe_coupon_id;
+}
+
+// Where a code works, as two badges: the website (Stripe) and the iPhone app
+// (Apple). "Ready" alone used to mean the website only, and a code the app
+// couldn't take looked the same as one it could (owner, 2026-10-08).
+const APPLE_BADGE: Record<AppleCodeStatus["state"], { label: string; cls: string }> = {
+  live: { label: "Apple ✓", cls: "bg-emerald-900/50 text-emerald-300" },
+  pending: { label: "Apple pending", cls: "bg-amber-900/40 text-amber-300" },
+  off: { label: "Apple off", cls: "bg-gray-800 text-gray-400" },
+  web_only: { label: "Website only", cls: "bg-gray-800 text-gray-400" },
+};
+function AppleBadge({ promo }: { promo: PromoCode }) {
+  const s = appleCodeStatus({ ...promo, discount_type: promo.discount_type ?? "", code: promo.code } as Parameters<typeof appleCodeStatus>[0]);
+  const b = APPLE_BADGE[s.state];
+  return (
+    <span className={`ml-1.5 text-[0.5625rem] font-bold px-1.5 py-0.5 rounded-full ${b.cls}`} title={s.detail} data-apple-state={s.state}>
+      {b.label}
+    </span>
+  );
 }
 
 export default function MarketingClient() {
@@ -79,6 +102,20 @@ export default function MarketingClient() {
   const promoCountsDays = promoForm.discount_type === "free_time" || promoIsGrant;
   const [promoBusy, setPromoBusy] = useState(false);
   const [promoError, setPromoError] = useState<string | null>(null);
+  const [promoOk, setPromoOk] = useState<string | null>(null);
+  // Whether the server holds the App Store Connect key (GET /api/admin/promo-
+  // codes). null until the list has loaded.
+  const [appleConnected, setAppleConnected] = useState<boolean | null>(null);
+  // Where the code being designed will work — said before it's created.
+  const promoAppleReason = appleWebOnlyReason({
+    code: promoForm.code || "YOURCODE",
+    discount_type: promoForm.discount_type,
+    free_days: promoCountsDays ? Number(promoForm.free_days) : null,
+    applies_to: promoForm.applies_to,
+    interval_target: promoForm.interval_target,
+    plan_target: promoForm.plan_target,
+    expires_at: promoForm.expires_at || null,
+  } as Parameters<typeof appleWebOnlyReason>[0]);
 
   // Email a promo code to users
   const [promoSend, setPromoSend] = useState<{ code: string; headline: string; message: string; segment: string } | null>(null);
@@ -165,6 +202,7 @@ export default function MarketingClient() {
     if (res.ok) {
       const data = await res.json();
       setPromos(data.codes ?? []);
+      setAppleConnected(data.apple?.connected ?? null);
       setPromosReady(true);
     } else {
       setPromosReady(false);
@@ -210,6 +248,7 @@ export default function MarketingClient() {
     e.preventDefault();
     setPromoBusy(true);
     setPromoError(null);
+    setPromoOk(null);
     try {
       const res = await fetch("/api/admin/promo-codes", {
         method: "POST",
@@ -231,9 +270,17 @@ export default function MarketingClient() {
       });
       const data = await res.json();
       if (res.ok) {
+        const code = String(data.promo?.code ?? promoForm.code);
         setPromoForm(EMPTY_PROMO);
-        // Honest warnings: Stripe rejected the code, or it isn't on Apple yet.
-        setPromoError([data.stripeWarning, data.appleWarning].filter(Boolean).join(" ") || null);
+        // Honest warnings: Stripe rejected the code, or it isn't on Apple yet
+        // — and, when neither happened, where the code now works.
+        const warning = [data.stripeWarning, data.appleWarning].filter(Boolean).join(" ") || null;
+        setPromoError(warning);
+        if (!warning) {
+          setPromoOk(data.appleOk
+            ? `${code} is live on the website (Stripe) and in the iPhone app (Apple offer code).`
+            : `${code} is live on the website. In the iPhone app it opens swiftcard.me${promoAppleReason ? ` — ${promoAppleReason.replace(/ — used on swiftcard\.me\.?$/, ".")}` : "."}`);
+        }
         loadPromos();
       } else {
         setPromoError(data.error);
@@ -418,6 +465,17 @@ export default function MarketingClient() {
                 Promo tables aren&apos;t set up — run <span className="font-mono">supabase/email-system.sql</span> in the Supabase SQL editor.
               </p>
             )}
+            {/* The one thing that gates the iPhone app: the App Store Connect
+                key. Said once, here, with the exact fix — not as a red line
+                under every code. */}
+            {appleConnected === false && (
+              <p className="text-red-300 text-xs bg-red-950/40 border border-red-800/40 rounded-xl px-3 py-2 mb-4" data-testid="asc-not-connected">
+                <span className="font-semibold">App Store Connect isn&apos;t connected</span>, so new free-time Pro codes work on the website only until it is.
+                Fix: in App Store Connect → Users and Access → Integrations → App Store Connect API, make (or reuse) a key with the <span className="font-semibold">App Manager</span> role;
+                then in Vercel → Settings → Environment Variables (Production) add <span className="font-mono">ASC_KEY_ID</span>, <span className="font-mono">ASC_ISSUER_ID</span> and <span className="font-mono">ASC_PRIVATE_KEY</span> (the .p8 file&apos;s contents) and redeploy.
+                Every pending code is put on Apple by the daily run as soon as the key is there.
+              </p>
+            )}
             <form onSubmit={createPromo} className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-gray-400 block mb-1">Code *</label>
@@ -574,9 +632,22 @@ export default function MarketingClient() {
                       ? "Customers enter it in the SwiftCard promo box — on the Pricing page, or \"Have a promo code?\" on the order page. Stripe takes their card, they can cancel any time during the free days, and billing starts when the free days end."
                       : "Customers enter every code in the SwiftCard promo box — on the Pricing page, or \"Have a promo code?\" on the order page just before payment. Stripe's payment page has no code field."}
                 </p>
+                {/* And the iPhone app, where Pro is billed by Apple: the same
+                    string becomes an Apple offer code when it can
+                    (lib/apple-offer-plan), otherwise the app opens the website. */}
+                <p className="text-[0.6875rem] mt-1.5" data-testid="promo-platforms">
+                  {promoAppleReason ? (
+                    <><span className="font-semibold text-gray-400">Website only.</span> <span className="text-gray-500">In the iPhone app the code opens swiftcard.me — {promoAppleReason.replace(/ — used on swiftcard\.me\.?$/, ".")}</span></>
+                  ) : appleConnected === false ? (
+                    <><span className="font-semibold text-amber-300">Website now, iPhone app once App Store Connect is connected.</span> <span className="text-gray-500">Then it&apos;s redeemed on Apple&apos;s own sheet against the Apple-billed Pro.</span></>
+                  ) : (
+                    <><span className="font-semibold text-emerald-300">Website and iPhone app.</span> <span className="text-gray-500">The same string is made as an Apple offer code: in the app, Apple&apos;s sheet shows the free period, then bills Pro at Apple&apos;s price. Redemptions are counted once across both{promoForm.max_uses && Number(promoForm.max_uses) < 500 ? "; Apple's copy is switched off when the total is reached" : ""}.</span></>
+                  )}
+                </p>
               </div>
 
               {promoError && <p className="col-span-2 text-red-400 text-xs">{promoError}</p>}
+              {promoOk && <p className="col-span-2 text-emerald-300 text-xs">{promoOk}</p>}
               <button type="submit" disabled={promoBusy}
                 className="col-span-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold py-2 rounded-xl text-sm transition-colors">
                 {promoBusy ? "Creating…" : "Create code"}
@@ -609,11 +680,12 @@ export default function MarketingClient() {
                       <span
                         className={`ml-2 text-[0.5625rem] font-bold px-1.5 py-0.5 rounded-full ${codeReady(p) ? "bg-emerald-900/50 text-emerald-300" : "bg-red-900/40 text-red-300"}`}
                         title={codeReady(p)
-                          ? "Works in the SwiftCard promo box (Pricing page and the order page)"
+                          ? "Works on the website: the SwiftCard promo box on the Pricing page and the order page (billed by Stripe)"
                           : "Money off with no Stripe coupon behind it — it can't take anything off. Deactivate it and create it again."}
                       >
-                        {codeReady(p) ? "Ready ✓" : "Broken"}
+                        {codeReady(p) ? "Website ✓" : "Broken"}
                       </span>
+                      {codeReady(p) && <AppleBadge promo={p} />}
                       {p.description && <span className="text-gray-500 ml-2">{p.description}</span>}
                       {/* The whole offer in words, so a code is never a mystery
                           in the list (owner, 2026-09-17). */}

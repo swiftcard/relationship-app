@@ -7,7 +7,7 @@ import {
   type AppliesTo, type IntervalTarget,
 } from "@/lib/promo";
 import { PLAN_LIMITS } from "@/lib/plan";
-import { appleOfferPlan, deactivateAppleOffer, mirrorPromoToApple } from "@/lib/apple-offer-codes";
+import { appleOfferPlan, ascConfigured, deactivateAppleOffer, mirrorPromoToApple } from "@/lib/apple-offer-codes";
 
 // The Stripe PRODUCTS behind each plan, so a coupon can be restricted to the
 // plan it was created for. Without this, a code typed on Stripe's own checkout
@@ -255,11 +255,17 @@ export async function POST(req: NextRequest) {
   // (lib/apple-offer-codes). A failure doesn't block the code — the daily
   // cron retries it, and until then the app sends the code to swiftcard.me.
   let appleWarning: string | null = null;
+  let appleOk = false;
   if (data && appleOfferPlan(data)) {
     const apple = await mirrorPromoToApple(data);
-    if (!apple.ok) appleWarning = `Saved, but not on Apple yet (${apple.error}). In the iPhone app this code is used on swiftcard.me until it is; it's retried daily.`;
+    appleOk = apple.ok;
+    if (!apple.ok) appleWarning = `Saved and working on swiftcard.me, but not on Apple yet: ${apple.error} It's retried every day; in the iPhone app the code opens swiftcard.me until then.`;
+    // The list shows the outcome too (apple_offer_code_id / apple_offer_error
+    // were written by the mirror) — return the row as it is now.
+    const { data: fresh } = await admin.from("promo_codes").select("*").eq("id", data.id).maybeSingle();
+    if (fresh) data = fresh;
   }
-  return NextResponse.json({ promo: data, stripeWarning, appleWarning });
+  return NextResponse.json({ promo: data, stripeWarning, appleWarning, appleOk });
 }
 
 // GET /api/admin/promo-codes — list ACTIVE promo codes (the working set the
@@ -275,7 +281,10 @@ export async function GET() {
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ codes: data });
+  // Whether codes can reach the iPhone app at all: the page shows the exact
+  // fix when the App Store Connect key is missing, instead of a red line on
+  // every code (lib/apple-offer-codes).
+  return NextResponse.json({ codes: data, apple: { connected: ascConfigured() } });
 }
 
 // DELETE /api/admin/promo-codes?id=<id> — deactivate a promo code EVERYWHERE.

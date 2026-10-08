@@ -38,7 +38,7 @@ import { getAccountEmail } from "@/lib/account-email";
 import { expireFreeMonths } from "@/lib/referral-server";
 import { purgeExpiredDeletedAccounts, reconcileDeletedSubscriptions } from "@/lib/account-purge";
 import { applyDueSeatReductions } from "@/lib/office-scheduled-seats";
-import { mirrorPendingPromosToApple } from "@/lib/apple-offer-codes";
+import { mirrorPendingPromosToApple, turnOffUsedUpAppleOffers } from "@/lib/apple-offer-codes";
 import { insertNotification } from "@/lib/notify";
 import { officeEndedNotice } from "@/lib/billing-state";
 import { trialEndingSoonEmail, trialEndedEmail, unsubUrl, marketingHeaders } from "@/lib/email-templates";
@@ -262,6 +262,9 @@ export async function GET(req: NextRequest) {
   let appleOfferCodesMade = 0;
   try {
     appleOfferCodesMade = await mirrorPendingPromosToApple();
+    // …and a capped code that ran out on the website is turned off on Apple,
+    // which can't hold a cap under 500 itself.
+    await turnOffUsedUpAppleOffers();
   } catch (e) {
     await reportError("reminders.apple-offer-codes", e);
   }

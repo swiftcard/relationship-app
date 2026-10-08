@@ -1,8 +1,11 @@
 import crypto from "node:crypto";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAdminSupabase } from "@/lib/supabase-admin";
-import { IAP_PRODUCT_ANNUAL, IAP_PRODUCT_MONTHLY } from "@/lib/iap-shared";
-import { TRIAL_DAYS } from "@/lib/plan";
 import type { PromoRow } from "@/lib/promo";
+import { claimPromoUse } from "@/lib/promo-claim";
+import { appleOfferPlan, appleCodeCount, promoUsedUp, type AppleOfferPlan } from "@/lib/apple-offer-plan";
+
+export { appleOfferPlan, appleCodeStatus, appleWebOnlyReason, type AppleOfferPlan } from "@/lib/apple-offer-plan";
 
 // ── Every SwiftCard promo code, redeemable through Apple too ────────────────
 //
@@ -30,62 +33,27 @@ import type { PromoRow } from "@/lib/promo";
 // Only FREE TIME maps cleanly. Apple's offer durations are fixed steps, money
 // off would need a price point per territory, and a grant (tester) code
 // switches a plan on with no subscription at all — those stay on the website.
+//
+// Redemptions are counted ONCE, across both platforms: the website claims a
+// use at checkout, and the RevenueCat webhook claims one for every Apple
+// redemption (recordAppleRedemption). When the cap is reached the Apple copy
+// is turned off — Apple itself can't be told a cap under 500
+// (lib/apple-offer-plan APPLE_CODES_MIN).
+//
+// 2026-10-08: first run with a real key. Two things only Apple could tell us:
+// inline price ids must be written "${local-id}", and the redemption count
+// has bounds. Both are pinned in tests/apple-offer-codes-asc.test.ts.
 
 const API = "https://api.appstoreconnect.apple.com/v1";
 const APP_ID = process.env.ASC_APP_ID?.trim() || process.env.NEXT_PUBLIC_APP_STORE_ID?.trim() || "6798875872";
 
-/** Apple's free-trial steps, by the day count SwiftCard stores. */
-const APPLE_DURATIONS: Record<number, string> = {
-  14: "TWO_WEEKS",
-  30: "ONE_MONTH",
-  60: "TWO_MONTHS",
-  90: "THREE_MONTHS",
-  180: "SIX_MONTHS",
-  365: "ONE_YEAR",
-};
-
-/** Apple took the code's place for at most this many redemptions. */
-const DEFAULT_APPLE_CODES = 10000;
-
-export type AppleOfferPlan = {
-  productId: string;
-  duration: string;
-  customerEligibilities: string[];
-};
-
-/**
- * Can this code exist on Apple, and as what? Null when it can't — the app
- * then hands the code to swiftcard.me.
- *
- * Under 14 days is left out on purpose: Apple REPLACES the 14-day trial with
- * the code's offer, and the website never lets a code shorten the trial
- * (checkout takes the longer of the two). The plain Pro button already gives
- * more than a one-week code would.
- */
-export function appleOfferPlan(promo: PromoRow & { active?: boolean | null }): AppleOfferPlan | null {
-  if (promo.active === false) return null;
-  if (promo.discount_type !== "free_time") return null;
-  const applies = promo.applies_to ?? "any";
-  if (applies !== "any" && applies !== "pro") return null;
-  const days = Number(promo.free_days);
-  if (!(days >= TRIAL_DAYS)) return null;
-  const duration = APPLE_DURATIONS[days];
-  if (!duration) return null;
-  if (promo.expires_at && new Date(promo.expires_at) <= new Date()) return null;
-  // Apple custom codes are letters and numbers only.
-  if (!/^[A-Z0-9]{1,64}$/.test(String(promo.code ?? ""))) return null;
-  const productId = promo.interval_target === "annual" ? IAP_PRODUCT_ANNUAL : IAP_PRODUCT_MONTHLY;
-  // Who may redeem, in Apple's terms. "New accounts" are people not paying:
-  // never subscribed (NEW) or no longer subscribed (EXPIRED).
-  const target = promo.plan_target ?? "free";
-  const customerEligibilities =
-    target === "pro" ? ["EXISTING"] : target === "all" ? ["NEW", "EXISTING", "EXPIRED"] : ["NEW", "EXPIRED"];
-  return { productId, duration, customerEligibilities };
-}
-
 export function ascConfigured(): boolean {
   return !!(process.env.ASC_KEY_ID && process.env.ASC_ISSUER_ID && process.env.ASC_PRIVATE_KEY);
 }
+
+/** What the admin is told when the key is missing — the exact fix, not a hint. */
+export const ASC_NOT_CONNECTED =
+  "App Store Connect isn't connected: add ASC_KEY_ID, ASC_ISSUER_ID and ASC_PRIVATE_KEY (an App Store Connect API key with the App Manager role) to the Vercel project's Production environment and redeploy.";
 
 function ascToken(): string {
   const kid = process.env.ASC_KEY_ID!.trim();
@@ -140,7 +108,7 @@ async function territories(subId: string): Promise<string[]> {
   return ["USA"];
 }
 
-type PromoForApple = PromoRow & { id: string; active?: boolean | null };
+type PromoForApple = PromoRow & { id: string; active?: boolean | null; uses_count?: number | null };
 
 /**
  * Create the Apple offer code for one SwiftCard code and record the result on
@@ -151,11 +119,10 @@ type PromoForApple = PromoRow & { id: string; active?: boolean | null };
 export async function mirrorPromoToApple(promo: PromoForApple): Promise<{ ok: boolean; error?: string }> {
   const plan = appleOfferPlan(promo);
   if (!plan) return { ok: false, error: "Not a code Apple can take." };
-  if (!ascConfigured()) return { ok: false, error: "App Store Connect isn't connected (ASC_* env vars)." };
+  if (!ascConfigured()) return { ok: false, error: ASC_NOT_CONNECTED };
   // A code whose redemptions are used up stays off Apple — Apple would
   // otherwise hand out uses the website no longer has.
-  const usedUp = promo.max_uses != null && Number(promo.max_uses) - Number((promo as { uses_count?: number }).uses_count ?? 0) <= 0;
-  if (usedUp) return { ok: false, error: "This code has no redemptions left." };
+  if (promoUsedUp(promo)) return { ok: false, error: "This code has no redemptions left." };
   const admin = getAdminSupabase();
   const name = `SwiftCard ${promo.code}`.slice(0, 64);
   try {
@@ -166,6 +133,10 @@ export async function mirrorPromoToApple(promo: PromoForApple): Promise<{ ok: bo
     const existing = await asc<{ data: AscItem[] }>("GET", `/subscriptions/${subId}/offerCodes?limit=200`).catch(() => ({ data: [] as AscItem[] }));
     const found = (existing.data ?? []).find((o) => o.attributes?.name === name);
     const offerId = found ? found.id : await createOffer(subId, name, plan);
+    // An offer found switched off (deactivated here, or by hand in App Store
+    // Connect) is switched back on: the SwiftCard code is active, so its
+    // Apple copy must be too.
+    if (found && found.attributes?.active === false) await setOfferActive(offerId, true);
     const codes = await asc<{ data: AscItem[] }>("GET", `/subscriptionOfferCodes/${offerId}/customCodes?limit=50`).catch(() => ({ data: [] as AscItem[] }));
     if (!(codes.data ?? []).some((c) => String(c.attributes?.customCode ?? "").toUpperCase() === promo.code)) {
       await createCustomCode(offerId, promo);
@@ -181,7 +152,11 @@ export async function mirrorPromoToApple(promo: PromoForApple): Promise<{ ok: bo
 
 async function createOffer(subId: string, name: string, plan: AppleOfferPlan): Promise<string> {
     const terrs = await territories(subId);
-    // A free trial has no price, only the territories it runs in.
+    // A free trial has no price, only the territories it runs in. The price
+    // rows are created inline, and Apple only takes an inline id written as
+    // "${local-id}" — a plain "price-USA" is refused with 409 (seen live
+    // 2026-10-08, the first time this ran with a real key).
+    const localId = (t: string) => `\${price-${t}}`;
     const made = await asc<{ data: AscItem }>("POST", "/subscriptionOfferCodes", {
       data: {
         type: "subscriptionOfferCodes",
@@ -196,29 +171,29 @@ async function createOffer(subId: string, name: string, plan: AppleOfferPlan): P
         },
         relationships: {
           subscription: { data: { type: "subscriptions", id: subId } },
-          prices: { data: terrs.map((t) => ({ type: "subscriptionOfferCodePrices", id: `price-${t}` })) },
+          prices: { data: terrs.map((t) => ({ type: "subscriptionOfferCodePrices", id: localId(t) })) },
         },
       },
       included: terrs.map((t) => ({
         type: "subscriptionOfferCodePrices",
-        id: `price-${t}`,
+        id: localId(t),
         relationships: { territory: { data: { type: "territories", id: t } } },
       })),
     });
     return made.data.id;
 }
 
-/** The code people type, on Apple's offer — with the same cap and expiry. */
+/**
+ * The code people type, on Apple's offer — with the same expiry, and the
+ * remaining uses inside Apple's 500–25,000 bounds (lib/apple-offer-plan).
+ */
 async function createCustomCode(offerId: string, promo: PromoForApple): Promise<void> {
-  const remaining = promo.max_uses != null
-    ? Math.max(1, Number(promo.max_uses) - Number((promo as { uses_count?: number }).uses_count ?? 0))
-    : DEFAULT_APPLE_CODES;
   await asc("POST", "/subscriptionOfferCodeCustomCodes", {
     data: {
       type: "subscriptionOfferCodeCustomCodes",
       attributes: {
         customCode: promo.code,
-        numberOfCodes: remaining,
+        numberOfCodes: appleCodeCount(promo),
         ...(promo.expires_at ? { expirationDate: new Date(promo.expires_at).toISOString().slice(0, 10) } : {}),
       },
       relationships: { offerCode: { data: { type: "subscriptionOfferCodes", id: offerId } } },
@@ -226,22 +201,70 @@ async function createCustomCode(offerId: string, promo: PromoForApple): Promise<
   });
 }
 
+async function setOfferActive(offerId: string, active: boolean): Promise<void> {
+  await asc("PATCH", `/subscriptionOfferCodes/${offerId}`, {
+    data: { type: "subscriptionOfferCodes", id: offerId, attributes: { active } },
+  });
+}
+
 /**
- * Turn a code off on Apple too (api/admin/promo-codes DELETE). Without this a
- * deactivated SwiftCard code stayed redeemable in the App Store for ever.
- * Returns an error message, or null when Apple has it off (or never had it).
+ * Turn a code off on Apple too (api/admin/promo-codes DELETE, and the cap).
+ * Without this a deactivated SwiftCard code stayed redeemable in the App
+ * Store for ever. Returns an error message, or null when Apple has it off (or
+ * never had it).
  */
 export async function deactivateAppleOffer(offerId: string | null | undefined): Promise<string | null> {
   if (!offerId) return null;
   if (!ascConfigured()) return "App Store Connect isn't connected — turn this code off in App Store Connect → Subscriptions → Offer Codes.";
   try {
-    await asc("PATCH", `/subscriptionOfferCodes/${offerId}`, {
-      data: { type: "subscriptionOfferCodes", id: offerId, attributes: { active: false } },
-    });
+    await setOfferActive(offerId, false);
     return null;
   } catch (e) {
     return (e instanceof Error ? e.message : String(e)).slice(0, 300);
   }
+}
+
+/**
+ * One Apple redemption, counted against the SwiftCard code (api/iap/
+ * revenuecat, from the event's offer_code). Idempotent per account: a second
+ * event for the same person and code counts nothing. Once the cap is reached
+ * the Apple copy is turned off, since Apple can't hold a cap under 500 itself.
+ * Returns what happened, for the webhook's response.
+ */
+export async function recordAppleRedemption(
+  admin: SupabaseClient,
+  input: { code: string; userId: string },
+): Promise<"counted" | "already_counted" | "unknown_code" | "cap_reached"> {
+  const code = input.code.toUpperCase().trim();
+  const { data: promo } = await admin
+    .from("promo_codes")
+    .select("id, code, max_uses, uses_count, apple_offer_code_id")
+    .eq("code", code)
+    .maybeSingle();
+  if (!promo) return "unknown_code";
+  // The redemption row is the per-account guard (UNIQUE code_id + user_id).
+  const { error } = await admin
+    .from("promo_code_redemptions")
+    .insert({ code_id: promo.id, user_id: input.userId, consumed_at: new Date().toISOString() });
+  if (error) {
+    if (error.code !== "23505") throw new Error(`redemption_insert_failed: ${error.message}`);
+    // Claimed on the website first (typed on /pricing, then redeemed in the
+    // app): mark it spent and count nothing twice.
+    await admin.from("promo_code_redemptions")
+      .update({ consumed_at: new Date().toISOString() })
+      .eq("code_id", promo.id).eq("user_id", input.userId).is("consumed_at", null);
+    return "already_counted";
+  }
+  const claimed = await claimPromoUse(admin, promo.id as string);
+  // Apple handed out a use the cap no longer had (the webhook lags Apple's
+  // sheet): the person keeps what Apple gave them, and the code is shut on
+  // Apple now so it stops there.
+  const usedUp = !claimed || (promo.max_uses != null && Number(promo.max_uses) - (Number(promo.uses_count ?? 0) + 1) <= 0);
+  if (usedUp && promo.apple_offer_code_id) {
+    await deactivateAppleOffer(promo.apple_offer_code_id as string);
+    return "cap_reached";
+  }
+  return "counted";
 }
 
 /**
@@ -264,7 +287,29 @@ export async function mirrorPendingPromosToApple(): Promise<number> {
   return made;
 }
 
+/**
+ * Daily (api/reminders): any code on Apple whose redemptions ran out on the
+ * website is turned off on Apple, so the two never drift apart. Returns how
+ * many were turned off.
+ */
+export async function turnOffUsedUpAppleOffers(): Promise<number> {
+  if (!ascConfigured()) return 0;
+  const { data } = await getAdminSupabase()
+    .from("promo_codes")
+    .select("id, code, max_uses, uses_count, apple_offer_code_id, apple_offer_error")
+    .not("apple_offer_code_id", "is", null)
+    .not("max_uses", "is", null);
+  let off = 0;
+  for (const row of data ?? []) {
+    if (!promoUsedUp(row) || row.apple_offer_error) continue;
+    if (await deactivateAppleOffer(row.apple_offer_code_id as string)) continue;
+    await getAdminSupabase().from("promo_codes").update({ apple_offer_error: "All redemptions used — turned off on Apple." }).eq("id", row.id);
+    off++;
+  }
+  return off;
+}
+
 /** Whether a code checked in the app can be redeemed through Apple right now. */
-export function appleRedeemable(promo: PromoRow & { apple_offer_code_id?: unknown; active?: boolean | null }): boolean {
-  return typeof promo.apple_offer_code_id === "string" && !!promo.apple_offer_code_id && appleOfferPlan(promo) !== null;
+export function appleRedeemable(promo: PromoRow & { apple_offer_code_id?: unknown; active?: boolean | null; uses_count?: number | null }): boolean {
+  return typeof promo.apple_offer_code_id === "string" && !!promo.apple_offer_code_id && appleOfferPlan(promo) !== null && !promoUsedUp(promo);
 }
