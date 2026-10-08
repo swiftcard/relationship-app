@@ -296,6 +296,11 @@ export default async function CardPage({
     instagram: profile.instagram || "",
     twitter: profile.twitter || "",
     tiktok: profile.tiktok || "",
+    facebook,
+    snapchat,
+    youtube,
+    // The Swift Links buttons this page shows (already capped to the plan).
+    links: actionLinks,
     // Embed the CORRECT owner's headshot in the saved contact (same per-card
     // resolution the card render uses — never another card's/user's photo).
     photoUrl: cardData.photoUrl,

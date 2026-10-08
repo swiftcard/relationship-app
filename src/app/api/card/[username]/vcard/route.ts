@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { isCardActive } from "@/lib/card-active";
-import { buildVCard, pickContactImage, type VCardPhone } from "@/lib/vcard";
+import { buildVCard, cardContactLinks, pickContactImage, type VCardPhone } from "@/lib/vcard";
+import { isPaidPlan, PLAN_LIMITS } from "@/lib/plan";
 import { cardHeadshot } from "@/lib/card-media";
 import { fetchVCardPhoto } from "@/lib/contact-photo";
 import { renderInitialsPhoto } from "@/lib/contact-initials-photo";
@@ -45,19 +46,23 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ use
 
   // Headshot: the card's own, falling back to the account photo — same
   // resolution the card page uses, so the saved contact shows the same face the
-  // scanner just looked at. The owner's row is only read when the card doesn't
-  // pin its own photoUrl (see cardHeadshot).
+  // scanner just looked at. The account photo is only used when the card doesn't
+  // pin its own photoUrl (see cardHeadshot). The owner's row also says which
+  // plan the card is on, which decides how many Swift Links buttons it shows.
+  const { data: owner } = cardRow?.user_id
+    ? await admin
+        .from("profiles")
+        .select("photo_url, plan")
+        .eq("id", cardRow.user_id as string)
+        .maybeSingle()
+    : { data: null };
   let photoUrl = cardHeadshot(custom, null);
-  if (!photoUrl && cardRow?.user_id) {
-    const { data: owner } = await admin
-      .from("profiles")
-      .select("photo_url")
-      .eq("id", cardRow.user_id as string)
-      .maybeSingle();
+  if (!photoUrl && cardRow) {
     photoUrl = cardHeadshot(custom, (owner?.photo_url as string | null) ?? null);
   } else if (!photoUrl && !cardRow) {
     photoUrl = (str(c.photo_url) ?? null) as string | null;
   }
+  const paid = isPaidPlan((cardRow ? owner?.plan : c.plan) as string | null | undefined);
   // Headshot first, the card's logo when there is none (owner order
   // 2026-09-24: a contact exchanged through SwiftCard always carries a face or
   // a logo). fetchVCardPhoto is the SSRF-guarded, resized fetch shared with the
@@ -95,6 +100,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ use
       instagram: str(c.instagram),
       twitter: str(c.twitter),
       tiktok: str(c.tiktok),
+      facebook: str(custom.facebook),
+      snapchat: str(custom.snapchat),
+      youtube: str(custom.youtube),
+      // The Swift Links buttons the card page shows — Free shows its first
+      // FREE_MAX_LINKS, exactly as sanitizeCustomizationForPlan trims them there.
+      links: cardContactLinks(custom.links, paid ? null : PLAN_LIMITS.FREE_MAX_LINKS),
       // Their Swift Links bio goes into the contact's Notes — the same text
       // the card page shows under "Swift Links".
       note: str(custom.bio),

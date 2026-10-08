@@ -7,7 +7,7 @@ import { createPortal } from "react-dom";
 import { getVisitorId, getVisitorInfo, markSharedWith, hasSavedContact, markSavedContact } from "@/lib/visitor";
 import { triggerSignupNudge, triggerSignupNudgeWhenVisible } from "@/lib/nudge";
 import {
-  buildVCard, pickContactImage, contactInitials, CONTACT_INITIALS_BG, CONTACT_INITIALS_FG, type VCardPhoto,
+  buildVCard, pickContactImage, contactInitials, CONTACT_INITIALS_BG, CONTACT_INITIALS_FG, type VCardPhoto, type VCardLink,
 } from "@/lib/vcard";
 import { openFileViaSystemBrowser } from "@/lib/native-file";
 import { outbox, isQueuedOffline } from "@/lib/offline-outbox";
@@ -32,6 +32,11 @@ interface Person {
   instagram?: string;
   twitter?: string;
   tiktok?: string;
+  facebook?: string;
+  snapchat?: string;
+  youtube?: string;
+  /** The Swift Links buttons the card shows — saved as named links. */
+  links?: VCardLink[];
   /** THIS card owner's headshot — embedded in the saved contact when present. */
   photoUrl?: string | null;
   /** The card's company logo — embedded instead when there is no headshot. */
@@ -350,6 +355,10 @@ export default function SaveContactButton({
         instagram: person.instagram,
         twitter: person.twitter,
         tiktok: person.tiktok,
+        facebook: person.facebook,
+        snapchat: person.snapchat,
+        youtube: person.youtube,
+        links: person.links,
         // Swift Links bio → the contact's Notes, same as the server vCard.
         note: person.bio,
       },

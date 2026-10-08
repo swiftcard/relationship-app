@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { buildVCard, contactInitials, escapeVCardText, escapeVCardValue, normalizeVCardUrl, pickContactImage } from "@/lib/vcard";
+import { buildVCard, cardContactLinks, contactInitials, escapeVCardText, escapeVCardValue, normalizeVCardUrl, pickContactImage } from "@/lib/vcard";
 
 // A tiny 1x1 JPEG's base64 stand-in is enough to exercise the PHOTO path — the
 // builder never decodes it, it only base64-frames + folds.
@@ -78,8 +78,8 @@ describe("buildVCard — structure", () => {
     expect(out).toContain("TEL;TYPE=FAX:555-3333");
     expect(out).toContain("URL:https://morgan.com");
     expect(out).toContain("ADR;TYPE=WORK:;;1 Main Unit 5;NYC;NY;10001;");
-    expect(out).toContain("URL;type=LinkedIn:https://linkedin.com/in/alex");
-    expect(out).toContain("X-SOCIALPROFILE;type=instagram;x-user=alex:https://instagram.com/alex"); // leading @ stripped, tappable URL
+    expect(out).toContain("item1.URL:https://linkedin.com/in/alex\r\nitem1.X-ABLabel:LinkedIn");
+    expect(out).toContain("item2.URL:https://instagram.com/alex\r\nitem2.X-ABLabel:Instagram"); // leading @ stripped, tappable URL
   });
 
   it("falls back to the legacy single phone when no phones[] given", () => {
@@ -156,7 +156,28 @@ describe("a saved contact carries everything the card holds", () => {
     instagram: "@coastlinerealty",
     twitter: "@alexmorgan",
     tiktok: "@coastlinerealty",
+    facebook: "facebook.com/coastlinerealty",
+    snapchat: "@alexsnaps",
+    youtube: "youtube.com/@coastlinetours",
+    links: [
+      { label: "Book a showing", url: "calendly.com/alexmorgan" },
+      { label: "Listings", url: "https://coastlinehomes.com/listings" },
+    ],
+    note: "Bay Area realtor.\nCall any time.",
   };
+
+  // The row for a label, with the URL it opens — iPhone pairs them by item group.
+  function namedRows(out: string): Record<string, string> {
+    const lines = out.split("\r\n");
+    const rows: Record<string, string> = {};
+    for (const l of lines) {
+      const m = /^(item\d+)\.X-ABLabel:(.*)$/.exec(l);
+      if (!m) continue;
+      const url = lines.find((u) => u.startsWith(`${m[1]}.URL:`));
+      rows[m[2]] = url ? url.slice(`${m[1]}.URL:`.length) : "";
+    }
+    return rows;
+  }
 
   it("includes every field a card can hold, plus the photo", () => {
     const out = buildVCard(full, { base64: "/9j/4AAQSkZJRg==", mime: "image/jpeg" });
@@ -172,25 +193,84 @@ describe("a saved contact carries everything the card holds", () => {
       "1200 Ocean Ave",
       "San Francisco",
       "94122",
-      "URL;type=LinkedIn:",
-      "X-SOCIALPROFILE;type=instagram;x-user=",
+      "NOTE:Bay Area realtor.\\nCall any time.",
       "PHOTO;ENCODING=b",
     ]) {
       expect(out, `missing from the saved contact: ${probe}`).toContain(probe);
     }
   });
 
+  it("saves EVERY social and every Swift Links button as a named, tappable row", () => {
+    // Facebook, Snapchat, YouTube and the Swift Links buttons used to be left
+    // out of the contact entirely, and Instagram/X/TikTok were X-SOCIALPROFILE
+    // lines that Android throws away.
+    expect(namedRows(buildVCard(full))).toEqual({
+      SwiftCard: "https://swiftcard.me/demo-realty",
+      LinkedIn: "https://linkedin.com/in/alexmorgan",
+      Instagram: "https://instagram.com/coastlinerealty",
+      TikTok: "https://tiktok.com/@coastlinerealty",
+      Facebook: "https://facebook.com/coastlinerealty",
+      X: "https://x.com/alexmorgan",
+      Snapchat: "https://snapchat.com/add/alexsnaps",
+      YouTube: "https://youtube.com/@coastlinetours",
+      "Book a showing": "https://calendly.com/alexmorgan",
+      Listings: "https://coastlinehomes.com/listings",
+    });
+    expect(buildVCard(full)).not.toContain("X-SOCIALPROFILE");
+  });
+
   it("carries the SwiftCard link so the card outlives the save", () => {
     // Without this the contact is a dead end: the design, Swift Links and
     // everything else on the card become unreachable once the sheet closes.
-    const out = buildVCard(full);
-    expect(out).toContain("URL;type=SwiftCard:https://swiftcard.me/demo-realty");
+    expect(namedRows(buildVCard(full)).SwiftCard).toBe("https://swiftcard.me/demo-realty");
   });
 
   it("keeps the card link distinguishable from the personal website", () => {
     const out = buildVCard(full);
     expect(out).toContain("URL:https://coastlinehomes.com");
-    expect(out.match(/^URL/gm)?.length).toBe(3); // website + SwiftCard + LinkedIn
+    expect(out.match(/^URL/gm)?.length).toBe(1); // the website; every other link is a named row
+  });
+
+  it("never saves the same link twice, and skips headers and non-links", () => {
+    const rows = namedRows(buildVCard({
+      name: "A B",
+      website: "coastlinehomes.com",
+      instagram: "@alex",
+      links: [
+        { label: "My site", url: "https://www.coastlinehomes.com/" },
+        { label: "Insta", url: "instagram.com/alex" },
+        { label: "Section", url: "", kind: "header" },
+        { label: "Nothing", url: "not a link" },
+        { label: "Menu", url: "menu.example.com" },
+      ],
+    }));
+    expect(rows).toEqual({ Instagram: "https://instagram.com/alex", Menu: "https://menu.example.com" });
+  });
+
+  it("keeps every group's URL and label on adjacent, uniquely numbered lines", () => {
+    const lines = buildVCard(full).split("\r\n");
+    const items = lines.filter((l) => /^item\d+\./.test(l));
+    expect(items.length % 2).toBe(0);
+    for (let i = 0; i < items.length; i += 2) {
+      const n = items[i].split(".")[0];
+      expect(items[i]).toMatch(new RegExp(`^${n}\\.URL:https://`));
+      expect(items[i + 1]).toMatch(new RegExp(`^${n}\\.X-ABLabel:.+`));
+    }
+    expect(new Set(items.map((l) => l.split(".")[0])).size).toBe(items.length / 2);
+  });
+
+  it("caps the Swift Links buttons the way the card does", () => {
+    const links = [
+      { label: "One", url: "one.com" },
+      { label: "Head", url: "", kind: "header" },
+      { label: "Two", url: "two.com" },
+      { label: "Three", url: "three.com" },
+    ];
+    expect(cardContactLinks(links, null).map((l) => l.label)).toEqual(["One", "Two", "Three"]);
+    // Free: the first FREE_MAX_LINKS entries, as sanitizeCustomizationForPlan
+    // trims them for the card page — then headers drop out.
+    expect(cardContactLinks(links, 2).map((l) => l.label)).toEqual(["One"]);
+    expect(cardContactLinks("garbage", null)).toEqual([]);
   });
 
   it("omits the card link cleanly when there isn't one", () => {
@@ -232,5 +312,23 @@ describe("saved contact — picture fallback and bio", () => {
     expect(route).toContain("note: str(custom.bio)");
     expect(route).toContain("?? (await renderInitialsPhoto(name))");
     expect(page).toMatch(/logoUrl: cardData\.logoUrl,[\s\S]{0,120}\bbio,/);
+  });
+
+  it("the page, the button and the server vCard all hand over every social and the Swift Links buttons", () => {
+    const btn = readFileSync("src/components/SaveContactButton.tsx", "utf8");
+    const route = readFileSync("src/app/api/card/[username]/vcard/route.ts", "utf8");
+    const src = readFileSync("src/app/[username]/page.tsx", "utf8");
+    const start = src.indexOf("const person = {");
+    const person = src.slice(start, src.indexOf("\n  };", start));
+    expect(start).toBeGreaterThan(-1);
+    for (const s of ["linkedin", "instagram", "twitter", "tiktok", "facebook", "snapchat", "youtube", "links"]) {
+      expect(btn, `button drops ${s}`).toContain(`${s}: person.${s}`);
+    }
+    for (const s of ["facebook", "snapchat", "youtube"]) {
+      expect(route, `server vCard drops ${s}`).toContain(`${s}: str(custom.${s})`);
+      expect(person, `card page drops ${s}`).toMatch(new RegExp(`\\n\\s+${s},`));
+    }
+    expect(route).toContain("links: cardContactLinks(custom.links, paid ? null : PLAN_LIMITS.FREE_MAX_LINKS)");
+    expect(person).toContain("links: actionLinks,");
   });
 });

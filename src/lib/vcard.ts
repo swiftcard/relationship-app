@@ -13,8 +13,12 @@
 
 import { socialUrl } from "@/lib/social-url";
 import { unitLine } from "@/lib/address-unit";
+import { fullHref } from "@/lib/link-brand";
 
 export type VCardPhone = { number: string; label?: string | null; showOnCard?: boolean };
+
+/** One of the card's own Swift Links buttons ("Book a call", "Listings"). */
+export type VCardLink = { label?: string | null; url?: string | null; kind?: string | null };
 
 export type VCardAddress = {
   street?: string | null;
@@ -58,6 +62,27 @@ export interface VCardPerson {
   instagram?: string | null;
   twitter?: string | null;
   tiktok?: string | null;
+  facebook?: string | null;
+  snapchat?: string | null;
+  youtube?: string | null;
+  /**
+   * The card's other Swift Links buttons, exactly the ones the visitor sees
+   * (already capped to the owner's plan by the caller — see cardContactLinks).
+   */
+  links?: VCardLink[] | null;
+}
+
+/**
+ * The Swift Links buttons a saved contact carries: the ones the card page
+ * shows, in its order. Headers are label-only rows and carry no link. Free
+ * shows its first `freeMax`, so a contact never holds a link the card hides.
+ * Shared by the card page (the button) and the server vCard (phones, QR scans,
+ * the app) so the two can't disagree.
+ */
+export function cardContactLinks(raw: unknown, freeMax: number | null): VCardLink[] {
+  const all = (Array.isArray(raw) ? raw : []) as VCardLink[];
+  const shown = freeMax === null ? all : all.slice(0, freeMax);
+  return shown.filter((l) => l && l.kind !== "header" && String(l.label ?? "").trim() && String(l.url ?? "").trim());
 }
 
 export interface VCardPhoto {
@@ -138,26 +163,32 @@ export function normalizeVCardUrl(url?: string | null): string {
   return /^https?:\/\//i.test(s) ? s : `https://${s}`;
 }
 
-// A social profile in the form iOS Contacts itself exports:
-//   X-SOCIALPROFILE;type=instagram;x-user=alex:https://instagram.com/alex
-// The value used to be the bare handle ("alex"), which Contacts shows as text
-// that opens nothing; the profile URL makes the row tappable, and x-user keeps
-// the handle as its visible label. The URL comes from socialUrl — the same one
-// the card's own Instagram button opens — so a pasted link, an @handle and a
-// bare handle all land on the right profile.
-function socialProfileLine(platform: "instagram" | "twitter" | "tiktok", raw?: string | null): string | null {
-  const url = socialUrl(platform, raw);
-  if (!url) return null;
-  let handle = String(raw ?? "").trim().replace(/^@+/, "");
+// Every social, in the card's own order (lib/social-url buildConnectLinks),
+// with the name the contact shows next to it.
+const SOCIAL_ROWS = [
+  ["linkedin", "LinkedIn"],
+  ["instagram", "Instagram"],
+  ["tiktok", "TikTok"],
+  ["facebook", "Facebook"],
+  ["twitter", "X"],
+  ["snapchat", "Snapchat"],
+  ["youtube", "YouTube"],
+] as const;
+
+// Same link written two ways ("https://www.x.com/a/", "x.com/a") is one row.
+function sameLinkKey(url: string): string {
+  return url.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/+$/, "");
+}
+
+// A Swift Links button's address, as the card's button opens it (fullHref), or
+// null when it isn't a web address at all.
+function linkButtonUrl(raw?: string | null): string | null {
+  const href = fullHref(String(raw ?? ""));
   try {
-    if (/[/.]/.test(handle)) {
-      const segs = new URL(url).pathname.split("/").filter(Boolean);
-      handle = (segs[segs.length - 1] ?? "").replace(/^@+/, "");
-    }
-  } catch { /* keep the typed value */ }
-  const user = handle.replace(/[^A-Za-z0-9._-]/g, "");
-  const param = user ? `;x-user=${user}` : "";
-  return `X-SOCIALPROFILE;type=${platform}${param}:${escapeVCardValue(url)}`;
+    return new URL(href).hostname.includes(".") ? href : null;
+  } catch {
+    return null;
+  }
 }
 
 // Build the folded PHOTO line, or null if the payload is unusable. iOS/macOS
@@ -230,11 +261,48 @@ export function buildVCard(person: VCardPerson, photo?: VCardPhoto | null): stri
   }
   if (person.fax && person.fax.trim()) lines.push(`TEL;TYPE=FAX:${esc(person.fax)}`);
 
-  if (person.website) lines.push(`URL:${esc(normalizeVCardUrl(person.website))}`);
+  // Every link after the website is a NAMED row: "SwiftCard", "Instagram",
+  // "Book a call". Written the way iPhone Contacts writes its own custom
+  // labels — itemN.URL + itemN.X-ABLabel — which iPhone reads back as that
+  // name and Android saves as a website row; on both the row opens the link.
+  // Socials used to be X-SOCIALPROFILE lines, which Android drops entirely, and
+  // Facebook, Snapchat, YouTube and the Swift Links buttons weren't written at
+  // all — a contact saved from a card simply lost them.
+  const seen = new Set<string>();
+  let item = 0;
+  const namedLink = (label: string, url: string) => {
+    const key = sameLinkKey(url);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    item += 1;
+    lines.push(`item${item}.URL:${esc(url)}`);
+    lines.push(`item${item}.X-ABLabel:${esc(label.trim().slice(0, 40))}`);
+  };
 
-  // Labelled so the phone shows it as its own row ("SwiftCard") rather than a
-  // second anonymous URL indistinguishable from their website.
-  if (person.cardUrl) lines.push(`URL;type=SwiftCard:${esc(normalizeVCardUrl(person.cardUrl))}`);
+  if (person.website) {
+    const site = normalizeVCardUrl(person.website);
+    lines.push(`URL:${esc(site)}`);
+    seen.add(sameLinkKey(site));
+  }
+
+  // Their SwiftCard itself, as its own row rather than a second anonymous URL
+  // indistinguishable from their website.
+  if (person.cardUrl) namedLink("SwiftCard", normalizeVCardUrl(person.cardUrl));
+
+  // socialUrl (not normalizeVCardUrl) — the same address the card's own button
+  // opens, so a pasted link, an @handle and a bare handle all land on the
+  // right profile ("john-doe" → linkedin.com/in/john-doe, not https://john-doe).
+  for (const [platform, label] of SOCIAL_ROWS) {
+    const url = socialUrl(platform, person[platform]);
+    if (url) namedLink(label, url);
+  }
+
+  for (const l of Array.isArray(person.links) ? person.links : []) {
+    if (!l || l.kind === "header") continue;
+    const url = linkButtonUrl(l.url);
+    const label = String(l.label ?? "").trim();
+    if (url && label) namedLink(label, url);
+  }
 
   const addr = person.address;
   if (addr && (addr.street || addr.city || addr.state || addr.zip)) {
@@ -242,17 +310,7 @@ export function buildVCard(person: VCardPerson, photo?: VCardPhoto | null): stri
     lines.push(`ADR;TYPE=WORK:;;${esc(street)};${esc(addr.city)};${esc(addr.state)};${esc(addr.zip)};`);
   }
 
-  // socialUrl (not normalizeVCardUrl) — a bare handle like "john-doe" must
-  // become linkedin.com/in/john-doe, not the nonsense domain https://john-doe.
-  if (person.linkedin) {
-    const li = socialUrl("linkedin", person.linkedin);
-    if (li) lines.push(`URL;type=LinkedIn:${esc(li)}`);
-  }
   if (person.note && person.note.trim()) lines.push(`NOTE:${escapeVCardText(person.note)}`);
-  for (const platform of ["instagram", "twitter", "tiktok"] as const) {
-    const line = socialProfileLine(platform, person[platform]);
-    if (line) lines.push(line);
-  }
 
   // Embedded headshot — best-effort; a bad/missing image is silently skipped so
   // saving a contact never breaks over a photo.
