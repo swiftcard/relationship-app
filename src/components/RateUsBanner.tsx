@@ -27,7 +27,10 @@ export default function RateUsBanner({ leadCount, viewCount, dismissedAt }: { le
   }
 
   return (
-    <div className="flex items-center justify-between gap-4 rounded-2xl px-5 py-3.5 mb-5 bg-blue-950/30 border border-blue-800/40 flex-wrap">
+    // sc-apple-only: the whole banner asks for an App Store review, so an
+    // Android browser gets none of it (globals.css, data-sc-os) — not a banner
+    // with its button missing.
+    <div className="sc-apple-only flex items-center justify-between gap-4 rounded-2xl px-5 py-3.5 mb-5 bg-blue-950/30 border border-blue-800/40 flex-wrap">
       <p className="text-sm text-blue-200/90 leading-snug min-w-0">
         {leadCount >= 1 ? "Your card is bringing in contacts." : "People are viewing your card."} If SwiftCard is working for you, a quick App Store review helps others find it.
         <span className="hidden md:inline text-blue-300/70"> Best on iPhone.</span>

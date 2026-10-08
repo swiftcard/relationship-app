@@ -89,7 +89,10 @@ export default async function AppStoreReviews() {
             web page elsewhere with a "Best on iPhone" tip, and every tap
             counted as cta rate_us / reviews_page. See lib/rate-us.ts. */}
         {APP_STORE_WRITE_REVIEW_URL && (
-          <div className="hp-card !p-8 mt-10 max-w-2xl mx-auto text-center" data-reveal>
+          // sc-apple-only: the panel is "write a review on the App Store", so
+          // an Android browser gets none of it (globals.css, data-sc-os); the
+          // reviews above stay — they are just what people said.
+          <div className="sc-apple-only hp-card !p-8 mt-10 max-w-2xl mx-auto text-center" data-reveal>
             <p className="text-slate-900 font-semibold text-[1.0625rem]">Used SwiftCard? Leave a review.</p>
             <p className="text-slate-500 text-[0.90625rem] leading-relaxed mt-2">
               It takes a few seconds, it posts under your App Store name, and it&apos;s the one thing that

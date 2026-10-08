@@ -74,11 +74,58 @@ describe("one look, the header's", () => {
     const lib = read("src/lib/app-store.ts");
     const block = lib.slice(lib.indexOf("export function appStoreEmailBlock"));
     expect(block).toContain("background:#191A1E;border:1px solid #2F3034;border-radius:12px;");
-    expect(block).toMatch(/color:#BABABB;font-size:9px;[^"]*">Download on the</);
-    expect(block).toMatch(/color:#FFFFFF;font-size:12\.5px;font-weight:600;[^"]*">App&nbsp;Store</);
-    // The Apple mark, as a hosted PNG (no SVG in email) that actually ships.
-    expect(block).toContain("/email/apple-glyph-white.png");
+    expect(block).toMatch(/color:#BABABB;font-size:9px;[^"]*">\$\{top\}</);
+    expect(block).toMatch(/color:#FFFFFF;font-size:12\.5px;font-weight:600;[^"]*">\$\{main\}</);
+    // Both marks, as hosted PNGs (no SVG in email) that actually ship.
+    expect(block).toContain("apple-glyph-white.png");
+    expect(block).toContain("qr-glyph-white.png");
     expect(existsSync(join(root, "public/email/apple-glyph-white.png"))).toBe(true);
+    expect(existsSync(join(root, "public/email/qr-glyph-white.png"))).toBe(true);
+  });
+
+  // An email can't see the reader's phone. With both stores live it carries
+  // the site's "Get the app" badge to swiftcard.me/download, the smart link
+  // that routes by device when opened (owner, 2026-10-08: Android readers were
+  // being handed an App Store button). App Store alone → the App Store badge.
+  describe("the email badge routes by device through swiftcard.me/download", () => {
+    beforeEach(() => { vi.resetModules(); });
+    afterEach(() => { vi.unstubAllEnvs(); });
+
+    it("both stores live → Get the app → /download with campaign tags", async () => {
+      vi.stubEnv("NEXT_PUBLIC_APP_STORE_URL", "https://apps.apple.com/app/id6798875872");
+      vi.stubEnv("NEXT_PUBLIC_PLAY_STORE_URL", "https://play.google.com/store/apps/details?id=me.swiftcard.app");
+      vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://swiftcard.me");
+      const { appStoreEmailBlock } = await import("@/lib/app-store");
+      const out = appStoreEmailBlock("lead");
+      expect(out).toContain('href="https://swiftcard.me/download?utm_source=swiftcard&utm_medium=email&utm_campaign=welcome"');
+      expect(out).toContain(">iPhone &amp; Android<");
+      expect(out).toContain(">Get the&nbsp;app<");
+      expect(out).toContain("/email/qr-glyph-white.png");
+      expect(out).not.toContain("apps.apple.com");
+    });
+
+    it("App Store alone → the App Store badge, straight to the listing", async () => {
+      vi.stubEnv("NEXT_PUBLIC_APP_STORE_URL", "https://apps.apple.com/app/id6798875872");
+      vi.stubEnv("NEXT_PUBLIC_PLAY_STORE_URL", "");
+      const { appStoreEmailBlock } = await import("@/lib/app-store");
+      const out = appStoreEmailBlock("lead");
+      expect(out).toContain('href="https://apps.apple.com/app/id6798875872"');
+      expect(out).toContain(">Download on the<");
+      expect(out).toContain(">App&nbsp;Store<");
+      expect(out).toContain("/email/apple-glyph-white.png");
+    });
+
+    it("no store at all → nothing", async () => {
+      vi.stubEnv("NEXT_PUBLIC_APP_STORE_URL", "");
+      vi.stubEnv("NEXT_PUBLIC_PLAY_STORE_URL", "");
+      const { appStoreEmailBlock } = await import("@/lib/app-store");
+      expect(appStoreEmailBlock("lead")).toBe("");
+    });
+
+    it("the welcome email's lead stops saying iPhone once Android exists", () => {
+      const tpl = read("src/lib/email-templates.ts");
+      expect(tpl).toMatch(/appStoreEmailBlock\(PLAY_STORE_URL \? "[^"]*iPhone or Android[^"]*" : "SwiftCard for iPhone/);
+    });
   });
 
   it("is the header's size everywhere but the phone hero", () => {

@@ -466,7 +466,7 @@ export default async function FlowSettingsPage({
               1.1.7 / 5.6.1. See lib/rate-us.ts. */}
           {APP_STORE_WRITE_REVIEW_URL && (
             <NativeHidden>
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
+              <div className="sc-apple-only bg-gray-900 border border-gray-800 rounded-2xl px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
                   <p className="text-white text-sm font-semibold">Rate SwiftCard</p>
                   <p className="text-gray-500 text-xs mt-0.5">A quick App Store review helps other people find us.<span className="hidden md:inline"> Best on iPhone.</span></p>

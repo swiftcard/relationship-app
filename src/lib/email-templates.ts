@@ -1,6 +1,6 @@
 import { escapeHtml, safeUrlAttr } from "./escape";
 import { htmlToText } from "./email-text";
-import { appStoreEmailBlock } from "./app-store";
+import { PLAY_STORE_URL, appStoreEmailBlock } from "./app-store";
 // The downgrade card quotes real limits rather than remembered ones.
 import { PLAN_LIMITS, PLAN_PRICES } from "./plan";
 import { from as senderFrom_, replyToFor, type SenderKey } from "./email-senders";
@@ -196,7 +196,7 @@ export function welcomeEmail(opts: {
       ${opts.officeMember ? "" : step(4, "Send new contacts to your CRM", `When someone shares their details back, they can go straight into your CRM. Connect it in ${a(`${APP_URL}/settings/flows`, "Settings \u2192 Notifications and preferences")} under \u201cSend contacts to your CRM\u201d (Pro and Office).`)}
       ${step(opts.officeMember ? 4 : 5, "Share it everywhere else", `Text or email the link, and download your QR code from \u201cOther ways to share\u201d for a slide, a flyer or your lock screen. Nobody has to install anything to open it.`, true)}
     `)}
-    ${appStoreEmailBlock("SwiftCard for iPhone — your card, QR code and new contacts, right in your pocket.")}
+    ${appStoreEmailBlock(PLAY_STORE_URL ? "The SwiftCard app — your card, QR code and new contacts, right in your pocket, on iPhone or Android." : "SwiftCard for iPhone — your card, QR code and new contacts, right in your pocket.")}
   `;
   return built(SUPPORT_FROM, `Your SwiftCard is live, ${opts.firstName}!`, layout(body, opts.unsubscribeUrl, opts.prefsUrl));
 }

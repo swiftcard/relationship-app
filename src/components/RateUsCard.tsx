@@ -29,7 +29,10 @@ export default function RateUsCard() {
   if (!href || androidApp) return null;
 
   return (
-    <div className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5">
+    // sc-apple-only: an Android BROWSER (not just the Android app) is hidden
+    // the same way, by the before-paint data-sc-os tag (globals.css) — the
+    // rating is on the App Store either way.
+    <div className="sc-apple-only bg-gray-900 border border-gray-800/80 rounded-2xl p-5">
       <div className="flex items-start gap-3">
         <div className="w-9 h-9 rounded-xl bg-amber-500/15 flex items-center justify-center shrink-0">
           <svg viewBox="0 0 24 24" className="w-5 h-5" fill="#f59e0b" aria-hidden="true"><path d="M12 2l2.9 5.88 6.5.95-4.7 4.58 1.11 6.47L12 17.3 6.19 19.86 7.3 13.4 2.6 8.82l6.5-.95L12 2z" /></svg>

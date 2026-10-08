@@ -77,19 +77,31 @@ export const APP_STORE_WRITE_REVIEW_URL: string | null =
  * solid hex so no client's dark mode can blend them away. The shine and the
  * hover cannot exist in an email; everything else matches.
  * `lead` lets each email say why the app matters to ITS reader.
+ *
+ * An email cannot see the reader's phone, so once BOTH stores exist the badge
+ * becomes the "Get the app" pill (the site's third badge, components/AppStoreBadge
+ * GetTheAppBadge) linking to swiftcard.me/download — the smart link that reads
+ * the device when it is opened and lands on the App Store or Google Play, with
+ * the campaign tags below carried into the store (lib/download-link). With the
+ * App Store alone it stays the App Store badge, straight to the listing.
  */
 export function appStoreEmailBlock(lead: string): string {
-  if (!APP_STORE_URL) return "";
+  if (!APP_STORE_URL && !PLAY_STORE_URL) return "";
   const site = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
+  const smart = Boolean(APP_STORE_URL && PLAY_STORE_URL) || !APP_STORE_URL;
+  const href = smart ? `${site}/download?utm_source=swiftcard&utm_medium=email&utm_campaign=welcome` : APP_STORE_URL;
+  const glyph = smart ? "qr-glyph-white.png" : "apple-glyph-white.png";
+  const top = smart ? "iPhone &amp; Android" : "Download on the";
+  const main = smart ? "Get the&nbsp;app" : "App&nbsp;Store";
   return `
     <div style="margin:28px 0 0;padding:20px 0 0;border-top:1px solid #e5e7eb;">
       <p style="margin:0 0 12px;color:#475569;font-size:13px;line-height:1.5;">${lead}</p>
-      <a href="${APP_STORE_URL}" style="display:inline-block;background:#191A1E;border:1px solid #2F3034;border-radius:12px;padding:6px 12px;text-decoration:none;">
+      <a href="${href}" style="display:inline-block;background:#191A1E;border:1px solid #2F3034;border-radius:12px;padding:6px 12px;text-decoration:none;">
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr>
-          <td style="vertical-align:middle;padding:0 8px 0 0;"><img src="${site}/email/apple-glyph-white.png" width="17" height="17" alt="" style="display:block;border:0;" /></td>
+          <td style="vertical-align:middle;padding:0 8px 0 0;"><img src="${site}/email/${glyph}" width="17" height="17" alt="" style="display:block;border:0;" /></td>
           <td style="vertical-align:middle;">
-            <span style="display:block;color:#BABABB;font-size:9px;line-height:1.25;">Download on the</span>
-            <span style="display:block;color:#FFFFFF;font-size:12.5px;font-weight:600;line-height:1.25;letter-spacing:-0.01em;">App&nbsp;Store</span>
+            <span style="display:block;color:#BABABB;font-size:9px;line-height:1.25;">${top}</span>
+            <span style="display:block;color:#FFFFFF;font-size:12.5px;font-weight:600;line-height:1.25;letter-spacing:-0.01em;">${main}</span>
           </td>
         </tr></table>
       </a>

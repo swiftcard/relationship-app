@@ -155,7 +155,7 @@ describe("office invite App Store badge", () => {
     const tpl = readFileSync(join(process.cwd(), "src/lib/email-templates.ts"), "utf8");
     expect(tpl).toMatch(/\$\{appStoreEmailBlock\(/);
     const lib = readFileSync(join(process.cwd(), "src/lib/app-store.ts"), "utf8");
-    expect(lib).toMatch(/if \(!APP_STORE_URL\) return "";/);
+    expect(lib).toMatch(/if \(!APP_STORE_URL && !PLAY_STORE_URL\) return "";/);
   });
 });
 

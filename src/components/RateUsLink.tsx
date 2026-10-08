@@ -14,6 +14,10 @@ import { APP_STORE_WRITE_REVIEW_URL } from "@/lib/app-store";
 // (see /admin/analytics → Top CTAs). Renders nothing until the App Store id is
 // configured, like every other lib/app-store.ts consumer. See lib/rate-us.ts
 // for the rules the surfaces follow.
+//
+// `sc-apple-only`: hidden in an Android browser (globals.css, by the
+// before-paint data-sc-os tag from lib/store-os) — an Android visitor can't
+// rate an app on the App Store, so the link would only be noise there.
 export default function RateUsLink({
   placement,
   className = "",
@@ -31,7 +35,7 @@ export default function RateUsLink({
       rel="noopener noreferrer"
       title="Best on iPhone"
       onClick={() => trackCta("rate_us", placement)}
-      className={className}
+      className={`sc-apple-only ${className}`.trim()}
     >
       {children}
     </a>
