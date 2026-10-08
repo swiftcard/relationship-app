@@ -548,7 +548,10 @@ export const OUTPUT_CHECK_PROMPT = [
   "- companies: every company, organisation or brand NAME printed as text.",
   "- logos: every logo, emblem, brand mark or wordmark drawn on it — name the",
   "  brand (e.g. Starbucks) or describe the mark in 2-4 words. Plain decorative",
-  "  shapes, stripes and borders are NOT logos.",
+  "  shapes, lines, rules, stripes, dots and borders are NOT logos: leave them out.",
+  "- otherText: any other lettering, words, numbers, codes or symbols printed on",
+  "  it that the lists above did not cover (a slogan, initials, a colour code,",
+  "  placeholder text, a label). Decorative shapes are not text.",
   "- looksLikePhoto: true when it looks like a PHOTOGRAPH of a physical card rather",
   "  than a clean flat digital graphic — visible paper surface or grain, uneven",
   "  lighting, glare or vignette, cast shadows, perspective or tilt, curled or",
@@ -564,7 +567,8 @@ export const OUTPUT_CHECK_PROMPT = [
   "  [[0,0],[100,0],[100,100],[0,100]]; otherwise the card's own edge.",
   "Return ONLY valid JSON:",
   '{"emails":[],"phones":[],"addresses":[],"websites":[],"names":[],"companies":[],',
-  ' "logos":[],"looksLikePhoto":false,"fillsFrame":true,"cardCorners":[[0,0],[100,0],[100,100],[0,100]]}',
+  ' "logos":[],"otherText":[],"looksLikePhoto":false,"fillsFrame":true,',
+  ' "cardCorners":[[0,0],[100,0],[100,100],[0,100]]}',
   "Empty arrays if none. Do not include anything else.",
 ].join("\n");
 
@@ -699,13 +703,20 @@ export function findLeaks(scan: unknown, id: TransferIdentity, source: SourceFac
   return leaks;
 }
 
+/** A "logo" that is plainly a line, stripe or shape — the checker names these
+ *  despite being told not to (live: "golden horizontal line"), and a decorative
+ *  rule is exactly what the artwork SHOULD keep. */
+const DECORATIVE = /\b(line|lines|rule|stripe|stripes|bar|bars|border|borders|divider|underline|shape|shapes|circle|circles|dot|dots|square|squares|rectangle|rectangles|block|blocks|band|bands|panel|panels|pattern|gradient|swoosh|wave|waves|triangle|triangles|curve|curves|frame)\b/i;
+const BRANDLIKE = /\b(logo|emblem|wordmark|mark|brand|icon|monogram|crest|badge|symbol|siren|mermaid|letter|initials?)\b/i;
+
 /** The artwork pass may carry NOTHING readable: every transcription is a leak. */
 export function artworkLeaks(scan: unknown): string[] {
   if (!scan || typeof scan !== "object") return [];
   const r = scan as Record<string, unknown>;
-  return (["emails", "phones", "addresses", "websites", "names", "companies", "logos"] as const)
-    .flatMap((k) => strs(r[k], 20))
-    .filter((s) => norm(s).length >= 2);
+  const text = (["emails", "phones", "addresses", "websites", "names", "companies", "otherText"] as const)
+    .flatMap((k) => strs(r[k], 20));
+  const logos = strs(r.logos, 20).filter((l) => !(DECORATIVE.test(l) && !BRANDLIKE.test(l)));
+  return [...text, ...logos].filter((s) => norm(s).length >= 2);
 }
 
 /** One corrective sentence for the retry attempt. */

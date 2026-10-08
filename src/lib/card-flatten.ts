@@ -30,6 +30,11 @@ export const LOCATE_CARD_PROMPT = [
   "plastic, lying on something, held, at any angle), or is it already a FLAT",
   "digital design (a screenshot, an exported template, a mockup, a scan)?",
   "",
+  "A thin magenta grid is drawn over the image every 10% of its width and",
+  "height, with the percentage printed at the top and left edges. Read every",
+  "coordinate off that grid — e.g. a corner a third of the way from the 20 line",
+  "to the 30 line is 23. The grid is a measuring aid; it is not part of the card.",
+  "",
   "Return ONLY valid JSON:",
   '{"kind":"photo_of_physical_card"|"flat_design","fillsFrame":true|false,',
   ' "corners":[[x,y],[x,y],[x,y],[x,y]]}',
@@ -204,6 +209,29 @@ export function warpQuad(
 }
 
 /**
+ * The copy the FINDER sees: a labelled 10% grid over the image. Asked for
+ * percentages with nothing to measure against, the model placed a tilted
+ * card's corners 10% away from where they were (live, 2026-10-08) — read off a
+ * ruler, the same model is far closer. The crop itself uses the clean pixels.
+ */
+export async function gridOverlay(image: Buffer, W: number, H: number): Promise<Buffer> {
+  const sharp = (await import("sharp")).default;
+  const fs = Math.max(11, Math.round(Math.min(W, H) * 0.022));
+  const parts: string[] = [];
+  for (let p = 10; p < 100; p += 10) {
+    const x = (p / 100) * W, y = (p / 100) * H;
+    parts.push(`<line x1="${x.toFixed(1)}" y1="0" x2="${x.toFixed(1)}" y2="${H}" stroke="#ff00c8" stroke-width="1" stroke-opacity="0.75"/>`);
+    parts.push(`<line x1="0" y1="${y.toFixed(1)}" x2="${W}" y2="${y.toFixed(1)}" stroke="#ff00c8" stroke-width="1" stroke-opacity="0.75"/>`);
+    const label = (tx: number, ty: number, anchor: string) =>
+      `<text x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" font-family="Arial, sans-serif" font-size="${fs}" font-weight="bold" fill="#ff00c8" stroke="#ffffff" stroke-width="${(fs * 0.22).toFixed(1)}" paint-order="stroke" text-anchor="${anchor}">${p}</text>`;
+    parts.push(label(x, fs * 1.1, "middle"));
+    parts.push(label(fs * 0.3, y + fs * 0.4, "start"));
+  }
+  const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">${parts.join("")}</svg>`);
+  return sharp(image).composite([{ input: svg }]).jpeg({ quality: 88 }).toBuffer();
+}
+
+/**
  * Cut an image to a pixel quad, laid flat at the quad's own proportions
  * (flatSize). Works on any decodable image; alpha is dropped. Returns null when
  * the warp is degenerate. Used on the source upload AND on every generated
@@ -240,8 +268,8 @@ export async function prepareCardImage(
       .removeAlpha()
       .jpeg({ quality: 90 })
       .toBuffer({ resolveWithObject: true });
-    const b64 = upright.data.toString("base64");
-    const reading = await aiVision({ imageBase64: b64, mediaType: "image/jpeg", prompt: LOCATE_CARD_PROMPT, json: true, maxTokens: 300 });
+    const gridded = await gridOverlay(upright.data, upright.info.width, upright.info.height);
+    const reading = await aiVision({ imageBase64: gridded.toString("base64"), mediaType: "image/jpeg", prompt: LOCATE_CARD_PROMPT, json: true, maxTokens: 300 });
     const m = reading?.match(/\{[\s\S]*\}/);
     let parsed: unknown = null;
     try { parsed = m ? JSON.parse(m[0]) : null; } catch { parsed = null; }

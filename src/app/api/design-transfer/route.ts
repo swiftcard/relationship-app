@@ -243,8 +243,9 @@ export async function POST(request: NextRequest) {
   if (!art && masked && prepared.kind === "flat") {
     // The painted-out original passes the same gate as a redraw would: if the
     // measurement missed a line, it is still on there and must not ship.
-    const { image } = await check({ data: Buffer.from(masked.imageBase64, "base64"), mediaType: "image/jpeg" });
+    const { image, problems } = await check({ data: Buffer.from(masked.imageBase64, "base64"), mediaType: "image/jpeg" });
     if (image) { art = image; artworkFrom = "masked-source"; }
+    else console.error(`[design-transfer] masked source rejected for ${user.id}:`, [...problems.leaks, ...(problems.photo ? ["(photo look)"] : []), ...(problems.scene ? ["(scene)"] : [])].join(", "));
   }
   console.log(`[design-transfer] ${user.id}: source ${prepared.kind}${prepared.flattened ? " (cropped)" : ""}, masked ${maskBoxes(face).length} boxes, artwork from ${artworkFrom}`);
 

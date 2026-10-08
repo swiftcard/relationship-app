@@ -332,10 +332,17 @@ describe("findLeaks", () => {
     expect(sourceFacts({ names: "x", brands: [1, "Nike"] }).brands).toEqual(["Nike"]);
   });
 
-  it("the artwork pass may carry nothing readable at all", () => {
+  it("the artwork pass may carry nothing readable at all — but a decorative line is not a logo", () => {
     expect(artworkLeaks({ emails: [], names: ["Jordan Rivera"], logos: ["Starbucks siren"], companies: [] })).toEqual(["Jordan Rivera", "Starbucks siren"]);
     expect(artworkLeaks({ phones: ["(206) 555-0100"] })).toEqual(["(206) 555-0100"]);
+    // Lettering of any kind counts (live: a redraw with "#C9A024" written on it).
+    expect(artworkLeaks({ otherText: ["#C9A024", "SAMPLE"] })).toEqual(["#C9A024", "SAMPLE"]);
+    // The checker names rules and stripes as "logos" despite instructions (live:
+    // "golden horizontal line"); those are artwork and stay. A mark described
+    // with brand words still counts.
+    expect(artworkLeaks({ logos: ["golden horizontal line", "thin gold rule", "navy left panel", "green circle logo", "letter S monogram"] })).toEqual(["green circle logo", "letter S monogram"]);
     expect(artworkLeaks(null)).toEqual([]);
+    expect(OUTPUT_CHECK_PROMPT).toContain('"otherText":[]');
   });
 
   it("the retry suffix names the leaked text and the mark", () => {

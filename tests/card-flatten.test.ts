@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyHomography, cardKindFromScan, cardQuadFromScan, flatSize, homography, maskRegions, quadCoverage, warpQuad, LOCATE_CARD_PROMPT, type Pt } from "@/lib/card-flatten";
+import { applyHomography, cardKindFromScan, cardQuadFromScan, flatSize, gridOverlay, homography, maskRegions, quadCoverage, warpQuad, LOCATE_CARD_PROMPT, type Pt } from "@/lib/card-flatten";
 
 // A photo of a paper card is found and laid flat before anything is redrawn
 // (owner, 2026-10-06: a loosely shot card should still copy its design, not
@@ -88,6 +88,20 @@ describe("maskRegions", () => {
     expect(px(10, 10)[0]).toBeLessThan(60);
     // No boxes → the image passes through (re-encoded).
     expect((await maskRegions(src, [])).length).toBeGreaterThan(100);
+  });
+  it("the finder reads coordinates off a drawn grid, and the crop uses the clean pixels", async () => {
+    const sharp = (await import("sharp")).default;
+    const plain = await sharp({ create: { width: 400, height: 200, channels: 3, background: "#808080" } }).png().toBuffer();
+    const gridded = await gridOverlay(plain, 400, 200);
+    const raw = await sharp(gridded).raw().toBuffer({ resolveWithObject: true });
+    const px = (x: number, y: number) => { const i = (y * raw.info.width + x) * raw.info.channels; return [raw.data[i], raw.data[i + 1], raw.data[i + 2]]; };
+    // A magenta line at 50% width; plain grey between lines.
+    expect(px(200, 150)[0]).toBeGreaterThan(px(200, 150)[1] + 40); expect(px(200, 150)[1]).toBeLessThan(110);
+    expect(Math.abs(px(190, 150)[0] - 128)).toBeLessThan(8);
+    expect(LOCATE_CARD_PROMPT).toMatch(/magenta grid/);
+    const flatten = (await import("node:fs")).readFileSync("src/lib/card-flatten.ts", "utf8");
+    expect(flatten).toMatch(/gridOverlay\(upright\.data/);
+    expect(flatten).toMatch(/cropToQuad\(upright\.data, quad, "jpeg"\)/);
   });
   it("the card finder makes the model commit to fillsFrame, and the kind is reported", () => {
     expect(LOCATE_CARD_PROMPT).toMatch(/fillsFrame = true ONLY when/);
