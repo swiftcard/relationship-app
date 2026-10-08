@@ -86,7 +86,7 @@ export default function AppStoreBadge({
       // overflow-hidden clips the shine to the pill; relative is what it anchors
       // to. Both are load-bearing — without them the sweep runs across whatever
       // sits next to the badge.
-      className={`sc-appstore-badge relative overflow-hidden inline-flex items-center ${s.gap} ${s.radius} ${s.pad} transition-colors ${className}`}
+      className={`sc-appstore-badge sc-store-apple relative overflow-hidden inline-flex items-center ${s.gap} ${s.radius} ${s.pad} transition-colors ${className}`}
     >
       <AppleGlyph className={s.glyph} />
       <span className="leading-tight">
@@ -127,7 +127,7 @@ export function GooglePlayBadge({ size = "sm", className = "" }: { size?: Size; 
         target="_blank"
         rel="noopener noreferrer"
         aria-label="Get it on Google Play"
-        className={`sc-appstore-badge relative overflow-hidden inline-flex items-center ${s.gap} ${s.radius} ${s.pad} transition-colors ${className}`}
+        className={`sc-appstore-badge sc-store-play relative overflow-hidden inline-flex items-center ${s.gap} ${s.radius} ${s.pad} transition-colors ${className}`}
       >
         <PlayGlyph className={s.glyph} />
         <span className="leading-tight">

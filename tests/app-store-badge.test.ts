@@ -275,3 +275,23 @@ describe("the hero badge and the nav badge are complements", () => {
     expect(users).toEqual(["src/app/page.tsx"]);
   });
 });
+
+// One store per visitor (owner, 2026-10-06): the boot script tags <html
+// data-sc-os> before paint and CSS shows Google Play only on Android, the App
+// Store everywhere else — so iPhone and desktop look exactly as before Play.
+describe("phones see only their own store", () => {
+  const boot = read("src/app/layout.tsx");
+  const css = read("src/app/globals.css");
+  const badge = read("src/components/AppStoreBadge.tsx");
+  it("the boot script tags the OS before paint and keeps the tag", () => {
+    expect(boot).toContain("setAttribute('data-sc-os','android')");
+    expect(boot).toContain("setAttribute('data-sc-os','ios')");
+    expect(boot).toContain("a==='data-sc-os'");
+    expect(boot).toMatch(/attributeFilter:\[[^\]]*'data-sc-os'/);
+  });
+  it("each badge carries its store class and CSS hides the other store", () => {
+    expect(badge).toContain("sc-appstore-badge sc-store-apple");
+    expect(badge).toContain("sc-appstore-badge sc-store-play");
+    expect(css).toContain(':root:not([data-sc-os="android"]) .sc-store-play, [data-sc-os="android"] .sc-store-apple { display: none !important; }');
+  });
+});
