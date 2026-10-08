@@ -18,7 +18,7 @@ describe("signed-in /pricing shows the account, never a flash of the trial", () 
 
   it("the boot script marks a signed-in browser before paint, and keeps the mark", () => {
     expect(boot).toContain("sb-[^=]*-auth-token/.test(document.cookie))document.documentElement.setAttribute('data-sc-authed','')");
-    expect(boot).toContain("'data-sc-authed']});");
+    expect(boot).toMatch(/attributeFilter:\[[^\]]*'data-sc-authed'[^\]]*\]\}\);/);
   });
 
   it("the plan-dependent parts stay hidden only while signed in and unanswered", () => {
