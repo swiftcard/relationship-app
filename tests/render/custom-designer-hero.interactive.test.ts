@@ -30,6 +30,7 @@ beforeAll(async () => {
     import CustomCardDesigner from "@/components/CustomCardDesigner";
     import { normalizeCustomLayout } from "@/lib/custom-layout";
     import { buildDesign, fallbackSpec } from "@/lib/ai-card-design";
+    import { faceLayoutFromScan, freeLayoutFromFace, transferChecklist } from "@/lib/design-transfer";
 
     const data = {
       name: "Dana Whitfield", title: "Insurance Advisor", company: "Beacon Mutual",
@@ -48,8 +49,21 @@ beforeAll(async () => {
         return new Response(JSON.stringify({ layout: buildDesign(spec, ctx, body.brief) }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
       if (url.includes("/api/design-transfer")) {
+        // The route's real answer since 2026-10-08 (lib/design-transfer): the
+        // measured card built into an editable free design with the owner's
+        // own details over the redrawn artwork.
         const px = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
-        return new Response(JSON.stringify({ url: px, checklist: ["Your name is spelled exactly right"] }), { status: 200, headers: { "Content-Type": "application/json" } });
+        const face = faceLayoutFromScan({
+          background: "#f5f0e6", font: "serif",
+          panels: [{ x: 0, y: 0, w: 32, h: 100, color: "#1b2a4a" }],
+          elements: [
+            { kind: "name", x: 40, y: 18, w: 50, h: 9, align: "left", color: "#1b2a4a", weight: "bold", size: "xl" },
+            { kind: "phone", x: 40, y: 62, w: 40, h: 4, align: "left", color: "#333333", weight: "normal", size: "sm" },
+          ],
+        })!;
+        const identity = { name: data.name, title: data.title, company: data.company, phone: data.phone, email: data.email, website: data.website, hasHeadshot: false, hasLogo: false };
+        const reply = { layout: freeLayoutFromFace(face, identity, { bgImage: px }), artwork: true, checklist: transferChecklist(identity) };
+        return new Response(JSON.stringify(reply), { status: 200, headers: { "Content-Type": "application/json" } });
       }
       return realFetch(input, init);
     }) as any;
@@ -66,6 +80,9 @@ beforeAll(async () => {
     entryPoints: [join(tmp, "entry.tsx")], bundle: true, write: false, format: "iife", jsx: "automatic",
     define: { "process.env.NODE_ENV": '"production"', "process.env.NEXT_PUBLIC_APP_URL": '"https://swiftcard.me"' },
     alias: { "@": resolve("src") },
+    // lib/design-transfer reaches lib/card-flatten, whose server-only image
+    // work loads sharp with a dynamic import the stub never calls.
+    external: ["sharp"],
   });
   bundle = out.outputFiles[0].text;
 }, 240_000);
@@ -203,7 +220,10 @@ describe("Copy: camera or upload", () => {
     // … the camera is off …
     expect(await page.evaluate(() => (window as never as { tracksStopped: number }).tracksStopped)).toBeGreaterThan(0);
     // … and the card goes to the redraw, as a JPEG no larger than 1400px.
-    await page.getByRole("dialog", { name: "Approve your rebuilt card design" }).waitFor();
+    const approve = page.getByRole("dialog", { name: "Approve your copied card design" });
+    await approve.waitFor();
+    // The preview is the real card renderer drawing the owner's own details.
+    expect(await approve.locator("[data-transfer-preview]").innerText()).toContain("Dana Whitfield");
     const sent = await page.evaluate(() => (window as never as { calls: { url: string; body: { imageBase64: string; mediaType: string } }[] }).calls.find((c) => c.url.includes("/api/design-transfer"))!.body);
     expect(sent.mediaType).toBe("image/jpeg");
     const dims = await page.evaluate(async (b64) => {
