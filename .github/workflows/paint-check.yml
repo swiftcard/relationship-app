@@ -29,12 +29,34 @@ permissions:
   issues: write
 
 jobs:
-  paint:
+  # Deployment Checks hold a production build until CI passes, but GitHub
+  # reports "success" when it is BUILT. Sweep it once swiftcard.me serves it,
+  # never the older build still live in the meantime.
+  live:
     # deployment_status also fires for previews and for every state transition.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.deployment_status.state == 'success' &&
        github.event.deployment_status.environment == 'Production')
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    outputs:
+      live: ${{ steps.wait.outputs.live }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Wait until swiftcard.me serves this deploy
+        id: wait
+        env:
+          DEPLOY_SHA: ${{ github.event.deployment.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/wait-for-live.mjs
+
+  paint:
+    needs: live
+    if: needs.live.outputs.live == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

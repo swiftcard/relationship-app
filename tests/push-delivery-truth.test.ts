@@ -269,7 +269,7 @@ describe("a broken push setup is visible, not silent", () => {
     const health = read("src/app/api/health/route.ts");
     expect(health).toMatch(/apns: await checkApnsCredentials\(\)/);
     // Reported, never part of `ok`: a bad APNs key must not take the site down.
-    expect(health).toMatch(/\{ ok: db, db, dbMs: Date\.now\(\) - t0, push \}/);
+    expect(health).toMatch(/\{ ok: db, db, dbMs: Date\.now\(\) - t0, push, sha \}/);
     const guard = read("scripts/health-check.mjs");
     expect(guard).toMatch(/push\.apns\?\.configured === true && push\.apns\?\.ok === true && push\.webPush === true/);
   });

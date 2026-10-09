@@ -36,8 +36,13 @@ export async function GET() {
       webPush: !!process.env.VAPID_PRIVATE_KEY && !!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
     };
   } catch { push = null; }
+  // WHICH BUILD is answering. Deployment Checks hold a new build until CI
+  // passes, so "deployed" and "live" are different moments; the post-deploy
+  // checks wait for this to name their commit (scripts/wait-for-live.mjs)
+  // before testing swiftcard.me. The repository is public; this is no secret.
+  const sha = process.env.VERCEL_GIT_COMMIT_SHA || null;
   return NextResponse.json(
-    { ok: db, db, dbMs: Date.now() - t0, push },
+    { ok: db, db, dbMs: Date.now() - t0, push, sha },
     { status: db ? 200 : 503, headers: { "Cache-Control": "no-store" } },
   );
 }

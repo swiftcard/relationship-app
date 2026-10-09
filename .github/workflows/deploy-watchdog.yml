@@ -53,7 +53,8 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event.deployment_status.state == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # Up to 45 of these are spent waiting for the build to go live (below).
+    timeout-minutes: 75
     steps:
       - name: Confirm this is a PRODUCTION deploy
         id: gate
@@ -85,9 +86,21 @@ jobs:
         with:
           node-version: 24
 
+      # Deployment Checks hold the build until CI passes, but GitHub reports
+      # "success" when it is BUILT. Soak only once it is live: a soak over a
+      # build no visitor has reached always looks healthy, and the real one
+      # would then go live unwatched.
+      - name: Wait until production serves this deploy
+        id: live
+        if: steps.gate.outputs.proceed == 'true' && github.event_name == 'deployment_status'
+        env:
+          DEPLOY_SHA: ${{ github.event.deployment.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/wait-for-live.mjs
+
       - name: Watch the deploy and roll back if it is breaking the site
         id: watchdog
-        if: steps.gate.outputs.proceed == 'true'
+        if: steps.gate.outputs.proceed == 'true' && steps.live.outputs.live != 'false'
         env:
           DEPLOY_SHA: ${{ github.event.deployment.sha || github.event.inputs.sha || github.sha }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}

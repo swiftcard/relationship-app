@@ -17,11 +17,34 @@ permissions:
   contents: read
   issues: write
 jobs:
-  qa:
+  # Deployment Checks hold a production build until CI passes, but GitHub
+  # reports "success" when it is BUILT. Test it once swiftcard.me serves it,
+  # never the older build still live in the meantime. Scheduled and manual
+  # runs have no commit to wait for and go straight on.
+  live:
     if: >-
       github.event_name != 'deployment_status' ||
       (github.event.deployment_status.state == 'success' &&
        contains(github.event.deployment_status.environment, 'roduction'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    outputs:
+      live: ${{ steps.wait.outputs.live }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Wait until swiftcard.me serves this deploy
+        id: wait
+        env:
+          DEPLOY_SHA: ${{ github.event.deployment.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/wait-for-live.mjs
+
+  qa:
+    needs: live
+    if: needs.live.outputs.live == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
