@@ -11,6 +11,11 @@
 set -e
 cd "$(git rev-parse --show-toplevel)"
 
+# A skip-CI tag in a commit message means CI never runs, so Vercel's
+# Deployment Checks hold the deploy forever. Reads Git's ref lines on stdin.
+echo "pre-push: no skip-CI tag in the commits being pushed"
+node scripts/no-skip-ci.mjs
+
 echo "pre-push: typecheck (npx tsc --noEmit)"
 npx tsc --noEmit
 
