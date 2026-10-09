@@ -186,6 +186,29 @@ describe("signatureContentChanged ignores what the signature can't show", () => 
   it("an on-card scalar change IS a signature change", () => {
     expect(signatureContentChanged(before, { name: "Jeffrey" })).toBe(true);
   });
+
+  // 2026-10-09: Edit card sends every design key on every save, null for unset.
+  // A card saved before Title color / Company color existed has no such keys,
+  // so its first save after them added `titleColor: null` — which read as a
+  // change: both PNGs thrown away and a "re-copy your signature" for nothing.
+  it("a save that only fills in cleared keys (null, \"\") is NOT a change", () => {
+    const updates = {
+      customization: {
+        ...before.customization,
+        titleColor: null, companyColor: null, photoShape: null, fax: "",
+        links: [{ label: "New menu", url: "https://b.example" }],
+      },
+    };
+    expect(signatureContentChanged(before, updates)).toBe(false);
+    expect(cardContentChanged(before, { customization: { ...before.customization, titleColor: null, companyColor: null } })).toBe(false);
+  });
+  it("picking a Title color or Company color IS a change", () => {
+    expect(signatureContentChanged(before, { customization: { ...before.customization, titleColor: "#d4af7a" } })).toBe(true);
+    expect(cardContentChanged(before, { customization: { ...before.customization, companyColor: "#93c5fd" } })).toBe(true);
+    // ...and clearing one that was set is a change back.
+    const set = { ...before, customization: { ...before.customization, titleColor: "#d4af7a" } };
+    expect(signatureContentChanged(set, { customization: { ...before.customization, titleColor: null } })).toBe(true);
+  });
   it("both routes gate the nudge on it", () => {
     for (const f of ["src/app/api/cards/[id]/route.ts", "src/app/api/office/cards/[id]/route.ts"]) {
       const src = raw(f);

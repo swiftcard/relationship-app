@@ -40,6 +40,27 @@ export function canonicalize(v: unknown): unknown {
 }
 
 /**
+ * The blob without its CLEARED keys — null, undefined or "".
+ *
+ * The editor sends every design key it knows on every save, `null` for "not
+ * set". So the first save of a card made before a key existed adds, say,
+ * `titleColor: null` where the stored blob has no such key at all. Both mean
+ * the template's own value (templateStyle reads null, "" and absent alike),
+ * and the scalars above already compare `?? ""`. Without this, that save read
+ * as a change: both PNGs thrown away and the owner told to re-copy a signature
+ * that had not changed — once per card, every time a design key is added.
+ */
+function withoutCleared(cust: unknown): unknown {
+  if (!cust || typeof cust !== "object" || Array.isArray(cust)) return cust;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(cust as Record<string, unknown>)) {
+    if (v === null || v === undefined || v === "") continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+/**
  * True only when a submitted field holds a value DIFFERENT from the stored one.
  *
  * `before` must be a row selected before the write, and it must include every
@@ -59,8 +80,8 @@ export function cardContentChanged(
   }
   if ("customization" in updates) {
     return (
-      JSON.stringify(canonicalize(updates.customization ?? {})) !==
-      JSON.stringify(canonicalize(before.customization ?? {}))
+      JSON.stringify(canonicalize(withoutCleared(updates.customization ?? {}))) !==
+      JSON.stringify(canonicalize(withoutCleared(before.customization ?? {})))
     );
   }
   return false;
@@ -117,8 +138,8 @@ export function signatureContentChanged(
   }
   if ("customization" in updates) {
     return (
-      JSON.stringify(canonicalize(stripSignatureIrrelevant(updates.customization ?? {}, keepSocials))) !==
-      JSON.stringify(canonicalize(stripSignatureIrrelevant(before.customization ?? {}, keepSocials)))
+      JSON.stringify(canonicalize(withoutCleared(stripSignatureIrrelevant(updates.customization ?? {}, keepSocials)))) !==
+      JSON.stringify(canonicalize(withoutCleared(stripSignatureIrrelevant(before.customization ?? {}, keepSocials))))
     );
   }
   return false;
