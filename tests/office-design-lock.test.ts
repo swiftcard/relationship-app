@@ -101,6 +101,7 @@ describe("extractDesign — pulls just the design keys from a card (brand seedin
   it("covers exactly the colour/font keys — a new design key must be added deliberately", () => {
     expect([...OFFICE_DESIGN_KEYS]).toEqual([
       "accentColor", "font", "bgColor", "surfaceColor", "textColor", "infoColor", "fontFamily",
+      "titleColor", "companyColor",
       "finish", "panelMedia", "panelMediaType", "panelMediaPoster", "panelDim",
     ]);
   });

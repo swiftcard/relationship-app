@@ -31,7 +31,7 @@ export default function PhotoFirst({ data }: { data: CardData }) {
   const rowPal = style.infoColor
     ? infoPaletteFrom(style.infoColor)
     : { strong: infoPalette.strong, mid: infoPalette.mid, soft: infoPalette.soft, muted: infoPalette.muted };
-  const companyColor = style.infoColor ?? infoPalette.company;
+  const companyColor = style.companyColor ?? style.infoColor ?? infoPalette.company;
   const f = fitFactor(data); // auto-fit: more info → everything sizes down together
   // Row is 242 design px: info panel is 460 - 40% = 276, less 17px padding
   // either side. The roomiest of the five, which is why this is the one
@@ -116,7 +116,7 @@ export default function PhotoFirst({ data }: { data: CardData }) {
             {data.name}
           </h2>
           <p
-            style={{ ...fitTitleFluid(8, data.title, { tracking: 0.14, f }), color: "rgba(221,214,254,0.9)", letterSpacing: "0.14em", textTransform: "uppercase", marginTop: 2 }}
+            style={{ ...fitTitleFluid(8, data.title, { tracking: 0.14, f }), color: style.titleColor ?? "rgba(221,214,254,0.9)", letterSpacing: "0.14em", textTransform: "uppercase", marginTop: 2 }}
           >
             {data.title}
           </p>

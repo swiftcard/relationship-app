@@ -18,7 +18,7 @@ import { META, FALLBACK_META } from "@/lib/template-style-presets";
 const all = { ...META, fallback: FALLBACK_META };
 
 describe("card design colour labels are the same on every template", () => {
-  for (const field of ["accent", "text", "info"] as const) {
+  for (const field of ["accent", "text", "title", "company", "info"] as const) {
     it(`"${FALLBACK_META[field].label}" is called that on every template`, () => {
       const labels = Object.entries(all).map(([id, m]) => [id, m[field].label]);
       const off = labels.filter(([, l]) => l !== FALLBACK_META[field].label);

@@ -26,7 +26,8 @@ export default function ModernBold({ data }: { data: CardData }) {
     : darkCard
       ? { strong: "#f1f5f9", mid: "#e2e8f0", soft: "#94a3b8", muted: "#94a3b8" }
       : { strong: "#0f172a", mid: "#1e293b", soft: "#475569", muted: "#64748b" };
-  const companyColor = style.infoColor ?? (darkCard ? "#cbd5e1" : "#475569");
+  const companyColor = style.companyColor ?? style.infoColor ?? (darkCard ? "#cbd5e1" : "#475569");
+  const titleColor = style.titleColor ?? BLUE;
   const f = fitFactor(data); // auto-fit: more info → everything sizes down together
   // Row is 170.4 design px: panel 44% of 460 = 202.4, less 16px padding either
   // side. Uppercase with 0.16em of tracking — about a fifth of the rendered
@@ -109,7 +110,7 @@ export default function ModernBold({ data }: { data: CardData }) {
             {data.name}
           </h2>
           <p
-            style={{ ...fitTitleFluid(9.5, data.title, { tracking: 0.18, f }), color: BLUE, letterSpacing: "0.18em", fontWeight: 700, marginTop: 6, textTransform: "uppercase" }}
+            style={{ ...fitTitleFluid(9.5, data.title, { tracking: 0.18, f }), color: titleColor, letterSpacing: "0.18em", fontWeight: 700, marginTop: 6, textTransform: "uppercase" }}
           >
             {data.title}
           </p>

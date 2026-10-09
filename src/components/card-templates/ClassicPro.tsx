@@ -101,9 +101,12 @@ export default function ClassicPro({ data }: { data: CardData }) {
               {(data.company || data.name || "K")[0].toUpperCase()}
             </div>
           )}
+          {/* A chosen Company color drops the class rather than fighting it,
+              as the name does (nameClass): the light theme forces some text
+              classes with !important, which an inline colour cannot beat. */}
           <span
-            className="text-white/80 font-bold leading-tight min-w-0"
-            style={{ ...companyFit, overflowWrap: "anywhere" }}
+            className={`${style.companyColor ? "" : "text-white/80 "}font-bold leading-tight min-w-0`}
+            style={{ ...companyFit, overflowWrap: "anywhere", color: style.companyColor }}
           >
             {data.company}
           </span>
@@ -120,8 +123,8 @@ export default function ClassicPro({ data }: { data: CardData }) {
             {data.name}
           </h2>
           <p
-            className="text-blue-300 font-semibold mt-1.5"
-            style={{ ...fitTitleFluid(9.5, data.title, { tracking: 0.16, f }), letterSpacing: "0.16em", textTransform: "uppercase" }}
+            className={`${style.titleColor ? "" : "text-blue-300 "}font-semibold mt-1.5`}
+            style={{ ...fitTitleFluid(9.5, data.title, { tracking: 0.16, f }), letterSpacing: "0.16em", textTransform: "uppercase", color: style.titleColor }}
           >
             {data.title}
           </p>

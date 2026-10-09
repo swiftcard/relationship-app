@@ -46,6 +46,9 @@ export type CardPrefill = {
   bgColor?: string;
   textColor?: string;
   infoColor?: string;
+  /** Title color and Company color — their own steps in the shared panel. */
+  titleColor?: string;
+  companyColor?: string;
   fontFamily?: string;
   /** The second panel and the finish — steps 4 and 9 of the numbered design
    *  path the builders share with Card design. */
@@ -103,7 +106,7 @@ export type CardPrefill = {
 
 // Every design key a builder may carry over. Kept as one list so the sketch
 // writer, the wizard's autofill, and the tests can't drift apart.
-export const PREFILL_STYLE_KEYS = ["accentColor", "bgColor", "textColor", "infoColor", "fontFamily", "surfaceColor", "finish"] as const;
+export const PREFILL_STYLE_KEYS = ["accentColor", "bgColor", "textColor", "infoColor", "titleColor", "companyColor", "fontFamily", "surfaceColor", "finish"] as const;
 
 // Swift Links page design keys — separate list so the wizard can hydrate them
 // into its OWN "Social design" state instead of the card's style state.

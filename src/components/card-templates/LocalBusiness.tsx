@@ -124,7 +124,7 @@ export default function LocalBusiness({ data }: { data: CardData }) {
             {data.name}
           </h2>
           {data.title && (
-            <p style={{ ...fitTitleFluid(8.5, data.title, { tracking: 0.12, f }), color: "rgba(254,243,199,0.9)", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 600, marginTop: 2 }}>
+            <p style={{ ...fitTitleFluid(8.5, data.title, { tracking: 0.12, f }), color: style.titleColor ?? "rgba(254,243,199,0.9)", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 600, marginTop: 2 }}>
               {data.title}
             </p>
           )}
@@ -146,7 +146,7 @@ export default function LocalBusiness({ data }: { data: CardData }) {
         <div className="flex-1 flex flex-col justify-start" style={{ minHeight: 0 }}>
           {/* Company name */}
           <div className="min-w-0">
-            <p className="font-black leading-tight" style={{ ...companyFit, color: bodyInk.strong, overflowWrap: "anywhere" }}>
+            <p className="font-black leading-tight" style={{ ...companyFit, color: style.companyColor ?? bodyInk.strong, overflowWrap: "anywhere" }}>
               {data.company}
             </p>
             <div className="w-12 h-[2px] mt-1 rounded-full" style={{ background: `linear-gradient(90deg, ${AMBER2}, #fbbf24)` }} />

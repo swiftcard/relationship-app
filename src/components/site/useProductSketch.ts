@@ -142,6 +142,8 @@ function fromPrefill(p: CardPrefill): Sketch {
       bgColor: p.bgColor,
       textColor: p.textColor,
       infoColor: p.infoColor,
+      titleColor: p.titleColor,
+      companyColor: p.companyColor,
       fontFamily: p.fontFamily,
       surfaceColor: p.surfaceColor,
       finish: p.finish,

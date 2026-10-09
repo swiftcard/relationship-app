@@ -57,6 +57,9 @@ export const FREE_MONTH_DAYS = 30;
 // arbitrary custom value. (Free baseline customization — about, address, bio,
 // socials, testimonials, links up to the cap — is never touched.)
 export const PRO_CUSTOMIZATION_KEYS = ["accentColor", "font", "bgColor", "surfaceColor", "textColor", "infoColor", "fontFamily",
+  // Title color and Company color (owner, 2026-10-09) — colours like the
+  // rest, so a Free card snaps them to that template's swatches.
+  "titleColor", "companyColor",
   // Card FINISH and panel media (lib/card-finishes.ts). `finish` is only
   // PARTLY Pro — Flat, Sheen and Halo are free — so it is snapped below
   // rather than dropped. Panel media is Pro outright: an uploaded photo or
@@ -154,6 +157,8 @@ export function convertCustomizationToFreeClosest(
   const textColor = pickStr(cust.textColor);
   const infoColor = pickStr(cust.infoColor);
   const accentColor = pickStr(cust.accentColor);
+  const titleColor = pickStr(cust.titleColor);
+  const companyColor = pickStr(cust.companyColor);
 
   // A Pro FINISH falls back to Flat rather than to another finish: Sheen is not
   // a "cheaper Brushed", so snapping between them would silently redesign the
@@ -185,12 +190,16 @@ export function convertCustomizationToFreeClosest(
     if (textColor !== undefined) cust.textColor = nearestPreset(textColor, freeSafeValues(meta, "text"), meta.text.fallback);
     if (infoColor !== undefined) cust.infoColor = nearestPreset(infoColor, meta.info.presets, meta.info.fallback);
     if (accentColor !== undefined) cust.accentColor = nearestPreset(accentColor, meta.accent.presets, meta.accent.fallback);
+    if (titleColor !== undefined) cust.titleColor = nearestPreset(titleColor, meta.title.presets, meta.title.fallback);
+    if (companyColor !== undefined) cust.companyColor = nearestPreset(companyColor, meta.company.presets, meta.company.fallback);
   } else {
     delete cust.bgColor;
     delete cust.surfaceColor;
     delete cust.textColor;
     delete cust.infoColor;
     delete cust.accentColor;
+    delete cust.titleColor;
+    delete cust.companyColor;
     delete cust.customLayout;
   }
   // `fontFamily` is already a closed preset list (CARD_FONT_OPTIONS) with no
@@ -259,7 +268,7 @@ export function describeFreeDesignChanges(
   // One line for colours however many moved: listing four near-identical
   // hex swaps reads as a wall of noise, and the person cannot picture any of
   // them anyway. What matters is that the colours shift, not which.
-  const COLOUR_KEYS = ["bgColor", "surfaceColor", "textColor", "infoColor", "accentColor"] as const;
+  const COLOUR_KEYS = ["bgColor", "surfaceColor", "textColor", "titleColor", "companyColor", "infoColor", "accentColor"] as const;
   const movedColours = COLOUR_KEYS.filter((k) => {
     const b = pickStr(before[k]);
     const a = pickStr(after[k]);
@@ -309,7 +318,7 @@ export function proFeaturesInUse(
     names.push(before.panelMediaType === "video" ? "Background video" : "Background photo");
   }
 
-  const COLOUR_KEYS = ["bgColor", "surfaceColor", "textColor", "infoColor", "accentColor"] as const;
+  const COLOUR_KEYS = ["bgColor", "surfaceColor", "textColor", "titleColor", "companyColor", "infoColor", "accentColor"] as const;
   if (COLOUR_KEYS.some((k) => {
     const b = pickStr(before[k]);
     return b !== undefined && b !== pickStr(after[k]);

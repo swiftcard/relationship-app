@@ -227,7 +227,7 @@ describe("style panel: one numbered path, in build order", () => {
     await page.context().close();
   });
 
-  it("runs Look → Branding panel → Photo or video → Info panel → Name → Accent → Details → Font → Finish (owner, 2026-09-16)", async () => {
+  it("runs Look → Branding panel → Photo or video → Info panel → Name → Title → Company → Accent → Details → Font → Finish (owner, 2026-09-16; Title and Company 2026-10-09)", async () => {
     const page = await mount("style", "v={}");
     const steps = await page.evaluate(() =>
       [...document.querySelectorAll<HTMLElement>("ol[aria-label] > li")].map((li) => ({
@@ -237,9 +237,9 @@ describe("style panel: one numbered path, in build order", () => {
       })),
     );
     expect(steps.map((s) => s.label)).toEqual([
-      "Look", "Branding panel", "Photo or video", "Info panel", "Name color", "Accent / icons", "Details color", "Font", "Finish",
+      "Look", "Branding panel", "Photo or video", "Info panel", "Name color", "Title color", "Company color", "Accent / icons", "Details color", "Font", "Finish",
     ]);
-    expect(steps.map((s) => s.n)).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9"]);
+    expect(steps.map((s) => s.n)).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"]);
     expect(steps.every((s) => s.visible), "a step is hidden").toBe(true);
     // Nothing folded behind a tab or a More row any more.
     expect(await page.evaluate(() => document.querySelectorAll("details, [role='group'][aria-label='Fine-tune']").length)).toBe(0);
@@ -269,7 +269,8 @@ describe("style panel: one numbered path, in build order", () => {
     );
     expect(labels[0]).toBe("Look");
     expect(labels.at(-1)).toBe("Finish");
-    expect(labels).toHaveLength(8);
+    // Classic Pro's eleven, less the second surface.
+    expect(labels).toHaveLength(10);
     await page.context().close();
   });
 

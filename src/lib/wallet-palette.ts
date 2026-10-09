@@ -568,7 +568,18 @@ function resolveLook(meta: Meta, sampled?: SampledSurface | null): RawLook {
   if (meta.template === "custom") return customLook(DEFAULT_CUSTOM);
   // The card page renders Classic Pro for a missing or retired template id.
   const build = TEMPLATES[meta.template ?? ""] ?? classicPro;
-  return build(meta.style ?? {});
+  const style = meta.style ?? {};
+  const look = build(style);
+  // A chosen Title color / Company color replaces whatever the template
+  // borrowed for that line, on every template alike — exactly what the card
+  // does. The company is then drawn as picked, not pulled into the band.
+  const title = firstHex(style.titleColor);
+  const company = firstHex(style.companyColor);
+  return {
+    ...look,
+    ...(title ? { title } : {}),
+    ...(company ? { company, companyOver: undefined } : {}),
+  };
 }
 
 const DEFAULT_LEAD: PassLead = { tile: "", monogram: { background: "", color: "" }, edge: null };

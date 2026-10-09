@@ -8,7 +8,11 @@
 // the base first, then the details (owner, 2026-09-16: "users need to be told
 // where to go"). On Classic Pro that reads:
 //   1 Look · 2 Branding panel · 3 Photo or video · 4 Info panel ·
-//   5 Name color · 6 Accent / icons · 7 Details color · 8 Font · 9 Finish
+//   5 Name color · 6 Title color · 7 Company color · 8 Accent / icons ·
+//   9 Details color · 10 Font · 11 Finish
+// Title and Company are their own steps (owner, 2026-10-09): they used to
+// borrow the accent or the details colour, and on Luxury Minimal one control
+// painted both lines at once.
 // Every template uses its own labels (template-style-presets META), and a
 // template with no second surface simply has one step fewer. Nothing is behind
 // a tab or a "More" fold any more: those hid half the panel from the people
@@ -560,7 +564,7 @@ export default function TemplateStyleControls({
   const swatches = (
     f: StyleField,
     current: string | undefined,
-    key: "bgColor" | "surfaceColor" | "textColor" | "accentColor" | "infoColor",
+    key: "bgColor" | "surfaceColor" | "textColor" | "titleColor" | "companyColor" | "accentColor" | "infoColor",
   ) => <Swatches presets={f.presets} value={current} fallbackHex={f.fallback} onPick={(v) => onChange({ [key]: v })} proTag={proTags} />;
 
   // The path, in build order. Base first — the whole look, the main surface and
@@ -598,6 +602,10 @@ export default function TemplateStyleControls({
       ? [{ key: "surface", label: meta.surface.label, help: meta.surface.hint, title: meta.surface.help, body: swatches(meta.surface, value.surfaceColor, "surfaceColor") }]
       : []),
     { key: "text", label: meta.text.label, help: meta.text.hint, title: meta.text.help, body: swatches(meta.text, value.textColor, "textColor") },
+    // Right under the name: the three lines that say who you are, each its own
+    // colour. "Default" here is the template's own choice for that line.
+    { key: "title", label: meta.title.label, help: meta.title.hint, title: meta.title.help, body: swatches(meta.title, value.titleColor, "titleColor") },
+    { key: "company", label: meta.company.label, help: meta.company.hint, title: meta.company.help, body: swatches(meta.company, value.companyColor, "companyColor") },
     { key: "accent", label: meta.accent.label, help: meta.accent.hint, title: meta.accent.help, body: swatches(meta.accent, value.accentColor, "accentColor") },
     { key: "info", label: meta.info.label, help: meta.info.hint, title: meta.info.help, body: swatches(meta.info, value.infoColor, "infoColor") },
     {

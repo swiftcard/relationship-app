@@ -88,7 +88,7 @@ type Card = {
   twitter: string;
   tiktok: string;
   template: string;
-  customization?: { bio?: string; facebook?: string; snapchat?: string; youtube?: string; about?: string; address?: CardAddress; links?: CardLink[]; customLayout?: CustomLayout; phones?: CardPhone[]; fax?: string; accentColor?: string; bgColor?: string; textColor?: string; infoColor?: string; fontFamily?: string; surfaceColor?: string; finish?: string; panelMedia?: string; panelMediaType?: string; panelMediaPoster?: string; panelDim?: number; linkLook?: string; linkBgColor?: string; linkTextColor?: string; linkFontFamily?: string; linkIconShape?: string; linkIconFill?: string; logoShape?: "auto" | "circle"; hideCardLink?: boolean; linkHeroStyle?: string; linkHeroContent?: string; linkHeroImage?: string; linkHeroMediaType?: string; linkButtonStyle?: string; linkButtonColor?: string; linkBgMedia?: string; linkBgMediaType?: string; linkBgDim?: number; linkGlass?: boolean; linkAccentColor?: string };
+  customization?: { bio?: string; facebook?: string; snapchat?: string; youtube?: string; about?: string; address?: CardAddress; links?: CardLink[]; customLayout?: CustomLayout; phones?: CardPhone[]; fax?: string; accentColor?: string; bgColor?: string; textColor?: string; infoColor?: string; titleColor?: string; companyColor?: string; fontFamily?: string; surfaceColor?: string; finish?: string; panelMedia?: string; panelMediaType?: string; panelMediaPoster?: string; panelDim?: number; linkLook?: string; linkBgColor?: string; linkTextColor?: string; linkFontFamily?: string; linkIconShape?: string; linkIconFill?: string; logoShape?: "auto" | "circle"; hideCardLink?: boolean; linkHeroStyle?: string; linkHeroContent?: string; linkHeroImage?: string; linkHeroMediaType?: string; linkButtonStyle?: string; linkButtonColor?: string; linkBgMedia?: string; linkBgMediaType?: string; linkBgDim?: number; linkGlass?: boolean; linkAccentColor?: string };
 };
 
 // Company information owned by the user's Office organization (sub-users only).
@@ -304,6 +304,8 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
     surfaceColor: card.customization?.surfaceColor ?? undefined,
     textColor: card.customization?.textColor ?? undefined,
     infoColor: card.customization?.infoColor ?? undefined,
+    titleColor: card.customization?.titleColor ?? undefined,
+    companyColor: card.customization?.companyColor ?? undefined,
     fontFamily: card.customization?.fontFamily ?? undefined,
     // Finish + panel media (lib/card-finishes.ts). Every key TemplateStyle
     // carries has to be listed in BOTH this reader and the save payload below:
@@ -535,6 +537,8 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
       surfaceColor: c.surfaceColor as string | undefined,
       textColor: c.textColor as string | undefined,
       infoColor: c.infoColor as string | undefined,
+      titleColor: c.titleColor as string | undefined,
+      companyColor: c.companyColor as string | undefined,
       fontFamily: c.fontFamily as string | undefined,
       finish: c.finish as string | undefined,
       panelMedia: c.panelMedia as string | undefined,
@@ -654,6 +658,8 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
             surfaceColor: templateStyleState.surfaceColor ?? null,
             textColor: templateStyleState.textColor ?? null,
             infoColor: templateStyleState.infoColor ?? null,
+            titleColor: templateStyleState.titleColor ?? null,
+            companyColor: templateStyleState.companyColor ?? null,
             fontFamily: templateStyleState.fontFamily ?? null,
             finish: templateStyleState.finish ?? null,
             panelMedia: templateStyleState.panelMedia ?? null,

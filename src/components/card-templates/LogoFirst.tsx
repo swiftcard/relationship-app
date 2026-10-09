@@ -380,7 +380,9 @@ export default function LogoFirst({ data }: { data: CardData }) {
                 // Grows to fill this column when the title is short ("CEO"),
                 // with the floor above as its minimum.
                 ...fitTitleFluid(9, data.title, { tracking: 0.14, f, min: Math.max(6.5, fitUnbroken(fitTitle(9, data.title), data.title, 0.86)) }),
-                color: accent,
+                // Its own Title color when one is picked — exactly as picked,
+                // like the name. Unset, it follows the readable accent.
+                color: style.titleColor ?? accent,
                 fontWeight: 600,
                 letterSpacing: "0.14em",
                 textTransform: "uppercase",
@@ -402,7 +404,7 @@ export default function LogoFirst({ data }: { data: CardData }) {
               fitCompany already sizes for two lines, and the width factor now
               makes the estimate right in the first place. */}
           {data.company ? (
-            <p className="mt-1 min-w-0" style={{ ...companyFit, color: infoPal.soft, fontWeight: 400, overflowWrap: "anywhere" }}>
+            <p className="mt-1 min-w-0" style={{ ...companyFit, color: style.companyColor ?? infoPal.soft, fontWeight: 400, overflowWrap: "anywhere" }}>
               {data.company}
             </p>
           ) : null}

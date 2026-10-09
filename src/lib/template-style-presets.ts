@@ -54,6 +54,14 @@ export type TemplateMeta = {
    */
   surface?: StyleField;
   text: StyleField;
+  /**
+   * The job title and the company name, each its own colour (owner,
+   * 2026-10-09). `fallback` is what the template paints when unset — before
+   * these existed the two lines borrowed the accent or the details colour, or
+   * were fixed, so leaving them unset changes nothing on a saved card.
+   */
+  title: StyleField;
+  company: StyleField;
   info: StyleField;
   accent: StyleField;
 };
@@ -123,6 +131,18 @@ export const META: Record<string, TemplateMeta> = {
       presets: ["#ffffff", "#f8fafc", "#d4af7a", "#bfdbfe"],
       fallback: "#ffffff",
     },
+    title: {
+      label: "Title color",
+      help: "Your job title, under your name on the branding panel. A light shade reads best on the dark panel.",
+      presets: ["#93c5fd", "#ffffff", "#bfdbfe", "#d4af7a", "#cbd5e1"],
+      fallback: "#93c5fd",
+    },
+    company: {
+      label: "Company color",
+      help: "Your company name, beside your logo on the branding panel. A light shade reads best on the dark panel.",
+      presets: ["#ffffff", "#e2e8f0", "#93c5fd", "#d4af7a"],
+      fallback: "#ffffff",
+    },
     info: {
       label: "Details color",
       hint: "Your phone, email and address.",
@@ -164,6 +184,18 @@ export const META: Record<string, TemplateMeta> = {
       presets: ["#ffffff", "#f8fafc", "#60a5fa", "#a78bfa"],
       fallback: "#ffffff",
     },
+    title: {
+      label: "Title color",
+      help: "Your job title, under your name. It follows your accent until you pick a colour here.",
+      presets: ["#3b82f6", "#60a5fa", "#a78bfa", "#22d3ee", "#fbbf24", "#ffffff"],
+      fallback: "#3b82f6",
+    },
+    company: {
+      label: "Company color",
+      help: "Your company name at the top of the card. Keep it light on the dark card.",
+      presets: ["#cbd5e1", "#ffffff", "#94a3b8", "#60a5fa", "#a78bfa"],
+      fallback: "#cbd5e1",
+    },
     info: {
       label: "Details color",
       hint: "Your phone, email and address.",
@@ -203,6 +235,18 @@ export const META: Record<string, TemplateMeta> = {
       help: "Your name in the serif headline. A deep charcoal, ink, or gold keeps it elegant on ivory.",
       presets: ["#1c1612", "#0e1b35", "#3f2d1a", "#8c6c34"],
       fallback: "#1c1612",
+    },
+    title: {
+      label: "Title color",
+      help: "Your job title, under your name. Gold like your accent until you pick a colour here.",
+      presets: ["#b08d57", "#8c6c34", "#1c1612", "#3f2d1a", "#0e1b35", "#d4af7a"],
+      fallback: "#b08d57",
+    },
+    company: {
+      label: "Company color",
+      help: "Your company name at the top of the card. Gold like your accent until you pick a colour here.",
+      presets: ["#b08d57", "#8c6c34", "#1c1612", "#3f2d1a", "#0e1b35", "#d4af7a"],
+      fallback: "#b08d57",
     },
     info: {
       label: "Details color",
@@ -252,6 +296,18 @@ export const META: Record<string, TemplateMeta> = {
       presets: ["#ffffff", "#fffbf0", "#fde68a"],
       fallback: "#ffffff",
     },
+    title: {
+      label: "Title color",
+      help: "Your job title, under your name on the header stripe — a light shade reads best on the color.",
+      presets: ["#fef3c7", "#ffffff", "#fde68a", "#1c1612"],
+      fallback: "#fef3c7",
+    },
+    company: {
+      label: "Company color",
+      help: "Your company name, at the top of the card body under the stripe.",
+      presets: ["#92400e", "#7c2d12", "#1c1612", "#b45309", "#166534", "#0e1b35"],
+      fallback: "#92400e",
+    },
     info: {
       label: "Details color",
       hint: "Your phone, email and address.",
@@ -300,6 +356,18 @@ export const META: Record<string, TemplateMeta> = {
       presets: ["#ffffff", "#f8fafc", "#d4af7a"],
       fallback: "#ffffff",
     },
+    title: {
+      label: "Title color",
+      help: "Your job title, under your name on the photo — keep it light so it reads over the image.",
+      presets: ["#ddd6fe", "#ffffff", "#e5e7eb", "#d4af7a"],
+      fallback: "#ddd6fe",
+    },
+    company: {
+      label: "Company color",
+      help: "Your company name, at the top of the info panel beside your logo.",
+      presets: ["#111827", "#1e1b4b", "#6d28d9", "#4f46e5", "#ffffff"],
+      fallback: "#111827",
+    },
     info: {
       label: "Details color",
       hint: "Your phone, email and address.",
@@ -341,6 +409,18 @@ export const META: Record<string, TemplateMeta> = {
       presets: ["#ffffff", "#f4f2ed", "#e6ebf3", "#141b26"],
       fallback: "#ffffff",
     },
+    title: {
+      label: "Title color",
+      help: "Your job title, under your name. It follows your accent until you pick a colour here.",
+      presets: ["#ffffff", "#c9d4e8", "#b08d57", "#d4af7a", "#60a5fa", "#141b26"],
+      fallback: "#ffffff",
+    },
+    company: {
+      label: "Company color",
+      help: "Your company name, under your title.",
+      presets: ["#c2ccdc", "#ffffff", "#e6ebf3", "#b08d57", "#5a6b85", "#141b26"],
+      fallback: "#c2ccdc",
+    },
     info: {
       label: "Details color",
       hint: "Your phone, email and address.",
@@ -353,8 +433,8 @@ export const META: Record<string, TemplateMeta> = {
       // 2026-09-16: one control, one label everywhere). What it paints on THIS
       // template — the title and the QR too — belongs in the hint, not the label.
       label: "Accent / icons",
-      hint: "Icons beside your details, your title and QR code, and the buttons on your card page.",
-      help: "Draws your job title, the contact icons and the QR code. A shade too close to your background is brightened or darkened until it reads — you keep the colour you picked, at a version of it that can be seen. The QR is darkened further, because a pale code is one phones stop scanning.",
+      hint: "Icons beside your details, your QR code, and the buttons on your card page. Your title too, until you give it its own colour.",
+      help: "Draws the contact icons and the QR code, and your job title while Title color is on Default. A shade too close to your background is brightened or darkened until it reads — you keep the colour you picked, at a version of it that can be seen. The QR is darkened further, because a pale code is one phones stop scanning.",
       presets: ["#ffffff", "#c9d4e8", "#b08d57", "#d4af7a", "#60a5fa", "#0f766e", "#be123c", "#141b26"],
       fallback: "#ffffff",
     },
@@ -379,6 +459,18 @@ export const FALLBACK_META: TemplateMeta = {
     label: "Name color",
     help: "The color of your name / headline text.",
     presets: ["#ffffff", "#f8fafc", "#1c1612", "#0e1b35"],
+    fallback: "#ffffff",
+  },
+  title: {
+    label: "Title color",
+    help: "The color of your job title.",
+    presets: ["#93c5fd", "#ffffff", "#1c1612", "#0e1b35"],
+    fallback: "#93c5fd",
+  },
+  company: {
+    label: "Company color",
+    help: "The color of your company name.",
+    presets: ["#ffffff", "#e5e7eb", "#111827", "#334155"],
     fallback: "#ffffff",
   },
   info: {

@@ -639,6 +639,8 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
       surfaceColor: result.customization.surfaceColor as string | undefined,
       textColor: result.customization.textColor as string | undefined,
       infoColor: result.customization.infoColor as string | undefined,
+      titleColor: result.customization.titleColor as string | undefined,
+      companyColor: result.customization.companyColor as string | undefined,
       fontFamily: result.customization.fontFamily as string | undefined,
       // Read back from the CONVERTED customization, not from the draft: the
       // converter keeps a free finish (Sheen, Halo) and drops a Pro one, and
@@ -668,6 +670,8 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
       surfaceColor: result.customization.surfaceColor as string | undefined,
       textColor: result.customization.textColor as string | undefined,
       infoColor: result.customization.infoColor as string | undefined,
+      titleColor: result.customization.titleColor as string | undefined,
+      companyColor: result.customization.companyColor as string | undefined,
       fontFamily: result.customization.fontFamily as string | undefined,
       finish: result.customization.finish as string | undefined,
       panelMedia: result.customization.panelMedia as string | undefined,

@@ -22,6 +22,10 @@ export default function LuxuryMinimal({ data }: { data: CardData }) {
   const GOLD2 = style.accentColor ?? GOLD2_DEFAULT;
   const bg = panelBackground(style, IVORY);
   const nameColor = style.textColor ?? TEXT;
+  // The title and the company were both drawn in the accent, so one gold
+  // picker recoloured the two lines together. Each has its own now.
+  const titleColor = style.titleColor ?? GOLD;
+  const companyColor = style.companyColor ?? GOLD;
   // Info text sits on the card, so on a dark canvas (e.g. Charcoal Luxe) it
   // defaults to a soft light tone; an explicit infoColor overrides it.
   const darkCard = isDarkBg(bg);
@@ -100,7 +104,7 @@ export default function LuxuryMinimal({ data }: { data: CardData }) {
           ) : null}
           <p
             className="min-w-0 leading-tight"
-            style={{ ...companyFit, color: GOLD, fontWeight: 700, textTransform: "uppercase", overflowWrap: "anywhere" }}
+            style={{ ...companyFit, color: companyColor, fontWeight: 700, textTransform: "uppercase", overflowWrap: "anywhere" }}
           >
             {data.company}
           </p>
@@ -124,7 +128,7 @@ export default function LuxuryMinimal({ data }: { data: CardData }) {
           <div className="flex items-center gap-1.5 mt-2" style={titleBox}>
             <div className="h-px flex-1" style={{ maxWidth: 20, background: GOLD }} />
             <p
-              style={{ ...fitTitleFluid(8.5, data.title, { tracking: 0.2, f }), letterSpacing: "0.2em", color: GOLD, fontWeight: 600, textTransform: "uppercase" }}
+              style={{ ...fitTitleFluid(8.5, data.title, { tracking: 0.2, f }), letterSpacing: "0.2em", color: titleColor, fontWeight: 600, textTransform: "uppercase" }}
             >
               {data.title}
             </p>

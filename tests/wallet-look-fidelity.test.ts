@@ -50,6 +50,9 @@ const STYLES: Record<string, Record<string, unknown>> = {
   linen: { finish: "linen" },
   linenTeal: { finish: "linen", accentColor: "#14b8a6" },
   gradient: { bgColor: "linear-gradient(135deg, #111827 0%, #6d28d9 100%)" },
+  // Title color and Company color (2026-10-09): a rose and a green that read
+  // on every default ground, so the title check below sees them exactly.
+  ownTitleCompany: { titleColor: "#e11d48", companyColor: "#16a34a" },
 };
 
 /** #abc → #aabbcc, lower-case, everywhere in a string. */

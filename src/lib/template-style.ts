@@ -16,6 +16,19 @@ export type TemplateStyle = {
   bgColor?: string;
   textColor?: string;
   infoColor?: string; // color of the contact/details text (phone, email, address…)
+  /**
+   * The job title and the company name, each on its own.
+   *
+   * Owner, 2026-10-09: "there isn't a place for me to change the color of my
+   * title or my company name… it shouldn't be that the color you choose
+   * changes both of them." Each template had borrowed some other control for
+   * these lines — the accent on Modern Bold and Logo First, Details color for
+   * the company on three templates, nothing at all on Classic Pro — and on
+   * Luxury Minimal ONE accent painted both. Unset keeps each template's own
+   * choice exactly, so no saved card changes.
+   */
+  titleColor?: string;
+  companyColor?: string;
   fontFamily?: string;
   /**
    * The card's SECOND surface, where a template has one.
@@ -107,6 +120,8 @@ export function templateStyle(data: Pick<CardData, "customization">): TemplateSt
     surfaceColor: safeCssValue(c.surfaceColor),
     textColor: safeCssValue(c.textColor),
     infoColor: safeCssValue(c.infoColor),
+    titleColor: safeCssValue(c.titleColor),
+    companyColor: safeCssValue(c.companyColor),
     fontFamily: safeFontValue(c.fontFamily),
     finish: pick(c.finish),
     panelMedia: pick(c.panelMedia),
