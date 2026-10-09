@@ -14,7 +14,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { name, email, company, title, phone, username, plan = "pro", template = "classic-pro", accentColor, photoShape, surfaceColor } = await req.json();
+  const { name, email, company, title, phone, username, plan = "pro", template = "classic-pro", accentColor, photoShape, surfaceColor, titleColor, companyColor } = await req.json();
+  // Title color / Company color: a plain hex only. "" (Default) or anything
+  // else leaves the template's own colour for that line.
+  const lineColor = (v: unknown) => (typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? v : undefined);
+  const titleHex = lineColor(titleColor);
+  const companyHex = lineColor(companyColor);
 
   if (!name || !email || !username) {
     return NextResponse.json({ error: "name, email, and username are required" }, { status: 400 });
@@ -78,6 +83,8 @@ export async function POST(req: NextRequest) {
     template,
     customization: {
       ...(accentColor ? { accentColor } : {}),
+      ...(titleHex ? { titleColor: titleHex } : {}),
+      ...(companyHex ? { companyColor: companyHex } : {}),
       // Photo First's Photo shape, the same choice the card editor offers.
       // The panel colour only shows around a circle photo, so it is kept only
       // with one — and only as a plain hex or one of the template's own swatches.

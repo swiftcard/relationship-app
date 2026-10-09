@@ -11,6 +11,37 @@ import { META } from "@/lib/template-style-presets";
 // Photo First's photo-panel swatches — the same ones the card editor offers.
 const PHOTO_PANEL = META["photo-first"].surface!;
 
+/**
+ * Title color / Company color for a card made here — the same per-template
+ * swatches as the card editor's steps (owner, 2026-10-09: the job title and
+ * the company each get their own colour, everywhere a card is designed).
+ * "" is Default: the template's own colour for that line.
+ */
+function LineColorRow({ label, presets, value, fallback, onPick }: {
+  label: string; presets: string[]; value: string; fallback: string; onPick: (v: string) => void;
+}) {
+  return (
+    <div>
+      <p className="text-xs text-gray-400 mb-1">{label}</p>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {presets.map((c) => (
+          <button key={c} type="button" aria-label={`${label} ${c}`} aria-pressed={value === c}
+            onClick={() => onPick(c)}
+            className="w-7 h-7 rounded-lg border border-gray-700"
+            style={{ background: c, boxShadow: value === c ? "0 0 0 2px #111827, 0 0 0 4px #3b82f6" : undefined }} />
+        ))}
+        <input type="color" aria-label={`${label}: any color`} value={/^#[0-9a-f]{6}$/i.test(value) ? value : fallback}
+          onChange={(e) => onPick(e.target.value)}
+          className="w-9 h-7 rounded-lg border border-gray-700 bg-gray-800 cursor-pointer p-0.5" />
+        <button type="button" onClick={() => onPick("")} aria-pressed={value === ""}
+          className={`text-xs font-semibold px-2.5 py-1 rounded-lg border ${value === "" ? "bg-blue-600 border-blue-600 text-white" : "border-gray-700 text-gray-400"}`}>
+          Default
+        </button>
+      </div>
+    </div>
+  );
+}
+
 type User = {
   id: string;
   username: string;
@@ -79,7 +110,7 @@ export default function UsersClient() {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createResult, setCreateResult] = useState<{ cardUrl?: string; error?: string } | null>(null);
-  const [form, setForm] = useState({ name: "", email: "", company: "", title: "", phone: "", username: "", plan: "pro", template: "classic-pro", accentColor: "#2563eb", photoShape: "original", surfaceColor: "" });
+  const [form, setForm] = useState({ name: "", email: "", company: "", title: "", phone: "", username: "", plan: "pro", template: "classic-pro", accentColor: "#2563eb", photoShape: "original", surfaceColor: "", titleColor: "", companyColor: "" });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -130,7 +161,7 @@ export default function UsersClient() {
       const data = await res.json();
       if (res.ok) {
         setCreateResult({ cardUrl: data.cardUrl });
-        setForm({ name: "", email: "", company: "", title: "", phone: "", username: "", plan: "pro", template: "classic-pro", accentColor: "#2563eb", photoShape: "original", surfaceColor: "" });
+        setForm({ name: "", email: "", company: "", title: "", phone: "", username: "", plan: "pro", template: "classic-pro", accentColor: "#2563eb", photoShape: "original", surfaceColor: "", titleColor: "", companyColor: "" });
         load();
       } else {
         setCreateResult({ error: data.error });
@@ -369,6 +400,14 @@ export default function UsersClient() {
                     )}
                   </div>
                 )}
+                {/* Title color and Company color, each its own — the swatches
+                    follow the template picked above. */}
+                <LineColorRow label="Title color" presets={(META[form.template] ?? META["classic-pro"]).title.presets}
+                  fallback={(META[form.template] ?? META["classic-pro"]).title.fallback}
+                  value={form.titleColor} onPick={(v) => setForm((p) => ({ ...p, titleColor: v }))} />
+                <LineColorRow label="Company color" presets={(META[form.template] ?? META["classic-pro"]).company.presets}
+                  fallback={(META[form.template] ?? META["classic-pro"]).company.fallback}
+                  value={form.companyColor} onPick={(v) => setForm((p) => ({ ...p, companyColor: v }))} />
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">Accent color</label>
                   <div className="flex items-center gap-3">
