@@ -88,7 +88,7 @@ type Card = {
   twitter: string;
   tiktok: string;
   template: string;
-  customization?: { bio?: string; facebook?: string; snapchat?: string; youtube?: string; about?: string; address?: CardAddress; links?: CardLink[]; customLayout?: CustomLayout; phones?: CardPhone[]; fax?: string; accentColor?: string; bgColor?: string; textColor?: string; infoColor?: string; titleColor?: string; companyColor?: string; fontFamily?: string; surfaceColor?: string; finish?: string; panelMedia?: string; panelMediaType?: string; panelMediaPoster?: string; panelDim?: number; linkLook?: string; linkBgColor?: string; linkTextColor?: string; linkFontFamily?: string; linkIconShape?: string; linkIconFill?: string; logoShape?: "auto" | "circle"; hideCardLink?: boolean; linkHeroStyle?: string; linkHeroContent?: string; linkHeroImage?: string; linkHeroMediaType?: string; linkButtonStyle?: string; linkButtonColor?: string; linkBgMedia?: string; linkBgMediaType?: string; linkBgDim?: number; linkGlass?: boolean; linkAccentColor?: string };
+  customization?: { bio?: string; facebook?: string; snapchat?: string; youtube?: string; about?: string; address?: CardAddress; links?: CardLink[]; customLayout?: CustomLayout; phones?: CardPhone[]; fax?: string; accentColor?: string; bgColor?: string; textColor?: string; infoColor?: string; titleColor?: string; companyColor?: string; fontFamily?: string; surfaceColor?: string; finish?: string; panelMedia?: string; panelMediaType?: string; panelMediaPoster?: string; panelDim?: number; linkLook?: string; linkBgColor?: string; linkTextColor?: string; linkFontFamily?: string; linkIconShape?: string; linkIconFill?: string; logoShape?: "auto" | "circle"; photoShape?: "circle"; hideCardLink?: boolean; linkHeroStyle?: string; linkHeroContent?: string; linkHeroImage?: string; linkHeroMediaType?: string; linkButtonStyle?: string; linkButtonColor?: string; linkBgMedia?: string; linkBgMediaType?: string; linkBgDim?: number; linkGlass?: boolean; linkAccentColor?: string };
 };
 
 // Company information owned by the user's Office organization (sub-users only).
@@ -316,6 +316,8 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
     panelMediaType: card.customization?.panelMediaType ?? undefined,
     panelMediaPoster: card.customization?.panelMediaPoster ?? undefined,
     panelDim: typeof card.customization?.panelDim === "number" ? card.customization.panelDim : undefined,
+    // Photo First's Original / Circle photo — every plan.
+    photoShape: card.customization?.photoShape === "circle" ? "circle" : undefined,
   });
   function patchTemplateStyle(patch: Partial<TemplateStyle>) {
     setTemplateStyleState((prev) => ({ ...prev, ...patch }));
@@ -545,6 +547,8 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
       panelMediaType: c.panelMediaType as string | undefined,
       panelMediaPoster: c.panelMediaPoster as string | undefined,
       panelDim: typeof c.panelDim === "number" ? c.panelDim : undefined,
+      // Not a Pro choice, so the Free version keeps it.
+      photoShape: c.photoShape === "circle" ? "circle" : undefined,
     };
     const ls: SwiftLinkStyle = { ...linkStyleState };
     for (const k of LINK_STYLE_KEYS) delete (ls as Record<string, unknown>)[k];
@@ -666,6 +670,9 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
             panelMediaType: templateStyleState.panelMediaType ?? null,
             panelMediaPoster: templateStyleState.panelMediaPoster ?? null,
             panelDim: templateStyleState.panelDim ?? null,
+            // Photo First's Original / Circle photo (every plan) — null clears
+            // it back to the full-height photo.
+            photoShape: templateStyleState.photoShape ?? null,
             // Swift Links page design ("Social design" — Pro, stripped on Free).
             linkLook: linkStyleState.linkLook ?? null,
             linkIconShape: linkStyleState.linkIconShape ?? null,
@@ -1235,7 +1242,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                   a light-blue PRO tag (proTags). The wall is Save Changes,
                   where the full offer opens. */}
               {!customSelected && (
-                <TemplateStyleControls value={templateStyleState} onChange={patchTemplateStyle} template={template} locked={!isPro} proTags={!isPro} />
+                <TemplateStyleControls value={templateStyleState} onChange={patchTemplateStyle} template={template} locked={!isPro} proTags={!isPro} hasPhoto={!!photoState} />
               )}
             </div>
             )}

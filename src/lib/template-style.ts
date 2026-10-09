@@ -57,6 +57,12 @@ export type TemplateStyle = {
   panelMediaPoster?: string;
   /** Scrim over the media, 0–0.85, so a name stays readable on a busy photo. */
   panelDim?: number;
+  /**
+   * Photo First only: "circle" sits the headshot in a circle ON the photo
+   * panel, with the panel colour (surfaceColor) all round it. Absent is the
+   * full-height photo. Not a Pro key: it is a layout choice, like logoShape.
+   */
+  photoShape?: "circle";
 };
 
 // Shades of one chosen info color for ContactRows' four levels (phone → address).
@@ -128,6 +134,7 @@ export function templateStyle(data: Pick<CardData, "customization">): TemplateSt
     panelMediaType: pick(c.panelMediaType),
     panelMediaPoster: pick(c.panelMediaPoster),
     ...(dim === undefined ? {} : { panelDim: dim }),
+    ...(c.photoShape === "circle" ? { photoShape: "circle" as const } : {}),
   };
 }
 

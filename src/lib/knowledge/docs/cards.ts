@@ -94,6 +94,20 @@ export const cardDocs = defineDocs([
       "\"Suggest my company logo\" looks the logo up three ways and lists the matches to pick from — nothing is applied until you tap one: by the Company name on the card, by your work email\u2019s domain (a Gmail, iCloud or Outlook address is skipped), and by the Website on the card. When there is a website, its logo is listed FIRST — the official logo for that exact site if one is on file, otherwise the logo the site itself shows (its header logo or app icon). So when the name search finds the wrong company or nothing at all, adding your website on Card info and pressing it again is the fix. The headshot note says it plainly: \"Recommended. This will also be used for your SwiftLink.\" Each card has its OWN headshot — a card without one will not borrow another card's. The logo adapts to its own shape (square, wide, or banner), and a \"Logo shape\" toggle under the upload adds a Circle option — your full logo inside a clean circular badge, nothing cropped. On a team account the company logo is set by the admin on the Branding tab and can't be uploaded by a member.",
   },
   {
+    id: "photo-first-photo-shape",
+    title: "Photo First: full photo or a circle",
+    audience: ["user", "office-admin"],
+    triggers: [
+      "circle photo", "round photo", "photo circle", "photo in a circle", "circular photo",
+      "headshot circle", "round headshot", "photo shape", "photo panel", "photo panel color",
+      "photo panel colour", "color behind my photo", "background behind photo", "photo first",
+    ],
+    answer:
+      "Only on the Photo First template. On the \"Card design\" tab (Edit card, or the design step of the card builder), pick \"Photo First\", then find the \"Photo shape\" step. \"Original\" (the default) fills the whole left panel with your headshot. \"Circle\" puts your headshot in a circle on that panel, with your name and title underneath — and \"Color behind your photo\" opens right under the toggle, so you can pick the panel colour around the circle. Photo shape is on every plan.",
+    detail:
+      "With \"Original\" there is no colour to pick: the photo covers the whole panel, so the step just says \"Choose Circle to pick the color behind it.\" That is the thing people miss — choose Circle first, then the colours appear. On a light panel colour your name and title switch to dark text by themselves; a Name color you picked still wins. No headshot yet? The panel colour shows either way, and your initials sit in the circle. Switching back to Original keeps the colour you picked for next time. The same Photo shape step is in the homepage card builder and, for a team, on the admin's Branding tab — with the look locked, every member's Photo First card follows it.",
+  },
+  {
     id: "socials",
     title: "Social profiles and extra links",
     audience: ["user"],

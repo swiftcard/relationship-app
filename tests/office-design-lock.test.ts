@@ -103,6 +103,7 @@ describe("extractDesign — pulls just the design keys from a card (brand seedin
       "accentColor", "font", "bgColor", "surfaceColor", "textColor", "infoColor", "fontFamily",
       "titleColor", "companyColor",
       "finish", "panelMedia", "panelMediaType", "panelMediaPoster", "panelDim",
+      "photoShape",
     ]);
   });
 });

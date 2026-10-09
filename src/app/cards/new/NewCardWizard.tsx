@@ -471,6 +471,8 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
         const v = p[k];
         if (typeof v === "string" && v) next[k] = v;
       }
+      // Photo First's Circle photo, picked in the homepage builder.
+      if (p.photoShape === "circle") next.photoShape = "circle";
       // A photo or video the visitor uploaded behind the card in the sketch.
       for (const k of PREFILL_CARD_MEDIA_KEYS) {
         const v = p[k];
@@ -651,6 +653,8 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
       panelMediaType: result.customization.panelMediaType as string | undefined,
       panelMediaPoster: result.customization.panelMediaPoster as string | undefined,
       panelDim: typeof result.customization.panelDim === "number" ? result.customization.panelDim : undefined,
+      // Not a Pro choice: the Free version keeps the circle photo.
+      photoShape: result.customization.photoShape === "circle" ? "circle" : undefined,
     });
 
     // The Swift Links half. describeFreeDesignChanges + proLinkFeaturesInUse
@@ -678,6 +682,8 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
       panelMediaType: result.customization.panelMediaType as string | undefined,
       panelMediaPoster: result.customization.panelMediaPoster as string | undefined,
       panelDim: typeof result.customization.panelDim === "number" ? result.customization.panelDim : undefined,
+      // Not a Pro choice: the Free version keeps the circle photo.
+      photoShape: result.customization.photoShape === "circle" ? "circle" : undefined,
     };
     return {
       changed: result.changed,
@@ -1034,6 +1040,8 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
       // can't be added there and silently dropped here.
       const style: Record<string, unknown> = {};
       for (const k of PRO_CUSTOMIZATION_KEYS) if (cust[k] !== undefined) style[k] = cust[k];
+      // Photo shape is every-plan, so it is not on that list.
+      if (cust.photoShape === "circle") style.photoShape = "circle";
       if (Object.keys(style).length) setTemplateStyleState(style as TemplateStyle);
       // Swift Links page design keys ride alongside the card's, on their own
       // list — the Pro keys AND the every-plan structural ones (Look, header
@@ -2264,7 +2272,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                   the panel (same as the editor — the two must never disagree). */}
               {!customSelected && (
                 <div>
-                  <TemplateStyleControls value={templateStyleState} onChange={patchTemplateStyle} template={template} locked={!designUnlocked} canUpload />
+                  <TemplateStyleControls value={templateStyleState} onChange={patchTemplateStyle} template={template} locked={!designUnlocked} canUpload hasPhoto={!!headshotUrl} />
                   {!isPro && !designUnlocked && (
                     <PlanGate
                       feature="colors-fonts"

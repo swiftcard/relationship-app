@@ -1,5 +1,6 @@
 // PhotoFirst — Portrait Pro
 // Style: Full-height photo on the left, clean white info panel on the right
+//        (Photo shape "Circle": the photo in a circle on the panel's colour)
 // Includes: Profile photo (full-height), name overlay, company, phone, email, website, QR
 // Best for: Real estate, beauty, fitness, coaches, personal brand, healthcare
 
@@ -20,6 +21,16 @@ export default function PhotoFirst({ data }: { data: CardData }) {
   // The photo panel. bgColor already means the INFO panel on this template,
   // so the brand backdrop behind the photo gets the second surface.
   const photoBg = style.surfaceColor ?? PHOTO_BG_DEFAULT;
+  // Photo shape "Circle" (customization.photoShape): the headshot sits in a
+  // circle ON this panel instead of filling it, so the panel colour shows all
+  // round it — which is the reason to pick one. Absent is the full-height
+  // photo, and every card saved before this existed keeps exactly that.
+  const circle = style.photoShape === "circle";
+  // A light panel colour turns the name and title to ink. Circle only: the
+  // full-height photo keeps its dark scrim and white name as before.
+  const lightPanel = circle && !isDarkBg(photoBg);
+  // The ring is a BORDER, not a shadow — see the circle <img> below.
+  const ring = lightPanel ? "rgba(15,23,42,0.12)" : "rgba(255,255,255,0.35)";
   // bgColor now tints the INFO PANEL — the surface behind the contact text.
   // Default is the clean white panel; a dark choice flips the text to light.
   const infoBg = panelBackground(style, "#ffffff");
@@ -33,6 +44,9 @@ export default function PhotoFirst({ data }: { data: CardData }) {
     : { strong: infoPalette.strong, mid: infoPalette.mid, soft: infoPalette.soft, muted: infoPalette.muted };
   const companyColor = style.companyColor ?? style.infoColor ?? infoPalette.company;
   const f = fitFactor(data); // auto-fit: more info → everything sizes down together
+  // A packed card has less height per line of text, so the circle gives some
+  // back rather than crowd the name and title under it.
+  const circleSize = f >= 1 ? "62%" : f >= 0.85 ? "56%" : "50%";
   // Row is 242 design px: info panel is 460 - 40% = 276, less 17px padding
   // either side. The roomiest of the five, which is why this is the one
   // template whose logo could take a larger share (52%) to begin with.
@@ -61,23 +75,53 @@ export default function PhotoFirst({ data }: { data: CardData }) {
     >
       {/* ── Left: full-height photo panel ──────────────── */}
       <div
-        className="relative flex flex-col justify-end shrink-0"
+        className={`relative flex flex-col shrink-0 ${circle ? "items-center justify-center" : "justify-end"}`}
         style={{
           width: "40%",
           background: photoBg,
           overflow: "hidden",
+          // Circle: the photo and the name stack in the middle of the panel.
+          ...(circle ? { padding: "14px 0 12px", gap: Math.round(9 * Math.min(f, 1.1)) } : {}),
         }}
       >
-        {/* Radial highlight for depth */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background: "radial-gradient(ellipse at 60% 20%, rgba(167,139,250,0.35) 0%, transparent 60%)",
-          }}
-        />
+        {/* Radial highlight for depth — on the template's own violet. Not over
+            a colour the owner picked for a circle photo: it would tint it. */}
+        {!(circle && style.surfaceColor) && (
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background: "radial-gradient(ellipse at 60% 20%, rgba(167,139,250,0.35) 0%, transparent 60%)",
+            }}
+          />
+        )}
 
         {/* Photo or avatar */}
-        {data.photoUrl ? (
+        {circle ? (
+          data.photoUrl ? (
+            // The ring is a BORDER: the iPhone's screenshot engine (the texted
+            // link preview) drops a shadow on an <img> — see logoCircleStyle.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={data.photoUrl}
+              alt={data.name}
+              className="relative shrink-0 rounded-full object-cover"
+              style={{ width: circleSize, aspectRatio: "1/1", border: `2px solid ${ring}` }}
+            />
+          ) : (
+            <div
+              className="relative shrink-0 rounded-full flex items-center justify-center font-black"
+              style={{
+                width: circleSize, aspectRatio: "1/1",
+                background: lightPanel ? "rgba(15,23,42,0.06)" : "rgba(255,255,255,0.15)",
+                border: `2px solid ${ring}`,
+                fontSize: "clamp(18px, 4.5vw, 30px)",
+                color: lightPanel ? "#111827" : "#ffffff",
+              }}
+            >
+              {data.initials ?? (data.name ?? "").split(" ").map((n) => n[0]).join("").slice(0, 2)}
+            </div>
+          )
+        ) : data.photoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={data.photoUrl}
@@ -100,23 +144,26 @@ export default function PhotoFirst({ data }: { data: CardData }) {
           </div>
         )}
 
-        {/* Gradient overlay at bottom — name sits on top of it */}
-        <div
-          className="absolute bottom-0 left-0 right-0"
-          style={{ height: "50%", background: "linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 100%)" }}
-        />
+        {/* Gradient overlay at bottom — name sits on top of it. Not with a
+            circle photo: there the name sits on the panel colour, not a photo. */}
+        {!circle && (
+          <div
+            className="absolute bottom-0 left-0 right-0"
+            style={{ height: "50%", background: "linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 100%)" }}
+          />
+        )}
 
         {/* Name + title over photo */}
         {/* titleBox: the job title sizes itself to THIS column (shared.tsx). */}
-        <div className="relative px-3.5 pb-3" style={titleBox}>
+        <div className={circle ? "relative w-full px-3 text-center" : "relative px-3.5 pb-3"} style={titleBox}>
           <h2
-            className={`font-extrabold leading-tight ${nameClass(style)}`}
-            style={{ fontSize: fitName(18 * heroGrow(f), data.name, 16), overflowWrap: "anywhere", minWidth: 0, textShadow: "0 1px 4px rgba(0,0,0,0.4)", color: style.textColor }}
+            className={`font-extrabold leading-tight ${lightPanel ? "" : nameClass(style)}`}
+            style={{ fontSize: fitName(18 * heroGrow(f), data.name, 16), overflowWrap: "anywhere", minWidth: 0, textShadow: lightPanel ? undefined : "0 1px 4px rgba(0,0,0,0.4)", color: style.textColor ?? (lightPanel ? "#111827" : undefined) }}
           >
             {data.name}
           </h2>
           <p
-            style={{ ...fitTitleFluid(8, data.title, { tracking: 0.14, f }), color: style.titleColor ?? "rgba(221,214,254,0.9)", letterSpacing: "0.14em", textTransform: "uppercase", marginTop: 2 }}
+            style={{ ...fitTitleFluid(8, data.title, { tracking: 0.14, f }), color: style.titleColor ?? (lightPanel ? "#4b5563" : "rgba(221,214,254,0.9)"), letterSpacing: "0.14em", textTransform: "uppercase", marginTop: 2 }}
           >
             {data.title}
           </p>

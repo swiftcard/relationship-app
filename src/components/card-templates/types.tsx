@@ -221,6 +221,10 @@ export type CardCustomization = {
   // width, so square/wide/banner marks each read naturally. "circle" wraps the
   // whole mark in a circular plate — nothing is ever cropped (owner spec).
   logoShape?: "auto" | "circle";
+  // Photo First's headshot. Absent (every card saved before this existed) is
+  // the full-height photo; "circle" puts it in a circle on the photo panel's
+  // colour (surfaceColor). Every plan — a layout choice, not a Pro colour.
+  photoShape?: "circle";
 };
 
 export type CardData = {

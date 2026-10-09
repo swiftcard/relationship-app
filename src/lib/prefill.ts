@@ -83,6 +83,9 @@ export type CardPrefill = {
    *  same Original/Circle toggle the real editor does, and a visitor who picks
    *  Circle must still have it picked when they land in the wizard. */
   logoShape?: "auto" | "circle";
+  /** Photo First's Circle photo — the same Photo shape step the editor has,
+   *  carried from the homepage builders into the wizard. */
+  photoShape?: "circle";
   // ── Uploaded media (owner, 2026-09-17: a visitor can add a photo or video
   // before they have an account). Public URLs from a guest upload, carried so
   // the wizard opens with the same background the sketch showed.

@@ -9,7 +9,10 @@ export type OfficeAddress = { street?: string; unit?: string; city?: string; sta
 // The look an office owns: colors + fonts, set on the office Branding page.
 // These are the ONLY customization keys the office overwrites — an employee's
 // personal content (photoUrl, bio, links, socials, testimonials) is never touched.
-export const OFFICE_DESIGN_KEYS = PRO_CUSTOMIZATION_KEYS;
+// Plus Photo First's photo shape: every plan, so it is not a Pro key, but it
+// IS the office's look — the Branding page shows the same Photo shape step,
+// and with the look locked every member's card follows it.
+export const OFFICE_DESIGN_KEYS = [...PRO_CUSTOMIZATION_KEYS, "photoShape"] as const;
 
 export type OfficeBrand = {
   logoUrl: string | null;

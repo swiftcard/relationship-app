@@ -151,6 +151,7 @@ function fromPrefill(p: CardPrefill): Sketch {
       panelMediaType: p.panelMediaType,
       panelMediaPoster: p.panelMediaPoster,
       panelDim: p.panelDim,
+      photoShape: p.photoShape === "circle" ? "circle" : undefined,
     },
     linkStyle: {
       linkLook: p.linkLook,

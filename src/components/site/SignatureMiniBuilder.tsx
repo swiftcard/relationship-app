@@ -164,7 +164,7 @@ export default function SignatureMiniBuilder({ linkedinEnabled = false }: { link
           {customSelected ? (
             <CustomCardDesigner layout={customLayout} data={data} onChange={(l) => patch({ customLayout: l })} canScan={false} />
           ) : (
-            <TemplateStyleControls value={sketch.style} onChange={patchStyle} template={sketch.template} />
+            <TemplateStyleControls value={sketch.style} onChange={patchStyle} template={sketch.template} hasPhoto={!!sketch.headshot} />
           )}
         </div>
       ),

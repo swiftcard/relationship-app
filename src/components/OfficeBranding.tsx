@@ -124,6 +124,7 @@ export default function OfficeBranding({ office }: { office: Brand }) {
       panelMedia: pick("panelMedia"), panelMediaType: pick("panelMediaType"),
       panelMediaPoster: pick("panelMediaPoster"),
       ...(dim === undefined ? {} : { panelDim: dim }),
+      ...(d.photoShape === "circle" ? { photoShape: "circle" as const } : {}),
     };
   });
   const patchDesign = (p: Partial<TemplateStyle>) => setDesign((prev) => ({ ...prev, ...p }));

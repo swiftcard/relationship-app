@@ -36,7 +36,7 @@ import { CARD_FONT_OPTIONS, isDarkBg } from "./shared";
 import type { TemplateStyle } from "./shared";
 import { META, FALLBACK_META, type Look, type StyleField } from "@/lib/template-style-presets";
 import { useRef, useState } from "react";
-import { DesignSteps, ProTag, type DesignStep } from "@/components/ui/DesignControls";
+import { DesignSteps, ProTag, Segmented, type DesignStep } from "@/components/ui/DesignControls";
 import {
   CARD_FINISHES, FINISH_FAMILIES, getFinish, isFreeFinish,
   composePanelBackground, PANEL_DIM_DEFAULT,
@@ -520,6 +520,7 @@ export default function TemplateStyleControls({
   template,
   canUpload = true,
   proTags = false,
+  hasPhoto,
 }: {
   value: TemplateStyle;
   onChange: (patch: Partial<TemplateStyle>) => void;
@@ -542,6 +543,13 @@ export default function TemplateStyleControls({
    *  homepage builders): every upload route answers 401 there. The step stays
    *  in its place in the numbered path, saying when it becomes available. */
   canUpload?: boolean;
+  /**
+   * Whether the card being designed has a headshot. Photo First uses it to
+   * keep its panel colour out of sight under a full-height photo, where it
+   * shows nowhere. Omitted where there is no one card's photo to ask about
+   * (Office branding, the Teams demo): the colour then always shows.
+   */
+  hasPhoto?: boolean;
 }) {
   const meta = (template && META[template]) || FALLBACK_META;
 
@@ -566,6 +574,46 @@ export default function TemplateStyleControls({
     current: string | undefined,
     key: "bgColor" | "surfaceColor" | "textColor" | "titleColor" | "companyColor" | "accentColor" | "infoColor",
   ) => <Swatches presets={f.presets} value={current} fallbackHex={f.fallback} onPick={(v) => onChange({ [key]: v })} proTag={proTags} />;
+
+  // PHOTO FIRST's second surface is its photo panel, and it gets a Photo shape
+  // step: Original (the photo fills the panel) or Circle (the photo in a
+  // circle on the panel's colour). The colour is part of the same step and
+  // opens with Circle — under a full-height photo it is covered, so a picker
+  // there would change nothing anyone can see. It stays shown while the card
+  // has no photo (the colour fills the panel then) and where the caller can't
+  // say whether it has one.
+  const photoCircle = value.photoShape === "circle";
+  const photoShapeStep = (surface: StyleField): DesignStep => ({
+    key: "surface",
+    label: "Photo shape",
+    help: "Fill the panel, or sit in a circle on a color you pick.",
+    title: surface.help,
+    body: (
+      <div className="space-y-3">
+        <Segmented
+          label="Photo shape"
+          value={photoCircle ? "circle" : "original"}
+          onChange={(v) => onChange({ photoShape: v === "circle" ? "circle" : undefined })}
+          options={[
+            { value: "original", label: "Original" },
+            { value: "circle", label: "Circle" },
+          ]}
+        />
+        {photoCircle || hasPhoto !== true ? (
+          <div>
+            <p className="text-[0.6875rem] text-gray-500 mb-1.5">
+              {photoCircle ? "Color behind your photo" : `${surface.label} color — shows when there's no photo`}
+            </p>
+            {swatches(surface, value.surfaceColor, "surfaceColor")}
+          </div>
+        ) : (
+          <p className="text-[0.6875rem] text-gray-500 leading-snug">
+            Your photo fills the whole panel. Choose Circle to pick the color behind it.
+          </p>
+        )}
+      </div>
+    ),
+  });
 
   // The path, in build order. Base first — the whole look, the main surface and
   // what goes behind it, the second surface — then the type and colour details,
@@ -599,7 +647,9 @@ export default function TemplateStyleControls({
     // Only some templates have a second surface; on the rest the background
     // already paints the whole card and this step would do nothing.
     ...(meta.surface
-      ? [{ key: "surface", label: meta.surface.label, help: meta.surface.hint, title: meta.surface.help, body: swatches(meta.surface, value.surfaceColor, "surfaceColor") }]
+      ? [template === "photo-first"
+        ? photoShapeStep(meta.surface)
+        : { key: "surface", label: meta.surface.label, help: meta.surface.hint, title: meta.surface.help, body: swatches(meta.surface, value.surfaceColor, "surfaceColor") }]
       : []),
     { key: "text", label: meta.text.label, help: meta.text.hint, title: meta.text.help, body: swatches(meta.text, value.textColor, "textColor") },
     // Right under the name: the three lines that say who you are, each its own
