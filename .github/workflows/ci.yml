@@ -1,15 +1,17 @@
 name: CI
 
-# Runs on every push and PR. These three checks need no secrets/env, so they
-# run reliably and catch the vast majority of regressions BEFORE (or right as)
-# Vercel auto-deploys from main:
+# Runs on every push and PR. These checks need no secrets/env, so they run
+# reliably, and they are the GATE: Vercel Deployment Checks hold every
+# production build until the `verify` and `render` jobs below pass (since
+# 2026-10-09). Vercel matches them BY JOB NAME, so renaming either one means
+# updating the checks in Vercel's project settings too
+# (tests/deploy-gate.test.ts). `verify` runs:
 #   • typecheck — the compiler catches broken types across the whole app
 #   • lint      — eslint catches unused code, bad hooks, banned patterns
 #   • test      — 680+ source-invariant + logic tests (kept GREEN, so any red is real)
 #
-# A red run is a loud signal that something drifted — the exact thing that lets
-# small glitches slip in at scale. Turn on branch protection ("require CI to
-# pass") once the team is ready to gate merges on it.
+# A red run means the push is NOT live: swiftcard.me keeps the last green
+# build until a fix makes CI pass again.
 
 on:
   push:

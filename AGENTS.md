@@ -97,15 +97,25 @@ of them is removed or quietly weakened.
 
 | Guard | Runs | What it catches |
 |---|---|---|
+| **Vercel Deployment Checks** (Project Settings → Build and Deployment → Deployment Checks: `verify`, `render`) + `scripts/wait-for-live.mjs` | every push to `main` | a change going live before its tests pass. The production build is made at once but swiftcard.me keeps the previous one until CI's `verify` and `render` jobs are green. The post-deploy checks wait until `/api/health` names their commit, so they test what is live. Pinned by `tests/deploy-gate.test.ts`. |
 | `.github/workflows/uptime.yml` → `scripts/health-check.mjs` | every 15 min | outage, blank card, expired Apple secret, **speed budget** (median full-response time per key route, DB latency) |
 | `.github/workflows/nightly-qa.yml` | nightly 05:00 NY + after every production deploy | real Chromium against production: flows, every screen at both widths for Free/Pro/Office, Office admin + member, **analytics and notifications end to end** (`scripts/qa-prod-probe.mjs`), **real cards' link previews: name, logo and photo actually in the picture** (`scripts/qa-share-preview.mjs`) |
-| `.github/workflows/deploy-watchdog.yml` | on every deploy | error-rate spike → automatic rollback (needs the Sentry secrets) |
+| `.github/workflows/deploy-watchdog.yml` | on every deploy, **when enabled** | error-rate spike → automatic rollback (needs the Sentry secrets). Found switched off in GitHub (Actions → "Deploy watchdog (auto-rollback)", disabled by hand 2026-08-17) on 2026-10-09; no test can see that switch, so check it there. |
 | `ci.yml` + the tripwire tests (`one-notification-per-visit`, `view-visit-window`, `analytics-*`, `trial-eligibility`, `proxy-auth-hop`) | every push | the recurring bugs, pinned at source |
 | `.githooks/pre-push` (installed by `npm install` via `scripts/install-hooks.mjs`) | before every push leaves the machine | a type or lint error reaching `main`. CI was red for 26 pushes in Sept 2026 over one lint error nobody saw, and while red its Test job never ran. Pinned by `tests/push-guard.test.ts`. |
 | `.gitattributes` (`* text=auto eol=lf`) | every checkout | CRLF working copies. ~600 tests read source as strings; with `core.autocrlf=true` they failed locally and passed in CI, so red stopped meaning anything. Pinned by `tests/line-endings.test.ts`. |
 
 **A red CI run is a page, not a colour.** Read the failing step before pushing
 anything else — a red Lint step hides the Test step behind it.
+
+**A push is not live until CI is green** (about 12–15 minutes). Red means the
+change is held, not shipped: say so, fix forward, and push again. Never tell
+the owner something is live because the push succeeded; check that
+`/api/health` reports the commit. A test that failed on a fluke: re-run the
+job in GitHub Actions. A real emergency that cannot wait for CI: Vercel →
+the deployment → **Force Promote**. Renaming the `verify` or `render` job
+means updating the Deployment Checks in Vercel too, or every deploy waits
+forever. `[skip ci]` in a commit message does the same thing. Don't use it.
 
 Both workflows keep ONE issue open while something is wrong (labels `uptime`,
 `nightly-qa`) and close it when it passes; GitHub emails the owner on open.
