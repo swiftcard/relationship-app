@@ -601,7 +601,7 @@ export default function TemplateStyleControls({
   const photoShapeStep = (surface: StyleField): DesignStep => ({
     key: "surface",
     label: "Photo shape",
-    help: "Fill the panel, or sit in a circle on a color you pick.",
+    help: "Full photo, or a circle on a color you pick.",
     title: surface.help,
     body: (
       <div className="space-y-3">

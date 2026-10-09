@@ -5,6 +5,7 @@ import { ensureEmailPreferences } from "@/lib/email-prefs";
 import { slugTaken } from "@/lib/username";
 import { sendRawEmail } from "@/lib/messaging";
 import { escapeHtml, safeUrlAttr } from "@/lib/escape";
+import { META } from "@/lib/template-style-presets";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
@@ -13,7 +14,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { name, email, company, title, phone, username, plan = "pro", template = "classic-pro", accentColor } = await req.json();
+  const { name, email, company, title, phone, username, plan = "pro", template = "classic-pro", accentColor, photoShape, surfaceColor } = await req.json();
 
   if (!name || !email || !username) {
     return NextResponse.json({ error: "name, email, and username are required" }, { status: 400 });
@@ -75,7 +76,20 @@ export async function POST(req: NextRequest) {
     phone: phone || null,
     plan,
     template,
-    customization: accentColor ? { accentColor } : {},
+    customization: {
+      ...(accentColor ? { accentColor } : {}),
+      // Photo First's Photo shape, the same choice the card editor offers.
+      // The panel colour only shows around a circle photo, so it is kept only
+      // with one — and only as a plain hex or one of the template's own swatches.
+      ...(template === "photo-first" && photoShape === "circle"
+        ? {
+            photoShape: "circle",
+            ...(typeof surfaceColor === "string" && (/^#[0-9a-f]{6}$/i.test(surfaceColor) || META["photo-first"].surface?.presets.includes(surfaceColor))
+              ? { surfaceColor }
+              : {}),
+          }
+        : {}),
+    },
   });
 
   if (profileError) {

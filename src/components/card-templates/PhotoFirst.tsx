@@ -130,13 +130,16 @@ export default function PhotoFirst({ data }: { data: CardData }) {
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
+            {/* On a light panel colour the initials are ink, or white on white
+                would leave an empty ring. */}
             <div
-              className="rounded-full flex items-center justify-center font-black text-white"
+              className={`rounded-full flex items-center justify-center font-black ${isDarkBg(photoBg) ? "text-white" : ""}`}
               style={{
                 width: "52%", aspectRatio: "1/1",
-                background: "rgba(255,255,255,0.15)",
-                border: "2px solid rgba(255,255,255,0.3)",
+                background: isDarkBg(photoBg) ? "rgba(255,255,255,0.15)" : "rgba(15,23,42,0.06)",
+                border: `2px solid ${isDarkBg(photoBg) ? "rgba(255,255,255,0.3)" : "rgba(15,23,42,0.12)"}`,
                 fontSize: "clamp(18px, 4.5vw, 30px)",
+                ...(isDarkBg(photoBg) ? {} : { color: "#111827" }),
               }}
             >
               {data.initials ?? (data.name ?? "").split(" ").map((n) => n[0]).join("").slice(0, 2)}

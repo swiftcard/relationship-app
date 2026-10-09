@@ -6,6 +6,7 @@ import { storedCaptureIsCurrent } from "@/lib/stored-capture";
 import { fetchVCardPhoto, withLogoSize } from "@/lib/contact-photo";
 import { BrandOg, loadBrandOgInputs } from "@/lib/brand-og";
 import { squareCorners } from "@/lib/square-corners";
+import { isDarkBg } from "@/lib/template-style";
 
 // A pixel-perfect PNG of the real card, captured client-side on the dashboard
 // and stored here. When present it IS the share preview, so the link unfurls
@@ -209,12 +210,19 @@ function ClassicProOG(p: Meta) {
 
 function PhotoFirstOG(p: Meta) {
   const ACCENT = p.accentColor || "#6d28d9";
+  const circle = p.style?.photoShape === "circle";
+  const panel = p.style?.surfaceColor ?? "linear-gradient(145deg, #4f46e5 0%, #7c3aed 60%, #6d28d9 100%)";
   const website = (p.website ?? "").replace(/^https?:\/\//, "");
   return (
     <div style={{ width: "100%", height: "100%", display: "flex", background: "#fff" }}>
-      {/* Left photo panel */}
-      <div style={{ width: "40%", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(145deg, #4f46e5 0%, #7c3aed 60%, #6d28d9 100%)" }}>
-        <Photo url={p.photoUrl} name={p.name ?? ""} size={300} radius={40} border="8px solid rgba(255,255,255,0.25)" bg="rgba(255,255,255,0.15)" />
+      {/* Left photo panel. Photo shape "Circle" draws the photo round on the
+          panel colour the owner picked, as the card does. */}
+      <div style={{ width: "40%", display: "flex", alignItems: "center", justifyContent: "center", background: circle ? panel : "linear-gradient(145deg, #4f46e5 0%, #7c3aed 60%, #6d28d9 100%)" }}>
+        <Photo
+          url={p.photoUrl} name={p.name ?? ""} size={300} radius={circle ? 300 : 40}
+          border={`8px solid ${circle && !isDarkBg(panel) ? "rgba(15,23,42,0.10)" : "rgba(255,255,255,0.25)"}`}
+          bg={circle && !isDarkBg(panel) ? "#475569" : "rgba(255,255,255,0.15)"}
+        />
       </div>
       {/* Right details */}
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", flex: 1, padding: "48px 56px" }}>

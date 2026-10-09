@@ -324,6 +324,105 @@ FLOWS["card-design-title-company"] = async () => {
   } finally { await ctx.close(); }
 };
 
+// ── B4. Photo First's Photo shape: Circle, its colour, saved and live ───────
+// Owner, 2026-10-09: Photo First can keep the photo as it is or put it in a
+// circle on the photo panel, and with the circle the panel colour behind it
+// can be changed. Switches the card to Photo First on Edit card, chooses
+// Circle and a panel colour, saves, then checks the database, the PUBLIC card
+// (signed out) and the editor opened again; then goes back to Original.
+// Found by data-design-step and the step's own labels; the colour by what the
+// swatch paints — no hex hard-coded.
+FLOWS["card-design-photo-shape"] = async () => {
+  const flow = "card-design-photo-shape";
+  const rgbOf = (hex) => {
+    const n = parseInt(String(hex).replace("#", ""), 16);
+    return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+  };
+  const shape = (page) => page.locator('[data-design-step="surface"]');
+  const segment = (page, label) => shape(page).locator(`[role="group"][aria-label="Photo shape"] button:has-text("${label}")`);
+  const panelSwatch = (page) => shape(page).locator('button[aria-label="Color preset"]').nth(2);
+  const openDesign = async (page) => {
+    await page.goto(`${BASE}/cards/${cardId}/edit`, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector('input[placeholder="John Smith"]', { timeout: 30000 });
+    await page.waitForTimeout(1200);
+    await page.locator('button:has-text("Card design")').first().click();
+    await page.locator('[data-design-step="look"]').waitFor({ timeout: 15000 });
+  };
+  const save = async (page) => {
+    await page.locator('button:has-text("Save changes")').first().click();
+    await page.waitForURL(/\/dashboard/, { timeout: 20000 }).catch(() => {});
+  };
+  const readRow = async () => (await (await adm(`/rest/v1/cards?id=eq.${cardId}&select=template,customization`)).json().catch(() => null))?.[0];
+  /** The photo panel of the PUBLIC card, as anyone who opens the link sees it. */
+  const publicPanel = async () => {
+    const pub = await newPage({ signedIn: false });
+    try {
+      await pub.page.goto(`${BASE}/card/${uname}`, { waitUntil: "domcontentloaded" });
+      await pub.page.waitForSelector(".sc-card", { timeout: 30000 });
+      await pub.page.waitForTimeout(800);
+      return await pub.page.evaluate(() => {
+        const panel = document.querySelector(".sc-card")?.firstElementChild;
+        if (!panel) return null;
+        const round = [...panel.children].find((el) => el.classList.contains("rounded-full"));
+        const r = round?.getBoundingClientRect();
+        return {
+          bg: getComputedStyle(panel).backgroundColor,
+          round: r ? Math.abs(r.width - r.height) <= 1 && parseFloat(getComputedStyle(round).borderTopLeftRadius) >= r.width / 2 - 1 : false,
+          scrim: [...panel.querySelectorAll("div")].some((d) => /rgba\(0,\s*0,\s*0,\s*0\.72\)/.test(d.style.background)),
+        };
+      });
+    } finally { await pub.ctx.close(); }
+  };
+
+  const { ctx, page } = await newPage();
+  try {
+    await login(page);
+    await dismissOverlays(page);
+    await openDesign(page);
+    await page.locator('button[aria-label="Photo First"]').first().click();
+    await shape(page).waitFor({ timeout: 15000 });
+    if (!((await shape(page).textContent()) || "").includes("Photo shape")) { fail(flow, "Photo First has no Photo shape step"); return; }
+    await segment(page, "Circle").click();
+    await page.waitForTimeout(300);
+    await panelSwatch(page).click();
+    await page.waitForTimeout(400);
+    const want = await panelSwatch(page).evaluate((el) => getComputedStyle(el).backgroundColor);
+    await save(page);
+
+    const row = await readRow();
+    const cust = row?.customization ?? {};
+    if (row?.template !== "photo-first" || cust.photoShape !== "circle" || !cust.surfaceColor) {
+      fail(flow, `not saved: template=${row?.template} photoShape=${cust.photoShape} surfaceColor=${cust.surfaceColor}`); return;
+    }
+    if (rgbOf(cust.surfaceColor) !== want) fail(flow, `saved panel ${cust.surfaceColor}, picked ${want}`);
+    else pass("photo shape", "Circle and its panel colour saved as picked");
+
+    const live = await publicPanel();
+    if (!live || !live.round || live.scrim || live.bg !== want) {
+      fail(flow, `public card: ${JSON.stringify(live)} (want a round photo on ${want}, no scrim)`);
+    } else pass("photo shape", "the public card shows the circle on the colour picked");
+
+    await openDesign(page);
+    const pressed = [await segment(page, "Circle").getAttribute("aria-pressed"), await panelSwatch(page).getAttribute("aria-pressed")];
+    if (pressed.join() !== "true,true") fail(flow, `reopened, Circle/colour show as ${pressed.join("/")} (want true/true)`);
+    else pass("photo shape", "reopened with Circle and the colour still picked");
+
+    // Back to Original: the full-height photo, and the shape cleared.
+    await segment(page, "Original").click();
+    await page.waitForTimeout(300);
+    await save(page);
+    const after = await readRow();
+    const back = await publicPanel();
+    if (after?.customization?.photoShape === "circle" || !back || back.round || !back.scrim) {
+      fail(flow, `back to Original: photoShape=${after?.customization?.photoShape} public=${JSON.stringify(back)}`);
+    } else pass("photo shape", "Original saves and the public card fills the panel again");
+  } finally {
+    await ctx.close();
+    // The later flows expect the seeded card's own template.
+    await adm(`/rest/v1/cards?id=eq.${cardId}`, { method: "PATCH", body: JSON.stringify({ template: "modern-bold" }) }).catch(() => {});
+  }
+};
+
 FLOWS["profile-persistence"] = async () => {
   const { ctx, page } = await newPage();
   try {

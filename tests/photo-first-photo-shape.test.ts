@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { templateStyle } from "@/lib/template-style";
 import { sanitizeCustomizationForPlan, convertCustomizationToFreeClosest, PRO_CUSTOMIZATION_KEYS } from "@/lib/plan";
 import { OFFICE_DESIGN_KEYS, overlayOfficeDesign, extractDesign } from "@/lib/office-brand";
+import { META, freeSafeValues } from "@/lib/template-style-presets";
 
 // Photo First's Photo shape — Original (the photo fills the left panel) or
 // Circle (the photo in a circle on the panel's colour). Owner, 2026-10-09.
@@ -18,6 +19,13 @@ describe("customization.photoShape", () => {
     expect("photoShape" in templateStyle({ customization: {} })).toBe(false);
     expect("photoShape" in templateStyle({ customization: { photoShape: "square" } as never })).toBe(false);
     expect("photoShape" in templateStyle({ customization: { photoShape: null } as never })).toBe(false);
+  });
+
+  it("offers a light panel among the swatches, so Free can have a white circle card", () => {
+    const panel = META["photo-first"].surface!;
+    expect(panel.presets).toContain("#ffffff");
+    expect(freeSafeValues(META["photo-first"], "surface")).toContain("#ffffff");
+    expect(sanitizeCustomizationForPlan({ photoShape: "circle", surfaceColor: "#ffffff" }, false, "photo-first").surfaceColor).toBe("#ffffff");
   });
 
   it("is on every plan: not a Pro key, and Free keeps it", () => {
@@ -61,6 +69,21 @@ describe("every editor reads and writes it", () => {
     expect(src("src/lib/prefill.ts")).toMatch(/photoShape\?: "circle";/);
     expect(src("src/components/site/useProductSketch.ts")).toMatch(/photoShape: p\.photoShape === "circle" \? "circle" : undefined/);
     expect(src("src/components/site/CardMiniBuilder.tsx")).toMatch(/hasPhoto=\{!!sketch\.headshot\}/);
+  });
+
+  it("the admin page's Create card offers it for Photo First, and the route keeps only a real choice", () => {
+    const form = src("src/app/admin/users/UsersClient.tsx");
+    expect(form).toContain(`form.template === "photo-first" &&`);
+    expect(form).toContain(`<option value="circle">Circle`);
+    const route = src("src/app/api/admin/create-card/route.ts");
+    expect(route).toContain(`template === "photo-first" && photoShape === "circle"`);
+    expect(route).toContain(`META["photo-first"].surface?.presets.includes(surfaceColor)`);
+  });
+
+  it("the link-preview stand-in draws the circle on the panel colour too", () => {
+    const og = src("src/app/card/[username]/opengraph-image.tsx");
+    expect(og).toContain(`const circle = p.style?.photoShape === "circle";`);
+    expect(og).toContain(`radius={circle ? 300 : 40}`);
   });
 
   it("Office branding reads it back, so the step it shows saves", () => {

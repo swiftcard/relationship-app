@@ -6,6 +6,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { getSignupSourceLabel } from "@/lib/source-labels";
 import { useRouter } from "next/navigation";
+import { META } from "@/lib/template-style-presets";
+
+// Photo First's photo-panel swatches — the same ones the card editor offers.
+const PHOTO_PANEL = META["photo-first"].surface!;
 
 type User = {
   id: string;
@@ -75,7 +79,7 @@ export default function UsersClient() {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createResult, setCreateResult] = useState<{ cardUrl?: string; error?: string } | null>(null);
-  const [form, setForm] = useState({ name: "", email: "", company: "", title: "", phone: "", username: "", plan: "pro", template: "classic-pro", accentColor: "#2563eb" });
+  const [form, setForm] = useState({ name: "", email: "", company: "", title: "", phone: "", username: "", plan: "pro", template: "classic-pro", accentColor: "#2563eb", photoShape: "original", surfaceColor: "" });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -126,7 +130,7 @@ export default function UsersClient() {
       const data = await res.json();
       if (res.ok) {
         setCreateResult({ cardUrl: data.cardUrl });
-        setForm({ name: "", email: "", company: "", title: "", phone: "", username: "", plan: "pro", template: "classic-pro", accentColor: "#2563eb" });
+        setForm({ name: "", email: "", company: "", title: "", phone: "", username: "", plan: "pro", template: "classic-pro", accentColor: "#2563eb", photoShape: "original", surfaceColor: "" });
         load();
       } else {
         setCreateResult({ error: data.error });
@@ -332,6 +336,39 @@ export default function UsersClient() {
                     <option value="logo-first">Logo First</option>
                   </select>
                 </div>
+                {/* Photo First's Photo shape — the same choice as the card
+                    editor's Photo shape step: Original fills the left panel,
+                    Circle sits the photo on a panel colour picked here. */}
+                {form.template === "photo-first" && (
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">Photo</label>
+                    <select value={form.photoShape} onChange={(e) => setForm((p) => ({ ...p, photoShape: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+                      <option value="original">Original — fills the photo panel</option>
+                      <option value="circle">Circle — on a panel color</option>
+                    </select>
+                    {form.photoShape === "circle" && (
+                      <div className="mt-2">
+                        <p className="text-xs text-gray-400 mb-1">Color behind the photo</p>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {PHOTO_PANEL.presets.map((c) => (
+                            <button key={c} type="button" aria-label="Color preset" aria-pressed={form.surfaceColor === c}
+                              onClick={() => setForm((p) => ({ ...p, surfaceColor: c }))}
+                              className="w-7 h-7 rounded-lg border border-gray-700"
+                              style={{ background: c, boxShadow: form.surfaceColor === c ? "0 0 0 2px #111827, 0 0 0 4px #3b82f6" : undefined }} />
+                          ))}
+                          <input type="color" aria-label="Any color" value={/^#[0-9a-f]{6}$/i.test(form.surfaceColor) ? form.surfaceColor : "#4f46e5"}
+                            onChange={(e) => setForm((p) => ({ ...p, surfaceColor: e.target.value }))}
+                            className="w-9 h-7 rounded-lg border border-gray-700 bg-gray-800 cursor-pointer p-0.5" />
+                          <button type="button" onClick={() => setForm((p) => ({ ...p, surfaceColor: "" }))}
+                            className={`text-xs font-semibold px-2.5 py-1 rounded-lg border ${form.surfaceColor === "" ? "bg-blue-600 border-blue-600 text-white" : "border-gray-700 text-gray-400"}`}>
+                            Default
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div>
                   <label className="text-xs text-gray-400 block mb-1">Accent color</label>
                   <div className="flex items-center gap-3">

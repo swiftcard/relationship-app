@@ -346,8 +346,10 @@ export const META: Record<string, TemplateMeta> = {
     surface: {
       label: "Photo panel",
       hint: "Behind and around your photo.",
-      help: "The colored panel behind your photo — it shows through around the edges, and fills the panel when there's no photo yet.",
-      presets: ["linear-gradient(145deg, #4f46e5 0%, #7c3aed 60%, #6d28d9 100%)", "#4f46e5", "#0e1b35", "#111827", "#052e2b", "#3f1d2e"],
+      help: "The colored panel behind your photo. With a Circle photo it shows all around it; with Original it fills the panel until you add a photo.",
+      // The two light ones are for a Circle photo: a clean white or soft grey
+      // panel, where the name and title turn to ink on their own.
+      presets: ["linear-gradient(145deg, #4f46e5 0%, #7c3aed 60%, #6d28d9 100%)", "#4f46e5", "#0e1b35", "#111827", "#052e2b", "#3f1d2e", "#ffffff", "#f1f5f9"],
       fallback: "linear-gradient(145deg, #4f46e5 0%, #7c3aed 60%, #6d28d9 100%)",
     },
     text: {
