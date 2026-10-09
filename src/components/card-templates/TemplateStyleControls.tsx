@@ -62,7 +62,11 @@ function looksActive(value: TemplateStyle, look: Look): boolean {
     value.textColor === look.text &&
     same(value.fontFamily, look.font) &&
     same(value.finish, look.finish) &&
-    same(value.surfaceColor, look.surface)
+    same(value.surfaceColor, look.surface) &&
+    // A Look hands the title and company back to the template (applyLook), so
+    // a card with its own title or company colour is no longer that Look.
+    value.titleColor === undefined &&
+    value.companyColor === undefined
   );
 }
 
@@ -73,7 +77,9 @@ function isOriginal(value: TemplateStyle): boolean {
     value.textColor === undefined &&
     value.fontFamily === undefined &&
     value.finish === undefined &&
-    value.surfaceColor === undefined
+    value.surfaceColor === undefined &&
+    value.titleColor === undefined &&
+    value.companyColor === undefined
   );
 }
 
@@ -556,6 +562,10 @@ export default function TemplateStyleControls({
   // A Look sets the card's whole scheme in one tap, INCLUDING clearing what it
   // does not specify. Leaving the previous finish or second surface underneath
   // is what makes a preset feel like it half-worked.
+  //
+  // The title and company go back to Default too. A Look recolours the ground
+  // they sit on, and the template's own colours for them follow that ground —
+  // a white title picked for a navy card would vanish on Bone if it stayed.
   const applyLook = (look: Look) =>
     onChange({
       bgColor: look.bg,
@@ -563,10 +573,15 @@ export default function TemplateStyleControls({
       fontFamily: look.font,
       finish: look.finish,
       surfaceColor: meta.surface ? look.surface : undefined,
+      titleColor: undefined,
+      companyColor: undefined,
     });
   // Exactly the keys a Look sets, handed back to the template.
   const applyOriginal = () =>
-    onChange({ bgColor: undefined, textColor: undefined, fontFamily: undefined, finish: undefined, surfaceColor: undefined });
+    onChange({
+      bgColor: undefined, textColor: undefined, fontFamily: undefined, finish: undefined, surfaceColor: undefined,
+      titleColor: undefined, companyColor: undefined,
+    });
 
   /** The short line under a colour field. The long `help` stays as its tooltip. */
   const swatches = (

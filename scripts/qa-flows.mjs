@@ -256,6 +256,74 @@ FLOWS["card-edit-bio-required"] = async () => {
   } finally { await ctx.close(); }
 };
 
+// ── B3. Title color and Company color: each its own, saved, and live ────────
+// Owner, 2026-10-09: the job title and the company name each have their own
+// colour on Card design, and picking one never moves the other. Picks one of
+// each on Edit card, saves, then checks the database, the PUBLIC card (signed
+// out) and the editor opened again. Steps are found by data-design-step, the
+// colours by what the swatch actually paints — no hex is hard-coded here.
+FLOWS["card-design-title-company"] = async () => {
+  const flow = "card-design-title-company";
+  const rgbOf = (hex) => {
+    const n = parseInt(String(hex).replace("#", ""), 16);
+    return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+  };
+  const openDesign = async (page) => {
+    await page.goto(`${BASE}/cards/${cardId}/edit`, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector('input[placeholder="John Smith"]', { timeout: 30000 });
+    await page.waitForTimeout(1200);
+    await page.locator('button:has-text("Card design")').first().click();
+    await page.locator('[data-design-step="title"]').waitFor({ timeout: 15000 });
+  };
+  const titleSwatch = (page) => page.locator('[data-design-step="title"] button[aria-label="Color preset"]').nth(2);
+  const companySwatch = (page) => page.locator('[data-design-step="company"] button[aria-label="Color preset"]').nth(1);
+
+  const { ctx, page } = await newPage();
+  try {
+    await login(page);
+    await dismissOverlays(page);
+    await openDesign(page);
+    await titleSwatch(page).click();
+    await companySwatch(page).click();
+    await page.waitForTimeout(400);
+    const paint = (loc) => loc.evaluate((el) => getComputedStyle(el).backgroundColor);
+    const want = { title: await paint(titleSwatch(page)), company: await paint(companySwatch(page)) };
+    await page.locator('button:has-text("Save changes")').first().click();
+    await page.waitForURL(/\/dashboard/, { timeout: 20000 }).catch(() => {});
+
+    const row = (await (await adm(`/rest/v1/cards?id=eq.${cardId}&select=title,company,customization`)).json().catch(() => null))?.[0];
+    const cust = row?.customization ?? {};
+    if (!cust.titleColor || !cust.companyColor) { fail(flow, `not saved: titleColor=${cust.titleColor} companyColor=${cust.companyColor}`); return; }
+    if (rgbOf(cust.titleColor) !== want.title || rgbOf(cust.companyColor) !== want.company) {
+      fail(flow, `saved ${cust.titleColor}/${cust.companyColor}, picked ${want.title}/${want.company}`);
+    } else pass("title/company colour", "both saved as picked");
+
+    // The live card, as anyone who opens the link sees it.
+    const pub = await newPage({ signedIn: false });
+    try {
+      await pub.page.goto(`${BASE}/card/${uname}`, { waitUntil: "domcontentloaded" });
+      await pub.page.waitForSelector(".sc-card", { timeout: 30000 });
+      await pub.page.waitForTimeout(800);
+      const seen = await pub.page.evaluate(([title, company]) => {
+        const colors = (t) => [...document.querySelectorAll(".sc-card *")]
+          .filter((e) => (e.textContent || "").trim() === t && ![...e.children].some((c) => (c.textContent || "").trim() === t) && e.getBoundingClientRect().width > 0)
+          .map((e) => getComputedStyle(e).color);
+        return { title: [...new Set(colors(title))], company: [...new Set(colors(company))] };
+      }, [row.title, row.company]);
+      if (seen.title.join() !== rgbOf(cust.titleColor) || seen.company.join() !== rgbOf(cust.companyColor)) {
+        fail(flow, `public card paints title ${seen.title.join("/") || "nothing"} and company ${seen.company.join("/") || "nothing"}; saved ${rgbOf(cust.titleColor)} and ${rgbOf(cust.companyColor)}`);
+        await pub.page.screenshot({ path: `${OUT}/card-design-title-company-public.png` }).catch(() => {});
+      } else pass("title/company colour", "the public card paints both");
+    } finally { await pub.ctx.close(); }
+
+    // Opened again, the editor shows exactly what was saved.
+    await openDesign(page);
+    const pressed = [await titleSwatch(page).getAttribute("aria-pressed"), await companySwatch(page).getAttribute("aria-pressed")];
+    if (pressed.join() !== "true,true") fail(flow, `reopened, the picks show as ${pressed.join("/")} (want true/true)`);
+    else pass("title/company colour", "reopened with both still picked");
+  } finally { await ctx.close(); }
+};
+
 FLOWS["profile-persistence"] = async () => {
   const { ctx, page } = await newPage();
   try {

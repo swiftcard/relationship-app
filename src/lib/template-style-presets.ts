@@ -358,8 +358,10 @@ export const META: Record<string, TemplateMeta> = {
     },
     title: {
       label: "Title color",
-      help: "Your job title, under your name on the photo — keep it light so it reads over the image.",
-      presets: ["#ddd6fe", "#ffffff", "#e5e7eb", "#d4af7a"],
+      // Light shades for the full-height photo; the dark two for a Circle
+      // photo on a light panel colour, where the title turns to ink.
+      help: "Your job title, under your name. Light shades read over a full photo; on a circle photo with a light panel, pick a dark one.",
+      presets: ["#ddd6fe", "#ffffff", "#e5e7eb", "#d4af7a", "#4b5563", "#111827"],
       fallback: "#ddd6fe",
     },
     company: {

@@ -211,7 +211,7 @@ describe("style panel: one numbered path, in build order", () => {
   });
 
   it("Original hands back exactly the keys a Look sets — nothing else", async () => {
-    const v = encodeURIComponent(JSON.stringify({ bgColor: "#052e2b", textColor: "#ffffff", finish: "sheen", accentColor: "#be123c", infoColor: "#111827" }));
+    const v = encodeURIComponent(JSON.stringify({ bgColor: "#052e2b", textColor: "#ffffff", finish: "sheen", accentColor: "#be123c", infoColor: "#111827", titleColor: "#d4af7a", companyColor: "#93c5fd" }));
     const page = await mount("style", `v=${v}`);
     await page.click("button[title=\"The template's own colours, font and finish\"]");
     await page.waitForTimeout(80);
@@ -219,11 +219,30 @@ describe("style panel: one numbered path, in build order", () => {
       patches: (window as unknown as { __patches: Record<string, unknown>[] }).__patches,
       value: (window as unknown as { __value: Record<string, unknown> }).__value,
     }));
-    expect(Object.keys(patches.at(-1)!).sort()).toEqual(["bgColor", "finish", "fontFamily", "surfaceColor", "textColor"]);
+    expect(Object.keys(patches.at(-1)!).sort()).toEqual(["bgColor", "companyColor", "finish", "fontFamily", "surfaceColor", "textColor", "titleColor"]);
     expect(Object.values(patches.at(-1)!).every((x) => x === undefined)).toBe(true);
     // Accent and details colour are not part of a Look, so Original leaves them.
     expect(value.accentColor).toBe("#be123c");
     expect(value.infoColor).toBe("#111827");
+    await page.context().close();
+  });
+
+  it("a Look puts Title and Company color back on Default, so neither can vanish on the new ground", async () => {
+    // Logo First's "Bone" is a light card. A white title picked for the navy
+    // card would disappear on it if the Look left it in place.
+    const v = encodeURIComponent(JSON.stringify({ titleColor: "#ffffff", companyColor: "#ffffff" }));
+    const page = await mount("style", `v=${v}&t=logo-first`);
+    await page.click("button[title='Bone']");
+    await page.waitForTimeout(80);
+    const value = await page.evaluate(() => (window as unknown as { __value: Record<string, unknown> }).__value);
+    expect(value.bgColor).toBe("#f4f2ed");
+    expect(value.titleColor).toBeUndefined();
+    expect(value.companyColor).toBeUndefined();
+    // The tile reads as picked, and stops claiming it once a line is recoloured.
+    expect(await page.getAttribute("button[title='Bone']", "aria-pressed")).toBe("true");
+    await page.locator("li", { hasText: "Company color" }).locator("button[aria-label='Color preset']").nth(1).click();
+    await page.waitForTimeout(80);
+    expect(await page.getAttribute("button[title='Bone']", "aria-pressed")).toBe("false");
     await page.context().close();
   });
 
