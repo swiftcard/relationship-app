@@ -30,7 +30,11 @@ import { withoutSocials, type CardData } from "@/components/card-templates/types
 // WebKit, which is the iPhone app:
 //   1. a complete capture must PASS — a false reject would leave a card on the
 //      rendered stand-in forever;
-//   2. a capture with the name or the logo missing must FAIL.
+//   2. a capture with the name, the logo or the photo missing must FAIL —
+//      the way WebKit actually drops a picture: the image paints nothing while
+//      its box still draws. A circle logo's ring and plate and a circle
+//      headshot's ring are part of that box, and once let an empty capture
+//      through (nightly QA, 2026-10-11), so those run too.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const TEMPLATES: Array<[string, React.ComponentType<{ data: CardData }>]> = [
@@ -57,7 +61,7 @@ const paintedIn = ${paintedIn.toString()};
 const overlaps = ${overlaps.toString()};
 window.capturePainted = ${capturePainted.toString()};`;
 
-type Verdict = { found: number; complete: boolean; noName: boolean; noLogo: boolean | null };
+type Verdict = { found: number; complete: boolean; noName: boolean; noLogo: boolean | null; noPhoto: boolean | null };
 
 async function verdict(page: Page, css: string, Template: React.ComponentType<{ data: CardData }>, data: CardData, negatives: boolean): Promise<Verdict> {
   const markup = renderToStaticMarkup(createElement(Template, { data: withoutSocials(data) }));
@@ -88,7 +92,7 @@ async function verdict(page: Page, css: string, Template: React.ComponentType<{ 
     for (let n = walk.nextNode(); n; n = walk.nextNode()) if (words.some((x: string) => (n!.textContent ?? "").includes(x))) found++;
 
     const complete = await w.capturePainted(el, name, await raster(), width, raster);
-    if (!negatives) return { found, complete, noName: false, noLogo: null };
+    if (!negatives) return { found, complete, noName: false, noLogo: null, noPhoto: null };
 
     // Simulate WebKit's failure: the name's glyphs didn't paint.
     const nameNodes: HTMLElement[] = [];
@@ -102,16 +106,33 @@ async function verdict(page: Page, css: string, Template: React.ComponentType<{ 
     nameNodes.forEach((n) => { n.style.color = ""; n.style.webkitTextFillColor = ""; n.style.textShadow = ""; });
     const noName = !(await w.capturePainted(el, name, blankName, width, raster));
 
-    // …and the logo didn't.
+    // …and a picture didn't: its image painted nothing, its box (ring, plate,
+    // border) still drew — so the source is swapped for a blank, not hidden.
+    const BLANK = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+    const blankOf = async (img: HTMLImageElement) => {
+      // Size held where it is: an undecoded picture keeps its laid-out box
+      // (html-to-image copies the computed size), while a 1×1 blank would
+      // shrink an auto-width logo and move everything beside it.
+      const r = img.getBoundingClientRect();
+      const was = { src: img.src, width: img.style.width, height: img.style.height };
+      img.style.width = `${r.width}px`;
+      img.style.height = `${r.height}px`;
+      img.src = BLANK;
+      await img.decode().catch(() => {});
+      const shot = await raster();
+      img.src = was.src;
+      img.style.width = was.width;
+      img.style.height = was.height;
+      await img.decode().catch(() => {});
+      return shot;
+    };
     const logo = el.querySelector('img[alt="logo"]') as HTMLImageElement | null;
     let noLogo: boolean | null = null;
-    if (logo) {
-      logo.style.opacity = "0";
-      const blankLogo = await raster();
-      logo.style.opacity = "";
-      noLogo = !(await w.capturePainted(el, name, blankLogo, width, raster));
-    }
-    return { found, complete, noName, noLogo };
+    if (logo) noLogo = !(await w.capturePainted(el, name, await blankOf(logo), width, raster));
+    const photo = [...el.querySelectorAll("img")].find((i) => i.alt !== "logo") as HTMLImageElement | undefined;
+    let noPhoto: boolean | null = null;
+    if (photo) noPhoto = !(await w.capturePainted(el, name, await blankOf(photo), width, raster));
+    return { found, complete, noName, noLogo, noPhoto };
   }, { name: data.name, negatives });
 }
 
@@ -130,9 +151,13 @@ for (const [engine, type] of ENGINES) {
     });
     afterAll(async () => { await browser?.close(); });
 
+    // Every content shape, plus the negative card again with the circle logo
+    // and (Photo First) the circle headshot, whose rings are part of the box.
+    const CIRCLES: Array<[string, CardData]> = CASES.filter(([n]) => n === NEGATIVE).map(([n, d]) =>
+      [`${n} · circle logo + circle photo`, { ...d, customization: { ...(d.customization ?? {}), logoShape: "circle", photoShape: "circle" } }]);
     for (const [tname, Template] of TEMPLATES) {
-      for (const [sname, data] of CASES) {
-        const negatives = sname === NEGATIVE;
+      for (const [sname, data] of [...CASES, ...CIRCLES]) {
+        const negatives = sname.startsWith(NEGATIVE);
         it(`${tname} · ${sname}`, async () => {
           const v = await verdict(page, css, Template, data, negatives);
           expect(v.found, "the name must be on the card for the check to find").toBeGreaterThan(0);
@@ -140,6 +165,7 @@ for (const [engine, type] of ENGINES) {
           if (negatives) {
             expect(v.noName, "a capture with no name was accepted").toBe(true);
             expect(v.noLogo, "a capture with no logo was accepted").toBe(true);
+            if (v.noPhoto !== null) expect(v.noPhoto, "a capture with no photo was accepted").toBe(true);
           }
         }, 120_000);
       }

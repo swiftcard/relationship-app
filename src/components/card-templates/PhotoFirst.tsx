@@ -17,9 +17,9 @@ const PHOTO_BG_DEFAULT = "linear-gradient(145deg, #4f46e5 0%, #7c3aed 60%, #6d28
 export default function PhotoFirst({ data }: { data: CardData }) {
   const style = templateStyle(data);
   const ACCENT = style.accentColor ?? ACCENT_DEFAULT;
-  // The photo panel keeps a fixed brand backdrop (only visible with no photo).
-  // The photo panel. bgColor already means the INFO panel on this template,
-  // so the brand backdrop behind the photo gets the second surface.
+  // The photo panel's colour. bgColor already means the INFO panel on this
+  // template, so the backdrop behind the photo gets the second surface. It
+  // shows around a Circle photo, or fills the panel while there's no photo.
   const photoBg = style.surfaceColor ?? PHOTO_BG_DEFAULT;
   // Photo shape "Circle" (customization.photoShape): the headshot sits in a
   // circle ON this panel instead of filling it, so the panel colour shows all

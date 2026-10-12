@@ -8,7 +8,9 @@
 // or the logo simply absent, and it was uploaded as the share preview.
 //
 // So the pixels are verified. Rasterise the card a second time with those
-// elements hidden (visibility only, so nothing moves) and compare: wherever the
+// elements taken out (text by visibility; a picture by moving the image out of
+// its own box, so its ring and plate still draw — nothing moves either way)
+// and compare: wherever the
 // name or an image sits, the real capture must differ from the hidden one. If
 // it doesn't, that element never painted and the capture is rejected (the
 // retry is the redraw WebKit needs). Fails OPEN wherever it cannot measure, so
@@ -122,10 +124,26 @@ export async function capturePainted(
   if (!a) return true;
   for (const group of groups) {
     const nodes = Array.from(new Set(group.map((i) => hide[i])));
-    const was = nodes.map((node) => node.style.visibility);
-    nodes.forEach((node) => { node.style.visibility = "hidden"; });
+    // A picture loses only its PICTURE for the reference raster — its ring,
+    // plate and box stay, by moving the image out of its own content box.
+    // Hiding the whole <img> also hid the ring a circle logo or a circle
+    // headshot draws as its border, so a capture whose picture never painted
+    // still "differed" by that ring and was accepted: a live link preview
+    // showed two empty circles where the logo and photo belonged (nightly QA,
+    // 2026-10-11). Text is hidden as before.
+    const isImg = (node: HTMLElement) => node.tagName === "IMG";
+    const was = nodes.map((node) => (isImg(node) ? node.style.objectPosition : node.style.visibility));
+    nodes.forEach((node) => {
+      if (isImg(node)) node.style.objectPosition = "-100000px -100000px";
+      else node.style.visibility = "hidden";
+    });
     let without: string | null = null;
-    try { without = await raster(); } finally { nodes.forEach((node, i) => { node.style.visibility = was[i]; }); }
+    try { without = await raster(); } finally {
+      nodes.forEach((node, i) => {
+        if (isImg(node)) node.style.objectPosition = was[i];
+        else node.style.visibility = was[i];
+      });
+    }
     const b = without ? await pixelsOf(without) : null;
     if (!b || a.width !== b.width || a.height !== b.height) continue;
     const k = a.width / w;
