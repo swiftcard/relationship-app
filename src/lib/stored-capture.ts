@@ -1,5 +1,5 @@
 import type { getAdminSupabase } from "@/lib/supabase-admin";
-import { DROPPED_OLD_CAPTURES, SHARE_CAPTURES_TRUSTED_SINCE } from "@/lib/share-capture-version";
+import { DROPPED_OLD_CAPTURES, RETAKE_CAPTURES_AFTER, SHARE_CAPTURES_TRUSTED_SINCE } from "@/lib/share-capture-version";
 
 type Admin = ReturnType<typeof getAdminSupabase>;
 
@@ -35,6 +35,9 @@ export async function storedCaptureIsCurrent(
     // (lib/share-capture-version) is set aside until its verified re-capture;
     // every other old capture is the card exactly and keeps serving.
     if (bucket === "card-shares" && DROPPED_OLD_CAPTURES.has(slug.toLowerCase()) && !(written >= SHARE_CAPTURES_TRUSTED_SINCE)) return false;
+    // …and a newer one the nightly check caught, until it is retaken.
+    const retakeAfter = bucket === "card-shares" ? RETAKE_CAPTURES_AFTER[slug.toLowerCase()] : undefined;
+    if (retakeAfter !== undefined && !(written >= retakeAfter)) return false;
     // A legacy profile-card has no cards row; its address never changes hands.
     if (!card?.created_at) return true;
     const born = Date.parse(String(card.created_at));

@@ -37,3 +37,15 @@ export const DROPPED_OLD_CAPTURES: ReadonlySet<string> = new Set([
   "aaronlavi-nadlanhomesllc", // logo slot empty
   "aaronlavi-malvecapital",   // logo slot empty
 ]);
+
+// Captures stored AFTER the trust date that the nightly check still found
+// missing something, each with the moment the fix for it went live. A capture
+// written before that moment is set aside — the stand-in serves, and the
+// owner's device, told it is stale, retakes it — and the first capture after
+// it serves again.
+// 2026-10-11: two empty rings where the logo and the headshot belonged. The
+// pixel check took a picture's own ring for the picture (lib/capture-verify),
+// fixed in 93eca35f, live 2026-10-12 16:27Z.
+export const RETAKE_CAPTURES_AFTER: Readonly<Record<string, number>> = {
+  "jordankhani-douglaselliman": Date.parse("2026-10-12T16:27:00Z"),
+};

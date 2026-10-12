@@ -264,7 +264,7 @@ describe("the capture is verified in its pixels, and its presence on the server"
 // the card link has to look exactly like the card". So only the captures
 // verified broken are set aside, and only until they're re-captured.
 import { storedCaptureIsCurrent } from "../src/lib/stored-capture";
-import { SHARE_CAPTURE_VERSION, SHARE_CAPTURES_TRUSTED_SINCE, DROPPED_OLD_CAPTURES } from "../src/lib/share-capture-version";
+import { SHARE_CAPTURE_VERSION, SHARE_CAPTURES_TRUSTED_SINCE, DROPPED_OLD_CAPTURES, RETAKE_CAPTURES_AFTER } from "../src/lib/share-capture-version";
 
 function fakeAdmin(fileWritten: string, cardCreated: string | null, slug = "alex") {
   return {
@@ -288,6 +288,19 @@ describe("old share captures: the card exactly, unless known to have dropped som
   it("…until its verified re-capture, which serves again", async () => {
     expect(await storedCaptureIsCurrent(fakeAdmin(after, cardBorn, "aaronlavi-nadlanhomesllc"), "card-shares", "aaronlavi-nadlanhomesllc")).toBe(true);
     expect(await storedCaptureIsCurrent(fakeAdmin(after, cardBorn), "card-shares", "alex")).toBe(true);
+  });
+  it("a newer capture the nightly check caught is set aside until it is retaken after its fix", async () => {
+    const slug = "jordankhani-douglaselliman";
+    const fixed = RETAKE_CAPTURES_AFTER[slug];
+    expect(fixed).toBeGreaterThan(SHARE_CAPTURES_TRUSTED_SINCE);
+    // The date is when the fix WENT live, never a guess in the future.
+    expect(fixed).toBeLessThanOrEqual(Date.parse("2026-10-12T16:30:00Z"));
+    const caught = new Date(fixed - 3 * 86_400_000).toISOString();
+    const retaken = new Date(fixed + 60_000).toISOString();
+    expect(await storedCaptureIsCurrent(fakeAdmin(caught, cardBorn, slug), "card-shares", slug)).toBe(false);
+    expect(await storedCaptureIsCurrent(fakeAdmin(retaken, cardBorn, slug), "card-shares", slug)).toBe(true);
+    // Every other card's capture from the same day is untouched.
+    expect(await storedCaptureIsCurrent(fakeAdmin(caught, cardBorn), "card-shares", "alex")).toBe(true);
   });
   it("email signatures are a different picture and keep their own rule", async () => {
     expect(await storedCaptureIsCurrent(fakeAdmin(before, cardBorn), "card-signatures", "alex")).toBe(true);
