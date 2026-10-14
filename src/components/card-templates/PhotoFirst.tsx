@@ -45,8 +45,11 @@ export default function PhotoFirst({ data }: { data: CardData }) {
   const companyColor = style.companyColor ?? style.infoColor ?? infoPalette.company;
   const f = fitFactor(data); // auto-fit: more info → everything sizes down together
   // A packed card has less height per line of text, so the circle gives some
-  // back rather than crowd the name and title under it.
-  const circleSize = f >= 1 ? "62%" : f >= 0.85 ? "56%" : "50%";
+  // back rather than crowd the name and title under it. Raised from 62/56/50
+  // (owner, 2026-10-14: "the circle … is a little small"); at 70% of the 184px
+  // panel there is still ~27px of panel colour either side of the ring, and
+  // photo-first-circle-photo measures the fit on every card density.
+  const circleSize = f >= 1 ? "70%" : f >= 0.85 ? "63%" : "56%";
   // Row is 242 design px: info panel is 460 - 40% = 276, less 17px padding
   // either side. The roomiest of the five, which is why this is the one
   // template whose logo could take a larger share (52%) to begin with.

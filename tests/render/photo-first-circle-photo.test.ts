@@ -68,7 +68,14 @@ async function measure(page: Page, css: string, data: CardData): Promise<Report>
       const radius = parseFloat(getComputedStyle(photo).borderTopLeftRadius);
       if (!(radius >= ph.width / 2 - TOL)) problems.push(`photo corner radius ${radius}px on a ${Math.round(ph.width)}px photo — not a circle`);
       if (!inside(ph)) problems.push("photo leaves the photo panel");
-      if (ph.width < pr.width * 0.45) problems.push(`photo only ${Math.round(ph.width)}px wide in a ${Math.round(pr.width)}px panel`);
+      // Owner, 2026-10-14: the circle was "a little small" — raised to 70/63/56%
+      // of the panel. This floor keeps it from quietly shrinking back.
+      if (ph.width < pr.width * 0.54) problems.push(`photo only ${Math.round(ph.width)}px wide in a ${Math.round(pr.width)}px panel`);
+      // Bigger, but never against the card's left edge or the info panel.
+      const SIDE = 6;
+      if (ph.left - pr.left < SIDE || pr.right - ph.right < SIDE) {
+        problems.push(`photo is ${Math.round(ph.left - pr.left)}px / ${Math.round(pr.right - ph.right)}px from the panel's sides`);
+      }
     }
 
     const name = panel.querySelector("h2") as HTMLElement;
