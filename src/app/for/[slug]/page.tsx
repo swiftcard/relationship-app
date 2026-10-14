@@ -10,6 +10,8 @@ import { PersonaShowcase } from "@/components/site/HeroShowcase";
 import NativeHidden from "@/components/NativeHidden";
 import HomeHeadingReveal from "@/components/site/HomeHeadingReveal";
 import MarketingCta from "@/components/site/MarketingCta";
+import Deferred from "@/components/Deferred";
+import { QrAsImages } from "@/components/card-templates/qr-render-mode";
 import { PROFESSION_TEMPLATE } from "@/lib/campaign-links";
 import "@/app/home.css";
 
@@ -337,6 +339,9 @@ export default async function VerticalPage({ params }: { params: Promise<{ slug:
         </defs>
       </svg>
 
+      {/* QrAsImages: the showcase cards' QR codes as cached <img>s, not inline
+          path data (these pages were 600–740 KB of HTML, SEO audit 2026-10-14). */}
+      <QrAsImages>
       <main className="hp overflow-clip">
         {/* Hero */}
         <section className="hp-page-hero pt-32 pb-20 sm:pt-40 sm:pb-24">
@@ -359,7 +364,10 @@ export default async function VerticalPage({ params }: { params: Promise<{ slug:
                   Swift Links page, and the Swift Signature — all themed to the
                   persona this page speaks to. */}
               <div className="hidden md:flex justify-center"><PersonaShowcase personaKey={v.persona} scale={0.82} /></div>
-              <div className="md:hidden flex justify-center max-w-full overflow-hidden"><PersonaShowcase personaKey={v.persona} scale={0.46} /></div>
+              {/* The phone copy is built in the browser, on phones only: the
+                  desktop one above is the hero and stays in the HTML; this
+                  one duplicated it for every visitor who never saw it. */}
+              <div className="md:hidden flex justify-center max-w-full overflow-hidden"><Deferred when="idle" media="(max-width: 767.98px)" minHeight={320}><PersonaShowcase personaKey={v.persona} scale={0.46} /></Deferred></div>
             </div>
           </div>
         </section>
@@ -437,6 +445,7 @@ export default async function VerticalPage({ params }: { params: Promise<{ slug:
           </MarketingCta>
         </div>
       </main>
+      </QrAsImages>
 
       <SiteFooter />
     </div>

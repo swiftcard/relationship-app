@@ -74,7 +74,9 @@ describe("cards are saved only where it makes sense", () => {
 
 describe("the no-signal screen", () => {
   it("draws the QR with MiniQR's own look, so the code is the same one everywhere", () => {
-    const mini = read("src/components/card-templates/MiniQR.tsx");
+    // The drawing MiniQR renders lives in lib/qr-svg.ts (shared with the
+    // /api/qr image route since the 2026-10-14 page-weight pass).
+    const mini = read("src/lib/qr-svg.ts");
     const num = (src: string, name: string) => src.match(new RegExp(`${name} = ([\\d.]+)`))?.[1];
     for (const n of ["MODULE", "CORNER", "EYE"]) {
       expect(num(offline, n), n).toBe(num(mini, n));

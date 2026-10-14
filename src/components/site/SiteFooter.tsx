@@ -50,6 +50,10 @@ const COLS: { title: string; links: { label: string; href: string }[] }[] = [
       { label: "Preview", href: "/preview" },
       { label: "Templates", href: "/templates" },
       { label: "Why SwiftCard", href: "/testimonials" },
+      // Same reason as the "Who it's for" column: /blog and /compare had no
+      // internal links at all (SEO audit, 2026-10-14).
+      { label: "Blog", href: "/blog" },
+      { label: "Compare", href: "/compare" },
       { label: "About", href: "/about" },
       { label: "Company", href: "/company" },
       { label: "Press", href: "/press" },

@@ -16,6 +16,7 @@ import HomeHeadingReveal from "@/components/site/HomeHeadingReveal";
 import ScrollReveal from "@/components/ScrollReveal";
 import Eyebrow from "@/components/site/Eyebrow";
 import AiDesignerShowcase from "@/components/site/AiDesignerShowcase";
+import { QrAsImages } from "@/components/card-templates/qr-render-mode";
 import "@/app/home.css";
 
 const TEMPLATES = [
@@ -100,6 +101,9 @@ export default function TemplatesPage() {
     // Light page (owner, 2026-09-17: "take away the dark backgrounds"). The
     // card previews keep their own look; only the page around them is light.
     // hp-soft on main so the pb-28 that clears the sticky bar matches the footer.
+    // QrAsImages: six template cards plus the AI designer's, each with a QR —
+    // as inline SVG that was most of this page's 1.17 MB (SEO audit 2026-10-14).
+    <QrAsImages>
     <main className="hp hp-soft min-h-screen pb-28">
       {/* The standard site header, so this page can be navigated away from
           anywhere — it replaced a lone history-back button, which was a dead
@@ -245,5 +249,6 @@ export default function TemplatesPage() {
       {/* Footer too, so the page has the same way out as every other page. */}
       <SiteFooter />
     </main>
+    </QrAsImages>
   );
 }

@@ -5,30 +5,25 @@ import { TRIAL_DAYS } from "@/lib/plan";
 import SiteNav from "@/components/site/SiteNav";
 import HeroClaim from "@/components/site/HeroClaim";
 import HeroShareWord from "@/components/site/HeroShareWord";
-import { ShareScene, SaveScene, LeadScene } from "@/components/site/HowItWorksScenes";
-import HomeCardPhone from "@/components/site/HomeCardPhone";
 import { StoreBadges } from "@/components/AppStoreBadge";
-import HeroShowcase from "@/components/site/HeroShowcase";
 import SiteFooter from "@/components/site/SiteFooter";
 import ScrollReveal from "@/components/ScrollReveal";
 import ScrollProgress from "@/components/ScrollProgress";
 import HomeHeadingReveal from "@/components/site/HomeHeadingReveal";
-import SwiftLinksPhone from "@/components/site/SwiftLinksPhone";
 import SwiftLinkMiniBuilder from "@/components/site/SwiftLinkMiniBuilder";
-import SignatureDemo from "@/components/site/SignatureDemo";
 import SignatureMiniBuilder from "@/components/site/SignatureMiniBuilder";
-import DashboardDemo from "@/components/site/DashboardDemo";
 import IntegrationLogos from "@/components/site/IntegrationLogos";
-import ShareWaysPhones from "@/components/site/ShareWaysPhones";
-import WatchShareImage from "@/components/site/WatchShareImage";
-import TemplateGallery from "@/components/site/TemplateGallery";
 import { AiDesignerTeaser } from "@/components/site/AiDesignerShowcase";
-import TeamsDashboard from "@/components/site/TeamsDashboard";
-import WideDemo from "@/components/site/WideDemo";
+import {
+  LazyHeroShowcase, LazyTemplateGallery, LazySwiftLinksPhone, LazySignatureDemo, LazyDashboardDemo,
+  LazyShareWaysPhones, LazyWatchShareImage, LazyTeamsDashboard, LazyHomeCardPhone, LazyScene,
+} from "@/components/site/HomeLazy";
 import NativeHidden from "@/components/NativeHidden";
 import NativeHomeGate from "@/components/NativeHomeGate";
 import GuestFlowReset from "@/components/GuestFlowReset";
 import BadgeCloseButton from "@/components/BadgeCloseButton";
+import HeroVideo from "@/components/site/HeroVideo";
+import { QrAsImages } from "@/components/card-templates/qr-render-mode";
 import "./home.css";
 
 export const metadata: Metadata = {
@@ -94,7 +89,14 @@ export default function Home() {
       <SiteNav />
       <IconGradient />
 
-      {/* `.hp` scopes every homepage-only style in home.css. */}
+      {/* `.hp` scopes every homepage-only style in home.css.
+          QrAsImages: every card on this page is a picture of the product, so
+          its QR is a cached <img> rather than inline path data (the homepage
+          HTML was 2.4 MB, 1.9 MB of it QR codes — SEO audit 2026-10-14).
+          HomeLazy: the heavy replicas below the fold are built in the browser
+          as they come into view, code and markup both (components/Deferred +
+          dynamic imports); the words around them stay server-rendered. */}
+      <QrAsImages>
       <main className="hp overflow-clip">
         {/* ═══════════════ HERO ═══════════════ */}
         <section className="relative flex flex-col justify-center min-h-[calc(100svh-56px)] pt-24 pb-14 overflow-hidden">
@@ -107,20 +109,26 @@ export default function Home() {
               (0.88/0.70 → 0.74/0.52, phones 0.46 → 0.30) and the hero's small
               text (subtitle, feature list) went from grey to ink to keep it
               readable: measured against the footage it now reads BETTER than
-              before (darkest spot 6.1:1 desktop, 4.7:1 phone; was 5.3 / 4.3). */}
-          <video
-            className="absolute inset-0 w-full h-full object-cover motion-reduce:hidden"
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            poster="/hero-bg-poster.jpg?v=2"
+              before (darkest spot 6.1:1 desktop, 4.7:1 phone; was 5.3 / 4.3).
+              The first frame is a real, eager, high-priority <img> — the
+              page's Largest Contentful Paint — and HeroVideo lays the footage
+              over it only after the page has loaded (SEO audit 2026-10-14:
+              as an autoplaying <video> the hero was the LCP at 6.0 s). */}
+          {/* eslint-disable-next-line @next/next/no-img-element -- the LCP element: a plain <img> is in the first HTML, with no loader in front of it */}
+          <img
+            src="/hero-bg-poster.jpg?v=2"
+            srcSet="/hero-bg-poster-640.jpg 640w, /hero-bg-poster-1024.jpg 1024w, /hero-bg-poster.jpg?v=2 1600w"
+            sizes="100vw"
+            width={1600}
+            height={900}
+            alt=""
+            fetchPriority="high"
+            loading="eager"
+            decoding="async"
+            className="absolute inset-0 w-full h-full object-cover"
             aria-hidden="true"
-            tabIndex={-1}
-          >
-            <source src="/hero-bg.mp4?v=2" type="video/mp4" />
-          </video>
+          />
+          <HeroVideo />
           <div
             className="absolute inset-0 pointer-events-none"
             aria-hidden="true"
@@ -225,7 +233,10 @@ export default function Home() {
               `}</style>
               <div className="sc-heroshow-box">
                 <div className="sc-heroshow origin-top-left">
-                  <HeroShowcase />
+                  {/* Built in the browser once the page is idle, and only at
+                      xl where it is shown: on a phone the CSS hid it, but the
+                      HTML still carried all six personas three ways each. */}
+                  <LazyHeroShowcase />
                 </div>
               </div>
             </div>
@@ -271,12 +282,15 @@ export default function Home() {
 
             <div className="mt-10 md:mt-8 grid md:grid-cols-3 gap-5">
               {[
-                { n: 1, t: "Share your card", d: "They scan your QR code or open your link. No app to download.", scene: <ShareScene /> },
-                { n: 2, t: "They save you", d: "One tap on Save Contact puts your photo, number and email in their phone.", scene: <SaveScene /> },
-                { n: 3, t: "You get the lead", d: "When they share their info back, you're notified — switch on a follow-up and the emails go out for you.", scene: <LeadScene /> },
+                { n: 1, t: "Share your card", d: "They scan your QR code or open your link. No app to download.", scene: "share" as const },
+                { n: 2, t: "They save you", d: "One tap on Save Contact puts your photo, number and email in their phone.", scene: "save" as const },
+                { n: 3, t: "You get the lead", d: "When they share their info back, you're notified — switch on a follow-up and the emails go out for you.", scene: "lead" as const },
               ].map((s, i) => (
                 <div key={s.n} className="hp-step" data-reveal style={{ transitionDelay: `${i * 90}ms` }}>
-                  <div className="hp-step-stage" aria-hidden="true">{s.scene}</div>
+                  {/* The stage has a fixed height (home.css), so the scene can
+                      be built as it nears the screen: each is a phone full of
+                      product UI, ~140 elements a visitor may never scroll to. */}
+                  <div className="hp-step-stage" aria-hidden="true"><LazyScene scene={s.scene} /></div>
                   <div className="px-2 mt-5">
                     <div className="flex items-center gap-2.5">
                       <span className="hp-step-num md:hidden">{s.n}</span>
@@ -303,7 +317,7 @@ export default function Home() {
               </p>
             </div>
             <div className="mt-14" data-reveal>
-              <TemplateGallery linkedinEnabled={linkedinEnabled} />
+              <LazyTemplateGallery linkedinEnabled={linkedinEnabled} />
             </div>
             {/* The AI Card Designer: both ways in, under a divider so it reads
                 as its own idea and not part of the gallery. Full showcase on /templates. */}
@@ -341,7 +355,7 @@ export default function Home() {
               <SwiftLinkMiniBuilder linkedinEnabled={linkedinEnabled} />
             </div>
             <div className="flex justify-center" data-reveal="scale">
-              <SwiftLinksPhone />
+              <LazySwiftLinksPhone />
             </div>
           </div>
         </section>
@@ -358,7 +372,7 @@ export default function Home() {
                 Your card sits in your signature. Recipients open it, save you and reply in one tap.
               </p>
             </div>
-            <div data-reveal="fade"><SignatureDemo /></div>
+            <div data-reveal="fade"><LazySignatureDemo /></div>
             <SignatureMiniBuilder linkedinEnabled={linkedinEnabled} />
           </div>
         </section>
@@ -376,9 +390,7 @@ export default function Home() {
               </p>
             </div>
             <div data-reveal="fade">
-              <WideDemo minWidth={760}>
-                <DashboardDemo />
-              </WideDemo>
+              <LazyDashboardDemo />
             </div>
             <div className="mt-8 flex flex-wrap items-center gap-3" data-reveal>
               <Link href="/cards/new" className="rd-btn rd-btn-primary">Create your free card</Link>
@@ -416,7 +428,7 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="mt-14 flex justify-center" data-reveal="scale"><ShareWaysPhones light /></div>
+            <div className="mt-14 flex justify-center" data-reveal="scale"><LazyShareWaysPhones /></div>
 
             <ul className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-3 max-w-5xl mx-auto" data-reveal>
               {[
@@ -441,7 +453,7 @@ export default function Home() {
         {/* ═══════════════ APPLE WATCH ═══════════════ */}
         <section id="watch" className="relative py-24 sm:py-28 overflow-hidden">
           <div className="relative max-w-7xl mx-auto px-5 sm:px-6 grid lg:grid-cols-2 gap-10 lg:gap-14 items-center">
-            <div className="flex justify-center order-2 lg:order-1" data-reveal="scale"><WatchShareImage /></div>
+            <div className="flex justify-center order-2 lg:order-1" data-reveal="scale"><LazyWatchShareImage /></div>
             <div className="order-1 lg:order-2" data-hp-head>
               <span className="hp-kicker">Apple Watch</span>
               <h2 className="rd-h2 text-[clamp(2rem,4vw,3.1rem)] text-slate-900 mt-4">
@@ -488,9 +500,7 @@ export default function Home() {
               ))}
             </div>
             <div className="mt-8" data-reveal="fade">
-              <WideDemo minWidth={820}>
-                <TeamsDashboard />
-              </WideDemo>
+              <LazyTeamsDashboard />
             </div>
             {/* A small team that's ready gets the self-serve path; a bigger or
                 unsure buyer gets a way to ask first. */}
@@ -506,7 +516,7 @@ export default function Home() {
           <div className="hp-final max-w-7xl mx-auto px-6 sm:px-14 py-16 sm:py-24" data-reveal="scale">
             <div className="hp-final-rings hidden md:block" aria-hidden="true"><span /><span /><span /><span /></div>
             {/* A real SwiftCard, rising out of the panel. */}
-            <div className="hp-final-phone hidden lg:block"><HomeCardPhone /></div>
+            <div className="hp-final-phone hidden lg:block"><LazyHomeCardPhone media="(min-width: 1024px)" /></div>
             {/* lg: the text column stops 22rem short of the panel's right edge,
                 where the absolute phone sits. Without the cap, at 1024-1200px
                 the 42rem column ran under the phone — the headline and
@@ -538,11 +548,12 @@ export default function Home() {
                 by the same 24px and mt-10 became mt-4, so the gap above and
                 the bottom crop are both unchanged. */}
             <div className="lg:hidden relative mt-4 -mb-16 sm:-mb-24 h-[344px] pt-6 overflow-hidden flex justify-center">
-              <div className="rotate-[-3deg] origin-top"><HomeCardPhone width={250} /></div>
+              <div className="rotate-[-3deg] origin-top"><LazyHomeCardPhone width={250} media="(max-width: 1023.98px)" /></div>
             </div>
           </div>
         </section>
       </main>
+      </QrAsImages>
 
       <SiteFooter />
     </>

@@ -9,7 +9,6 @@ import { useEffect } from "react";
 export default function ScrollReveal() {
   useEffect(() => {
     const els = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
-    if (!els.length) return;
 
     if (!("IntersectionObserver" in window)) {
       els.forEach((el) => el.classList.add("is-in"));
@@ -30,6 +29,22 @@ export default function ScrollReveal() {
 
     els.forEach((el) => io.observe(el));
 
+    // Blocks that mount after load (components/Deferred: the gallery, the
+    // dashboards, the phones) bring their own data-reveal elements with them.
+    // Observed only at mount, those would keep their pre-reveal opacity: 0 for
+    // ever — the exact "rendered but invisible" failure paint-check.yml
+    // exists to catch. So every element added later is picked up too.
+    const mo = new MutationObserver((records) => {
+      for (const r of records) {
+        for (const node of r.addedNodes) {
+          if (!(node instanceof HTMLElement)) continue;
+          if (node.hasAttribute("data-reveal")) io.observe(node);
+          node.querySelectorAll<HTMLElement>("[data-reveal]").forEach((el) => io.observe(el));
+        }
+      }
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+
     // Safety net: if the observer somehow never fires while the page IS visible
     // (a rare browser hiccup), don't leave content stuck invisible — reveal it.
     // Only triggers when nothing has revealed yet despite something being in
@@ -44,7 +59,7 @@ export default function ScrollReveal() {
       if (!anyRevealed && anyInView) els.forEach((el) => el.classList.add("is-in"));
     }, 2500);
 
-    return () => { io.disconnect(); window.clearTimeout(failsafe); };
+    return () => { io.disconnect(); mo.disconnect(); window.clearTimeout(failsafe); };
   }, []);
 
   return null;

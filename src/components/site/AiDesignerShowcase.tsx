@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import CardScaler from "@/components/CardScaler";
+import Deferred from "@/components/Deferred";
 import Eyebrow from "@/components/site/Eyebrow";
 import { FreeCard } from "@/components/card-templates/CustomCard";
 import {
@@ -337,10 +338,13 @@ export function AiDesignerTeaser() {
           Or have it copy the exact business card you want, or the one you already have.
         </p>
       </div>
-      <div className="mt-12 grid lg:grid-cols-2 gap-5">
+      {/* The two panels are ~350 elements of card renders; on the homepage
+          they are built as they come into view (the heading above stays in
+          the server HTML). /templates renders its own copy in full. */}
+      <Deferred minHeight={480} className="mt-12 grid lg:grid-cols-2 gap-5">
         <CreatePanel />
         <RecreatePanel />
-      </div>
+      </Deferred>
       <div className="mt-10 flex justify-center" data-reveal>
         <Link href="/cards/new" className="rd-btn rd-btn-primary">Create your free card</Link>
       </div>

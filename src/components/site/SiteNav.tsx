@@ -35,6 +35,10 @@ const RESOURCES: Item[] = [
   { label: "Preview", href: "/preview", desc: "Interact with a real SwiftCard" },
   { label: "Templates", href: "/templates", desc: "Beautiful, ready-to-use designs" },
   { label: "Why SwiftCard", href: "/testimonials", desc: "What SwiftCard does for people like you" },
+  // Blog and Compare were reachable only from the sitemap (SEO audit,
+  // 2026-10-14): pages with no internal links barely rank.
+  { label: "Blog", href: "/blog", desc: "Guides and honest comparisons" },
+  { label: "Compare", href: "/compare", desc: "SwiftCard vs Linktree, Popl, Blinq & more" },
   { label: "Contact Us", href: "/contact", desc: "Talk to the team" },
   { label: "Privacy", href: "/privacy", desc: "How we protect your data" },
 ];
