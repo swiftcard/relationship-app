@@ -22,7 +22,10 @@ export default function CreateDemo({ person, href, as: Heading = "h3" }: { perso
       <div className="mb-4">
         <Heading className="text-base font-semibold text-white">Link anything to your SwiftCard</Heading>
         <p className="text-gray-400 text-sm mt-1 leading-relaxed">
-          Paste your email signature or add a picture. It keeps its exact look, and a click anywhere on it opens your SwiftCard.
+          Paste your email signature or add a picture, and the whole thing becomes one clickable link to your SwiftCard.
+        </p>
+        <p className="text-gray-400 text-sm mt-2 leading-relaxed">
+          Already have a signature you like? Copy it from your email and paste it here. Same fonts, same colors, nothing changes.
         </p>
       </div>
       <div className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5">

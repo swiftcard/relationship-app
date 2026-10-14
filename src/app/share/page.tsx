@@ -282,7 +282,10 @@ export default async function SharePage({
               <div className="mb-4">
                 <h2 className="text-base font-semibold text-white">Link anything to your SwiftCard</h2>
                 <p className="text-gray-500 text-sm mt-1 leading-relaxed">
-                  Paste your email signature or add a picture. It keeps its exact look, and a click anywhere on it opens your SwiftCard.
+                  Paste your email signature or add a picture, and the whole thing becomes one clickable link to your SwiftCard.
+                </p>
+                <p className="text-gray-500 text-sm mt-2 leading-relaxed">
+                  Already have a signature you like? Copy it from your email and paste it here. Same fonts, same colors, nothing changes.
                 </p>
               </div>
               {isPro ? (
