@@ -70,7 +70,7 @@ describe("the Links page replicas match the real Links page", () => {
     expect(preview).toMatch(/create=\{<CreateDemo person=\{/);
     expect(demo).toMatch(/create=\{<CreateDemo person=\{/);
     const createDemo = read("src/components/CreateDemo.tsx");
-    for (const s of ["Link anything to your SwiftCard", "Paste your email signature or add a picture, and the whole thing becomes one clickable link to your SwiftCard.", "Already have a signature you like? Copy it from your email and paste it here. Same fonts, same colors, nothing changes."]) {
+    for (const s of ["Link anything to your SwiftCard", "Paste your email signature or add a picture. The whole thing becomes one clickable link to your SwiftCard.", "Already have a signature?</strong> Copy it from your email and paste it in. Same fonts, same colors, nothing changes."]) {
       expect(share, `the real Create side lost "${s}"`).toContain(s);
       expect(createDemo, `the demo Create side lost "${s}"`).toContain(s);
     }

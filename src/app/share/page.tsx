@@ -282,10 +282,13 @@ export default async function SharePage({
               <div className="mb-4">
                 <h2 className="text-base font-semibold text-white">Link anything to your SwiftCard</h2>
                 <p className="text-gray-500 text-sm mt-1 leading-relaxed">
-                  Paste your email signature or add a picture, and the whole thing becomes one clickable link to your SwiftCard.
+                  Paste your email signature or add a picture. The whole thing becomes one clickable link to your SwiftCard.
                 </p>
-                <p className="text-gray-500 text-sm mt-2 leading-relaxed">
-                  Already have a signature you like? Copy it from your email and paste it here. Same fonts, same colors, nothing changes.
+                {/* The tip, set apart so the intro stays two lines on a phone.
+                    Same block in CreateDemo (the replicas). */}
+                <p className="mt-3 flex items-start gap-2 rounded-xl bg-blue-500/10 border border-blue-500/20 px-3 py-2.5 text-xs text-gray-400 leading-relaxed">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden className="w-4 h-4 shrink-0 mt-px text-blue-400"><path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" /></svg>
+                  <span><strong className="text-white font-semibold">Already have a signature?</strong> Copy it from your email and paste it in. Same fonts, same colors, nothing changes.</span>
                 </p>
               </div>
               {isPro ? (
