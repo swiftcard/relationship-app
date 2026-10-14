@@ -39,6 +39,7 @@ const RESOURCES: Item[] = [
   // 2026-10-14): pages with no internal links barely rank.
   { label: "Blog", href: "/blog", desc: "Guides and honest comparisons" },
   { label: "Compare", href: "/compare", desc: "SwiftCard vs Linktree, Popl, Blinq & more" },
+  { label: "FAQ", href: "/faq", desc: "Android, pricing, NFC, follow-up — answered" },
   { label: "Contact Us", href: "/contact", desc: "Talk to the team" },
   { label: "Privacy", href: "/privacy", desc: "How we protect your data" },
 ];

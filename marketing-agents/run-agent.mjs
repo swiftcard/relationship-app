@@ -79,7 +79,7 @@ async function existingPagesBlock(id) {
     ];
     return "\n---\nPAGES THAT ALREADY EXIST — do NOT write another page for any of these keywords or slugs:\n" +
       (lines.length ? lines.join("\n") : "(none yet — the site has no agent-written pages)") +
-      "\nAlso already covered by hand-built pages, do not duplicate: /compare/linktree-alternative, /compare/popl-alternative, /compare/blinq-alternative, /compare/hihello-alternative, /pricing, /templates, /preview, and the /for/* industry pages.";
+      "\nAlso already covered by hand-built pages, do not duplicate: /compare/linktree-alternative, /compare/popl-alternative, /compare/blinq-alternative, /compare/hihello-alternative, /compare/mobilo-alternative, /compare/linq-alternative, /compare/dot-alternative, /faq, /pricing, /templates, /preview, and the /for/* industry pages.";
   } catch {
     return "";
   }

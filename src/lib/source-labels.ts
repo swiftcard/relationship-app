@@ -73,6 +73,7 @@ export const SIGNUP_SOURCE_LABELS: Record<string, string> = {
   badge:        "'Made with SwiftCard' badge",
   view_tracking_page: "'Business card view tracking' landing page",
   link_in_bio_page:   "'Link in bio with analytics' landing page",
+  faq_page:           "FAQ page",
   follow_up:    "Link in a follow-up email/text",
 };
 

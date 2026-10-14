@@ -281,6 +281,46 @@ const COMPETITORS: Record<string, Competitor> = {
       { q: "Is there a team version?", a: "SwiftCard Office: on-brand cards for every teammate, individual lead books, one admin dashboard — $3.99 per seat per month with a 2-seat minimum, unlimited seats." },
     ],
   },
+  "dot-alternative": {
+    name: "Dot",
+    metaTitle: "Dot Card Alternative — Digital Business Card Without Buying Hardware",
+    metaDesc: "SwiftCard is the Dot alternative that starts free with no device to buy, and adds lead capture, a built-in CRM and automated email + text follow-up.",
+    heroSub: "Dot sells a tap-to-share device with a free profile behind it. SwiftCard starts with the free card itself — QR, link, Apple Wallet, any NFC tag — and then does the follow-up for you.",
+    honest: "Dot (dot.cards) is a hardware-first digital business card: you buy a dot.card, dot.thin, dot.metal or dot.band, and the profile it opens is free for life. If you want a nicely made physical tap device and nothing more, that works. People switch to SwiftCard when they don't want to buy a device to get started, want their card in Apple Wallet and on Apple Watch, and want what happens after the tap handled for them — a share-back form, a built-in CRM and automated email + text follow-up, which Dot reserves for its team plans and a paid individual tier.",
+    rows: [
+      { label: "Digital business card", swiftcard: "✓", them: "✓" },
+      { label: "Free to start without buying hardware", swiftcard: "✓", them: "✗ (profile is free after a device purchase)" },
+      { label: "NFC tap-to-share", swiftcard: "✓ (works with any blank NFC tag)", them: "✓ (their devices, from $30)" },
+      { label: "Apple Wallet and Apple Watch", swiftcard: "✓", them: "Limited" },
+      { label: "Lead capture (share-back form)", swiftcard: "✓", them: "Paid tiers" },
+      { label: "Built-in lead CRM (notes, history, follow-ups)", swiftcard: "✓", them: "Team plans" },
+      { label: "Automated follow-up sequences (email + text)", swiftcard: "✓", them: "✗" },
+      { label: "Link-in-bio page included", swiftcard: "✓ (Swift Links)", them: "✗" },
+      { label: "AI card designer (copy any card from a photo)", swiftcard: "✓ (Pro)", them: "✗" },
+      { label: "Starting price", swiftcard: "Free", them: "$30 device (one-time)" },
+      { label: "Cheapest paid plan", swiftcard: "$4.99/mo", them: "Teams from $8/member/mo (billed annually)", pricing: true },
+    ],
+    switchReasons: [
+      { t: "Nothing to buy first", d: "Create the card, share it by QR, link or Apple Wallet in the next five minutes. Add NFC later with any blank tag, or keep using the device you already own." },
+      { t: "Follow-up is built in", d: "When someone shares their info back, SwiftCard sends your email and text follow-up on schedule. Dot's profile shares your details and stops there." },
+      { t: "The card lives in Apple Wallet", d: "Lock-screen access on iPhone and a scannable QR on Apple Watch, no device in your pocket required." },
+    ],
+    migration: {
+      intro: "A Dot device stores a link, and a link can be rewritten. Rebuild the card in minutes and keep the hardware if you like it.",
+      steps: [
+        { t: "Create your card free", d: "Enter your details at swiftcard.me/cards/new, pick a template — or, on Pro, photograph your current card and the AI designer rebuilds it." },
+        { t: "Re-point your dot.device", d: "SwiftCard writes your new card link to any NFC tag or card, including Dot hardware, so a tap opens your SwiftCard from now on." },
+        { t: "Switch on follow-up", d: "Turn on email and text follow-up for new contacts and they hear from you on schedule, STOP-compliant." },
+      ],
+    },
+    faq: [
+      { q: "Do I need to buy anything to use SwiftCard?", a: "No. The card, QR and link sharing, Apple Wallet and the Swift Links page are free with no device. NFC is optional and works with any blank tag." },
+      { q: "Can I keep using my Dot card or band?", a: "Yes — Dot devices store a link, and SwiftCard writes your new card link to any NFC tag. Tap it and your SwiftCard opens." },
+      { q: "How does pricing compare?", a: "Dot's profile is free after a one-time device purchase (from $30); its team plans run $8 to $15 per member per month billed annually, and extra individual features sit in a paid tier. SwiftCard is free to start and Pro is $4.99/month flat with a free trial. Verify current pricing with them — plans change." },
+      { q: "What does SwiftCard do that Dot doesn't?", a: "Automated follow-up by email and text, a built-in CRM for every lead, a Swift Links page, Apple Wallet and Apple Watch sharing, and an AI designer that rebuilds any card from a photo — all on one plan, no hardware required." },
+      { q: "Does the person I meet need an app?", a: "No — with either product your card opens in the browser. With SwiftCard they also save your contact in one tap and can share theirs back." },
+    ],
+  },
 };
 
 const ALL_SLUGS = Object.keys(COMPETITORS);

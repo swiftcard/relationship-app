@@ -29,6 +29,7 @@ const P = {
   hihello: { label: "HiHello alternative", href: "/compare/hihello-alternative", desc: "SwiftCard vs HiHello, side by side" },
   popl: { label: "Popl alternative", href: "/compare/popl-alternative", desc: "SwiftCard vs Popl, side by side" },
   linktree: { label: "Linktree alternative", href: "/compare/linktree-alternative", desc: "SwiftCard vs Linktree, side by side" },
+  dot: { label: "Dot alternative", href: "/compare/dot-alternative", desc: "SwiftCard vs Dot, side by side" },
   realtors: { label: "For real estate agents", href: "/for/real-estate-agents", desc: "The card that works the open house" },
   contractors: { label: "For contractors", href: "/for/contractors", desc: "Share on site, capture the job" },
   insurance: { label: "For insurance agents", href: "/for/insurance-agents", desc: "Every quote starts with a contact" },

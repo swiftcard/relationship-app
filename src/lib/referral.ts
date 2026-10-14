@@ -40,6 +40,7 @@ export const SIGNUP_SOURCES = [
   "badge",         // "Made with SwiftCard" badge
   "view_tracking_page",   // /business-card-view-tracking landing page
   "link_in_bio_page",     // /link-in-bio-with-analytics landing page
+  "faq_page",             // /faq
   "follow_up",     // "Sent with SwiftCard" link in an automation email/text
   "preview",       // a "Create Your Card for Free" button on the Test It Live page
   // The site already sent these and every one was dropped at /cards/new

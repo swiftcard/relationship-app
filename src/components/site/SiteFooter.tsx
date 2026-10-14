@@ -54,6 +54,7 @@ const COLS: { title: string; links: { label: string; href: string }[] }[] = [
       // internal links at all (SEO audit, 2026-10-14).
       { label: "Blog", href: "/blog" },
       { label: "Compare", href: "/compare" },
+      { label: "FAQ", href: "/faq" },
       { label: "About", href: "/about" },
       { label: "Company", href: "/company" },
       { label: "Press", href: "/press" },
