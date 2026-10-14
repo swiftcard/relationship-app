@@ -49,7 +49,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 import { track } from "@/lib/events";
 import { PLAN_LIMITS, isPaidPlan, PRO_CUSTOMIZATION_KEYS, LINK_STYLE_KEYS, LINK_STRUCTURAL_KEYS, convertCustomizationToFreeClosest, describeFreeDesignChanges, proLinkFeaturesInUse } from "@/lib/plan";
 import { SwiftLinkStyleControls, type SwiftLinkStyle } from "@/components/SwiftLinkDesign";
-import { MoreOptions, Segmented, Switch } from "@/components/ui/DesignControls";
+import { MoreOptions, Switch } from "@/components/ui/DesignControls";
 import SwiftLinkLivePreview from "@/components/SwiftLinkLivePreview";
 import PlanCards from "@/components/PlanCards";
 import FreeDesignChoice from "@/components/FreeDesignChoice";
@@ -2178,23 +2178,8 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                   {/* Suggest an official company logo (Agent 4 contract). Fails safe —
                       renders nothing when the provider isn't configured. */}
                   <LogoSuggest company={company} email={email} website={website} onConfirm={(url) => setLogoUrl(url || null)} />
-                  {logoUrl && (
-                    <div className="mt-2">
-                      {/* The shared Segmented, same as the edit form. This was a
-                          hand-rolled grey-on-grey pair whose selected state was
-                          nearly invisible. */}
-                      <p className="text-[0.6875rem] text-gray-500 mb-1.5">Logo shape on the card</p>
-                      <Segmented
-                        label="Logo shape on the card"
-                        value={logoShape}
-                        onChange={setLogoShape}
-                        options={[
-                          { value: "auto", label: "Original" },
-                          { value: "circle", label: "Circle" },
-                        ]}
-                      />
-                    </div>
-                  )}
+                  {/* Logo shape (Original / Circle) is a step in the design
+                      panel below, beside Photo shape — not here. */}
                 </div>
               )}
 
@@ -2272,7 +2257,16 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                   the panel (same as the editor — the two must never disagree). */}
               {!customSelected && (
                 <div>
-                  <TemplateStyleControls value={templateStyleState} onChange={patchTemplateStyle} template={template} locked={!designUnlocked} canUpload hasPhoto={!!headshotUrl} />
+                  <TemplateStyleControls
+                    value={templateStyleState}
+                    onChange={patchTemplateStyle}
+                    template={template}
+                    locked={!designUnlocked}
+                    canUpload
+                    hasPhoto={!!headshotUrl}
+                    // An office card's logo is the office's, shaped on Branding.
+                    logo={!org && logoUrl ? { shape: logoShape, onChange: setLogoShape } : undefined}
+                  />
                   {!isPro && !designUnlocked && (
                     <PlanGate
                       feature="colors-fonts"

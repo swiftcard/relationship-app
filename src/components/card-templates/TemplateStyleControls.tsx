@@ -12,7 +12,8 @@
 //   9 Details color · 10 Font · 11 Finish
 // Title and Company are their own steps (owner, 2026-10-09): they used to
 // borrow the accent or the details colour, and on Luxury Minimal one control
-// painted both lines at once.
+// painted both lines at once. A card with a logo also gets a Logo shape step
+// right after the panels (owner, 2026-10-14) — see the `logo` prop.
 // Every template uses its own labels (template-style-presets META), and a
 // template with no second surface simply has one step fewer. Nothing is behind
 // a tab or a "More" fold any more: those hid half the panel from the people
@@ -527,6 +528,7 @@ export default function TemplateStyleControls({
   canUpload = true,
   proTags = false,
   hasPhoto,
+  logo,
 }: {
   value: TemplateStyle;
   onChange: (patch: Partial<TemplateStyle>) => void;
@@ -556,6 +558,15 @@ export default function TemplateStyleControls({
    * (Office branding, the Teams demo): the colour then always shows.
    */
   hasPhoto?: boolean;
+  /**
+   * The card's logo shape — Original or Circle. Passed only when the card has
+   * a logo its owner can reshape; omitted, there is no Logo shape step. The
+   * shape lives on customization.logoShape, not on TemplateStyle, so the
+   * caller owns it. It used to sit under the logo upload; it moved here, next
+   * to Photo shape, so every "how does it look" choice is in one numbered path
+   * (owner, 2026-10-14).
+   */
+  logo?: { shape: "auto" | "circle"; onChange: (v: "auto" | "circle") => void };
 }) {
   const meta = (template && META[template]) || FALLBACK_META;
 
@@ -630,9 +641,36 @@ export default function TemplateStyleControls({
     ),
   });
 
+  // LOGO SHAPE — Original (adapts to the mark: square, wide or banner) or
+  // Circle (the whole mark on a white plate, nothing cropped). No colour here:
+  // the plate is white by design (shared.tsx logoCircleStyle).
+  const logoShapeStep: DesignStep[] = logo
+    ? [{
+      key: "logo-shape",
+      label: "Logo shape",
+      help: "Your logo as it is, or whole inside a circle.",
+      body: (
+        <div>
+          <Segmented
+            label="Logo shape"
+            value={logo.shape}
+            onChange={logo.onChange}
+            options={[
+              { value: "auto", label: "Original" },
+              { value: "circle", label: "Circle" },
+            ]}
+          />
+          <p className="text-[0.6875rem] text-gray-500 mt-1.5 leading-snug">
+            {logo.shape === "circle" ? "Your full logo inside a clean circle — nothing gets cut off." : "Adapts to your logo — square, wide, or banner."}
+          </p>
+        </div>
+      ),
+    }]
+    : [];
+
   // The path, in build order. Base first — the whole look, the main surface and
-  // what goes behind it, the second surface — then the type and colour details,
-  // then the material over all of it.
+  // what goes behind it, the second surface, the logo's shape — then the type
+  // and colour details, then the material over all of it.
   const steps: DesignStep[] = [
     {
       key: "look",
@@ -666,6 +704,8 @@ export default function TemplateStyleControls({
         ? photoShapeStep(meta.surface)
         : { key: "surface", label: meta.surface.label, help: meta.surface.hint, title: meta.surface.help, body: swatches(meta.surface, value.surfaceColor, "surfaceColor") }]
       : []),
+    // Right after Photo shape on Photo First, so the two shapes sit together.
+    ...logoShapeStep,
     { key: "text", label: meta.text.label, help: meta.text.hint, title: meta.text.help, body: swatches(meta.text, value.textColor, "textColor") },
     // Right under the name: the three lines that say who you are, each its own
     // colour. "Default" here is the template's own choice for that line.

@@ -13,7 +13,6 @@ import { withoutSocials } from "@/components/card-templates/types";
 import TemplatePicker from "@/components/card-templates/TemplatePicker";
 import TemplateStyleControls from "@/components/card-templates/TemplateStyleControls";
 import type { TemplateStyle } from "@/components/card-templates/shared";
-import { Segmented } from "@/components/ui/DesignControls";
 import { SwiftLinkStyleControls, type SwiftLinkStyle } from "@/components/SwiftLinkDesign";
 import SwiftLinkLivePreview from "@/components/SwiftLinkLivePreview";
 import ViewsChart from "@/components/ViewsChart";
@@ -773,20 +772,6 @@ function CardBranding() {
                   Suggest my company logo
                 </button>
               </div>
-              {logoUrl && (
-                <div className="mt-2">
-                  <p className="text-[0.6875rem] text-gray-500 mb-1.5">Logo shape on the card</p>
-                  <Segmented
-                    label="Logo shape on the card"
-                    value={logoShape}
-                    onChange={setLogoShape}
-                    options={[
-                      { value: "auto", label: "Original" },
-                      { value: "circle", label: "Circle" },
-                    ]}
-                  />
-                </div>
-              )}
             </div>
 
             <div className="grid grid-cols-1 @xl:grid-cols-2 gap-3">
@@ -849,7 +834,13 @@ function CardBranding() {
         <Section n={2} title="Card appearance" desc="The design your whole team inherits — template, colors and fonts.">
           <TemplatePicker template={template} onSelect={setTemplate} data={previewData} customUnlocked={false} upsell={false} />
           <div className="mt-4">
-            <TemplateStyleControls value={design} onChange={(p) => setDesign((prev) => ({ ...prev, ...p }))} template={template} canUpload={false} />
+            <TemplateStyleControls
+              value={design}
+              onChange={(p) => setDesign((prev) => ({ ...prev, ...p }))}
+              template={template}
+              canUpload={false}
+              logo={logoUrl ? { shape: logoShape, onChange: setLogoShape } : undefined}
+            />
           </div>
           <p className="text-[0.6875rem] text-gray-600 mt-3">
             Use the lock below to decide whether every team card must match this design.

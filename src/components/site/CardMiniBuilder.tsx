@@ -21,7 +21,7 @@ import { DEFAULT_PRESET, buildPreset, normalizeCustomLayout } from "@/lib/custom
 import type { CardData } from "@/components/card-templates/types";
 import MiniBuilderModal, { type MiniStep } from "./MiniBuilderModal";
 import { useProductSketch } from "./useProductSketch";
-import { Field, LogoShapeToggle } from "./BuilderFields";
+import { Field } from "./BuilderFields";
 import { prettyCardSlug } from "@/lib/slug";
 
 // The 6th tile in the Swift Cards template grid: a dashed card outline with a
@@ -159,9 +159,8 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
           <div>
             <ImageUpload guest field="logo" shape="square" currentUrl={sketch.logo} label="Company logo" onUploaded={(u) => patch({ logo: u || null })} />
             <LogoSuggest company={sketch.company} email={sketch.email} onConfirm={(u) => patch({ logo: u })} />
-            {/* Logo plate shape — the editor's own control, shown only once a
-                logo exists, exactly as the editor does it. */}
-            {sketch.logo && <LogoShapeToggle value={sketch.logoShape} onChange={(v) => patch({ logoShape: v })} />}
+            {/* Logo shape is a step in "Make it yours", exactly as the editor
+                does it — shown there once a logo exists. */}
           </div>
         </div>
       ),
@@ -183,7 +182,13 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
           {customSelected ? (
             <CustomCardDesigner layout={customLayout} data={data} onChange={(l) => patch({ customLayout: l })} canScan={false} />
           ) : (
-            <TemplateStyleControls value={sketch.style} onChange={patchStyle} template={sketch.template} hasPhoto={!!sketch.headshot} />
+            <TemplateStyleControls
+              value={sketch.style}
+              onChange={patchStyle}
+              template={sketch.template}
+              hasPhoto={!!sketch.headshot}
+              logo={sketch.logo ? { shape: sketch.logoShape, onChange: (v) => patch({ logoShape: v }) } : undefined}
+            />
           )}
         </div>
       ),

@@ -21,7 +21,7 @@ import TemplateStyleControls from "@/components/card-templates/TemplateStyleCont
 import TemplatePicker from "@/components/card-templates/TemplatePicker";
 import MiniBuilderModal, { type MiniStep } from "./MiniBuilderModal";
 import { useProductSketch } from "./useProductSketch";
-import { Field, LogoShapeToggle } from "./BuilderFields";
+import { Field } from "./BuilderFields";
 import { prettyCardSlug } from "@/lib/slug";
 
 // "See how your Swift Signature would look" builder for the homepage signature
@@ -137,8 +137,8 @@ export default function SignatureMiniBuilder({ linkedinEnabled = false }: { link
           <div>
             <ImageUpload guest field="logo" shape="square" currentUrl={sketch.logo} label="Company logo" onUploaded={(u) => patch({ logo: u || null })} />
             <LogoSuggest company={sketch.company} email={sketch.email} onConfirm={(u) => patch({ logo: u })} />
-            {/* The signature IS the card, so the same plate shape applies. */}
-            {sketch.logo && <LogoShapeToggle value={sketch.logoShape} onChange={(v) => patch({ logoShape: v })} />}
+            {/* The signature IS the card, so the same Logo shape step applies —
+                in "Design your signature", as in the editor. */}
           </div>
         </div>
       ),
@@ -164,7 +164,13 @@ export default function SignatureMiniBuilder({ linkedinEnabled = false }: { link
           {customSelected ? (
             <CustomCardDesigner layout={customLayout} data={data} onChange={(l) => patch({ customLayout: l })} canScan={false} />
           ) : (
-            <TemplateStyleControls value={sketch.style} onChange={patchStyle} template={sketch.template} hasPhoto={!!sketch.headshot} />
+            <TemplateStyleControls
+              value={sketch.style}
+              onChange={patchStyle}
+              template={sketch.template}
+              hasPhoto={!!sketch.headshot}
+              logo={sketch.logo ? { shape: sketch.logoShape, onChange: (v) => patch({ logoShape: v }) } : undefined}
+            />
           )}
         </div>
       ),

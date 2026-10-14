@@ -54,7 +54,10 @@ describe("Branding matches Card design and Social design (owner, 2026-09-16)", (
     const card = readFileSync(join(process.cwd(), "src/components/OfficeBranding.tsx"), "utf8");
     expect(card).toMatch(/<TemplatePicker /);
     expect(card).toMatch(/<PinnedCardPreview stickBelow="\.sc-office-header">/);
-    expect(card).toContain("Logo shape on the card");
+    // Logo shape is a step in Card appearance (TemplateStyleControls), the same
+    // place it sits on a teammate's Card design — not under the logo upload.
+    expect(card).toMatch(/logo=\{logoUrl \? \{ shape: logoShape, onChange: setLogoShape \} : undefined\}/);
+    expect(card).not.toContain("Logo shape on the card");
   });
 
   it("the Links tab has the Link buttons step and a pinned preview", () => {

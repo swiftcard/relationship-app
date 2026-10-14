@@ -19,7 +19,6 @@ import LogoSuggest from "@/components/LogoSuggest";
 import TemplateStyleControls from "@/components/card-templates/TemplateStyleControls";
 import TemplatePicker from "@/components/card-templates/TemplatePicker";
 import PinnedCardPreview from "@/components/PinnedCardPreview";
-import { Segmented } from "@/components/ui/DesignControls";
 import OfficeLinksBranding from "@/components/OfficeLinksBranding";
 import type { TemplateStyle } from "@/components/card-templates/shared";
 
@@ -275,20 +274,8 @@ export default function OfficeBranding({ office }: { office: Brand }) {
               {/* Auto-search uses the website domain when set — a far better hit
                   rate than a name search — and falls back to the company name. */}
               <LogoSuggest company={company} website={website} onConfirm={(u) => setLogoUrl(u)} />
-              {logoUrl && (
-                <div className="mt-2">
-                  <p className="text-[0.6875rem] text-gray-500 mb-1.5">Logo shape on the card</p>
-                  <Segmented
-                    label="Logo shape on the card"
-                    value={logoShape}
-                    onChange={setLogoShape}
-                    options={[
-                      { value: "auto", label: "Original" },
-                      { value: "circle", label: "Circle" },
-                    ]}
-                  />
-                </div>
-              )}
+              {/* Logo shape (Original / Circle) is a step in Card appearance
+                  below, the same place it sits on a teammate's Card design. */}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -371,7 +358,12 @@ export default function OfficeBranding({ office }: { office: Brand }) {
             ) : (
               // The exact colour/font control the card editor uses — one look
               // system everywhere. Writes offices.brand_design on save.
-              <TemplateStyleControls value={design} onChange={patchDesign} template={template} />
+              <TemplateStyleControls
+                value={design}
+                onChange={patchDesign}
+                template={template}
+                logo={logoUrl ? { shape: logoShape, onChange: setLogoShape } : undefined}
+              />
             )}
           </div>
           <p className="text-[0.6875rem] text-gray-600 mt-3">

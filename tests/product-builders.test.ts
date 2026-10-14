@@ -144,11 +144,13 @@ describe("the builders show the product as it is now", () => {
   });
 
   it("offers the Circle logo plate, in both card-shaped builders", () => {
-    expect(fields).toMatch(/Logo shape on the card/);
+    // A Logo shape step in the shared design steps, as in the signed-in
+    // editor — not a toggle under the logo upload (owner, 2026-10-14).
+    expect(fields).not.toMatch(/LogoShapeToggle/);
     for (const src of [card, signature]) {
-      expect(src).toMatch(/LogoShapeToggle/);
+      expect(src).not.toMatch(/LogoShapeToggle/);
       // Gated on having a logo, exactly as the signed-in editor gates it.
-      expect(src).toMatch(/sketch\.logo && <LogoShapeToggle/);
+      expect(src).toMatch(/logo=\{sketch\.logo \? \{ shape: sketch\.logoShape, onChange: \(v\) => patch\(\{ logoShape: v \}\) \} : undefined\}/);
       // And the preview has to actually render the plate.
       expect(src).toMatch(/logoShape: sketch\.logoShape/);
     }

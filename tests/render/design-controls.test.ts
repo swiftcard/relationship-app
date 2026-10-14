@@ -63,13 +63,15 @@ describe("design controls", () => {
   /** bg-blue-600 as this build's CSS actually computes it (Tailwind 4 → oklch). */
   const BLUE_REF = `<span id="ref" class="bg-blue-600"></span>`;
 
-  const panel = (locked = false) =>
+  // With a logo, so every check below also covers the Logo shape step.
+  const panel = (locked = false, template = "classic-pro", withLogo = true) =>
     renderToStaticMarkup(
       createElement(TemplateStyleControls, {
         value: { bgColor: "#101828", textColor: "#ffffff" },
         onChange: () => {},
-        template: "classic-pro",
+        template,
         locked,
+        logo: withLogo ? { shape: "auto", onChange: () => {} } : undefined,
       }),
     );
 
@@ -233,5 +235,37 @@ describe("design controls", () => {
     const html = panel();
     expect(html).not.toMatch(/<details/);
     expect(html).not.toMatch(/shidden(=|s|>)/);
+  });
+
+  it("Logo shape is a numbered step beside Photo shape, only when there is a logo", async () => {
+    // Owner, 2026-10-14: moved out of "Logo & headshot" into the design steps,
+    // right after the panels — on Photo First, directly under Photo shape.
+    const steps = (html: string) =>
+      inPhone(html, (page) =>
+        page.evaluate(() => {
+          const ol = document.querySelector("ol[aria-label]")!;
+          return [...ol.children].map((li) => {
+            const seg = li.querySelector<HTMLElement>("[role=group][aria-label=\"Logo shape\"]");
+            return {
+              text: (li.textContent || "").trim(),
+              segs: seg ? [...seg.querySelectorAll("button")].map((b) => ({ label: (b.textContent || "").trim(), pressed: b.getAttribute("aria-pressed") === "true" })) : null,
+              overflow: li.scrollWidth > li.clientWidth + 1,
+            };
+          });
+        }),
+      );
+    const photoFirst = await steps(panel(false, "photo-first"));
+    const at = (needle: string) => photoFirst.findIndex((s) => s.text.includes(needle));
+    expect(at("Photo shape")).toBeGreaterThan(-1);
+    expect(at("Logo shape")).toBe(at("Photo shape") + 1);
+    const logo = photoFirst[at("Logo shape")];
+    expect(logo.segs).toEqual([{ label: "Original", pressed: true }, { label: "Circle", pressed: false }]);
+    // No colour behind the logo: the plate is white by design.
+    expect(logo.text).not.toMatch(/color/i);
+    expect(photoFirst.filter((s) => s.overflow)).toEqual([]);
+
+    const noLogo = await steps(panel(false, "photo-first", false));
+    expect(noLogo.some((s) => s.text.includes("Logo shape"))).toBe(false);
+    expect(noLogo).toHaveLength(photoFirst.length - 1);
   });
 });

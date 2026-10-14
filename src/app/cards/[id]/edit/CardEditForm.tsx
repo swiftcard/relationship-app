@@ -34,7 +34,7 @@ import PinnedCardPreview, { PinnedLinkPreview } from "@/components/PinnedCardPre
 import UndoDesignButton from "@/components/UndoDesignButton";
 import { useDesignHistory, useUndoShortcut, changedKeys } from "@/lib/use-design-history";
 import { SwiftLinkStyleControls, type SwiftLinkStyle } from "@/components/SwiftLinkDesign";
-import { MoreOptions, Segmented, Switch } from "@/components/ui/DesignControls";
+import { MoreOptions, Switch } from "@/components/ui/DesignControls";
 import SwiftLinkLivePreview from "@/components/SwiftLinkLivePreview";
 import AddressInput, { EMPTY_ADDRESS } from "@/components/AddressInput";
 import { withoutSocials } from "@/components/card-templates/types";
@@ -1151,29 +1151,8 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                       change": no signature refresh, no Wallet pass update. */}
                   <ImageUpload field="logo" currentUrl={cardLogoUrl} label="Upload your company logo" shape="square" cardId={logoCardId} defer onUploaded={(url) => setCardLogoUrl(url || null)} />
                   <LogoSuggest company={company} email={email} website={website} onConfirm={(url) => setCardLogoUrl(url || null)} />
-                  {cardLogoUrl && (
-                    <div className="mt-2">
-                      {/* Was a hand-rolled pair of buttons whose SELECTED state
-                          was bg-gray-700 sitting on a bg-gray-800 track — two
-                          greys one step apart, which on a phone in daylight
-                          told you nothing about which shape was active. Now the
-                          shared Segmented: filled blue, like every other
-                          either/or choice in the editor. */}
-                      <p className="text-[0.6875rem] text-gray-500 mb-1.5">Logo shape on the card</p>
-                      <Segmented
-                        label="Logo shape on the card"
-                        value={logoShape}
-                        onChange={setLogoShape}
-                        options={[
-                          { value: "auto", label: "Original" },
-                          { value: "circle", label: "Circle" },
-                        ]}
-                      />
-                      <p className="text-[0.6875rem] text-gray-500 mt-1.5 leading-snug">
-                        {logoShape === "circle" ? "Your full logo inside a clean circle — nothing gets cut off." : "Adapts to your logo — square, wide, or banner."}
-                      </p>
-                    </div>
-                  )}
+                  {/* Logo shape (Original / Circle) is a step in the design
+                      panel below, beside Photo shape — not here. */}
                   {!isPrimary && <p className="text-[0.6875rem] text-gray-600 mt-1">Per-card logo (different from your profile logo)</p>}
                 </div>
               )}
@@ -1242,7 +1221,16 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                   a light-blue PRO tag (proTags). The wall is Save Changes,
                   where the full offer opens. */}
               {!customSelected && (
-                <TemplateStyleControls value={templateStyleState} onChange={patchTemplateStyle} template={template} locked={!isPro} proTags={!isPro} hasPhoto={!!photoState} />
+                <TemplateStyleControls
+                  value={templateStyleState}
+                  onChange={patchTemplateStyle}
+                  template={template}
+                  locked={!isPro}
+                  proTags={!isPro}
+                  hasPhoto={!!photoState}
+                  // An office card's logo is the office's, shaped on Branding.
+                  logo={!org && cardLogoUrl ? { shape: logoShape, onChange: setLogoShape } : undefined}
+                />
               )}
             </div>
             )}
