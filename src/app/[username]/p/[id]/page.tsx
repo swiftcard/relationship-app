@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 import CardPage, { generateMetadata as cardMetadata } from "../../page";
 import { CREATE_SOURCE, isCreateId } from "@/lib/create-link";
+import { createLinkAlias } from "@/lib/create-link-preview";
+import { forwardQuery } from "@/lib/forward-query";
 
 // The address every part of a Create + creation opens (lib/create-link): the
 // owner pasted a signature or dropped a picture on the Links page, and each
@@ -21,8 +23,12 @@ type Params = Promise<{ username: string; id: string }>;
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { username: raw, id } = await params;
-  const username = raw.toLowerCase();
+  let username = raw.toLowerCase();
   if (!isCreateId(id)) return { title: "SwiftCard", robots: { index: false, follow: false } };
+  // An old slug (the card was renamed) is about to be redirected below; name
+  // the picture at its current address so nothing points at a dead one.
+  const alias = await createLinkAlias(username);
+  if (alias) username = alias;
   const base = await cardMetadata({ params: Promise.resolve({ username }) });
   // The picture is this folder's opengraph-image route, named EXPLICITLY.
   // Leaving openGraph.images empty for the file convention to fill did not
@@ -54,10 +60,16 @@ export default async function CreateLinkPage({
   const { username: raw, id } = await params;
   if (!isCreateId(id)) notFound();
   const username = raw.toLowerCase();
-  // The card page 308s a mixed-case slug to its own root URL; do it here
-  // first so the /p/<id> part (and its picture preview) survives.
-  if (raw !== username) permanentRedirect(`/${username}/p/${id}`);
   const query = await searchParams;
+  // The card page 308s a mixed-case slug to its own root URL; do it here
+  // first so the /p/<id> part (and its picture preview) survives — and every
+  // query param with it (lib/forward-query), as the card page does.
+  if (raw !== username) permanentRedirect(forwardQuery(`/${username}/p/${id}`, query));
+  // Same for a renamed card: the card page's alias redirect goes to the bare
+  // card (still a create_link view, but the link would then preview as the
+  // card, not the owner's picture). Keep /p/<id> on the new slug instead.
+  const alias = await createLinkAlias(username);
+  if (alias) permanentRedirect(forwardQuery(`/${alias}/p/${id}`, query));
   return CardPage({
     params: Promise.resolve({ username }),
     searchParams: Promise.resolve({ ...query, source: query.source ?? CREATE_SOURCE }),

@@ -68,6 +68,19 @@ describe("the share link page", () => {
     expect(page).toMatch(/if \(!isCreateId\(id\)\) notFound\(\);/);
   });
 
+  it("a mixed-case or renamed slug keeps /p/<id> AND every query param", () => {
+    // The mixed-case hop used to drop ?source= / ?ct=; a renamed card's old
+    // link fell through to the card page's alias redirect, which goes to the
+    // bare card — still a view, but the link previewed as the card, not the
+    // owner's picture.
+    expect(page).toContain("if (raw !== username) permanentRedirect(forwardQuery(`/${username}/p/${id}`, query));");
+    expect(page).toContain("const alias = await createLinkAlias(username);");
+    expect(page).toContain("if (alias) permanentRedirect(forwardQuery(`/${alias}/p/${id}`, query));");
+    // …before the card renders, so the card page's own alias redirect never
+    // runs for a /p/ link.
+    expect(page.indexOf("if (alias) permanentRedirect(")).toBeLessThan(page.indexOf("return CardPage({"));
+  });
+
   it("names its own picture as the og/twitter image — explicitly", () => {
     // Left for the file convention to fill, the live page shipped with no
     // og:image at all (2026-10-07).
@@ -80,6 +93,9 @@ describe("the share link page", () => {
   it("previews as the owner's own picture, and only theirs", () => {
     expect(preview).toContain("getAdminSupabase().storage.from(\"card-uploads\").download(`${ownerId}/${file}`)");
     expect(preview).toContain("if (!(await resolveCardMeta(username))) return null;");
+    // A link made before a rename still previews as its picture.
+    expect(preview).toContain("const username = (await createLinkAlias(slug)) ?? slug;");
+    expect(preview).toMatch(/if \(cardRow\) return null;[\s\S]*return findSlugAlias\(username\);/);
     expect(og).toContain("return cardPreview({ params: Promise.resolve({ username }) });");
     // The two image files must carry the same literal config.
     for (const line of ["export const size = { width: 1200, height: 630 };", 'export const contentType = "image/jpeg";', 'export const runtime = "nodejs";']) {
@@ -106,11 +122,30 @@ describe("the Create box", () => {
     expect(box).toContain('"text/html": new Blob([phase.html], { type: "text/html" })');
   });
 
+  it("uploads each distinct pasted picture once, and drops one that can't be read instead of failing", () => {
+    expect(box).toContain("const stored = new Map<string, Promise<string | null>>();");
+    expect(box).toContain("if (!stored.has(p.src))");
+    expect(box).toMatch(/e\.status === 401 \|\| e\.status === 403 \|\| e\.status === 429\)\) throw e;/);
+    expect(box).toContain('else { (p.img.closest("a") ?? p.img).remove(); dropped++; }');
+    expect(box).toContain("made = { html: relink(draft, PLACEHOLDER, shareUrl), shareUrl, dropped };");
+  });
+  it("never ignores a drop", () => {
+    const drop = box.slice(box.indexOf("  function onDrop("), box.indexOf("  async function pasteButton()"));
+    expect(drop).toMatch(/if \(input\) void make\(input\);\s*\/\/[^\n]*\n\s*else setPhase\(\{ kind: "error"/);
+  });
   it("only shows a remembered creation that is still safe", () => {
     expect(box).toContain("isSafeLinkedHtml(saved.html)");
   });
   it("keeps the phone keyboard away from the paste box and never inserts typing", () => {
     expect(box).toContain('inputMode="none"');
     expect(box).toContain("onBeforeInput={(e) => e.preventDefault()}");
+  });
+});
+
+describe("the Links page offers Create only to accounts the upload route will serve", () => {
+  const share = read("src/app/share/page.tsx");
+  it("gates on the plan RIGHT NOW (an expired free month is Free), like api/upload", () => {
+    expect(share).toContain("const canCreate = isPaidProfile(profile);");
+    expect(share).toMatch(/\{canCreate \? \(\s*<CreateLinkBox/);
   });
 });

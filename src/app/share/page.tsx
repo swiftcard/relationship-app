@@ -22,6 +22,7 @@ import { buildCardData } from "@/lib/card-data";
 import { cardHeadshot } from "@/lib/card-media";
 import { safeCssValue, safeFontValue } from "@/lib/custom-layout";
 import { isPaidPlan, LINK_STYLE_KEYS, LINK_STRUCTURAL_KEYS } from "@/lib/plan";
+import { isPaidProfile } from "@/lib/effective-plan";
 import { pickFreeLiveCardIds } from "@/lib/card-active";
 import { canViewOfficeAdmin, getOfficeSubUserContext } from "@/lib/office-roles";
 import { ownLiveHref, signSelfLink } from "@/lib/self-pass";
@@ -88,6 +89,11 @@ export default async function SharePage({
   if (awaitingPlanChoice(profile)) redirect("/welcome");
 
   const isPro = isPaidPlan(profile.plan);
+  // Create + is gated the way its upload route gates it (api/upload): paid
+  // RIGHT NOW, an expired free month counted as Free. On the raw plan an
+  // expired grant saw the paste box, pasted, and only then heard "Create is
+  // part of Pro".
+  const canCreate = isPaidProfile(profile);
 
   // Only cards that actually SERVE publicly can be shared. On Free, the
   // grandfathering rule is that the oldest FREE_CARD_LIMIT cards stay live and
@@ -291,7 +297,7 @@ export default async function SharePage({
                   <span><strong className="text-white font-semibold">Already have a signature?</strong> Copy it from your email and paste it in. Same fonts, same colors, nothing changes.</span>
                 </p>
               </div>
-              {isPro ? (
+              {canCreate ? (
                 <CreateLinkBox key={activeUsername} username={activeUsername} appUrl={APP_URL} selfToken={signSelfLink(user.id)} />
               ) : (
                 <PlanGate feature="create-link" nativeCopy="Pro feature — Linking your own signature or a picture to your SwiftCard is only available on the Pro plan">

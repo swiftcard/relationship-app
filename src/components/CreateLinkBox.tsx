@@ -153,10 +153,29 @@ export default function CreateLinkBox({ username, appUrl, selfToken = null }: {
         let linked;
         try { linked = linkEverything(frame, PLACEHOLDER); } finally { frame.remove(); }
         if (!linked.root.textContent?.trim() && !linked.root.querySelector("img")) throw new NothingError();
+        // Each distinct picture is uploaded ONCE — a logo repeated in a
+        // signature used to cost one upload per copy, against a limit of 30
+        // per 10 minutes. A picture that can't be read (a blob: from another
+        // page, say) is dropped and counted like a cid: one, instead of
+        // failing the whole paste; only "not Pro" / "too many" stop it.
+        const stored = new Map<string, Promise<string | null>>();
+        let dropped = linked.dropped;
         for (const p of linked.pending) {
-          const { url } = await uploadMedia(await uploadable(await srcToFile(p.src)), "create");
-          p.img.setAttribute("src", url);
+          if (!stored.has(p.src)) {
+            stored.set(p.src, (async () => {
+              try {
+                return (await uploadMedia(await uploadable(await srcToFile(p.src)), "create")).url;
+              } catch (e) {
+                if (e instanceof UploadError && (e.status === 401 || e.status === 403 || e.status === 429)) throw e;
+                return null;
+              }
+            })());
+          }
+          const url = await stored.get(p.src)!;
+          if (url) p.img.setAttribute("src", url);
+          else { (p.img.closest("a") ?? p.img).remove(); dropped++; }
         }
+        if (!linked.root.textContent?.trim() && !linked.root.querySelector("img")) throw new NothingError();
         const draft = linked.root.outerHTML;
         // The share link previews as this — a picture of it, uploaded. If the
         // picture can't be made, the link still opens the card (with the
@@ -171,7 +190,7 @@ export default function CreateLinkBox({ username, appUrl, selfToken = null }: {
           // Keep the fallback; say why in the console for whoever looks.
           console.warn("[create] preview picture not made:", e instanceof Error ? e.message : e);
         }
-        made = { html: relink(draft, PLACEHOLDER, shareUrl), shareUrl, dropped: linked.dropped };
+        made = { html: relink(draft, PLACEHOLDER, shareUrl), shareUrl, dropped };
       }
       if (!aliveRef.current) return;
       try { localStorage.setItem(storeKey, JSON.stringify({ html: made.html, shareUrl: made.shareUrl })); } catch { /* ignore */ }
@@ -193,6 +212,8 @@ export default function CreateLinkBox({ username, appUrl, selfToken = null }: {
     setDragging(false);
     const input = readTransfer(e.dataTransfer);
     if (input) void make(input);
+    // A PDF, a folder, an empty drag: say so, never nothing at all.
+    else setPhase({ kind: "error", message: "That can't be linked. Drop your signature, some text, or a picture (JPG, PNG, WebP or GIF)." });
   }
 
   async function pasteButton() {

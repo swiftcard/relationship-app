@@ -246,6 +246,46 @@ for (const engineName of ["chromium", "webkit"] as const) {
       } finally { await w.ctx.close(); }
     });
 
+    it("the box: a repeated picture is uploaded once; one that can't be read is dropped and said, not a failed paste", async () => {
+      const w = await open(engine);
+      try {
+        await w.page.evaluate(() => (window as unknown as { mountBox: () => void }).mountBox());
+        await w.page.locator('[role="textbox"][contenteditable]').waitFor();
+        // The same pasted logo twice, plus a blob: picture from another page
+        // that this page can never fetch.
+        await w.page.evaluate((png) => {
+          const html = `<div style="font-family:Helvetica;color:rgb(10,60,120)"><img src="${png}" width="40" height="40">Jamie Park<br><img src="${png}" width="40" height="40"><img src="blob:https://elsewhere.test/0b1c2d3e" width="40" height="40"></div>`;
+          const dt = new DataTransfer();
+          dt.setData("text/html", html);
+          document.querySelector('[role="textbox"][contenteditable]')!.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+        }, PNG40);
+        await w.page.locator("button", { hasText: /^Copy$/ }).waitFor({ timeout: 30_000 });
+        expect(w.uploads.length, "the logo once + the preview snapshot").toBe(2);
+        const r = await w.page.evaluate(() => {
+          const root = (document.querySelector("[data-create-preview]") as HTMLElement).shadowRoot!;
+          return { text: root.textContent ?? "", imgs: Array.from(root.querySelectorAll("img")).map((i) => i.getAttribute("src")) };
+        });
+        expect(r.text).toContain("Jamie Park");
+        expect(r.imgs).toEqual([w.uploads[0], w.uploads[0]]);
+        expect(await w.page.getByText("1 picture couldn't be kept").count()).toBe(1);
+      } finally { await w.ctx.close(); }
+    });
+
+    it("the box: a drop it can't use says so", async () => {
+      const w = await open(engine);
+      try {
+        await w.page.evaluate(() => (window as unknown as { mountBox: () => void }).mountBox());
+        await w.page.locator('[role="textbox"][contenteditable]').waitFor();
+        await w.page.evaluate(() => {
+          const dt = new DataTransfer();
+          try { dt.items.add(new File(["%PDF-1.4"], "brochure.pdf", { type: "application/pdf" })); } catch { /* an empty drag is the same case */ }
+          document.querySelector('[role="textbox"][contenteditable]')!.dispatchEvent(new DragEvent("drop", { dataTransfer: dt, bubbles: true, cancelable: true }));
+        });
+        await w.page.locator('[role="alert"]', { hasText: "That can't be linked." }).waitFor({ timeout: 5000 });
+        expect(w.uploads.length).toBe(0);
+      } finally { await w.ctx.close(); }
+    });
+
     it("the owner's own preview opens through the self-view hop; what's copied keeps the share link", async () => {
       const w = await open(engine);
       try {

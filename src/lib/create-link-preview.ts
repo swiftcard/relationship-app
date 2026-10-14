@@ -2,6 +2,7 @@ import { createFileFromId } from "@/lib/create-link";
 import { getCardPageData } from "@/lib/card-page-data";
 import { resolveCardMeta } from "@/lib/resolve-card";
 import { getAdminSupabase } from "@/lib/supabase-admin";
+import { findSlugAlias } from "@/lib/slug-alias";
 
 // The picture behind a Create + share link (lib/create-link), fitted onto a
 // calm background at the standard 1200×630 link-preview size — what iMessage,
@@ -16,9 +17,26 @@ export const LINKED_PREVIEW_SIZE = { width: 1200, height: 630 };
 const BACKGROUND = "#F4F1EC"; // the card page's warm paper, a shade deeper
 const PAD = 48;
 
-export async function linkedPicturePreview(username: string, id: string): Promise<Buffer | null> {
+/**
+ * The card's CURRENT slug when `username` is an old one it was renamed from —
+ * null when the slug is still a live address (or nobody ever had it). A
+ * Create link made before a rename still names the old slug; the picture is
+ * stored under the owner's id, so following the alias keeps both the link
+ * and its preview working. Same rule the card page applies before its own
+ * alias redirect: no card row and no live legacy profile card.
+ */
+export async function createLinkAlias(username: string): Promise<string | null> {
+  const { cardRow, profileRow } = await getCardPageData(username);
+  if (cardRow) return null;
+  const legacyLive = !!profileRow && !((profileRow.customization as { _migrated?: boolean } | null)?._migrated) && !!profileRow.name;
+  if (legacyLive) return null;
+  return findSlugAlias(username);
+}
+
+export async function linkedPicturePreview(slug: string, id: string): Promise<Buffer | null> {
   const file = createFileFromId(id);
   if (!file) return null;
+  const username = (await createLinkAlias(slug)) ?? slug;
   if (!(await resolveCardMeta(username))) return null; // a card that is down previews nothing of theirs
   const { cardRow } = await getCardPageData(username);
   const ownerId = cardRow?.user_id as string | undefined;

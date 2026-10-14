@@ -985,10 +985,51 @@ FLOWS["create-link"] = async () => {
         if (img.status() !== 200 || !/^image\//.test(type)) fail("create-link", `the preview image answered ${img.status()} ${type}`);
         else if (img.headers()["x-sc-preview"] !== "linked") fail("create-link", `the preview fell back to the card instead of the linked picture (${img.headers()["x-sc-preview"] || "no marker"})`);
       }
+      // A STRANGER opening it: a card view, on this card, from a Create link
+      // (owner, 2026-10-14: "that link shows up in analytics"). A fresh,
+      // signed-out browser, let past the human gate (which refuses
+      // automation) the way qa-offline does.
+      const visitor = await newPage({ signedIn: false });
+      try {
+        await visitor.ctx.addInitScript(() => {
+          Object.defineProperty(Navigator.prototype, "webdriver", { get: () => false, configurable: true });
+        });
+        const sent = visitor.page.waitForRequest((r) => r.url().includes("/api/card-events") && r.method() === "POST" && /"viewed_card"/.test(r.postData() || ""), { timeout: 30000 }).catch(() => null);
+        await visitor.page.goto(share, { waitUntil: "domcontentloaded" });
+        const req = await sent;
+        const body = req ? JSON.parse(req.postData() || "{}") : null;
+        const res = req ? await req.response() : null;
+        if (!req) fail("create-link", "a visitor opened the share link and no view was sent");
+        else if (body.card_owner_username !== uname || body.source !== "create_link") fail("create-link", `the visitor's view went out as ${JSON.stringify({ card: body.card_owner_username, source: body.source })}, not this card from a Create link`);
+        else if (!res || res.status() !== 200) fail("create-link", `the view was answered ${res ? res.status() : "nothing"}`);
+        else {
+          // What the server decided. "hosting" is a datacenter (CI) — refused
+          // by design, so it can't be a card_views row there; anything but a
+          // recorded/hosting create_link decision is a real miss.
+          let row = null;
+          for (let i = 0; i < 10 && !row; i++) {
+            await new Promise((r) => setTimeout(r, 1500));
+            const rows = await (await adm(`/rest/v1/analytics_ingest_log?entity_key=eq.${uname}&event_type=eq.viewed_card&select=reason,source,counted&order=created_at.desc&limit=1`)).json().catch(() => null);
+            row = Array.isArray(rows) ? rows[0] ?? null : null;
+          }
+          if (!row) fail("create-link", "the visitor's view left no decision in analytics_ingest_log");
+          else if (row.source !== "create_link") fail("create-link", `the view was logged from ${JSON.stringify(row.source)}, not create_link`);
+          else if (row.reason !== "recorded" && row.reason !== "hosting") fail("create-link", `the visitor's view was not counted: ${row.reason}${row.reason === "self" ? " (a stranger was taken for the owner)" : ""}`);
+          else if (row.reason === "recorded") {
+            const views = await (await adm(`/rest/v1/card_views?username=eq.${uname}&source=eq.create_link&select=id`)).json().catch(() => null);
+            if (!Array.isArray(views) || views.length !== 1) fail("create-link", `expected ONE create_link card view for the card, found ${Array.isArray(views) ? views.length : JSON.stringify(views)}`);
+          }
+        }
+      } finally {
+        await visitor.ctx.close();
+      }
     }
-    if (!failures.some((f) => f.flow === "create-link")) pass("create-link", "pasted signature linked everywhere, pictures stored, Copy carries HTML + share link, link previews as the picture");
+    if (!failures.some((f) => f.flow === "create-link")) pass("create-link", "pasted signature linked everywhere, pictures stored, Copy carries HTML + share link, link previews as the picture, a visitor's open counts as a Create link view");
   } finally {
     await ctx.close();
+    // The visitor's event + decision rows (card_views go with the account).
+    await adm(`/rest/v1/card_events?card_owner_username=eq.${uname}&source=eq.create_link`, { method: "DELETE" }).catch(() => {});
+    await adm(`/rest/v1/analytics_ingest_log?entity_key=eq.${uname}`, { method: "DELETE" }).catch(() => {});
     // The pictures this flow made, so production storage keeps nothing of it.
     for (const url of uploaded) {
       const path = url.split("/card-uploads/")[1]?.split("?")[0];
