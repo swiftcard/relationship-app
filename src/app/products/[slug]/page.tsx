@@ -36,6 +36,10 @@ type Product = {
   eyebrow: string;
   title: React.ReactNode;
   titlePlain: string;
+  // The <title> for search (keyword first, under ~50 chars so " | SwiftCard"
+  // fits in 60). titlePlain stays the short nav/OG name; the two diverge on
+  // purpose — "Apple Wallet — SwiftCard" told Google nothing about business cards.
+  metaTitle: string;
   subtitle: string;
   demo: React.ReactNode;
   wide?: boolean; // demo spans full width below the hero copy
@@ -88,6 +92,7 @@ const PRODUCTS: Record<string, Product> = {
     eyebrow: "Digital Cards",
     title: <>A card so good, people <A>want</A> to keep it.</>,
     titlePlain: "Digital Cards",
+    metaTitle: "Digital Business Card: Share by Tap, QR or Link",
     subtitle: "Designer templates, your colors, your photo, your logo — a scannable QR and a Save Contact button built in. Share it with a tap, a QR, or a link, and land straight in their phone.",
     demo: (
       <div className="w-full rounded-[28px] hp-soft border border-[rgba(11,16,34,0.08)] p-5 sm:p-7 shadow-[0_40px_80px_-50px_rgba(29,63,184,0.35)]">
@@ -101,12 +106,13 @@ const PRODUCTS: Record<string, Product> = {
       { t: "Save Contact, built in", d: "Your name, number, email and photo drop straight into their contacts as a vCard." },
       { t: "Unlimited cards on Pro", d: "A card for each side of you — work, personal, speaking — each with its own analytics." },
     ],
-    metaDesc: "Beautiful, customizable digital business cards that share themselves with one tap — QR, NFC, or link, no app required.",
+    metaDesc: "Build a digital business card people actually keep. Share by NFC tap, QR code, link or Apple Wallet; they save you in one tap with no app. Free to start.",
   },
   swiftlinks: {
     eyebrow: "SwiftLinks",
     title: <>Everything to do. <A>One SwiftLink.</A></>,
     titlePlain: "SwiftLinks",
+    metaTitle: "Link in Bio With Analytics & Lead Capture",
     subtitle: "Your bio, your socials, your booking link, your latest drop — one beautiful page that lives in your Instagram, TikTok, or email. Separate from your card, powered by the same profile.",
     // Light like the rest of the site (owner, 2026-09-17: only the header and
     // footer stay dark — SwiftLinksPhone's caption is slate now). No side
@@ -123,7 +129,7 @@ const PRODUCTS: Record<string, Product> = {
       { t: "Capture leads on the page", d: "A built-in connect form turns visitors into saved contacts." },
       { t: "Made for your bio", d: "Drop it in your Instagram or TikTok bio and send traffic that converts." },
     ],
-    metaDesc: "SwiftLinks — one beautiful link-in-bio page for your bio, socials, and links, with lead capture built in.",
+    metaDesc: "SwiftLinks is a link-in-bio page that reports back: view counts, traffic sources, and a Connect button that saves visitors as contacts. Free to start.",
     // Product-correct CTA — still lands on /cards/new (the SwiftLink lives on
     // the same card record; the builder covers it), only the label changes.
     ctaLabel: "Create your free SwiftLink",
@@ -132,6 +138,7 @@ const PRODUCTS: Record<string, Product> = {
     eyebrow: "Swift Signature",
     title: <>Every email you send, <A>advertising you.</A></>,
     titlePlain: "Swift Signature",
+    metaTitle: "Digital Business Card Email Signature",
     subtitle: "Drop your live SwiftCard into your email signature once with Swift Signature. Now every message ends with a clickable card — recipients open it, save your contact, and reach out in a single tap.",
     ctaLabel: "Create your free Swift Signature",
     demo: (
@@ -146,12 +153,13 @@ const PRODUCTS: Record<string, Product> = {
       { t: "Clickable, not decorative", d: "One tap opens your card, saves your contact, or reaches you directly." },
       { t: "A tiny billboard", d: "Every reply becomes a professional advertisement for you and your brand." },
     ],
-    metaDesc: "Swift Signature turns your email signature into a live, clickable SwiftCard — recipients open, save, and reach out in one tap.",
+    metaDesc: "Turn your SwiftCard into a live email signature for Gmail, Outlook and Apple Mail. Every email carries your card and a save-contact button. Free to start.",
   },
   "lead-capture": {
     eyebrow: "Lead Capture",
     title: <>Turn every scan into a <A>relationship.</A></>,
     titlePlain: "Lead Capture",
+    metaTitle: "Business Card Lead Capture & Auto Follow-Up",
     subtitle: "When someone opens your card, they can share their info right back — straight into your contacts, with where and when you met. Then you follow up by email or text, and they can text you back. No more lost napkins or half-typed numbers.",
     demo: (
       <div className="rounded-[28px] bg-white border border-slate-200 px-4 py-6 sm:p-10">
@@ -178,12 +186,13 @@ const PRODUCTS: Record<string, Product> = {
       { t: "Sequences that run themselves", d: "Switch on an email follow-up for a contact and it sends on your schedule — never outside 8am–9pm their time. Texts and AI-written messages on Pro." },
       { t: "Straight to your CRM", d: "Contacts flow into your dashboard and sync to Salesforce, GoHighLevel, Pipedrive, HubSpot or Google Contacts." },
     ],
-    metaDesc: "Capture leads the moment someone opens your card — two-way contact exchange, follow-up by email or text from a registered sender, and replies that land in one thread.",
+    metaDesc: "A digital business card with lead capture: visitors share their name, phone and email back, and SwiftCard sends the follow-up for you. Free to start.",
   },
   analytics: {
     eyebrow: "Dashboard & Analytics",
     title: <>See who&apos;s looking. <A>Never lose a lead.</A></>,
     titlePlain: "Dashboard & Analytics",
+    metaTitle: "See Who Viewed Your Business Card: Analytics",
     subtitle: "Real-time views, contacts, and locations. Every contact who taps your card lands in one searchable place — with full history, their replies, and automated follow-ups. Try the dashboard right here.",
     // DashboardDemo is a faithful replica of the desktop dashboard: a browser
     // frame around a two-column board that needs ~720px to hold together. Sent
@@ -216,12 +225,13 @@ const PRODUCTS: Record<string, Product> = {
       { t: "One thread per person", d: "Notes, read/unread, every view — and the emails and texts you've exchanged, in the order they happened." },
       { t: "Follow-up on autopilot", d: "Light, medium, or aggressive email follow-ups for any contact you choose — plus texts and AI-written messages on Pro." },
     ],
-    metaDesc: "SwiftCard's dashboard: real-time views, contacts, top locations, and a built-in CRM where replies and automated follow-ups live in one thread.",
+    metaDesc: "Know the moment your card is viewed, where the view came from (QR, NFC, link or bio page), repeat visits and viewer cities, in one place. Free to start.",
   },
   teams: {
     eyebrow: "Teams & Offices",
     title: <>One brand. <A>Everyone on it.</A></>,
     titlePlain: "Teams & Offices",
+    metaTitle: "Digital Business Cards for Teams & Offices",
     subtitle: "Roll out cards across your whole team with consistent branding, shared templates, and one place to manage seats. Every rep looks sharp — and every lead is accounted for.",
     demo: <TeamsDashboard />,
     wide: true,
@@ -231,12 +241,13 @@ const PRODUCTS: Record<string, Product> = {
       { t: "Seats & roles", d: "Add or remove people in seconds. One bill, full admin control." },
       { t: "Invite by email", d: "Teammates join with Google or an emailed link — no password to set up, and their card is ready to share." },
     ],
-    metaDesc: "Roll out on-brand digital cards across your whole team, with shared templates, seat management, and team analytics.",
+    metaDesc: "Issue digital business cards to your whole team, keep every lead in one CRM, and sync to the tools you use. Shared templates, seats and team analytics.",
   },
   wallet: {
     eyebrow: "Ways to share",
     title: <>Your card, always <A>in your pocket.</A></>,
     titlePlain: "Apple Wallet",
+    metaTitle: "Apple Wallet Business Card: Tap to Share",
     // The demo shows two phones since the standalone QR phone came out — the
     // pass carries the QR itself, so a third phone said nothing the first
     // didn't. Copy now matches: Wallet (QR included) and the share sheet, in
@@ -256,13 +267,14 @@ const PRODUCTS: Record<string, Product> = {
       { t: "Updates itself", d: "Change your title or your number and the pass in your Wallet redraws itself — Apple fetches the new one. Nothing to re-add, nothing left stale." },
       { t: "Right where they look", d: "Sitting next to the cards people already pull out every day." },
     ],
-    metaDesc: "Add your SwiftCard to Apple Wallet — your digital business card, always a swipe away, even offline.",
+    metaDesc: "Keep your digital business card in Apple Wallet and share from the lock screen. One tap and they have your contact and links, no app needed. Free to start.",
   },
   watch: {
     eyebrow: "Apple Watch",
     // Exact message requested by the owner.
     title: <>Make your Apple Watch into a <A>scannable business card</A> you take with you everywhere.</>,
     titlePlain: "Apple Watch",
+    metaTitle: "Apple Watch Business Card: Share From Your Wrist",
     subtitle: "Raise your wrist, show your code, and share your details hands-free — no phone required. Your card goes wherever you go.",
     demo: <WatchShareImage />,
     features: [
@@ -271,12 +283,13 @@ const PRODUCTS: Record<string, Product> = {
       { t: "Scannable code", d: "A crisp QR your Watch displays so anyone can open your full card." },
       { t: "Powered by your card", d: "Everything stays in sync with the card and profile you already have." },
     ],
-    metaDesc: "Make your Apple Watch a scannable business card you take everywhere — share your details hands-free.",
+    metaDesc: "Turn your Apple Watch into a scannable business card. Raise your wrist, they scan the QR code, and your contact lands in their phone. Free to start.",
   },
   integrations: {
     eyebrow: "Integrations",
     title: <>Your leads flow into <A>the tools you already use.</A></>,
     titlePlain: "Integrations",
+    metaTitle: "Digital Business Card CRM Integrations",
     subtitle: "The moment someone shares their info, SwiftCard pushes that contact straight into your CRM and the apps your team runs on — in real time. No CSV shuffling, no copy-paste, no lead sitting in a dashboard nobody opens.",
     demo: (
       <div className="w-[340px] max-w-full flex flex-col items-center">
@@ -323,7 +336,16 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const p = PRODUCTS[slug];
   if (!p) return { title: "SwiftCard" };
-  return { title: `${p.titlePlain} — SwiftCard`, description: p.metaDesc };
+  // Same shape as /for and /compare: keyword title, self-canonical (the
+  // product pages had none, so ?utm / mixed-case variants could compete),
+  // and an OG block so the share card carries the page, not the site default.
+  const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
+  return {
+    title: `${p.metaTitle} | SwiftCard`,
+    description: p.metaDesc,
+    alternates: { canonical: `${APP_URL}/products/${slug}` },
+    openGraph: { title: p.metaTitle, description: p.metaDesc, url: `${APP_URL}/products/${slug}`, siteName: "SwiftCard" },
+  };
 }
 
 export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {

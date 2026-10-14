@@ -33,8 +33,10 @@ import "./home.css";
 
 export const metadata: Metadata = {
   title: "SwiftCard: The digital business card that shares everything",
+  // Under 155 characters — the previous 164-char line was cut mid-word in results.
   description:
-    "One tap and you're in their phone — card, links, and everything you do. Digital cards, SwiftLinks, live email signatures, Apple Wallet, analytics, and lead capture.",
+    "One tap and you're in their phone. Digital business card, link in bio, email signature, Apple Wallet, analytics and automatic follow-up. Free to start.",
+  alternates: { canonical: "/" },
 };
 
 // One gradient definition every icon on the page strokes with, so the icons

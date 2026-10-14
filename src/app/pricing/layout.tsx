@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 // metadata lives here.
 export const metadata: Metadata = {
   title: "Pricing — SwiftCard",
+  alternates: { canonical: "/pricing" },
   description:
     "Simple, honest pricing for SwiftCard. Free forever to start — upgrade when your network grows. No contracts, cancel anytime.",
 };

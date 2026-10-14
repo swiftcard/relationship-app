@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 // lives here.
 export const metadata: Metadata = {
   title: "Contact Us — SwiftCard",
+  alternates: { canonical: "/contact" },
   description:
     "Questions about SwiftCard, help with your account, or teams and partnership inquiries — send us a message and we'll reply within 24 hours.",
 };

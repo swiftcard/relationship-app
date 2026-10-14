@@ -11,6 +11,7 @@ import "@/app/home.css";
 
 export const metadata: Metadata = {
   title: "SwiftCard vs Linktree, Popl & Blinq — Digital Business Card Comparison",
+  alternates: { canonical: "/compare" },
   description:
     "How SwiftCard compares to Linktree, Popl, and Blinq on price, lead capture, and follow-up automation. See the real differences before you switch.",
 };

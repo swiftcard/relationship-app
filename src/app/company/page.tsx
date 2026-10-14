@@ -7,6 +7,7 @@ import "@/app/home.css";
 
 export const metadata: Metadata = {
   title: "Company — SwiftCard",
+  alternates: { canonical: "/company" },
   description:
     "SwiftCard is a digital business card and link-in-bio platform operated by Swift Card Inc. Company information, leadership, and legal policies.",
 };

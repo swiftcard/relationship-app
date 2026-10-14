@@ -22,6 +22,7 @@ import "@/app/home.css";
 
 export const metadata: Metadata = {
   title: "Why SwiftCard — SwiftCard",
+  alternates: { canonical: "/testimonials" },
   description:
     "Why professionals are switching to digital business cards: share in one tap, capture every lead, and follow up automatically. Free to start.",
 };

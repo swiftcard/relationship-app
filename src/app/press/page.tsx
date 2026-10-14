@@ -25,6 +25,7 @@ import "@/app/home.css";
 
 export const metadata: Metadata = {
   title: "Press & Media Kit — SwiftCard",
+  alternates: { canonical: "/press" },
   description:
     "Press information about SwiftCard, the digital business card that shares everything: company facts, product overview, logo and screenshots, and how to reach us.",
 };
