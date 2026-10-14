@@ -471,13 +471,18 @@ export default async function CardPage({
         <div role="region" aria-label="Swift Links" className="w-full max-w-sm rounded-2xl p-5 shadow-sm" style={{ background: "#fff", border: "1px solid #E4DDD4" }}>
           {/* The button IS the box's heading (owner change 2026-10-14): the
               "Swift Links" title is gone and the link to the full page took its
-              top-left spot. A filled dark pill, not the old slate-500 ghost
-              chip, so a visitor actually taps it. Neutral dark, not the card
-              accent: Save Contact above already owns the accent colour. */}
+              top-left spot. An OUTLINE in the card's own colour — text, arrow
+              and border all --sc-accent, the same colour as Save Contact above,
+              on white — like the "Scan QR code" button beside Save Contact.
+              Smaller than a primary button on purpose (owner: the filled dark
+              pill was "way too big and overwhelming"): noticeable, not loud.
+              cardPageTheme keeps the accent dark enough for white text, so it
+              is just as readable as text on white. */}
           <div className="flex mb-3">
             <a
               href={`/links/${profile.username}`}
-              className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-4 py-2.5 text-[0.8125rem] font-semibold text-white shadow-sm hover:bg-slate-700 transition-colors"
+              className="inline-flex items-center gap-1 rounded-full border bg-white px-3.5 py-[7px] text-xs font-semibold transition-colors hover:bg-[color-mix(in_srgb,var(--sc-accent,#1D4ED8)_8%,#fff)]"
+              style={{ borderColor: "var(--sc-accent, #1D4ED8)", color: "var(--sc-accent, #1D4ED8)" }}
             >
               View my Swift Link page →
             </a>

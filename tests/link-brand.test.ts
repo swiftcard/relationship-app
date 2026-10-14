@@ -234,6 +234,18 @@ describe("public card page copy and controls", () => {
     }
   });
 
+  it("the button is a small outline in the card's colour, not a big dark pill (owner 2026-10-14)", () => {
+    // Text, arrow and border take the same colour as Save Contact (--sc-accent
+    // on the page and the mockups; the persona's accent in HeroShowcase).
+    const page = code(PAGE);
+    const btn = page.slice(page.indexOf("href={`/links/${profile.username}`}"), page.indexOf("View my Swift Link page →"));
+    expect(btn).toMatch(/borderColor: "var\(--sc-accent, #1D4ED8\)", color: "var\(--sc-accent, #1D4ED8\)"/);
+    expect(btn, "the button grew back to primary size").toMatch(/text-xs/);
+    expect(btn, "the dark filled pill is back").not.toMatch(/bg-slate-900|text-white/);
+    expect(code("src/components/site/DemoSwiftLinks.tsx")).toMatch(/color: "var\(--sc-accent, #1D4ED8\)"/);
+    expect(code("src/components/site/HeroShowcase.tsx")).toMatch(/borderColor: persona\.accent, color: persona\.accent/);
+  });
+
   it("Share this card no longer offers Show QR Code", () => {
     // A sharer's control sitting in a viewer's flow: it asked the person
     // already holding the card to display a QR for someone ELSE to scan.

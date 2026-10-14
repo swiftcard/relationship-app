@@ -63,14 +63,18 @@ export default function DemoSwiftLinks({ compact = true }: { compact?: boolean }
   return (
     <>
       <div className="flex mb-3">
-        {/* The card page's dark pill in the heading's old top-left spot (no
-            "Swift Links" title since 2026-10-14). A span, not a link:
+        {/* The card page's accent-outline button in the heading's old
+            top-left spot (no "Swift Links" title since 2026-10-14). Every
+            mockup wrapping this sets --sc-accent, exactly as the card page
+            does, so it takes the same colour as the mockup's Save Contact.
+            A span, not a link:
             everything in these mockups is display-only, and a button that
             looks clickable and does nothing is worse than one that never
             invited the tap. Hover styling is dropped for the same reason.
             With the heading gone the full label fits the compact frame too. */}
         <span
-          className={`inline-flex items-center whitespace-nowrap rounded-full bg-slate-900 font-semibold text-white shadow-sm ${compact ? "text-[0.6875rem] px-3 py-1.5" : "text-[0.8125rem] px-4 py-2.5"}`}
+          className={`inline-flex items-center whitespace-nowrap rounded-full border bg-white font-semibold ${compact ? "text-[0.625rem] px-2.5 py-1" : "text-xs px-3.5 py-[7px]"}`}
+          style={{ borderColor: "var(--sc-accent, #1D4ED8)", color: "var(--sc-accent, #1D4ED8)" }}
         >
           View my Swift Link page →
         </span>
