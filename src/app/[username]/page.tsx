@@ -468,21 +468,18 @@ export default async function CardPage({
           saved the contact sees what else this person links to BEFORE
           being asked for their own details. */}
       {hasConnectSection && (
-        <div className="w-full max-w-sm rounded-2xl p-5 shadow-sm" style={{ background: "#fff", border: "1px solid #E4DDD4" }}>
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <SectionHeading>Swift Links</SectionHeading>
-            {/* A warm ghost chip, not a footnote. "Go to Swift Links →" at
-                text-slate-400 sat next to a heading that already says Swift
-                Links — word noise at legal-disclaimer weight. Deliberately NOT
-                blue-50: a cool tint fights the cream page. */}
+        <div role="region" aria-label="Swift Links" className="w-full max-w-sm rounded-2xl p-5 shadow-sm" style={{ background: "#fff", border: "1px solid #E4DDD4" }}>
+          {/* The button IS the box's heading (owner change 2026-10-14): the
+              "Swift Links" title is gone and the link to the full page took its
+              top-left spot. A filled dark pill, not the old slate-500 ghost
+              chip, so a visitor actually taps it. Neutral dark, not the card
+              accent: Save Contact above already owns the accent colour. */}
+          <div className="flex mb-3">
             <a
               href={`/links/${profile.username}`}
-              // py-2 -my-1: a 32px tap target that still LOOKS like the same
-              // slim chip (it was 24px tall — under any touch guideline).
-              className="shrink-0 text-[0.6875rem] font-medium text-slate-500 rounded-full px-2.5 py-2 -my-1 inline-flex items-center bg-[#FAF7F2] hover:bg-[#EDE7DE] hover:text-slate-700 transition-colors"
-              style={{ boxShadow: "inset 0 0 0 1px #EFE9E1" }}
+              className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-4 py-2.5 text-[0.8125rem] font-semibold text-white shadow-sm hover:bg-slate-700 transition-colors"
             >
-              View Swift Link page →
+              View my Swift Link page →
             </a>
           </div>
           {bio && (

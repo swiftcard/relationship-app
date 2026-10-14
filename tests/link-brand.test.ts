@@ -218,10 +218,20 @@ describe("the marketing mockups show the card page's real Swift Links design", (
 describe("public card page copy and controls", () => {
   const PAGE = "src/app/[username]/page.tsx";
 
-  it('the Swift Links chip says "View Swift Link page", not "View all"', () => {
+  it('the Swift Links button says "View my Swift Link page", not "View all"', () => {
     const c = code(PAGE);
-    expect(c).toMatch(/View Swift Link page →/);
+    expect(c).toMatch(/View my Swift Link page →/);
     expect(c, "the vague label is back").not.toMatch(/>\s*View all →\s*</);
+  });
+
+  it("the button replaced the Swift Links heading, on the page and its mockups (owner 2026-10-14)", () => {
+    expect(code(PAGE), "the Swift Links heading is back").not.toMatch(/<SectionHeading>Swift Links<\/SectionHeading>/);
+    for (const f of ["src/components/site/DemoSwiftLinks.tsx", "src/components/site/HeroShowcase.tsx"]) {
+      const c = code(f);
+      expect(c, `${f} lost the new label`).toMatch(/View my Swift Link page →/);
+      expect(c, `${f} still shows the old title`).not.toMatch(/>\s*Swift Links\s*</);
+      expect(c, `${f} still abbreviates the label`).not.toMatch(/View page →/);
+    }
   });
 
   it("Share this card no longer offers Show QR Code", () => {

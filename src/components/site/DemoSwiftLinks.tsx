@@ -16,8 +16,8 @@ import { buildConnectLinks } from "@/lib/social-url";
 // used by all three, is what stops that happening again.
 //
 // The structure below mirrors src/app/[username]/page.tsx's Swift Links
-// section exactly — plain bold heading + chip (the numbered badges are gone
-// from the real page, owner redesign 2026-08-19), bio, rule, socials rail,
+// section exactly — the dark "View my Swift Link page →" pill where the
+// heading used to be (owner change 2026-10-14), bio, rule, socials rail,
 // rule, action links — and the pieces that ARE the design
 // (SocialLinkIntercept's "rail", CardActionLinks) are the live components,
 // not copies, so a change there lands here for free.
@@ -62,27 +62,17 @@ const RULE = <div className="h-px bg-[#EFE9E1]" />;
 export default function DemoSwiftLinks({ compact = true }: { compact?: boolean }) {
   return (
     <>
-      <div className="flex items-center justify-between gap-3 mb-3">
-        {/* Plain bold heading, matching the real page's SectionHeading. */}
-        <p className={`text-slate-900 font-bold tracking-tight whitespace-nowrap ${compact ? "text-[0.8125rem]" : "text-[0.9375rem]"}`}>Swift Links</p>
-        {/* The card page's warm ghost chip. A span, not a link: everything in
-            these mockups is display-only, and a chip that looks clickable and
-            does nothing is worse than one that never invited the tap. Hover
-            styling is dropped for the same reason.
-
-            The compact frame abbreviates the label. Measured, not guessed: that
-            header row is 213px wide inside the phone, and the full
-            "View Swift Link page →" leaves the heading 44px — it wrapped
-            "Swift Links" onto two lines. The alternative was shrinking the
-            heading, but it would then be smaller than "Save Alex's contact" and
-            "Share this card" in the same phone, which reads as a bug. The
-            chip's position, weight and colour are what carry the design here;
-            SignatureDemo renders at true scale and keeps the full wording. */}
+      <div className="flex mb-3">
+        {/* The card page's dark pill in the heading's old top-left spot (no
+            "Swift Links" title since 2026-10-14). A span, not a link:
+            everything in these mockups is display-only, and a button that
+            looks clickable and does nothing is worse than one that never
+            invited the tap. Hover styling is dropped for the same reason.
+            With the heading gone the full label fits the compact frame too. */}
         <span
-          className={`shrink-0 whitespace-nowrap font-medium text-slate-500 rounded-full bg-[#FAF7F2] ${compact ? "text-[0.625rem] px-2 py-[3px]" : "text-[0.6875rem] px-2.5 py-1"}`}
-          style={{ boxShadow: "inset 0 0 0 1px #EFE9E1" }}
+          className={`inline-flex items-center whitespace-nowrap rounded-full bg-slate-900 font-semibold text-white shadow-sm ${compact ? "text-[0.6875rem] px-3 py-1.5" : "text-[0.8125rem] px-4 py-2.5"}`}
         >
-          {compact ? "View page →" : "View Swift Link page →"}
+          View my Swift Link page →
         </span>
       </div>
 

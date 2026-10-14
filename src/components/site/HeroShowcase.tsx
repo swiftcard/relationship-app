@@ -628,10 +628,9 @@ function PhoneCard({ persona }: { persona: Persona }) {
           {/* ── Swift Links — bio, website capsule, brand discs ──
               Right after Save contact, as on the live page since 2026-09-22. */}
           <div className="w-full max-w-sm rounded-2xl p-4 shadow-sm" style={{ background: "#fff", border: "1px solid #E4DDD4" }}>
-            <div className="flex items-center justify-between gap-3 mb-2.5">
-              <SectionHeading>Swift Links</SectionHeading>
-              <span className="shrink-0 text-[0.6875rem] font-medium text-slate-500 rounded-full px-2.5 py-1 bg-[#FAF7F2]" style={{ boxShadow: "inset 0 0 0 1px #EFE9E1" }}>
-                View Swift Link page →
+            <div className="flex mb-2.5">
+              <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-900 px-4 py-2.5 text-[0.8125rem] font-semibold text-white shadow-sm">
+                View my Swift Link page →
               </span>
             </div>
             <p className="text-slate-600 text-[0.8125rem] leading-[1.6]">{persona.bio}</p>
