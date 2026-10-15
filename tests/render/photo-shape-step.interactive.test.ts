@@ -119,9 +119,14 @@ describe("Photo First's Photo shape step", () => {
     await page.context().close();
   });
 
-  it("with no photo yet, or where the caller can't say (Office branding), the colour shows with Original", async () => {
+  it("with no photo yet, or where the caller can't say (Office branding), Original still hides the colour", async () => {
+    // Owner, 2026-10-14: the colour behind the photo is a Circle choice on
+    // every editor — Office Branding and the homepage builder included.
     for (const hash of ["photo=0", ""]) {
       const page = await mount(hash);
+      expect(await swatchCount(page), `hash "${hash}"`).toBe(0);
+      await expect(step(page).textContent()).resolves.toContain("Choose Circle to pick the color behind it.");
+      await step(page).getByRole("button", { name: "Circle" }).tap();
       expect(await swatchCount(page), `hash "${hash}"`).toBeGreaterThan(0);
       await page.context().close();
     }

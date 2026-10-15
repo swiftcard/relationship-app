@@ -33,148 +33,20 @@
 // property to the template's baked-in design. Consumed by NewCardWizard and
 // CardEditForm.
 
-import { CARD_FONT_OPTIONS, isDarkBg } from "./shared";
+import { CARD_FONT_OPTIONS } from "./shared";
 import type { TemplateStyle } from "./shared";
 import { META, FALLBACK_META, type Look, type StyleField } from "@/lib/template-style-presets";
+import CardLookPicker from "./CardLookPicker";
 import { useRef, useState } from "react";
 import { DesignSteps, ProTag, Segmented, type DesignStep } from "@/components/ui/DesignControls";
 import {
-  CARD_FINISHES, FINISH_FAMILIES, getFinish, isFreeFinish,
+  CARD_FINISHES, FINISH_FAMILIES, getFinish,
   composePanelBackground, PANEL_DIM_DEFAULT,
 } from "@/lib/card-finishes";
 import { isAllowedMedia, uploadMedia, uploadErrorMessage, WRONG_TYPE_MESSAGE, IMAGE_TYPES, VIDEO_TYPES } from "@/lib/upload-media";
 
 function isHex(v?: string): v is string {
   return !!v && /^#[0-9a-fA-F]{6}$/.test(v);
-}
-
-// Is this Look exactly what the card is wearing right now?
-//
-// Every field a Look SETS has to be compared, or the highlight lies. Once Looks
-// gained a finish and a second surface, comparing only bg/text/font meant
-// picking "Sea Glass" and then switching the finish to Carbon left Sea Glass
-// still lit up — the panel claiming a preset that no longer described the card.
-// Undefined on both sides counts as a match: a Look without a finish means Flat,
-// which is what an unset finish renders as.
-function looksActive(value: TemplateStyle, look: Look): boolean {
-  const same = (a?: string, b?: string) => (a ?? undefined) === (b ?? undefined);
-  return (
-    value.bgColor === look.bg &&
-    value.textColor === look.text &&
-    same(value.fontFamily, look.font) &&
-    same(value.finish, look.finish) &&
-    same(value.surfaceColor, look.surface) &&
-    // A Look hands the title and company back to the template (applyLook), so
-    // a card with its own title or company colour is no longer that Look.
-    value.titleColor === undefined &&
-    value.companyColor === undefined
-  );
-}
-
-/** Every key a Look sets — and so every key "Original" hands back to the template. */
-function isOriginal(value: TemplateStyle): boolean {
-  return (
-    value.bgColor === undefined &&
-    value.textColor === undefined &&
-    value.fontFamily === undefined &&
-    value.finish === undefined &&
-    value.surfaceColor === undefined &&
-    value.titleColor === undefined &&
-    value.companyColor === undefined
-  );
-}
-
-function LooksGallery({
-  looks,
-  value,
-  onPick,
-  original,
-  onOriginal,
-  proTags = false,
-}: {
-  looks: Look[];
-  value: TemplateStyle;
-  onPick: (look: Look) => void;
-  /** The template's own baked-in scheme, painted on the "Original" tile. */
-  original: { bg: string; text: string };
-  onOriginal: () => void;
-  /** Tag the Looks built on a Pro finish (Free account, Edit card). */
-  proTags?: boolean;
-}) {
-  const originalActive = isOriginal(value);
-  return (
-    <div className="grid grid-cols-3 gap-2">
-      {/* ORIGINAL — the template exactly as it ships. Before this there was no
-          way back to it short of five separate "Default" taps, and a card with
-          nothing set lit no tile at all, so the untouched state read as "no
-          choice made". It writes nothing new: only the unset values those
-          Default chips already write. */}
-      <button
-        type="button"
-        onClick={onOriginal}
-        className="group text-left"
-        aria-pressed={originalActive}
-        title="The template's own colours, font and finish"
-      >
-        <div
-          className="h-11 rounded-lg flex items-center px-2.5 transition-transform group-hover:scale-[1.03]"
-          style={{
-            background: composePanelBackground(original.bg, undefined),
-            border: "1px solid rgba(255,255,255,0.12)",
-            boxShadow: originalActive ? "0 0 0 2px #0b0f16, 0 0 0 4px #3b82f6" : undefined,
-          }}
-        >
-          <span data-ds="specimen" className="text-sm font-bold leading-none" style={{ color: isDarkBg(original.bg) ? original.text : "#111827" }}>Aa</span>
-        </div>
-        <span className="mt-1 flex items-center gap-1 min-w-0">
-          <span className={`text-[0.6875rem] leading-tight truncate ${originalActive ? "text-blue-300 font-semibold" : "text-gray-400"}`}>Original</span>
-        </span>
-      </button>
-      {looks.map((look) => {
-        const active = looksActive(value, look);
-        // A Look built on a Pro finish SHOWS its finish here and applies on tap,
-        // so the card previews exactly as it would. Save Changes names it
-        // (lib/plan.ts proFeaturesInUse); the PRO tag says so beforehand.
-        const needsPro = proTags && !!look.finish && !isFreeFinish(look.finish);
-        return (
-          <button
-            key={look.name}
-            type="button"
-            onClick={() => onPick(look)}
-            className="group text-left"
-            aria-pressed={active}
-            title={look.finish ? `${look.name} — ${getFinish(look.finish).name.toLowerCase()} finish` : look.name}
-          >
-            <div
-              className="relative h-11 rounded-lg flex items-center px-2.5 transition-transform group-hover:scale-[1.03]"
-              style={{
-                // The FINISH, not just the colour. A Look whose whole point is
-                // the material rendered as a flat chip identical to the plain
-                // colour beside it, so the two reads that matter — sea glass,
-                // brushed metal — were invisible until after you picked one.
-                background: composePanelBackground(look.bg, look.finish),
-                border: "1px solid rgba(255,255,255,0.12)",
-                // The same offset ring the colour swatches use. A Look tile IS
-                // its preview, so filling it blue would destroy the thing being
-                // chosen — but the ring has to be the identical ring, or
-                // "selected" means two different marks on one screen.
-                boxShadow: active ? "0 0 0 2px #0b0f16, 0 0 0 4px #3b82f6" : undefined,
-              }}
-            >
-              {/* Aa uses a legible color for the picker even on light themes */}
-              <span data-ds="specimen" className="text-sm font-bold leading-none" style={{ color: isDarkBg(look.bg) ? look.text : "#111827", fontFamily: look.font }}>Aa</span>
-              {/* In the swatch's corner, not beside the name: three to a row on
-                  a phone, a tag there would cut "Executive Navy" to "Exe…". */}
-              {needsPro && <span className="absolute top-1 right-1"><ProTag /></span>}
-            </div>
-            <span className="mt-1 flex items-center gap-1 min-w-0">
-              <span className={`text-[0.6875rem] leading-tight truncate ${active ? "text-blue-300 font-semibold" : "text-gray-400"}`}>{look.name}</span>
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
 }
 
 function Swatches({
@@ -527,7 +399,6 @@ export default function TemplateStyleControls({
   template,
   canUpload = true,
   proTags = false,
-  hasPhoto,
   logo,
 }: {
   value: TemplateStyle;
@@ -552,10 +423,9 @@ export default function TemplateStyleControls({
    *  in its place in the numbered path, saying when it becomes available. */
   canUpload?: boolean;
   /**
-   * Whether the card being designed has a headshot. Photo First uses it to
-   * keep its panel colour out of sight under a full-height photo, where it
-   * shows nowhere. Omitted where there is no one card's photo to ask about
-   * (Office branding, the Teams demo): the colour then always shows.
+   * Whether the card being designed has a headshot. Still accepted from the
+   * editors that know it, but draws nothing: Photo First's panel colour now
+   * shows with Circle only, on every editor (owner, 2026-10-14).
    */
   hasPhoto?: boolean;
   /**
@@ -574,9 +444,11 @@ export default function TemplateStyleControls({
   // does not specify. Leaving the previous finish or second surface underneath
   // is what makes a preset feel like it half-worked.
   //
-  // The title and company go back to Default too. A Look recolours the ground
-  // they sit on, and the template's own colours for them follow that ground —
-  // a white title picked for a navy card would vanish on Bone if it stayed.
+  // The title and company take the Look's own ink, or go back to Default when
+  // it has none. A Look recolours the ground they sit on, and the template's
+  // own colours for them follow that ground — a white title picked for a navy
+  // card would vanish on Bone if it stayed. A Look on a ground the template
+  // was not drawn for (an ivory Classic Pro, a frosted stripe) carries its own.
   const applyLook = (look: Look) =>
     onChange({
       bgColor: look.bg,
@@ -584,8 +456,8 @@ export default function TemplateStyleControls({
       fontFamily: look.font,
       finish: look.finish,
       surfaceColor: meta.surface ? look.surface : undefined,
-      titleColor: undefined,
-      companyColor: undefined,
+      titleColor: look.title,
+      companyColor: look.company,
     });
   // Exactly the keys a Look sets, handed back to the template.
   const applyOriginal = () =>
@@ -604,10 +476,10 @@ export default function TemplateStyleControls({
   // PHOTO FIRST's second surface is its photo panel, and it gets a Photo shape
   // step: Original (the photo fills the panel) or Circle (the photo in a
   // circle on the panel's colour). The colour is part of the same step and
-  // opens with Circle — under a full-height photo it is covered, so a picker
-  // there would change nothing anyone can see. It stays shown while the card
-  // has no photo (the colour fills the panel then) and where the caller can't
-  // say whether it has one.
+  // opens with Circle ONLY — on every editor, with or without a photo
+  // (owner, 2026-10-14: the colour behind the photo is a Circle choice, and
+  // Office Branding and the homepage builder were still offering it with
+  // Original). Under a full-height photo it is covered anyway.
   const photoCircle = value.photoShape === "circle";
   const photoShapeStep = (surface: StyleField): DesignStep => ({
     key: "surface",
@@ -625,11 +497,9 @@ export default function TemplateStyleControls({
             { value: "circle", label: "Circle" },
           ]}
         />
-        {photoCircle || hasPhoto !== true ? (
+        {photoCircle ? (
           <div>
-            <p className="text-[0.6875rem] text-gray-500 mb-1.5">
-              {photoCircle ? "Color behind your photo" : `${surface.label} color — shows when there's no photo`}
-            </p>
+            <p className="text-[0.6875rem] text-gray-500 mb-1.5">Color behind your photo</p>
             {swatches(surface, value.surfaceColor, "surfaceColor")}
           </div>
         ) : (
@@ -675,13 +545,13 @@ export default function TemplateStyleControls({
     {
       key: "look",
       label: "Look",
-      help: "The whole card in one tap. Change any part of it below.",
+      help: "The whole card in one tap. Open a style to see its looks.",
       body: (
-        <LooksGallery
-          looks={meta.looks}
+        <CardLookPicker
+          template={template}
+          meta={meta}
           value={value}
           onPick={applyLook}
-          original={{ bg: meta.bg.fallback, text: meta.text.fallback }}
           onOriginal={applyOriginal}
           proTags={proTags}
         />

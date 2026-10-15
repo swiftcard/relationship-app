@@ -190,8 +190,11 @@ export function convertCustomizationToFreeClosest(
     if (textColor !== undefined) cust.textColor = nearestPreset(textColor, freeSafeValues(meta, "text"), meta.text.fallback);
     if (infoColor !== undefined) cust.infoColor = nearestPreset(infoColor, meta.info.presets, meta.info.fallback);
     if (accentColor !== undefined) cust.accentColor = nearestPreset(accentColor, meta.accent.presets, meta.accent.fallback);
-    if (titleColor !== undefined) cust.titleColor = nearestPreset(titleColor, meta.title.presets, meta.title.fallback);
-    if (companyColor !== undefined) cust.companyColor = nearestPreset(companyColor, meta.company.presets, meta.company.fallback);
+    // A Look on a light or frosted ground carries its own title and company
+    // ink, so those count as offered too — or Free would put back the pale
+    // template default the Look was there to replace.
+    if (titleColor !== undefined) cust.titleColor = nearestPreset(titleColor, freeSafeValues(meta, "title"), meta.title.fallback);
+    if (companyColor !== undefined) cust.companyColor = nearestPreset(companyColor, freeSafeValues(meta, "company"), meta.company.fallback);
   } else {
     delete cust.bgColor;
     delete cust.surfaceColor;

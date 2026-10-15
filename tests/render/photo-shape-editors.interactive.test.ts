@@ -448,11 +448,13 @@ for (const [engine, width] of RUNS) {
       const { page, calls, errors } = await rig(engine, width);
       await mount(page, "branding", { office });
       await expect(shapeStep(page).locator("p").first().textContent()).resolves.toBe("Photo shape");
-      // Branding designs for a whole team, some with photos and some without,
-      // so the panel colour is always on offer here.
-      expect(await swatchCount(page)).toBe(PANEL.length);
+      // The colour behind the photo is a Circle choice here too (owner,
+      // 2026-10-14) — with Original there is nothing to pick.
+      expect(await swatchCount(page)).toBe(0);
+      await expect(shapeStep(page).textContent()).resolves.toContain("Choose Circle to pick the color behind it.");
       expect(await layoutProblems(page)).toEqual([]);
       await tap(page, "Circle");
+      expect(await swatchCount(page)).toBe(PANEL.length);
       await pick(page, GREEN);
       await expectCircle(page, PANEL[GREEN]);
       expect(await layoutProblems(page)).toEqual([]);

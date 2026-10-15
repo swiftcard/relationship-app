@@ -351,9 +351,14 @@ describe("every template lets you style all of it", () => {
   });
 
   it("only highlights a Look that matches every field it sets", () => {
-    const src = read2("src/components/card-templates/TemplateStyleControls.tsx");
+    // The Look picker moved into its own file (Solid / Gradient / Glass rows,
+    // owner 2026-10-14); the rule came with it, and covers the Look's own
+    // title and company ink too.
+    const src = read2("src/components/card-templates/CardLookPicker.tsx");
     expect(src).toMatch(/same\(value\.finish, look\.finish\)/);
     expect(src).toMatch(/same\(value\.surfaceColor, look\.surface\)/);
+    expect(src).toMatch(/same\(value\.titleColor, look\.title\)/);
+    expect(src).toMatch(/same\(value\.companyColor, look\.company\)/);
   });
 
   it("snaps a Free account's surface to that template's presets, or drops it", () => {
@@ -426,14 +431,18 @@ describe("curated Looks are free-safe", () => {
     // ones Save Changes will stop at. Only under `proTags` (the Edit card of a
     // Free account); the tile still applies on tap and the Save dialog
     // (proFeaturesInUse) still names the Pro finish.
+    const picker = read("src/components/card-templates/CardLookPicker.tsx");
+    expect(picker).toMatch(/const needsPro = proTags && !!look\.finish && !isFreeFinish\(look\.finish\)/);
+    expect(picker).toMatch(/\{needsPro && <span[^>]*><ProTag \/><\/span>\}/);
     const src = read("src/components/card-templates/TemplateStyleControls.tsx");
-    expect(src).toMatch(/const needsPro = proTags && !!look\.finish && !isFreeFinish\(look\.finish\)/);
-    expect(src).toMatch(/\{needsPro && <span[^>]*><ProTag \/><\/span>\}/);
     expect(src).toMatch(/\{proTags && !f\.free && <span[^>]*><ProTag \/><\/span>\}/);
   });
 
   it("the Looks swatch paints its finish, not just its colour", () => {
-    const src = read("src/components/card-templates/TemplateStyleControls.tsx");
-    expect(src).toMatch(/background: composePanelBackground\(look\.bg, look\.finish\)/);
+    // Each tile is a miniature card; its brand surface is painted with the
+    // same call every template makes, finish included.
+    const src = read("src/components/card-templates/CardLookPicker.tsx");
+    expect(src).toMatch(/const brand = composePanelBackground\(paint\.bg, paint\.finish\)/);
+    expect(src).toMatch(/bg: look\.bg, finish: look\.finish/);
   });
 });

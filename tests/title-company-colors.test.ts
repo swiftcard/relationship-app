@@ -10,7 +10,7 @@ import LocalBusiness from "@/components/card-templates/LocalBusiness";
 import LuxuryMinimal from "@/components/card-templates/LuxuryMinimal";
 import LogoFirst from "@/components/card-templates/LogoFirst";
 import { SAMPLE_DATA, type CardData } from "@/components/card-templates/types";
-import { META, FALLBACK_META } from "@/lib/template-style-presets";
+import { META, FALLBACK_META, freeSafeValues } from "@/lib/template-style-presets";
 import { PRO_CUSTOMIZATION_KEYS, convertCustomizationToFreeClosest, proFeaturesInUse } from "@/lib/plan";
 import { PREFILL_STYLE_KEYS } from "@/lib/prefill";
 import { passPalette } from "@/lib/wallet-palette";
@@ -132,16 +132,21 @@ describe("they save, convert and travel like every other card colour", () => {
     expect(sketch).toContain("companyColor: p.companyColor");
   });
 
-  it("Free keeps a swatch and snaps a free-hand colour to the nearest swatch", () => {
+  it("Free keeps a swatch and snaps a free-hand colour to the nearest offered one", () => {
     for (const [id, m] of Object.entries(META)) {
       const kept = convertCustomizationToFreeClosest({ titleColor: m.title.presets[1], companyColor: m.company.presets[1] }, id);
       expect(kept.changed, id).toBe(false);
       expect(kept.customization.titleColor).toBe(m.title.presets[1]);
       expect(kept.customization.companyColor).toBe(m.company.presets[1]);
 
+      // "Offered" = a swatch, or the ink a curated Look carries (owner,
+      // 2026-10-14: Looks on light and frosted grounds bring their own title
+      // and company colour) — the same rule the background already follows.
       const snapped = convertCustomizationToFreeClosest({ titleColor: "#123457", companyColor: "#fedcbb" }, id).customization;
-      expect(m.title.presets, id).toContain(snapped.titleColor);
-      expect(m.company.presets, id).toContain(snapped.companyColor);
+      expect(freeSafeValues(m, "title"), id).toContain(snapped.titleColor);
+      expect(freeSafeValues(m, "company"), id).toContain(snapped.companyColor);
+      expect(snapped.titleColor, id).not.toBe("#123457");
+      expect(snapped.companyColor, id).not.toBe("#fedcbb");
     }
   });
 

@@ -96,6 +96,9 @@ describe("every editor reads and writes it", () => {
     expect(f).toMatch(/label: "Photo shape"/);
     expect(f).toMatch(/\{ value: "original", label: "Original" \}/);
     expect(f).toMatch(/\{ value: "circle", label: "Circle" \}/);
-    expect(f).toMatch(/photoCircle \|\| hasPhoto !== true \?/);
+    // The colour opens with Circle only, on every editor — Office Branding and
+    // the homepage builder included (owner, 2026-10-14).
+    expect(f).toMatch(/\{photoCircle \? \(/);
+    expect(f).not.toMatch(/hasPhoto !== true/);
   });
 });

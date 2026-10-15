@@ -19,8 +19,45 @@
  * look surviving underneath is exactly what makes a preset feel broken. A Look
  * that omits `surface` leaves that template's own default, since three of the
  * six templates have no second surface at all.
+ *
+ * `family` files it under one of the three rows of the Look picker (owner,
+ * 2026-10-14: "the same exact thing" as Social design's Solid / Gradient /
+ * Glass). It is decided by what the card is MADE of, the split a
+ * non-designer can predict by looking:
+ *   • solid    — one flat colour (a material finish over it stays Solid)
+ *   • gradient — colour that shifts across the card
+ *   • glass    — a deep colour wash under the painted Frosted sheet
+ *
+ * `title` and `company` are the ink for those two lines. Optional: a Look that
+ * omits them hands both lines back to the template's own colour, which is
+ * right on the ground the template was drawn for. A Look on a very different
+ * ground — an ivory Classic Pro, a frosted glass header — carries its own, or
+ * the template's pale blue title would vanish into it.
  */
-export type Look = { name: string; bg: string; text: string; font?: string; finish?: string; surface?: string };
+export type Look = {
+  name: string;
+  family: LookFamily;
+  bg: string;
+  text: string;
+  font?: string;
+  finish?: string;
+  surface?: string;
+  title?: string;
+  company?: string;
+};
+
+export type LookFamily = "solid" | "gradient" | "glass";
+
+/** The Look picker's three rows, in the same order as Social design's. */
+export const CARD_LOOK_FAMILIES: { id: LookFamily; name: string; blurb: string }[] = [
+  { id: "solid", name: "Solid", blurb: "One clean colour." },
+  { id: "gradient", name: "Gradient", blurb: "Colour that shifts across the card." },
+  { id: "glass", name: "Glass", blurb: "Frosted glass over colour." },
+];
+
+export function looksInFamily(meta: TemplateMeta, family: LookFamily): Look[] {
+  return meta.looks.filter((l) => l.family === family);
+}
 
 export type StyleField = {
   label: string;
@@ -82,10 +119,10 @@ export type TemplateMeta = {
  * A Look on the picker is a value the product is offering, so it is allowed.
  * This is what makes the comment above true.
  */
-export function freeSafeValues(meta: TemplateMeta, field: "bg" | "surface" | "text"): string[] {
+export function freeSafeValues(meta: TemplateMeta, field: "bg" | "surface" | "text" | "title" | "company"): string[] {
   const base = field === "surface" ? meta.surface?.presets ?? [] : meta[field].presets;
   const fromLooks = meta.looks
-    .map((l) => (field === "bg" ? l.bg : field === "text" ? l.text : l.surface))
+    .map((l) => (field === "bg" ? l.bg : field === "text" ? l.text : field === "surface" ? l.surface : field === "title" ? l.title : l.company))
     .filter((v): v is string => typeof v === "string" && !!v);
   return [...new Set([...base, ...fromLooks])];
 }
@@ -102,14 +139,35 @@ export const META: Record<string, TemplateMeta> = {
     name: "Classic Pro",
     blurb: "A two-panel executive card — a colored branding panel on the left, clean white info on the right.",
     looks: [
-      { name: "Executive Navy", bg: "linear-gradient(160deg, #0e1b35 0%, #162947 100%)", text: "#ffffff" },
-      { name: "Onyx", bg: "#070d1c", text: "#ffffff" },
-      { name: "Graphite", bg: "#111827", text: "#e5e7eb" },
-      { name: "Forest", bg: "#052e2b", text: "#ffffff" },
-      { name: "Burgundy", bg: "#3f1d2e", text: "#f3d9c6" },
-      { name: "Sky", bg: "linear-gradient(160deg, #0e1b35 0%, #2563eb 100%)", text: "#ffffff" },
-      { name: "Sea Glass", bg: "linear-gradient(160deg, #1c3a5e 0%, #2f6f8f 100%)", text: "#f2fbff", finish: "frosted", surface: "#f8fafc" },
-      { name: "Titanium", bg: "#2a3140", text: "#ffffff", finish: "brushed", surface: "#f1f5f9" },
+      // Solid
+      { name: "Onyx", family: "solid", bg: "#070d1c", text: "#ffffff" },
+      { name: "Graphite", family: "solid", bg: "#111827", text: "#e5e7eb" },
+      { name: "Forest", family: "solid", bg: "#052e2b", text: "#ffffff" },
+      { name: "Burgundy", family: "solid", bg: "#3f1d2e", text: "#f3d9c6" },
+      { name: "Titanium", family: "solid", bg: "#2a3140", text: "#ffffff", finish: "brushed", surface: "#f1f5f9" },
+      { name: "Espresso", family: "solid", bg: "#1c1612", text: "#f5e6d3", title: "#d4af7a" },
+      { name: "Oxford", family: "solid", bg: "#1e3a5f", text: "#ffffff", title: "#bfdbfe" },
+      { name: "Plum", family: "solid", bg: "#2e1a47", text: "#ffffff", title: "#d8b4fe" },
+      { name: "Petrol", family: "solid", bg: "#0f3d46", text: "#ffffff", title: "#99f6e4" },
+      { name: "Ivory", family: "solid", bg: "#f5f1e8", text: "#1c1612", title: "#8c6c34", company: "#3f2d1a" },
+      // Gradient
+      { name: "Executive Navy", family: "gradient", bg: "linear-gradient(160deg, #0e1b35 0%, #162947 100%)", text: "#ffffff" },
+      { name: "Sky", family: "gradient", bg: "linear-gradient(160deg, #0e1b35 0%, #2563eb 100%)", text: "#ffffff" },
+      { name: "Dusk", family: "gradient", bg: "linear-gradient(160deg, #0e1b35 0%, #4c1d95 100%)", text: "#ffffff", title: "#c4b5fd" },
+      { name: "Emerald", family: "gradient", bg: "linear-gradient(160deg, #022c22 0%, #047857 100%)", text: "#ffffff", title: "#a7f3d0" },
+      { name: "Copper", family: "gradient", bg: "linear-gradient(160deg, #1c1612 0%, #9a3412 100%)", text: "#fff7ed", title: "#fed7aa" },
+      { name: "Twilight", family: "gradient", bg: "linear-gradient(160deg, #1e1b4b 0%, #6d28d9 100%)", text: "#ffffff", title: "#ddd6fe" },
+      { name: "Steel", family: "gradient", bg: "linear-gradient(160deg, #1f2937 0%, #475569 100%)", text: "#ffffff", title: "#e2e8f0" },
+      { name: "Champagne", family: "gradient", bg: "linear-gradient(160deg, #1c1612 0%, #3f2d1a 55%, #8c6c34 100%)", text: "#fdf6e3", title: "#f0e2c4" },
+      // Glass
+      { name: "Sea Glass", family: "glass", bg: "linear-gradient(160deg, #1c3a5e 0%, #2f6f8f 100%)", text: "#f2fbff", finish: "frosted", surface: "#f8fafc" },
+      { name: "Arctic", family: "glass", bg: "linear-gradient(160deg, #0c2d48 0%, #0c4a6e 55%, #075985 100%)", text: "#ffffff", finish: "frosted", title: "#e0f2fe", company: "#ffffff", surface: "#f8fafc" },
+      { name: "Aurora", family: "glass", bg: "linear-gradient(160deg, #042f2e 0%, #115e59 50%, #4c1d95 100%)", text: "#ffffff", finish: "frosted", title: "#ccfbf1", company: "#ffffff" },
+      { name: "Amethyst", family: "glass", bg: "linear-gradient(160deg, #2e1065 0%, #581c87 55%, #6b21a8 100%)", text: "#ffffff", finish: "frosted", title: "#f3e8ff", company: "#ffffff" },
+      { name: "Rose Quartz", family: "glass", bg: "linear-gradient(160deg, #4c0519 0%, #881337 55%, #9f1239 100%)", text: "#ffffff", finish: "frosted", title: "#ffe4e6", company: "#ffffff" },
+      { name: "Jade", family: "glass", bg: "linear-gradient(160deg, #022c22 0%, #064e3b 55%, #065f46 100%)", text: "#ffffff", finish: "frosted", title: "#d1fae5", company: "#ffffff" },
+      { name: "Smoke", family: "glass", bg: "linear-gradient(160deg, #111827 0%, #1f2937 55%, #374151 100%)", text: "#ffffff", finish: "frosted", title: "#e5e7eb", company: "#ffffff" },
+      { name: "Sunset", family: "glass", bg: "linear-gradient(160deg, #431407 0%, #7c2d12 50%, #9d174d 100%)", text: "#ffffff", finish: "frosted", title: "#ffedd5", company: "#ffffff" },
     ],
     bg: {
       label: "Branding panel",
@@ -162,14 +220,35 @@ export const META: Record<string, TemplateMeta> = {
     name: "Modern Bold",
     blurb: "A full-bleed dark card with an oversized name and electric accents.",
     looks: [
-      { name: "Electric Dark", bg: "#070d1c", text: "#ffffff" },
-      { name: "Pure Black", bg: "#0a0a0a", text: "#ffffff" },
-      { name: "Violet Night", bg: "linear-gradient(135deg, #111827 0%, #6d28d9 100%)", text: "#ffffff" },
-      { name: "Deep Blue", bg: "linear-gradient(135deg, #0e1b35 0%, #2563eb 100%)", text: "#ffffff" },
-      { name: "Emerald", bg: "#052e2b", text: "#6ee7b7" },
-      { name: "Ember", bg: "#1c1010", text: "#fca5a5" },
-      { name: "Frostbite", bg: "linear-gradient(150deg, #10243f 0%, #1d4e6b 100%)", text: "#eaf7ff", finish: "frosted" },
-      { name: "Carbon", bg: "#0b0f16", text: "#ffffff", finish: "carbon" },
+      // Solid
+      { name: "Electric Dark", family: "solid", bg: "#070d1c", text: "#ffffff" },
+      { name: "Pure Black", family: "solid", bg: "#0a0a0a", text: "#ffffff" },
+      { name: "Emerald", family: "solid", bg: "#052e2b", text: "#6ee7b7" },
+      { name: "Ember", family: "solid", bg: "#1c1010", text: "#fca5a5" },
+      { name: "Carbon", family: "solid", bg: "#0b0f16", text: "#ffffff", finish: "carbon" },
+      { name: "Ink", family: "solid", bg: "#0b1120", text: "#e0e7ff" },
+      { name: "Oxblood", family: "solid", bg: "#2a0a0f", text: "#fecdd3" },
+      { name: "Deep Teal", family: "solid", bg: "#042f2e", text: "#5eead4" },
+      { name: "Aubergine", family: "solid", bg: "#1e0b2e", text: "#e9d5ff" },
+      { name: "Gunmetal", family: "solid", bg: "#1f2933", text: "#ffffff" },
+      // Gradient
+      { name: "Violet Night", family: "gradient", bg: "linear-gradient(135deg, #111827 0%, #6d28d9 100%)", text: "#ffffff" },
+      { name: "Deep Blue", family: "gradient", bg: "linear-gradient(135deg, #0e1b35 0%, #2563eb 100%)", text: "#ffffff" },
+      { name: "Neon Dusk", family: "gradient", bg: "linear-gradient(135deg, #0f172a 0%, #be185d 100%)", text: "#ffffff" },
+      { name: "Cyber", family: "gradient", bg: "linear-gradient(135deg, #0f0c29 0%, #302b63 55%, #24243e 100%)", text: "#67e8f9" },
+      { name: "Inferno", family: "gradient", bg: "linear-gradient(135deg, #1c0a00 0%, #9a3412 100%)", text: "#fed7aa" },
+      { name: "Lagoon", family: "gradient", bg: "linear-gradient(135deg, #042f2e 0%, #0e7490 100%)", text: "#ffffff" },
+      { name: "Nebula", family: "gradient", bg: "linear-gradient(135deg, #0b1020 0%, #312e81 50%, #701a75 100%)", text: "#f5d0fe" },
+      { name: "Matrix", family: "gradient", bg: "linear-gradient(135deg, #020617 0%, #14532d 100%)", text: "#86efac" },
+      // Glass
+      { name: "Frostbite", family: "glass", bg: "linear-gradient(150deg, #10243f 0%, #1d4e6b 100%)", text: "#eaf7ff", finish: "frosted" },
+      { name: "Polar", family: "glass", bg: "linear-gradient(135deg, #0c1a2e 0%, #1e3a5f 55%, #1e40af 100%)", text: "#ffffff", finish: "frosted" },
+      { name: "Ultraviolet", family: "glass", bg: "linear-gradient(135deg, #1e0b3b 0%, #4c1d95 55%, #6d28d9 100%)", text: "#ffffff", finish: "frosted" },
+      { name: "Magma", family: "glass", bg: "linear-gradient(135deg, #2a0a05 0%, #7f1d1d 55%, #9a3412 100%)", text: "#ffffff", finish: "frosted" },
+      { name: "Abyss", family: "glass", bg: "linear-gradient(135deg, #020617 0%, #0c4a6e 55%, #155e75 100%)", text: "#ffffff", finish: "frosted" },
+      { name: "Toxic", family: "glass", bg: "linear-gradient(135deg, #052e16 0%, #14532d 55%, #3f6212 100%)", text: "#ecfccb", finish: "frosted" },
+      { name: "Smoke", family: "glass", bg: "linear-gradient(135deg, #0a0a0a 0%, #262626 55%, #404040 100%)", text: "#ffffff", finish: "frosted" },
+      { name: "Opal", family: "glass", bg: "linear-gradient(135deg, #0f172a 0%, #1e1b4b 45%, #134e4a 100%)", text: "#ffffff", finish: "frosted" },
     ],
     bg: {
       label: "Card background",
@@ -214,14 +293,39 @@ export const META: Record<string, TemplateMeta> = {
   "luxury-minimal": {
     name: "Luxury Minimal",
     blurb: "An ivory editorial card with a gold accent strip and a refined serif feel.",
+    // The light grounds here carry a deeper gold for the title and company:
+    // the template's own gold is drawn for ivory and sits under 3:1 on the
+    // darker creams and the frosted washes.
     looks: [
-      { name: "Ivory & Gold", bg: "#fafaf6", text: "#1c1612", font: SERIF },
-      { name: "Warm Cream", bg: "#fffbf0", text: "#3f2d1a", font: SERIF },
-      { name: "Pearl", bg: "#ffffff", text: "#0e1b35", font: SERIF },
-      { name: "Sand", bg: "#f5efe3", text: "#1c1612", font: SERIF },
-      { name: "Charcoal Luxe", bg: "#1c1612", text: "#d4af7a", font: SERIF },
-      { name: "Opaline", bg: "linear-gradient(160deg, #eef2f6 0%, #dbe6ee 100%)", text: "#1c2733", finish: "frosted" },
-      { name: "Gilded", bg: "#14110d", text: "#f0e2c4", finish: "gilt" },
+      // Solid
+      { name: "Ivory & Gold", family: "solid", bg: "#fafaf6", text: "#1c1612", font: SERIF },
+      { name: "Warm Cream", family: "solid", bg: "#fffbf0", text: "#3f2d1a", font: SERIF },
+      { name: "Pearl", family: "solid", bg: "#ffffff", text: "#0e1b35", font: SERIF },
+      { name: "Sand", family: "solid", bg: "#f5efe3", text: "#1c1612", font: SERIF },
+      { name: "Charcoal Luxe", family: "solid", bg: "#1c1612", text: "#d4af7a", font: SERIF },
+      { name: "Gilded", family: "solid", bg: "#14110d", text: "#f0e2c4", finish: "gilt" },
+      { name: "Blush", family: "solid", bg: "#f8ece8", text: "#3b1f1a", font: SERIF, title: "#8c6c34", company: "#8c6c34" },
+      { name: "Sage", family: "solid", bg: "#e8ede4", text: "#1f2a1c", font: SERIF, title: "#6b5326", company: "#6b5326" },
+      { name: "Stone", family: "solid", bg: "#e7e5e0", text: "#1c1612", font: SERIF, title: "#6b5326", company: "#6b5326" },
+      { name: "Navy Couture", family: "solid", bg: "#14203a", text: "#f0e2c4", font: SERIF, title: "#d4af7a", company: "#d4af7a" },
+      // Gradient
+      { name: "Champagne", family: "gradient", bg: "linear-gradient(160deg, #fbf6ea 0%, #efe2c4 100%)", text: "#1c1612", font: SERIF, title: "#6b5326", company: "#6b5326" },
+      { name: "Rose Gold", family: "gradient", bg: "linear-gradient(160deg, #fbefe9 0%, #ecc9bb 100%)", text: "#3b1f1a", font: SERIF, title: "#6b5326", company: "#6b5326" },
+      { name: "Linen Dawn", family: "gradient", bg: "linear-gradient(160deg, #fffbf0 0%, #f3e6cf 100%)", text: "#3f2d1a", font: SERIF, title: "#8c6c34", company: "#8c6c34" },
+      { name: "Pearl Mist", family: "gradient", bg: "linear-gradient(160deg, #ffffff 0%, #e8edf3 100%)", text: "#0e1b35", font: SERIF, title: "#8c6c34", company: "#8c6c34" },
+      { name: "Sandstone", family: "gradient", bg: "linear-gradient(160deg, #f5efe3 0%, #e2d3b8 100%)", text: "#1c1612", font: SERIF, title: "#6b5326", company: "#6b5326" },
+      { name: "Silk Grey", family: "gradient", bg: "linear-gradient(160deg, #f8f8f7 0%, #dedcd8 100%)", text: "#1c1612", font: SERIF, title: "#6b5326", company: "#6b5326" },
+      { name: "Midnight Gold", family: "gradient", bg: "linear-gradient(160deg, #0f0d0a 0%, #2b2218 100%)", text: "#f0e2c4", font: SERIF, title: "#d4af7a", company: "#d4af7a" },
+      { name: "Bordeaux", family: "gradient", bg: "linear-gradient(160deg, #2a0f14 0%, #4a1a24 100%)", text: "#f3d9c6", font: SERIF, title: "#d4af7a", company: "#d4af7a" },
+      // Glass
+      { name: "Opaline", family: "glass", bg: "linear-gradient(160deg, #eef2f6 0%, #dbe6ee 100%)", text: "#1c2733", finish: "frosted" },
+      { name: "Moonstone", family: "glass", bg: "linear-gradient(160deg, #dfe6ef 0%, #c9d4e3 55%, #b6c4d8 100%)", text: "#1c2733", font: SERIF, finish: "frosted", title: "#5b4520", company: "#5b4520" },
+      { name: "Rosewater", family: "glass", bg: "linear-gradient(160deg, #f3e1de 0%, #e8cbc6 55%, #ddb6b0 100%)", text: "#3b1f1a", font: SERIF, finish: "frosted", title: "#5b4520", company: "#5b4520" },
+      { name: "Celadon", family: "glass", bg: "linear-gradient(160deg, #dcebe2 0%, #c6ddd0 55%, #b1d0bd 100%)", text: "#1f2a1c", font: SERIF, finish: "frosted", title: "#5b4520", company: "#5b4520" },
+      { name: "Morganite", family: "glass", bg: "linear-gradient(160deg, #f4e3da 0%, #ebcfc0 55%, #e1baa8 100%)", text: "#3f2d1a", font: SERIF, finish: "frosted", title: "#5b4520", company: "#5b4520" },
+      { name: "Mist", family: "glass", bg: "linear-gradient(160deg, #e9edf2 0%, #d7dee7 55%, #c5cfdb 100%)", text: "#1c2733", font: SERIF, finish: "frosted", title: "#5b4520", company: "#5b4520" },
+      { name: "Smoke Quartz", family: "glass", bg: "linear-gradient(160deg, #1c1814 0%, #2a241f 55%, #3a332c 100%)", text: "#f0e2c4", font: SERIF, finish: "frosted", title: "#e7c98f", company: "#e7c98f" },
+      { name: "Onyx Glass", family: "glass", bg: "linear-gradient(160deg, #0a0a0c 0%, #111114 55%, #1c1c22 100%)", text: "#f5f5f4", font: SERIF, finish: "frosted", title: "#d4af7a", company: "#d4af7a" },
     ],
     bg: {
       label: "Card background",
@@ -267,14 +371,36 @@ export const META: Record<string, TemplateMeta> = {
     name: "Local Business",
     blurb: "A warm card with a bold header stripe and the phone number as the hero.",
     looks: [
-      { name: "Warm Amber", bg: "linear-gradient(100deg, #b45309 0%, #d97706 60%, #f59e0b 100%)", text: "#ffffff" },
-      { name: "Forest", bg: "#166534", text: "#ffffff" },
-      { name: "Teal", bg: "#0f766e", text: "#ffffff" },
-      { name: "Midnight", bg: "#0e1b35", text: "#ffffff" },
-      { name: "Cherry", bg: "#be123c", text: "#ffffff" },
-      { name: "Slate", bg: "#334155", text: "#ffffff" },
-      { name: "Sea Glass", bg: "linear-gradient(100deg, #2f7f8f 0%, #3f9fae 60%, #56b8c4 100%)", text: "#f4feff", finish: "frosted", surface: "#ffffff" },
-      { name: "Slate & Linen", bg: "linear-gradient(100deg, #3b4451 0%, #4b5563 60%, #5b6675 100%)", text: "#ffffff", finish: "linen", surface: "#f5f5f4" },
+      // Solid
+      { name: "Forest", family: "solid", bg: "#166534", text: "#ffffff" },
+      { name: "Teal", family: "solid", bg: "#0f766e", text: "#ffffff" },
+      { name: "Midnight", family: "solid", bg: "#0e1b35", text: "#ffffff" },
+      { name: "Cherry", family: "solid", bg: "#be123c", text: "#ffffff" },
+      { name: "Slate", family: "solid", bg: "#334155", text: "#ffffff" },
+      { name: "Brick", family: "solid", bg: "#9a3412", text: "#ffffff" },
+      { name: "Mustard", family: "solid", bg: "#854d0e", text: "#ffffff" },
+      { name: "Olive", family: "solid", bg: "#4d5b1f", text: "#ffffff" },
+      { name: "Navy", family: "solid", bg: "#1e3a8a", text: "#ffffff", surface: "#ffffff" },
+      { name: "Plum", family: "solid", bg: "#6b21a8", text: "#ffffff" },
+      // Gradient
+      { name: "Warm Amber", family: "gradient", bg: "linear-gradient(100deg, #b45309 0%, #d97706 60%, #f59e0b 100%)", text: "#ffffff" },
+      { name: "Slate & Linen", family: "gradient", bg: "linear-gradient(100deg, #3b4451 0%, #4b5563 60%, #5b6675 100%)", text: "#ffffff", finish: "linen", surface: "#f5f5f4" },
+      { name: "Citrus", family: "gradient", bg: "linear-gradient(100deg, #9a3412 0%, #c2410c 60%, #ea580c 100%)", text: "#ffffff" },
+      { name: "Harvest", family: "gradient", bg: "linear-gradient(100deg, #78350f 0%, #92400e 60%, #b45309 100%)", text: "#ffffff" },
+      { name: "Berry", family: "gradient", bg: "linear-gradient(100deg, #831843 0%, #9d174d 60%, #be185d 100%)", text: "#ffffff" },
+      { name: "Ocean", family: "gradient", bg: "linear-gradient(100deg, #0c4a6e 0%, #075985 60%, #0369a1 100%)", text: "#ffffff" },
+      { name: "Sunrise", family: "gradient", bg: "linear-gradient(100deg, #9f1239 0%, #c2410c 60%, #b45309 100%)", text: "#ffffff" },
+      { name: "Pine", family: "gradient", bg: "linear-gradient(100deg, #14532d 0%, #166534 60%, #15803d 100%)", text: "#ffffff" },
+      // Glass — the title is white on every one: the stripe's own cream
+      // title is drawn for the amber stripe and fades into a frosted one.
+      { name: "Sea Glass", family: "glass", bg: "linear-gradient(100deg, #2f7f8f 0%, #3f9fae 60%, #56b8c4 100%)", text: "#f4feff", finish: "frosted", surface: "#ffffff" },
+      { name: "Sky Glass", family: "glass", bg: "linear-gradient(100deg, #0c3a5e 0%, #0c4a6e 60%, #075985 100%)", text: "#ffffff", finish: "frosted", title: "#ffffff", surface: "#ffffff" },
+      { name: "Mint", family: "glass", bg: "linear-gradient(100deg, #064e3b 0%, #065f46 60%, #047857 100%)", text: "#ffffff", finish: "frosted", title: "#ffffff" },
+      { name: "Coral", family: "glass", bg: "linear-gradient(100deg, #7f1d1d 0%, #9f1239 60%, #be123c 100%)", text: "#ffffff", finish: "frosted", title: "#ffffff" },
+      { name: "Lilac", family: "glass", bg: "linear-gradient(100deg, #3b0764 0%, #581c87 60%, #6b21a8 100%)", text: "#ffffff", finish: "frosted", title: "#ffffff" },
+      { name: "Honey", family: "glass", bg: "linear-gradient(100deg, #451a03 0%, #78350f 60%, #92400e 100%)", text: "#ffffff", finish: "frosted", title: "#ffffff" },
+      { name: "Ember", family: "glass", bg: "linear-gradient(100deg, #450a0a 0%, #7f1d1d 60%, #9a3412 100%)", text: "#ffffff", finish: "frosted", title: "#ffffff" },
+      { name: "Storm", family: "glass", bg: "linear-gradient(100deg, #111827 0%, #1f2937 60%, #334155 100%)", text: "#ffffff", finish: "frosted", title: "#ffffff" },
     ],
     bg: {
       label: "Header stripe",
@@ -326,15 +452,39 @@ export const META: Record<string, TemplateMeta> = {
   "photo-first": {
     name: "Photo First",
     blurb: "A full-height photo on the left, and the info panel on the right whose background you set here.",
+    // `bg` is the INFO panel here and `surface` the photo panel, where the name
+    // and title sit. The newer Looks colour both, so the pair reads as one
+    // design; the details on the info panel follow its colour on their own.
     looks: [
-      { name: "Clean White", bg: "#ffffff", text: "#ffffff" },
-      { name: "Royal Violet", bg: "linear-gradient(145deg, #4f46e5 0%, #7c3aed 60%, #6d28d9 100%)", text: "#ffffff" },
-      { name: "Indigo", bg: "#4f46e5", text: "#ffffff" },
-      { name: "Rose", bg: "linear-gradient(145deg, #be123c 0%, #f43f5e 100%)", text: "#ffffff" },
-      { name: "Emerald", bg: "linear-gradient(145deg, #064e3b 0%, #10b981 100%)", text: "#ffffff" },
-      { name: "Onyx", bg: "#0a0a0a", text: "#ffffff" },
-      { name: "Sea Glass", bg: "#ffffff", text: "#ffffff", finish: "frosted", surface: "linear-gradient(145deg, #2f7f8f 0%, #3f9fae 60%, #56b8c4 100%)" },
-      { name: "Graphite", bg: "#111827", text: "#ffffff", finish: "brushed", surface: "#1f2937" },
+      // Solid
+      { name: "Clean White", family: "solid", bg: "#ffffff", text: "#ffffff" },
+      { name: "Indigo", family: "solid", bg: "#4f46e5", text: "#ffffff" },
+      { name: "Onyx", family: "solid", bg: "#0a0a0a", text: "#ffffff" },
+      { name: "Graphite", family: "solid", bg: "#111827", text: "#ffffff", finish: "brushed", surface: "#1f2937" },
+      { name: "Ivory", family: "solid", bg: "#fafaf6", text: "#ffffff", surface: "#1c1612", title: "#d4af7a" },
+      { name: "Navy", family: "solid", bg: "#0e1b35", text: "#ffffff", surface: "#1e3a8a", title: "#bfdbfe" },
+      { name: "Forest", family: "solid", bg: "#052e2b", text: "#ffffff", surface: "#065f46", title: "#a7f3d0" },
+      { name: "Wine", family: "solid", bg: "#3f1d2e", text: "#ffffff", surface: "#4c0519", title: "#fecdd3" },
+      { name: "Slate", family: "solid", bg: "#f1f5f9", text: "#ffffff", surface: "#334155", title: "#e2e8f0" },
+      { name: "Sand", family: "solid", bg: "#f5efe3", text: "#ffffff", surface: "#7c5a26", title: "#fef3c7" },
+      // Gradient
+      { name: "Royal Violet", family: "gradient", bg: "linear-gradient(145deg, #4f46e5 0%, #7c3aed 60%, #6d28d9 100%)", text: "#ffffff" },
+      { name: "Rose", family: "gradient", bg: "linear-gradient(145deg, #be123c 0%, #f43f5e 100%)", text: "#ffffff" },
+      { name: "Emerald", family: "gradient", bg: "linear-gradient(145deg, #064e3b 0%, #10b981 100%)", text: "#ffffff" },
+      { name: "Ocean", family: "gradient", bg: "linear-gradient(145deg, #0c4a6e 0%, #0891b2 100%)", text: "#ffffff", surface: "#0c4a6e", title: "#bae6fd" },
+      { name: "Sunset", family: "gradient", bg: "linear-gradient(145deg, #9a3412 0%, #db2777 100%)", text: "#ffffff", surface: "#7c2d12", title: "#fed7aa" },
+      { name: "Midnight", family: "gradient", bg: "linear-gradient(145deg, #020617 0%, #1e3a8a 100%)", text: "#ffffff", surface: "#0f172a", title: "#bfdbfe" },
+      { name: "Peach", family: "gradient", bg: "linear-gradient(145deg, #fff7ed 0%, #fed7aa 100%)", text: "#ffffff", surface: "#c2410c", title: "#ffedd5" },
+      { name: "Steel", family: "gradient", bg: "linear-gradient(145deg, #e2e8f0 0%, #94a3b8 100%)", text: "#ffffff", surface: "#334155", title: "#e2e8f0" },
+      // Glass
+      { name: "Sea Glass", family: "glass", bg: "#ffffff", text: "#ffffff", finish: "frosted", surface: "linear-gradient(145deg, #2f7f8f 0%, #3f9fae 60%, #56b8c4 100%)" },
+      { name: "Aurora", family: "glass", bg: "linear-gradient(145deg, #042f2e 0%, #115e59 50%, #4c1d95 100%)", text: "#ffffff", finish: "frosted", surface: "#134e4a", title: "#ccfbf1" },
+      { name: "Lavender", family: "glass", bg: "linear-gradient(145deg, #2e1065 0%, #4c1d95 55%, #6d28d9 100%)", text: "#ffffff", finish: "frosted", surface: "#4c1d95", title: "#ede9fe" },
+      { name: "Blush", family: "glass", bg: "linear-gradient(145deg, #4c0519 0%, #881337 55%, #be123c 100%)", text: "#ffffff", finish: "frosted", surface: "#881337", title: "#ffe4e6" },
+      { name: "Jade", family: "glass", bg: "linear-gradient(145deg, #022c22 0%, #064e3b 55%, #047857 100%)", text: "#ffffff", finish: "frosted", surface: "#064e3b", title: "#d1fae5" },
+      { name: "Arctic", family: "glass", bg: "linear-gradient(145deg, #0c2d48 0%, #0c4a6e 55%, #0369a1 100%)", text: "#ffffff", finish: "frosted", surface: "#0c4a6e", title: "#e0f2fe" },
+      { name: "Smoke", family: "glass", bg: "linear-gradient(145deg, #111827 0%, #1f2937 55%, #374151 100%)", text: "#ffffff", finish: "frosted", surface: "#1f2937", title: "#e5e7eb" },
+      { name: "Amber", family: "glass", bg: "linear-gradient(145deg, #451a03 0%, #78350f 55%, #b45309 100%)", text: "#ffffff", finish: "frosted", surface: "#78350f", title: "#fef3c7" },
     ],
     bg: {
       label: "Info panel background",
@@ -391,14 +541,35 @@ export const META: Record<string, TemplateMeta> = {
     name: "Logo First",
     blurb: "Leads with your logo on a panel of its own, beside your name and details.",
     looks: [
-      { name: "Dark Navy", bg: "#2c3a52", text: "#ffffff" },
-      { name: "Midnight", bg: "#141b26", text: "#ffffff" },
-      { name: "Slate", bg: "#1e293b", text: "#ffffff" },
-      { name: "Forest", bg: "#16352c", text: "#ffffff" },
-      { name: "Oxblood", bg: "#3a1d22", text: "#ffffff" },
-      { name: "Bone", bg: "#f4f2ed", text: "#141b26" },
-      { name: "Sea Glass", bg: "linear-gradient(160deg, #24506b 0%, #3a7f96 100%)", text: "#f2fbff", finish: "frosted" },
-      { name: "Brushed Steel", bg: "#39414f", text: "#ffffff", finish: "brushed" },
+      // Solid
+      { name: "Dark Navy", family: "solid", bg: "#2c3a52", text: "#ffffff" },
+      { name: "Midnight", family: "solid", bg: "#141b26", text: "#ffffff" },
+      { name: "Slate", family: "solid", bg: "#1e293b", text: "#ffffff" },
+      { name: "Forest", family: "solid", bg: "#16352c", text: "#ffffff" },
+      { name: "Oxblood", family: "solid", bg: "#3a1d22", text: "#ffffff" },
+      { name: "Bone", family: "solid", bg: "#f4f2ed", text: "#141b26" },
+      { name: "Brushed Steel", family: "solid", bg: "#39414f", text: "#ffffff", finish: "brushed" },
+      { name: "Espresso", family: "solid", bg: "#211a15", text: "#ffffff" },
+      { name: "Ivory", family: "solid", bg: "#fafaf6", text: "#141b26" },
+      { name: "Petrol", family: "solid", bg: "#0f3d46", text: "#ffffff" },
+      // Gradient
+      { name: "Navy Dusk", family: "gradient", bg: "linear-gradient(160deg, #141b26 0%, #2c3a52 100%)", text: "#ffffff" },
+      { name: "Ember", family: "gradient", bg: "linear-gradient(160deg, #2a1414 0%, #7c2d12 100%)", text: "#ffffff" },
+      { name: "Evergreen", family: "gradient", bg: "linear-gradient(160deg, #0b231c 0%, #16352c 50%, #1f4d3f 100%)", text: "#ffffff" },
+      { name: "Plum Night", family: "gradient", bg: "linear-gradient(160deg, #1a1028 0%, #3b1f4f 100%)", text: "#ffffff" },
+      { name: "Steel Blue", family: "gradient", bg: "linear-gradient(160deg, #1e293b 0%, #3b5574 100%)", text: "#ffffff" },
+      { name: "Sand Dune", family: "gradient", bg: "linear-gradient(160deg, #f4f2ed 0%, #e4d9c6 100%)", text: "#141b26" },
+      { name: "Charcoal", family: "gradient", bg: "linear-gradient(160deg, #0f1115 0%, #2a2d33 100%)", text: "#ffffff" },
+      { name: "Wine", family: "gradient", bg: "linear-gradient(160deg, #2b0f16 0%, #5a1e2b 100%)", text: "#ffffff" },
+      // Glass
+      { name: "Sea Glass", family: "glass", bg: "linear-gradient(160deg, #24506b 0%, #3a7f96 100%)", text: "#f2fbff", finish: "frosted" },
+      { name: "Arctic", family: "glass", bg: "linear-gradient(160deg, #0c2d48 0%, #0c4a6e 55%, #075985 100%)", text: "#ffffff", finish: "frosted" },
+      { name: "Aurora", family: "glass", bg: "linear-gradient(160deg, #042f2e 0%, #115e59 50%, #4c1d95 100%)", text: "#ffffff", finish: "frosted" },
+      { name: "Amethyst", family: "glass", bg: "linear-gradient(160deg, #2e1065 0%, #581c87 55%, #6b21a8 100%)", text: "#ffffff", finish: "frosted" },
+      { name: "Jade", family: "glass", bg: "linear-gradient(160deg, #022c22 0%, #064e3b 55%, #065f46 100%)", text: "#ffffff", finish: "frosted" },
+      { name: "Rose Quartz", family: "glass", bg: "linear-gradient(160deg, #4c0519 0%, #881337 55%, #9f1239 100%)", text: "#ffffff", finish: "frosted" },
+      { name: "Smoke", family: "glass", bg: "linear-gradient(160deg, #111827 0%, #1f2937 55%, #374151 100%)", text: "#ffffff", finish: "frosted" },
+      { name: "Sunset", family: "glass", bg: "linear-gradient(160deg, #431407 0%, #7c2d12 50%, #9d174d 100%)", text: "#ffffff", finish: "frosted" },
     ],
     bg: {
       label: "Card background",
@@ -449,9 +620,9 @@ export const FALLBACK_META: TemplateMeta = {
   name: "This template",
   blurb: "Restyle the background, name color, and font to make it yours.",
   looks: [
-    { name: "Navy", bg: "#0e1b35", text: "#ffffff" },
-    { name: "Onyx", bg: "#070d1c", text: "#ffffff" },
-    { name: "Ivory", bg: "#fafaf6", text: "#1c1612" },
+    { name: "Navy", family: "solid", bg: "#0e1b35", text: "#ffffff" },
+    { name: "Onyx", family: "solid", bg: "#070d1c", text: "#ffffff" },
+    { name: "Ivory", family: "solid", bg: "#fafaf6", text: "#1c1612" },
   ],
   bg: {
     label: "Background",

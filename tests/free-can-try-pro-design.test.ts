@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
 import TemplateStyleControls from "@/components/card-templates/TemplateStyleControls";
 import { proFeaturesInUse } from "@/lib/plan";
-import { META } from "@/lib/template-style-presets";
+import { META, CARD_LOOK_FAMILIES, looksInFamily } from "@/lib/template-style-presets";
 import { isFreeFinish } from "@/lib/card-finishes";
 
 // ── A Free account can try every Pro design control, and is stopped at Save ───
@@ -54,9 +54,13 @@ describe("the design panel on a Free account", () => {
     const tagged = markup(true, true);
     const colourInputs = (tagged.match(/<input[^>]*type="color"[^>]*>/g) ?? []).length;
     const proFinishes = 5; // Frosted, Brushed, Carbon, Linen, Gilt edge
-    const proFinishLooks = META["classic-pro"].looks.filter((l) => l.finish && !isFreeFinish(l.finish)).length;
-    // any color × each colour step, Photo or video, the Pro finishes, the Looks built on them.
-    expect(proTagCount(tagged)).toBe(colourInputs + 1 + proFinishes + proFinishLooks);
+    // The Look rows open closed (owner, 2026-10-14), so the tags in view are
+    // the rows made only of Pro-finish Looks — Glass — tagged on the row itself.
+    const proLookRows = CARD_LOOK_FAMILIES.filter((f) =>
+      looksInFamily(META["classic-pro"], f.id).every((l) => !!l.finish && !isFreeFinish(l.finish))).length;
+    expect(proLookRows).toBe(1);
+    // any color × each colour step, Photo or video, the Pro finishes, the Pro Look rows.
+    expect(proTagCount(tagged)).toBe(colourInputs + 1 + proFinishes + proLookRows);
     // Tagging changes nothing else: same controls, still all live.
     expect(tagged.match(/<button[^>]*\sdisabled(=|\s|>)/g)).toBeNull();
     expect(tagged.replace(/<span[^>]*>PRO<\/span>/g, "").replace(/<span class="absolute[^"]*"><\/span>/g, ""))

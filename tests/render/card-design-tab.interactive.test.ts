@@ -232,6 +232,8 @@ describe("style panel: one numbered path, in build order", () => {
     // card would disappear on it if the Look left it in place.
     const v = encodeURIComponent(JSON.stringify({ titleColor: "#ffffff", companyColor: "#ffffff" }));
     const page = await mount("style", `v=${v}&t=logo-first`);
+    // Bone is a Solid look; the rows open closed, as on Social design.
+    await page.click("button[aria-expanded]:has-text('Solid')");
     await page.click("button[title='Bone']");
     await page.waitForTimeout(80);
     const value = await page.evaluate(() => (window as unknown as { __value: Record<string, unknown> }).__value);
