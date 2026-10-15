@@ -73,7 +73,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ use
   const name = str(c.name) ?? username;
   // …and their initials when there is neither, or when the picture they have
   // won't load (owner order 2026-09-25) — the sheet never opens on a blank.
-  const photo = (image ? await fetchVCardPhoto(image.url, image.kind) : null)
+  // forContact: a square JPEG under iCloud's size ceiling, the shape iPhone
+  // keeps after "Create New Contact" (lib/vcard, "The picture as iPhone keeps it").
+  const photo = (image ? await fetchVCardPhoto(image.url, image.kind, { forContact: true }) : null)
     ?? (await renderInitialsPhoto(name));
 
   const vcard = buildVCard(

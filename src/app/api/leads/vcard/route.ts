@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
   // from a business email domain. Best-effort: nothing found → no PHOTO, and
   // the contact still saves exactly as before.
   const image = await resolveLeadImageUrl(admin, lead);
-  const photo = image ? await fetchVCardPhoto(image.url, image.kind) : null;
+  const photo = image ? await fetchVCardPhoto(image.url, image.kind, { forContact: true }) : null;
 
   // Shared builder handles RFC 6350 escaping — these fields are VISITOR-supplied,
   // so a name with an embedded newline or ";" could otherwise inject arbitrary

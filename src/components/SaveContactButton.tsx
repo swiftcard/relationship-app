@@ -7,8 +7,10 @@ import { createPortal } from "react-dom";
 import { getVisitorId, getVisitorInfo, markSharedWith, hasSavedContact, markSavedContact } from "@/lib/visitor";
 import { triggerSignupNudge, triggerSignupNudgeWhenVisible } from "@/lib/nudge";
 import {
-  buildVCard, pickContactImage, contactInitials, CONTACT_INITIALS_BG, CONTACT_INITIALS_FG, type VCardPhoto, type VCardLink,
+  buildVCard, pickContactImage, contactInitials, CONTACT_INITIALS_BG, CONTACT_INITIALS_FG,
+  type VCardPhoto, type VCardLink, type ContactImageKind,
 } from "@/lib/vcard";
+import { toContactPhoto } from "@/lib/contact-photo-browser";
 import { openFileViaSystemBrowser } from "@/lib/native-file";
 import { outbox, isQueuedOffline } from "@/lib/offline-outbox";
 // The QR popup is desktop-only (its button is hidden below md), yet the
@@ -75,13 +77,13 @@ function drawInitialsPhoto(name: string): VCardPhoto | null {
   }
 }
 
-// Fetch the card owner's headshot and base64-encode it for embedding. Routed
-// through the SSRF-guarded same-origin image proxy so cross-origin Supabase /
-// avatar URLs read cleanly (and CORS-taint can't block the read). Best-effort:
-// any failure (offline, non-image, timeout) resolves to null so the contact
-// still saves — just without the photo. Capped so a slow image never hangs the
+// Fetch the card owner's headshot (or logo) and finish it for embedding.
+// Routed through the SSRF-guarded same-origin image proxy so cross-origin
+// Supabase / avatar URLs read cleanly (and CORS-taint can't block the read).
+// Best-effort: any failure (offline, non-image, timeout) resolves to null and
+// the initials tile is used instead. Capped so a slow image never hangs the
 // save.
-async function fetchHeadshotPhoto(url: string): Promise<VCardPhoto | null> {
+async function fetchHeadshotPhoto(url: string, kind: ContactImageKind): Promise<VCardPhoto | null> {
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 4000);
@@ -90,17 +92,7 @@ async function fetchHeadshotPhoto(url: string): Promise<VCardPhoto | null> {
     if (!res.ok) return null;
     const blob = await res.blob();
     if (!blob.type.startsWith("image/")) return null;
-    // ~700KB embedded ceiling — keeps the .vcf importable on iOS/Android.
-    if (blob.size > 700_000) return null;
-    const dataUrl: string = await new Promise((resolve, reject) => {
-      const fr = new FileReader();
-      fr.onload = () => resolve(String(fr.result));
-      fr.onerror = () => reject(new Error("read failed"));
-      fr.readAsDataURL(blob);
-    });
-    const m = dataUrl.match(/^data:([^;,]+)?(?:;base64)?,([\s\S]*)$/i);
-    if (!m || !m[2]) return null;
-    return { base64: m[2], mime: m[1] || blob.type };
+    return await toContactPhoto(blob, kind);
   } catch {
     return null;
   }
@@ -335,7 +327,7 @@ export default function SaveContactButton({
     // headshot (owner order 2026-09-24), or their initials when there is
     // neither — or when the picture they have fails to load (2026-09-25).
     const image = pickContactImage(person.photoUrl, person.logoUrl);
-    const photo = (image ? await fetchHeadshotPhoto(image.url) : null) ?? drawInitialsPhoto(person.name);
+    const photo = (image ? await fetchHeadshotPhoto(image.url, image.kind) : null) ?? drawInitialsPhoto(person.name);
 
     const vcard = buildVCard(
       {

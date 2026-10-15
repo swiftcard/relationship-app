@@ -105,6 +105,62 @@ export type ContactImageKind = "headshot" | "logo";
 export const CONTACT_INITIALS_BG = "#1D4ED8";
 export const CONTACT_INITIALS_FG = "#FFFFFF";
 
+// ── The picture as iPhone keeps it ──────────────────────────────────────────
+//
+// Owner, 2026-10-15: Save Contact opened the contact sheet with no headshot.
+// The file carried one, but in whatever shape the upload had: logos went in as
+// PNGs of up to ~290KB, and iCloud drops a contact picture past ~224KB, so on
+// a synced iPhone the photo vanished after "Create New Contact". Every saved
+// contact picture is now the one shape Contacts itself writes: a square JPEG
+// with a JFIF header, well under that ceiling. The server (lib/contact-photo)
+// and the browser (SaveContactButton) both read these values.
+
+/** Edge of the square picture. Contacts shows it at ~200pt. */
+export const CONTACT_PHOTO_EDGE = 512;
+/** Hard ceiling for the embedded picture — under iCloud's ~224KB, with room. */
+export const CONTACT_PHOTO_MAX_BYTES = 200_000;
+/** JPEG qualities tried in turn until the picture fits under the ceiling. */
+export const CONTACT_PHOTO_QUALITIES = [85, 72, 60] as const;
+/**
+ * A logo is drawn inside this share of the square, centred: Contacts crops the
+ * picture to a circle, and a logo filling the square lost its corners.
+ */
+export const CONTACT_LOGO_BOX = 0.7;
+/** Behind a white / very light logo, which would vanish on white. */
+export const CONTACT_LOGO_DARK_BG = "#111827";
+
+/**
+ * The tile colour behind a logo, from the average luminance (0–1) of its
+ * visible pixels: white, unless the logo itself is near-white.
+ */
+export function contactLogoBackground(avgLuminance: number | null): string {
+  return avgLuminance !== null && avgLuminance > 0.8 ? CONTACT_LOGO_DARK_BG : "#FFFFFF";
+}
+
+/** Relative luminance (0–1) of an sRGB pixel, as WCAG defines it. */
+export function pixelLuminance(r: number, g: number, b: number): number {
+  const ch = [r, g, b].map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+}
+
+/**
+ * Average luminance of the visible (alpha ≥ 128) pixels of an RGBA buffer, or
+ * null when nothing is visible.
+ */
+export function visibleLuminance(rgba: ArrayLike<number>): number | null {
+  let sum = 0;
+  let n = 0;
+  for (let i = 0; i + 3 < rgba.length; i += 4) {
+    if (rgba[i + 3] < 128) continue;
+    sum += pixelLuminance(rgba[i], rgba[i + 1], rgba[i + 2]);
+    n += 1;
+  }
+  return n ? sum / n : null;
+}
+
 /** Up to two initials from a name ("Alex Morgan" → "AM"), "" when there is no name. */
 export function contactInitials(name: string | null | undefined): string {
   const words = String(name ?? "").trim().split(/\s+/).filter(Boolean);

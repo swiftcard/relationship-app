@@ -21,7 +21,11 @@
 // picture simply omits PHOTO and the contact still saves.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { pickContactImage, type ContactImageKind, type VCardPhoto } from "@/lib/vcard";
+import {
+  pickContactImage, contactLogoBackground, visibleLuminance,
+  CONTACT_PHOTO_EDGE, CONTACT_PHOTO_MAX_BYTES, CONTACT_PHOTO_QUALITIES, CONTACT_LOGO_BOX,
+  type ContactImageKind, type VCardPhoto,
+} from "@/lib/vcard";
 import { safeFetch } from "@/lib/safe-fetch";
 import { cardHeadshot } from "@/lib/card-media";
 import { isCardActive, ownerIsDeleted } from "@/lib/card-active";
@@ -51,7 +55,14 @@ export type { ContactImageKind };
  * photo — the contact saved with no face, the exact thing the owner asked to
  * never happen. If sharp is unavailable the raw bytes are used when they fit.
  */
-export async function fetchVCardPhoto(url: string, kind: ContactImageKind = "headshot"): Promise<VCardPhoto | null> {
+export async function fetchVCardPhoto(
+  url: string,
+  kind: ContactImageKind = "headshot",
+  // forContact: the picture goes INTO a saved contact (the vCard routes), so it
+  // is finished by contactPhotoFromBytes. Left off by the link-preview image,
+  // which needs the logo's transparency and its own proportions.
+  opts: { forContact?: boolean } = {},
+): Promise<VCardPhoto | null> {
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
@@ -63,6 +74,15 @@ export async function fetchVCardPhoto(url: string, kind: ContactImageKind = "hea
     if (!raw.byteLength) return null;
     // Anything past a few MB is not a headshot; don't hand it to the resizer.
     if (raw.byteLength > 6_000_000) return null;
+
+    if (opts.forContact) {
+      const finished = await contactPhotoFromBytes(raw, kind);
+      if (finished) return finished;
+      // No sharp: the upload itself, only when it is already a picture
+      // Contacts reads and small enough to survive iCloud.
+      if (raw.byteLength > CONTACT_PHOTO_MAX_BYTES || !/^image\/(jpeg|png)$/.test(type)) return null;
+      return { base64: raw.toString("base64"), mime: type };
+    }
 
     const shrunk = await shrinkForVCard(raw, kind);
     if (shrunk) return shrunk;
@@ -87,6 +107,75 @@ async function shrinkForVCard(raw: Buffer, kind: ContactImageKind): Promise<VCar
       : await img.jpeg({ quality: 82 }).toBuffer();
     if (!out.byteLength || out.byteLength > VCARD_PHOTO_MAX_BYTES) return null;
     return { base64: out.toString("base64"), mime: kind === "logo" ? "image/png" : "image/jpeg" };
+  } catch {
+    return null;
+  }
+}
+
+// The JFIF APP0 segment every camera, browser and Contacts itself writes after
+// SOI. libvips leaves it out (its JPEGs open FF D8 FF DB). Most decoders
+// accept that, but a saved contact's picture should be the plainest JPEG there
+// is, not one that relies on a decoder being lenient.
+const JFIF_APP0 = Buffer.from([
+  0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
+]);
+
+/** The same JPEG with a JFIF header, when it has none. Anything else is returned as is. */
+export function withJfifHeader(jpeg: Buffer): Buffer {
+  if (jpeg.length < 4 || jpeg[0] !== 0xff || jpeg[1] !== 0xd8) return jpeg;
+  if (jpeg[2] === 0xff && jpeg[3] === 0xe0) return jpeg;
+  return Buffer.concat([jpeg.subarray(0, 2), JFIF_APP0, jpeg.subarray(2)]);
+}
+
+/**
+ * Any picture → the picture a saved contact carries (see lib/vcard, "The
+ * picture as iPhone keeps it"): a CONTACT_PHOTO_EDGE square JPEG with a JFIF
+ * header, no larger than CONTACT_PHOTO_MAX_BYTES.
+ *
+ *   • headshot (and the initials tile): fills the square, centred — the same
+ *     crop the card's round headshot shows.
+ *   • logo: whole, centred in CONTACT_LOGO_BOX of the square on white — or on
+ *     dark when the logo itself is near-white — so the circle Contacts cuts
+ *     never clips it and transparency never turns black.
+ *
+ * Null when the bytes aren't a picture sharp can read; the caller falls back.
+ */
+export async function contactPhotoFromBytes(raw: Buffer, kind: ContactImageKind): Promise<VCardPhoto | null> {
+  try {
+    const sharp = (await import("sharp")).default;
+    const edge = CONTACT_PHOTO_EDGE;
+    let square: Buffer;
+    if (kind === "logo") {
+      const box = Math.round(edge * CONTACT_LOGO_BOX);
+      const logo = await sharp(raw, { animated: false })
+        .rotate()
+        .resize(box, box, { fit: "inside" })
+        .ensureAlpha()
+        .png()
+        .toBuffer();
+      const sample = await sharp(logo).resize(48, 48, { fit: "inside" }).ensureAlpha().raw().toBuffer();
+      const background = contactLogoBackground(visibleLuminance(sample));
+      square = await sharp({ create: { width: edge, height: edge, channels: 3, background } })
+        .composite([{ input: logo, gravity: "centre" }])
+        .png()
+        .toBuffer();
+    } else {
+      square = await sharp(raw, { animated: false })
+        .rotate()
+        .resize(edge, edge, { fit: "cover", position: "centre" })
+        .flatten({ background: "#ffffff" })
+        .png()
+        .toBuffer();
+    }
+    for (const quality of CONTACT_PHOTO_QUALITIES) {
+      const jpeg = withJfifHeader(
+        await sharp(square).flatten({ background: "#ffffff" }).jpeg({ quality, chromaSubsampling: "4:2:0" }).toBuffer(),
+      );
+      if (jpeg.byteLength && jpeg.byteLength <= CONTACT_PHOTO_MAX_BYTES) {
+        return { base64: jpeg.toString("base64"), mime: "image/jpeg" };
+      }
+    }
+    return null;
   } catch {
     return null;
   }

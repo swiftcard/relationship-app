@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { buildVCard, cardContactLinks, contactInitials, escapeVCardText, escapeVCardValue, normalizeVCardUrl, pickContactImage } from "@/lib/vcard";
+import {
+  buildVCard, cardContactLinks, contactInitials, escapeVCardText, escapeVCardValue, normalizeVCardUrl, pickContactImage,
+  contactLogoBackground, visibleLuminance, CONTACT_LOGO_DARK_BG,
+} from "@/lib/vcard";
 
 // A tiny 1x1 JPEG's base64 stand-in is enough to exercise the PHOTO path — the
 // builder never decodes it, it only base64-frames + folds.
@@ -312,6 +315,32 @@ describe("saved contact — picture fallback and bio", () => {
     expect(route).toContain("note: str(custom.bio)");
     expect(route).toContain("?? (await renderInitialsPhoto(name))");
     expect(page).toMatch(/logoUrl: cardData\.logoUrl,[\s\S]{0,120}\bbio,/);
+  });
+
+  // Owner, 2026-10-15: the headshot went missing on iPhone after "Create New
+  // Contact". Every picture a contact carries is finished into the square JPEG
+  // iPhone keeps (lib/contact-photo contactPhotoFromBytes; Apple's own parser
+  // checks it in tests/render/contact-photo-apple.test.ts). Dropping the
+  // forContact flag would quietly send raw uploads again.
+  it("every contact picture — card, lead, initials, browser — is finished for Contacts", () => {
+    const card = readFileSync("src/app/api/card/[username]/vcard/route.ts", "utf8");
+    const lead = readFileSync("src/app/api/leads/vcard/route.ts", "utf8");
+    const initials = readFileSync("src/lib/contact-initials-photo.tsx", "utf8");
+    const btn = readFileSync("src/components/SaveContactButton.tsx", "utf8");
+    expect(card).toContain("fetchVCardPhoto(image.url, image.kind, { forContact: true })");
+    expect(lead).toContain("fetchVCardPhoto(image.url, image.kind, { forContact: true })");
+    expect(initials).toContain('contactPhotoFromBytes(png, "headshot")');
+    expect(btn).toContain("fetchHeadshotPhoto(image.url, image.kind)");
+    expect(btn).toMatch(/return await toContactPhoto\(blob, kind\);/);
+  });
+
+  it("a near-white logo goes on dark, anything else on white", () => {
+    expect(contactLogoBackground(null)).toBe("#FFFFFF");
+    expect(contactLogoBackground(0.1)).toBe("#FFFFFF");
+    expect(contactLogoBackground(0.95)).toBe(CONTACT_LOGO_DARK_BG);
+    // RGBA: one opaque white pixel, one transparent black one (ignored).
+    expect(visibleLuminance([255, 255, 255, 255, 0, 0, 0, 0])).toBeCloseTo(1);
+    expect(visibleLuminance([0, 0, 0, 0])).toBeNull();
   });
 
   it("the page, the button and the server vCard all hand over every social and the Swift Links buttons", () => {

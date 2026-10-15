@@ -12,14 +12,14 @@
 // other contact picture: any failure returns null and the contact still saves.
 
 import { ImageResponse } from "next/og";
-import { CONTACT_INITIALS_BG, CONTACT_INITIALS_FG, contactInitials, type VCardPhoto } from "@/lib/vcard";
-import { VCARD_PHOTO_EDGE } from "@/lib/contact-photo";
+import { CONTACT_INITIALS_BG, CONTACT_INITIALS_FG, CONTACT_PHOTO_EDGE, contactInitials, type VCardPhoto } from "@/lib/vcard";
+import { contactPhotoFromBytes } from "@/lib/contact-photo";
 
 export async function renderInitialsPhoto(name: string | null | undefined): Promise<VCardPhoto | null> {
   const initials = contactInitials(name);
   if (!initials) return null;
   try {
-    const size = VCARD_PHOTO_EDGE;
+    const size = CONTACT_PHOTO_EDGE;
     const png = Buffer.from(
       await new ImageResponse(
         (
@@ -46,14 +46,9 @@ export async function renderInitialsPhoto(name: string | null | undefined): Prom
       ).arrayBuffer(),
     );
     if (!png.byteLength) return null;
-    // JPEG is a fraction of the PNG's size for a flat tile; keep the PNG if
-    // sharp is unavailable.
-    try {
-      const sharp = (await import("sharp")).default;
-      const jpg = await sharp(png).jpeg({ quality: 90 }).toBuffer();
-      if (jpg.byteLength) return { base64: jpg.toString("base64"), mime: "image/jpeg" };
-    } catch { /* fall through to the PNG */ }
-    return { base64: png.toString("base64"), mime: "image/png" };
+    // The same square JPEG every saved contact picture is (lib/contact-photo);
+    // keep the PNG if sharp is unavailable.
+    return (await contactPhotoFromBytes(png, "headshot")) ?? { base64: png.toString("base64"), mime: "image/png" };
   } catch {
     return null;
   }
