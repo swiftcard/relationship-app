@@ -81,4 +81,13 @@
          posted; without this declaration PushNotifications.requestPermissions()
          resolves "denied" on every modern device and push is silently dead. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- The card scanner (CardScanCamera) opens the camera with getUserMedia.
+         Capacitor answers the WebView's VIDEO_CAPTURE request with a runtime
+         CAMERA request, and Android refuses a runtime request for a permission
+         the manifest never declares: no dialog, getUserMedia rejects, and the
+         scanner is dead on every Android phone (audit NS-03). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Declaring CAMERA makes Play assume a camera is required and hide the
+         app from devices without one. It isn't: the scanner is optional. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 </manifest>
