@@ -7,13 +7,19 @@ import ScrollProgress from "@/components/ScrollProgress";
 import ScrollReveal from "@/components/ScrollReveal";
 import NativeHidden from "@/components/NativeHidden";
 import HomeHeadingReveal from "@/components/site/HomeHeadingReveal";
+import { itemListJsonLd, jsonLdScript } from "@/lib/brand";
+import { VS_COMPETITORS } from "@/lib/compare/competitors";
 import "@/app/home.css";
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
+
 export const metadata: Metadata = {
-  title: "SwiftCard vs Linktree, Popl & Blinq — Digital Business Card Comparison",
+  // ≤ 60 chars, set as-is so the layout template cannot lengthen it.
+  title: { absolute: "SwiftCard vs Popl, Blinq, Linq, HiHello & Dot: Compared" },
   alternates: { canonical: "/compare" },
   description:
-    "How SwiftCard compares to Linktree, Popl, and Blinq on price, lead capture, and follow-up automation. See the real differences before you switch.",
+    "How SwiftCard compares to Popl, Blinq, Linq, HiHello, Dot and Linktree on price, lead capture and follow-up automation. Head-to-head pages and alternative guides.",
+  openGraph: { title: "SwiftCard compared with Popl, Blinq, Linq, HiHello, Dot and Linktree", description: "Head-to-head pages and alternative guides, with sources and the places each rival is stronger.", url: `${APP_URL}/compare`, siteName: "SwiftCard" },
 };
 
 // pricing: this row states SwiftCard's OWN price. /compare was the one
@@ -29,12 +35,25 @@ type Row = { label: string; swiftcard: string; linktree: string; popl: string; b
 // since plans and prices change. SwiftCard's numbers are the same ones live on /pricing.
 const ROWS: Row[] = [
   { label: "Starting price", swiftcard: "Free", linktree: "Free (12% fee on sales)", popl: "Free", blinq: "Free" },
-  { label: "Cheapest paid plan", pricing: true, swiftcard: "$4.99/mo", linktree: "$8/mo (Starter)", popl: "$7.99/mo (Pro)", blinq: "~$3–10/mo (Premium, by billing term)" },
+  { label: "Cheapest paid plan", pricing: true, swiftcard: "$4.99/mo", linktree: "$8/mo (Starter)", popl: "$7.99/mo (Pro)", blinq: "$9.99/mo, or $7.33/mo billed annually (Premium)" },
   { label: "Built-in lead CRM (notes, history, follow-ups)", swiftcard: "✓", linktree: "✗", popl: "Via 3rd-party integrations", blinq: "Via 3rd-party integrations" },
-  { label: "Automated follow-up sequences (email + text)", swiftcard: "✓", linktree: "✗", popl: "✗", blinq: "✗" },
+  { label: "Automated follow-up sequences (email + text)", swiftcard: "✓", linktree: "✗", popl: "Not listed", blinq: "Not listed" },
   { label: "NFC tap-to-share", swiftcard: "✓", linktree: "✗", popl: "✓", blinq: "✓" },
   { label: "Custom card designer", swiftcard: "✓ (Pro)", linktree: "N/A — link-in-bio, not a card", popl: "Limited", blinq: "✓" },
-  { label: "Team/office pricing", pricing: true, swiftcard: "$3.99/seat/mo · min 2 seats", linktree: "N/A", popl: "$5/user/mo · min 5 seats", blinq: "$4.99/user/mo · min 5 seats" },
+  { label: "Team/office pricing", pricing: true, swiftcard: "$3.99/seat/mo · min 2 seats", linktree: "N/A", popl: "Not published", blinq: "$6.99/user/mo, or $4.99 billed annually · min 5" },
+];
+
+// The two page families this hub links, each with a one-line summary. The
+// head-to-head list is driven by lib/compare/competitors (one place to edit);
+// the alternative pages keep their own copy in compare/[slug]/page.tsx.
+const ALTERNATIVES: { slug: string; name: string; summary: string }[] = [
+  { slug: "linktree", name: "Linktree", summary: "A link-in-bio page that also saves your card and captures the visitor's contact." },
+  { slug: "popl", name: "Popl", summary: "Built-in email and text follow-up instead of wiring it through integrations." },
+  { slug: "blinq", name: "Blinq", summary: "The card feeds a contacts list with notes, history and follow-up switched on per contact." },
+  { slug: "hihello", name: "HiHello", summary: "Cards and signatures plus the follow-up layer HiHello does not focus on." },
+  { slug: "mobilo", name: "Mobilo", summary: "Monthly pricing and a free plan that needs no hardware." },
+  { slug: "linq", name: "Linq", summary: "One flat price and a link that looks like your name, without an enterprise rollout." },
+  { slug: "dot", name: "Dot", summary: "Start free with no device to buy, and let the follow-up run itself." },
 ];
 
 function Cell({ value, brand }: { value: string; brand?: boolean }) {
@@ -64,12 +83,19 @@ function Cell({ value, brand }: { value: string; brand?: boolean }) {
   );
 }
 
+const card = "rd-card-l px-5 py-4 block hover:border-slate-300 transition-colors";
+
 export default function ComparePage() {
+  const itemList = itemListJsonLd("SwiftCard comparison pages", [
+    ...VS_COMPETITORS.map((c) => ({ name: `SwiftCard vs ${c.name}`, path: `/compare/swiftcard-vs-${c.slug}`, description: c.tldr })),
+    ...ALTERNATIVES.map((a) => ({ name: `${a.name} alternative`, path: `/compare/${a.slug}-alternative`, description: a.summary })),
+  ]);
   return (
     // bg-cream stays only for the native shell's status-bar canvas rule in
     // globals.css (html.native-app:has(main.bg-cream)); .hp paints the page
     // itself white (owner, 2026-09-17: light pages, no cream).
     <main className="hp sc-canvas-white min-h-screen bg-cream flex flex-col">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(itemList) }} />
       <ScrollProgress />
       <ScrollReveal />
       <HomeHeadingReveal />
@@ -137,30 +163,56 @@ export default function ComparePage() {
           </p>
           <p className="text-slate-600 text-sm leading-relaxed mb-2">
             <strong className="text-slate-900">Popl</strong> and <strong className="text-slate-900">Blinq</strong> both do NFC sharing and CRM
-            <em> integrations</em>{" "}well, but neither has SwiftCard&apos;s built-in automated email + text follow-up sequences out of the box —
-            you&apos;d need to wire that up yourself through Zapier or a separate tool.
+            <em> integrations</em>{" "}well; neither lists built-in automated email + text follow-up on its official pages, so you&apos;d wire that up through a separate tool.
           </p>
           <p className="text-slate-600 text-sm leading-relaxed">
             SwiftCard bundles the card, the CRM, and the follow-up automation into one plan — no separate tools to connect.
           </p>
         </div>
+      </section>
+      </div>
 
-        {/* Deep-dive pages per competitor — each owns one "<x> alternative" query. */}
-        <div className="mt-10 flex flex-wrap justify-center gap-2">
-          {["linktree", "popl", "blinq", "hihello", "mobilo", "linq", "dot"].map((s) => (
-            <Link key={s} href={`/compare/${s}-alternative`} className="text-[0.8125rem] text-slate-600 hover:text-slate-900 hover:border-slate-300 rounded-full px-3.5 py-1.5 bg-white border border-slate-200 transition-colors capitalize">
-              {s === "hihello" ? "HiHello" : s.charAt(0).toUpperCase() + s.slice(1)} alternative →
-            </Link>
-          ))}
+      {/* Head to head — one page per rival for "SwiftCard vs X" searches. */}
+      <section className="max-w-4xl mx-auto w-full px-5 sm:px-6 pt-16 pb-12">
+        <div data-hp-head>
+          <h2 className="rd-h2 text-[clamp(1.6rem,3.2vw,2.3rem)] text-slate-900 text-center mb-3 [text-wrap:balance]">Head to head</h2>
+          <p className="text-slate-500 text-[0.9375rem] text-center max-w-xl mx-auto mb-8">Price, features and follow-up side by side, with where each rival is stronger and the sources we checked.</p>
         </div>
+        <ul className="grid sm:grid-cols-2 gap-3 list-none p-0">
+          {VS_COMPETITORS.map((c) => (
+            <li key={c.slug}>
+              <Link href={`/compare/swiftcard-vs-${c.slug}`} className={card}>
+                <span className="text-slate-900 font-semibold text-[0.9375rem]">SwiftCard vs {c.name} →</span>
+                <span className="block text-slate-500 text-[0.84375rem] mt-1 leading-relaxed">{c.hook.charAt(0).toUpperCase() + c.hook.slice(1)}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
 
-        <div className="mt-10 text-center">
-          <Link
-            href="/cards/new"
-            className="rd-btn rd-btn-primary rd-btn-lg"
-          >
+      {/* Alternative guides — each owns one "<x> alternative" query. */}
+      <div className="hp-soft">
+      <section className="max-w-4xl mx-auto w-full px-5 sm:px-6 pt-14 pb-16">
+        <div data-hp-head>
+          <h2 className="rd-h2 text-[clamp(1.6rem,3.2vw,2.3rem)] text-slate-900 text-center mb-3 [text-wrap:balance]">Looking for an alternative?</h2>
+          <p className="text-slate-500 text-[0.9375rem] text-center max-w-xl mx-auto mb-8">Why people switch, and how to move your card and contacts over.</p>
+        </div>
+        <ul className="grid sm:grid-cols-2 gap-3 list-none p-0">
+          {ALTERNATIVES.map((a) => (
+            <li key={a.slug}>
+              <Link href={`/compare/${a.slug}-alternative`} className={card}>
+                <span className="text-slate-900 font-semibold text-[0.9375rem]">{a.name} alternative →</span>
+                <span className="block text-slate-500 text-[0.84375rem] mt-1 leading-relaxed">{a.summary}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+
+        <div className="mt-10 text-center flex flex-wrap justify-center gap-3">
+          <Link href="/cards/new" className="rd-btn rd-btn-primary rd-btn-lg">
             Try SwiftCard free →
           </Link>
+          <Link href="/faq" className="rd-btn rd-btn-lg border border-slate-200 bg-white text-slate-800 hover:border-slate-300">Read the FAQ</Link>
         </div>
       </section>
       </div>

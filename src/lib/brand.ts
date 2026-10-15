@@ -184,6 +184,53 @@ export function profilePageJsonLd(p: {
   };
 }
 
+// FAQPage node for a page whose visible FAQ is exactly `items` — pass the same
+// array the page renders, never a second copy, so the structured data can't
+// drift from what a reader sees. `text` may carry the few HTML tags Google
+// accepts in an Answer (<a>, <p>, <b>, lists); plain strings are fine too.
+export function faqPageJsonLd(items: { q: string; a: string }[]) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: items.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
+  };
+}
+
+// BreadcrumbList for the "Home > Compare > SwiftCard vs X" trail. `path` is the
+// page-relative path ("" for home) so every item resolves under APP_URL.
+export function breadcrumbJsonLd(crumbs: { name: string; path: string }[]) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: crumbs.map((c, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: c.name,
+      item: `${APP_URL}${c.path}`,
+    })),
+  };
+}
+
+// ItemList for a hub page that links a set of sibling pages (the /compare hub).
+export function itemListJsonLd(name: string, items: { name: string; path: string; description?: string }[]) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name,
+    itemListElement: items.map((it, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: it.name,
+      url: `${APP_URL}${it.path}`,
+      ...(it.description ? { description: it.description } : {}),
+    })),
+  };
+}
+
+// The @id of the homepage's SoftwareApplication node, for pages that talk
+// about the product (comparisons, FAQ) to reference instead of re-declaring it.
+export const SOFTWARE_ID = `${APP_URL}/#software`;
+
 export function jsonLdScript(node: unknown): string {
   return JSON.stringify(node).replace(/</g, "\\u003c");
 }

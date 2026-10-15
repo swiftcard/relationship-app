@@ -7,8 +7,11 @@ import SiteFooterMini from "@/components/site/SiteFooterMini";
 import FaqAccordion from "@/components/site/FaqAccordion";
 import ScrollProgress from "@/components/ScrollProgress";
 import ScrollReveal from "@/components/ScrollReveal";
-import NativeHidden from "@/components/NativeHidden";
 import HomeHeadingReveal from "@/components/site/HomeHeadingReveal";
+import CompareTable, { type CompareRow } from "@/components/site/CompareTable";
+import VsComparison from "@/components/site/VsComparison";
+import { faqPageJsonLd, jsonLdScript } from "@/lib/brand";
+import { VS_SLUGS, vsCompetitorForSlug } from "@/lib/compare/competitors";
 import "@/app/home.css";
 
 // ── Competitor-alternative pages: /compare/<x>-alternative ──────────────────
@@ -28,8 +31,13 @@ import "@/app/home.css";
 //
 // SEO plumbing: slugs live in src/app/sitemap.ts (COMPARE_SLUGS), the hub
 // links every page, and each page cross-links its siblings.
+//
+// The same route also serves /compare/swiftcard-vs-<x> (2026-10-14): the
+// head-to-head pages for "SwiftCard vs X" searches. Their data lives in
+// src/lib/compare/competitors.ts and they render through VsComparison; this
+// file only dispatches on the slug so both families share one URL prefix.
 
-type Row = { label: string; swiftcard: string; them: string; pricing?: true };
+type Row = CompareRow;
 
 type Competitor = {
   name: string;
@@ -287,18 +295,23 @@ const COMPETITORS: Record<string, Competitor> = {
     metaDesc: "SwiftCard is the Dot alternative that starts free with no device to buy, and adds lead capture, a built-in CRM and automated email + text follow-up.",
     heroSub: "Dot sells a tap-to-share device with a free profile behind it. SwiftCard starts with the free card itself — QR, link, Apple Wallet, any NFC tag — and then does the follow-up for you.",
     honest: "Dot (dot.cards) is a hardware-first digital business card: you buy a dot.card, dot.thin, dot.metal or dot.band, and the profile it opens is free for life. If you want a nicely made physical tap device and nothing more, that works. People switch to SwiftCard when they don't want to buy a device to get started, want their card in Apple Wallet and on Apple Watch, and want what happens after the tap handled for them — a share-back form, a built-in CRM and automated email + text follow-up, which Dot reserves for its team plans and a paid individual tier.",
+    // Dot's shop and team pages render only with JavaScript, so device and
+    // team prices could not be read from an official page (docs/competitor-
+    // facts.md, 2026-10-14). Only what their App Store listing and
+    // subscription policy state is claimed; the rest is "Not listed".
     rows: [
       { label: "Digital business card", swiftcard: "✓", them: "✓" },
-      { label: "Free to start without buying hardware", swiftcard: "✓", them: "✗ (profile is free after a device purchase)" },
-      { label: "NFC tap-to-share", swiftcard: "✓ (works with any blank NFC tag)", them: "✓ (their devices, from $30)" },
-      { label: "Apple Wallet and Apple Watch", swiftcard: "✓", them: "Limited" },
-      { label: "Lead capture (share-back form)", swiftcard: "✓", them: "Paid tiers" },
-      { label: "Built-in lead CRM (notes, history, follow-ups)", swiftcard: "✓", them: "Team plans" },
-      { label: "Automated follow-up sequences (email + text)", swiftcard: "✓", them: "✗" },
-      { label: "Link-in-bio page included", swiftcard: "✓ (Swift Links)", them: "✗" },
-      { label: "AI card designer (copy any card from a photo)", swiftcard: "✓ (Pro)", them: "✗" },
-      { label: "Starting price", swiftcard: "Free", them: "$30 device (one-time)" },
-      { label: "Cheapest paid plan", swiftcard: "$4.99/mo", them: "Teams from $8/member/mo (billed annually)", pricing: true },
+      { label: "Free to start without buying hardware", swiftcard: "✓", them: "Profile is free with a device" },
+      { label: "NFC tap-to-share", swiftcard: "✓ (works with any blank NFC tag)", them: "✓ (their devices)" },
+      { label: "Apple Wallet", swiftcard: "✓", them: "✓" },
+      { label: "Apple Watch app", swiftcard: "✓", them: "Not listed" },
+      { label: "Lead capture (share-back form)", swiftcard: "✓", them: "✓" },
+      { label: "Built-in lead CRM (notes, history, follow-ups)", swiftcard: "✓", them: "Lead export listed" },
+      { label: "Automated follow-up sequences (email + text)", swiftcard: "✓", them: "Not listed" },
+      { label: "Link-in-bio page included", swiftcard: "✓ (Swift Links)", them: "Not listed" },
+      { label: "AI card designer (copy any card from a photo)", swiftcard: "✓ (Pro)", them: "Not listed" },
+      { label: "Starting price", swiftcard: "Free", them: "Device purchase (price on their site)" },
+      { label: "Cheapest paid plan", swiftcard: "$4.99/mo", them: "$15/mo, or $12/mo billed annually (Profile+)", pricing: true },
     ],
     switchReasons: [
       { t: "Nothing to buy first", d: "Create the card, share it by QR, link or Apple Wallet in the next five minutes. Add NFC later with any blank tag, or keep using the device you already own." },
@@ -316,24 +329,36 @@ const COMPETITORS: Record<string, Competitor> = {
     faq: [
       { q: "Do I need to buy anything to use SwiftCard?", a: "No. The card, QR and link sharing, Apple Wallet and the Swift Links page are free with no device. NFC is optional and works with any blank tag." },
       { q: "Can I keep using my Dot card or band?", a: "Yes — Dot devices store a link, and SwiftCard writes your new card link to any NFC tag. Tap it and your SwiftCard opens." },
-      { q: "How does pricing compare?", a: "Dot's profile is free after a one-time device purchase (from $30); its team plans run $8 to $15 per member per month billed annually, and extra individual features sit in a paid tier. SwiftCard is free to start and Pro is $4.99/month flat with a free trial. Verify current pricing with them — plans change." },
-      { q: "What does SwiftCard do that Dot doesn't?", a: "Automated follow-up by email and text, a built-in CRM for every lead, a Swift Links page, Apple Wallet and Apple Watch sharing, and an AI designer that rebuilds any card from a photo — all on one plan, no hardware required." },
+      { q: "How does pricing compare?", a: "Dot's profile is free once you own one of its devices, and its Profile+ subscription is $15 a month or $12 a month billed annually; device and team prices are on their site. SwiftCard is free to start with no purchase, and Pro is $4.99/month flat with a free trial. Verify current pricing with them — plans change." },
+      { q: "What does SwiftCard do that Dot doesn't list?", a: "Automated follow-up by email and text, a built-in CRM for every lead, a Swift Links page, an Apple Watch app, and an AI designer that rebuilds any card from a photo — none of which appear on Dot's official pages — all on one plan, no hardware required." },
       { q: "Does the person I meet need an app?", a: "No — with either product your card opens in the browser. With SwiftCard they also save your contact in one tap and can share theirs back." },
     ],
   },
 };
 
 const ALL_SLUGS = Object.keys(COMPETITORS);
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
 export function generateStaticParams() {
-  return ALL_SLUGS.map((slug) => ({ slug }));
+  return [...ALL_SLUGS, ...VS_SLUGS].map((slug) => ({ slug }));
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
+  const vs = vsCompetitorForSlug(slug);
+  if (vs) {
+    const url = `${APP_URL}/compare/${slug}`;
+    return {
+      // Set as-is: the layout's title template would push these past 60 chars.
+      title: { absolute: vs.metaTitle },
+      description: vs.metaDesc,
+      alternates: { canonical: url },
+      openGraph: { title: vs.metaTitle, description: vs.metaDesc, url, siteName: "SwiftCard", type: "article" },
+      twitter: { card: "summary_large_image", title: vs.metaTitle, description: vs.metaDesc },
+    };
+  }
   const c = COMPETITORS[slug];
   if (!c) return { title: "SwiftCard" };
-  const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
   return {
     title: `${c.metaTitle} | SwiftCard`,
     description: c.metaDesc,
@@ -342,38 +367,22 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   };
 }
 
-function Cell({ value, brand }: { value: string; brand?: boolean }) {
-  const isCheck = value.startsWith("✓");
-  const isCross = value === "✗";
-  return (
-    <td className={`px-4 py-4 text-sm text-center align-middle ${brand ? "font-semibold" : "text-slate-600"}`} style={brand ? { color: "#1D4ED8" } : undefined}>
-      {/* Same as /compare: the glyph is the answer, so it gets a text
-          equivalent and a shade you can actually see (✗ was slate-300, ~1.6:1). */}
-      {isCross ? <><span aria-hidden="true" className="text-slate-500">✗</span><span className="sr-only">No</span></> : isCheck ? (
-        <span><span aria-hidden="true" className="text-green-600 text-base">✓</span><span className="sr-only">Yes</span>{value.length > 1 ? <span className="text-slate-500 text-xs"> {value.slice(1).trim()}</span> : null}</span>
-      ) : value}
-    </td>
-  );
-}
-
 export default async function AlternativePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  const vs = vsCompetitorForSlug(slug);
+  if (vs) return <VsComparison c={vs} />;
   const c = COMPETITORS[slug];
   if (!c) notFound();
 
   const src = `alt_${slug.replace(/-/g, "_")}`;
-  const faqJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: c.faq.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
-  };
+  const faqJsonLd = faqPageJsonLd(c.faq);
 
   return (
     // bg-cream stays only for the native shell's status-bar canvas rule in
     // globals.css (html.native-app:has(main.bg-cream)); .hp paints the page
     // itself white (owner, 2026-09-17: light pages, no cream).
     <main className="hp sc-canvas-white min-h-screen bg-cream flex flex-col">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(faqJsonLd) }} />
       <ScrollProgress />
       <ScrollReveal />
       <HomeHeadingReveal />
@@ -399,41 +408,7 @@ export default async function AlternativePage({ params }: { params: Promise<{ sl
       {/* Table */}
       <div className="hp-soft">
       <section className="max-w-3xl mx-auto w-full px-5 sm:px-6 pt-14 pb-16">
-        {/* Phones: the table is wider than the screen, so say it swipes and
-            fade the cut edge — without this the competitor columns are simply
-            invisible on a phone (owner mobile pass, 2026-09-17). */}
-        <p className="sm:hidden mb-2 flex items-center gap-1.5 text-[0.8125rem] font-medium text-slate-500">
-          Swipe the table to compare
-          <span aria-hidden="true">→</span>
-        </p>
-        <div className="relative">
-        <div className="relative overflow-x-auto rounded-3xl border border-slate-200 bg-white shadow-[0_18px_40px_-28px_rgba(15,23,42,0.3)]">
-          <table className="w-full border-collapse min-w-[520px]">
-            <thead>
-              <tr className="border-b border-slate-200">
-                <th className="px-4 py-4 text-left text-sm font-semibold text-slate-900 w-2/5">&nbsp;</th>
-                <th className="px-4 py-4 text-sm font-bold text-center" style={{ color: "#1D4ED8" }}>SwiftCard</th>
-                <th className="px-4 py-4 text-sm font-semibold text-slate-500 text-center">{c.name}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {c.rows.map((row, i) => {
-                const tr = (
-                  <tr key={row.label} className={i % 2 === 1 ? "bg-[#F5F7FB]" : ""}>
-                    <td className="px-4 py-4 text-sm font-medium text-slate-700">{row.label}</td>
-                    <Cell value={row.swiftcard} brand />
-                    <Cell value={row.them} />
-                  </tr>
-                );
-                // Rows quoting OUR price are dropped inside the native shell (3.1.1).
-                return row.pricing ? <NativeHidden key={row.label}>{tr}</NativeHidden> : tr;
-              })}
-            </tbody>
-          </table>
-        </div>
-        {/* the cut edge, faded so it reads as "there is more" */}
-        <span className="sm:hidden pointer-events-none absolute inset-y-0 right-0 w-10 rounded-r-3xl" style={{ background: "linear-gradient(90deg, rgba(255,255,255,0) 0%, #ffffff 92%)" }} aria-hidden="true" />
-        </div>
+        <CompareTable competitor={c.name} rows={c.rows} />
         <p className="text-slate-600 text-[0.9375rem] leading-relaxed max-w-2xl mx-auto text-center mt-8">{c.honest}</p>
       </section>
       </div>
@@ -487,6 +462,11 @@ export default async function AlternativePage({ params }: { params: Promise<{ sl
         <div className="mb-3"><Eyebrow dark={false}>More comparisons</Eyebrow></div>
         <div className="flex flex-wrap justify-center gap-2">
           <Link href="/compare" className="text-[0.8125rem] text-slate-600 hover:text-slate-900 hover:border-slate-300 rounded-full px-3.5 py-1.5 bg-white border border-slate-200 transition-colors">Full comparison table</Link>
+          {/* The head-to-head twin of this page, when there is one. */}
+          {VS_SLUGS.includes(`swiftcard-vs-${slug.replace(/-alternative$/, "")}`) && (
+            <Link href={`/compare/swiftcard-vs-${slug.replace(/-alternative$/, "")}`} className="text-[0.8125rem] text-slate-600 hover:text-slate-900 hover:border-slate-300 rounded-full px-3.5 py-1.5 bg-white border border-slate-200 transition-colors">SwiftCard vs {c.name}, head to head</Link>
+          )}
+          <Link href="/faq" className="text-[0.8125rem] text-slate-600 hover:text-slate-900 hover:border-slate-300 rounded-full px-3.5 py-1.5 bg-white border border-slate-200 transition-colors">FAQ</Link>
           <Link href="/business-card-view-tracking" className="text-[0.8125rem] text-slate-600 hover:text-slate-900 hover:border-slate-300 rounded-full px-3.5 py-1.5 bg-white border border-slate-200 transition-colors">Card view tracking</Link>
           <Link href="/link-in-bio-with-analytics" className="text-[0.8125rem] text-slate-600 hover:text-slate-900 hover:border-slate-300 rounded-full px-3.5 py-1.5 bg-white border border-slate-200 transition-colors">Link in bio with analytics</Link>
           {ALL_SLUGS.filter((s) => s !== slug).map((s) => (

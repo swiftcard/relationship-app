@@ -323,6 +323,14 @@ export default function PricingPage() {
               )}
             </details>
           )}
+          {/* Questions people ask on this page are answered in full on /faq,
+              and the compare pages show the same prices next to each rival's. */}
+          <p className="text-center text-sm text-slate-500 mt-10">
+            Questions about trials, cancelling or teams?{" "}
+            <Link href="/faq#pricing" className="text-brand underline underline-offset-2">Read the FAQ</Link>
+            {" "}or see{" "}
+            <Link href="/compare" className="text-brand underline underline-offset-2">how SwiftCard compares</Link>.
+          </p>
         </section>
         </div>
       </main>

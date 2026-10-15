@@ -92,7 +92,20 @@ export function campaignSourceLabel(source: string): string | null {
   return `${CAMPAIGN_NAMES[platform]} — ${place}`;
 }
 
+// Landing-page sources (lib/referral.ts LANDING_SOURCE): for_<industry> from a
+// /for page, alt_<rival>_alternative from a "<rival> alternative" page, and
+// alt_vs_<rival> from a "SwiftCard vs <rival>" page.
+function landingSourceLabel(source: string): string | null {
+  const vs = source.match(/^alt_vs_([a-z0-9]+)$/);
+  if (vs) return `'SwiftCard vs ${vs[1]}' comparison page`;
+  const alt = source.match(/^alt_([a-z0-9_]+?)(?:_alternative)?$/);
+  if (alt) return `'${alt[1].replace(/_/g, " ")} alternative' page`;
+  const industry = source.match(/^for_([a-z0-9_]+)$/);
+  if (industry) return `'For ${industry[1].replace(/_/g, " ")}' page`;
+  return null;
+}
+
 export function getSignupSourceLabel(source: string | null | undefined): string {
   if (!source) return SIGNUP_SOURCE_LABELS.direct;
-  return SIGNUP_SOURCE_LABELS[source] ?? campaignSourceLabel(source) ?? source.replace(/_/g, " ");
+  return SIGNUP_SOURCE_LABELS[source] ?? campaignSourceLabel(source) ?? landingSourceLabel(source) ?? source.replace(/_/g, " ");
 }

@@ -34,6 +34,21 @@ const COMPARE_SLUGS = [
   "dot-alternative",
 ];
 
+// /compare/swiftcard-vs-<x> head-to-head pages (2026-10-14) — kept in sync by
+// hand with VS_COMPETITORS in src/lib/compare/competitors.ts, like the list
+// above (tests/blog-related.test.ts reads these literals from this file).
+const VS_SLUGS = [
+  "swiftcard-vs-popl",
+  "swiftcard-vs-blinq",
+  "swiftcard-vs-linq",
+  "swiftcard-vs-hihello",
+  "swiftcard-vs-dot",
+];
+// The day the head-to-head pages and /faq were last substantively changed. A
+// real date, not `new Date()`: a lastModified that moves every hour tells
+// Google nothing.
+const COMPARE_PAGES_MODIFIED = new Date("2026-10-14T00:00:00Z");
+
 const PRODUCT_SLUGS = [
   "digital-cards",
   "swiftlinks",
@@ -63,12 +78,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...FOR_SLUGS.map((s) => `/for/${s}`),
     ...COMPARE_SLUGS.map((s) => `/compare/${s}`),
   ];
-  const marketing = routes.map((route) => ({
+  const marketing: MetadataRoute.Sitemap = routes.map((route) => ({
     url: `${APP_URL}${route}`,
-    lastModified: new Date(),
+    lastModified: route === "/faq" ? COMPARE_PAGES_MODIFIED : new Date(),
     changeFrequency: "weekly" as const,
     priority: route === "" ? 1 : 0.6,
   }));
+  const headToHead = VS_SLUGS.map((s) => ({
+    url: `${APP_URL}/compare/${s}`,
+    lastModified: COMPARE_PAGES_MODIFIED,
+    changeFrequency: "monthly" as const,
+    priority: 0.6,
+  }));
+  marketing.push(...headToHead);
 
   // ── Public user pages: every live card and its Swift Links page ───────────
   // These pages are public by design (the privacy policy says exactly that),
