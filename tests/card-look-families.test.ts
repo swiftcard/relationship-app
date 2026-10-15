@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { META, CARD_LOOK_FAMILIES, looksInFamily, freeSafeValues, type Look } from "@/lib/template-style-presets";
+import { META, CARD_LOOK_FAMILIES, looksInFamily, freeSafeValues, RETIRED_LOOK_VALUES, type Look, type LookColourField } from "@/lib/template-style-presets";
 import { convertCustomizationToFreeClosest, proFeaturesInUse } from "@/lib/plan";
 import { getFinish, isFreeFinish } from "@/lib/card-finishes";
 
@@ -38,91 +38,21 @@ function underWhite(hex: string, alpha: number): string {
 }
 const stops = (bg: string) => bg.match(/#[0-9a-f]{6}/gi) ?? [];
 
-// Where each template paints the name, title and company, and the template's
-// own colour for the two lines a Look can leave unset. Only templates whose
-// title/company are FIXED colours are listed for those: Modern Bold and Logo
-// First draw the title in the owner's accent and adapt the company to the
-// ground on their own.
-const PHOTO_PANEL_DEFAULT = META["photo-first"].surface!.fallback;
-const GROUND: Record<string, {
-  name: "bg" | "surface";
-  title?: { fallback: string; on: "bg" | "surface" };
-  company?: { fallback: string; on: "bg" | "surface" };
-}> = {
-  "classic-pro": { name: "bg", title: { fallback: "#93c5fd", on: "bg" }, company: { fallback: "#e2e8f0", on: "bg" } },
-  "modern-bold": { name: "bg" },
-  "luxury-minimal": { name: "bg", title: { fallback: "#b08d57", on: "bg" }, company: { fallback: "#b08d57", on: "bg" } },
-  "local-business": { name: "bg", title: { fallback: "#fef3c7", on: "bg" } },
-  "photo-first": { name: "surface", title: { fallback: "#ddd6fe", on: "surface" } },
-  "logo-first": { name: "bg" },
+// Where each template paints every colour a Look sets — the ground each one
+// has to read on. `bg` is the brand surface, `surface` the second one (Classic
+// Pro's info panel, Local Business's body, Photo First's photo panel).
+type Ground = "bg" | "surface";
+const WHERE: Record<string, { name: Ground; title: Ground; company: Ground; info: Ground; accent: Ground }> = {
+  "classic-pro": { name: "bg", title: "bg", company: "bg", info: "surface", accent: "surface" },
+  "modern-bold": { name: "bg", title: "bg", company: "bg", info: "bg", accent: "bg" },
+  "luxury-minimal": { name: "bg", title: "bg", company: "bg", info: "bg", accent: "bg" },
+  "local-business": { name: "bg", title: "bg", company: "surface", info: "surface", accent: "surface" },
+  "photo-first": { name: "surface", title: "surface", company: "bg", info: "bg", accent: "bg" },
+  "logo-first": { name: "bg", title: "bg", company: "bg", info: "bg", accent: "bg" },
 };
 
-// Every Look that existed before the three rows, value for value. A saved card
-// is matched to its Look by VALUE (looksActive), and a Free card's colours are
-// kept only while some Look still offers them (freeSafeValues) — so changing or
-// dropping one of these silently un-highlights saved cards, or rewrites a Free
-// card's colours on its next save. Add Looks freely; never edit these.
-const LEGACY = {
-  "classic-pro": [
-    {name: "Executive Navy", bg: "linear-gradient(160deg, #0e1b35 0%, #162947 100%)", text: "#ffffff"},
-    {name: "Onyx", bg: "#070d1c", text: "#ffffff"},
-    {name: "Graphite", bg: "#111827", text: "#e5e7eb"},
-    {name: "Forest", bg: "#052e2b", text: "#ffffff"},
-    {name: "Burgundy", bg: "#3f1d2e", text: "#f3d9c6"},
-    {name: "Sky", bg: "linear-gradient(160deg, #0e1b35 0%, #2563eb 100%)", text: "#ffffff"},
-    {name: "Sea Glass", bg: "linear-gradient(160deg, #1c3a5e 0%, #2f6f8f 100%)", text: "#f2fbff", finish: "frosted", surface: "#f8fafc"},
-    {name: "Titanium", bg: "#2a3140", text: "#ffffff", finish: "brushed", surface: "#f1f5f9"},
-  ],
-  "modern-bold": [
-    {name: "Electric Dark", bg: "#070d1c", text: "#ffffff"},
-    {name: "Pure Black", bg: "#0a0a0a", text: "#ffffff"},
-    {name: "Violet Night", bg: "linear-gradient(135deg, #111827 0%, #6d28d9 100%)", text: "#ffffff"},
-    {name: "Deep Blue", bg: "linear-gradient(135deg, #0e1b35 0%, #2563eb 100%)", text: "#ffffff"},
-    {name: "Emerald", bg: "#052e2b", text: "#6ee7b7"},
-    {name: "Ember", bg: "#1c1010", text: "#fca5a5"},
-    {name: "Frostbite", bg: "linear-gradient(150deg, #10243f 0%, #1d4e6b 100%)", text: "#eaf7ff", finish: "frosted"},
-    {name: "Carbon", bg: "#0b0f16", text: "#ffffff", finish: "carbon"},
-  ],
-  "luxury-minimal": [
-    {name: "Ivory & Gold", bg: "#fafaf6", text: "#1c1612", font: "Georgia, 'Times New Roman', serif"},
-    {name: "Warm Cream", bg: "#fffbf0", text: "#3f2d1a", font: "Georgia, 'Times New Roman', serif"},
-    {name: "Pearl", bg: "#ffffff", text: "#0e1b35", font: "Georgia, 'Times New Roman', serif"},
-    {name: "Sand", bg: "#f5efe3", text: "#1c1612", font: "Georgia, 'Times New Roman', serif"},
-    {name: "Charcoal Luxe", bg: "#1c1612", text: "#d4af7a", font: "Georgia, 'Times New Roman', serif"},
-    {name: "Opaline", bg: "linear-gradient(160deg, #eef2f6 0%, #dbe6ee 100%)", text: "#1c2733", finish: "frosted"},
-    {name: "Gilded", bg: "#14110d", text: "#f0e2c4", finish: "gilt"},
-  ],
-  "local-business": [
-    {name: "Warm Amber", bg: "linear-gradient(100deg, #b45309 0%, #d97706 60%, #f59e0b 100%)", text: "#ffffff"},
-    {name: "Forest", bg: "#166534", text: "#ffffff"},
-    {name: "Teal", bg: "#0f766e", text: "#ffffff"},
-    {name: "Midnight", bg: "#0e1b35", text: "#ffffff"},
-    {name: "Cherry", bg: "#be123c", text: "#ffffff"},
-    {name: "Slate", bg: "#334155", text: "#ffffff"},
-    {name: "Sea Glass", bg: "linear-gradient(100deg, #2f7f8f 0%, #3f9fae 60%, #56b8c4 100%)", text: "#f4feff", finish: "frosted", surface: "#ffffff"},
-    {name: "Slate & Linen", bg: "linear-gradient(100deg, #3b4451 0%, #4b5563 60%, #5b6675 100%)", text: "#ffffff", finish: "linen", surface: "#f5f5f4"},
-  ],
-  "photo-first": [
-    {name: "Clean White", bg: "#ffffff", text: "#ffffff"},
-    {name: "Royal Violet", bg: "linear-gradient(145deg, #4f46e5 0%, #7c3aed 60%, #6d28d9 100%)", text: "#ffffff"},
-    {name: "Indigo", bg: "#4f46e5", text: "#ffffff"},
-    {name: "Rose", bg: "linear-gradient(145deg, #be123c 0%, #f43f5e 100%)", text: "#ffffff"},
-    {name: "Emerald", bg: "linear-gradient(145deg, #064e3b 0%, #10b981 100%)", text: "#ffffff"},
-    {name: "Onyx", bg: "#0a0a0a", text: "#ffffff"},
-    {name: "Sea Glass", bg: "#ffffff", text: "#ffffff", finish: "frosted", surface: "linear-gradient(145deg, #2f7f8f 0%, #3f9fae 60%, #56b8c4 100%)"},
-    {name: "Graphite", bg: "#111827", text: "#ffffff", finish: "brushed", surface: "#1f2937"},
-  ],
-  "logo-first": [
-    {name: "Dark Navy", bg: "#2c3a52", text: "#ffffff"},
-    {name: "Midnight", bg: "#141b26", text: "#ffffff"},
-    {name: "Slate", bg: "#1e293b", text: "#ffffff"},
-    {name: "Forest", bg: "#16352c", text: "#ffffff"},
-    {name: "Oxblood", bg: "#3a1d22", text: "#ffffff"},
-    {name: "Bone", bg: "#f4f2ed", text: "#141b26"},
-    {name: "Sea Glass", bg: "linear-gradient(160deg, #24506b 0%, #3a7f96 100%)", text: "#f2fbff", finish: "frosted"},
-    {name: "Brushed Steel", bg: "#39414f", text: "#ffffff", finish: "brushed"},
-  ],
-};
+/** The QR plates whose code is drawn in the accent (fixed light plates). */
+const QR_PLATE: Record<string, string> = { "luxury-minimal": "#f5f0e8", "local-business": "#fff8e6" };
 
 describe("the card Look library", () => {
   it.each(TEMPLATES)("%s: 10 Solid, 8 Gradient, 8 Glass — Social design's split", (t) => {
@@ -142,15 +72,15 @@ describe("the card Look library", () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it.each(TEMPLATES)("%s: keeps every Look it had, value for value", (t) => {
-    const legacy = (LEGACY as Record<string, Omit<Look, "family">[]>)[t];
-    expect(legacy.length).toBeGreaterThan(0);
-    for (const old of legacy) {
-      const now = META[t].looks.find((l) => l.name === old.name);
-      expect(now, `${t}/${old.name} was removed`).toBeDefined();
-      const { family: _family, ...rest } = now!;
-      void _family;
-      expect(rest, `${t}/${old.name} changed`).toEqual(old);
+  // Owner, 2026-10-15: a Look has to design "every aspect of the card". One
+  // left unset falls back to the template's own colour, which is how a green
+  // card ended up with blue icons and a purple bar.
+  it.each(TEMPLATES)("%s: every Look sets every colour the card draws", (t) => {
+    for (const l of META[t].looks) {
+      for (const k of ["title", "company", "info", "accent"] as const) {
+        expect(l[k], `${t}/${l.name} leaves ${k} to the template`).toMatch(/^#[0-9a-f]{6}$/i);
+      }
+      if (META[t].surface) expect(l.surface, `${t}/${l.name} leaves its second surface to the template`).toBeDefined();
     }
   });
 });
@@ -192,58 +122,80 @@ describe("each Look is filed under what it is made of", () => {
   });
 });
 
-describe("every NEW Look reads (3:1, the large-text floor)", () => {
-  // The Frosted finish lays up to ~30% white over the panel at its brightest
-  // band, so a Glass Look is measured against its wash UNDER that sheet.
-  const newLooks = TEMPLATES.flatMap((t) => {
-    const legacy = new Set(((LEGACY as Record<string, { name: string }[]>)[t]).map((l) => l.name));
-    return META[t].looks.filter((l) => !legacy.has(l.name)).map((l) => ({ t, l }));
+describe("a redrawn Look never rewrites a Free card", () => {
+  // A Free card keeps its colours only while some Look still offers them
+  // (freeSafeValues). Redrawing the library on 2026-10-15 changed most Looks'
+  // values, so every value any Look offered before stays allowed.
+  it("every colour the old library offered is still Free-safe", () => {
+    for (const [t, fields] of Object.entries(RETIRED_LOOK_VALUES)) {
+      for (const [field, values] of Object.entries(fields)) {
+        for (const v of values ?? []) {
+          expect(freeSafeValues(META[t], field as LookColourField), `${t} ${field} ${v}`).toContain(v);
+        }
+      }
+    }
   });
 
-  function ground(t: string, l: Look, on: "bg" | "surface"): string[] {
-    const raw = on === "bg" ? l.bg : (l.surface ?? (t === "photo-first" ? PHOTO_PANEL_DEFAULT : META[t].surface?.fallback ?? "#ffffff"));
-    return stops(raw).map((s) => (on === "bg" && l.finish === "frosted" ? underWhite(s, 0.3) : s));
+  it("covers the Looks the picker shipped with (spot checks)", () => {
+    expect(RETIRED_LOOK_VALUES["classic-pro"].bg).toContain("linear-gradient(160deg, #0e1b35 0%, #2563eb 100%)");
+    expect(RETIRED_LOOK_VALUES["photo-first"].surface).toContain("linear-gradient(145deg, #2f7f8f 0%, #3f9fae 60%, #56b8c4 100%)");
+    expect(RETIRED_LOOK_VALUES["luxury-minimal"].text).toContain("#d4af7a");
+  });
+});
+
+describe("every Look reads (3:1 for the name lines and icons, 4.5:1 for the details)", () => {
+  const all = TEMPLATES.flatMap((t) => META[t].looks.map((l) => ({ t, l })));
+
+  // The Frosted finish lays ~30% white along the top edge, fading to 13% a
+  // third of the way down and 7% at the foot (lib/card-finishes). The name
+  // lines are measured under the brightest band; the details and their icons,
+  // which sit below the top third, under the 13% band.
+  function ground(l: Look, on: Ground, frost: number): string[] {
+    const raw = on === "bg" ? l.bg : l.surface!;
+    return stops(raw).map((s) => (on === "bg" && l.finish === "frosted" ? underWhite(s, frost) : s));
   }
   const worst = (ink: string, g: string[]) => Math.min(...g.map((s) => contrast(ink, s)));
 
-  it("adds a real library — at least 100 new Looks across the six templates", () => {
-    expect(newLooks.length).toBeGreaterThanOrEqual(100);
-  });
-
-  it("the name", () => {
-    for (const { t, l } of newLooks) {
-      const c = worst(l.text, ground(t, l, GROUND[t].name));
-      expect(c, `${t}/${l.name} name ${l.text} = ${c.toFixed(2)}`).toBeGreaterThanOrEqual(3);
+  it.each(["name", "title", "company"] as const)("the %s", (k) => {
+    for (const { t, l } of all) {
+      const ink = k === "name" ? l.text : l[k]!;
+      const c = worst(ink, ground(l, WHERE[t][k], 0.3));
+      expect(c, `${t}/${l.name} ${k} ${ink} = ${c.toFixed(2)}`).toBeGreaterThanOrEqual(3);
     }
   });
 
-  it("the title, in the Look's own ink or the template's", () => {
-    for (const { t, l } of newLooks) {
-      const g = GROUND[t].title;
-      if (!g) continue;
-      const ink = l.title ?? g.fallback;
-      const c = worst(ink, ground(t, l, g.on));
-      expect(c, `${t}/${l.name} title ${ink} = ${c.toFixed(2)}`).toBeGreaterThanOrEqual(3);
+  it("the details", () => {
+    for (const { t, l } of all) {
+      const c = worst(l.info!, ground(l, WHERE[t].info, 0.13));
+      expect(c, `${t}/${l.name} details ${l.info} = ${c.toFixed(2)}`).toBeGreaterThanOrEqual(4.5);
     }
   });
 
-  it("the company, in the Look's own ink or the template's", () => {
-    for (const { t, l } of newLooks) {
-      const g = GROUND[t].company;
-      if (!g) continue;
-      const ink = l.company ?? g.fallback;
-      const c = worst(ink, ground(t, l, g.on));
-      expect(c, `${t}/${l.name} company ${ink} = ${c.toFixed(2)}`).toBeGreaterThanOrEqual(3);
+  it("the icons", () => {
+    for (const { t, l } of all) {
+      const c = worst(l.accent!, ground(l, WHERE[t].accent, 0.13));
+      expect(c, `${t}/${l.name} icons ${l.accent} = ${c.toFixed(2)}`).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("the QR, where the accent draws the code on a fixed light plate", () => {
+    // The templates' own gold (#b08d57) on Luxury's plate is 2.7:1; no Look
+    // goes below what the template ships with.
+    for (const { t, l } of all.filter((x) => QR_PLATE[x.t])) {
+      const c = contrast(l.accent!, QR_PLATE[t]);
+      expect(c, `${t}/${l.name} QR ${l.accent} = ${c.toFixed(2)}`).toBeGreaterThanOrEqual(2.7);
     }
   });
 });
 
-describe("a Look's own title and company ink survives a Free save", () => {
-  it("both are offered values, so Free never snaps them back", () => {
+describe("a Look's own colours survive a Free save", () => {
+  it("title, company, details and accent are offered values, so Free never snaps them back", () => {
     for (const [t, m] of Object.entries(META)) {
       for (const l of m.looks) {
         if (l.title) expect(freeSafeValues(m, "title"), `${t}/${l.name}`).toContain(l.title);
         if (l.company) expect(freeSafeValues(m, "company"), `${t}/${l.name}`).toContain(l.company);
+        if (l.info) expect(freeSafeValues(m, "info"), `${t}/${l.name}`).toContain(l.info);
+        if (l.accent) expect(freeSafeValues(m, "accent"), `${t}/${l.name}`).toContain(l.accent);
       }
     }
   });
@@ -258,6 +210,8 @@ describe("a Look's own title and company ink survives a Free save", () => {
         if (m.surface && l.surface) cust.surfaceColor = l.surface;
         if (l.title) cust.titleColor = l.title;
         if (l.company) cust.companyColor = l.company;
+        if (l.info) cust.infoColor = l.info;
+        if (l.accent) cust.accentColor = l.accent;
         const r = convertCustomizationToFreeClosest(cust, t);
         expect(r.changed, `${t}/${l.name} was converted`).toBe(false);
         expect(proFeaturesInUse(cust, t), `${t}/${l.name}`).toEqual([]);
@@ -271,11 +225,15 @@ describe("a Look's own title and company ink survives a Free save", () => {
         const cust: Record<string, unknown> = { bgColor: l.bg, textColor: l.text, finish: l.finish };
         if (l.title) cust.titleColor = l.title;
         if (l.company) cust.companyColor = l.company;
+        if (l.info) cust.infoColor = l.info;
+        if (l.accent) cust.accentColor = l.accent;
         const out = convertCustomizationToFreeClosest(cust, t).customization;
         expect(out.finish, `${t}/${l.name}`).toBeUndefined();
         expect(out.bgColor, `${t}/${l.name}`).toBe(l.bg);
         expect(out.titleColor, `${t}/${l.name}`).toBe(l.title);
         expect(out.companyColor, `${t}/${l.name}`).toBe(l.company);
+        expect(out.infoColor, `${t}/${l.name}`).toBe(l.info);
+        expect(out.accentColor, `${t}/${l.name}`).toBe(l.accent);
         expect(proFeaturesInUse(cust, t), `${t}/${l.name}`).toEqual(["Frosted finish"]);
       }
     }
@@ -291,9 +249,18 @@ describe("the picker", () => {
     expect(controls).not.toMatch(/function LooksGallery/);
   });
 
-  it("a Look writes its own title and company ink (or hands both back)", () => {
+  it("a Look writes its own title, company, details and accent (or hands them back)", () => {
     expect(controls).toMatch(/titleColor: look\.title,/);
     expect(controls).toMatch(/companyColor: look\.company,/);
+    expect(controls).toMatch(/infoColor: look\.info,/);
+    expect(controls).toMatch(/accentColor: look\.accent,/);
+    // Original hands every one of them back.
+    expect(controls).toMatch(/titleColor: undefined, companyColor: undefined, infoColor: undefined, accentColor: undefined/);
+  });
+
+  it("Original's thumbnail is the tile's drawing scaled down, never squeezed (owner, 2026-10-15)", () => {
+    expect(picker).toMatch(/<MiniThumb layout=\{layout\} paint=\{original\} widthPx=\{64\} \/>/);
+    expect(picker).toMatch(/transform: `scale\(\$\{widthPx \/ THUMB_DRAWN_PX\}\)`/);
   });
 
   it("opens in place, the same way Social design's does", () => {

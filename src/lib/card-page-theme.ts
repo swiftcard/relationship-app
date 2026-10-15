@@ -27,6 +27,14 @@ function darken(hex: string, f: number): string {
   return `#${ch((n >> 16) & 255)}${ch((n >> 8) & 255)}${ch(n & 255)}`;
 }
 
+/** WCAG contrast of white text on `hex`. */
+function contrastWithWhite(hex: string): number {
+  const n = parseInt(hex.slice(1), 16);
+  const lin = (v: number) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); };
+  const l = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  return 1.05 / (l + 0.05);
+}
+
 function alpha(hex: string, a: number): string {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
@@ -53,6 +61,13 @@ export function cardPageTheme(accentRaw: string | null | undefined, templateId: 
   // gets deep-gold buttons instead of losing its identity.
   if (yiq(accent) > 160) accent = darken(accent, 0.45);
   if (yiq(accent) > 160) accent = darken(accent, 0.35); // near-white accents need a second step
+  // Brightness alone let saturated mid-tones through: mint, teal, sky and
+  // coral sit under 160 yet carry white text at under 2:1 (Modern Bold's
+  // #34d399 swatch, and the card Looks that use those accents, 2026-10-15).
+  // Keep darkening along the same hue until white text clears 3:1 — the floor
+  // the templates' own defaults already meet. Anything already there is
+  // untouched.
+  for (let i = 0; i < 8 && contrastWithWhite(accent) < 3; i++) accent = darken(accent, 0.12);
 
   return {
     accent,

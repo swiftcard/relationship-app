@@ -146,7 +146,10 @@ describe("the textures the pass copies are still the textures the cards draw", (
     const s = src("ClassicPro.tsx");
     expect(s).toContain('backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)"');
     expect(s).toContain('backgroundSize: "14px 14px"');
-    expect(s).toContain("background: `linear-gradient(90deg, ${BLUE}, #7c3aed)`");
+    // The bar's far end is violet until an accent is set, then a shade of it —
+    // the same accentShade call on the card and the pass (2026-10-15).
+    expect(s).toContain('background: `linear-gradient(90deg, ${BLUE}, ${accentShade(style.accentColor, BLUE, "#ffffff", 0.35, "#7c3aed")})`');
+    expect(palette).toContain('bar: { background: `linear-gradient(90deg, ${accent}, ${accentShade(style.accentColor, accent, "#ffffff", 0.35, "#7c3aed")})`, height: 4 }');
     expect(palette).toContain('image: "radial-gradient(rgba(255,255,255,0.06) 10.1%, transparent 10.1%)", size: "14px 14px"');
   });
 
@@ -154,14 +157,16 @@ describe("the textures the pass copies are still the textures the cards draw", (
     const s = src("ModernBold.tsx");
     expect(s).toContain('"linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)"');
     expect(s).toContain('backgroundSize: "24px 24px"');
-    expect(s).toContain('"radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%)"');
+    expect(s).toContain("background: `radial-gradient(circle, ${accentGlow(style.accentColor, BLUE)} 0%, transparent 70%)`");
+    expect(palette).toContain("glow: { color: accentGlow(style.accentColor, accent), size: 120, top: -30, right: -20 }");
     expect(s).toMatch(/width: 120, height: 120,\s+top: -30, right: -20/);
   });
 
   it("Local Business — the diagonal and the amber foot bar", () => {
     const s = src("LocalBusiness.tsx");
     expect(s).toContain('"repeating-linear-gradient(135deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 14px)"');
-    expect(s).toContain("background: `linear-gradient(90deg, ${AMBER}, #f59e0b, ${AMBER2})`");
+    expect(s).toContain('background: `linear-gradient(90deg, ${AMBER}, ${accentShade(style.accentColor, AMBER, "#ffffff", 0.3, "#f59e0b")}, ${AMBER2})`');
+    expect(palette).toContain('bar: { background: `linear-gradient(90deg, ${amber}, ${accentShade(style.accentColor, amber, "#ffffff", 0.3, "#f59e0b")}, ${amber2})`, height: 3 }');
   });
 
   it("Photo First — the violet bloom over the photo panel", () => {
@@ -170,7 +175,8 @@ describe("the textures the pass copies are still the textures the cards draw", (
 
   it("Luxury Minimal — the gold foil edge", () => {
     const s = src("LuxuryMinimal.tsx");
-    expect(s).toContain("background: `linear-gradient(to bottom, ${GOLD2}, ${GOLD}, #8c6c34)`");
+    expect(s).toContain('background: `linear-gradient(to bottom, ${GOLD2}, ${GOLD}, ${accentShade(style.accentColor, GOLD, "#000000", 0.25, "#8c6c34")})`');
+    expect(palette).toContain('edge: { background: `linear-gradient(180deg, ${gold2}, ${gold}, ${accentShade(style.accentColor, gold, "#000000", 0.25, "#8c6c34")})`, width: 5 }');
     expect(s).toMatch(/width: 5,/);
   });
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { sanitizeCustomizationForPlan, PRO_CUSTOMIZATION_KEYS, nearestPreset, convertCustomizationToFreeClosest } from "@/lib/plan";
-import { META, FALLBACK_META } from "@/lib/template-style-presets";
+import { META, FALLBACK_META, freeSafeValues } from "@/lib/template-style-presets";
 
 // These cover the persistence contract for the new editable-template style keys
 // (bgColor / textColor / fontFamily) alongside the existing accent/font gating,
@@ -27,8 +27,9 @@ describe("editable-template style keys are Pro-gated", () => {
     };
     const out = sanitizeCustomizationForPlan(input, false, "classic-pro");
     // Snapped, not deleted: every key is still present, pointing at one of the
-    // template's own presets.
-    expect(meta.accent.presets).toContain(out.accentColor);
+    // template's own presets — or an accent one of its Looks offers, since a
+    // Look sets the accent too (2026-10-15).
+    expect(freeSafeValues(meta, "accent")).toContain(out.accentColor);
     expect(meta.bg.presets).toContain(out.bgColor);
     expect(meta.text.presets).toContain(out.textColor);
     // Font has no custom-input equivalent to snap against — the picked value

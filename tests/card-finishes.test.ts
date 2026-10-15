@@ -443,6 +443,7 @@ describe("curated Looks are free-safe", () => {
     // same call every template makes, finish included.
     const src = read("src/components/card-templates/CardLookPicker.tsx");
     expect(src).toMatch(/const brand = composePanelBackground\(paint\.bg, paint\.finish\)/);
-    expect(src).toMatch(/bg: look\.bg, finish: look\.finish/);
+    expect(src).toMatch(/paint=\{paintOf\(meta, look\)\}/);
+    expect(src).toMatch(/finish: p\.finish,/);
   });
 });

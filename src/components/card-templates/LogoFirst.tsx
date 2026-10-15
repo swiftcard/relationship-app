@@ -56,9 +56,15 @@ const hex2 = (n: number) => Math.max(0, Math.min(255, Math.round(n))).toString(1
 function readableAccent(accent: string | undefined, bg: string, dark: boolean): string {
   const fallback = dark ? "#FFFFFF" : NAVY;
   if (!accent) return fallback;
-  const b = yiq(bg);
+  // Every colour stop of the ground, so a GRADIENT ground is judged too. It
+  // used to be read as one hex, which a gradient is not — so on every gradient
+  // and Glass ground the accent was thrown away for white, and a Look's
+  // "Sunset" orange or "Jade" mint never reached the card (2026-10-15).
+  const grounds = (bg.match(/#[0-9a-f]{6}/gi) ?? []).map((h) => yiq(h)!);
   const parts = rgb(accent);
-  if (b === null || !parts) return fallback;
+  if (!grounds.length || !parts) return fallback;
+  // The gap to the NEAREST stop: the accent has to read across the whole card.
+  const gap = (y: number) => Math.min(...grounds.map((b) => Math.abs(y - b)));
 
   let [r, g, bl] = parts;
   // Toward white on a dark card, toward black on a light one — the direction
@@ -66,7 +72,7 @@ function readableAccent(accent: string | undefined, bg: string, dark: boolean): 
   const target = dark ? 255 : 0;
   for (let i = 0; i < 12; i++) {
     const y = (r * 299 + g * 587 + bl * 114) / 1000;
-    if (Math.abs(y - b) >= 60) break;
+    if (gap(y) >= 60) break;
     r += (target - r) * 0.16;
     g += (target - g) * 0.16;
     bl += (target - bl) * 0.16;
@@ -75,7 +81,7 @@ function readableAccent(accent: string | undefined, bg: string, dark: boolean): 
   const y = yiq(out);
   // If twelve steps still couldn't separate them, the two really are the same
   // colour; only then fall back.
-  return y !== null && Math.abs(y - b) >= 55 ? out : fallback;
+  return y !== null && gap(y) >= 55 ? out : fallback;
 }
 
 /**

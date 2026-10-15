@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { Browser, Page } from "playwright";
 import { appCss, launchBrowser } from "./harness";
+import { META } from "@/lib/template-style-presets";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // THE CARD DESIGN TAB, MOUNTED AND USED.
@@ -219,17 +220,20 @@ describe("style panel: one numbered path, in build order", () => {
       patches: (window as unknown as { __patches: Record<string, unknown>[] }).__patches,
       value: (window as unknown as { __value: Record<string, unknown> }).__value,
     }));
-    expect(Object.keys(patches.at(-1)!).sort()).toEqual(["bgColor", "companyColor", "finish", "fontFamily", "surfaceColor", "textColor", "titleColor"]);
+    // Since 2026-10-15 a Look sets the accent and the details colour too
+    // (owner: a Look designs "every aspect of the card"), so Original hands
+    // those back as well.
+    expect(Object.keys(patches.at(-1)!).sort()).toEqual(["accentColor", "bgColor", "companyColor", "finish", "fontFamily", "infoColor", "surfaceColor", "textColor", "titleColor"]);
     expect(Object.values(patches.at(-1)!).every((x) => x === undefined)).toBe(true);
-    // Accent and details colour are not part of a Look, so Original leaves them.
-    expect(value.accentColor).toBe("#be123c");
-    expect(value.infoColor).toBe("#111827");
+    expect(value.accentColor).toBeUndefined();
+    expect(value.infoColor).toBeUndefined();
     await page.context().close();
   });
 
-  it("a Look puts Title and Company color back on Default, so neither can vanish on the new ground", async () => {
+  it("a Look replaces Title and Company color with its own, so neither can vanish on the new ground", async () => {
     // Logo First's "Bone" is a light card. A white title picked for the navy
-    // card would disappear on it if the Look left it in place.
+    // card would disappear on it if the Look left it in place; Bone carries
+    // its own ink for both (and its details and accent).
     const v = encodeURIComponent(JSON.stringify({ titleColor: "#ffffff", companyColor: "#ffffff" }));
     const page = await mount("style", `v=${v}&t=logo-first`);
     // Bone is a Solid look; the rows open closed, as on Social design.
@@ -237,9 +241,12 @@ describe("style panel: one numbered path, in build order", () => {
     await page.click("button[title='Bone']");
     await page.waitForTimeout(80);
     const value = await page.evaluate(() => (window as unknown as { __value: Record<string, unknown> }).__value);
-    expect(value.bgColor).toBe("#f4f2ed");
-    expect(value.titleColor).toBeUndefined();
-    expect(value.companyColor).toBeUndefined();
+    const bone = META["logo-first"].looks.find((l) => l.name === "Bone")!;
+    expect(value.bgColor).toBe(bone.bg);
+    expect(value.titleColor).toBe(bone.title);
+    expect(value.companyColor).toBe(bone.company);
+    expect(value.infoColor).toBe(bone.info);
+    expect(value.accentColor).toBe(bone.accent);
     // The tile reads as picked, and stops claiming it once a line is recoloured.
     expect(await page.getAttribute("button[title='Bone']", "aria-pressed")).toBe("true");
     await page.locator("li", { hasText: "Company color" }).locator("button[aria-label='Color preset']").nth(1).click();

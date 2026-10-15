@@ -188,8 +188,10 @@ export function convertCustomizationToFreeClosest(
       else delete cust.surfaceColor;
     }
     if (textColor !== undefined) cust.textColor = nearestPreset(textColor, freeSafeValues(meta, "text"), meta.text.fallback);
-    if (infoColor !== undefined) cust.infoColor = nearestPreset(infoColor, meta.info.presets, meta.info.fallback);
-    if (accentColor !== undefined) cust.accentColor = nearestPreset(accentColor, meta.accent.presets, meta.accent.fallback);
+    // A Look sets the details and the accent too (2026-10-15), so those are
+    // offered values as well.
+    if (infoColor !== undefined) cust.infoColor = nearestPreset(infoColor, freeSafeValues(meta, "info"), meta.info.fallback);
+    if (accentColor !== undefined) cust.accentColor = nearestPreset(accentColor, freeSafeValues(meta, "accent"), meta.accent.fallback);
     // A Look on a light or frosted ground carries its own title and company
     // ink, so those count as offered too — or Free would put back the pale
     // template default the Look was there to replace.

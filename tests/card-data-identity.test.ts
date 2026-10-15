@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildCardData, formatCardAddress, cardInitials } from "@/lib/card-data";
-import { META, FALLBACK_META } from "@/lib/template-style-presets";
+import { META, FALLBACK_META, freeSafeValues } from "@/lib/template-style-presets";
 
 // The Swift Signature has to look IDENTICAL to the card. It cannot, while being
 // a second implementation of the card.
@@ -76,7 +76,8 @@ describe("every surface builds the same card", () => {
         { ...OPTS, isPro: false },
       );
       const meta = META[template] ?? FALLBACK_META;
-      expect(meta.accent.presets, `${template} snapped outside its own palette`)
+      // Its own palette: the swatches plus the accents its Looks offer.
+      expect(freeSafeValues(meta, "accent"), `${template} snapped outside its own palette`)
         .toContain(out.data.customization?.accentColor);
     }
   });

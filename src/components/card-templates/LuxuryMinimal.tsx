@@ -3,7 +3,7 @@
 // Includes: Name, title, phone, email, website, QR — stripped back, refined
 // Best for: Luxury real estate, wealth management, executives, high-end services, attorneys
 
-import { panelBackground } from "@/lib/template-style";
+import { accentShade, panelBackground } from "@/lib/template-style";
 import React from "react";
 import { MiniQR as QR } from "./MiniQR";
 import type { CardData } from "./types";
@@ -64,7 +64,7 @@ export default function LuxuryMinimal({ data }: { data: CardData }) {
       <div
         style={{
           width: 5,
-          background: `linear-gradient(to bottom, ${GOLD2}, ${GOLD}, #8c6c34)`,
+          background: `linear-gradient(to bottom, ${GOLD2}, ${GOLD}, ${accentShade(style.accentColor, GOLD, "#000000", 0.25, "#8c6c34")})`,
           flexShrink: 0,
         }}
       />

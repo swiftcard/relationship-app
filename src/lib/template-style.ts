@@ -78,6 +78,43 @@ export function withAlpha(color: string, alpha: number): string {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
+/**
+ * `a` moved `t` (0–1) of the way to `b`, both #rrggbb. Anything else returns
+ * `a` untouched.
+ *
+ * For the second colour a template draws next to its accent — the far end of
+ * a bar, a rule's fade. Those were fixed (Classic Pro's bar always ended in
+ * violet, Photo First's rule in lilac), so a Look's green accent finished in
+ * purple. With an accent set they are now a shade of it; unset, each template
+ * keeps its own exactly.
+ */
+export function mixHex(a: string, b: string, t: number): string {
+  const ma = a.match(/^#([0-9a-f]{6})$/i);
+  const mb = b.match(/^#([0-9a-f]{6})$/i);
+  if (!ma || !mb) return a;
+  const na = parseInt(ma[1], 16), nb = parseInt(mb[1], 16);
+  return "#" + [16, 8, 0]
+    .map((s) => Math.round(((na >> s) & 255) * (1 - t) + ((nb >> s) & 255) * t).toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * The colour a template draws BESIDE its accent: `fallback` (the template's
+ * own, e.g. Classic Pro's violet bar end) while no accent is set, a shade of
+ * the accent once one is. One rule for the cards and the Wallet pass, which
+ * copies these bars and must never drift from them.
+ */
+export function accentShade(accentSet: string | undefined, accent: string, toward: string, t: number, fallback: string): string {
+  return accentSet ? mixHex(accent, toward, t) : fallback;
+}
+
+/** Modern Bold's bloom: the template's blue until an accent is set, then that accent. */
+export function accentGlow(accentSet: string | undefined, accent: string): string {
+  // Only a #rrggbb can be made translucent; anything else keeps the default
+  // bloom rather than painting a full-strength blob.
+  return accentSet && /^#[0-9a-f]{6}$/i.test(accent) ? withAlpha(accent, 0.12) : "rgba(59,130,246,0.12)";
+}
+
 // Treat only non-empty strings as a real override. `null`, `undefined`, and
 // `""` (a value the editor may send when a field is cleared) all resolve to
 // undefined → the template default.
@@ -158,6 +195,14 @@ export function panelBackground(style: TemplateStyle, fallback: string): string 
     poster: style.panelMediaType === "video" ? style.panelMediaPoster : undefined,
     dim: style.panelDim,
   });
+}
+
+/** Perceived brightness (YIQ, 0–255) of the first #rrggbb in a colour; 255 when there is none. */
+export function brightness(color: string): number {
+  const m = color.match(/#([0-9a-f]{6})/i);
+  if (!m) return 255;
+  const n = parseInt(m[1], 16);
+  return (((n >> 16) & 255) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000;
 }
 
 // Is a background color/gradient dark enough to need light text on top? Reads

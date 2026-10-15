@@ -4,7 +4,7 @@
 // Includes: Profile photo (full-height), name overlay, company, phone, email, website, QR
 // Best for: Real estate, beauty, fitness, coaches, personal brand, healthcare
 
-import { panelBackground } from "@/lib/template-style";
+import { accentShade, panelBackground } from "@/lib/template-style";
 import React from "react";
 import { MiniQR as QR } from "./MiniQR";
 import type { CardData } from "./types";
@@ -198,7 +198,7 @@ export default function PhotoFirst({ data }: { data: CardData }) {
               {data.company}
             </p>
           </div>
-          <div className="w-10 h-[2px] rounded-full" style={{ background: `linear-gradient(90deg, ${ACCENT}, #a78bfa)` }} />
+          <div className="w-10 h-[2px] rounded-full" style={{ background: `linear-gradient(90deg, ${ACCENT}, ${accentShade(style.accentColor, ACCENT, "#ffffff", 0.45, "#a78bfa")})` }} />
         </div>
 
         {/* Details start directly under the company and fill DOWNWARD; the QR

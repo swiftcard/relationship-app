@@ -40,7 +40,7 @@
 // sampled by the caller and passed in as `sampled`.)
 
 import type { ResolvedCardMeta, ResolvedCustomDesign } from "@/lib/resolve-card";
-import { isDarkBg, panelBackground, type TemplateStyle } from "@/lib/template-style";
+import { accentGlow, accentShade, isDarkBg, panelBackground, type TemplateStyle } from "@/lib/template-style";
 import { getFinish, PANEL_DIM_DEFAULT } from "@/lib/card-finishes";
 
 type Meta = NonNullable<ResolvedCardMeta>;
@@ -338,7 +338,7 @@ function classicPro(style: TemplateStyle): RawLook {
     details,
     finish: style.finish, media: mediaOf(style),
     layers: [DOTS],
-    bar: { background: `linear-gradient(90deg, ${accent}, #7c3aed)`, height: 4 },
+    bar: { background: `linear-gradient(90deg, ${accent}, ${accentShade(style.accentColor, accent, "#ffffff", 0.35, "#7c3aed")})`, height: 4 },
     ink: firstHex(style.textColor) ?? "#ffffff",
     title: "#93c5fd", // text-blue-300
     company: "#ffffff", companyOver: 0.2, // text-white/80
@@ -364,7 +364,7 @@ function modernBold(style: TemplateStyle): RawLook {
     band, details: null,
     finish: style.finish, media: mediaOf(style),
     layers: GRID,
-    glow: { color: "rgba(59,130,246,0.12)", size: 120, top: -30, right: -20 },
+    glow: { color: accentGlow(style.accentColor, accent), size: 120, top: -30, right: -20 },
     ink: firstHex(style.textColor) ?? "#ffffff",
     title: accent,
     company: firstHex(style.infoColor) ?? (dark ? "#cbd5e1" : "#475569"),
@@ -412,7 +412,7 @@ function localBusiness(style: TemplateStyle): RawLook {
     details,
     finish: style.finish, media: mediaOf(style),
     layers: [DIAGONAL],
-    bar: { background: `linear-gradient(90deg, ${amber}, #f59e0b, ${amber2})`, height: 3 },
+    bar: { background: `linear-gradient(90deg, ${amber}, ${accentShade(style.accentColor, amber, "#ffffff", 0.3, "#f59e0b")}, ${amber2})`, height: 3 },
     ink: firstHex(style.textColor) ?? "#ffffff",
     nameShadow: { y: 1, blur: 4, color: "rgba(0,0,0,0.2)" },
     title: "#fef3c7",
@@ -438,7 +438,7 @@ function luxuryMinimal(style: TemplateStyle): RawLook {
   return {
     band, details: null,
     finish: style.finish, media: mediaOf(style),
-    edge: { background: `linear-gradient(180deg, ${gold2}, ${gold}, #8c6c34)`, width: 5 },
+    edge: { background: `linear-gradient(180deg, ${gold2}, ${gold}, ${accentShade(style.accentColor, gold, "#000000", 0.25, "#8c6c34")})`, width: 5 },
     ink: firstHex(style.textColor) ?? "#1c1612",
     title: gold,
     company: gold,

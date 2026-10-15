@@ -112,7 +112,7 @@ const look = (template: string, name: string) => {
   return l;
 };
 const ARCTIC = look("classic-pro", "Arctic");
-const IVORY = look("classic-pro", "Ivory");
+const IVORY = look("classic-pro", "Ivory & Ink");
 const NEON_DUSK = look("modern-bold", "Neon Dusk");
 
 async function rig(engine: string, width: number, opts: { prefill?: Record<string, unknown>; signedIn?: boolean } = {}): Promise<Rig> {
@@ -289,19 +289,23 @@ for (const [engine, width] of RUNS) {
       await openRow(first.page, "Solid");
       expect(await tiles(first.page).count()).toBe(10);
       expect(await lookProblems(first.page)).toEqual([]);
-      await pickLook(first.page, "Ivory");
+      await pickLook(first.page, "Ivory & Ink");
       await clickSave(first.page, "Save changes");
       const kept = saves(first.calls, "/api/cards/c1").at(-1)?.body?.customization as Record<string, unknown>;
       expect(kept.bgColor).toBe(IVORY.bg);
       expect(kept.titleColor).toBe(IVORY.title);
       expect(kept.companyColor).toBe(IVORY.company);
+      // The whole card, not half of it: the info panel, details and accent too.
+      expect(kept.surfaceColor).toBe(IVORY.surface);
+      expect(kept.infoColor).toBe(IVORY.info);
+      expect(kept.accentColor).toBe(IVORY.accent);
       expect(first.errors).toEqual([]);
       await first.page.context().close();
 
       // Glass previews on Free like everything else; Save is the wall.
       const { page, calls, errors } = await rig(engine, width);
       await mount(page, "edit", { card: { ...CARD, customization: { ...CARD.customization, ...kept } }, isPro: false, initialTab: "design" });
-      await expect(row(page, "Solid").textContent()).resolves.toContain("Ivory");
+      await expect(row(page, "Solid").textContent()).resolves.toContain("Ivory & Ink");
       await openRow(page, "Glass");
       expect(await tiles(page).count()).toBe(8);
       await pickLook(page, "Arctic");

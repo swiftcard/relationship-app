@@ -3,7 +3,7 @@
 // Includes: Company logo/monogram, name, phone (prominent), email, website, QR
 // Best for: Restaurants, retail, contractors, salons, home services, local shops
 
-import { isDarkBg, panelBackground } from "@/lib/template-style";
+import { accentShade, isDarkBg, panelBackground } from "@/lib/template-style";
 import React from "react";
 import { MiniQR as QR } from "./MiniQR";
 import type { CardData } from "./types";
@@ -149,7 +149,7 @@ export default function LocalBusiness({ data }: { data: CardData }) {
             <p className="font-black leading-tight" style={{ ...companyFit, color: style.companyColor ?? bodyInk.strong, overflowWrap: "anywhere" }}>
               {data.company}
             </p>
-            <div className="w-12 h-[2px] mt-1 rounded-full" style={{ background: `linear-gradient(90deg, ${AMBER2}, #fbbf24)` }} />
+            <div className="w-12 h-[2px] mt-1 rounded-full" style={{ background: `linear-gradient(90deg, ${AMBER2}, ${accentShade(style.accentColor, AMBER2, "#ffffff", 0.45, "#fbbf24")})` }} />
           </div>
 
           <DetailsGap f={f} />
@@ -166,7 +166,7 @@ export default function LocalBusiness({ data }: { data: CardData }) {
       {/* Bottom gold accent bar */}
       <div
         className="absolute bottom-0 left-0 right-0"
-        style={{ height: 3, background: `linear-gradient(90deg, ${AMBER}, #f59e0b, ${AMBER2})` }}
+        style={{ height: 3, background: `linear-gradient(90deg, ${AMBER}, ${accentShade(style.accentColor, AMBER, "#ffffff", 0.3, "#f59e0b")}, ${AMBER2})` }}
       />
     </div>
   );

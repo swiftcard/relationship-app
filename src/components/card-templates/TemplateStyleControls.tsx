@@ -458,12 +458,17 @@ export default function TemplateStyleControls({
       surfaceColor: meta.surface ? look.surface : undefined,
       titleColor: look.title,
       companyColor: look.company,
+      // The details and the accent too (owner, 2026-10-15): a Look designs
+      // every part of the card, so the icons, the QR and the bars follow it
+      // instead of keeping the template's blue under a green card.
+      infoColor: look.info,
+      accentColor: look.accent,
     });
   // Exactly the keys a Look sets, handed back to the template.
   const applyOriginal = () =>
     onChange({
       bgColor: undefined, textColor: undefined, fontFamily: undefined, finish: undefined, surfaceColor: undefined,
-      titleColor: undefined, companyColor: undefined,
+      titleColor: undefined, companyColor: undefined, infoColor: undefined, accentColor: undefined,
     });
 
   /** The short line under a colour field. The long `help` stays as its tooltip. */

@@ -47,9 +47,9 @@ import {
 // picking "Sea Glass" and then switching the finish to Carbon left Sea Glass
 // still lit up — the panel claiming a preset that no longer described the card.
 // Undefined on both sides counts as a match: a Look without a finish means Flat,
-// which is what an unset finish renders as. The title and company count too: a
-// Look sets them (or hands them back to the template), so a card with its own
-// title or company colour is no longer that Look.
+// which is what an unset finish renders as. The title, company, details and
+// accent count too: a Look sets them (or hands them back to the template), so a
+// card with its own colour for any of them is no longer that Look.
 export function looksActive(value: TemplateStyle, look: Look): boolean {
   const same = (a?: string, b?: string) => (a ?? undefined) === (b ?? undefined);
   return (
@@ -59,7 +59,9 @@ export function looksActive(value: TemplateStyle, look: Look): boolean {
     same(value.finish, look.finish) &&
     same(value.surfaceColor, look.surface) &&
     same(value.titleColor, look.title) &&
-    same(value.companyColor, look.company)
+    same(value.companyColor, look.company) &&
+    same(value.infoColor, look.info) &&
+    same(value.accentColor, look.accent)
   );
 }
 
@@ -72,7 +74,9 @@ export function isOriginal(value: TemplateStyle): boolean {
     value.finish === undefined &&
     value.surfaceColor === undefined &&
     value.titleColor === undefined &&
-    value.companyColor === undefined
+    value.companyColor === undefined &&
+    value.infoColor === undefined &&
+    value.accentColor === undefined
   );
 }
 
@@ -83,29 +87,42 @@ type Paint = {
   surface: string;
   text: string;
   title: string;
+  company: string;
+  /** The details ink, when the Look sets one; unset follows the ground. */
+  info?: string;
+  accent: string;
   font?: string;
 };
 
 /**
  * How each template is laid out, as far as a thumbnail needs to know:
- * which part the brand colour (`bg`) paints and where the name sits.
+ * which part the brand colour (`bg`) paints, where the name sits, and the
+ * accent marks the template draws (a bar along the bottom, a strip down the
+ * edge).
  */
-type Layout = "split" | "stripe" | "photo" | "full";
+type Layout = "split" | "stripe" | "photo" | "full" | "strip";
 function layoutOf(template?: string): Layout {
   if (template === "classic-pro") return "split";
   if (template === "local-business") return "stripe";
   if (template === "photo-first") return "photo";
+  if (template === "luxury-minimal") return "strip";
   return "full";
 }
 
-/** Faint lines standing in for the phone, email and address, inked for their ground. */
-function DetailLines({ ground }: { ground: string }) {
-  const ink = isDarkBg(ground) ? "rgba(255,255,255,0.5)" : "rgba(15,23,42,0.38)";
+/**
+ * The phone, email and address: an icon dot in the accent beside a line in
+ * the details ink — so a tile shows the two colours a card wears most.
+ */
+function DetailRows({ ground, paint }: { ground: string; paint: Paint }) {
+  const ink = paint.info ?? (isDarkBg(ground) ? "#ffffff" : "#0f172a");
   return (
     <span className="flex flex-col gap-[3px]">
-      <span className="block h-[3px] w-4/5 rounded-full" style={{ background: ink }} />
-      <span className="block h-[3px] w-3/5 rounded-full" style={{ background: ink }} />
-      <span className="block h-[3px] w-2/3 rounded-full" style={{ background: ink }} />
+      {["w-4/5", "w-3/5", "w-2/3"].map((w) => (
+        <span key={w} className="flex items-center gap-[3px]">
+          <span className="block h-[4px] w-[4px] shrink-0 rounded-full" style={{ background: paint.accent }} />
+          <span className={`block h-[3px] ${w} rounded-full`} style={{ background: ink, opacity: 0.6 }} />
+        </span>
+      ))}
     </span>
   );
 }
@@ -116,9 +133,10 @@ function DetailLines({ ground }: { ground: string }) {
  * sits in under half a 150px tile, which cut "Sea Glass" to "Sea…". The name
  * is the caption under the card instead, where it always fits.
  */
-function NameBlock({ paint, small = false }: { paint: Paint; small?: boolean }) {
+function NameBlock({ paint, small = false, company = false }: { paint: Paint; small?: boolean; company?: boolean }) {
   return (
     <span className={`block min-w-0 ${small ? "text-center" : ""}`}>
+      {company && <span className="mb-1 block h-[3px] w-5 rounded-full" style={{ background: paint.company }} />}
       <span
         className={`block font-extrabold leading-none ${small ? "text-[0.6875rem]" : "text-[0.9375rem]"}`}
         style={{ color: paint.text, fontFamily: paint.font }}
@@ -130,6 +148,11 @@ function NameBlock({ paint, small = false }: { paint: Paint; small?: boolean }) 
   );
 }
 
+/** The short company line some templates set at the top of the details side. */
+function CompanyLine({ paint }: { paint: Paint }) {
+  return <span className="mb-1.5 block h-[3px] w-1/2 rounded-full" style={{ background: paint.company }} />;
+}
+
 /**
  * A miniature of the card a Look produces, in this template's layout.
  *
@@ -137,7 +160,8 @@ function NameBlock({ paint, small = false }: { paint: Paint; small?: boolean }) 
  * measuring and fitting its own text, would make opening a row slow on a
  * phone. What matters in a tile is the material, the colours and where they
  * fall on the card, and those are exact — the brand surface is painted with
- * composePanelBackground, the same call every template makes.
+ * composePanelBackground, the same call every template makes — down to the
+ * accent on the icons and the bar.
  */
 function MiniCard({ layout, paint }: { layout: Layout; paint: Paint }) {
   const brand = composePanelBackground(paint.bg, paint.finish);
@@ -148,21 +172,25 @@ function MiniCard({ layout, paint }: { layout: Layout; paint: Paint }) {
       {layout === "split" && (
         <>
           <span className="flex w-[46%] flex-col justify-center px-2">
+            <span className="mb-1 block h-[2px] w-3 rounded-full" style={{ background: paint.accent }} />
             <NameBlock paint={paint} />
           </span>
           <span className="flex flex-1 items-center px-2" style={{ background: paint.surface }}>
-            <span className="w-full"><DetailLines ground={paint.surface} /></span>
+            <span className="w-full"><DetailRows ground={paint.surface} paint={paint} /></span>
           </span>
+          <span className="absolute inset-x-0 bottom-0 h-[3px]" style={{ background: paint.accent }} />
         </>
       )}
       {layout === "stripe" && (
         <span className="flex w-full flex-col">
-          <span className="flex h-[44%] items-center px-2">
+          <span className="flex h-[42%] items-center px-2">
             <NameBlock paint={paint} />
           </span>
-          <span className="flex flex-1 items-center px-2" style={{ background: paint.surface }}>
-            <span className="w-full"><DetailLines ground={paint.surface} /></span>
+          <span className="flex flex-1 flex-col justify-center px-2" style={{ background: paint.surface }}>
+            <CompanyLine paint={paint} />
+            <DetailRows ground={paint.surface} paint={paint} />
           </span>
+          <span className="absolute inset-x-0 bottom-0 h-[3px]" style={{ background: paint.accent }} />
         </span>
       )}
       {layout === "photo" && (
@@ -171,17 +199,42 @@ function MiniCard({ layout, paint }: { layout: Layout; paint: Paint }) {
             <span className="block h-[34%] aspect-square rounded-full" style={{ background: isDarkBg(paint.surface) ? "rgba(255,255,255,0.22)" : "rgba(15,23,42,0.12)" }} />
             <NameBlock paint={paint} small />
           </span>
-          <span className="flex flex-1 items-center px-2">
-            <span className="w-full"><DetailLines ground={paint.bg} /></span>
+          <span className="flex flex-1 flex-col justify-center px-2">
+            <CompanyLine paint={paint} />
+            <DetailRows ground={paint.bg} paint={paint} />
           </span>
         </>
       )}
-      {layout === "full" && (
+      {(layout === "full" || layout === "strip") && (
         <span className="flex w-full flex-col justify-center gap-2 px-2.5">
-          <NameBlock paint={paint} />
-          <DetailLines ground={paint.bg} />
+          <NameBlock paint={paint} company />
+          <DetailRows ground={paint.bg} paint={paint} />
         </span>
       )}
+      {layout === "strip" && <span className="absolute inset-y-0 left-0 w-[3px]" style={{ background: paint.accent }} />}
+    </span>
+  );
+}
+
+/**
+ * A MiniCard drawn at tile size and scaled down to a thumbnail.
+ *
+ * Owner, 2026-10-15: Original's little picture "doesn't even fit correctly".
+ * It was the tile's layout squeezed into 56px — the same 15px "Aa", gaps and
+ * padding in a third of the room — so the name ran off the top and the lines
+ * off the bottom. Scaling the whole drawing keeps every proportion of the
+ * tiles below it, so the thumbnail is the same card, smaller.
+ */
+const THUMB_DRAWN_PX = 160;
+function MiniThumb({ layout, paint, widthPx }: { layout: Layout; paint: Paint; widthPx: number }) {
+  return (
+    <span className="relative block aspect-[1.75/1] overflow-hidden" style={{ width: widthPx }}>
+      <span
+        className="absolute left-0 top-0 block origin-top-left"
+        style={{ width: THUMB_DRAWN_PX, transform: `scale(${widthPx / THUMB_DRAWN_PX})` }}
+      >
+        <MiniCard layout={layout} paint={paint} />
+      </span>
     </span>
   );
 }
@@ -218,15 +271,9 @@ function LookTile({
       }`}
       style={active ? undefined : { boxShadow: "inset 0 0 0 1px rgba(127,127,127,0.35)" }}
     >
-      <MiniCard
-        layout={layout}
-        // The FINISH rides along, not just the colour: a Look whose whole
-        // point is the material must show it before you pick it.
-        paint={paintOf(meta, {
-          bg: look.bg, finish: look.finish, surface: look.surface, text: look.text,
-          title: look.title, font: look.font,
-        })}
-      />
+      {/* The FINISH rides along, not just the colour: a Look whose whole
+          point is the material must show it before you pick it. */}
+      <MiniCard layout={layout} paint={paintOf(meta, look)} />
       <span className={`block px-2 py-1.5 text-[0.6875rem] leading-tight truncate bg-gray-900/60 ${active ? "text-blue-300 font-semibold" : "text-gray-300"}`}>
         {look.name}
       </span>
@@ -238,7 +285,7 @@ function LookTile({
 /** A Look's colours with the template's own filling every gap it leaves. */
 function paintOf(
   meta: TemplateMeta,
-  p: { bg: string; finish?: string; surface?: string; text: string; title?: string; font?: string },
+  p: Pick<Look, "bg" | "text" | "finish" | "surface" | "title" | "company" | "info" | "accent" | "font">,
 ): Paint {
   return {
     bg: p.bg,
@@ -246,6 +293,9 @@ function paintOf(
     surface: p.surface ?? meta.surface?.fallback ?? "#ffffff",
     text: p.text,
     title: p.title ?? meta.title.fallback,
+    company: p.company ?? meta.company.fallback,
+    info: p.info,
+    accent: p.accent ?? meta.accent.fallback,
     font: p.font,
   };
 }
@@ -309,7 +359,8 @@ export default function CardLookPicker({
     setOpen(isOpen ? null : fam);
   }
 
-  const original = paintOf(meta, { bg: meta.bg.fallback, text: meta.text.fallback });
+  // The template as it ships: its own details ink, accent and second surface.
+  const original = paintOf(meta, { bg: meta.bg.fallback, text: meta.text.fallback, info: meta.info.fallback });
 
   return (
     <div className="rounded-xl border border-gray-800 overflow-hidden divide-y divide-gray-800">
@@ -325,9 +376,10 @@ export default function CardLookPicker({
         }`}
       >
         <span
-          className={`w-14 shrink-0 rounded-md overflow-hidden border-2 ${originalActive ? "border-blue-500" : "border-transparent"}`}
+          className={`shrink-0 rounded-md overflow-hidden border-2 ${originalActive ? "border-blue-500" : "border-transparent"}`}
+          style={originalActive ? undefined : { boxShadow: "inset 0 0 0 1px rgba(127,127,127,0.35)" }}
         >
-          <MiniCard layout={layout} paint={original} />
+          <MiniThumb layout={layout} paint={original} widthPx={64} />
         </span>
         <span className="min-w-0 flex-1">
           <span className={`block text-[0.8125rem] font-semibold ${originalActive ? "text-blue-300" : "text-gray-200"}`}>Original</span>

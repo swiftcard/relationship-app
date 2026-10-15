@@ -3,7 +3,7 @@
 // Includes: Logo, name, title, phone, email, website, social row, QR
 // Best for: Finance, consulting, legal, corporate, healthcare
 
-import { isDarkBg, panelBackground } from "@/lib/template-style";
+import { accentShade, isDarkBg, panelBackground } from "@/lib/template-style";
 import { MiniQR as QR } from "./MiniQR";
 import type { CardData } from "./types";
 import { cardAspect, ContactRows, fitFactor, fitCompany, splitLogoRow, fitTitleFluid, titleBox, fitName, heroGrow, logoStyle, logoCircleStyle, cardLogoShape, qrSize, templateStyle, CARD_BASE_FONT, infoPaletteFrom, IcoLinkedIn, IcoInsta, IcoX, IcoTikTok, nameClass, textWidthFactor, cardFontClass } from "./shared";
@@ -177,7 +177,7 @@ export default function ClassicPro({ data }: { data: CardData }) {
       {/* Bottom gradient accent */}
       <div
         className="absolute bottom-0 left-0 right-0"
-        style={{ height: 4, background: `linear-gradient(90deg, ${BLUE}, #7c3aed)` }}
+        style={{ height: 4, background: `linear-gradient(90deg, ${BLUE}, ${accentShade(style.accentColor, BLUE, "#ffffff", 0.35, "#7c3aed")})` }}
       />
     </div>
   );

@@ -169,6 +169,8 @@ for (const width of [390, 1280]) {
       expect(v.finish).toBe("frosted");
       expect(v.titleColor).toBe(arctic.title);
       expect(v.companyColor).toBe(arctic.company);
+      expect(v.infoColor).toBe(arctic.info);
+      expect(v.accentColor).toBe(arctic.accent);
       expect(await page.getAttribute("button[title^='Arctic']", "aria-pressed")).toBe("true");
       expect(await page.getAttribute("button[title=\"The template's own colours, font and finish\"]", "aria-pressed")).toBe("false");
       // Close it: the row still says which look the card is wearing.
@@ -178,7 +180,7 @@ for (const width of [390, 1280]) {
       // And Original takes it all back.
       await page.click("button[title=\"The template's own colours, font and finish\"]");
       const back = await page.evaluate(() => (window as unknown as { __value: Record<string, unknown> }).__value);
-      for (const k of ["bgColor", "textColor", "fontFamily", "finish", "surfaceColor", "titleColor", "companyColor"]) {
+      for (const k of ["bgColor", "textColor", "fontFamily", "finish", "surfaceColor", "titleColor", "companyColor", "infoColor", "accentColor"]) {
         expect(back[k], k).toBeUndefined();
       }
       await page.close();
@@ -250,6 +252,68 @@ describe("every template draws its own layout", () => {
         }
       }
       expect(seen).toBe(26);
+      await page.close();
+    });
+  }
+});
+
+// Owner, 2026-10-15: "make sure that if I press on one of them, it actually
+// works — the color that the text says it's going to be, the background, all
+// that." Every tile, on every template: one tap writes the WHOLE Look, lights
+// that tile alone, and the closed row names it.
+describe("every Look does exactly what its tile shows", () => {
+  for (const t of Object.keys(META)) {
+    it(`${t}: each of the 26 tiles applies its whole design`, async () => {
+      const page = await mount(390, t);
+      const meta = META[t];
+      for (const fam of ["Solid", "Gradient", "Glass"] as const) {
+        await row(page, fam).click();
+        await page.waitForTimeout(40);
+        for (const look of looksInFamily(meta, fam.toLowerCase() as "solid" | "gradient" | "glass")) {
+          const tile = page.locator(`#panel button[aria-pressed][title="${look.finish ? `${look.name} — ` : look.name}"], #panel button[aria-pressed][title^="${look.name} — "]`).first();
+          await tile.click();
+          const v = await page.evaluate(() => (window as unknown as { __value: Record<string, unknown> }).__value);
+          const want: Record<string, unknown> = {
+            bgColor: look.bg, textColor: look.text, fontFamily: look.font, finish: look.finish,
+            surfaceColor: meta.surface ? look.surface : undefined,
+            titleColor: look.title, companyColor: look.company, infoColor: look.info, accentColor: look.accent,
+          };
+          for (const [k, x] of Object.entries(want)) expect(v[k], `${t}/${look.name} ${k}`).toBe(x);
+          const lit = await page.$$eval("#panel button[aria-pressed='true'][title]", (els) =>
+            els.filter((e) => e.querySelector("[data-ds='specimen']") && !e.getAttribute("title")!.startsWith("The template"))
+              .map((e) => e.getAttribute("title")!.split(" — ")[0]));
+          expect(lit, `${t}/${look.name}`).toEqual([look.name]);
+        }
+        await row(page, fam).click();
+      }
+      await page.close();
+    });
+  }
+});
+
+// Owner, 2026-10-15: Original's little picture "doesn't even fit correctly".
+// It is now the tile's own drawing scaled down: everything in it stays inside
+// it, on every template.
+describe("Original's thumbnail fits", () => {
+  for (const t of Object.keys(META)) {
+    it(`${t}: nothing in the thumbnail spills past its frame`, async () => {
+      const page = await mount(390, t);
+      const spill = await page.evaluate(() => {
+        const btn = document.querySelector<HTMLElement>("button[title=\"The template's own colours, font and finish\"]")!;
+        const card = btn.querySelector<HTMLElement>("[data-ds='specimen']")!;
+        const frame = card.parentElement!.parentElement!.getBoundingClientRect();
+        const out: string[] = [];
+        if (frame.width < 40 || frame.height < 20) out.push(`frame ${frame.width}x${frame.height}`);
+        for (const el of [card, ...card.querySelectorAll<HTMLElement>("*")]) {
+          const r = el.getBoundingClientRect();
+          if (!r.width || !r.height) continue;
+          if (r.left < frame.left - 0.5 || r.right > frame.right + 0.5 || r.top < frame.top - 0.5 || r.bottom > frame.bottom + 0.5) {
+            out.push(`${el.tagName}.${el.className} ${Math.round(r.top - frame.top)}/${Math.round(frame.bottom - r.bottom)}`);
+          }
+        }
+        return out;
+      });
+      expect(spill).toEqual([]);
       await page.close();
     });
   }

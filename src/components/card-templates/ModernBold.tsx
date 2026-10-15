@@ -3,7 +3,7 @@
 // Includes: Name (hero), title, company, phone, email, website, social, QR
 // Best for: Tech, agencies, startups, creatives, personal brands
 
-import { panelBackground } from "@/lib/template-style";
+import { accentGlow, brightness, mixHex, panelBackground } from "@/lib/template-style";
 import React from "react";
 import { MiniQR as QR } from "./MiniQR";
 import type { CardData } from "./types";
@@ -28,6 +28,10 @@ export default function ModernBold({ data }: { data: CardData }) {
       : { strong: "#0f172a", mid: "#1e293b", soft: "#475569", muted: "#64748b" };
   const companyColor = style.companyColor ?? style.infoColor ?? (darkCard ? "#cbd5e1" : "#475569");
   const titleColor = style.titleColor ?? BLUE;
+  // The QR plate is a deep shade of the accent, so a Look's emerald or amber
+  // code sits on its own colour rather than the template's navy. A DARK accent
+  // gets a pale plate instead: dark on dark is a code no phone can read.
+  const qrPlate = !style.accentColor || !/^#[0-9a-f]{6}$/i.test(BLUE) ? DIM : brightness(BLUE) < 90 ? mixHex(BLUE, "#ffffff", 0.85) : mixHex(BLUE, "#0b0f16", 0.72);
   const f = fitFactor(data); // auto-fit: more info → everything sizes down together
   // Row is 170.4 design px: panel 44% of 460 = 202.4, less 16px padding either
   // side. Uppercase with 0.16em of tracking — about a fifth of the rendered
@@ -74,7 +78,7 @@ export default function ModernBold({ data }: { data: CardData }) {
         style={{
           width: 120, height: 120,
           top: -30, right: -20,
-          background: "radial-gradient(circle, rgba(59,130,246,0.12) 0%, transparent 70%)",
+          background: `radial-gradient(circle, ${accentGlow(style.accentColor, BLUE)} 0%, transparent 70%)`,
         }}
       />
 
@@ -150,7 +154,7 @@ export default function ModernBold({ data }: { data: CardData }) {
           <ContactRows
             data={data}
             palette={{ accent: BLUE, ...infoPal }}
-            qr={{ size: qrSize(f), node: <QR size={qrSize(f)} bg={DIM} fg={BLUE} url={data.cardUrl} /> }}
+            qr={{ size: qrSize(f), node: <QR size={qrSize(f)} bg={qrPlate} fg={BLUE} url={data.cardUrl} /> }}
           />
         </div>
       </div>
