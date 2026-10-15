@@ -324,8 +324,20 @@ export function nanpE164(raw: string | null | undefined): string | null {
   }
   // NXX-NXX-XXXX: neither the area code nor the exchange starts with 0 or 1.
   if (!/^[2-9]\d{2}[2-9]\d{6}$/.test(digits)) return null;
+  if (NOT_DOMESTIC_NANP.has(digits.slice(0, 3)) || /^[2-9]11$/.test(digits.slice(0, 3))) return null;
   return `+1${digits}`;
 }
+
+// "+1" is not only the US and Canada. These area codes are other countries
+// that share the North American plan (the Caribbean, Bermuda), billed as
+// international, plus 900 premium-rate. Texting them from a free account is
+// the SMS-pumping pattern a +1 check alone lets through. US territories
+// (Puerto Rico 787/939, USVI 340, Guam 671, N. Marianas 670, Am. Samoa 684)
+// are domestic and stay allowed.
+const NOT_DOMESTIC_NANP = new Set([
+  "242", "246", "264", "268", "284", "345", "441", "473", "649", "658", "664",
+  "721", "758", "767", "784", "809", "829", "849", "868", "869", "876", "900",
+]);
 
 export async function sendSms(to: string, body: string): Promise<{ status: SendResult; sid: string | null }> {
   const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_MESSAGING_SERVICE_SID, TWILIO_PHONE_NUMBER } = process.env;

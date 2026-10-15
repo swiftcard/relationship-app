@@ -21,11 +21,26 @@
 // lib/lead-status and lib/member-status.
 import { createClient } from "@supabase/supabase-js";
 
+// Hard cap on every call, like the session client in supabase-server.ts. With
+// no cap, a slow database makes every hot route (card views, vCards, leads)
+// hang until the function's max duration, so instances pile up instead of
+// failing fast — the way a traffic spike turns into an outage. 10s is ~20× a
+// normal round-trip. Storage gets 60s: uploads up to 25 MB go through here.
+const ADMIN_TIMEOUT_MS = 10_000;
+const ADMIN_STORAGE_TIMEOUT_MS = 60_000;
+
+function cappedFetch(url: RequestInfo | URL, init?: RequestInit) {
+  const href = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+  const cap = AbortSignal.timeout(href.includes("/storage/v1/") ? ADMIN_STORAGE_TIMEOUT_MS : ADMIN_TIMEOUT_MS);
+  const signal = init?.signal ? AbortSignal.any([init.signal, cap]) : cap;
+  return fetch(url, { ...init, signal });
+}
+
 // Service-role client — bypasses RLS. Server-side only; see above.
 export function getAdminSupabase() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
+    { auth: { autoRefreshToken: false, persistSession: false }, global: { fetch: cappedFetch } }
   );
 }

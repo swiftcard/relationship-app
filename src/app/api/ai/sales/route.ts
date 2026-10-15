@@ -24,7 +24,12 @@ type ChatMessage = { role: "user" | "assistant"; content: string };
 export async function POST(req: NextRequest) {
   // Public endpoint → strict per-IP limit (20 messages / 10 minutes).
   const ip = clientIp(req);
-  if (await isRateLimited(`sales-chat:${ip}`, 20, 10 * 60 * 1000)) {
+  // Plus one daily ceiling across every visitor: per-IP limits alone let a
+  // bot rotating IPs run the model bill without bound.
+  if (
+    (await isRateLimited(`sales-chat:${ip}`, 20, 10 * 60 * 1000)) ||
+    (await isRateLimited("ai-global:sales-chat", 3000, 24 * 60 * 60 * 1000))
+  ) {
     return NextResponse.json(
       { reply: "You've sent quite a few messages — give it a few minutes and try again, or reach the team at swiftcard.me/contact." },
       { status: 429 },

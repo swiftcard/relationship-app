@@ -28,13 +28,19 @@ export const runtime = "nodejs";
 const SIGNED_IN_LIMIT = 60;   // per user / 10 min
 const GUEST_LIMIT = 10;       // per IP  / 10 min
 const WINDOW_MS = 10 * 60 * 1000;
+const GUEST_DAILY_CEILING = 5000; // all guests together / day
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   const key = user ? `logo-suggest:u:${user.id}` : `logo-suggest:ip:${clientIp(req)}`;
-  if (await isRateLimited(key, user ? SIGNED_IN_LIMIT : GUEST_LIMIT, WINDOW_MS)) {
+  // Guests also share one daily ceiling: per-IP limits alone let a bot
+  // rotating IPs spend the logo provider's quota.
+  if (
+    (await isRateLimited(key, user ? SIGNED_IN_LIMIT : GUEST_LIMIT, WINDOW_MS)) ||
+    (!user && (await isRateLimited("ai-global:logo-suggest:guest", GUEST_DAILY_CEILING, 24 * 60 * 60 * 1000)))
+  ) {
     return NextResponse.json(
       { status: "rate_limited", candidates: [], message: "Too many logo searches — please wait a moment." },
       { status: 429 },

@@ -9,6 +9,8 @@
 //
 // Never throws: reporting an error must not itself break the path that failed.
 
+import { isRateLimited } from "@/lib/rate-limit";
+
 const ALERT_URL = process.env.ALERT_WEBHOOK_URL;
 const APP_ENV = process.env.VERCEL_ENV || process.env.NODE_ENV || "development";
 
@@ -52,23 +54,35 @@ export async function reportError(
     console.error("[error]", context, err.message);
   }
 
+  // A storm of one bug (a bad deploy under launch traffic) must not become
+  // thousands of database writes and chat posts. Rows are capped per
+  // fingerprint, not collapsed to one: Bo's detector (marketing-agents/lib/
+  // detectors.mjs) needs 3+ rows in 15 min to call it an incident. The chat
+  // alert says it once per 10 min. A limiter failure falls through to
+  // reporting — losing an alert is worse than sending a duplicate.
+  const fingerprint = fingerprintOf(context, err.message);
+  const STORM_WINDOW = 10 * 60 * 1000;
+  const rowCapped = await isRateLimited(`report-error:row:${fingerprint}`, 20, STORM_WINDOW).catch(() => false);
+
   // (b) Durable row — so something can READ this back. The console line above
   // is ephemeral and needs a Vercel token to reach; this is what lets Bo watch
   // for crashes with the Supabase key the agents already hold. Fire-and-forget
   // and fully swallowed: if the table is missing (migration not yet applied) or
   // Supabase is down, the path that failed must not fail twice.
-  try {
-    const { getAdminSupabase } = await import("@/lib/supabase-admin");
-    await getAdminSupabase().from("error_events").insert({
-      context,
-      message: err.message.slice(0, 2000),
-      stack: err.stack?.slice(0, 8000) ?? null,
-      env: APP_ENV,
-      fingerprint: fingerprintOf(context, err.message),
-      ...(extra ? { extra } : {}),
-    });
-  } catch {
-    /* durable sink is best-effort — the structured log above is the fallback */
+  if (!rowCapped) {
+    try {
+      const { getAdminSupabase } = await import("@/lib/supabase-admin");
+      await getAdminSupabase().from("error_events").insert({
+        context,
+        message: err.message.slice(0, 2000),
+        stack: err.stack?.slice(0, 8000) ?? null,
+        env: APP_ENV,
+        fingerprint,
+        ...(extra ? { extra } : {}),
+      });
+    } catch {
+      /* durable sink is best-effort — the structured log above is the fallback */
+    }
   }
 
   // (c) Real-time chat alert — only if a webhook is configured. Short-timeout,
@@ -77,7 +91,11 @@ export async function reportError(
   // (/api/client-error), so forwarding it let anyone write "🚨 SwiftCard error"
   // messages — links included — into the ops channel (security audit
   // 2026-09-24). They still land in (a) and (b) above.
-  if (ALERT_URL && !context.startsWith("client.")) {
+  if (
+    ALERT_URL &&
+    !context.startsWith("client.") &&
+    !(await isRateLimited(`report-error:alert:${fingerprint}`, 1, STORM_WINDOW).catch(() => false))
+  ) {
     const text = `🚨 *SwiftCard error* [${APP_ENV}] — *${context}*\n${err.message}`;
     try {
       await fetch(ALERT_URL, {

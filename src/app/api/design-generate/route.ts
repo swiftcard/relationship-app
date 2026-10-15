@@ -44,6 +44,7 @@ import type { AiDesignBrief } from "@/components/card-templates/types";
 const HEX = /^#[0-9a-f]{6}$/i;
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : "");
 const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
 const tooFast = () =>
   NextResponse.json({ error: "You're generating very quickly — give it a minute and try again." }, { status: 429 });
 
@@ -57,6 +58,10 @@ export async function POST(request: NextRequest) {
     if (await isRateLimited(`design-generate:ip:${clientIp(request)}`, 15, HOUR)) return tooFast();
     // The app never sends anything to the provider for someone it hasn't asked.
     useModel = !isShellRequest(request);
+    // One ceiling across ALL visitors, so a bot farm rotating IPs can't run up
+    // the model bill. Past it, visitors still get a design — from the engine
+    // alone, which is what the app already serves — never an error.
+    if (useModel && (await isRateLimited("ai-global:design-generate:guest", 5000, DAY))) useModel = false;
   } else {
     const admin = getAdminSupabase();
     const { data: profile } = await admin

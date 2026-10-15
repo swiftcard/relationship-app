@@ -94,6 +94,14 @@ describe("texts only ever go to North American numbers", () => {
     for (const bad of ["+44 20 7946 0958", "+882 1234 5678", "+1 116 555 0199", "555-0199", "", "+15165550199999"]) {
       expect(nanpE164(bad), bad).toBeNull();
     }
+    // +1 islands billed as international (SMS pumping), 900 premium, N11 service codes.
+    for (const bad of ["+1 876 555 0199", "+1 (809) 555-0199", "1 441 555 0199", "+1 900 555 0199", "+1 911 555 0199"]) {
+      expect(nanpE164(bad), bad).toBeNull();
+    }
+    // US territories are domestic.
+    for (const ok of ["+1 787 555 0199", "+1 340 555 0199", "+1 671 555 0199"]) {
+      expect(nanpE164(ok), ok).not.toBeNull();
+    }
     expect(read("src/lib/messaging.ts")).toMatch(/const e164 = nanpE164\(to\);\s*\n\s*if \(!e164\) return \{ status: "failed", sid: null \};/);
   });
   it("every user send route shares one daily ceiling", () => {
