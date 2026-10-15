@@ -250,7 +250,10 @@ describe("a logo never escapes the card, covers text, or pushes content off", ()
           }
           const cs = getComputedStyle(disc);
           const b = disc.getBoundingClientRect();
-          const pad = parseFloat(cs.paddingLeft);
+          // The inset from the disc's edge to the mark: on Logo First the
+          // tile's own padding plus the img's (CircleLogo insets the img, so
+          // it can reshape the inset for a wide mark once it has loaded).
+          const pad = parseFloat(cs.paddingLeft) + (disc === img ? 0 : parseFloat(getComputedStyle(img).paddingLeft));
           return { w: b.width, h: b.height, pad };
         });
         if ("err" in r) failures.push(`${tName}: ${r.err}`);

@@ -150,14 +150,15 @@ describe.each(engines)("Swift Links pinned header photo (%s)", (_name, engine) =
   it("the mini header sticks to the top once the photo is gone", async () => {
     const page = await mount(browser, { photoTone: "#6E4628" });
     await scrollTo(page, 600);
-    await page.waitForTimeout(400); // its own 300ms fade
-    const bar = await page.evaluate(() => {
+    const bar = () => page.evaluate(() => {
       const name = Array.from(document.querySelectorAll("span")).find((e) => e.textContent === "Alex Morgan" && e.className.includes("truncate"))!;
       const barEl = name.parentElement!;
       return { top: barEl.getBoundingClientRect().top, opacity: Number(getComputedStyle(barEl).opacity) };
     });
-    expect(Math.abs(bar.top), "the mini header scrolled away").toBeLessThan(1);
-    expect(bar.opacity).toBe(1);
+    // Its own 300ms fade — polled, not a fixed wait: a slow CI runner caught
+    // it at 0.69 after 400ms (2026-10-15) with nothing wrong on the page.
+    await expect.poll(async () => (await bar()).opacity, { timeout: 3000 }).toBe(1);
+    expect(Math.abs((await bar()).top), "the mini header scrolled away").toBeLessThan(1);
     await page.close();
   });
 
