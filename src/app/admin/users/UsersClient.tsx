@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback } from "react";
 import { getSignupSourceLabel } from "@/lib/source-labels";
 import { useRouter } from "next/navigation";
 import { META } from "@/lib/template-style-presets";
+import { adminErrorText, planChangeWarning } from "@/lib/admin-confirm";
 
 // Photo First's photo-panel swatches — the same ones the card editor offers.
 const PHOTO_PANEL = META["photo-first"].surface!;
@@ -65,19 +66,34 @@ const PLAN_STYLES: Record<string, { bg: string; text: string; label: string }> =
   enterprise: { bg: "#3b0764", text: "#c084fc", label: "Office" },
 };
 
-function PlanBadge({ plan, expires, userId, onUpdated }: { plan: string; expires: string | null; userId: string; onUpdated: () => void }) {
+function PlanBadge({ plan, expires, userId, who, onUpdated }: { plan: string; expires: string | null; userId: string; who: string; onUpdated: () => void }) {
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const cfg = PLAN_STYLES[plan] ?? PLAN_STYLES.free;
 
+  // Asks first, and says what failed (audit F-ADMIN-01): this dropdown used to
+  // change a plan on the first click and ignore every refusal.
   async function setPlan(next: string) {
+    if (next === plan || !window.confirm(planChangeWarning(who, plan, next))) return;
     setSaving(true);
-    await fetch("/api/admin/set-plan", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, plan: next }),
-    });
-    setSaving(false);
-    onUpdated();
+    setError(null);
+    let changed = false;
+    try {
+      const res = await fetch("/api/admin/set-plan", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, plan: next }),
+      });
+      if (res.ok) changed = true;
+      else setError(await adminErrorText(res));
+    } catch {
+      setError("Couldn't reach the server. Nothing was changed.");
+    } finally {
+      setSaving(false);
+    }
+    // Reload only when something changed: the reload redraws the list, which
+    // would wipe the refusal off the screen before it could be read.
+    if (changed) onUpdated();
   }
 
   return (
@@ -96,6 +112,7 @@ function PlanBadge({ plan, expires, userId, onUpdated }: { plan: string; expires
         <option value="pro">Pro</option>
         <option value="enterprise">Office</option>
       </select>
+      {error && <span role="alert" className="text-[0.625rem] text-red-400 max-w-[16rem]">{error}</span>}
     </div>
   );
 }
@@ -262,7 +279,7 @@ export default function UsersClient() {
                       <p className="text-gray-600 text-[0.625rem]">/{u.username}{u.company ? ` · ${u.company}` : ""}</p>
                     </td>
                     <td className="px-4 py-3">
-                      <PlanBadge plan={u.plan} expires={u.plan_expires_at} userId={u.id} onUpdated={load} />
+                      <PlanBadge plan={u.plan} expires={u.plan_expires_at} userId={u.id} who={u.email || u.name || "this user"} onUpdated={load} />
                     </td>
                     <td className="px-4 py-3 text-white font-semibold tabular-nums">{u.card_count}</td>
                     <td className="px-4 py-3 text-white font-semibold tabular-nums">{u.lead_count}</td>

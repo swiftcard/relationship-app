@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSignupSourceLabel, getSourceLabel } from "@/lib/source-labels";
 import Link from "next/link";
+import { adminErrorText, grantMonthWarning, planChangeWarning, takeOfflineWarning } from "@/lib/admin-confirm";
 
 type Detail = {
   user: {
@@ -41,6 +42,7 @@ export default function UserDetailClient({ userId }: { userId: string }) {
   const [busy, setBusy] = useState("");
   const [codeInput, setCodeInput] = useState("");
   const [codeMsg, setCodeMsg] = useState("");
+  const [actionError, setActionError] = useState("");
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/admin/users/${userId}`);
@@ -53,18 +55,28 @@ export default function UserDetailClient({ userId }: { userId: string }) {
   // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time data fetch on mount
   useEffect(() => { load(); }, [load]);
 
+  // Every refusal is shown now, not only the referral code's (audit
+  // F-ADMIN-02): a 409 or 502 on a plan change used to vanish.
   async function patch(body: Record<string, unknown>, busyKey: string) {
     setBusy(busyKey);
     setCodeMsg("");
-    const res = await fetch(`/api/admin/users/${userId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const d = await res.json().catch(() => ({}));
-    if (!res.ok && body.referralCode !== undefined) setCodeMsg(d.error || "Failed");
-    if (res.ok && body.referralCode !== undefined) setCodeMsg("Saved ✓");
-    setBusy("");
+    setActionError("");
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (body.referralCode !== undefined) {
+        setCodeMsg(res.ok ? "Saved ✓" : await adminErrorText(res));
+      } else if (!res.ok) {
+        setActionError(await adminErrorText(res));
+      }
+    } catch {
+      setActionError("Couldn't reach the server. Nothing was changed.");
+    } finally {
+      setBusy("");
+    }
     load();
   }
 
@@ -77,6 +89,7 @@ export default function UserDetailClient({ userId }: { userId: string }) {
   if (!data) return <p className="text-gray-500 text-sm py-10">Loading…</p>;
 
   const { user, cards, profileCard, totals, series, recentLeads } = data;
+  const who = user.email || user.name || user.username || "this user";
   const maxDay = Math.max(...series.map((s) => s.views + s.leads), 1);
   // The slug whose public pages actually exist: a real card first, then the
   // legacy profile-slug card. Null → this account has no public page yet.
@@ -149,12 +162,16 @@ export default function UserDetailClient({ userId }: { userId: string }) {
               )}
             </p>
             <p className="text-gray-600 text-[0.6875rem] mt-0.5">Setting a plan directly clears any free-month expiry.</p>
+            {actionError && <p role="alert" className="text-red-400 text-xs mt-1.5">{actionError}</p>}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {(["free", "pro", "enterprise"] as const).map((p) => (
               <button
                 key={p}
-                onClick={() => patch({ plan: p }, `plan-${p}`)}
+                onClick={() => {
+                  if (!window.confirm(planChangeWarning(who, user.plan || "free", p))) return;
+                  void patch({ plan: p }, `plan-${p}`);
+                }}
                 disabled={busy !== "" || user.plan === p}
                 className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors disabled:opacity-50 ${
                   user.plan === p ? "bg-blue-600 border-blue-600 text-white" : "bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500"
@@ -164,7 +181,10 @@ export default function UserDetailClient({ userId }: { userId: string }) {
               </button>
             ))}
             <button
-              onClick={() => patch({ grantFreeMonth: true }, "grant")}
+              onClick={() => {
+                if (!window.confirm(grantMonthWarning(who))) return;
+                void patch({ grantFreeMonth: true }, "grant");
+              }}
               disabled={busy !== ""}
               className="text-xs font-semibold px-3 py-1.5 rounded-full bg-emerald-700/60 border border-emerald-600/60 text-emerald-200 hover:bg-emerald-700 transition-colors disabled:opacity-50"
             >
@@ -237,7 +257,10 @@ export default function UserDetailClient({ userId }: { userId: string }) {
                           <button
                             type="button"
                             disabled={busy === `offline-${c.key}`}
-                            onClick={() => patch({ cardOffline: { cardId: c.key, offline: !c.offline } }, `offline-${c.key}`)}
+                            onClick={() => {
+                              if (!c.offline && !window.confirm(takeOfflineWarning(c.username))) return;
+                              void patch({ cardOffline: { cardId: c.key, offline: !c.offline } }, `offline-${c.key}`);
+                            }}
                             className={`font-semibold px-2 py-1 rounded-full transition-colors disabled:opacity-50 ${c.offline ? "text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20" : "text-red-400 bg-red-500/10 hover:bg-red-500/20"}`}
                           >
                             {busy === `offline-${c.key}` ? "…" : c.offline ? "Bring online" : "Take offline"}
