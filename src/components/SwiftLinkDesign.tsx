@@ -855,7 +855,7 @@ export function SwiftLinkStyleControls({
             would make every Look "not work" until the user found and reset it. */}
         <LookPicker value={value.linkLook} onPick={(v) => onChange({ linkLook: v, linkBgColor: undefined, linkTextColor: undefined, linkButtonColor: undefined, linkAccentColor: undefined })} locked={locked} />
         {locked && (
-          <p className="text-[0.625rem] text-gray-500 mt-2 leading-snug">Paper and Onyx are free — the rest come with Pro.</p>
+          <p className="text-[0.625rem] text-gray-500 mt-2 leading-snug">Photo match, Paper and Onyx are free — the rest come with Pro.</p>
         )}
         </>
       ),

@@ -44,8 +44,11 @@ describe("every header style (owner, 2026-09-17)", () => {
 
   it("a cover or banner photo dissolves into the background instead of meeting it at a hard line", () => {
     const profile = read("src/components/SwiftLinkProfile.tsx");
-    expect(profile).toContain("style={wash || bgMedia ? {");
-    expect(profile).toContain("{!wash && !bgMedia && (");
+    // glassOn = a glass wash OR Aura (2026-10-15: Aura dissolves too, rather
+    // than stopping under a capped overlay on a hard line).
+    expect(profile).toContain("style={glassOn || bgMedia ? {");
+    expect(profile).toContain("{!glassOn && !bgMedia && (");
+    expect(profile).toMatch(/const glassOn = auraOn \|\| !!wash;/);
   });
 
   it('"avatar" is what the compact circle is called in stored data', () => {

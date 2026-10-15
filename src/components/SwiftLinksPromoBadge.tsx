@@ -7,7 +7,8 @@ import SwiftLinksPromoSheet from "@/components/SwiftLinksPromoSheet";
 // Linktree-style corner badge for Swift Links pages: a small light chip with
 // the lightning bolt at the top-left of the page (owner order 2026-09-02 —
 // the bolt alone here, deliberately, unlike every other logo surface). It
-// scrolls away with the hero like Linktree's does. Tapping it opens the promo
+// stays in that corner while the page scrolls (owner, 2026-10-15) —
+// SwiftLinkProfile holds it in a sticky wrapper. Tapping it opens the promo
 // sheet inviting the visitor to create their own Swift Links — the SAME sheet
 // every other invite on a Swift Links page shows (components/
 // SwiftLinksPromoSheet; owner, 2026-09-23).
@@ -35,9 +36,9 @@ export default function SwiftLinksPromoBadge({ username, appUrl }: { username: s
   return (
     <>
       {/* The corner chip — light frosted square so it reads on any hero
-          (photo, logo gradient, initials), with the brand bolt inside. z-20
-          keeps it under the sticky mini header (z-30), which covers it once
-          the visitor scrolls — same lifecycle as Linktree's badge. */}
+          (photo, logo gradient, initials), with the brand bolt inside. It
+          sits above the sticky mini header, centred in it, and never scrolls
+          away (SwiftLinkProfile's sticky z-40 wrapper). */}
       <button
         onClick={() => { setOpen(true); track(username, "links_badge_open"); }}
         aria-label="What is Swift Links?"

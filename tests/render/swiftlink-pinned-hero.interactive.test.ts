@@ -106,7 +106,8 @@ const heroState = (page: Page) =>
 const tappable = (page: Page, selector: string) =>
   page.evaluate((sel) => {
     const els = Array.from(document.querySelectorAll(sel)) as HTMLElement[];
-    const onScreen = els.filter((e) => { const r = e.getBoundingClientRect(); return r.top > 60 && r.bottom < window.innerHeight - 4; });
+    // Below the 68px name bar, which (with the corner badge) owns the top.
+    const onScreen = els.filter((e) => { const r = e.getBoundingClientRect(); return r.top > 72 && r.bottom < window.innerHeight - 4; });
     if (!onScreen.length) return null;
     return onScreen.every((e) => {
       const r = e.getBoundingClientRect();
@@ -230,6 +231,62 @@ describe.each(engines)("Swift Links pinned header photo (%s)", (_name, engine) =
     const avatar = await mount(browser, { heroStyle: "avatar", photoTone: null });
     expect(await avatar.evaluate(() => document.querySelector("[data-sl-hero]"))).toBeNull();
     await avatar.close();
+  });
+
+  it("the lightning-bolt badge stays in the top-left corner at every scroll position", async () => {
+    // Owner, 2026-10-15: "that little box on the top-left corner … should
+    // always stay on the top left, even when someone scrolls."
+    const page = await mount(browser, { photoTone: "#6E4628" });
+    const badge = () => page.evaluate(() => {
+      const el = document.querySelector('[aria-label="What is Swift Links?"]') as HTMLElement;
+      const r = el.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return { x: r.left, y: r.top, onTop: !!hit && (hit === el || el.contains(hit)) };
+    });
+    const rest = await badge();
+    expect(rest.x).toBeLessThan(20);
+    expect(rest.y).toBeLessThan(20);
+    for (const y of [60, 200, 600, 1200]) {
+      await scrollTo(page, y);
+      await page.waitForTimeout(350); // the mini header's own fade
+      const b = await badge();
+      expect(Math.abs(b.x - rest.x), `moved sideways at ${y}`).toBeLessThan(1);
+      expect(Math.abs(b.y - rest.y), `scrolled away at ${y}`).toBeLessThan(1);
+      expect(b.onTop, `covered at ${y}`).toBe(true);
+    }
+    // …and once the name bar is showing, the bar's photo sits beside the
+    // badge, never under it.
+    const overlap = await page.evaluate(() => {
+      const b = (document.querySelector('[aria-label="What is Swift Links?"]') as HTMLElement).getBoundingClientRect();
+      const name = Array.from(document.querySelectorAll("span")).find((e) => e.textContent === "Alex Morgan" && e.className.includes("truncate"))!;
+      const avatar = (name.previousElementSibling as HTMLElement).getBoundingClientRect();
+      return avatar.left < b.right;
+    });
+    expect(overlap).toBe(false);
+    await page.close();
+  });
+
+  it("a glass look's blur eases in, so it never draws a line across the photo", async () => {
+    for (const look of ["frost", "aura"]) {
+      const page = await mount(browser, { look, photoTone: null });
+      const r = await page.evaluate(() => {
+        const layer = document.querySelector("[data-sl-glass]") as HTMLElement | null;
+        const hero = document.querySelector("[data-sl-hero]") as HTMLElement;
+        const ls = layer ? getComputedStyle(layer) : null;
+        const hs = getComputedStyle(hero);
+        return {
+          blur: ls ? (ls.backdropFilter || (ls as unknown as Record<string, string>).webkitBackdropFilter || "") : "",
+          mask: ls ? (ls.maskImage || (ls as unknown as Record<string, string>).webkitMaskImage || "") : "",
+          heroMask: hs.maskImage || (hs as unknown as Record<string, string>).webkitMaskImage || "",
+        };
+      });
+      expect(r.blur, look).toContain("blur");
+      expect(r.mask, look).toContain("gradient");
+      // Aura too: the photo dissolves into its blurred backdrop instead of
+      // stopping under a 42% overlay on a hard line.
+      expect(r.heroMask, look).toContain("gradient");
+      await page.close();
+    }
   });
 
   it("desktop: the photo only starts fading once it reaches the top", async () => {

@@ -85,7 +85,19 @@ describe("the Glass family renders as glass", () => {
           // tint; a test that only knew one of them would call the ramp a
           // missing surface.
           sheetImage: cs.backgroundImage === "none" ? null : cs.backgroundImage,
-          sheetBackdrop: cs.backdropFilter || "none",
+          // Under a hero the frost lives on its own eased layer inside the
+          // sheet (data-sl-glass, 2026-10-15) — a blur switched on at the
+          // sheet's top edge drew a line across the photo. Either place is
+          // the sheet's frost.
+          sheetBackdrop: (() => {
+            const layer = content.querySelector(":scope > [data-sl-glass]") as HTMLElement | null;
+            const own = cs.backdropFilter || "none";
+            return layer ? getComputedStyle(layer).backdropFilter || "none" : own;
+          })(),
+          glassEased: (() => {
+            const layer = content.querySelector(":scope > [data-sl-glass]") as HTMLElement | null;
+            return !!layer && /gradient/.test(getComputedStyle(layer).maskImage || "");
+          })(),
           nameColor: getComputedStyle(name).color,
         };
       });
@@ -128,6 +140,8 @@ describe("the Glass family renders as glass", () => {
     expect(Math.max(...alphas)).toBeGreaterThan(0.2);
     expect(Math.max(...alphas)).toBeLessThan(1);
     expect(r.sheetBackdrop).toContain("blur");
+    // …and the blur eases in with it rather than starting at a hard edge.
+    expect(r.glassEased).toBe(true);
   }, 60_000);
 
   it("leaves the Solid and Gradient families opaque and unblurred", async () => {

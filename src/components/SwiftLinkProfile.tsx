@@ -8,6 +8,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePhotoTone } from "@/components/usePhotoTone";
+import { useIsNativeApp } from "@/lib/platform";
 import ConnectButton from "@/components/ConnectButton";
 import SocialIcons, { type BrandSocial } from "@/components/SocialIcons";
 import { SwiftCardIcon } from "@/components/SwiftCardLogo";
@@ -60,6 +61,10 @@ function isLightHex(hex: string): boolean {
  */
 const HERO_DISSOLVE =
   "linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 38%, rgba(0,0,0,0.88) 52%, rgba(0,0,0,0.6) 66%, rgba(0,0,0,0.28) 80%, rgba(0,0,0,0) 92%, rgba(0,0,0,0) 100%)";
+
+/** The frosted sheet's blur, eased in over the same 64px its tint ramps in
+ *  over (sheetGlassBg), so the frost has no starting edge. */
+const GLASS_EASE_IN = "linear-gradient(180deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0.15) 16px, rgba(0,0,0,0.45) 32px, rgba(0,0,0,0.8) 48px, rgba(0,0,0,1) 64px)";
 
 function initialsOf(name: string) {
   return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
@@ -205,6 +210,9 @@ export default function SwiftLinkProfile({
   // surface the content below sits on, so it always dissolves INTO the page.
   // Not in a preview: there is no page scroll there, and the hero stays put.
   const pinHero = !embedded && (heroStyle === "cover" || heroBanner);
+  // The app never shows the corner badge (it may not sell), so the mini
+  // header does not leave room for it there.
+  const nativeApp = useIsNativeApp();
   const PIN_FADE = heroBanner ? 110 : 165;
   const sheetRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
@@ -295,24 +303,27 @@ export default function SwiftLinkProfile({
   const accent = customAccent ?? look.accent;
   const accentText = customAccent ? (isLightHex(customAccent) ? "#111827" : "#FFFFFF") : look.accentText;
 
-  // Hero → sheet fade: an EASED multi-stop ramp of the same sheet color the
-  // old two-stop linear fade used (owner order 2026-09-02: the hard band
-  // where the header met the information below read as "a very clear line").
-  // Same start (transparent sheet hex) and same end (sheetMeet — the exact
-  // surface the sheet opens with, 0.42 alpha on Aura), so no color anywhere
-  // changes; only the ramp between them is smooth instead of linear.
-  // The ramp reaches FULL opacity at 82% and HOLDS it to the end — buried
-  // edges everywhere a discontinuity could show (owner report 2026-09-02,
-  // second pass: "a very visible line"). Two edges matter: the image's own
-  // hard bottom cut-off, and the SHEET's top edge, which overlaps the hero's
-  // last 40px (-mt-10). The sheet top sits at (fadeH-40)/fadeH — ~83% of the
-  // fade on a cover, ~72% on the short banner. Until 2026-10-15 the ramp hit
-  // full opacity at exactly 72% for that reason, but its steepest stretch was
-  // its LAST one (0.83 → 1 in 7%), so a busy photo — a checked jacket —
-  // stopped along a visible straight edge. The tail now eases out to 82% and
-  // the sheet's own top eases in (softTop below), so neither end has an edge;
-  // everything up to 58% is unchanged, which keeps the logo clearance below.
-  const fadeMax = glassOn ? glassAlpha : 1;
+  // Hero → sheet fade: an EASED multi-stop ramp of the sheet colour, from
+  // transparent to the exact solid surface the sheet opens with. Glass looks,
+  // Aura and background media never use it: their hero dissolves to
+  // transparent instead (HERO_DISSOLVE), so what shows through is the page's
+  // own backdrop.
+  //
+  // The SHAPE is what makes it read as clean (owner, 2026-09-02: "a very
+  // clear line"; 2026-10-15: no line and no "very dark fade" — "very nice and
+  // light"). Two things went wrong with earlier ramps:
+  //   • a ramp that starts dimming high up spends the whole lower half of the
+  //     photo half-covered, which on a dark look over a bright photo is a
+  //     long muddy grey band — the "very dark fade";
+  //   • a ramp whose steepest stretch is its LAST one stops along a straight
+  //     edge on a busy photo (a checked jacket).
+  // So the photo stays nearly untouched through the first ~30% of the fade,
+  // dissolves through the middle, and eases out to full colour at 86% — slow
+  // at both ends, which is what leaves no edge. The sheet top sits at
+  // (fadeH-40)/fadeH (~83% on a cover, ~72% on the banner), and the sheet
+  // itself eases in over its first 72px (softTop below), so where the ramp is
+  // not quite solid yet there is still no edge. The logo hero's clearance
+  // below needs the ramp under ~0.3 for the first 35%: it is under 0.15.
 
   // A frosted sheet has a HARD TOP EDGE, and under a cover/banner hero that
   // edge is a line across the page.
@@ -330,6 +341,8 @@ export default function SwiftLinkProfile({
   // Only where a hero sits above it — with the compact-circle and no-header
   // layouts the sheet starts at the top of the page, where there is no edge to
   // hide and a ramp would just wash the first 64px out.
+  // …and the blur has to ease in with it (see the layer in the sheet).
+  const glassBlurLayer = glassOn && !flatTop;
   const sheetGlassBg = flatTop
     ? sheetMeet
     : `linear-gradient(180deg, ${hexAlpha(sheetBg, 0)} 0px, ${sheetMeet} 64px)`;
@@ -347,8 +360,8 @@ export default function SwiftLinkProfile({
         .map(([px, a]) => `${hexAlpha(sheetBg, a)} ${px}px`).join(", ")
     : null;
   const heroFade = `linear-gradient(180deg, ${[
-    [0, 0], [10, 0.04], [20, 0.12], [30, 0.25], [40, 0.4], [50, 0.56], [58, 0.7], [62, 0.79], [66, 0.87], [70, 0.93], [74, 0.97], [78, 0.99], [82, 1], [100, 1],
-  ].map(([stop, a]) => `${hexAlpha(sheetBg, a * fadeMax)} ${stop}%`).join(", ")})`;
+    [0, 0], [16, 0.03], [30, 0.1], [42, 0.22], [52, 0.38], [60, 0.54], [67, 0.7], [73, 0.83], [78, 0.92], [82, 0.97], [86, 1], [100, 1],
+  ].map(([stop, a]) => `${hexAlpha(sheetBg, a)} ${stop}%`).join(", ")})`;
 
   // THE BLACK BAND AT THE BOTTOM OF A PHONE (owner, 2026-10-06). Two causes:
   // • The phone `zoom: 0.92` shrinks the sheet's own min-h-[100dvh] to 92% of
@@ -470,8 +483,15 @@ export default function SwiftLinkProfile({
 
         {/* Linktree-style corner badge — invite to create your own Swift
             Links. Real page only: in a preview it's noise, and it would open
-            a signup sheet inside the owner's own editor. */}
-        {!embedded && <SwiftLinksPromoBadge username={username} appUrl={appUrl} />}
+            a signup sheet inside the owner's own editor.
+            It STAYS in the top-left corner while the page scrolls (owner,
+            2026-10-15): a zero-height sticky wrapper, above the mini header
+            (z-40 over z-30), at exactly the spot it sits at rest. */}
+        {!embedded && (
+          <div className="sticky top-0 z-40 h-0">
+            <SwiftLinksPromoBadge username={username} appUrl={appUrl} />
+          </div>
+        )}
 
         {/* Sticky mini header — zero-height wrapper so it draws over the hero.
             Skipped in a preview (no page scroll to reveal it). */}
@@ -481,12 +501,16 @@ export default function SwiftLinkProfile({
               // Square corners: the bar only shows once the page has scrolled
               // well past the desktop card's rounded top, so it always sits
               // flush against the top of the screen.
-              className={`flex items-center gap-2.5 px-4 h-[54px] transition-opacity duration-300 ${
+              // 68px tall = the corner badge's 14px inset + 40px + 14px, so
+              // the badge sits centred in the bar; the bar's content starts
+              // after it (64px) instead of underneath it. The app shows no
+              // badge, so there the bar keeps its normal 16px inset.
+              className={`flex items-center gap-2.5 pr-4 ${nativeApp ? "pl-4" : "pl-16"} h-[68px] transition-opacity duration-300 ${
                 scrolled ? "opacity-100" : "opacity-0 pointer-events-none"
               }`}
               style={{ background: hexAlpha(sheetBg, 0.84), backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" }}
             >
-              <div className="w-8 h-8 rounded-full overflow-hidden shrink-0" style={{ background: light ? "rgba(17,24,39,0.08)" : "#2c2d2d" }}>
+              <div className="w-9 h-9 rounded-full overflow-hidden shrink-0" style={{ background: light ? "rgba(17,24,39,0.08)" : "#2c2d2d" }}>
                 {photoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={photoUrl} alt="" className="w-full h-full object-cover" />
@@ -538,7 +562,12 @@ export default function SwiftLinkProfile({
           // Background media dissolves the hero the same way: the fade below
           // ends on a solid colour, and over a photo or video that colour
           // would be a hard band across the page.
-          style={wash || bgMedia ? {
+          // Aura dissolves the same way (2026-10-15): its hero used to sit
+          // under a sheet-coloured overlay capped at the glass's 42% alpha,
+          // so the photo never faded at all and stopped on a hard line where
+          // the blurred page began. Dissolving it reveals the Aura backdrop —
+          // the same photo, blurred — which is what the page continues with.
+          style={glassOn || bgMedia ? {
             maskImage: HERO_DISSOLVE,
             WebkitMaskImage: HERO_DISSOLVE,
           } : undefined}
@@ -612,7 +641,7 @@ export default function SwiftLinkProfile({
               invisibly, so the content just emerges out of the photo. */}
           {/* Skipped for glass looks — the mask above does this job, and an
               overlay inside a masked box would simply be masked with it. */}
-          {!wash && !bgMedia && (
+          {!glassOn && !bgMedia && (
             <div
               className="absolute inset-x-0 bottom-0 h-[55%] pointer-events-none"
               style={{ background: heroFade }}
@@ -629,7 +658,10 @@ export default function SwiftLinkProfile({
           // the fade ends on, so the seam is invisible and the content reads
           // as emerging from the photo — a curve here drew a visible line
           // through the blend. flatTop (avatar/none) was already square.
-          className={`sc-sl-body relative px-4 pb-9 text-center ${flatTop ? "pt-10" : "-mt-10 pt-7"}`}
+          // z-0 under a hero on a glass look: the sheet becomes a stacking
+          // context, so the frosted layer below (z -1) paints above the
+          // sheet's tint but beneath every word and button on it.
+          className={`sc-sl-body relative px-4 pb-9 text-center ${flatTop ? "pt-10" : "-mt-10 pt-7"}${glassBlurLayer ? " z-0" : ""}`}
           style={{
             // Over background media the sheet paints NOTHING — it is the layer
             // the content sits on, and the media is behind it. Painting sheetBg
@@ -647,7 +679,9 @@ export default function SwiftLinkProfile({
             // The blur is what makes it frosted glass rather than a tinted
             // pane: without it the wash reads as a flat colour behind a flat
             // colour, and the whole family loses its reason to exist.
-            ...(glassOn ? { backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)" } : {}),
+            // Under a cover/banner photo the blur lives on its own eased layer
+            // instead (glassBlurLayer, the first child below).
+            ...(glassOn && !glassBlurLayer ? { backdropFilter: "blur(28px)", WebkitBackdropFilter: "blur(28px)" } : {}),
             // A soft shadow under every piece of text on the page, but only
             // over media. The scrim alone cannot cover the case that actually
             // happens: one bright patch of an otherwise dark photo landing
@@ -660,6 +694,27 @@ export default function SwiftLinkProfile({
             ...(bgMedia ? { textShadow: "0 1px 12px rgba(0,0,0,0.5)" } : {}),
           }}
         >
+          {/* The frost, eased in. A backdrop blur has a HARD top edge: the
+              tint above already ramps in over 64px, but the blur switched on
+              all at once, so wherever something sharp sat behind the sheet's
+              top — Aura's photo at rest, any photo once it is pinned and the
+              page slides over it — a straight line ran across the picture.
+              Masking the blur on the same 64px ramp turns it into a gradual
+              frost. It is its own layer because a mask on the sheet itself
+              would fade the name and buttons with it. */}
+          {glassBlurLayer && (
+            <div
+              aria-hidden
+              data-sl-glass
+              className="absolute inset-0 -z-10 pointer-events-none"
+              style={{
+                backdropFilter: "blur(28px)",
+                WebkitBackdropFilter: "blur(28px)",
+                maskImage: GLASS_EASE_IN,
+                WebkitMaskImage: GLASS_EASE_IN,
+              }}
+            />
+          )}
           {/* Compact circular avatar — the "avatar" header style. Shows the
               same resolved `hero`: headshot (cropped), or logo (contained, on
               a white plate so any mark reads), or initials on the indigo

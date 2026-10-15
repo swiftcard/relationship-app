@@ -314,13 +314,13 @@ const phoneScreenWash = (accent: string) =>
   `linear-gradient(180deg, ${hexAlpha(accent, 0.14)} 0%, rgba(250,247,242,0) 46%), #FAF7F2`;
 
 // The live page's hero → sheet blend (SwiftLinkProfile): an eased ramp over
-// the hero's lower 55% that eases into the sheet colour by 82% and holds it, and
+// the hero's lower 55% that eases into the sheet colour by 86% and holds it, and
 // for GLASS looks a mask that dissolves the photo into the wash instead. The
 // mini used to end its hero on a short linear fade under a sheet with rounded
 // top corners — a visible card edge across the photo that the real page
 // dropped on 2026-09-02. Same numbers as the live page, so they match.
 const HERO_FADE_STOPS: Array<[number, number]> = [
-  [0, 0], [10, 0.04], [20, 0.12], [30, 0.25], [40, 0.4], [50, 0.56], [58, 0.7], [62, 0.79], [66, 0.87], [70, 0.93], [74, 0.97], [78, 0.99], [82, 1], [100, 1],
+  [0, 0], [16, 0.03], [30, 0.1], [42, 0.22], [52, 0.38], [60, 0.54], [67, 0.7], [73, 0.83], [78, 0.92], [82, 0.97], [86, 1], [100, 1],
 ];
 const HERO_DISSOLVE =
   "linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 38%, rgba(0,0,0,0.88) 52%, rgba(0,0,0,0.6) 66%, rgba(0,0,0,0.28) 80%, rgba(0,0,0,0) 92%, rgba(0,0,0,0) 100%)";
