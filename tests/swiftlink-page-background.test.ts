@@ -224,7 +224,9 @@ describe("the accent — one colour for every call to action", () => {
     // Their "Default" swatch falls back to the accent, so showing the Look's
     // raw one would preview a colour those rows never render.
     const design = read("src/components/SwiftLinkDesign.tsx");
-    expect(design).toMatch(/fallbackHex=\{value\.linkAccentColor \|\| getLook\(value\.linkLook\)\.accent\}/);
+    // pageLook = the Look as rendered, so Photo match shows the photo's accent.
+    expect(design).toMatch(/fallbackHex=\{value\.linkAccentColor \|\| pageLook\.accent\}/);
+    expect(design).toMatch(/const pageLook = resolveLook\(value\.linkLook, tone\)/);
   });
 });
 

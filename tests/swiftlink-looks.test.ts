@@ -171,7 +171,8 @@ describe("the plan line", () => {
     expect(isFreeLook("onyx")).toBe(true);
   });
   it("exactly the advertised number of free looks", () => {
-    expect(FREE_SWIFTLINK_LOOKS).toHaveLength(2);
+    // Photo match (the default since 2026-10-15), Paper and Onyx.
+    expect(FREE_SWIFTLINK_LOOKS).toHaveLength(3);
     for (const id of FREE_SWIFTLINK_LOOKS) expect(SWIFTLINK_LOOKS.some((l) => l.id === id)).toBe(true);
   });
   it("freeSafeLook keeps free choices and snaps everything else to the default", () => {

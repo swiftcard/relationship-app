@@ -132,12 +132,23 @@ describe("the Glass family renders as glass", () => {
 
   it("leaves the Solid and Gradient families opaque and unblurred", async () => {
     for (const look of ["paper", "onyx", "dawn", "ink"]) {
+      // No photo above (compact circle): one flat, fully opaque sheet.
+      const flat = await probe({ look, heroStyle: "avatar" });
+      expect(flat.hasWash, look).toBe(false);
+      expect(flat.sheetBackdrop, look).toBe("none");
+      // Opaque: rgb(), or an rgba with alpha 1 — and never the glass ramp.
+      expect(flat.sheetBg, look).not.toMatch(/rgba\([^)]*,\s*0?\.\d+\)/);
+      expect(tintAlphas(flat).filter((a) => a < 1), look).toHaveLength(0);
+
+      // Under a cover photo the solid sheet eases in over its first 72px so
+      // the pinned photo has no hard edge sliding across it (2026-10-15) —
+      // then it is the same opaque colour all the way down. Still no wash
+      // and no blur: it is not glass, it just has a soft top.
       const r = await probe({ look });
       expect(r.hasWash, look).toBe(false);
       expect(r.sheetBackdrop, look).toBe("none");
-      // Opaque: rgb(), or an rgba with alpha 1 — and never the glass ramp.
-      expect(r.sheetBg, look).not.toMatch(/rgba\([^)]*,\s*0?\.\d+\)/);
-      expect(tintAlphas(r).filter((a) => a < 1), look).toHaveLength(0);
+      expect(r.sheetImage, look).toMatch(/72px/);
+      expect(r.sheetImage, look).not.toMatch(/,\s*0?\.\d+\)\s+(7[3-9]|[89]\d|\d{3,})px/);
     }
   }, 60_000);
 

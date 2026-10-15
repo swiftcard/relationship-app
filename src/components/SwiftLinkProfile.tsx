@@ -6,13 +6,14 @@
 // Mobile-first (this lives in Instagram/TikTok/X bios) — on desktop the same
 // column renders centered at phone width.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { usePhotoTone } from "@/components/usePhotoTone";
 import ConnectButton from "@/components/ConnectButton";
 import SocialIcons, { type BrandSocial } from "@/components/SocialIcons";
 import { SwiftCardIcon } from "@/components/SwiftCardLogo";
 import SwiftLinkButtons from "@/components/SwiftLinkButtons";
 import SwiftLinksPromoBadge from "@/components/SwiftLinksPromoBadge";
-import { getLook, hexAlpha, normalizeIconShape, normalizeIconFill, normalizeHeroStyle, normalizeHeroContent, normalizeButtonStyle, pageMediaUrl, normalizePageMediaType, normalizePageDim, PAGE_MEDIA_BASE, washGradient } from "@/lib/swiftlink-looks";
+import { getLook, resolveLook, resolveHero, hexAlpha, normalizeIconShape, normalizeIconFill, normalizeHeroStyle, normalizeButtonStyle, pageMediaUrl, normalizePageMediaType, normalizePageDim, PAGE_MEDIA_BASE, washGradient } from "@/lib/swiftlink-looks";
 
 // Owner-picked "Social design": a named Look (every plan — Free gets the free
 // pair, see lib/swiftlink-looks) plus optional Pro fine-tuning (bg/text/font)
@@ -96,10 +97,15 @@ export default function SwiftLinkProfile({
   trackFor = null,
   trackSource = "swift_links",
   suppressTracking = false,
+  photoTone,
 }: {
   name: string;
   username: string;
   photoUrl: string | null;
+  /** "Photo match": the header photo's colour, read on the server by the
+   *  public page (null = nothing to match). Left undefined by the editor
+   *  previews, which read it in the browser instead. */
+  photoTone?: string | null;
   /** The card's logo, used for the hero ONLY when there is no headshot.
    *  Optional so any caller that has no logo keeps the initials fallback. */
   logoUrl?: string | null;
@@ -149,26 +155,20 @@ export default function SwiftLinkProfile({
 
   // What the header SHOWS — the owner's explicit pick, falling down the auto
   // chain (headshot → logo → initials) whenever the picked asset doesn't
-  // exist, so the header can never render empty.
-  const heroContent = normalizeHeroContent(pageStyle?.heroContent);
-  // "custom" is an owner-uploaded header photo (https-only — the URL comes
-  // through client-writable customization, so anything else falls through to
-  // the auto chain rather than rendering an arbitrary scheme on a public
-  // page). It renders exactly like a headshot: cover-cropped in the hero,
-  // circle-cropped in the compact avatar.
-  const customHero = heroContent === "custom" && pageStyle?.heroImage && /^https:\/\//.test(pageStyle.heroImage)
-    ? pageStyle.heroImage
-    : null;
-  // A header VIDEO renders where a photo would — cover-cropped in the hero,
-  // circle-cropped in the compact avatar — autoplaying, muted, on a loop.
-  const hero: { kind: "photo" | "video" | "logo" | "initials"; url: string | null } =
-    customHero ? { kind: pageStyle?.heroMediaType === "video" ? "video" : "photo", url: customHero } :
-    heroContent === "initials" ? { kind: "initials" as const, url: null } :
-    heroContent === "photo" && photoUrl ? { kind: "photo" as const, url: photoUrl } :
-    heroContent === "logo" && logoUrl ? { kind: "logo" as const, url: logoUrl } :
-    photoUrl ? { kind: "photo" as const, url: photoUrl } :
-    logoUrl ? { kind: "logo" as const, url: logoUrl } :
-    { kind: "initials" as const, url: null };
+  // exist, so the header can never render empty. An uploaded "custom" header
+  // renders exactly like a headshot: cover-cropped in the hero, circle-cropped
+  // in the compact avatar; a header VIDEO renders where a photo would,
+  // autoplaying, muted, on a loop. Shared with the public page's server
+  // render (lib/swiftlink-looks resolveHero), which samples the same photo.
+  const hero = resolveHero(pageStyle, photoUrl, logoUrl);
+
+  // "Photo match" (the default Look): the page takes the header photo's own
+  // colour. The public page reads it on the server and passes it in; the
+  // editor's previews leave it undefined and it is read here, in the browser,
+  // with the same arithmetic (lib/photo-tone).
+  const matchOn = !!getLook(pageStyle?.look).photoMatch;
+  const browserTone = usePhotoTone(matchOn && photoTone === undefined && hero.kind === "photo" ? hero.url : null);
+  const tone = !matchOn || hero.kind !== "photo" ? null : photoTone === undefined ? browserTone : photoTone;
 
   // ── Page background media ─────────────────────────────────────────────────
   // A photo or short video behind the WHOLE page, under every header style
@@ -194,12 +194,52 @@ export default function SwiftLinkProfile({
     return () => window.removeEventListener("scroll", onScroll);
   }, [embedded, scrollThreshold]);
 
+  // ── The pinned header photo (owner, 2026-10-15, after link.me) ─────────────
+  // The cover/banner photo stays put at the top of the screen while the page
+  // slides up over it, and it dissolves into the page colour as it goes: fully
+  // there at rest, gone once the content has travelled PIN_FADE px. The hero
+  // is position:sticky (see the sheet's overflow below) and this only drives
+  // its opacity, straight onto the element — no React render per scroll frame.
+  // What shows through as it fades is exactly what is behind it: the sheet
+  // colour, the Aura blur, the glass wash or the background media — the same
+  // surface the content below sits on, so it always dissolves INTO the page.
+  // Not in a preview: there is no page scroll there, and the hero stays put.
+  const pinHero = !embedded && (heroStyle === "cover" || heroBanner);
+  const PIN_FADE = heroBanner ? 110 : 165;
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const heroRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!pinHero) return;
+    let frame = 0;
+    const apply = () => {
+      frame = 0;
+      const sheet = sheetRef.current, el = heroRef.current;
+      if (!sheet || !el) return;
+      // Distance the page has moved past the TOP OF THE SHEET, not raw
+      // scrollY: on desktop the sheet sits 32px down the page, and the photo
+      // must not start fading before it has reached the top and pinned.
+      const travelled = -sheet.getBoundingClientRect().top;
+      const p = Math.min(1, Math.max(0, travelled / PIN_FADE));
+      el.style.opacity = p > 0 ? String(1 - p) : "";
+    };
+    const onScroll = () => { if (!frame) frame = requestAnimationFrame(apply); };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    apply();
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [pinHero, PIN_FADE]);
+
   const firstName = name.split(" ")[0] || username;
   const initials = initialsOf(name || username);
 
-  // Resolved page look: the named Look supplies the whole scheme, and the Pro
-  // fine-tune keys (bg/text) override it individually where set.
-  const look = getLook(pageStyle?.look);
+  // Resolved page look: the named Look supplies the whole scheme (Photo match
+  // derives it from the photo's colour), and the Pro fine-tune keys (bg/text)
+  // override it individually where set.
+  const look = resolveLook(pageStyle?.look, tone);
   // With background media the sheet is TRANSPARENT and this colour only shows
   // in the moment before the photo decodes (or forever, if it 404s). It is
   // pinned near-black rather than following the Look or the owner's custom
@@ -261,14 +301,17 @@ export default function SwiftLinkProfile({
   // Same start (transparent sheet hex) and same end (sheetMeet — the exact
   // surface the sheet opens with, 0.42 alpha on Aura), so no color anywhere
   // changes; only the ramp between them is smooth instead of linear.
-  // The ramp reaches FULL opacity at 72% and HOLDS it to the end — buried
+  // The ramp reaches FULL opacity at 82% and HOLDS it to the end — buried
   // edges everywhere a discontinuity could show (owner report 2026-09-02,
   // second pass: "a very visible line"). Two edges matter: the image's own
   // hard bottom cut-off, and the SHEET's top edge, which overlaps the hero's
   // last 40px (-mt-10). The sheet top sits at (fadeH-40)/fadeH — ~83% of the
-  // fade on a cover, ~72% on the short banner — so a ramp still translucent
-  // there made the sheet's edge itself read as a line. Full opacity by 72%
-  // covers the worst case; everything below it is one solid sheet color.
+  // fade on a cover, ~72% on the short banner. Until 2026-10-15 the ramp hit
+  // full opacity at exactly 72% for that reason, but its steepest stretch was
+  // its LAST one (0.83 → 1 in 7%), so a busy photo — a checked jacket —
+  // stopped along a visible straight edge. The tail now eases out to 82% and
+  // the sheet's own top eases in (softTop below), so neither end has an edge;
+  // everything up to 58% is unchanged, which keeps the logo clearance below.
   const fadeMax = glassOn ? glassAlpha : 1;
 
   // A frosted sheet has a HARD TOP EDGE, and under a cover/banner hero that
@@ -290,8 +333,21 @@ export default function SwiftLinkProfile({
   const sheetGlassBg = flatTop
     ? sheetMeet
     : `linear-gradient(180deg, ${hexAlpha(sheetBg, 0)} 0px, ${sheetMeet} 64px)`;
+  // Under a cover/banner photo the solid sheet eases in over its first 72px
+  // instead of starting with a squared edge. With the photo PINNED the
+  // content's top slides up over the picture, and a hard top would be a line
+  // moving across it; on the banner the sheet's top also lands just before the
+  // fade's end. At rest on a cover it changes nothing: those 72px sit on the
+  // fade's solid end and on the sheet's own colour, the same colour either
+  // way. Glass looks already ramp in (sheetGlassBg) and media pages paint no
+  // sheet; a non-hex custom colour cannot be given alpha, so it keeps the
+  // plain solid top rather than risk an invalid gradient.
+  const softTop = !flatTop && !glassOn && !bgMedia && /^#[0-9a-fA-F]{6}$/.test(sheetBg)
+    ? [[0, 0], [12, 0.1], [24, 0.3], [36, 0.55], [48, 0.78], [60, 0.93], [72, 1]]
+        .map(([px, a]) => `${hexAlpha(sheetBg, a)} ${px}px`).join(", ")
+    : null;
   const heroFade = `linear-gradient(180deg, ${[
-    [0, 0], [10, 0.04], [20, 0.12], [30, 0.25], [40, 0.4], [50, 0.56], [58, 0.7], [65, 0.83], [69, 0.94], [72, 1], [100, 1],
+    [0, 0], [10, 0.04], [20, 0.12], [30, 0.25], [40, 0.4], [50, 0.56], [58, 0.7], [62, 0.79], [66, 0.87], [70, 0.93], [74, 0.97], [78, 0.99], [82, 1], [100, 1],
   ].map(([stop, a]) => `${hexAlpha(sheetBg, a * fadeMax)} ${stop}%`).join(", ")})`;
 
   // THE BLACK BAND AT THE BOTTOM OF A PHONE (owner, 2026-10-06). Two causes:
@@ -320,9 +376,20 @@ export default function SwiftLinkProfile({
 
   return (
     <main className={embedded ? "" : "sc-sl-page min-h-[100dvh] flex flex-col"} style={{ background: embedded ? "transparent" : look.page }}>
-      <style>{`@media (max-width: 767px) { .sc-sl-sheet { zoom: 0.92; } }${canvasCss}`}</style>
+      {/* overflow CLIP on the real page, not hidden. Both clip the photo to the
+          rounded desktop card, but `hidden` also makes the sheet a scroll
+          container, and a sticky child sticks to its nearest scroll container
+          — a sheet that never scrolls — so the pinned photo and the mini
+          header would just scroll away with the page (the mini header had
+          never once appeared on a live page because of this). `clip` has no
+          scroll container, so both stick to the screen. A browser without
+          `clip` (Safari < 16) drops the rule and keeps overflow-hidden: the
+          photo scrolls normally there, exactly as before. Unlayered, so it
+          wins over the Tailwind utility. */}
+      <style>{`@media (max-width: 767px) { .sc-sl-sheet { zoom: 0.92; } }${embedded ? "" : " .sc-sl-sheet.sc-sl-pin { overflow: clip; }"}${canvasCss}`}</style>
       <div
-        className={`sc-sl-sheet relative mx-auto w-full max-w-[430px] overflow-hidden ${
+        ref={sheetRef}
+        className={`sc-sl-sheet relative mx-auto w-full max-w-[430px] overflow-hidden ${embedded ? "" : "sc-sl-pin "}${
           embedded
             ? "rounded-[30px]"
             : "sc-sl-fillcol grow shrink-0 md:grow-0 min-h-[100dvh] md:min-h-0 md:my-8 md:rounded-[30px] md:shadow-[0_24px_80px_rgba(0,0,0,0.6)]"
@@ -411,7 +478,10 @@ export default function SwiftLinkProfile({
         {!embedded && (
           <div className="sticky top-0 z-30 h-0">
             <div
-              className={`flex items-center gap-2.5 px-4 h-[54px] transition-opacity duration-300 md:rounded-t-[30px] ${
+              // Square corners: the bar only shows once the page has scrolled
+              // well past the desktop card's rounded top, so it always sits
+              // flush against the top of the screen.
+              className={`flex items-center gap-2.5 px-4 h-[54px] transition-opacity duration-300 ${
                 scrolled ? "opacity-100" : "opacity-0 pointer-events-none"
               }`}
               style={{ background: hexAlpha(sheetBg, 0.84), backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" }}
@@ -441,9 +511,14 @@ export default function SwiftLinkProfile({
             corners must not curve in) — on desktop/embedded the OUTER card's
             overflow-hidden clips these corners, and on the phone the page is
             full-bleed square. */}
+        {/* Pinned on the real page (pinHero): sticky at the top of the screen
+            while the content slides up over it — the content is positioned
+            and comes later, so it paints above. */}
         {(heroStyle === "cover" || heroBanner) && (
         <div
-          className={`relative w-full overflow-hidden ${heroBanner ? "h-[260px]" : "aspect-square max-h-[520px]"}`}
+          ref={heroRef}
+          data-sl-hero
+          className={`${pinHero ? "sticky top-0" : "relative"} w-full overflow-hidden ${heroBanner ? "h-[260px]" : "aspect-square max-h-[520px]"}`}
           // GLASS looks dissolve the hero into the page instead of washing it
           // with a sheet-coloured overlay.
           //
@@ -503,7 +578,7 @@ export default function SwiftLinkProfile({
               // out at 320px). Padding-top stays a percentage — it clears the
               // top corners, which DO scale with width.
               // Measured 2026-09-02 for the hold-opaque wash (h-[55%] of the
-              // hero, fully opaque from 72% of the fade): the logo's bottom
+              // hero; the ramp is unchanged below 58% since): the logo's bottom
               // edge must sit where the ramp is ≤~0.3 alpha (≤35% into the
               // fade), which is ≥65% up from the hero's bottom — 160px at
               // the widest cover, 100px on the banner, at every width.
@@ -564,9 +639,11 @@ export default function SwiftLinkProfile({
               ? "transparent"
               : glassOn
                 ? sheetGlassBg
-                : sheetTo
-                  ? `linear-gradient(180deg, ${sheetBg} 0%, ${sheetTo} 100%)`
-                  : sheetBg,
+                : softTop
+                  ? `linear-gradient(180deg, ${softTop}, ${sheetTo ? `${sheetTo} 100%` : `${sheetBg} 100%`})`
+                  : sheetTo
+                    ? `linear-gradient(180deg, ${sheetBg} 0%, ${sheetTo} 100%)`
+                    : sheetBg,
             // The blur is what makes it frosted glass rather than a tinted
             // pane: without it the wash reads as a flat colour behind a flat
             // colour, and the whole family loses its reason to exist.

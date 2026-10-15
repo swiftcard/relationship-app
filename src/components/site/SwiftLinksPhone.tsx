@@ -36,9 +36,9 @@ const TEXT = LOOK.text;
 const LIGHT = LOOK.mode === "light";
 
 // SwiftLinkProfile's hero → sheet blend: an eased ramp over the hero's lower
-// 55% that reaches the sheet colour at 72% and holds it.
+// 55% that eases into the sheet colour by 82% and holds it.
 const HERO_FADE = `linear-gradient(180deg, ${[
-  [0, 0], [10, 0.04], [20, 0.12], [30, 0.25], [40, 0.4], [50, 0.56], [58, 0.7], [65, 0.83], [69, 0.94], [72, 1], [100, 1],
+  [0, 0], [10, 0.04], [20, 0.12], [30, 0.25], [40, 0.4], [50, 0.56], [58, 0.7], [62, 0.79], [66, 0.87], [70, 0.93], [74, 0.97], [78, 0.99], [82, 1], [100, 1],
 ].map(([stop, a]) => `${hexAlpha(SHEET, a)} ${stop}%`).join(", ")})`;
 
 const SOCIALS = [

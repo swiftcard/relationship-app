@@ -78,8 +78,14 @@ describe("the Swift Links preview shows what the live page will show", () => {
     // the 2026-09-01 header expansion the chain lives in the `hero` resolver
     // (the owner's explicit pick falls down this same auto chain), and the
     // JSX branches on hero.kind.
-    expect(profile, "the hero's headshot → logo → initials chain is gone").toMatch(
-      /photoUrl \? \{ kind: "photo"[\s\S]{0,120}?logoUrl \? \{ kind: "logo"[\s\S]{0,120}?\{ kind: "initials"/,
+    // Since 2026-10-15 the resolver is lib/swiftlink-looks resolveHero, shared
+    // with the public page's server render (Photo match samples the same
+    // picture the header shows).
+    expect(profile, "the hero no longer goes through the shared resolver").toMatch(
+      /const hero = resolveHero\(pageStyle, photoUrl, logoUrl\)/,
+    );
+    expect(read("src/lib/swiftlink-looks.ts"), "the hero's headshot → logo → initials chain is gone").toMatch(
+      /if \(photoUrl\) return \{ kind: "photo"[\s\S]{0,120}?if \(logoUrl\) return \{ kind: "logo"[\s\S]{0,120}?return \{ kind: "initials"/,
     );
     expect(profile, "the hero JSX no longer branches on the resolved identity").toMatch(
       /hero\.kind === "photo" \?[\s\S]{0,600}?\) : hero\.kind === "logo" \?/,

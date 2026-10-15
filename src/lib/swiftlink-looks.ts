@@ -20,6 +20,8 @@
 // Every look must pass tests/swiftlink-looks.test.ts: text-on-sheet and
 // accentText-on-accent both ≥ 4.5:1 (WCAG AA). Change a value, run the test.
 
+import { isHex, lookFromTone } from "@/lib/photo-tone";
+
 export type SwiftLinkLook = {
   id: string;
   /** Shown in the picker. */
@@ -66,6 +68,10 @@ export type SwiftLinkLook = {
   /** How opaque the frosted sheet is over the wash, 0-1. Lower = more colour
    *  shows through = less contrast, so it is part of the AA sum above. */
   frost?: number;
+  /** "Photo match": the scheme is derived from the header photo's own colour
+   *  (lib/photo-tone) by resolveLook. The hex fields above are the fallback
+   *  for a page with no photo to read. */
+  photoMatch?: boolean;
 };
 
 // ── The three families ───────────────────────────────────────────────────────
@@ -90,7 +96,19 @@ export const LOOK_FAMILIES: { id: LookFamily; name: string; blurb: string }[] = 
 export const SWIFTLINK_LOOKS: SwiftLinkLook[] = [
   // ── SOLID — one flat colour behind everything ─────────────────────────────
   {
-    // The DEFAULT. Light, warm-white, editorial — the hoo.be register. FREE.
+    // The DEFAULT since 2026-10-15 (owner, after link.me). FREE. The page
+    // takes its colour from the owner's own header photo — see lib/photo-tone
+    // and resolveLook below. The hex values here are Paper's, byte-for-byte:
+    // they are what renders whenever there is no photo to match (a logo or
+    // initials header, a video, a photo that will not load), so a page without
+    // a photo looks exactly as it did when Paper was the default.
+    id: "match", name: "Photo match", family: "solid", mode: "light", photoMatch: true,
+    sheet: "#FAFAF7", page: "#ECEAE4", text: "#111827",
+    accent: "#1D4ED8", accentText: "#FFFFFF", tile: "#E8E6DF",
+  },
+  {
+    // The default until 2026-10-15. Light, warm-white, editorial — the hoo.be
+    // register. FREE.
     id: "paper", name: "Paper", family: "solid", mode: "light",
     sheet: "#FAFAF7", page: "#ECEAE4", text: "#111827",
     accent: "#1D4ED8", accentText: "#FFFFFF", tile: "#E8E6DF",
@@ -309,15 +327,28 @@ export function washGradient(look: SwiftLinkLook): string | null {
 }
 
 /** Look ids Free accounts may store and render. Order = picker order. */
-export const FREE_SWIFTLINK_LOOKS = ["paper", "onyx"] as const;
+export const FREE_SWIFTLINK_LOOKS = ["match", "paper", "onyx"] as const;
 
-/** The default for every page with no stored choice. Light, per the owner's
- *  2026-08-18 call: "default should be light". */
-export const DEFAULT_SWIFTLINK_LOOK = "paper";
+/** The default for every page with no stored choice: the page takes its colour
+ *  from the owner's header photo (owner, 2026-10-15). With no photo it renders
+ *  as Paper — light, per the owner's 2026-08-18 call "default should be light". */
+export const DEFAULT_SWIFTLINK_LOOK = "match";
 
 export function getLook(id?: string | null): SwiftLinkLook {
   return SWIFTLINK_LOOKS.find((l) => l.id === id)
     ?? SWIFTLINK_LOOKS.find((l) => l.id === DEFAULT_SWIFTLINK_LOOK)!;
+}
+
+/**
+ * The Look a page actually renders: getLook, plus — for "Photo match" — the
+ * scheme derived from `photoTone`, the header photo's colour (lib/photo-tone).
+ * No tone (no photo, a logo or initials header, a photo that would not load)
+ * leaves the Look's own fallback colours in place.
+ */
+export function resolveLook(id: string | null | undefined, photoTone: string | null | undefined): SwiftLinkLook {
+  const look = getLook(id);
+  if (!look.photoMatch || !isHex(photoTone)) return look;
+  return lookFromTone(photoTone, look);
 }
 
 export function isFreeLook(id?: string | null): boolean {
@@ -418,6 +449,35 @@ export const DEFAULT_HERO_CONTENT: HeroContent = "auto";
 
 export function normalizeHeroContent(v?: string | null): HeroContent {
   return v === "photo" || v === "logo" || v === "initials" || v === "custom" ? v : DEFAULT_HERO_CONTENT;
+}
+
+export type HeroSource = { kind: "photo" | "video" | "logo" | "initials"; url: string | null };
+
+/**
+ * What the page header SHOWS — the owner's explicit pick, falling down the auto
+ * chain (headshot → logo → initials) whenever the picked asset doesn't exist,
+ * so the header can never render empty. One function, because the public page
+ * (to sample the photo's colour on the server) and SwiftLinkProfile (to render
+ * it) must never disagree about which picture that is.
+ *
+ * "custom" is an owner-uploaded header photo (https-only — the URL comes
+ * through client-writable customization, so anything else falls through to
+ * the auto chain rather than rendering an arbitrary scheme on a public page).
+ */
+export function resolveHero(
+  style: { heroContent?: string; heroImage?: string; heroMediaType?: string } | undefined,
+  photoUrl: string | null,
+  logoUrl: string | null,
+): HeroSource {
+  const content = normalizeHeroContent(style?.heroContent);
+  const custom = content === "custom" && style?.heroImage && /^https:\/\//.test(style.heroImage) ? style.heroImage : null;
+  if (custom) return { kind: style?.heroMediaType === "video" ? "video" : "photo", url: custom };
+  if (content === "initials") return { kind: "initials", url: null };
+  if (content === "photo" && photoUrl) return { kind: "photo", url: photoUrl };
+  if (content === "logo" && logoUrl) return { kind: "logo", url: logoUrl };
+  if (photoUrl) return { kind: "photo", url: photoUrl };
+  if (logoUrl) return { kind: "logo", url: logoUrl };
+  return { kind: "initials", url: null };
 }
 
 // ── Link ROW style (Linktree-informed, 2026-09-01) ──────────────────────────

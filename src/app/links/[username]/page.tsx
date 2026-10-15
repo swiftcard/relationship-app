@@ -7,7 +7,8 @@ import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase-server";
 import { buildConnectLinks } from "@/lib/social-url";
 import { isPaidPlan, PLAN_LIMITS } from "@/lib/plan";
-import { freeSafeLook } from "@/lib/swiftlink-looks";
+import { freeSafeLook, getLook, resolveHero } from "@/lib/swiftlink-looks";
+import { getPhotoTone } from "@/lib/photo-tone-server";
 import { cardIsOffline } from "@/lib/card-active";
 import { getCardPageData } from "@/lib/card-page-data";
 import { cardHeadshot } from "@/lib/card-media";
@@ -233,6 +234,14 @@ export default async function SwiftLinksPage({ params, searchParams }: { params:
         }
       : {}),
   };
+  // "Photo match" (the default Look): the header photo's colour, read here on
+  // the server so the page paints in it from the first frame. Null when the
+  // Look is something else or the header is not a photo — passed as null, not
+  // left out, so the browser never goes looking for it either.
+  const heroForTone = resolveHero(pageStyle, photoUrl, (cardOrLegacy.logo_url as string | null) ?? null);
+  const photoTone = getLook(pageStyle.look).photoMatch && heroForTone.kind === "photo"
+    ? await getPhotoTone(heroForTone.url)
+    : null;
   const bio = customization.bio || "";
   // Free is capped at FREE_MAX_LINKS Swift Links buttons; paid plans get
   // unlimited. Trimmed here so the cap applies to existing accounts on view,
@@ -294,6 +303,7 @@ export default async function SwiftLinksPage({ params, searchParams }: { params:
         name={cardOrLegacy.name || username}
         username={username}
         photoUrl={photoUrl}
+        photoTone={photoTone}
         // Per-card logo, read off the SAME row the headshot comes from, so a
         // card with no headshot leads with its own logo and never another
         // card's (the bleed that cardHeadshot exists to prevent).

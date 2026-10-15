@@ -162,6 +162,8 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
             onChange={patchLinkStyle}
             links={sketch.links}
             onLinksChange={(links) => patch({ links })}
+            photoUrl={sketch.headshot}
+            logoUrl={sketch.logo}
           />
           <Switch
             checked={sketch.showCardLink}

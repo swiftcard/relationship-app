@@ -1467,6 +1467,10 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                 links={links}
                 onLinksChange={setLinks}
                 isLinkLocked={isOfficeRow}
+                // Same photo/logo the preview shows, so Photo match's
+                // "Default" colours are the ones the page gets.
+                photoUrl={photoState}
+                logoUrl={liveLogoUrl}
               />
             )}
             {/* Last, after the design steps, in plain words (owner, 2026-09-29:

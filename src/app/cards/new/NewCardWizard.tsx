@@ -2338,6 +2338,10 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                 // A guest has no account to upload against yet (every upload
                 // route answers 401) — same rule as the homepage builder.
                 canUpload
+                // Same photo/logo the preview shows, so Photo match's
+                // "Default" colours are the ones the page gets.
+                photoUrl={headshotUrl}
+                logoUrl={logoUrl}
               />
             )}
 

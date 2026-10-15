@@ -100,16 +100,19 @@ describe("rendering", () => {
   });
 
   it("the header content pick falls down the auto chain when the asset is missing", () => {
-    const src = read("src/components/SwiftLinkProfile.tsx");
+    // The chain lives in lib/swiftlink-looks resolveHero (2026-10-15) — shared
+    // by SwiftLinkProfile and the public page's server-side Photo match read.
+    expect(read("src/components/SwiftLinkProfile.tsx")).toMatch(/const hero = resolveHero\(pageStyle, photoUrl, logoUrl\)/);
+    const src = read("src/lib/swiftlink-looks.ts");
     // "Upload photo": renders as a cover photo, HTTPS-only (the URL rides in
     // client-writable customization), and with no image falls down the chain.
-    expect(src).toMatch(/heroContent === "custom" && pageStyle\?\.heroImage && \/\^https:/);
-    expect(src).toContain('customHero ? { kind: pageStyle?.heroMediaType === "video" ? "video" : "photo", url: customHero }');
-    expect(src).toMatch(/heroContent === "initials" \? \{ kind: "initials"/);
-    expect(src).toMatch(/heroContent === "photo" && photoUrl \? \{ kind: "photo"/);
-    expect(src).toMatch(/heroContent === "logo" && logoUrl \? \{ kind: "logo"/);
+    expect(src).toMatch(/content === "custom" && style\?\.heroImage && \/\^https:/);
+    expect(src).toContain('if (custom) return { kind: style?.heroMediaType === "video" ? "video" : "photo", url: custom }');
+    expect(src).toMatch(/if \(content === "initials"\) return \{ kind: "initials"/);
+    expect(src).toMatch(/if \(content === "photo" && photoUrl\) return \{ kind: "photo"/);
+    expect(src).toMatch(/if \(content === "logo" && logoUrl\) return \{ kind: "logo"/);
     // …and the unqualified auto chain closes it: photo → logo → initials.
-    expect(src).toMatch(/photoUrl \? \{ kind: "photo" as const, url: photoUrl \} :\s*\n\s*logoUrl \? \{ kind: "logo"/);
+    expect(src).toMatch(/if \(photoUrl\) return \{ kind: "photo", url: photoUrl \};\s*\n\s*if \(logoUrl\) return \{ kind: "logo"/);
   });
 
   it("buttons: solid/outline restyle ONLY compact rows — per-link sizes always win", () => {

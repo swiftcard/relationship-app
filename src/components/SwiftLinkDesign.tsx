@@ -18,12 +18,13 @@
 
 import { useRef, useState } from "react";
 import { useOpenInPlace } from "@/components/ui/useOpenInPlace";
+import { usePhotoTone } from "@/components/usePhotoTone";
 import { CARD_FONT_OPTIONS } from "@/components/card-templates/shared";
 // ProTag is the shared light-blue tag, so Social design and Card design tag
 // Pro identically (owner, 2026-09-18).
 import { DesignSteps, ProTag, type DesignStep } from "@/components/ui/DesignControls";
 import {
-  DEFAULT_SWIFTLINK_LOOK, isFreeLook, getLook,
+  DEFAULT_SWIFTLINK_LOOK, isFreeLook, getLook, resolveLook, resolveHero,
   LOOK_FAMILIES, looksInFamily, washGradient, hexAlpha,
   type SwiftLinkLook, type LookFamily,
   ICON_SHAPES, ICON_FILLS, normalizeIconShape, normalizeIconFill,
@@ -159,6 +160,14 @@ function SwatchRow({
 }
 
 /** One look, drawn as a miniature of the page it produces. */
+// "Photo match" has no colours of its own — they come from each owner's photo
+// — so its swatch (and its chip on the Solid row) paints a soft photo-like
+// blend of skin and sky tones rather than the white fallback, which would make
+// it look like a second Paper. The live preview beside the picker shows the
+// owner's real result.
+const PHOTO_MATCH_SURFACE = "linear-gradient(150deg, #E9DCCB 0%, #CBB8A6 48%, #A9B6C4 100%)";
+const PHOTO_MATCH_ACCENT = "#2B2622";
+
 function LookSwatch({
   look,
   active,
@@ -187,7 +196,9 @@ function LookSwatch({
         // The swatch paints the surface the look actually produces: the
         // gradient for gradient looks; a photo-like violet haze standing
         // in for the owner's blurred headshot on Aura.
-        background: look.aura
+        background: look.photoMatch
+          ? PHOTO_MATCH_SURFACE
+          : look.aura
           ? "linear-gradient(150deg, #3B2B52 0%, #17131E 45%, #24303F 100%)"
           : look.sheetTo
             ? `linear-gradient(180deg, ${look.sheet} 0%, ${look.sheetTo} 100%)`
@@ -224,9 +235,10 @@ function LookSwatch({
         <span className="text-[0.75rem] font-extrabold leading-none truncate" style={{ color: look.text }}>{look.name}</span>
       </span>
       <span className="relative mt-1.5 block h-1 w-2/3 rounded-full" style={{ background: look.text, opacity: 0.18 }} />
-      <span className="relative mt-2 block h-[14px] w-full rounded-full" style={{ background: look.accent }} />
+      <span className="relative mt-2 block h-[14px] w-full rounded-full" style={{ background: look.photoMatch ? PHOTO_MATCH_ACCENT : look.accent }} />
       <span className="relative mt-2 flex items-center gap-1.5 min-h-[11px]">
         {look.aura && <span className="text-[0.5625rem] leading-none" style={{ color: look.text, opacity: 0.55 }}>your photo, blurred</span>}
+        {look.photoMatch && <span className="text-[0.5625rem] leading-none" style={{ color: look.text, opacity: 0.7 }}>colours from your photo</span>}
         {proLocked && <ProTag />}
       </span>
     </button>
@@ -311,7 +323,7 @@ function LookPicker({
                     className="w-4 h-4 rounded-full ring-1 ring-gray-900"
                     style={{
                       background: washGradient(l)
-                        ?? (l.aura
+                        ?? (l.photoMatch ? PHOTO_MATCH_SURFACE : l.aura
                           ? "linear-gradient(150deg, #3B2B52 0%, #17131E 45%, #24303F 100%)"
                           : l.sheetTo
                             ? `linear-gradient(180deg, ${l.sheet} 0%, ${l.sheetTo} 100%)`
@@ -697,6 +709,8 @@ export function SwiftLinkStyleControls({
   onLinksChange,
   canUpload = true,
   isLinkLocked,
+  photoUrl = null,
+  logoUrl = null,
 }: {
   value: SwiftLinkStyle;
   onChange: (patch: Partial<SwiftLinkStyle>) => void;
@@ -712,7 +726,20 @@ export function SwiftLinkStyleControls({
    *  route answers 401 there, so the "Add" button would be a dead end; the
    *  same reasoning that gives the mini-builder no "Link buttons" section. */
   canUpload?: boolean;
+  /** The card's headshot and logo — what the page header shows. Photo match
+   *  takes its colours from that photo, so the "Default" swatches below can
+   *  only show the colour the page really gets if they know it. Left out,
+   *  they show the Look's fallback colours. */
+  photoUrl?: string | null;
+  logoUrl?: string | null;
 }) {
+  // The Look as the page will actually render it — for Photo match, its
+  // colours come from the header photo (the same read the live preview
+  // makes, cached, so this costs nothing extra).
+  const hero = resolveHero({ heroContent: value.linkHeroContent, heroImage: value.linkHeroImage, heroMediaType: value.linkHeroMediaType }, photoUrl, logoUrl);
+  const matchOn = !!getLook(value.linkLook).photoMatch;
+  const tone = usePhotoTone(matchOn && hero.kind === "photo" ? hero.url : null);
+  const pageLook = resolveLook(value.linkLook, tone);
 
   // ── SECTION ORDER IS DELIBERATE: the panel is a route, not a list ─────────
   //
@@ -902,7 +929,7 @@ export function SwiftLinkStyleControls({
       trailing: locked ? <ProTag /> : undefined,
       body: (
         <IconStyleControls
-          look={getLook(value.linkLook)}
+          look={pageLook}
           shape={normalizeIconShape(value.linkIconShape)}
           fill={normalizeIconFill(value.linkIconFill)}
           onChange={onChange}
@@ -921,7 +948,7 @@ export function SwiftLinkStyleControls({
         <SwatchRow
           presets={ACCENT_PRESETS}
           value={value.linkAccentColor}
-          fallbackHex={getLook(value.linkLook).accent}
+          fallbackHex={pageLook.accent}
           onPick={(v) => onChange({ linkAccentColor: v })}
           customLocked={locked}
         />
@@ -946,7 +973,7 @@ export function SwiftLinkStyleControls({
                 // The EFFECTIVE accent, not the Look's raw one: with a custom
                 // Connect colour set, a "Default" swatch showing the Look's
                 // would preview a colour these rows never render.
-                fallbackHex={value.linkAccentColor || getLook(value.linkLook).accent}
+                fallbackHex={value.linkAccentColor || pageLook.accent}
                 onPick={(v) => onChange({ linkButtonColor: v })}
                 customLocked={locked}
               />
