@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import UndoDesignButton from "@/components/UndoDesignButton";
+import type { DesignHistory } from "@/lib/use-design-history";
 
 // Shared chrome for the homepage "mini builders" (card / SwiftLink / signature).
 // A visitor steps through a handful of fields — only what a preview needs — with
@@ -38,6 +40,7 @@ export default function MiniBuilderModal({
   launching = false,
   launchLabel = "Make it live →",
   hidePreviewOnMobile = false,
+  undo,
 }: {
   open: boolean;
   onClose: () => void;
@@ -64,6 +67,12 @@ export default function MiniBuilderModal({
    *  that reads better than the picker followed by nav buttons followed by
    *  the preview all the way at the bottom of the sheet. */
   hidePreviewOnMobile?: boolean;
+  /** The design step's Undo (lib/use-design-history), shown on preview-first
+   *  steps. Computer: in the preview's header, on the LEFT — the modal's
+   *  close X owns the top-right corner. Phone: the caller puts it inside
+   *  `pinnedPreview`, where the editors have it (card corner / beside the
+   *  Swift Links preview). */
+  undo?: DesignHistory;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -202,7 +211,15 @@ export default function MiniBuilderModal({
                   form scrolls (owner, 2026-09-16), not floating in the middle
                   of a tall column where the design controls push it off-screen. */}
               <div className="w-full flex flex-col items-center md:sticky md:top-6">
-                <span className="text-white/35 text-[0.6875rem] font-semibold uppercase tracking-widest">Live preview</span>
+                {/* Three columns so the label stays centred whether or not
+                    Undo is there; the pill keeps its space while hidden. */}
+                <div className="w-full grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                  <div className="justify-self-start">
+                    {undo && current.previewFirst && <UndoDesignButton history={undo} variant="pill" />}
+                  </div>
+                  <span className="text-white/35 text-[0.6875rem] font-semibold uppercase tracking-widest">Live preview</span>
+                  <span aria-hidden />
+                </div>
                 <div className="w-full flex items-center justify-center mt-4">{preview}</div>
                 {previewCaption && <p className="text-white/40 text-[0.75rem] mt-4 text-center">{previewCaption}</p>}
               </div>

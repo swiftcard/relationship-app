@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 // ── Undo for a design tab (Card design, Social design) ──────────────────────
+// Every screen a card or a Swift Links page is designed on has one: Edit card,
+// the new-card builder, Office admin → Branding (Card and Links), and the
+// homepage "see how it would look" builders.
 //
 // Owner, 2026-09-23: "if a user … puts a new accent color … and realizes they
 // don't like it, they just press Undo without having to lose all the other
@@ -124,6 +127,35 @@ export function changedKeys<S>(prev: S, next: S): string {
     } else out.push(k);
   }
   return out.sort().join(",") || "value";
+}
+
+// ── Social design's per-link look ──────────────────────────────────────────
+// Each link button carries its own look (tile size, row style, blur, tile
+// photo), but the links themselves are edited elsewhere (Socials, the company
+// links list). So a history tracks only the look, matched back to its link by
+// WHAT the link is — never by position — and a link added or removed is never
+// a step (vetoed with sameLinkList).
+
+type StyledLink = { kind?: string; label: string; url: string; size?: unknown; rowStyle?: unknown; glass?: unknown; media?: unknown };
+type LinkLook = { k: string; size?: unknown; rowStyle?: unknown; glass?: unknown; media?: unknown };
+
+const linkLookKey = (l: StyledLink) => `${l.kind ?? "link"}|${l.label}|${l.url}`;
+
+export function linkLooksOf(links: StyledLink[]): LinkLook[] {
+  return links.map((l) => ({ k: linkLookKey(l), size: l.size, rowStyle: l.rowStyle, glass: l.glass, media: l.media }));
+}
+
+/** Put each link's remembered look back on it, leaving every other link alone. */
+export function restoreLinkLooks<L extends StyledLink>(links: L[], looks: LinkLook[]): L[] {
+  return links.map((l) => {
+    const was = looks.find((x) => x.k === linkLookKey(l));
+    return was ? ({ ...l, size: was.size, rowStyle: was.rowStyle, glass: was.glass, media: was.media } as L) : l;
+  });
+}
+
+/** The same links in the same order — only then is a change a design step. */
+export function sameLinkList(a: LinkLook[], b: LinkLook[]): boolean {
+  return a.map((x) => x.k).join("\n") === b.map((x) => x.k).join("\n");
 }
 
 /**

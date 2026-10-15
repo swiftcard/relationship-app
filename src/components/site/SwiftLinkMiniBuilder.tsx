@@ -12,6 +12,7 @@ import MiniBuilderModal, { type MiniStep } from "./MiniBuilderModal";
 import { useProductSketch } from "./useProductSketch";
 import { Field, TextArea, SocialFields, LinkButtons } from "./BuilderFields";
 import { prettyCardSlug } from "@/lib/slug";
+import { useDesignHistory, useUndoShortcut, changedKeys, linkLooksOf, restoreLinkLooks, sameLinkList } from "@/lib/use-design-history";
 
 // "See how your SwiftLink would look" builder for the homepage SwiftLinks
 // section. Three steps: (1) name, business & profile photo, (2) bio, socials &
@@ -30,6 +31,18 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
   const [fullPreview, setFullPreview] = useState(false);
   const closeFullPreview = useCallback(() => setFullPreview(false), []);
   const { sketch, patch, patchLinkStyle, patchSocial, handOff, reset, linkedInReturn } = useProductSketch("swiftlink", open);
+
+  // Undo on "Style your page" — the same one Social design has
+  // (lib/use-design-history). Recorded only while that step is showing: what
+  // opening the builder restores, and the links typed on step 2, are the
+  // starting point, never a step.
+  const DESIGN_STEP = 2;
+  const history = useDesignHistory(
+    { on: open && step === DESIGN_STEP, style: sketch.linkStyle, showCardLink: sketch.showCardLink, linkLooks: linkLooksOf(sketch.links) },
+    (s) => patch({ linkStyle: s.style, showCardLink: s.showCardLink, links: restoreLinkLooks(sketch.links, s.linkLooks) }),
+    { describe: (prev, next) => (prev.on && next.on && sameLinkList(prev.linkLooks, next.linkLooks) ? changedKeys(prev, next) : null) },
+  );
+  useUndoShortcut(open && step === DESIGN_STEP, history);
   // Back from the guest LinkedIn photo import (see readGuestLinkedInReturn):
   // re-open on the first step WITHOUT reset, so the stashed sketch and the
   // photo just connected for are both there.
@@ -65,6 +78,7 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
     setStep(0);
     setLaunching(false);
     reset();
+    history.clear();
   }
 
   const livePreview = (
@@ -180,7 +194,7 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
     <>
       <button
         type="button"
-        onClick={() => { reset(); setStep(0); setOpen(true); }}
+        onClick={() => { reset(); history.clear(); setStep(0); setOpen(true); }}
         className="rd-btn rd-btn-aurora rd-btn-lg mt-2"
         data-reveal
       >
@@ -208,7 +222,8 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
         // Pinned on a phone: the SAME scrollable page viewport Social design
         // uses — follows the step being edited, jumps to any section, opens
         // full size.
-        pinnedPreview={<LinkPageViewport onExpand={() => setFullPreview(true)}>{livePreview}</LinkPageViewport>}
+        pinnedPreview={<LinkPageViewport onExpand={() => setFullPreview(true)} undo={history}>{livePreview}</LinkPageViewport>}
+        undo={history}
       />
       {fullPreview && (
         <FullSizeOverlay label="See your Swift Links page full size" onClose={closeFullPreview}>

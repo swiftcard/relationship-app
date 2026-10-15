@@ -20,6 +20,8 @@ import TemplateStyleControls from "@/components/card-templates/TemplateStyleCont
 import TemplatePicker from "@/components/card-templates/TemplatePicker";
 import PinnedCardPreview from "@/components/PinnedCardPreview";
 import OfficeLinksBranding from "@/components/OfficeLinksBranding";
+import UndoDesignButton from "@/components/UndoDesignButton";
+import { useDesignHistory, useUndoShortcut } from "@/lib/use-design-history";
 import type { TemplateStyle } from "@/components/card-templates/shared";
 
 // Dark-theme form matching the /office/admin shell (bg-gray-900 panels, purple
@@ -143,6 +145,23 @@ export default function OfficeBranding({ office }: { office: Brand }) {
   // Each tab posts only its own keys, so saving one can never blank the other.
   const [tab, setTab] = useState<"card" | "links">("card");
 
+  // Undo — the same one Card design has (lib/use-design-history): template,
+  // colours, fonts, finish, logo shape and the custom layout, a step at a time.
+  // Company information is typing, not design, and is left to the fields.
+  // With the Custom design open, it is the designer's own Undo (as in the
+  // editors), so there is never a second button for the same thing.
+  const cardHistory = useDesignHistory(
+    { template, customLayout, design, logoShape },
+    (s) => {
+      setTemplate(s.template);
+      setCustomLayout(s.customLayout);
+      setDesign(s.design);
+      setLogoShape(s.logoShape);
+    },
+  );
+  useUndoShortcut(tab === "card", cardHistory);
+  const previewUndo = customSelected ? undefined : cardHistory;
+
   // The URL hash picks the tab: /office/admin/branding#links opens Links.
   //
   // Two things need it. The admin tour walks through both halves of Branding,
@@ -180,6 +199,7 @@ export default function OfficeBranding({ office }: { office: Brand }) {
       });
       setStatus(res.ok ? "saved" : "error");
       if (res.ok) {
+        cardHistory.clear();
         setTimeout(() => setStatus("idle"), 2500);
         // Server parts of the page (the "started from your card" note, the
         // setup checklist) catch up; this form's own state is kept.
@@ -258,13 +278,13 @@ export default function OfficeBranding({ office }: { office: Brand }) {
           after a save it showed the OLD values, which a second Save would
           then push back out to every teammate. */}
       <div hidden={tab !== "links"}>
-        <OfficeLinksBranding office={office} />
+        <OfficeLinksBranding office={office} active={tab === "links"} />
       </div>
       <div hidden={tab !== "card"}>
     <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[1fr_300px] lg:items-start">
       {/* Phone: the card pinned at the top while every section scrolls under
           it — the same as Card design — below the admin header and tabs. */}
-      <PinnedCardPreview stickBelow=".sc-office-header"><Preview data={previewData} /></PinnedCardPreview>
+      <PinnedCardPreview stickBelow=".sc-office-header" undo={previewUndo}><Preview data={previewData} /></PinnedCardPreview>
       {/* 1 ── Company information ─────────────────────────────────────── */}
       <div className="lg:col-start-1 min-w-0">
         <Section n={1} title="Company information" desc="What's true about your business. This is the same on everyone's card.">
@@ -325,7 +345,10 @@ export default function OfficeBranding({ office }: { office: Brand }) {
           information) so mobile sees it right away. On desktop this becomes
           the sticky right-hand column via explicit grid placement below. */}
       <aside className="hidden lg:block lg:col-start-2 lg:[grid-row:1/-1] lg:sticky lg:top-24">
-        <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider mb-2">Preview</p>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider">Preview</p>
+          {previewUndo && <UndoDesignButton history={previewUndo} variant="pill" className="shrink-0" />}
+        </div>
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-3">
           <div className="rounded-xl overflow-hidden">
             <InertPreview><CardScaler><Preview data={previewData} /></CardScaler></InertPreview>
@@ -354,7 +377,7 @@ export default function OfficeBranding({ office }: { office: Brand }) {
             {customSelected ? (
               // The card editor's own designer, in team mode: a photo copies
               // the LAYOUT only, never an image with someone's details baked in.
-              <CustomCardDesigner layout={customLayout} data={previewData} onChange={setCustomLayout} canScan teamBrand />
+              <CustomCardDesigner layout={customLayout} data={previewData} onChange={setCustomLayout} canScan teamBrand undo={cardHistory} />
             ) : (
               // The exact colour/font control the card editor uses — one look
               // system everywhere. Writes offices.brand_design on save.

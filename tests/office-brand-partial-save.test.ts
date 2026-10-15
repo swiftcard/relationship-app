@@ -53,7 +53,7 @@ describe("Branding matches Card design and Social design (owner, 2026-09-16)", (
   it("the Card tab uses the shared template gallery and pins its preview on phones", () => {
     const card = readFileSync(join(process.cwd(), "src/components/OfficeBranding.tsx"), "utf8");
     expect(card).toMatch(/<TemplatePicker /);
-    expect(card).toMatch(/<PinnedCardPreview stickBelow="\.sc-office-header">/);
+    expect(card).toMatch(/<PinnedCardPreview stickBelow="\.sc-office-header" undo=\{previewUndo\}>/);
     // Logo shape is a step in Card appearance (TemplateStyleControls), the same
     // place it sits on a teammate's Card design — not under the logo upload.
     expect(card).toMatch(/logo=\{logoUrl \? \{ shape: logoShape, onChange: setLogoShape \} : undefined\}/);
@@ -63,6 +63,6 @@ describe("Branding matches Card design and Social design (owner, 2026-09-16)", (
   it("the Links tab has the Link buttons step and a pinned preview", () => {
     const links = readFileSync(join(process.cwd(), "src/components/OfficeLinksBranding.tsx"), "utf8");
     expect(links).toMatch(/<SwiftLinkStyleControls value=\{style\} onChange=\{patchStyle\} links=\{links\} onLinksChange=\{setLinks\} \/>/);
-    expect(links).toMatch(/<PinnedLinkPreview stickBelow="\.sc-office-header">/);
+    expect(links).toMatch(/<PinnedLinkPreview stickBelow="\.sc-office-header" undo=\{history\}>/);
   });
 });

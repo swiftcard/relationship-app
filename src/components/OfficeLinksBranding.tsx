@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { SwiftLinkStyleControls, type SwiftLinkStyle } from "@/components/SwiftLinkDesign";
 import { PinnedLinkPreview } from "@/components/PinnedCardPreview";
+import UndoDesignButton from "@/components/UndoDesignButton";
+import { useDesignHistory, useUndoShortcut, changedKeys, linkLooksOf, restoreLinkLooks, sameLinkList } from "@/lib/use-design-history";
 import { normalizeSocial, socialDestination } from "@/lib/social-url";
 import { socialInput } from "@/lib/social-input";
 import SocialHandleField from "@/components/SocialHandleField";
@@ -75,7 +77,11 @@ function Section({ n, title, desc, children }: { n: number; title: string; desc:
   );
 }
 
-export default function OfficeLinksBranding({ office }: { office: OfficeRow }) {
+export default function OfficeLinksBranding({ office, active = true }: {
+  office: OfficeRow;
+  /** This half of Branding is the tab showing (Ctrl/Cmd+Z goes to it). */
+  active?: boolean;
+}) {
   const router = useRouter();
   // The page's look, read with the same shape the member's own Social design
   // step writes. Only the office vocabulary is kept, so a stray key from an
@@ -102,6 +108,19 @@ export default function OfficeLinksBranding({ office }: { office: OfficeRow }) {
   // overwriting pages its members already built.
   const [lockLinkDesign, setLockLinkDesign] = useState(office.brand_locks?.linkDesign === true);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  // Undo — the same one Social design has (lib/use-design-history): the page's
+  // look and each company link's look, a step at a time. Adding, removing or
+  // renaming a company link is not a design step, so it is never undone here.
+  const history = useDesignHistory(
+    { style, linkLooks: linkLooksOf(links) },
+    (s) => {
+      setStyle(s.style);
+      setLinks((cur) => restoreLinkLooks(cur, s.linkLooks));
+    },
+    { describe: (prev, next) => (sameLinkList(prev.linkLooks, next.linkLooks) ? changedKeys(prev, next) : null) },
+  );
+  useUndoShortcut(active, history);
 
   // Same rule as every other link form (wizard, editor, homepage builder):
   // both boxes filled is enough, and a bare address gets https:// added. This
@@ -135,6 +154,7 @@ export default function OfficeLinksBranding({ office }: { office: OfficeRow }) {
       });
       setStatus(res.ok ? "saved" : "error");
       if (res.ok) {
+        history.clear();
         setTimeout(() => setStatus("idle"), 2500);
         router.refresh();
       }
@@ -186,7 +206,7 @@ export default function OfficeLinksBranding({ office }: { office: OfficeRow }) {
         {/* Phone: pinned at the top below the admin header while every
             section scrolls under it, the same as Social design; tap to see the
             whole page. */}
-        <PinnedLinkPreview stickBelow=".sc-office-header">{preview}</PinnedLinkPreview>
+        <PinnedLinkPreview stickBelow=".sc-office-header" undo={history}>{preview}</PinnedLinkPreview>
         <Section
           n={1}
           title="Links information"
@@ -392,7 +412,10 @@ export default function OfficeLinksBranding({ office }: { office: OfficeRow }) {
       {/* Wide screens keep the sticky panel beside the controls — there is a
           beside here, and it follows you down the page. */}
       <aside className="hidden lg:block lg:sticky lg:top-4">
-        <p className="text-[0.6875rem] font-semibold text-gray-400 uppercase tracking-wide mb-2">Live preview</p>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <p className="text-[0.6875rem] font-semibold text-gray-400 uppercase tracking-wide">Live preview</p>
+          <UndoDesignButton history={history} variant="pill" className="shrink-0" />
+        </div>
         {preview}
         {previewCaption}
       </aside>

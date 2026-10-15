@@ -23,6 +23,8 @@ import MiniBuilderModal, { type MiniStep } from "./MiniBuilderModal";
 import { useProductSketch } from "./useProductSketch";
 import { Field } from "./BuilderFields";
 import { prettyCardSlug } from "@/lib/slug";
+import UndoDesignButton from "@/components/UndoDesignButton";
+import { useDesignHistory, useUndoShortcut, changedKeys } from "@/lib/use-design-history";
 
 // The 6th tile in the Swift Cards template grid: a dashed card outline with a
 // "+" that opens the REAL card builder — the same controls the signed-in editor
@@ -66,6 +68,20 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
   // designer), starting from the same preset the real builder opens on.
   const customSelected = sketch.template === "custom";
   const customLayout = sketch.customLayout ? normalizeCustomLayout(sketch.customLayout) : buildPreset(DEFAULT_PRESET);
+
+  // Undo on "Make it yours" — the same one Card design has
+  // (lib/use-design-history). Recorded only while that step is showing: what
+  // opening the builder restores is the starting point, never a step. With the
+  // Custom design open it is the designer's own Undo, as in the editors.
+  const DESIGN_STEP = 3;
+  const history = useDesignHistory(
+    { on: open && step === DESIGN_STEP, template: sketch.template, style: sketch.style, logoShape: sketch.logoShape, customLayout: sketch.customLayout },
+    (s) => patch({ template: s.template, style: s.style, logoShape: s.logoShape, customLayout: s.customLayout }),
+    { describe: (prev, next) => (prev.on && next.on ? changedKeys(prev, next) : null) },
+  );
+  useUndoShortcut(open && step === DESIGN_STEP, history);
+  const previewUndo = customSelected ? undefined : history;
+
   const Preview = customSelected ? CustomCard : TEMPLATES.find((t) => t.id === sketch.template)?.Component ?? ClassicPro;
   const addressStr = [
     sketch.street,
@@ -113,6 +129,7 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
     setStep(0);
     setLaunching(false);
     reset();
+    history.clear();
   }
 
   const steps: MiniStep[] = [
@@ -180,7 +197,7 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
               design rides the hand-off (CardPrefill.customLayout). */}
           <TemplatePicker template={sketch.template} onSelect={(id) => patch({ template: id })} data={data} customUnlocked upsell={false} />
           {customSelected ? (
-            <CustomCardDesigner layout={customLayout} data={data} onChange={(l) => patch({ customLayout: l })} canScan={false} />
+            <CustomCardDesigner layout={customLayout} data={data} onChange={(l) => patch({ customLayout: l })} canScan={false} undo={history} />
           ) : (
             <TemplateStyleControls
               value={sketch.style}
@@ -195,6 +212,14 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
     },
   ];
 
+  const cardPreview = (
+    <InertPreview className="w-full max-w-[260px]">
+      <div className="rounded-[var(--rd-r-lg)] overflow-hidden shadow-[var(--rd-sh-lg)]">
+        <CardScaler><Preview data={data} /></CardScaler>
+      </div>
+    </InertPreview>
+  );
+
   return (
     <>
       {/* The last grid item, after the six templates: one grid cell, exactly
@@ -202,7 +227,7 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
           2026-10-01: "the same exact size" as the cards above it). */}
       <button
         type="button"
-        onClick={() => { reset(); setStep(0); setOpen(true); }}
+        onClick={() => { reset(); history.clear(); setStep(0); setOpen(true); }}
         className="text-left outline-none group"
         data-reveal
         style={{ transitionDelay: "350ms" }}
@@ -244,13 +269,15 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
         launching={launching}
         launchLabel="Make it live →"
         previewCaption="This is your real card — recipients open it as a full page in their browser."
-        preview={
-          <InertPreview className="w-full max-w-[260px]">
-            <div className="rounded-[var(--rd-r-lg)] overflow-hidden shadow-[var(--rd-sh-lg)]">
-              <CardScaler><Preview data={data} /></CardScaler>
-            </div>
-          </InertPreview>
-        }
+        preview={cardPreview}
+        // Phone: Undo on the pinned card's top-left corner, as on Card design.
+        pinnedPreview={previewUndo ? (
+          <div className="relative w-full max-w-[260px]">
+            {cardPreview}
+            <UndoDesignButton history={previewUndo} variant="corner" />
+          </div>
+        ) : undefined}
+        undo={previewUndo}
       />
     </>
   );
