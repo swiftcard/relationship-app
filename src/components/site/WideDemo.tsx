@@ -20,13 +20,23 @@ import { useEffect, useRef, useState } from "react";
 // inner block keeps its full layout width — so while scaled we set an explicit
 // measured height and `contain: size` (same trick as CardScaler) to stop the
 // intrinsic width inflating the section on phones.
+//
+// `naturalHeight` is for a mock whose code is still downloading (the
+// homepage's lazy replicas, site/HomeLazy): until it renders, the inner block
+// is empty and measures 0, and a 0 height under `contain: size` collapsed the
+// section — the page below jumped up, then back down when the mock arrived,
+// and stayed collapsed if it never did (paint check, 2026-10-14). The space
+// that mock will take is held instead, scaled like the mock itself.
 export default function WideDemo({
   children,
   minWidth = 720,
+  naturalHeight,
 }: {
   children: React.ReactNode;
   /** The width the mock actually needs to stay readable. */
   minWidth?: number;
+  /** The mock's height at `minWidth`, held while it has not rendered yet. */
+  naturalHeight?: number;
 }) {
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
@@ -55,12 +65,18 @@ export default function WideDemo({
   }, [minWidth]);
 
   const scaled = scale > 0 && scale < 1;
+  // Nothing rendered inside yet: hold the space the mock is about to take.
+  const held = scale > 0 && height === 0 && naturalHeight ? naturalHeight * Math.min(1, scale) : 0;
 
   return (
     <div
       ref={outerRef}
       className="w-full"
-      style={scaled ? { height: height || undefined, contain: "size" } : undefined}
+      style={
+        scaled ? { height: height || held || undefined, contain: "size" }
+        : held ? { minHeight: held }
+        : undefined
+      }
     >
       <div
         ref={innerRef}

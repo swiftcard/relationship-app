@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { chromium, webkit, type Browser, type Page } from "playwright";
 import { appCss } from "./harness";
-import { META } from "@/lib/template-style-presets";
+import { META, freeSafeValues } from "@/lib/template-style-presets";
 
 // ── Title color and Company color, used in the REAL editors ─────────────────
 //
@@ -345,7 +345,9 @@ for (const [engine, width] of RUNS) {
       expect(saves(calls, "/api/cards/c1").length).toBe(before);
       await clickSave(page, "Save without them");
       const sent = saves(calls, "/api/cards/c1").at(-1)?.body?.customization as Record<string, unknown>;
-      expect(CP.company.presets).toContain(sent.companyColor);
+      // Snapped to a colour Free can keep: a swatch, or a Look's own ink
+      // (owner, 2026-10-14: Looks on light and frosted grounds carry theirs).
+      expect(freeSafeValues(CP, "company")).toContain(sent.companyColor);
       expect(sent.titleColor).toBe(CP.title.presets[1]);
       expect(errors).toEqual([]);
       await page.context().close();

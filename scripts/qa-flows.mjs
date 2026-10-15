@@ -69,9 +69,10 @@ async function seed() {
 // broken login. One sign-in, reused, is also what a real session looks like.
 let storageState = null;
 
-async function newPage({ signedIn = true } = {}) {
+async function newPage({ signedIn = true, userAgent } = {}) {
   const ctx = await markInternal(await browser.newContext({
     viewport: { width: 1280, height: 900 },
+    ...(userAgent ? { userAgent } : {}),
     ...(signedIn && storageState ? { storageState } : {}),
   }));
   const page = await ctx.newPage();
@@ -988,8 +989,14 @@ FLOWS["create-link"] = async () => {
       // A STRANGER opening it: a card view, on this card, from a Create link
       // (owner, 2026-10-14: "that link shows up in analytics"). A fresh,
       // signed-out browser, let past the human gate (which refuses
-      // automation) the way qa-offline does.
-      const visitor = await newPage({ signedIn: false });
+      // automation) the way qa-offline does. A real browser's User-Agent too:
+      // headless Chromium's says "HeadlessChrome", which the server rightly
+      // refuses as a bot (lib/bot-detection) — every nightly run failed on it
+      // as "not counted: bot" when the product was fine (issue #86).
+      const visitor = await newPage({
+        signedIn: false,
+        userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+      });
       try {
         await visitor.ctx.addInitScript(() => {
           Object.defineProperty(Navigator.prototype, "webdriver", { get: () => false, configurable: true });

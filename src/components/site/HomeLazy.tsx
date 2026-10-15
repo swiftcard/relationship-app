@@ -67,7 +67,9 @@ export function LazySignatureDemo() {
 export function LazyDashboardDemo() {
   return (
     <Deferred minHeight={520}>
-      <WideDemo minWidth={760}>
+      {/* naturalHeight: the mock's height at its design width, held while its
+          chunk downloads (measured 2026-10-14) — see WideDemo. */}
+      <WideDemo minWidth={760} naturalHeight={740}>
         <DashboardDemo />
       </WideDemo>
     </Deferred>
@@ -93,7 +95,7 @@ export function LazyWatchShareImage() {
 export function LazyTeamsDashboard() {
   return (
     <Deferred minHeight={520}>
-      <WideDemo minWidth={820}>
+      <WideDemo minWidth={820} naturalHeight={914}>
         <TeamsDashboard />
       </WideDemo>
     </Deferred>
