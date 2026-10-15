@@ -192,7 +192,7 @@ export const accountDocs = defineDocs([
     answer:
       "Settings → Plan and billing → \"Team seats\". The stepper shows how many you've bought versus how many are in use, and adding seats takes effect immediately. You can also add a seat on the spot when you invite someone past your current count. Office needs at least {limit.seats} seats.",
     detail:
-      "Seats in use = you + active members + pending invitations, and you can't reduce below that — remove members or revoke invitations first. Reductions are scheduled for the end of the billing period rather than applied immediately; increases are invoiced right away. Expired invitations stop holding a seat.",
+      "Seats in use = you + active members + pending invitations, and you can't reduce below that — remove members or revoke invitations first. Adding seats is invoiced right away (the prorated rest of the period). Removing seats: you keep them, and they stay paid, until the end of the billing period; the next renewal bills the lower count, the block shows \"Scheduled to reduce … on <date>\" until then, and \"Cancel scheduled reduction\" keeps them. The exception: a seat removed within 24 hours of adding it comes off straight away and its charge is refunded to the card, so it costs nothing. Expired invitations stop holding a seat.",
     commerce: true,
     nativeAnswer:
       "If you invite someone past your current seat count, the invite dialog lets you know; remove an existing team member to free up a seat. Office needs at least {limit.seats} seats, and seats in use means you, plus active members, plus pending invitations.",

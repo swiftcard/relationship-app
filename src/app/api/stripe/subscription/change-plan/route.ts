@@ -6,6 +6,7 @@ import { PLAN_LIMITS } from "@/lib/plan";
 import { priceIdForPlan, planFromPriceId, isUpgrade, DB_PLAN, type BillingPlan, type BillingInterval } from "@/lib/subscription";
 import { getOfficeSeatUsage } from "@/lib/office-seats";
 import { provisionOfficeForOwner, tearDownOfficeForOwner } from "@/lib/office-billing-sync";
+import { restorePendingSeatReduction } from "@/lib/office-scheduled-seats";
 import type Stripe from "stripe";
 import { officeSubUserBlockMessage, resolveBillingSubjectId } from "@/lib/office-roles";
 
@@ -68,7 +69,11 @@ export async function POST(req: NextRequest) {
 
   // Perform the swap on Stripe with proration.
   try {
-    const sub = (await getStripe().subscriptions.retrieve(profile.stripe_subscription_id)) as Stripe.Subscription;
+    let sub = (await getStripe().subscriptions.retrieve(profile.stripe_subscription_id)) as Stripe.Subscription;
+    // A pending seat reduction already sits in Stripe at the lower count (audit
+    // B-01). A swap prorates against Stripe's count, so put the paid seats back
+    // first, or the swap credits too little and re-charges seats already paid.
+    if (wasOffice) sub = (await restorePendingSeatReduction(subjectId, sub)) ?? sub;
     const item = sub.items.data[0];
     if (!item) return NextResponse.json({ error: "Subscription has no billable item." }, { status: 400 });
 

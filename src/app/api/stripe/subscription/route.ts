@@ -5,6 +5,7 @@ import { getStripe, subscriptionPeriodEnd } from "@/lib/stripe";
 import { planFromPriceId } from "@/lib/subscription";
 import { PLAN_LIMITS } from "@/lib/plan";
 import { getOfficeSeatUsage } from "@/lib/office-seats";
+import { paidSeats } from "@/lib/office-seat-plan";
 import type Stripe from "stripe";
 import { officeSubUserBlockMessage, getOfficeSubUserContext, roleHasCapability, resolveBillingSubjectId } from "@/lib/office-roles";
 import { stripeTrialEndIso } from "@/lib/billing-state";
@@ -162,10 +163,18 @@ export async function GET() {
       // counts at all, because they do not own the office row.
       const { data: office } = await admin
         .from("offices")
-        .select("id, scheduled_seats, scheduled_seats_at")
+        .select("id, seats, scheduled_seats, scheduled_seats_at")
         .eq("owner_id", subjectId)
         .maybeSingle();
       if (office) {
+        // With a reduction pending, Stripe already holds the lower count for
+        // the next renewal (renewalCents above is right to use it), but the
+        // team still has the seats it paid for until the date (audit B-01).
+        base.seats = paidSeats(
+          base.seats ?? PLAN_LIMITS.OFFICE_MIN_SEATS,
+          (office as { seats?: number | null }).seats ?? null,
+          (office as { scheduled_seats?: number | null }).scheduled_seats ?? null,
+        );
         // Same accounting as the invite/seat routes — getOfficeSeatUsage drops
         // EXPIRED pending invites, which no longer reserve a seat. Counting them
         // here (as a raw status='pending' count once did) inflated "used" in the

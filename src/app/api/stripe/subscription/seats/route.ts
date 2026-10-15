@@ -7,6 +7,11 @@ import { planFromPriceId } from "@/lib/subscription";
 import { getOfficeSeatUsage, computeSeatUsage } from "@/lib/office-seats";
 import { writeAudit } from "@/lib/audit";
 import { requireOfficeCapability } from "@/lib/office-roles";
+import { reportError } from "@/lib/report-error";
+import {
+  SEAT_ADDS_KEY, paidSeats, parseSeatAdds, planSeatChange, seatRefundCents, serializeSeatAdds,
+} from "@/lib/office-seat-plan";
+import { createHash } from "node:crypto";
 import type Stripe from "stripe";
 
 // GET /api/stripe/subscription/seats — what the seat UI needs to offer "add a
@@ -33,13 +38,17 @@ export async function GET() {
     .eq("id", ctx.ownerId)
     .single();
 
-  const { data: office } = await admin.from("offices").select("seats").eq("id", ctx.officeId).maybeSingle();
+  const { data: office } = await admin.from("offices").select("seats, scheduled_seats, scheduled_seats_at").eq("id", ctx.officeId).maybeSingle();
   const purchased = (office?.seats as number | null) ?? PLAN_LIMITS.OFFICE_MIN_SEATS;
   const usage = await getOfficeSeatUsage(ctx.officeId, purchased);
+  const scheduledSeats = (office?.scheduled_seats as number | null | undefined) ?? null;
 
   const base = {
     seats: usage.purchased,
     usage,
+    // A pending reduction: the count the next renewal bills (lib/office-seat-plan).
+    scheduledSeats,
+    scheduledSeatsAt: (office?.scheduled_seats_at as string | null | undefined) ?? null,
     interval: null as "monthly" | "annual" | null,
     perSeatCents: null as number | null,
     minSeats: PLAN_LIMITS.OFFICE_MIN_SEATS,
@@ -61,21 +70,26 @@ export async function GET() {
     const item = sub.items.data[0];
     const mapped = planFromPriceId(item?.price?.id);
     if (!item || mapped?.plan !== "office") return NextResponse.json({ ...base, billable: false });
-    // Stripe is authoritative for what they're actually paying for.
-    base.seats = item.quantity ?? base.seats;
+    // Stripe is authoritative for what they're paying for, except while a
+    // reduction is pending: then Stripe already holds the lower count for the
+    // next renewal and the team keeps the seats it paid for until then.
+    const stripeQty = item.quantity ?? base.seats;
+    base.seats = paidSeats(stripeQty, purchased, scheduledSeats);
     base.usage = { ...usage, ...computeSeatUsage(base.seats, usage.active, usage.pending) };
     base.interval = mapped.interval;
     base.perSeatCents = item.price?.unit_amount ?? null;
     if (base.perSeatCents != null) base.nextSeatTotalCents = base.perSeatCents * (base.seats + 1);
 
     // Quote one more seat. Best-effort: an extra API call that must never stop
-    // the seat UI from rendering.
+    // the seat UI from rendering. One seat on top of Stripe's own count: with a
+    // reduction pending, adding a seat first restores the paid seats at no
+    // charge, so one seat is still all that's charged.
     try {
       const preview = await stripe.invoices.createPreview({
         customer: sub.customer as string,
         subscription: profile!.stripe_subscription_id!,
         subscription_details: {
-          items: [{ id: item.id, quantity: base.seats + 1 }],
+          items: [{ id: item.id, quantity: stripeQty + 1 }],
           proration_behavior: "create_prorations",
           proration_date: Math.floor(Date.now() / 1000),
         },
@@ -98,7 +112,10 @@ export async function GET() {
 // Change the Office seat count. Allowed for the owner AND a billing_admin — a
 // delegated billing admin acts on the OWNER's subscription. Enforces the 2-seat
 // minimum and refuses to drop below seats in use (owner + active + pending).
-// Stripe prorates the change (create_prorations).
+// What each change costs is the owner's rule, decided in lib/office-seat-plan:
+// an added seat is charged now; a removed seat stays, paid, to the end of the
+// period, and the next renewal bills the lower count; a seat removed within 24
+// hours of being added comes off now and is refunded.
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -142,38 +159,59 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const sub = (await getStripe().subscriptions.retrieve(profile.stripe_subscription_id)) as Stripe.Subscription;
+    const stripe = getStripe();
+    const subId = profile.stripe_subscription_id;
+    const sub = (await stripe.subscriptions.retrieve(subId)) as Stripe.Subscription;
     const item = sub.items.data[0];
     // Guard: only touch it if it really is an Office (per-seat) price.
     const mapped = planFromPriceId(item?.price?.id);
     if (!item || mapped?.plan !== "office") {
       return NextResponse.json({ error: "This subscription isn't an Office plan." }, { status: 400 });
     }
-    const current = item.quantity ?? PLAN_LIMITS.OFFICE_MIN_SEATS;
+    const stripeQty = item.quantity ?? PLAN_LIMITS.OFFICE_MIN_SEATS;
     const periodEnd = subscriptionPeriodEndIso(sub);
+    const { data: officeRow } = await admin
+      .from("offices")
+      .select("seats, scheduled_seats, scheduled_seats_at")
+      .eq("id", office.id)
+      .maybeSingle();
+    const pendingSeats = (officeRow?.scheduled_seats as number | null | undefined) ?? null;
+    const paid = paidSeats(stripeQty, (officeRow?.seats as number | null | undefined) ?? null, pendingSeats);
+    const now = Date.now();
+    const addsRaw = sub.metadata?.[SEAT_ADDS_KEY] ?? "";
+    const adds = parseSeatAdds(addsRaw);
+    const plan = planSeatChange({ paid, stripeQty, requested, adds, now });
 
-    if (requested > current) {
-      // INCREASE → effective immediately, prorated (spec §4/§6). Also cancels any
-      // pending scheduled reduction (you're going up, not down).
-      //
+    // Idempotency keys name the TRANSITION and the subscription's state, not the
+    // request: a double-click (or a retry after a timeout) reads the same state
+    // and collapses into one Stripe call, while the same transition made again
+    // later (add a seat, remove it within the day, add it again) sees a
+    // different latest invoice or seat record and goes through. Derived
+    // server-side, so a client can't defeat it by varying its payload.
+    const latestInvoice = typeof sub.latest_invoice === "string" ? sub.latest_invoice : sub.latest_invoice?.id ?? "";
+    const state = createHash("sha256").update(`${latestInvoice}|${addsRaw}|${pendingSeats ?? ""}`).digest("hex").slice(0, 16);
+    const restore = async (to: number) => {
+      // Back to the seats already paid for this period: no proration, no charge.
+      await stripe.subscriptions.update(
+        subId,
+        { items: [{ id: item.id, quantity: to }], proration_behavior: "none" },
+        { idempotencyKey: `office-seats-restore:${subId}:${stripeQty}->${to}:${state}` },
+      );
+    };
+
+    if (plan.kind === "increase") {
+      // INCREASE → effective immediately and charged now. Also cancels any
+      // pending reduction (you're going up, not down).
+      if (plan.restoreTo != null) await restore(plan.restoreTo);
       // always_invoice, NOT create_prorations: Stripe does not bill a positive
       // proration on its own — create_prorations only parks the line item on the
       // next renewal invoice, so an extra seat bought today would be used free
       // until the cycle rolled over. always_invoice finalizes an invoice for the
       // prorated remainder now and charges the card on file.
-      //
-      // Idempotency: this endpoint charges money, and the obvious failure is a
-      // double-click (or a retry after a timeout) buying two seats. The key is
-      // the TRANSITION, not the request — two clicks both read current=3 and ask
-      // for 4, produce the same key, and Stripe collapses them into one charge.
-      // A later, genuinely different change (4→5) keys differently and goes
-      // through. Deriving it server-side from Stripe's own quantity means a
-      // client can't defeat it by varying its payload.
-      const idempotencyKey = `office-seats:${profile.stripe_subscription_id}:${current}->${requested}`;
-      const updated = await getStripe().subscriptions.update(
-        profile.stripe_subscription_id,
+      const updated = await stripe.subscriptions.update(
+        subId,
         {
-          items: [{ id: item.id, quantity: requested }],
+          items: [{ id: item.id, quantity: plan.quantity }],
           proration_behavior: "always_invoice",
           // Without this, Stripe's default (allow_incomplete) applies the
           // seat increase and leaves an uncollectable proration invoice
@@ -181,50 +219,141 @@ export async function POST(req: NextRequest) {
           // the added seat(s) were never paid for (billing audit).
           payment_behavior: "error_if_incomplete",
         },
-        { idempotencyKey },
+        { idempotencyKey: `office-seats:${subId}:${paid}->${plan.quantity}:${state}` },
       );
+      // Remember the purchase and the invoice that charged for it, so removing
+      // these seats within 24 hours can refund exactly that charge. A failure
+      // here costs only that refund window, never the purchase, so it's
+      // reported, not fatal.
+      const inv = typeof updated.latest_invoice === "string" ? updated.latest_invoice : updated.latest_invoice?.id ?? null;
+      if (inv && inv !== latestInvoice && !adds.some((a) => a.inv === inv)) {
+        try {
+          await stripe.subscriptions.update(subId, {
+            metadata: { [SEAT_ADDS_KEY]: serializeSeatAdds([...adds, { at: now, n: plan.added, left: plan.added, inv }], now) },
+          });
+        } catch (e) {
+          await reportError("office.seats.add_record_failed", e, { subId, inv, added: plan.added });
+        }
+      }
       // DB only after Stripe confirms — if the charge failed, the office must not
       // believe it owns a seat it never bought.
-      await admin.from("offices").update({ seats: requested, scheduled_seats: null, scheduled_seats_at: null }).eq("id", office.id);
-      await writeAudit({ action: "seat.changed", actorId: user.id, orgId: office.id as string, metadata: { seats: requested, mode: "increase" } });
+      await admin.from("offices").update({ seats: plan.dbSeats, scheduled_seats: null, scheduled_seats_at: null }).eq("id", office.id);
+      await writeAudit({ action: "seat.changed", actorId: user.id, orgId: office.id as string, metadata: { seats: plan.dbSeats, mode: "increase" } });
       const unit = updated.items.data[0]?.price?.unit_amount ?? item.price?.unit_amount ?? null;
       return NextResponse.json({
         ok: true,
         mode: "increased",
-        seats: requested,
+        seats: plan.dbSeats,
         perSeatCents: unit,
-        totalCents: unit != null ? unit * requested : null,
+        totalCents: unit != null ? unit * plan.dbSeats : null,
         interval: mapped.interval,
       });
     }
 
-    if (requested === current) {
-      // No change — treat as "cancel any scheduled reduction".
-      await admin.from("offices").update({ scheduled_seats: null, scheduled_seats_at: null }).eq("id", office.id);
+    if (plan.kind === "unchanged") {
+      // No change — treat as "cancel any scheduled reduction": the next renewal
+      // goes back to billing the seats they have.
+      if (plan.restoreTo != null) await restore(plan.restoreTo);
+      await admin.from("offices").update({ seats: plan.dbSeats, scheduled_seats: null, scheduled_seats_at: null }).eq("id", office.id);
       await writeAudit({ action: "seat.reduction_canceled", actorId: user.id, orgId: office.id as string });
-      return NextResponse.json({ ok: true, mode: "unchanged", seats: current });
+      return NextResponse.json({ ok: true, mode: "unchanged", seats: plan.dbSeats });
     }
 
-    // REDUCTION → schedule for the END of the current billing period (spec §5).
-    // Current seats stay billable + available until then; a daily job applies it.
+    // REDUCTION. Seats bought in the last 24 hours come off now and are
+    // refunded; the rest stay, paid, until the end of the period. Either way
+    // Stripe moves to the new count NOW, with no proration, so the next renewal
+    // bills it. (Changing Stripe only after the period ended, as this used to,
+    // let the renewal bill a full extra cycle at the old count: audit B-01.)
     //
-    // Guard: if Stripe didn't return a period end, storing scheduled_seats_at as
-    // null would make the reduction NEVER apply (the cron filters
-    // `.lte("scheduled_seats_at", now)`, which never matches null) — the banner
-    // would show forever and the customer keep paying the higher quantity. Fail
-    // loudly instead. (billing audit #11)
-    if (!periodEnd) {
+    // Guard: with no period end, the part that has to wait has no date to wait
+    // for. Fail loudly instead of scheduling a reduction that never applies.
+    // (billing audit #11)
+    if (!periodEnd && plan.dbSeatsIfRefunded > requested) {
       return NextResponse.json(
         { error: "no_period_end", message: "We couldn't schedule the seat reduction right now. Please try again in a moment." },
         { status: 503 }
       );
     }
+
+    // The schedule goes in BEFORE Stripe changes, so the webhook that change
+    // fires finds a pending reduction and leaves the paid seats in place.
+    const prevSchedule = {
+      scheduled_seats: pendingSeats,
+      scheduled_seats_at: (officeRow?.scheduled_seats_at as string | null | undefined) ?? null,
+    };
+    await admin.from("offices").update({ scheduled_seats: requested, scheduled_seats_at: periodEnd }).eq("id", office.id);
+    try {
+      await stripe.subscriptions.update(
+        subId,
+        {
+          items: [{ id: item.id, quantity: plan.quantity }],
+          proration_behavior: "none",
+          metadata: { [SEAT_ADDS_KEY]: serializeSeatAdds(plan.addsAfter, now) },
+        },
+        { idempotencyKey: `office-seats:${subId}:${paid}->${plan.quantity}:${state}` },
+      );
+    } catch (e) {
+      await admin.from("offices").update(prevSchedule).eq("id", office.id);
+      throw e;
+    }
+
+    // Refund the seats that were added within the day. A refund that fails
+    // leaves those seats as an ordinary removal (kept, and paid, to the end of
+    // the period), so what the customer was charged and what they hold always
+    // agree. The failure is reported so it can be refunded by hand.
+    let refundedSeats = 0;
+    let refundedCents = 0;
+    for (const r of plan.refunds) {
+      try {
+        const invoice = await stripe.invoices.retrieve(r.inv);
+        const cents = invoice.status === "paid"
+          ? seatRefundCents({
+              amountPaid: invoice.amount_paid ?? 0,
+              alreadyCredited: invoice.post_payment_credit_notes_amount ?? 0,
+              seats: r.seats,
+              of: r.of,
+              last: r.last,
+            })
+          : 0;
+        if (cents > 0) {
+          await stripe.creditNotes.create(
+            {
+              invoice: r.inv,
+              amount: cents,
+              refund_amount: cents,
+              reason: "order_change",
+              memo: `Seat${r.seats === 1 ? "" : "s"} removed within 24 hours of being added: not charged.`,
+            },
+            { idempotencyKey: `office-seat-refund:${r.inv}:${r.at}:${r.seats}:${state}` },
+          );
+        }
+        refundedSeats += r.seats;
+        refundedCents += cents;
+      } catch (e) {
+        await reportError("office.seats.refund_failed", e, { subId, invoice: r.inv, seats: r.seats });
+      }
+    }
+
+    const dbSeats = paid - refundedSeats;
+    const waiting = requested < dbSeats;
     await admin
       .from("offices")
-      .update({ scheduled_seats: requested, scheduled_seats_at: periodEnd })
+      .update({ seats: dbSeats, scheduled_seats: waiting ? requested : null, scheduled_seats_at: waiting ? periodEnd : null })
       .eq("id", office.id);
-    await writeAudit({ action: "seat.reduction_scheduled", actorId: user.id, orgId: office.id as string, metadata: { from: current, to: requested, effectiveAt: periodEnd } });
-    return NextResponse.json({ ok: true, mode: "scheduled", seats: current, scheduledSeats: requested, effectiveAt: periodEnd });
+    await writeAudit({
+      action: waiting ? "seat.reduction_scheduled" : "seat.changed",
+      actorId: user.id,
+      orgId: office.id as string,
+      metadata: { from: paid, to: requested, refundedSeats, refundedCents, ...(waiting ? { effectiveAt: periodEnd } : { mode: "refunded" }) },
+    });
+    return NextResponse.json({
+      ok: true,
+      mode: !waiting ? "reduced_now" : refundedSeats > 0 ? "reduced_now_and_scheduled" : "scheduled",
+      seats: dbSeats,
+      ...(waiting ? { scheduledSeats: requested, effectiveAt: periodEnd } : {}),
+      refundedSeats,
+      refundedCents,
+    });
   } catch (err) {
     // A declined card (or an invoice needing 3DS/SCA action) on the immediate
     // seat-increase invoice must say so plainly, matching change-plan's

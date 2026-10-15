@@ -506,6 +506,8 @@ function SeatManager({ sub, onChanged }: { sub: Sub; onChanged: () => Promise<vo
       if (!res.ok) { setMsg(data.error || "Couldn't update seats."); return; }
       if (data.mode === "increased") setMsg(`Seats increased to ${data.seats}. Your next invoice is prorated.`);
       else if (data.mode === "scheduled") setMsg(`Scheduled to reduce to ${data.scheduledSeats} on ${fmtDate(data.effectiveAt)}. Current seats stay until then.`);
+      else if (data.mode === "reduced_now") setMsg(`Seats reduced to ${data.seats}. You added ${data.refundedSeats === 1 ? "that seat" : "those seats"} less than 24 hours ago, so you won't be charged for ${data.refundedSeats === 1 ? "it" : "them"}.`);
+      else if (data.mode === "reduced_now_and_scheduled") setMsg(`${data.refundedSeats} seat${data.refundedSeats === 1 ? "" : "s"} you added in the last 24 hours ${data.refundedSeats === 1 ? "is" : "are"} removed, free of charge. The rest reduce to ${data.scheduledSeats} on ${fmtDate(data.effectiveAt)}; you keep them until then.`);
       else if (data.mode === "unchanged") setMsg("Scheduled reduction canceled — you'll keep your current seats.");
       await onChanged();
     } catch {

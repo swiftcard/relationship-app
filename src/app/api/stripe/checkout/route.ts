@@ -395,6 +395,37 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── One open checkout per account (audit B-15) ──────────────────────────
+    // Each tab used to get its own Checkout page, and both could be paid: the
+    // webhook then cancelled one subscription outright, so the customer paid
+    // twice. Now the same order still open is reused (a double-click or Back
+    // lands on the page already started), and any OTHER open checkout for this
+    // account is closed before a new one opens, so only one can ever be paid.
+    // Best-effort: a failed lookup never blocks a purchase; the webhook's
+    // newest-wins rule and duplicate refund are still there behind it.
+    const orderFingerprint = createHash("sha256")
+      .update(JSON.stringify([priceId, quantity, successPath, trialDays ?? 0, bridgeTrialEnd ?? 0, couponId ?? "", promotionCodeId ?? "", promoRedemptionId ?? ""]))
+      .digest("hex")
+      .slice(0, 16);
+    try {
+      let seen = 0;
+      for await (const open of stripe.checkout.sessions.list({
+        status: "open",
+        created: { gte: Math.floor(Date.now() / 1000) - 86400 },
+        limit: 100,
+        ...(profile.stripe_customer_id ? { customer: profile.stripe_customer_id as string } : {}),
+      })) {
+        if (++seen > 300) break;
+        if (open.client_reference_id !== user.id || open.mode !== "subscription") continue;
+        if (open.metadata?.order === orderFingerprint && open.url) {
+          return NextResponse.json({ url: open.url });
+        }
+        try { await stripe.checkout.sessions.expire(open.id); } catch { /* already completed or expired */ }
+      }
+    } catch (e) {
+      console.error("[checkout] open-session check failed:", e instanceof Error ? e.message : e);
+    }
+
     const session = await stripe.checkout.sessions.create({
       client_reference_id: user.id,
       // A NEW customer is registered under the account's AUTH email — the
@@ -419,6 +450,8 @@ export async function POST(req: NextRequest) {
       // there rather than here on purpose: a customer who opens Checkout and
       // walks away has had nothing, and must not lose their code for it.
       metadata: {
+        // Which order this page is, so a second click can find and reuse it.
+        order: orderFingerprint,
         ...(isOffice ? { seats: String(quantity) } : {}),
         ...(promoRedemptionId ? { promo_redemption_id: promoRedemptionId } : {}),
         // The webhook's repeat-card rule must not end this trial: it is the

@@ -19,7 +19,14 @@ type SeatInfo = {
   nextSeatTotalCents: number | null;
   billable: boolean;
   usage: { purchased: number; used: number; available: number };
+  /** A reduction already pending: the count the next renewal bills. */
+  scheduledSeats?: number | null;
 };
+
+/** The count the next renewal bills: what "remove a seat" lowers from. */
+function billedNext(info: SeatInfo): number {
+  return info.scheduledSeats ?? info.seats;
+}
 
 function usd(cents: number): string {
   return `$${(Math.round(cents) / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -534,7 +541,7 @@ export function RemoveMemberButton({ memberId, personName, canManageSeats, onPer
       if (canManageSeats && !native) {
         const info = await fetch("/api/stripe/subscription/seats")
           .then((r) => (r.ok ? r.json() : null)).catch(() => null);
-        if (info?.billable && info.perSeatCents != null && info.seats > (info.usage?.used ?? 1)) {
+        if (info?.billable && info.perSeatCents != null && billedNext(info) > (info.usage?.used ?? 1)) {
           setSeatInfo(info);
           setStep("seat");
           refresh();
@@ -557,7 +564,7 @@ export function RemoveMemberButton({ memberId, personName, canManageSeats, onPer
       const res = await fetch("/api/stripe/subscription/seats", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ seats: seatInfo.seats - 1 }),
+        body: JSON.stringify({ seats: billedNext(seatInfo) - 1 }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -565,9 +572,11 @@ export function RemoveMemberButton({ memberId, personName, canManageSeats, onPer
         return;
       }
       setSeatNote(
-        j.mode === "scheduled" || j.scheduledSeats != null
-          ? "Done ✓ Your bill goes down at your next renewal — you keep the seat until then."
-          : "Seat removed ✓",
+        j.mode === "reduced_now"
+          ? "Seat removed ✓ You added it less than a day ago, so you won't be charged for it."
+          : j.mode === "scheduled" || j.scheduledSeats != null
+            ? "Done ✓ Your bill goes down at your next renewal — you keep the seat until then."
+            : "Seat removed ✓",
       );
       setStep("done");
       refresh();

@@ -15,6 +15,9 @@ import { insertNotification } from "@/lib/notify";
 import { sendPushToUser } from "@/lib/push";
 import { stripeDowngradeAllowed } from "@/lib/iap-entitlement";
 import { provisionOfficeForOwner, tearDownOfficeForOwner, officeAccessEndedMessage } from "@/lib/office-billing-sync";
+import { seatSyncDecision } from "@/lib/office-seat-plan";
+import { cancelReplacedSubscription, isLiveSubscription, survivingSubscription } from "@/lib/stripe-supersede";
+import { applyScheduledReduction } from "@/lib/office-scheduled-seats";
 import { recordOfficeDeparture, type OfficeDepartureReason } from "@/lib/office-departure";
 import { getOfficeSubUserContext } from "@/lib/office-roles";
 import { PLAN_CHOSEN_KEY, sendWelcomeWhenCardLive } from "@/lib/welcome-email";
@@ -413,6 +416,36 @@ export async function POST(req: NextRequest) {
             if (typeof upcoming.amount_due === "number" && upcoming.amount_due > 0) recurringCents = upcoming.amount_due;
           } catch { /* keep the list price — right unless a discount applies */ }
         }
+
+        // ── The newest subscription wins (audit B-15) ──────────────────────
+        // When the account already holds a live subscription that is NEWER
+        // than this checkout's (two tabs paid and the other was processed
+        // first, or this delivery is a retry from hours ago), this one is the
+        // stale purchase. It is cancelled and refunded, and nothing below runs:
+        // no plan write, no trial record, no receipt. A Stripe failure throws,
+        // and Stripe delivers the event again.
+        {
+          const { data: holder } = await getAdminSupabase()
+            .from("profiles")
+            .select("stripe_subscription_id")
+            .eq("id", userId)
+            .maybeSingle();
+          const heldId = holder?.stripe_subscription_id as string | null | undefined;
+          if (heldId && heldId !== sub.id) {
+            const held = (await getStripe().subscriptions.retrieve(heldId)) as Stripe.Subscription;
+            if (isLiveSubscription(held) && survivingSubscription(held, sub) === "prior") {
+              try {
+                const settled = await cancelReplacedSubscription(sub, held);
+                await reportError("stripe.webhook.stale_checkout_cancelled", new Error("A checkout completed after a newer subscription; it was cancelled"), {
+                  userId, cancelled: sub.id, kept: held.id, ...settled,
+                });
+              } catch (e) {
+                await reportError("stripe.webhook.supersede_cancel_failed", e, { userId, priorSubId: sub.id, newSubscriptionId: held.id });
+              }
+              return NextResponse.json({ received: true, superseded: true });
+            }
+          }
+        }
       }
 
       // The customer-facing invoice link, and Stripe's own number for it, so
@@ -499,11 +532,13 @@ export async function POST(req: NextRequest) {
       }
 
       // Guard against double-billing: if this customer already had a DIFFERENT
-      // active subscription (e.g. clicked upgrade twice, or switched plans by
-      // starting a new Checkout instead of using the billing portal), cancel
-      // the old one now that the new one is confirmed active. Never cancel the
-      // subscription we're about to write (defends against Stripe redelivering
-      // this same event).
+      // live subscription (e.g. clicked upgrade twice, or switched plans by
+      // starting a new Checkout instead of using the billing portal), it is
+      // older than this one (the newest-wins check above returned otherwise),
+      // so it is replaced: a duplicate bought within the day is refunded in
+      // full, an older one has its unused time credited (lib/stripe-supersede,
+      // audit B-15). Never cancel the subscription we're about to write
+      // (defends against Stripe redelivering this same event).
       const { data: priorProfile } = await admin
         .from("profiles")
         .select("stripe_subscription_id")
@@ -512,7 +547,11 @@ export async function POST(req: NextRequest) {
       const priorSubId = priorProfile?.stripe_subscription_id as string | null | undefined;
       if (priorSubId && priorSubId !== session.subscription) {
         try {
-          await getStripe().subscriptions.cancel(priorSubId);
+          const [prior, incoming] = await Promise.all([
+            getStripe().subscriptions.retrieve(priorSubId),
+            getStripe().subscriptions.retrieve(session.subscription as string),
+          ]);
+          await cancelReplacedSubscription(prior as Stripe.Subscription, incoming as Stripe.Subscription);
         } catch (e) {
           // A failure here means the customer is left on TWO simultaneously
           // active Stripe subscriptions, billed every cycle for both — this
@@ -865,7 +904,13 @@ export async function POST(req: NextRequest) {
   // the billing UI always reflects Stripe truth regardless of where the change
   // was made.
   if (event.type === "customer.subscription.updated") {
-    const sub = event.data.object as Stripe.Subscription;
+    // The LIVE subscription, never the event's snapshot (audit B-02). Stripe
+    // doesn't promise order, and a delivery that failed is retried for up to
+    // three days, after newer changes have landed. Acting on an old snapshot
+    // wrote a seat count Stripe no longer bills, trimmed paid members, and
+    // could undo a Pro↔Office swap. If Stripe can't be reached this throws, and
+    // the 500 below has Stripe deliver the event again.
+    const sub = (await getStripe().subscriptions.retrieve((event.data.object as Stripe.Subscription).id)) as Stripe.Subscription;
     const quantity = sub.items.data[0]?.quantity;
     const admin = getAdminSupabase();
     const { data: subProfile } = await admin
@@ -972,9 +1017,34 @@ export async function POST(req: NextRequest) {
     if (quantity) {
       const profile = subProfile;
       if (profile?.id && profile.plan === "enterprise") {
-        const { data: office } = await admin.from("offices").select("id").eq("owner_id", profile.id).single();
-        if (office) {
-          await admin.from("offices").update({ seats: quantity }).eq("id", office.id);
+        const { data: office } = await admin
+          .from("offices")
+          .select("id, owner_id, seats, scheduled_seats, scheduled_seats_at")
+          .eq("owner_id", profile.id)
+          .single();
+        // A pending seat reduction already sits in Stripe for the next renewal
+        // while the team keeps its paid seats until the date (audit B-01,
+        // lib/office-seat-plan). Only a count that is neither the office's nor
+        // that pending one is a real change to follow.
+        const seatSync = office
+          ? seatSyncDecision({
+              liveQty: quantity,
+              dbSeats: (office.seats as number | null) ?? null,
+              scheduledSeats: (office.scheduled_seats as number | null) ?? null,
+              scheduledAt: (office.scheduled_seats_at as string | null) ?? null,
+              now: Date.now(),
+            })
+          : "noop";
+        if (office && seatSync === "apply_due") {
+          await applyScheduledReduction({
+            id: office.id as string,
+            owner_id: office.owner_id as string,
+            scheduled_seats: office.scheduled_seats as number,
+            scheduled_seats_at: (office.scheduled_seats_at as string | null) ?? null,
+          });
+        }
+        if (office && seatSync === "sync") {
+          await admin.from("offices").update({ seats: quantity, scheduled_seats: null, scheduled_seats_at: null }).eq("id", office.id);
           // Seats reduced below current headcount (e.g. self-service downgrade
           // via the billing portal) — trim the most-recently-added active
           // members so paid seat count and actual access stay in sync. Without
