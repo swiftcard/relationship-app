@@ -387,7 +387,9 @@ function photoFirst(style: TemplateStyle): RawLook {
   return {
     band: style.surfaceColor ?? "linear-gradient(145deg, #4f46e5 0%, #7c3aed 60%, #6d28d9 100%)",
     details,
-    layers: [PHOTO_BLOOM],
+    // The bloom belongs to the template's violet, as on the card: never over
+    // a panel colour the owner or a Look picked.
+    layers: style.surfaceColor ? [] : [PHOTO_BLOOM],
     ink: firstHex(style.textColor) ?? "#ffffff",
     nameShadow: { y: 1, blur: 4, color: "rgba(0,0,0,0.4)" },
     title: "#ddd6fe",

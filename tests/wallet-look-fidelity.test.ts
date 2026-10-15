@@ -171,6 +171,9 @@ describe("the textures the pass copies are still the textures the cards draw", (
 
   it("Photo First — the violet bloom over the photo panel", () => {
     expect(src("PhotoFirst.tsx")).toContain('"radial-gradient(ellipse at 60% 20%, rgba(167,139,250,0.35) 0%, transparent 60%)"');
+    // Only on the template's own violet — the card and the pass agree.
+    expect(src("PhotoFirst.tsx")).toContain("{!style.surfaceColor && (");
+    expect(palette).toContain("layers: style.surfaceColor ? [] : [PHOTO_BLOOM],");
   });
 
   it("Luxury Minimal — the gold foil edge", () => {

@@ -87,9 +87,12 @@ export default function PhotoFirst({ data }: { data: CardData }) {
           ...(circle ? { padding: "14px 0 12px", gap: Math.round(9 * Math.min(f, 1.1)) } : {}),
         }}
       >
-        {/* Radial highlight for depth — on the template's own violet. Not over
-            a colour the owner picked for a circle photo: it would tint it. */}
-        {!(circle && style.surfaceColor) && (
+        {/* Radial highlight for depth — on the template's own violet only.
+            Never over a panel colour the owner or a Look picked: a lilac bloom
+            tinted Forest's green and Amber's bronze (2026-10-15). It used to
+            be skipped only with a Circle photo, but the panel also shows
+            whole while a full-photo card has no photo yet. */}
+        {!style.surfaceColor && (
           <div
             className="absolute inset-0 pointer-events-none"
             style={{
