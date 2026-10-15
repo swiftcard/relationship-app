@@ -46,13 +46,18 @@ export default function SwiftLinksPromoBadge({ username, appUrl }: { username: s
       >
         {/* The bolt GLINTS every 3s (owner, 2026-10-06: "a very clean subtle
             flash just to grab the attention" of whoever is looking at the
-            page): ~0.4s of brighter blue, a soft glow and a 10% pop, then
-            still for the rest of the cycle. Bolt only; the chip never moves.
-            Off under reduced motion. */}
+            page). Made a touch showier on 2026-10-15 (owner: "make the
+            impulse a little larger … people can notice it a little more but
+            still keep it a little subtle"): ~0.5s of brighter blue, a 28% pop
+            with a stronger glow and a small rebound below full size, so it
+            reads as a quick impulse rather than a swell — then still for the
+            rest of the cycle. Bolt only; the chip never moves. Off under
+            reduced motion. */}
         <style>{`
           @keyframes sc-bolt-flash {
-            0%, 14%, 100% { transform: scale(1); filter: brightness(1) drop-shadow(0 0 0 rgba(59,130,246,0)); }
-            5% { transform: scale(1.1); filter: brightness(1.35) drop-shadow(0 0 4px rgba(59,130,246,0.8)); }
+            0%, 18%, 100% { transform: scale(1); filter: brightness(1) drop-shadow(0 0 0 rgba(59,130,246,0)); }
+            6% { transform: scale(1.28); filter: brightness(1.45) drop-shadow(0 0 6px rgba(59,130,246,0.9)); }
+            12% { transform: scale(0.96); filter: brightness(1.1) drop-shadow(0 0 2px rgba(59,130,246,0.35)); }
           }
           .sc-bolt-flash { transform-origin: 50% 50%; animation: sc-bolt-flash 3s ease-in-out 1s infinite; }
           @media (prefers-reduced-motion: reduce) { .sc-bolt-flash { animation: none; } }

@@ -15,9 +15,19 @@ describe("Swift Links badge bolt flash", () => {
     expect(src).not.toMatch(/<button[^>]*sc-bolt-flash/);
   });
 
-  it("stays subtle: a short glint, a small pop, then still", () => {
-    expect(src).toMatch(/0%, 14%, 100% \{ transform: scale\(1\)/);
-    expect(src).toMatch(/5% \{ transform: scale\(1\.1\)/);
+  it("stays subtle: a short impulse, then still", () => {
+    // 2026-10-15: a little showier (owner: "make the impulse a little larger
+    // … but still keep it a little subtle") — a 28% pop with a small rebound,
+    // over the first 18% of the 3s cycle (~0.5s); still the rest of the time.
+    expect(src).toMatch(/0%, 18%, 100% \{ transform: scale\(1\)/);
+    expect(src).toMatch(/6% \{ transform: scale\(1\.28\)/);
+    expect(src).toMatch(/12% \{ transform: scale\(0\.96\)/);
+  });
+
+  it("the bigger pop still fits inside the chip", () => {
+    // 22px bolt × 1.28 = 28px, plus a 6px glow, inside the 40px chip.
+    expect(src).toMatch(/w-10 h-10/);
+    expect(src).toMatch(/className="sc-bolt-flash w-\[22px\] h-\[22px\]"/);
   });
 
   it("is off for visitors who ask for reduced motion", () => {
