@@ -8,7 +8,8 @@ import { accentShade, panelBackground } from "@/lib/template-style";
 import React from "react";
 import { MiniQR as QR } from "./MiniQR";
 import type { CardData } from "./types";
-import { cardAspect, ContactRows, DetailsGap, fitFactor, fitCompany, splitLogoRow, fitTitleFluid, titleBox, fitName, heroGrow, logoStyle, logoCircleStyle, cardLogoShape, qrSize, templateStyle, CARD_BASE_FONT, isDarkBg, infoPaletteFrom, IcoInsta, IcoX, IcoTikTok, IcoLinkedIn, nameClass, textWidthFactor, cardFontClass } from "./shared";
+import { cardAspect, ContactRows, DetailsGap, fitFactor, fitCompanyFluid, splitLogoRow, logoRowStyle, companyCell, fitTitleFluid, titleBox, fitName, heroGrow, logoStyle, logoCircleStyle, cardLogoShape, qrSize, templateStyle, CARD_BASE_FONT, isDarkBg, infoPaletteFrom, IcoInsta, IcoX, IcoTikTok, IcoLinkedIn, nameClass, textWidthFactor, cardFontClass } from "./shared";
+import CircleLogo from "./CircleLogo";
 import PanelVideo from "./PanelVideo";
 
 const ACCENT_DEFAULT = "#6d28d9";
@@ -53,12 +54,12 @@ export default function PhotoFirst({ data }: { data: CardData }) {
   // Row is 242 design px: info panel is 460 - 40% = 276, less 17px padding
   // either side. The roomiest of the five, which is why this is the one
   // template whose logo could take a larger share (52%) to begin with.
-  const { logoMaxPct, companyPx } = splitLogoRow({
+  const { companyPx, companyMinPct } = splitLogoRow({
     row: 242, gap: 8, hasLogo: !!data.logoUrl, defaultLogoFrac: 0.52, minLogo: 60,
     company: data.company, targetPx: 12, trackingEm: 0, uppercase: false,
     widthFactor: textWidthFactor(cardFontClass(data), false),
   });
-  const companyFit = fitCompany(13.5, data.company, 20, companyPx, 0, false, f, textWidthFactor(cardFontClass(data), false));
+  const companyFit = fitCompanyFluid(13.5, data.company, 20, companyPx, 0, false, f, textWidthFactor(cardFontClass(data), false));
   const socials = [
     data.instagram && { icon: <IcoInsta />,    color: "#c084fc" },
     data.twitter   && { icon: <IcoX />,        color: "#64748b" },
@@ -190,16 +191,19 @@ export default function PhotoFirst({ data }: { data: CardData }) {
         <PanelVideo style={style} />
         {/* Company header */}
         <div>
-          <div className="flex items-center gap-2 mb-1.5 min-w-0">
-            {data.logoUrl && (
+          {/* Wraps: a logo too wide to share its line takes the line, and the
+              name goes underneath (logoRowStyle, shared.tsx). */}
+          <div className="mb-1.5 min-w-0" style={logoRowStyle(8)}>
+            {data.logoUrl && (cardLogoShape(data) === "circle"
+              ? <CircleLogo src={data.logoUrl} className="rounded-md" style={logoCircleStyle(f, 42)} />
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={data.logoUrl} alt="logo" className="rounded-md" style={cardLogoShape(data) === "circle"
-                ? logoCircleStyle(f, 42)
-                : logoStyle(f, 42, { maxWidth: data.company ? logoMaxPct : "88%" })} />
+              : <img src={data.logoUrl} alt="logo" className="rounded-md" style={logoStyle(f, 42, { maxWidth: data.company ? "100%" : "88%" })} />
             )}
-            <p className="font-extrabold min-w-0 leading-tight" style={{ color: companyColor, ...companyFit, overflowWrap: "anywhere" }}>
-              {data.company}
-            </p>
+            <div style={companyCell(companyMinPct)}>
+              <p className="font-extrabold leading-tight" style={{ color: companyColor, ...companyFit, overflowWrap: "anywhere" }}>
+                {data.company}
+              </p>
+            </div>
           </div>
           <div className="w-10 h-[2px] rounded-full" style={{ background: `linear-gradient(90deg, ${ACCENT}, ${accentShade(style.accentColor, ACCENT, "#ffffff", 0.45, "#a78bfa")})` }} />
         </div>

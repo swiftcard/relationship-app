@@ -6,7 +6,8 @@
 import { accentShade, isDarkBg, panelBackground } from "@/lib/template-style";
 import { MiniQR as QR } from "./MiniQR";
 import type { CardData } from "./types";
-import { cardAspect, ContactRows, fitFactor, fitCompany, splitLogoRow, fitTitleFluid, titleBox, fitName, heroGrow, logoStyle, logoCircleStyle, cardLogoShape, qrSize, templateStyle, CARD_BASE_FONT, infoPaletteFrom, IcoLinkedIn, IcoInsta, IcoX, IcoTikTok, nameClass, textWidthFactor, cardFontClass } from "./shared";
+import { cardAspect, ContactRows, fitFactor, fitCompanyFluid, splitLogoRow, logoRowStyle, companyCell, fitTitleFluid, titleBox, fitName, heroGrow, logoStyle, logoCircleStyle, cardLogoShape, qrSize, templateStyle, CARD_BASE_FONT, infoPaletteFrom, IcoLinkedIn, IcoInsta, IcoX, IcoTikTok, nameClass, textWidthFactor, cardFontClass } from "./shared";
+import CircleLogo from "./CircleLogo";
 import PanelVideo from "./PanelVideo";
 
 const NAVY = "#0e1b35";
@@ -29,12 +30,12 @@ export default function ClassicPro({ data }: { data: CardData }) {
   // The logo keeps 48% of it for an ordinary name and gives ground only as the
   // longest word grows, down to a 46px floor. Measured against the DOM at 71px
   // for the default split.
-  const { logoMaxPct, companyPx } = splitLogoRow({
+  const { companyPx, companyMinPct } = splitLogoRow({
     row: 152, gap: 8, hasLogo: !!data.logoUrl, defaultLogoFrac: 0.48, minLogo: 46,
     company: data.company, targetPx: 11, trackingEm: 0.03, uppercase: false,
     widthFactor: textWidthFactor(cardFontClass(data), false),
   });
-  const companyFit = fitCompany(13.5, data.company, 18, companyPx, 0.03, false, f, textWidthFactor(cardFontClass(data), false));
+  const companyFit = fitCompanyFluid(13.5, data.company, 18, companyPx, 0.03, false, f, textWidthFactor(cardFontClass(data), false));
   const socials = [
     data.linkedin  && { icon: <IcoLinkedIn />, handle: data.linkedin, color: "#60a5fa" },
     data.instagram && { icon: <IcoInsta />,    handle: data.instagram, color: "#c084fc" },
@@ -77,17 +78,21 @@ export default function ClassicPro({ data }: { data: CardData }) {
         />
 
         {/* Company logo + name */}
-        <div className="relative flex items-center gap-2">
+        {/* Wraps: a logo too wide to share its line takes the line, and the
+            name goes underneath (logoRowStyle, shared.tsx). */}
+        <div className="relative" style={logoRowStyle(8, 6)}>
           {data.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={data.logoUrl}
-              alt="logo"
-              className="rounded-lg"
-              style={cardLogoShape(data) === "circle"
-                ? logoCircleStyle(f, 46)
-                : logoStyle(f, 46, { background: "rgba(255,255,255,0.1)", maxWidth: data.company ? logoMaxPct : "88%" })}
-            />
+            cardLogoShape(data) === "circle" ? (
+              <CircleLogo src={data.logoUrl} className="rounded-lg" style={logoCircleStyle(f, 46)} />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={data.logoUrl}
+                alt="logo"
+                className="rounded-lg"
+                style={logoStyle(f, 46, { background: "rgba(255,255,255,0.1)", maxWidth: data.company ? "100%" : "88%" })}
+              />
+            )
           ) : (
             <div
               className="rounded-lg flex items-center justify-center shrink-0 font-black"
@@ -104,12 +109,14 @@ export default function ClassicPro({ data }: { data: CardData }) {
           {/* A chosen Company color drops the class rather than fighting it,
               as the name does (nameClass): the light theme forces some text
               classes with !important, which an inline colour cannot beat. */}
-          <span
-            className={`${style.companyColor ? "" : "text-white/80 "}font-bold leading-tight min-w-0`}
-            style={{ ...companyFit, overflowWrap: "anywhere", color: style.companyColor }}
-          >
-            {data.company}
-          </span>
+          <div style={companyCell(companyMinPct)}>
+            <span
+              className={`${style.companyColor ? "" : "text-white/80 "}block font-bold leading-tight`}
+              style={{ ...companyFit, overflowWrap: "anywhere", color: style.companyColor }}
+            >
+              {data.company}
+            </span>
+          </div>
         </div>
 
         {/* Name + title — hero */}

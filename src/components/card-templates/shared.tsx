@@ -193,6 +193,28 @@ export function logoCircleStyle(f: number, base: number, extra?: React.CSSProper
   };
 }
 
+/**
+ * The circle plate's padding for a mark of a known shape (CircleLogo).
+ *
+ * logoCircleStyle pads for a SQUARE mark — the worst case, since its corners
+ * reach furthest — so a wide wordmark contained in that same square box came
+ * out as a sliver: a 4:1 banner drew 39×10px on a 63px plate, a 7:1 one 39×6.
+ * Once the mark's shape is known, the box it is contained in is shaped like
+ * the mark itself and made as large as the circle allows: its corners sit on
+ * the same radius a square mark's corners sit on today, so a square logo is
+ * drawn exactly as before and a 4:1 one at 57×14.
+ */
+export function circleLogoPadding(d: number, aspect: number, border = 1): string {
+  // Where a square mark's corners sit now: a 0.66·d box, half-diagonal 0.4667·d.
+  const r = (d * 0.66) / Math.SQRT2;
+  const a = Math.min(Math.max(aspect, 0.1), 12);
+  const h = (2 * r) / Math.sqrt(1 + a * a);
+  const w = a * h;
+  const padX = Math.max(0, (d - w) / 2 - border);
+  const padY = Math.max(0, (d - h) / 2 - border);
+  return `${padY.toFixed(2)}px ${padX.toFixed(2)}px`;
+}
+
 // Shrink one long value (a long email, name, or company) to fit its line.
 // Exact-fit curve: beyond the comfy length, font size scales inversely with
 // length, so rendered width stays constant — a 40-char email occupies the same
@@ -341,15 +363,15 @@ export function splitLogoRow(opts: {
    *  come from — see textWidthFactor. Defaults to 1, so a caller that has not
    *  been updated renders exactly as it did. */
   widthFactor?: number;
-}): { logoMaxPct: string; companyPx: number } {
+}): { logoMaxPct: string; companyPx: number; companyMinPct: string } {
   const { row, gap, hasLogo, defaultLogoFrac, minLogo, company, targetPx, trackingEm, uppercase } = opts;
   const wf = opts.widthFactor ?? 1;
   const pct = (px: number) => `${Number(((px / row) * 100).toFixed(2))}%`;
-  if (!hasLogo) return { logoMaxPct: "0%", companyPx: row * NARROW };
+  if (!hasLogo) return { logoMaxPct: "0%", companyPx: row * NARROW, companyMinPct: "0%" };
 
   const defaultLogo = row * defaultLogoFrac;
   const s = (company ?? "").trim();
-  if (!s) return { logoMaxPct: pct(defaultLogo), companyPx: 0 };
+  if (!s) return { logoMaxPct: pct(defaultLogo), companyPx: 0, companyMinPct: "0%" };
 
   const word = longestWord(s);
   const needed = (wordEm(word, uppercase) * wf + word.length * trackingEm) * targetPx * SAFETY;
@@ -363,7 +385,13 @@ export function splitLogoRow(opts: {
   // immediately as luxury-minimal's logo overrunning its panel at 390px.
   // Expressing the computed split as a fraction keeps it responsive while still
   // being derived from the name.
-  return { logoMaxPct: pct(row - companyPx - gap), companyPx: companyPx * NARROW };
+  // The least the name may be given beside the logo (companyCell): its longest
+  // word, and enough for the whole name in about two lines — past that it reads
+  // better on its own line under the logo than as a four-line stack beside it.
+  // Capped, so an ordinary square logo still keeps a long name beside it.
+  const twoLines = (wordEm(s, uppercase) * wf + s.length * trackingEm) * targetPx * SAFETY * 0.58;
+  const companyMin = Math.max(companyPx, Math.min(twoLines, row * 0.6));
+  return { logoMaxPct: pct(row - companyPx - gap), companyPx: companyPx * NARROW, companyMinPct: pct(companyMin) };
 }
 
 /**
@@ -428,6 +456,72 @@ export function fitCompany(
   if (oneLineMax > size) size = Math.max(size, Math.min(base * grow, oneLineMax));
 
   return { fontSize: size, letterSpacing: `${Number(tracking.toFixed(3))}em` };
+}
+
+// ── The logo + company row, shaped by the logo itself ──────────────────────
+//
+// Owner, 2026-10-15: a wide or banner logo "kept as original or circle" must
+// fit perfectly — not too big, not too small — and the company name beside it
+// must not be too small either.
+//
+// The logo used to be held to its share of the row (splitLogoRow) whatever its
+// shape, so a 4:1 wordmark beside "Coastline Realty" came out 73×18px and a
+// 7:1 one 73×10 — a smudge. And the name was sized for that share even when a
+// square logo left it far more room, so it sat at 10px beside a 51px mark.
+//
+// Nothing here knows the logo's shape (it isn't stored, and the card is drawn
+// on the server, in captures and in the editor alike), so the ROW works it out:
+//   • the logo takes its natural width, up to the whole row;
+//   • the name keeps at least the width its longest word needs (companyCell);
+//   • the row wraps — so a logo too wide to share the line gets the line, at
+//     full size, and the name goes underneath it with the whole width;
+//   • the name is sized against the width it actually got (fitCompanyFluid).
+// A square logo still sits beside the name exactly where it always did.
+
+/** The row holding the logo and the company name (see above). */
+export function logoRowStyle(gapPx: number, rowGapPx = Math.round(gapPx * 0.75)): React.CSSProperties {
+  return { display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: gapPx, rowGap: rowGapPx };
+}
+
+/** The company name's cell in that row: never narrower than its longest word
+ *  needs (splitLogoRow's companyMinPct), and the box fitCompanyFluid measures. */
+export function companyCell(minPct: string): React.CSSProperties {
+  return { flex: "1 1 0", minWidth: minPct, containerType: "inline-size" };
+}
+
+/**
+ * fitCompany, against the width the name actually has (a companyCell).
+ *
+ * The same three rules, in CSS so they see the real column: the length-based
+ * size, held to what lets the longest word fit; or, when the whole name fits
+ * on ONE line, grown into the room up to COMPANY_GROW; never under the shared
+ * floor. Tracking stays what fitCompany chose.
+ */
+export function fitCompanyFluid(
+  base: number,
+  text: string | null | undefined,
+  comfy: number,
+  availPx: number,
+  trackingEm = 0,
+  uppercase = false,
+  f = 1,
+  widthFactor = 1,
+): React.CSSProperties {
+  const fixed = fitCompany(base, text, comfy, availPx, trackingEm, uppercase, f, widthFactor);
+  const s = (text ?? "").trim();
+  if (!s) return fixed;
+  const tracking = parseFloat(fixed.letterSpacing) || 0;
+  const floor = base * COMPANY_FLOOR;
+  const byLength = Math.max(floor, fitPx(base, s, comfy * 2));
+  const word = longestWord(s);
+  const wordEms = (wordEm(word, uppercase) * widthFactor + word.length * tracking) * SAFETY;
+  const lineEms = (wordEm(s, uppercase) * widthFactor + s.length * tracking) * SAFETY;
+  const grown = base * (1 + (COMPANY_GROW - 1) * roomGrow(f));
+  const px = (n: number) => `${n.toFixed(2)}px`;
+  return {
+    fontSize: `max(${px(floor)}, min(${px(byLength)}, calc(100cqw / ${wordEms.toFixed(3)})), min(${px(grown)}, calc(100cqw / ${lineEms.toFixed(3)})))`,
+    letterSpacing: fixed.letterSpacing,
+  };
 }
 
 export function fitPx(base: number, text: string | null | undefined, comfy: number): number {

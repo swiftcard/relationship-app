@@ -111,7 +111,9 @@ describe("every text field on a card goes through a fitter", () => {
       // ("COASTLIN / E REALTY"). fitCompany takes the column width and keeps the
       // longest word whole. Requiring it here rather than accepting either is
       // deliberate: fitPx alone is what allowed the split.
-      expect(src, `${t}: company not fitted`).toMatch(/fitCompany\([^)]*data\.company/);
+      // fitCompanyFluid is fitCompany measured against the column the name
+      // actually gets (companyCell) — the same longest-word rule, in CSS.
+      expect(src, `${t}: company not fitted`).toMatch(/fitCompany(Fluid)?\([^)]*data\.company/);
     });
 
     it(`${t} lets the name wrap rather than run off the card`, () => {

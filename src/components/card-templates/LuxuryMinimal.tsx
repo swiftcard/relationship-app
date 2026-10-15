@@ -7,7 +7,8 @@ import { accentShade, panelBackground } from "@/lib/template-style";
 import React from "react";
 import { MiniQR as QR } from "./MiniQR";
 import type { CardData } from "./types";
-import { cardAspect, ContactRows, DetailsGap, fitFactor, fitCompany, splitLogoRow, fitTitleFluid, titleBox, fitName, heroGrow, logoStyle, logoCircleStyle, cardLogoShape, qrSize, templateStyle, CARD_BASE_FONT, isDarkBg, infoPaletteFrom, textWidthFactor, cardFontClass } from "./shared";
+import { cardAspect, ContactRows, DetailsGap, fitFactor, fitCompanyFluid, splitLogoRow, logoRowStyle, companyCell, fitTitleFluid, titleBox, fitName, heroGrow, logoStyle, logoCircleStyle, cardLogoShape, qrSize, templateStyle, CARD_BASE_FONT, isDarkBg, infoPaletteFrom, textWidthFactor, cardFontClass } from "./shared";
+import CircleLogo from "./CircleLogo";
 import PanelVideo from "./PanelVideo";
 
 const GOLD_DEFAULT  = "#b08d57";
@@ -39,12 +40,12 @@ export default function LuxuryMinimal({ data }: { data: CardData }) {
   // Row is 170.4 design px: panel 44% of 460 = 202.4, less 16px padding either
   // side. 0.22em of tracking is the most of any template, so the most here to
   // reclaim before anything has to get smaller.
-  const { logoMaxPct, companyPx } = splitLogoRow({
+  const { companyPx, companyMinPct } = splitLogoRow({
     row: 170.4, gap: 8, hasLogo: !!data.logoUrl, defaultLogoFrac: 0.48, minLogo: 46,
     company: data.company, targetPx: 9, trackingEm: 0.22, uppercase: true,
     widthFactor: textWidthFactor(cardFontClass(data), true),
   });
-  const companyFit = fitCompany(10.5, data.company, 18, companyPx, 0.22, true, f, textWidthFactor(cardFontClass(data), true));
+  const companyFit = fitCompanyFluid(10.5, data.company, 18, companyPx, 0.22, true, f, textWidthFactor(cardFontClass(data), true));
 
   return (
     <div
@@ -95,19 +96,22 @@ export default function LuxuryMinimal({ data }: { data: CardData }) {
         style={{ width: "44%", padding: "18px 16px 17px 16px" }}
       >
         {/* Company + optional logo */}
-        <div className="flex items-center gap-2 min-w-0">
-          {data.logoUrl ? (
+        {/* Wraps: a logo too wide to share its line takes the line, and the
+            name goes underneath (logoRowStyle, shared.tsx). */}
+        <div className="min-w-0" style={logoRowStyle(8)}>
+          {data.logoUrl ? (cardLogoShape(data) === "circle"
+            ? <CircleLogo src={data.logoUrl} className="rounded" style={logoCircleStyle(f, 38)} />
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={data.logoUrl} alt="logo" className="rounded" style={cardLogoShape(data) === "circle"
-            ? logoCircleStyle(f, 38)
-            : logoStyle(f, 38, { maxWidth: data.company ? logoMaxPct : "88%" })} />
+            : <img src={data.logoUrl} alt="logo" className="rounded" style={logoStyle(f, 38, { maxWidth: data.company ? "100%" : "88%" })} />
           ) : null}
-          <p
-            className="min-w-0 leading-tight"
-            style={{ ...companyFit, color: companyColor, fontWeight: 700, textTransform: "uppercase", overflowWrap: "anywhere" }}
-          >
-            {data.company}
-          </p>
+          <div style={companyCell(companyMinPct)}>
+            <p
+              className="leading-tight"
+              style={{ ...companyFit, color: companyColor, fontWeight: 700, textTransform: "uppercase", overflowWrap: "anywhere" }}
+            >
+              {data.company}
+            </p>
+          </div>
         </div>
 
         {/* Name — refined, light weight */}

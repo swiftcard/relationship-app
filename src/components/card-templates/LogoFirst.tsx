@@ -15,6 +15,7 @@ import { cardLogoShape,
   qrSize, templateStyle, CARD_BASE_FONT, isDarkBg, infoPaletteFrom,
   DetailsGap, textWidthFactor, cardFontClass } from "./shared";
 import PanelVideo from "./PanelVideo";
+import CircleLogo from "./CircleLogo";
 
 const NAVY   = "#2C3A52";
 const INK    = "#141B26";
@@ -147,6 +148,8 @@ export default function LogoFirst({ data }: { data: CardData }) {
   const f = fitFactor(data);
   const grow = heroGrow(f);
   const circle = cardLogoShape(data) === "circle";
+  // The Circle tile's diameter (its logo is inset by CircleLogo).
+  const circleD = 118 * (0.94 + 0.06 * grow);
   const ruleColor = dark ? "rgba(255,255,255,0.20)" : "rgba(20,27,38,0.14)";
 
   // Company sits under the name as a single line and truncates, so a long one is
@@ -265,9 +268,11 @@ export default function LogoFirst({ data }: { data: CardData }) {
             // ground tint) so the mark always sits on a clean field, and a
             // fixed 1:1 box so the radius is a true circle. The inner img keeps
             // object-contain, inset far enough that a square mark's corners
-            // stay inside the circumference (see logoCircleStyle's geometry).
+            // stay inside the circumference (see logoCircleStyle's geometry) —
+            // the inset is the IMAGE's padding, so CircleLogo can reshape it
+            // to a wide mark once it knows the mark's proportions.
             ...(circle
-              ? { borderRadius: "50%", width: 118 * (0.94 + 0.06 * grow), height: 118 * (0.94 + 0.06 * grow), padding: 20 * (0.94 + 0.06 * grow), background: "#ffffff" }
+              ? { borderRadius: "50%", width: circleD, height: circleD, background: "#ffffff" }
               : { borderRadius: 12 }),
             overflow: "hidden",
             boxShadow: `0 0 0 1px ${tileEdge}`,
@@ -285,7 +290,14 @@ export default function LogoFirst({ data }: { data: CardData }) {
             minHeight: 54,
           }}
         >
-          {data.logoUrl ? (
+          {data.logoUrl && circle ? (
+            <CircleLogo
+              src={data.logoUrl}
+              diameter={circleD}
+              border={0}
+              style={{ width: "100%", height: "100%", padding: 20 * (0.94 + 0.06 * grow), objectFit: "contain", display: "block" }}
+            />
+          ) : data.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={data.logoUrl}

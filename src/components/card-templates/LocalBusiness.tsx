@@ -8,6 +8,7 @@ import React from "react";
 import { MiniQR as QR } from "./MiniQR";
 import type { CardData } from "./types";
 import { cardAspect, ContactRows, DetailsGap, fitFactor, fitCompany, fitTitleFluid, titleBox, fitName, heroGrow, logoStyle, logoCircleStyle, cardLogoShape, qrSize, templateStyle, CARD_BASE_FONT, infoPaletteFrom, nameClass, textWidthFactor, cardFontClass } from "./shared";
+import CircleLogo from "./CircleLogo";
 import PanelVideo from "./PanelVideo";
 
 const AMBER_DEFAULT  = "#b45309";
@@ -83,17 +84,21 @@ export default function LocalBusiness({ data }: { data: CardData }) {
 
         {/* Top-right: company badge */}
         <div className="absolute top-0 right-0 h-full flex items-center pr-5">
-          {data.logoUrl ? (
+          {data.logoUrl ? (cardLogoShape(data) === "circle" ? (
+            <CircleLogo
+              src={data.logoUrl}
+              className="rounded-xl"
+              style={logoCircleStyle(f, Math.round(LOGO_H / 1.24), { background: "rgba(255,255,255,0.92)" })}
+            />
+          ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={data.logoUrl}
               alt="logo"
               className="rounded-xl"
-              style={cardLogoShape(data) === "circle"
-                ? logoCircleStyle(f, Math.round(LOGO_H / 1.24), { background: "rgba(255,255,255,0.92)" })
-                : logoStyle(f, LOGO_H, { background: "rgba(255,255,255,0.15)", padding: 5, maxWidth: Math.round(LOGO_H * 2.6 * Math.min(Math.max(f, 0.85), 1.3)) })}
+              style={logoStyle(f, LOGO_H, { background: "rgba(255,255,255,0.15)", padding: 5, maxWidth: Math.round(LOGO_H * 2.6 * Math.min(Math.max(f, 0.85), 1.3)) })}
             />
-          ) : (
+          )) : (
             <div
               className="rounded-xl flex items-center justify-center font-black text-amber-800"
               style={{

@@ -7,7 +7,8 @@ import { accentGlow, brightness, mixHex, panelBackground } from "@/lib/template-
 import React from "react";
 import { MiniQR as QR } from "./MiniQR";
 import type { CardData } from "./types";
-import { cardAspect, ContactRows, fitFactor, fitCompany, splitLogoRow, fitTitleFluid, titleBox, fitName, heroGrow, logoStyle, logoCircleStyle, cardLogoShape, qrSize, templateStyle, CARD_BASE_FONT, isDarkBg, infoPaletteFrom, IcoLinkedIn, IcoInsta, IcoX, IcoTikTok, nameClass, textWidthFactor, cardFontClass } from "./shared";
+import { cardAspect, ContactRows, fitFactor, fitCompanyFluid, splitLogoRow, logoRowStyle, companyCell, fitTitleFluid, titleBox, fitName, heroGrow, logoStyle, logoCircleStyle, cardLogoShape, qrSize, templateStyle, CARD_BASE_FONT, isDarkBg, infoPaletteFrom, IcoLinkedIn, IcoInsta, IcoX, IcoTikTok, nameClass, textWidthFactor, cardFontClass } from "./shared";
+import CircleLogo from "./CircleLogo";
 import PanelVideo from "./PanelVideo";
 
 const BG           = "#070d1c";
@@ -36,12 +37,12 @@ export default function ModernBold({ data }: { data: CardData }) {
   // Row is 170.4 design px: panel 44% of 460 = 202.4, less 16px padding either
   // side. Uppercase with 0.16em of tracking — about a fifth of the rendered
   // width, and the first thing given back before either box resizes.
-  const { logoMaxPct, companyPx } = splitLogoRow({
+  const { companyPx, companyMinPct } = splitLogoRow({
     row: 170.4, gap: 8, hasLogo: !!data.logoUrl, defaultLogoFrac: 0.48, minLogo: 46,
     company: data.company, targetPx: 10, trackingEm: 0.16, uppercase: true,
     widthFactor: textWidthFactor(cardFontClass(data), true),
   });
-  const companyFit = fitCompany(12, data.company, 18, companyPx, 0.16, true, f, textWidthFactor(cardFontClass(data), true));
+  const companyFit = fitCompanyFluid(12, data.company, 18, companyPx, 0.16, true, f, textWidthFactor(cardFontClass(data), true));
   const socials = [
     data.instagram && { icon: <IcoInsta />,    color: "#a78bfa" },
     data.twitter   && { icon: <IcoX />,        color: "#94a3b8" },
@@ -88,19 +89,22 @@ export default function ModernBold({ data }: { data: CardData }) {
         style={{ width: "44%", padding: "18px 16px 16px" }}
       >
         {/* Company */}
-        <div className="flex items-center gap-2 min-w-0">
-          {data.logoUrl && (
+        {/* Wraps: a logo too wide to share its line takes the line, and the
+            name goes underneath (logoRowStyle, shared.tsx). */}
+        <div className="min-w-0" style={logoRowStyle(8)}>
+          {data.logoUrl && (cardLogoShape(data) === "circle"
+            ? <CircleLogo src={data.logoUrl} className="rounded-md" style={logoCircleStyle(f, 38)} />
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={data.logoUrl} alt="logo" className="rounded-md" style={cardLogoShape(data) === "circle"
-              ? logoCircleStyle(f, 38)
-              : logoStyle(f, 38, { maxWidth: data.company ? logoMaxPct : "88%" })} />
+            : <img src={data.logoUrl} alt="logo" className="rounded-md" style={logoStyle(f, 38, { maxWidth: data.company ? "100%" : "88%" })} />
           )}
-          <p
-            className="min-w-0 leading-tight"
-            style={{ ...companyFit, color: companyColor, fontWeight: 700, textTransform: "uppercase", overflowWrap: "anywhere" }}
-          >
-            {data.company}
-          </p>
+          <div style={companyCell(companyMinPct)}>
+            <p
+              className="leading-tight"
+              style={{ ...companyFit, color: companyColor, fontWeight: 700, textTransform: "uppercase", overflowWrap: "anywhere" }}
+            >
+              {data.company}
+            </p>
+          </div>
         </div>
 
         {/* Name — the hero */}
