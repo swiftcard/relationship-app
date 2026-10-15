@@ -1,11 +1,17 @@
 "use client";
 
 import { useEffect } from "react";
+import { isChunkLoadError, recoverFromChunkError } from "@/lib/chunk-reload";
 
 // App-wide error boundary — without this, an uncaught error anywhere renders
 // Next.js's default unstyled error screen instead of anything on-brand.
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  // A page from before a deploy asking for a chunk that no longer exists.
+  // reset() re-renders the same dead import, so "Try again" could never work;
+  // only a fresh document can (lib/chunk-reload, audit NS-06).
+  const staleDeploy = isChunkLoadError(error);
   useEffect(() => {
+    if (staleDeploy && recoverFromChunkError()) return;
     console.error("[app error boundary]", error);
     // Report the crash so a page-level failure any user hits is visible to the
     // team (React boundary errors never surface as window.onerror). Best-effort.
@@ -22,7 +28,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
         keepalive: true,
       }).catch(() => {});
     } catch { /* never throw from the boundary */ }
-  }, [error]);
+  }, [error, staleDeploy]);
 
   return (
     // `sc-app` is what the light-mode layer in globals.css is scoped to, so
@@ -36,7 +42,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
           We hit an unexpected error. Try again, or head back to your dashboard — nothing you have saved is affected.
         </p>
         <button
-          onClick={() => reset()}
+          onClick={() => (staleDeploy ? window.location.reload() : reset())}
           className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm px-5 py-2.5 rounded-full transition-colors"
         >
           Try again

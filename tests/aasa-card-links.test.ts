@@ -88,7 +88,12 @@ describe("1 · the association file claims no link at all", () => {
 describe("2 · a link that still reaches the app goes to the browser, never the webview", () => {
   const bridge = readFileSync("src/components/NativeAppBridge.tsx", "utf8");
   const purchase = readFileSync("src/lib/external-purchase.ts", "utf8");
-  const handler = bridge.slice(bridge.indexOf('addListener("appUrlOpen"'), bridge.indexOf("pushNotificationActionPerformed"));
+  // The appUrlOpen handler is a named function (onAppUrl) so a link that hit a
+  // stale chunk can be replayed after the reload (audit NS-06).
+  const handler = bridge.slice(bridge.indexOf("const onAppUrl = async"), bridge.indexOf("pushNotificationActionPerformed"));
+  it("the handler is the one attached to appUrlOpen", () => {
+    expect(handler).toContain('App.addListener("appUrlOpen", onAppUrl)');
+  });
 
   it("hands it to the default browser, with a bounce guard, and no webview fallback", () => {
     expect(handler).toMatch(/openLinkInDefaultBrowser\(dest\)/);

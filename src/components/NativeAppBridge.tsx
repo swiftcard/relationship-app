@@ -7,6 +7,7 @@ import { nativePushPrefix } from "@/lib/push-device";
 import { LINKEDIN_MESSAGE } from "@/lib/linkedin-popup";
 import { PUBLIC_PAGE_META } from "@/lib/universal-links";
 import { ACTIVE_CARD_EVENT } from "@/lib/active-card";
+import { isChunkLoadError, recoverFromChunkError } from "@/lib/chunk-reload";
 
 /** The card this phone's home-screen widget shows — how a widget tap is told apart from a scanned QR. */
 const WIDGET_CARD_KEY = "sc_widget_card";
@@ -250,7 +251,7 @@ export default function NativeAppBridge() {
     (async () => {
       try {
         const { App } = await import("@capacitor/app");
-        const handle = await App.addListener("appUrlOpen", async ({ url }) => {
+        const onAppUrl = async ({ url }: { url: string }) => {
           try {
             // Close the system-browser sheet first in both branches — the
             // OAuth round-trip and universal links can each arrive from it.
@@ -377,10 +378,21 @@ export default function NativeAppBridge() {
                 console.warn("[links] could not hand a link to the browser:", dest);
               }
             }
-          } catch { /* malformed URL — ignore */ }
-        });
+          } catch (e) {
+            // Every import above is a chunk fetched NOW, not when the page
+            // loaded. After a deploy those 404 and the sign-in return leg
+            // died here in silence, leaving the user on the login form (audit
+            // NS-06). Keep the link, reload onto the current deployment, and
+            // replay it below once the listener is back.
+            if (isChunkLoadError(e)) replayAfterReload(url);
+            /* otherwise a malformed URL — ignore */
+          }
+        };
+        const handle = await App.addListener("appUrlOpen", onAppUrl);
         if (cancelled) { handle.remove(); return; }
         removeListener = () => handle.remove();
+        const pending = takePendingAppUrl();
+        if (pending) void onAppUrl({ url: pending });
       } catch { /* plugin unavailable (older shell build) — nothing to listen for */ }
 
       // Push-notification taps: lib/apns.ts puts the in-app destination in the
@@ -487,6 +499,34 @@ export default function NativeAppBridge() {
   return null;
 }
 
+/** A swiftcard:// link that arrived while this page's chunks were stale. */
+const PENDING_APP_URL_KEY = "sc-pending-app-url";
+/** Long enough for a reload on a slow connection, short enough that a stale link never fires later. */
+const PENDING_APP_URL_MAX_AGE_MS = 120_000;
+
+function replayAfterReload(url: string): void {
+  try {
+    sessionStorage.setItem(PENDING_APP_URL_KEY, JSON.stringify({ url, at: Date.now() }));
+  } catch { return; /* nowhere to keep it — a reload would only lose it */ }
+  if (!recoverFromChunkError()) {
+    // Already reloaded for this a moment ago: replaying would fail the same
+    // way, and keeping it would fire on some later, unrelated page load.
+    try { sessionStorage.removeItem(PENDING_APP_URL_KEY); } catch { /* ignore */ }
+  }
+}
+
+function takePendingAppUrl(): string | null {
+  try {
+    const raw = sessionStorage.getItem(PENDING_APP_URL_KEY);
+    if (!raw) return null;
+    sessionStorage.removeItem(PENDING_APP_URL_KEY);
+    const { url, at } = JSON.parse(raw) as { url?: unknown; at?: unknown };
+    if (typeof url !== "string" || typeof at !== "number") return null;
+    return Date.now() - at < PENDING_APP_URL_MAX_AGE_MS ? url : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Full-screen "Signing you in…" cover for the OAuth return leg.
