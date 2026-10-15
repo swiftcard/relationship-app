@@ -10,12 +10,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Just enough of the supabase-js chain for getCrmConnection and the resolvers:
 // from(table).select().eq().eq().maybeSingle() / .update().eq().eq().
 type Row = Record<string, unknown>;
-const db: { integrations: Row[]; profiles: Row[] } = { integrations: [], profiles: [] };
+const db: Record<string, Row[]> = { integrations: [], profiles: [], cards: [], crm_links: [] };
 let officeCtx: { officeId: string; ownerId: string; role: string; isOwner: boolean } | null = null;
 
 vi.mock("@/lib/supabase-admin", () => ({
   getAdminSupabase: () => ({
-    from: (table: "integrations" | "profiles") => {
+    from: (table: string) => {
       const filters: [string, unknown][] = [];
       const chain = {
         select: () => chain,
@@ -57,6 +57,8 @@ beforeEach(() => {
   officeCtx = null;
   db.integrations = [];
   db.profiles = [];
+  db.cards = [];
+  db.crm_links = [];
   respond = () => json({});
   vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
     const method = (init?.method ?? "GET").toUpperCase();
@@ -86,6 +88,15 @@ describe("Office: the team's leads reach the office CRM", () => {
   beforeEach(() => {
     officeCtx = { officeId: "o1", ownerId: OWNER, role: "employee", isOwner: false };
     db.profiles.push({ id: OWNER, plan: "enterprise" });
+    // A member's leads reach the agency's CRM from their COMPANY card.
+    db.cards.push({ id: MEMBER_CARD, user_id: MEMBER, is_office_card: true });
+  });
+
+  it("…but not from a card the member kept from before they joined", async () => {
+    const PERSONAL = "44444444-4444-4444-8444-444444444444";
+    db.cards.push({ id: PERSONAL, user_id: MEMBER, is_office_card: false });
+    connect("pipedrive", OWNER);
+    expect(await getCrmConnection("pipedrive", "Pipedrive", OWNER, PERSONAL, MEMBER)).toBeNull();
   });
 
   it("a sub-user with no connection of their own inherits the owner's", async () => {
@@ -222,10 +233,20 @@ describe("Google Contacts", () => {
     expect(calls.some((c) => c.url.endsWith("people:createContact"))).toBe(true);
   });
 
-  it("an edit never creates a contact it can't find (Google's search lags)", async () => {
-    respond = (url) => (url.includes("searchContacts") ? json({ results: [] }) : json({}));
-    await syncLeadToGoogle(lead, "u1", { mode: "update" });
+  // Google's search cache lags a new contact by minutes, so an edit made just
+  // after a capture used to be unable to find it — and was made to never
+  // create, which left contacts captured before connecting stuck out of
+  // Google for good. The record id is now REMEMBERED at capture (crm_links),
+  // so the edit updates it directly without searching at all.
+  it("an edit updates the remembered contact by id, even while Google's search lags", async () => {
+    db.crm_links.push({ lead_id: "L1", provider: "google", owner_id: "u1", record_id: "people/c9", record_kind: "person" });
+    respond = (url) =>
+      url.includes("searchContacts") ? json({ results: [] }) : url.includes("people/c9?personFields") ? json(existing) : json({});
+    await syncLeadToGoogle({ ...lead, leadId: "L1" }, "u1", { mode: "update", changedFields: ["name"] });
+    expect(calls.some((c) => c.url.includes("searchContacts"))).toBe(false);
     expect(calls.some((c) => c.url.endsWith("people:createContact"))).toBe(false);
+    const upd = calls.find((c) => c.url.includes("people/c9:updateContact"))!;
+    expect((upd.body as { names: { givenName: string }[] }).names[0].givenName).toBe("Maya");
   });
 });
 
@@ -246,14 +267,17 @@ describe("Salesforce", () => {
   it("an open lead keeps the rep's Company and Description", async () => {
     respond = (url) =>
       url.includes("/query")
-        ? json({ records: [{ Id: "00Qopen", IsConverted: false, Description: "Budget approved Q3 — call Tue" }] })
+        ? json({ records: [{ Id: "00Qopen", IsConverted: false, LastName: "Cohen-Levi", FirstName: "Maya", Company: "Acme Holdings", Description: "Budget approved Q3 — call Tue" }] })
         : new Response(null, { status: 204 });
-    await syncLeadToSalesforce({ ...lead, company: null }, "u1");
+    await syncLeadToSalesforce(lead, "u1");
     const patch = calls.find((c) => c.method === "PATCH")!;
     const body = patch.body as Row;
+    // Meeting someone again never overwrites what a rep typed in Salesforce —
+    // it only fills what's blank (here, the phone).
     expect(body.Company).toBeUndefined();
     expect(body.Description).toBeUndefined();
-    expect(body.LastName).toBe("Cohen");
+    expect(body.LastName).toBeUndefined();
+    expect(body.Phone).toBe("+1 555 010 0100");
   });
 
   it("over-long values are clipped instead of failing the whole write", async () => {
@@ -268,8 +292,12 @@ describe("HubSpot", () => {
   beforeEach(() => connect("hubspot", "u1"));
 
   it("an edit that didn't touch notes adds no second note", async () => {
-    respond = (url) => (url.endsWith("/crm/v3/objects/contacts") ? json({ id: "h1" }, 201) : json({}));
+    respond = (url) =>
+      url.endsWith("/contacts/search")
+        ? json({ results: [{ id: "h1", properties: { email: "maya@acme.co", firstname: "Maya", lastname: "Cohen" } }] })
+        : json({ id: "h1" });
     await syncLeadToHubSpot(lead, "u1", { mode: "update", attachNote: false });
+    expect(calls.some((c) => c.method === "POST" && c.url.endsWith("/crm/v3/objects/contacts"))).toBe(false);
     expect(calls.some((c) => c.url.endsWith("/objects/notes"))).toBe(false);
   });
 

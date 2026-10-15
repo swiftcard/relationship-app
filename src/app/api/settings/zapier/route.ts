@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
-import { isPaidPlan } from "@/lib/plan";
+import { isPaidProfile, PLAN_COLUMNS } from "@/lib/effective-plan";
 import { isZapierWebhookUrl } from "@/lib/safe-fetch";
 import { sanitizeCardScope } from "@/lib/crm-scope";
 import { scopeIsOwned } from "@/lib/crm-scope-server";
-import { zapierLeadPayload } from "@/lib/crm-sync";
+import { zapierLeadPayload, zapierStatusMessage, CRM_WEBHOOK_TIMEOUT_MS } from "@/lib/crm-sync";
 
 // PATCH — save webhook URL
 export async function PATCH(request: NextRequest) {
@@ -15,13 +15,17 @@ export async function PATCH(request: NextRequest) {
 
   const admin = getAdminSupabase();
 
-  // Zapier integration is a Pro/Office feature.
-  const { data: planRow } = await admin.from("profiles").select("plan").eq("id", user.id).single();
-  if (!isPaidPlan(planRow?.plan)) {
+  const { zapier_webhook_url, zapier_card_ids } = await request.json() as { zapier_webhook_url?: string; zapier_card_ids?: unknown };
+
+  // CONNECTING Zapier is a Pro/Office feature. Disconnecting is not: a lapsed
+  // account must always be able to stop its contacts going somewhere — the
+  // privacy policy promises "disconnect anytime", and the padlock used to
+  // make that impossible after a downgrade.
+  const clearing = !zapier_webhook_url;
+  const { data: planRow } = await admin.from("profiles").select(PLAN_COLUMNS).eq("id", user.id).single();
+  if (!clearing && !isPaidProfile(planRow)) {
     return NextResponse.json({ code: "INTEGRATION_PRO_ONLY", error: "upgrade", message: "Zapier is a Pro feature.", upgrade: "/upgrade" }, { status: 402 });
   }
-
-  const { zapier_webhook_url, zapier_card_ids } = await request.json() as { zapier_webhook_url?: string; zapier_card_ids?: unknown };
 
   // Only accept a real Zapier catch-hook URL (or clearing it). This stops an
   // arbitrary internal URL from being stored and later POSTed lead PII (SSRF).
@@ -49,7 +53,9 @@ export async function PATCH(request: NextRequest) {
 
   const { error } = await admin
     .from("profiles")
-    .update({ zapier_webhook_url: zapier_webhook_url || null, ...scopeUpdate })
+    // A new (or removed) webhook starts with a clean slate: the last one's
+    // failure line says nothing about this one.
+    .update({ zapier_webhook_url: zapier_webhook_url || null, ...scopeUpdate, zapier_error: null })
     .eq("id", user.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -65,8 +71,8 @@ export async function POST(request: NextRequest) {
   // Test send is Pro-only too, and the URL must be a real Zapier hook — without
   // this, res.ok/res.status leaked back is a blind internal port-scan oracle.
   const admin2 = getAdminSupabase();
-  const { data: planRow2 } = await admin2.from("profiles").select("plan").eq("id", user.id).single();
-  if (!isPaidPlan(planRow2?.plan)) {
+  const { data: planRow2 } = await admin2.from("profiles").select(PLAN_COLUMNS).eq("id", user.id).single();
+  if (!isPaidProfile(planRow2)) {
     return NextResponse.json({ code: "INTEGRATION_PRO_ONLY", error: "upgrade", message: "Zapier is a Pro feature.", upgrade: "/upgrade" }, { status: 402 });
   }
 
@@ -76,31 +82,52 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "invalid_url", message: "Enter a Zapier webhook URL (https://hooks.zapier.com/…)." }, { status: 400 });
   }
 
+  // Every field filled in, never null: Zapier only offers a field for mapping
+  // once the sample it was built from had a VALUE there, so a null notes or
+  // where_met in the test meant the Zap could never use them.
+  const body = JSON.stringify(zapierLeadPayload({
+    leadId: "00000000-0000-4000-8000-000000000000",
+    capturedByCardId: "00000000-0000-4000-8000-000000000001",
+    name: "Jane Smith",
+    email: "jane@example.com",
+    phone: "555-0100",
+    company: "Acme Inc",
+    message: "Loved meeting you at the conference!",
+    notes: "Interested in a demo next week.",
+    whereMet: "Austin Founders Mixer",
+    location: "New York, US",
+    source: "QR code",
+    capturedByCard: "your-card",
+    capturedByName: "Your Name",
+    tags: ["scanned"],
+    test: true,
+  }));
+
+  let status: number | null = null;
   try {
     const res = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // The same builder the real send uses, so the sample a Zap is built
-      // from carries every field a real lead will — company and source were
-      // missing here, so they could not be mapped until a real lead arrived.
-      body: JSON.stringify(zapierLeadPayload({
-        name: "Jane Smith",
-        email: "jane@example.com",
-        phone: "555-0100",
-        company: "Acme Inc",
-        message: "Loved meeting you at the conference!",
-        notes: null,
-        whereMet: null,
-        location: "New York, US",
-        source: "QR code",
-        capturedByCard: "your-card",
-        capturedByName: "Your Name",
-        tags: null,
-        test: true,
-      })),
+      body,
+      // Same bound as a real send — a hook that never answers must not hang
+      // the button (it used to have no timeout at all).
+      signal: AbortSignal.timeout(CRM_WEBHOOK_TIMEOUT_MS),
     });
-    return NextResponse.json({ ok: res.ok, status: res.status });
-  } catch {
-    return NextResponse.json({ error: "unreachable" }, { status: 502 });
-  }
+    status = res.status;
+  } catch { /* no answer */ }
+
+  // ok reflects ZAPIER's answer, and the reply is always 200 so the button
+  // reads the body: it used to check this route's own status, which was 200
+  // whether Zapier took the test or refused it, so a switched-off Zap showed
+  // "Sent ✓".
+  const outcome = zapierStatusMessage(status);
+  return NextResponse.json({
+    ok: outcome.ok,
+    status,
+    message: outcome.ok
+      ? "Test sent — open your Zap in Zapier to see it arrive."
+      : outcome.retryable
+        ? "Zapier didn't answer — wait a moment and press Test again."
+        : outcome.message,
+  });
 }

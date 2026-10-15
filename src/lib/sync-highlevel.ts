@@ -1,13 +1,21 @@
 import {
-  getCrmConnection,
-  setSyncError,
-  connectionErrorMessage,
-  resolveCrmOwnerId,
   describeCapture,
   shouldAttachNote,
+  mayOverwrite,
+  pushFailure,
+  splitName,
+  samePhone,
+  type ContactField,
   type CrmLead,
+  type CrmConnection,
+  type CrmProvider,
+  type PushOptions,
+  type PushResult,
   type CrmSyncOptions,
 } from "./crm-connection";
+import { crmFetch, errorDetail, CrmNoAnswerError, type CrmBudget } from "./crm-http";
+import { runCrmSync, type SyncOutcome } from "./crm-run";
+import { isCrmVisibleTag } from "./lead-tags";
 
 // ── HighLevel (GoHighLevel) ──────────────────────────────────────────────────
 //
@@ -20,11 +28,12 @@ import {
 // the connect form asks for the Location ID as well. Both are validated
 // together on save.
 //
-// upsert, not create: /contacts/upsert honours the location's own "Allow
-// Duplicate Contact" preference (Settings → Business Profile → Contact
-// Preferences). That delegates the dedup policy to what the customer has
-// already decided rather than us guessing, and means meeting the same person
-// twice updates one record instead of making two.
+// Finding the contact: the record we wrote last time (crm_links), then
+// HighLevel's own duplicate lookup by email, then by phone. A contact found
+// that way is UPDATED with only blanks filled (a rep's edits in HighLevel win).
+// Only when nothing matches is /contacts/upsert used to create — upsert still
+// honours the location's "Allow Duplicate Contact" preference, so two captures
+// racing each other land on one record.
 
 const HL_BASE = "https://services.leadconnectorhq.com";
 // HighLevel requires an explicit API version header on every request; without
@@ -40,7 +49,6 @@ function headers(token: string): Record<string, string> {
     Accept: "application/json",
   };
 }
-
 
 export type HighLevelCheck = "ok" | "missing_scope" | "rejected";
 
@@ -62,7 +70,7 @@ export async function checkHighLevelConnection(token: string, locationId: string
   let scopeRefused = false;
   const attempt = async (url: string): Promise<boolean> => {
     try {
-      const res = await fetch(url, { headers: headers(token) });
+      const res = await crmFetch(url, { headers: headers(token) });
       if (res.ok) return true;
       const text = await res.text().catch(() => "");
       if ((res.status === 401 || res.status === 403) && /scope/i.test(text)) scopeRefused = true;
@@ -76,102 +84,156 @@ export async function checkHighLevelConnection(token: string, locationId: string
   return scopeRefused ? "missing_scope" : "rejected";
 }
 
-export async function syncLeadToHighLevel(lead: CrmLead, capturedBy: string, opts?: CrmSyncOptions): Promise<void> {
-  // An office sub-user with no connection of their own inherits the office
-  // owner's, so a whole agency's leads land in one HighLevel sub-account.
-  const userId = await resolveCrmOwnerId("highlevel", capturedBy);
-  // No refresh config — Private Integration tokens are static and never expire,
-  // so expires_at is null and the refresh branch never runs. HighLevel does
-  // recommend rotating them periodically, and a rotation looks exactly like a
-  // revoked token here: the next lead 401s and the banner tells them to reconnect.
-  const conn = await getCrmConnection("highlevel", LABEL, userId, lead.capturedByCardId, capturedBy);
-  if (!conn) return;
+type HlContact = {
+  id?: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  companyName?: string | null;
+};
 
+class Unauthorized extends Error {
+  constructor(public status: number) { super(String(status)); }
+}
+
+async function getContact(token: string, id: string, budget: CrmBudget): Promise<HlContact | null> {
+  const res = await crmFetch(`${HL_BASE}/contacts/${encodeURIComponent(id)}`, { headers: headers(token) }, budget);
+  if (res.status === 401) throw new Unauthorized(401);
+  if (!res.ok) return null;
+  return ((await res.json()) as { contact?: HlContact }).contact ?? null;
+}
+
+/** HighLevel's own "is there already a contact with this email / number" lookup. */
+async function findDuplicate(token: string, locationId: string, by: "email" | "number", value: string, budget: CrmBudget): Promise<HlContact | null> {
+  const res = await crmFetch(
+    `${HL_BASE}/contacts/search/duplicate?locationId=${encodeURIComponent(locationId)}&${by}=${encodeURIComponent(value)}`,
+    { headers: headers(token) },
+    budget,
+  );
+  if (res.status === 401) throw new Unauthorized(401);
+  // A token granted only contacts.write can't read — fall through to upsert,
+  // which still deduplicates on HighLevel's side.
+  if (!res.ok) return null;
+  return ((await res.json()) as { contact?: HlContact | null }).contact ?? null;
+}
+
+/** What to change on a contact HighLevel already has — blanks, plus what the owner just edited. */
+function updateBody(cur: HlContact, lead: CrmLead, opts: CrmSyncOptions): Record<string, string> {
+  const b: Record<string, string> = {};
+  const fill = (field: ContactField, key: keyof HlContact, value: string | null | undefined) => {
+    if (!value) return;
+    const now = (cur[key] ?? "").toString();
+    if ((!now.trim() || mayOverwrite(field, opts)) && now !== value) b[key] = value;
+  };
+  const { first, last } = splitName(lead.name);
+  if (mayOverwrite("name", opts)) {
+    b.firstName = first;
+    b.lastName = last ?? "";
+  } else {
+    fill("name", "firstName", first);
+    fill("name", "lastName", last);
+  }
+  fill("email", "email", lead.email);
+  if (lead.phone && !samePhone(cur.phone, lead.phone)) fill("phone", "phone", lead.phone);
+  fill("company", "companyName", lead.company);
+  return b;
+}
+
+export async function pushToHighLevel(conn: CrmConnection, lead: CrmLead, opts: PushOptions): Promise<PushResult> {
+  const { budget } = opts;
   const locationId = typeof conn.metadata.location_id === "string" ? conn.metadata.location_id : "";
   if (!locationId) {
-    await setSyncError("highlevel", userId, `Reconnect ${LABEL} — the sub-account it points at is missing.`);
-    return;
+    return { ok: false, status: 400, retryable: false, message: `Reconnect ${LABEL} — the sub-account it points at is missing.` };
   }
-
-  const [firstName, ...rest] = (lead.name || "").trim().split(/\s+/);
-  const lastName = rest.join(" ") || undefined;
-
-  // source and tags are FIRST-CLASS HighLevel fields, which is what makes this
-  // more than a contact dump: a tag is what fires the workflows the customer has
-  // already built — welcome text, pipeline placement, task assignment. We supply
-  // the trigger; their existing automation does the work.
-  const tags = [
-    "swiftcard",
-    ...(lead.capturedByCard ? [`swiftcard-${lead.capturedByCard}`] : []),
-    // The lead's own tags ride along as real HighLevel tags — that is what
-    // fires tag-triggered workflows. Capture-time tags are whitelisted in the
-    // leads route; edit-time tags are the owner's own.
-    ...(lead.tags ?? []),
-  ];
-
-  // NO tags in the upsert body. HighLevel documents that field as "will
-  // overwrite all current tags associated with the contact" — so meeting a
-  // known contact again, or editing one, wiped every tag the customer's own
-  // pipeline had put on them ("hot-lead", "appointment-set"…) and replaced
-  // them with ours. Tags go on afterwards through the Add Tags endpoint,
-  // which only ever adds.
-  const body: Record<string, unknown> = {
-    locationId,
-    firstName,
-    ...(lastName ? { lastName } : {}),
-    ...(lead.email ? { email: lead.email } : {}),
-    ...(lead.phone ? { phone: lead.phone } : {}),
-    ...(lead.company ? { companyName: lead.company } : {}),
-    ...(lead.source ? { source: `SwiftCard – ${lead.source}` } : { source: "SwiftCard" }),
-  };
-
-  const res = await fetch(`${HL_BASE}/contacts/upsert`, {
-    method: "POST",
-    headers: headers(conn.token),
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    // 401 here is most often a rotated token; 403 a missing contacts.write
-    // scope. Both fail every lead until someone reconnects.
-    const detail = await res.text().catch(() => "");
-    console.warn("[sync-highlevel] upsert failed:", res.status, detail);
-    await setSyncError("highlevel", userId, connectionErrorMessage(LABEL, res.status));
-    return;
-  }
-
-  let contactId: string | undefined;
   try {
-    const payload = (await res.json()) as { contact?: { id?: string }; id?: string };
-    contactId = payload?.contact?.id ?? payload?.id;
-  } catch { /* no id, no follow-ups — the contact itself is saved */ }
-
-  if (contactId) {
-    // Additive tagging. Not best-effort in spirit — a tag is what starts the
-    // customer's workflow — but a failure here must not report the saved
-    // contact as lost, so it is logged rather than bannered.
-    try {
-      const t = await fetch(`${HL_BASE}/contacts/${encodeURIComponent(contactId)}/tags`, {
-        method: "POST",
-        headers: headers(conn.token),
-        body: JSON.stringify({ tags }),
-      });
-      if (!t.ok) console.warn("[sync-highlevel] add tags failed:", t.status, await t.text().catch(() => ""));
-    } catch { /* logged above when it answers at all */ }
-
-    // Attach the capture context as a note. Best-effort: the contact is
-    // already saved, and losing the note is far better than reporting a
-    // working connection as broken.
-    const note = describeCapture(lead);
-    if (note && shouldAttachNote(opts)) {
-      await fetch(`${HL_BASE}/contacts/${encodeURIComponent(contactId)}/notes`, {
-        method: "POST",
-        headers: headers(conn.token),
-        body: JSON.stringify({ body: note }),
-      }).catch(() => {});
+    let existing: HlContact | null = null;
+    if (opts.knownRecord?.id) existing = await getContact(conn.token, opts.knownRecord.id, budget);
+    if (!existing && opts.previousEmail && opts.previousEmail.toLowerCase() !== (lead.email ?? "").toLowerCase()) {
+      existing = await findDuplicate(conn.token, locationId, "email", opts.previousEmail, budget);
     }
-  }
+    if (!existing && lead.email) existing = await findDuplicate(conn.token, locationId, "email", lead.email, budget);
+    if (!existing && lead.phone) existing = await findDuplicate(conn.token, locationId, "number", lead.phone, budget);
 
-  // Recovered — drop the banner, but only if one was actually showing.
-  if (conn.syncError) await setSyncError("highlevel", userId, null);
+    let contactId: string | undefined;
+    let created = false;
+
+    if (existing?.id) {
+      contactId = existing.id;
+      const body = updateBody(existing, lead, opts);
+      if (Object.keys(body).length) {
+        // PUT /contacts/{id} — WITHOUT tags: that field replaces every tag the
+        // customer's own pipeline put on them. Tags are added separately below.
+        const res = await crmFetch(`${HL_BASE}/contacts/${encodeURIComponent(existing.id)}`, { method: "PUT", headers: headers(conn.token), body: JSON.stringify(body) }, budget);
+        if (!res.ok) return pushFailure(LABEL, res.status, await errorDetail(res));
+      }
+    } else {
+      const { first, last } = splitName(lead.name);
+      // source is a first-class HighLevel field. NO tags here either:
+      // HighLevel documents that field as "will overwrite all current tags".
+      const body: Record<string, unknown> = {
+        locationId,
+        firstName: first,
+        ...(last ? { lastName: last } : {}),
+        ...(lead.email ? { email: lead.email } : {}),
+        ...(lead.phone ? { phone: lead.phone } : {}),
+        ...(lead.company ? { companyName: lead.company } : {}),
+        source: lead.source ? `SwiftCard – ${lead.source}` : "SwiftCard",
+      };
+      // 401 here is most often a rotated token; 403 a missing contacts.write
+      // scope. Both fail every lead until someone reconnects.
+      const res = await crmFetch(`${HL_BASE}/contacts/upsert`, { method: "POST", headers: headers(conn.token), body: JSON.stringify(body) }, budget);
+      if (!res.ok) return pushFailure(LABEL, res.status, await errorDetail(res));
+      const payload = (await res.json().catch(() => ({}))) as { contact?: { id?: string }; id?: string; new?: boolean };
+      contactId = payload?.contact?.id ?? payload?.id;
+      // Only HighLevel knows whether upsert matched someone (its duplicate
+      // rules can be wider than our lookups). A note goes on when it says
+      // the contact is new, so an edit never stacks one on an old record.
+      created = payload?.new === true;
+    }
+
+    if (contactId) {
+      // Tags are what fire the customer's own workflows — welcome text,
+      // pipeline placement, task assignment. Additive only, and never our
+      // internal markers ("unread", the sample contact's "demo").
+      const tags = [
+        "swiftcard",
+        ...(lead.capturedByCard ? [`swiftcard-${lead.capturedByCard}`] : []),
+        ...(lead.tags ?? []).filter(isCrmVisibleTag),
+      ];
+      try {
+        const t = await crmFetch(`${HL_BASE}/contacts/${encodeURIComponent(contactId)}/tags`, { method: "POST", headers: headers(conn.token), body: JSON.stringify({ tags }) }, budget);
+        if (!t.ok) console.warn("[sync-highlevel] add tags failed:", t.status, await errorDetail(t));
+      } catch { /* logged above when it answers at all */ }
+
+      // The capture context as a note: always on a new contact, and on an
+      // existing one when this is a capture or the edit changed what a note
+      // says. Best-effort — the contact itself is saved.
+      const note = describeCapture(lead);
+      if (note && (created || shouldAttachNote(opts))) {
+        try {
+          const n = await crmFetch(`${HL_BASE}/contacts/${encodeURIComponent(contactId)}/notes`, { method: "POST", headers: headers(conn.token), body: JSON.stringify({ body: note }) }, budget);
+          if (!n.ok) console.warn("[sync-highlevel] note failed:", n.status, await errorDetail(n));
+        } catch { /* bonus */ }
+      }
+    }
+
+    return {
+      ok: true,
+      action: created ? "created" : "updated",
+      recordId: contactId,
+      recordKind: "contact",
+      recordUrl: contactId ? `https://app.gohighlevel.com/v2/location/${encodeURIComponent(locationId)}/contacts/detail/${encodeURIComponent(contactId)}` : undefined,
+    };
+  } catch (e) {
+    if (e instanceof Unauthorized) return pushFailure(LABEL, e.status);
+    if (e instanceof CrmNoAnswerError) return pushFailure(LABEL, null);
+    throw e;
+  }
+}
+
+export const highlevelProvider: CrmProvider = { key: "highlevel", label: LABEL, push: pushToHighLevel };
+
+export function syncLeadToHighLevel(lead: CrmLead, capturedBy: string, opts?: CrmSyncOptions): Promise<SyncOutcome> {
+  return runCrmSync(highlevelProvider, lead, capturedBy, opts);
 }

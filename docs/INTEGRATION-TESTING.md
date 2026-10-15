@@ -1,5 +1,42 @@
 # Testing SwiftCard's Integrations
 
+## CRMs, Google Contacts and Zapier — current state (2026-10-14)
+
+The "no test mocks anything" note below is from July and is out of date for the
+CRM integrations. What exists now, from fastest to most real:
+
+| What | Command | Sees |
+|---|---|---|
+| Contract tests — every provider, the runner, the retry queue, Zapier, against fakes that answer like each real API | `npx vitest run tests/crm-provider-contract.test.ts tests/crm-sync-behaviour.test.ts` | duplicates, overwrites, 401/403/409/429/5xx/timeouts, refresh, Office routing, card scope, the queue |
+| The routes, executed | `npx vitest run tests/integrations-routes.test.ts` | connect / test / disconnect / Zapier / event switches as the button sees them |
+| Every Settings state, rendered at 390 and 1280px | `npx vitest run --config vitest.render.config.ts tests/render/integrations-settings-states.test.ts` | Reconnect vs Needs attention, Paused, Last sent / waiting, Disconnect after a plan ends |
+| **Live** — the real sync code against real test accounts, read back through each CRM's own API, cleaned up after | `npx vitest run --config vitest.live.config.ts` | HubSpot, Pipedrive, GoHighLevel for real |
+
+The live suite needs test-account tokens in the environment or `.env.local`
+(never commit them): `QA_HUBSPOT_TOKEN` (HubSpot service key with contact
+read + write), `QA_PIPEDRIVE_TOKEN` (personal API token), `QA_HIGHLEVEL_TOKEN`
++ `QA_HIGHLEVEL_LOCATION_ID` (Private Integration with contacts.write +
+locations.readonly). A provider without its token is skipped and says so. It
+never touches the SwiftCard database — only the CRM accounts it is given.
+
+Google Contacts and Salesforce are OAuth, so they are checked through the
+product itself: connect them on a test Pro account in Settings → Notifications
+and preferences, press **Send test contact** on each (it says "Added" / "Updated"
+and links to the record), then share a contact on that account's card and see
+"Last contact sent just now". Zapier: paste a Catch Hook URL, press **Test**,
+then "Test trigger" in Zapier.
+
+How it works, briefly: every provider's `push` (src/lib/sync-*.ts) only talks
+to its CRM; `runCrmSync` (src/lib/crm-run.ts) does everything around it —
+destination (Office), card scope, token refresh (and one forced refresh after a
+401), remembering the record (`crm_links`), the Settings line (`sync_error`,
+`last_synced_at`), and queueing busy/down sends (`crm_sync_outbox`, drained
+daily by /api/reminders via src/lib/crm-outbox-drain.ts). Schema:
+supabase/crm-sync-reliability.sql.
+
+---
+
+
 **Repo:** `/Users/menashharooni/Desktop/relationship-app` · **Written:** 2026-07-29 · **Baseline verified this session:** `npx vitest run` → **62 files, 708/708 passing, 14.2s**
 
 > **Read this first.** I grepped the whole test suite for provider mocking:

@@ -34,7 +34,11 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const error = searchParams.get("error");
+  // Deny / Cancel on Salesforce's screen returns error=access_denied — a
+  // choice, not a failure.
+  if (error === "access_denied") return DONE("cancelled");
   if (error || !code || !state) return DONE("error");
+  if (!process.env.SALESFORCE_CLIENT_ID || !process.env.SALESFORCE_CLIENT_SECRET) return DONE("unconfigured");
 
   const userId = verifyState(state);
   if (!userId) return DONE("error");
@@ -57,8 +61,8 @@ export async function GET(request: NextRequest) {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       code,
-      client_id: process.env.SALESFORCE_CLIENT_ID!,
-      client_secret: process.env.SALESFORCE_CLIENT_SECRET!,
+      client_id: process.env.SALESFORCE_CLIENT_ID,
+      client_secret: process.env.SALESFORCE_CLIENT_SECRET,
       redirect_uri: `${APP_URL}/api/integrations/salesforce/callback`,
       grant_type: "authorization_code",
       code_verifier: codeVerifier,

@@ -2,7 +2,8 @@ import { getAdminSupabase } from "./supabase-admin";
 import { encryptToken, decryptToken } from "./token-crypto";
 import { resolveOfficeContext } from "./office-roles";
 import { isCardInScope, parseCardScope } from "./crm-scope";
-import { isPaidPlan } from "./plan";
+import { isPaidProfile, PLAN_COLUMNS } from "./effective-plan";
+import { crmFetch, isRetryableStatus, type CrmBudget } from "./crm-http";
 
 // ── Shared plumbing for every CRM connection ─────────────────────────────────
 //
@@ -67,7 +68,36 @@ export type CrmLead = {
    * isCardInScope treats as out-of-scope whenever a scope is set.
    */
   capturedByCardId?: string | null;
+  /**
+   * leads.id in SwiftCard. What the CRM record we create is remembered against
+   * (crm_links), so a later edit updates THAT record — even after the email it
+   * was matched on has changed — and what a failed send is queued under.
+   * Absent only for the Settings test contact, which is not a real lead.
+   */
+  leadId?: string | null;
 };
+
+/** "Maya" → { first: "Maya", last: null }; "Maya de la Cruz" → { first: "Maya", last: "de la Cruz" }. */
+export function splitName(name: string | null | undefined): { first: string; last: string | null } {
+  const [first = "", ...rest] = (name ?? "").trim().split(/\s+/);
+  return { first, last: rest.length ? rest.join(" ") : null };
+}
+
+/** Digits only, for comparing phone numbers typed in different formats. */
+export const phoneDigits = (v: string | null | undefined) => (v ?? "").replace(/\D/g, "");
+
+/**
+ * Two phone numbers are the same number when their digits match, allowing for
+ * one carrying a country code the other leaves off ("+1 415 555 0148" and
+ * "(415) 555-0148"). Seven digits minimum, so short codes and extensions can't
+ * match unrelated people.
+ */
+export function samePhone(a: string | null | undefined, b: string | null | undefined): boolean {
+  const x = phoneDigits(a);
+  const y = phoneDigits(b);
+  if (x.length < 7 || y.length < 7) return false;
+  return x === y || x.endsWith(y) || y.endsWith(x);
+}
 
 /**
  * Render the capture context as a short human note.
@@ -115,11 +145,87 @@ export const CAPTURE_NOTE_SIGNATURE = "— captured with SwiftCard";
 export type CrmSyncOptions = {
   mode?: "capture" | "update";
   attachNote?: boolean;
+  /**
+   * Update mode only: which contact fields the owner actually changed in this
+   * edit. Only those are written over what the CRM holds — editing a note must
+   * not overwrite the company a salesperson corrected in Salesforce. Absent
+   * means "not known" (a queued retry, a returning visitor filling a blank),
+   * and then a field is only written where the CRM record has it empty.
+   */
+  changedFields?: readonly ContactField[];
+  /**
+   * The email the contact had BEFORE this edit. A record we never stored an id
+   * for (synced before crm_links existed) is still found by its old email
+   * instead of being duplicated under the new one.
+   */
+  previousEmail?: string | null;
+  /** The phone BEFORE this edit — replaced in place in CRMs that keep a list of numbers. */
+  previousPhone?: string | null;
+  /** Set by the outbox drain, so a send that fails again isn't queued twice. */
+  fromOutbox?: boolean;
+  /**
+   * The Settings "Send test contact" button. Ignores card scope (there is no
+   * card) and is never queued: the person pressing it wants the answer now.
+   */
+  test?: boolean;
 };
+
+export type ContactField = "name" | "email" | "phone" | "company";
 
 export function shouldAttachNote(opts: CrmSyncOptions | undefined): boolean {
   return (opts?.mode ?? "capture") === "capture" || opts?.attachNote === true;
 }
+
+/**
+ * May this sync write `field` over a value the CRM record already holds?
+ *
+ *   capture — no. The CRM is the salesperson's system of record; a returning
+ *             contact fills blanks, never replaces what someone typed there.
+ *   update  — only a field the owner just changed in SwiftCard. When the edit
+ *             didn't say (changedFields absent), nothing is overwritten.
+ */
+export function mayOverwrite(field: ContactField, opts: CrmSyncOptions | undefined): boolean {
+  if ((opts?.mode ?? "capture") !== "update") return false;
+  return !!opts?.changedFields?.includes(field);
+}
+
+/**
+ * What one sync of one contact to one CRM came to. Every provider returns this
+ * and does no database work of its own: recording the outcome (the Settings
+ * banner, "Last contact sent", the remembered record id, the retry queue) is
+ * lib/crm-run's job, done the same way for all of them.
+ */
+export type PushResult =
+  | {
+      ok: true;
+      action: "created" | "updated" | "logged";
+      /** The CRM's id for the record — remembered so the next edit updates it. */
+      recordId?: string;
+      /** Which kind of record recordId is, where a CRM has more than one (Salesforce Lead vs Contact). */
+      recordKind?: string;
+      /** A link that opens the record in the CRM, for the Settings test. */
+      recordUrl?: string;
+    }
+  | {
+      ok: false;
+      /** HTTP status, or null when the CRM never answered. */
+      status: number | null;
+      /** Worth trying again later (busy, down, no answer) rather than needing the user. */
+      retryable: boolean;
+      message: string;
+    };
+
+/** A failed push, classified and worded the same way for every provider. */
+export function pushFailure(label: string, status: number | null, detail?: string): PushResult {
+  return { ok: false, status, retryable: isRetryableStatus(status), message: connectionErrorMessage(label, status, detail) };
+}
+
+/** Options every provider's push receives. */
+export type PushOptions = CrmSyncOptions & {
+  budget: CrmBudget;
+  /** The record this lead was last written to in THIS destination, if we know it. */
+  knownRecord?: { id: string; kind: string | null } | null;
+};
 
 export type CrmConnection = {
   token: string;
@@ -176,8 +282,11 @@ export async function resolveCrmOwnerId(
     // outlives a lapsed subscription (so re-subscribing restores the team) —
     // the same reason requireOfficeCapability re-checks the owner's plan. A
     // lapsed owner's own leads already stop syncing; their team's must too.
-    const { data: owner } = await admin.from("profiles").select("plan").eq("id", ctx.ownerId).maybeSingle();
-    if (isPaidPlan(owner?.plan as string | null)) return ctx.ownerId;
+    // isPaidProfile, not the raw plan column: an owner whose timed grant has
+    // run out is Free now, even before the daily job rewrites the column. The
+    // capture path already stops their OWN leads on exactly this rule.
+    const { data: owner } = await admin.from("profiles").select(PLAN_COLUMNS).eq("id", ctx.ownerId).maybeSingle();
+    if (isPaidProfile(owner)) return ctx.ownerId;
   }
 
   return capturedByUserId;
@@ -200,6 +309,33 @@ export async function setSyncError(
     .eq("user_id", userId)
     .eq("provider", provider);
 }
+
+/**
+ * Stamp "Last contact sent" on a connection. Best-effort: the column is
+ * display-only, and a database without it (supabase/crm-sync-reliability.sql
+ * unapplied) must never turn a delivered contact into a reported failure.
+ */
+export async function markSynced(provider: CrmProviderKey, userId: string): Promise<void> {
+  try {
+    await getAdminSupabase()
+      .from("integrations")
+      .update({ last_synced_at: new Date().toISOString() })
+      .eq("user_id", userId)
+      .eq("provider", provider);
+  } catch { /* display-only */ }
+}
+
+export type ConnectionOptions = {
+  /** The Settings test: there is no card, so card scope can't apply. */
+  skipScope?: boolean;
+  /**
+   * Refresh even though the stored expiry says the token is still good. Used
+   * once, after a provider answered 401: Salesforce never tells us how long a
+   * token lives (we assume 90 minutes), and an org whose session timeout is
+   * shorter rejects it early. Refreshing is the fix; "reconnect" was not.
+   */
+  forceRefresh?: boolean;
+};
 
 /**
  * Load a usable token for `provider`, refreshing it first if it's about to
@@ -226,6 +362,12 @@ export async function setSyncError(
  * anyway meant an owner who picked "only my work card" silently cut every
  * agent's leads off from the agency CRM, while each agent's Settings said
  * their contacts "go there automatically".
+ *
+ * What an inherited connection DOES require is that the lead came in on the
+ * member's COMPANY card (cards.is_office_card). That card is the seat the
+ * office pays for and the reason the agency's CRM should hear about it; a
+ * card the member kept from before they joined is theirs, and its contacts
+ * are not the employer's to receive.
  */
 export async function getCrmConnection(
   provider: CrmProviderKey,
@@ -234,6 +376,7 @@ export async function getCrmConnection(
   cardId: string | null | undefined,
   capturedBy: string,
   refresh?: RefreshConfig,
+  opts: ConnectionOptions = {},
 ): Promise<CrmConnection | null> {
   const admin = getAdminSupabase();
   const { data } = await admin
@@ -243,7 +386,7 @@ export async function getCrmConnection(
     // already null, which would be a pointless round trip per capture.
     // card_ids rides along for the same reason: the scope check costs no extra
     // query, it is just one more column on a row we were already reading.
-    .select("access_token, refresh_token, expires_at, sync_error, metadata, card_ids")
+    .select("access_token, refresh_token, expires_at, sync_error, metadata, card_ids, updated_at")
     .eq("user_id", userId)
     .eq("provider", provider)
     .maybeSingle();
@@ -259,36 +402,64 @@ export async function getCrmConnection(
   // parseCardScope reads as null — all cards — so this is a no-op until someone
   // actually sets a scope.
   const inherited = capturedBy !== userId;
-  if (!inherited && !isCardInScope(parseCardScope((data as { card_ids?: unknown }).card_ids), cardId)) return null;
+  if (!opts.skipScope) {
+    if (inherited) {
+      if (!cardId) return null;
+      const { data: card } = await admin.from("cards").select("is_office_card").eq("id", cardId).maybeSingle();
+      if (!(card as { is_office_card?: boolean } | null)?.is_office_card) return null;
+    } else if (!isCardInScope(parseCardScope((data as { card_ids?: unknown }).card_ids), cardId)) {
+      return null;
+    }
+  }
 
   const now = Date.now();
   const accessToken = decryptToken(data.access_token);
   const storedError = (data.sync_error as string | null) ?? null;
   const metadata = (data.metadata as Record<string, unknown> | null) ?? {};
 
-  // Static-token providers have no expires_at, so this whole branch is skipped
-  // and the stored token is used as-is.
-  if (refresh && data.expires_at && now > (data.expires_at as number) - 5 * 60 * 1000) {
+  // Static-token providers have no expires_at (and no refresh config), so this
+  // whole branch is skipped and the stored token is used as-is.
+  const dueForRefresh = !!data.expires_at && now > (data.expires_at as number) - 5 * 60 * 1000;
+  if (refresh && (dueForRefresh || opts.forceRefresh)) {
+    // A deployment without the app's client secret (a preview build shares the
+    // production database) cannot refresh — and must not mark a working
+    // production connection as broken for trying. Use the token as it is; if
+    // it really has expired, the provider's 401 says so on its own.
+    if (!refresh.clientId || !refresh.clientSecret) {
+      console.warn(`[crm:${provider}] no client credentials here — skipping token refresh`);
+      return { token: accessToken, syncError: storedError, metadata };
+    }
     if (!data.refresh_token) {
-      await setSyncError(provider, userId, `No refresh token on file — reconnect ${label}.`);
+      await setSyncError(provider, userId, `${label} needs you to reconnect — sign in again from Settings to keep contacts flowing.`);
       return null;
     }
 
-    const res = await fetch(refresh.tokenUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "refresh_token",
-        client_id: refresh.clientId ?? "",
-        client_secret: refresh.clientSecret ?? "",
-        refresh_token: decryptToken(data.refresh_token),
-      }),
-    });
+    let res: Response;
+    try {
+      res = await crmFetch(refresh.tokenUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          client_id: refresh.clientId,
+          client_secret: refresh.clientSecret,
+          refresh_token: decryptToken(data.refresh_token),
+        }),
+      });
+    } catch {
+      // The sign-in server didn't answer. Not the user's problem and not a
+      // dead connection — the caller sees no connection and the contact is
+      // retried later, without a banner telling anyone to reconnect.
+      throw new RefreshUnavailableError(label);
+    }
 
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
-      console.warn(`[crm:${provider}] token refresh failed:`, res.status, detail);
-      await setSyncError(provider, userId, `Token refresh failed (${res.status}) — reconnect ${label} to resume syncing.`);
+      console.warn(`[crm:${provider}] token refresh failed:`, res.status, detail.slice(0, 300));
+      if (isRetryableStatus(res.status)) throw new RefreshUnavailableError(label);
+      // 400 invalid_grant: the user revoked access, changed their password
+      // (Salesforce), or the grant aged out. Only signing in again fixes it.
+      await setSyncError(provider, userId, `${label} signed SwiftCard out — reconnect ${label} to keep contacts flowing.`);
       return null;
     }
 
@@ -300,7 +471,12 @@ export async function getCrmConnection(
     // as null — and a null expires_at skips this branch forever, so the token
     // silently ages until every sync 401s. Fall back to the same conservative
     // 90 minutes the Salesforce callback uses.
-    await admin
+    //
+    // Conditional on updated_at: five providers sync in parallel and several
+    // contacts can arrive together, so two refreshes can race. The loser's
+    // write is dropped rather than overwriting a refresh token the winner may
+    // have just rotated; its own access token is still valid for this call.
+    let write = admin
       .from("integrations")
       .update({
         access_token: encryptToken(tokens.access_token),
@@ -311,6 +487,8 @@ export async function getCrmConnection(
       })
       .eq("user_id", userId)
       .eq("provider", provider);
+    if (data.updated_at) write = write.eq("updated_at", data.updated_at as string);
+    await write;
 
     // The update above already cleared sync_error, so the caller has nothing
     // stale left to clear.
@@ -321,14 +499,52 @@ export async function getCrmConnection(
 }
 
 /**
+ * The provider's sign-in server didn't answer, or answered "try later". The
+ * connection is fine; the contact goes to the retry queue.
+ */
+export class RefreshUnavailableError extends Error {
+  constructor(label: string) {
+    super(`${label} sign-in server unavailable`);
+    this.name = "RefreshUnavailableError";
+  }
+}
+
+/**
  * Turn a provider's HTTP failure into copy the user can act on.
  *
- * 401/403 is the realistic case — a scope never granted, an API not enabled on
- * the project, a rotated token — and it needs different advice from a transient
- * 5xx, because retrying will never fix it.
+ * Three different situations, and each needs different advice:
+ *   • 401/403 — the connection itself: a token revoked or rotated, a scope
+ *     never granted, an API not enabled. Retrying will never fix it.
+ *   • 400/404/409/422 — this one contact: the CRM refused its details (an
+ *     email it considers invalid, a required field). The connection is fine
+ *     and the next contact will go through; telling them to reconnect would
+ *     send them round in circles.
+ *   • 429/5xx/no answer — the CRM was busy or down. It is queued and retried
+ *     (lib/crm-outbox), which is what "will try again" promises.
  */
-export function connectionErrorMessage(label: string, status: number): string {
-  return status === 401 || status === 403
-    ? `${label} refused the last contact (${status}) — reconnect ${label} and allow contact access.`
-    : `Couldn't save the last contact to ${label} (${status}). New leads will keep trying.`;
+export function connectionErrorMessage(label: string, status: number | null, detail?: string): string {
+  if (status === 401 || status === 403) {
+    return `${label} refused SwiftCard (${status}) — reconnect ${label} and allow access to contacts.`;
+  }
+  if (isRetryableStatus(status)) {
+    return status === null
+      ? `${label} didn't answer — SwiftCard will try again.`
+      : `${label} was busy (${status}) — SwiftCard will try again.`;
+  }
+  const why = detail?.trim() ? `: ${detail.trim().slice(0, 160)}` : "";
+  return `${label} didn't accept the last contact (${status})${why}. Your connection is fine — new contacts still go through.`;
 }
+
+/**
+ * One CRM, as lib/crm-run drives it. `push` talks to the CRM and nothing
+ * else — no database reads or writes — so the capture path, the edit path,
+ * the retry queue, the Settings test and the live test script all run the
+ * very same code against the very same API.
+ */
+export type CrmProvider = {
+  key: CrmProviderKey;
+  label: string;
+  /** OAuth providers only. Read at call time so env changes need no rebuild. */
+  refresh?: () => RefreshConfig;
+  push: (conn: CrmConnection, lead: CrmLead, opts: PushOptions) => Promise<PushResult>;
+};

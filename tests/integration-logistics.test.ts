@@ -52,8 +52,15 @@ describe("tag hygiene at the boundaries", () => {
 
   it("edit-sync strips server-owned tags before they reach a CRM", () => {
     // sc-locked / sms-paused / flow-* are internal state, not contact data.
-    const src = read("src/app/api/leads/[id]/route.ts");
-    expect(src).toContain("RESERVED_LEAD_TAG.test(t)");
+    // Every later sync (edit, returning visitor, retry) reads the lead back
+    // through loadCrmLead, whose tags go through isCrmVisibleTag — which drops
+    // the reserved tags AND the bookkeeping ones ("unread", the sample
+    // contact's "demo"). HighLevel applies the same filter on its side.
+    expect(read("src/app/api/leads/[id]/route.ts")).toContain("loadCrmLead(id)");
+    expect(read("src/lib/crm-lead.ts")).toContain("tags: crmTags(row.tags)");
+    expect(read("src/lib/crm-lead.ts")).toContain("filter(isCrmVisibleTag)");
+    expect(read("src/lib/lead-tags.ts")).toContain("!RESERVED_LEAD_TAG.test(tag) && !INTERNAL_LEAD_TAGS.has(tag)");
+    expect(read("src/lib/sync-highlevel.ts")).toContain("(lead.tags ?? []).filter(isCrmVisibleTag)");
   });
 });
 

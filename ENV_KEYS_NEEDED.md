@@ -33,22 +33,27 @@ Do NOT commit `.env.local` to git.
 
 ---
 
-## Needed for CRM Integrations (Google Contacts, HubSpot)
+## Needed for CRM Integrations (Google Contacts, Salesforce)
 
-> Zapier needs no env var — each user pastes their own webhook URL in Settings → Integrations, which also carries conversation-notification and view events to any CRM.
+> Zapier needs no env var — each user pastes their own webhook URL in Settings → Notifications and preferences, which also carries conversation-notification and view events to any CRM.
 >
-> HubSpot needs no env var either — HubSpot disabled self-serve public (OAuth,
-> multi-account) app creation, so this connects via a **Private App access
-> token** instead. Each user pastes their own token in Settings →
-> Integrations (HubSpot → Settings → Integrations → Private Apps → Create a
-> private app → grant `crm.objects.contacts.write` → copy the token). No
-> Client ID/Secret, no redirect URI, nothing to configure here.
+> HubSpot, Pipedrive and GoHighLevel need no env var either — each user pastes
+> their own token (HubSpot service key or private-app token with contact read
+> AND write; Pipedrive personal API token; GoHighLevel Private Integration token
+> with contacts.write + locations.readonly, plus the Location ID) in Settings →
+> Notifications and preferences. No Client ID/Secret, no redirect URI.
+>
+> Leaving Google or Salesforce unset is safe: their Connect button lands back on
+> Settings with "isn't switched on yet" instead of failing. A deployment
+> WITHOUT the secrets (e.g. a preview build — it shares the production
+> database) never refreshes tokens, so it can't mark live connections broken.
 
 | Variable | Where to get it |
 |---|---|
-| `OAUTH_SECRET` | **Required** for Google connect (and to encrypt stored HubSpot tokens). A 32-byte key as 64 hex chars. Generate with `openssl rand -hex 32`. |
-| `GOOGLE_CLIENT_ID` | console.cloud.google.com → APIs & Services → Credentials → Create OAuth client ID (Web application). Also enable the **People API**. |
-| `GOOGLE_CLIENT_SECRET` | Same Google OAuth client. |
+| `OAUTH_SECRET` | **Required** for every CRM: encrypts all stored CRM tokens and signs the OAuth state. A 32-byte key as 64 hex chars. Generate with `openssl rand -hex 32`. Changing it makes every stored token unreadable (everyone has to reconnect). |
+| `GOOGLE_CLIENT_ID` | console.cloud.google.com → APIs & Services → Credentials → Create OAuth client ID (Web application). Also enable the **People API**. Redirect URI: `https://swiftcard.me/api/integrations/google/callback`. |
+| `GOOGLE_CLIENT_SECRET` | Same OAuth client. |
+| `SALESFORCE_CLIENT_ID` / `SALESFORCE_CLIENT_SECRET` | Salesforce Setup → External Client App (or Connected App) with OAuth: scopes `api` + `refresh_token`, PKCE required, callback `https://swiftcard.me/api/integrations/salesforce/callback`. Production orgs only (login.salesforce.com). |
 
 Register this **redirect URI** in the Google OAuth app (must match `NEXT_PUBLIC_APP_URL` exactly):
 - Google → `https://swiftcard.me/api/integrations/google/callback` · scope `https://www.googleapis.com/auth/contacts`
@@ -192,7 +197,6 @@ the feature behind it degrades quietly when unset.
 |---|---|
 | `ALERT_WEBHOOK_URL` | Production error alerts (`lib/report-error.ts`). Unset = errors are logged but nothing is pushed anywhere. |
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | Shared rate-limit store (`lib/rate-limit.ts`). Unset = limits fall back to per-instance memory, so they reset on every cold start. |
-| `HUBSPOT_CLIENT_ID` / `HUBSPOT_CLIENT_SECRET` | HubSpot CRM integration OAuth. Unset = the Connect button can't complete. |
 | `STRIPE_RETENTION_COUPON_ID` | Coupon offered in the account-DELETION retention flow (`/api/account/retain`). |
 | `STRIPE_RETENTION_DISCOUNT_COUPON_ID` | Separate coupon offered in the subscription CANCEL flow (`/api/stripe/subscription/discount`). Note: two different coupons — easy to confuse. |
 | `APPLE_PUSH_KEY_ID` / `APPLE_PUSH_PRIVATE_KEY` / `APPLE_PUSH_TOPIC` / `APPLE_PUSH_SANDBOX` | Native iOS push. Unset = push is skipped; in-app bell notifications still work. |

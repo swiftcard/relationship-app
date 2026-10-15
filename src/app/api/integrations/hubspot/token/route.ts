@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
-import { isPaidPlan } from "@/lib/plan";
+import { isPaidProfile, PLAN_COLUMNS } from "@/lib/effective-plan";
 import { encryptToken } from "@/lib/token-crypto";
 import { sanitizeCardScope } from "@/lib/crm-scope";
 import { scopeIsOwned } from "@/lib/crm-scope-server";
+import { crmFetch } from "@/lib/crm-http";
 
 // HubSpot's self-serve OAuth ("public app") creation is currently disabled on
 // their end, so this integration connects via a Private App access token
@@ -20,8 +21,8 @@ export async function POST(request: NextRequest) {
   const admin = getAdminSupabase();
 
   // HubSpot is a Pro/Office feature, same as the other CRM integrations.
-  const { data: planRow } = await admin.from("profiles").select("plan").eq("id", user.id).single();
-  if (!isPaidPlan(planRow?.plan)) {
+  const { data: planRow } = await admin.from("profiles").select(PLAN_COLUMNS).eq("id", user.id).single();
+  if (!isPaidProfile(planRow)) {
     return NextResponse.json({ code: "INTEGRATION_PRO_ONLY", error: "upgrade", message: "HubSpot is a Pro feature.", upgrade: "/upgrade" }, { status: 402 });
   }
 
@@ -37,11 +38,18 @@ export async function POST(request: NextRequest) {
   // A service key granted ONLY the contact scopes must not be refused here
   // because the account-info endpoint wants a scope the setup text never
   // mentioned; that would reject a key that syncs perfectly well.
-  const probe = (url: string) =>
-    fetch(url, { headers: { Authorization: `Bearer ${trimmed}` } }).then((r) => r.ok).catch(() => false);
+  // The account-details answer also carries the portal id, kept so "Send test
+  // contact" can link straight to the record it made. Bounded (lib/crm-http):
+  // a HubSpot that never answers must not hang the Save button.
+  let portalId: number | null = null;
+  const details = await crmFetch("https://api.hubapi.com/account-info/v3/details", { headers: { Authorization: `Bearer ${trimmed}` } })
+    .catch(() => null);
+  if (details?.ok) portalId = ((await details.json().catch(() => ({}))) as { portalId?: number }).portalId ?? null;
   const accepted =
-    (await probe("https://api.hubapi.com/account-info/v3/details")) ||
-    (await probe("https://api.hubapi.com/crm/v3/objects/contacts?limit=1"));
+    !!details?.ok ||
+    (await crmFetch("https://api.hubapi.com/crm/v3/objects/contacts?limit=1", { headers: { Authorization: `Bearer ${trimmed}` } })
+      .then((r) => r.ok)
+      .catch(() => false));
   if (!accepted) {
     return NextResponse.json(
       { error: "invalid_token", message: "That token wasn't accepted by HubSpot — check it and try again." },
@@ -72,6 +80,7 @@ export async function POST(request: NextRequest) {
     access_token: encryptToken(trimmed),
     refresh_token: null,
     expires_at: null,
+    metadata: portalId ? { portal_id: portalId } : {},
     updated_at: new Date().toISOString(),
     ...scopeUpdate,
     sync_error: null, // upsert only touches listed columns — must clear explicitly on reconnect

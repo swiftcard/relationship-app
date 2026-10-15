@@ -6,7 +6,9 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
     // Browser-based render tests live in their own config (vitest.render.config.ts)
     // so this suite stays fast and needs no Chromium. Run them with `npm run test:render`.
-    exclude: ["tests/render/**"],
+    // tests/live talks to real third-party CRM accounts (vitest.live.config.ts)
+    // and must never run as part of the normal suite or CI.
+    exclude: ["tests/render/**", "tests/live/**"],
     environment: "node",
     // 30s, not vitest's 5s default. A handful of tripwires do real work — the
     // server-only boundary walks the whole import graph, wallet-strip renders

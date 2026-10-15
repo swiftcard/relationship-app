@@ -25,3 +25,20 @@ export function mergeClientTags(
   const keptReserved = (existing ?? []).filter((t) => RESERVED_LEAD_TAG.test(t));
   return Array.from(new Set([...keptReserved, ...incomingClean]));
 }
+
+/**
+ * SwiftCard's own bookkeeping tags — never meaningful outside the app. "unread"
+ * is the inbox dot, "demo" marks the sample contact every account starts with.
+ */
+const INTERNAL_LEAD_TAGS = new Set(["unread", "demo"]);
+
+/**
+ * May this tag leave SwiftCard for a CRM or Zapier? Only the owner's own
+ * labels (plus "scanned", the one capture-time tag that means something to
+ * them). In HighLevel a tag is a workflow trigger, so a bookkeeping marker
+ * there could start a customer's automation — and since CRM tagging only ever
+ * ADDS, an "unread" sent once would never come off when the owner reads it.
+ */
+export function isCrmVisibleTag(tag: unknown): tag is string {
+  return typeof tag === "string" && !!tag.trim() && !RESERVED_LEAD_TAG.test(tag) && !INTERNAL_LEAD_TAGS.has(tag);
+}

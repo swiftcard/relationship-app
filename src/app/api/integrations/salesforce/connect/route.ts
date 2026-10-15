@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveConnectUserId } from "@/lib/connect-user";
-import { isPaidPlan } from "@/lib/plan";
+import { isPaidProfile, PLAN_COLUMNS } from "@/lib/effective-plan";
 import { signState } from "@/lib/oauth-state";
 import { parseCardsParam, scopeIsOwned } from "@/lib/crm-scope-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
@@ -20,15 +20,15 @@ export async function GET(request: Request) {
   const user = { id: userId };
 
   // Integrations are a Pro/Office feature.
-  const { data: profile } = await getAdminSupabase().from("profiles").select("plan").eq("id", user.id).single();
+  const { data: profile } = await getAdminSupabase().from("profiles").select(PLAN_COLUMNS).eq("id", user.id).single();
   // The shell opens this in an SFSafariViewController where the native
   // guards can't run — never send it to the pricing page (3.1.1).
   const fromShell = new URL(request.url).searchParams.get("native") === "1";
-  if (!isPaidPlan(profile?.plan)) return NextResponse.redirect(`${APP_URL}${fromShell ? "/dashboard" : "/pricing"}`);
+  if (!isPaidProfile(profile)) return NextResponse.redirect(`${APP_URL}${fromShell ? "/dashboard" : "/pricing"}`);
 
   // Not configured yet (Connected App credentials pending) — land back on
   // Settings with a clear status instead of a broken Salesforce URL.
-  if (!process.env.SALESFORCE_CLIENT_ID) {
+  if (!process.env.SALESFORCE_CLIENT_ID || !process.env.SALESFORCE_CLIENT_SECRET) {
     return NextResponse.redirect(`${APP_URL}/settings/flows?integration=salesforce&status=unconfigured`);
   }
 

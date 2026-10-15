@@ -116,17 +116,28 @@ describe("every egress path applies the rule", () => {
     expect(src).toMatch(/cardId:\s*string \| null \| undefined,/);
   });
 
+  // Every provider is driven by ONE runner (lib/crm-run), and that runner is
+  // what fetches the token — so the card id is passed in exactly one place,
+  // and a provider file can't get a token any other way.
+  it("the shared runner passes the capturing card into the gate", () => {
+    const src = stripComments(read("src/lib/crm-run.ts"));
+    expect(src, "runCrmSync calls getCrmConnection without the card id").toMatch(
+      /getCrmConnection\([^)]*lead\.capturedByCardId/s,
+    );
+  });
+
   it.each([
     ["src/lib/sync-google.ts", "google"],
     ["src/lib/sync-hubspot.ts", "hubspot"],
     ["src/lib/sync-pipedrive.ts", "pipedrive"],
     ["src/lib/sync-highlevel.ts", "highlevel"],
     ["src/lib/sync-salesforce.ts", "salesforce"],
-  ])("%s passes the capturing card into the gate", (file) => {
+  ])("%s gets its token only through the gated runner", (file, key) => {
     const src = stripComments(read(file));
-    expect(src, `${file} calls getCrmConnection without the card id`).toMatch(
-      /getCrmConnection\([^)]*lead\.capturedByCardId/s,
-    );
+    expect(src, `${file} reads a token around the runner`).not.toMatch(/getCrmConnection\(|from\("integrations"\)/);
+    expect(src, `${file} no longer syncs through runCrmSync`).toMatch(/return runCrmSync\(/);
+    const registry = stripComments(read("src/lib/crm-sync.ts"));
+    expect(registry, `${key} is missing from CRM_PROVIDERS`).toMatch(new RegExp(`\\b${key}: \\w+Provider`));
   });
 
   it("the lead route feeds the real card id in, and gates its Zapier webhook", () => {
@@ -158,7 +169,9 @@ describe("every egress path applies the rule", () => {
     // "only my work card". Own connections are still scoped exactly as before.
     const src = stripComments(read("src/lib/crm-connection.ts"));
     expect(src).toMatch(/const inherited = capturedBy !== userId;/);
-    expect(src).toMatch(/if \(!inherited && !isCardInScope\(/);
+    // Own connection: the owner's card scope. Inherited: the member's COMPANY
+    // card instead — never the owner's own-card list.
+    expect(src).toMatch(/if \(inherited\) \{[\s\S]*?is_office_card[\s\S]*?\} else if \(!isCardInScope\(/);
   });
 });
 
@@ -186,7 +199,8 @@ describe("the save API can't be used to create a silent trap", () => {
   });
 
   it("is Pro-gated like the integrations themselves", () => {
-    expect(src).toMatch(/isPaidPlan/);
+    // Expiry-aware, like every send: an expired timed grant is Free now.
+    expect(src).toMatch(/isPaidProfile\(planRow\)/);
   });
 });
 

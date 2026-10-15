@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { resolveConnectUserId } from "@/lib/connect-user";
-import { isPaidPlan } from "@/lib/plan";
+import { isPaidProfile, PLAN_COLUMNS } from "@/lib/effective-plan";
 import { signState, oauthBindCookieName, oauthBindCookieValue, OAUTH_BIND_COOKIE_OPTIONS } from "@/lib/oauth-state";
 import { parseCardsParam, scopeIsOwned } from "@/lib/crm-scope-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
@@ -16,11 +16,17 @@ export async function GET(request: Request) {
   const user = { id: userId };
 
   // Integrations are a Pro/Office feature.
-  const { data: profile } = await getAdminSupabase().from("profiles").select("plan").eq("id", user.id).single();
+  const { data: profile } = await getAdminSupabase().from("profiles").select(PLAN_COLUMNS).eq("id", user.id).single();
   // The shell opens this in an SFSafariViewController where the native
   // guards can't run — never send it to the pricing page (3.1.1).
   const fromShell = new URL(request.url).searchParams.get("native") === "1";
-  if (!isPaidPlan(profile?.plan)) return NextResponse.redirect(`${APP_URL}${fromShell ? "/dashboard" : "/pricing"}`);
+  if (!isPaidProfile(profile)) return NextResponse.redirect(`${APP_URL}${fromShell ? "/dashboard" : "/pricing"}`);
+
+  // Not configured on this deployment — land back on Settings with a clear
+  // status instead of sending the user to Google with client_id=undefined.
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+    return NextResponse.redirect(`${APP_URL}/settings/flows?integration=google&status=unconfigured`);
+  }
 
   // Pre-connect card scope. The settings UI makes the user choose all-cards
   // vs only-these BEFORE the OAuth redirect; the choice rides this cookie to
@@ -35,7 +41,7 @@ export async function GET(request: Request) {
 
   const state = signState(user.id);
   const params = new URLSearchParams({
-    client_id: process.env.GOOGLE_CLIENT_ID!,
+    client_id: process.env.GOOGLE_CLIENT_ID,
     redirect_uri: `${APP_URL}/api/integrations/google/callback`,
     response_type: "code",
     scope: SCOPES,

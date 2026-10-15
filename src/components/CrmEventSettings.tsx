@@ -40,9 +40,12 @@ export default function CrmEventSettings({ initialNotifications, initialViews, z
   const locked = !isPro;
   const needsZapier = isPro && !zapierConnected;
 
-  async function save(next: { notifications: boolean; views: boolean }) {
+  // Optimistic, and put back if the save didn't land — a switch that shows
+  // ON while the server still has it OFF is a switch that lies.
+  async function save(next: { notifications: boolean; views: boolean }, prev: { notifications: boolean; views: boolean }) {
     setSaving(true);
     setError(null);
+    let failed: string | null = null;
     try {
       const res = await fetch("/api/settings/crm", {
         method: "PATCH",
@@ -51,26 +54,32 @@ export default function CrmEventSettings({ initialNotifications, initialViews, z
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        setError(d.message || "Couldn't save. Try again.");
+        failed = d.message || "Couldn't save. Try again.";
       }
     } catch {
-      setError("Couldn't save. Try again.");
-    } finally {
-      setSaving(false);
+      failed = "Couldn't save. Try again.";
     }
+    if (failed) {
+      setError(failed);
+      setNotifications(prev.notifications);
+      setViews(prev.views);
+    }
+    setSaving(false);
   }
 
+  // On a lapsed account a switch can still be turned OFF — stopping data
+  // leaving is never a paid feature — but not back on.
   function toggleNotifications() {
-    if (locked) return;
+    if (locked && !notifications) return;
     const v = !notifications;
     setNotifications(v);
-    save({ notifications: v, views });
+    save({ notifications: v, views }, { notifications, views });
   }
   function toggleViews() {
-    if (locked) return;
+    if (locked && !views) return;
     const v = !views;
     setViews(v);
-    save({ notifications, views: v });
+    save({ notifications, views: v }, { notifications, views });
   }
 
   return (
@@ -106,7 +115,7 @@ export default function CrmEventSettings({ initialNotifications, initialViews, z
             <p className="text-gray-200 text-sm">Conversation notifications</p>
             <p className="text-gray-600 text-[0.6875rem] mt-0.5">When someone saves your contact or activity happens on a contact.</p>
           </div>
-          <Toggle on={notifications} onClick={toggleNotifications} disabled={locked || saving} />
+          <Toggle on={notifications} onClick={toggleNotifications} disabled={(locked && !notifications) || saving} />
         </div>
 
         <div className="flex items-center justify-between gap-3 bg-gray-800/40 border border-gray-800 rounded-xl px-4 py-3">
@@ -114,7 +123,7 @@ export default function CrmEventSettings({ initialNotifications, initialViews, z
             <p className="text-gray-200 text-sm">SwiftCard &amp; SwiftLink views</p>
             <p className="text-gray-600 text-[0.6875rem] mt-0.5">Every card and Swift Links view, with location. High-traffic cards use more Zapier tasks.</p>
           </div>
-          <Toggle on={views} onClick={toggleViews} disabled={locked || saving} />
+          <Toggle on={views} onClick={toggleViews} disabled={(locked && !views) || saving} />
         </div>
       </div>
 

@@ -6,9 +6,8 @@ import { isLockedLead } from "@/lib/lead-access";
 import { isPaidUser } from "@/lib/notification-privacy";
 import { after } from "next/server";
 import { isPaidPlan } from "@/lib/plan";
-import { getSourceLabel } from "@/lib/source-labels";
-import { RESERVED_LEAD_TAG } from "@/lib/lead-tags";
 import { syncLeadToAllCrms } from "@/lib/crm-sync";
+import { CRM_LEAD_COLUMNS, crmChanges, loadCrmLead } from "@/lib/crm-lead";
 
 // Edits fan out to every connected CRM in after() — same room as capture.
 export const maxDuration = 60;
@@ -145,6 +144,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     body.tags = reconciled;
   }
 
+  // The contact as the CRM last saw it — read BEFORE the write, so the sync
+  // below can tell what this edit actually changed (and the email it had).
+  const CRM_VISIBLE = ["name", "email", "phone", "company", "notes", "tags", "message", "where_met"];
+  const crmRelevant = CRM_VISIBLE.some((k) => k in body);
+  const { data: before } = crmRelevant
+    ? await admin.from("leads").select(CRM_LEAD_COLUMNS).eq("id", id).in("card_owner", usernames).maybeSingle()
+    : { data: null };
+
   const { error } = await admin
     .from("leads")
     .update(body)
@@ -155,54 +162,29 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   // ── CRM stays current with EDITS, not just captures (owner order
   // 2026-08-27, the Blinq-parity work). Editing a contact's details, notes or
-  // tags re-runs the same sync the capture ran, in UPDATE mode: every provider
-  // finds the existing record by email and updates it in place (Google and
-  // Pipedrive included — both now look before they create). Only fields a CRM
-  // record shows trigger it — status/follow-up churn stays internal. Same paid
-  // gate and after() semantics as the capture path.
-  const CRM_VISIBLE = ["name", "email", "phone", "company", "notes", "tags", "message", "where_met"];
-  if (CRM_VISIBLE.some((k) => k in body)) {
+  // tags re-runs the same sync the capture ran, in UPDATE mode, against the
+  // record that capture created (crm_links) — so it is updated in place even
+  // when the edit changed the very email it was first matched on.
+  //
+  // Only a REAL change syncs. The dashboard PATCHes tags just to clear
+  // "unread" when a contact is opened, and sends whole objects back on save;
+  // comparing before and after (crmChanges) keeps those from writing to every
+  // CRM, and from creating records for contacts that were never sent.
+  // Only the changed contact fields may overwrite what the CRM holds; a fresh
+  // timeline note only when the edit changed what a note carries.
+  if (crmRelevant && before) {
     try {
-      const { data: fresh } = await admin
-        .from("leads")
-        .select("name, email, phone, company, notes, tags, message, location, source, card_owner, where_met")
-        .eq("id", id)
-        .in("card_owner", usernames)
-        .maybeSingle();
-      const { data: ownerProfile } = await admin.from("profiles").select("id, plan").eq("id", user.id).maybeSingle();
-      if (fresh?.name && ownerProfile?.id && isPaidPlan(ownerProfile.plan)) {
-        const { data: cardRow } = await admin.from("cards").select("id, name").eq("username", fresh.card_owner as string).maybeSingle();
-        const leadData = {
-          name: fresh.name as string,
-          email: (fresh.email as string) || null,
-          phone: (fresh.phone as string) || null,
-          company: (fresh.company as string) || null,
-          location: (fresh.location as string) || null,
-          whereMet: (fresh.where_met as string) || null,
-          message: (fresh.message as string) || null,
-          notes: (fresh.notes as string) || null,
-          source: fresh.source ? getSourceLabel(fresh.source as string) : null,
-          capturedByCard: fresh.card_owner as string,
-          capturedByName: (cardRow?.name as string | null) ?? null,
-          capturedByCardId: (cardRow?.id as string | undefined) ?? null,
-          // Stored tags mix the owner's labels with INTERNAL markers
-          // (sc-locked, sms-paused, flow-* …). Only the owner's own tags may
-          // leave the building — a system marker in HighLevel's tags field
-          // could fire a customer workflow, and in any CRM it reads as junk.
-          tags: Array.isArray(fresh.tags)
-            ? (fresh.tags as string[]).filter((t) => !RESERVED_LEAD_TAG.test(t))
-            : null,
-        };
-        // Email is the dedup key everywhere, so no email → no edit-sync at
-        // all: with nothing to match on, an "update" could only create a
-        // second record. A fresh timeline note only when the edit changed
-        // what a note carries — renaming or tagging a contact five times must
-        // not stack five identical notes on their CRM record.
-        if (leadData.email) {
+      const loaded = await loadCrmLead(id);
+      if (loaded) {
+        const change = crmChanges(before, loaded.row);
+        if (change.fields.length || change.note || change.tags) {
           after(
-            syncLeadToAllCrms(leadData, ownerProfile.id, {
+            syncLeadToAllCrms(loaded.lead, loaded.capturedBy, {
               mode: "update",
-              attachNote: "notes" in body || "message" in body || "where_met" in body,
+              attachNote: change.note,
+              changedFields: change.fields,
+              previousEmail: (before.email as string | null) ?? null,
+              previousPhone: (before.phone as string | null) ?? null,
             }),
           );
         }

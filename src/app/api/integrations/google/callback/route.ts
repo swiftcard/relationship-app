@@ -53,9 +53,14 @@ export async function GET(request: NextRequest) {
   const state = searchParams.get("state");
   const error = searchParams.get("error");
 
+  // Pressing Cancel (or Back) on Google's screen comes back as
+  // error=access_denied. That is a choice, not a failure — Settings says
+  // "cancelled" instead of "connection failed".
+  if (error === "access_denied") return DONE("cancelled");
   if (error || !code || !state) {
     return DONE("error");
   }
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) return DONE("unconfigured");
 
   // State must carry a valid signature — an unsigned/forged state (arbitrary
   // user_id) is rejected, so tokens can't be written onto another user's row.
@@ -83,8 +88,8 @@ export async function GET(request: NextRequest) {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       code,
-      client_id: process.env.GOOGLE_CLIENT_ID!,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
       redirect_uri: `${APP_URL}/api/integrations/google/callback`,
       grant_type: "authorization_code",
     }),

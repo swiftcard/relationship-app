@@ -47,6 +47,7 @@ import { canSendMarketing } from "@/lib/marketing-consent";
 import { preferenceCenterUrl } from "@/lib/email-token";
 import { reportError } from "@/lib/report-error";
 import { cardIsOffline } from "@/lib/card-active";
+import { drainCrmOutbox } from "@/lib/crm-outbox-drain";
 
 
 // Automations send AS the card the contact came through: each card has its own
@@ -267,6 +268,16 @@ export async function GET(req: NextRequest) {
     await turnOffUsedUpAppleOffers();
   } catch (e) {
     await reportError("reminders.apple-offer-codes", e);
+  }
+
+  // Contacts a CRM or Zapier couldn't take when they arrived (busy, down, no
+  // answer) — sent again from the lead as it is now (lib/crm-outbox-drain).
+  // Bounded to two minutes so the sends below always get their turn.
+  let crmCatchUp: Awaited<ReturnType<typeof drainCrmOutbox>> | null = null;
+  try {
+    crmCatchUp = await drainCrmOutbox({ deadlineMs: 120_000 });
+  } catch (e) {
+    await reportError("reminders.crm-outbox", e);
   }
 
   // Expire finished trial / free-month grants → back to Free, unless the user
@@ -785,5 +796,5 @@ export async function GET(req: NextRequest) {
   }
   // === END PRESET-BASED SEQUENCE PROCESSING ===
 
-  return NextResponse.json({ sent: totalSent, checkedHour: currentUTCHour, downgraded, purged, seatReductionsApplied, subscriptionsStopped, appleOfferCodesMade });
+  return NextResponse.json({ sent: totalSent, checkedHour: currentUTCHour, downgraded, purged, seatReductionsApplied, subscriptionsStopped, appleOfferCodesMade, crmCatchUp });
 }

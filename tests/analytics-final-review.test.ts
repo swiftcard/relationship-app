@@ -68,7 +68,8 @@ describe("Free never receives a place — the remaining paths", () => {
     const s = read("src/lib/crm-sync.ts");
     const body = s.slice(s.indexOf("export async function syncLeadToAllCrms"));
     expect(body.indexOf("isPaidProfile(data)")).toBeGreaterThan(-1);
-    expect(body.indexOf("isPaidProfile(data)")).toBeLessThan(body.indexOf("syncLeadToGoogle"));
+    // Before the fan-out to every provider (runCrmSync), not after.
+    expect(body.indexOf("isPaidProfile(data)")).toBeLessThan(body.indexOf("runCrmSync("));
   });
 });
 

@@ -21,6 +21,8 @@ const leadsRoute = read("src/app/api/leads/route.ts");
 const crmSync = read("src/lib/crm-sync.ts");
 const capturesToAll = () => expect(leadsRoute, "lead capture no longer runs the CRM fan-out").toContain("syncLeadToAllCrms(");
 const settingsUi = read("src/components/IntegrationsSettings.tsx");
+// syncLeadToAllCrms runs every provider registered in CRM_PROVIDERS, so a
+// provider is "synced" when it is registered there.
 
 /**
  * What has to be TRUE in the product for each name we put on the website.
@@ -30,31 +32,31 @@ const PROOF: Record<string, () => void> = {
   GoHighLevel: () => {
     expect(read("src/lib/sync-highlevel.ts")).toBeTruthy();
     capturesToAll();
-    expect(crmSync, "GoHighLevel is advertised but never synced on lead capture").toContain("syncLeadToHighLevel(");
+    expect(crmSync, "GoHighLevel is advertised but never synced on lead capture").toContain("highlevel: highlevelProvider");
     expect(settingsUi, "GoHighLevel has no card in Settings → Integrations").toContain('title="GoHighLevel"');
   },
   Pipedrive: () => {
     expect(read("src/lib/sync-pipedrive.ts")).toBeTruthy();
     capturesToAll();
-    expect(crmSync, "Pipedrive is advertised but never synced on lead capture").toContain("syncLeadToPipedrive(");
+    expect(crmSync, "Pipedrive is advertised but never synced on lead capture").toContain("pipedrive: pipedriveProvider");
     expect(settingsUi, "Pipedrive has no card in Settings → Integrations").toContain('title="Pipedrive"');
   },
   Salesforce: () => {
     expect(read("src/lib/sync-salesforce.ts")).toBeTruthy();
     capturesToAll();
-    expect(crmSync, "Salesforce is advertised but never synced on lead capture").toContain("syncLeadToSalesforce(");
+    expect(crmSync, "Salesforce is advertised but never synced on lead capture").toContain("salesforce: salesforceProvider");
     expect(settingsUi, "Salesforce has no card in Settings → Integrations").toContain('name="Salesforce"');
   },
   HubSpot: () => {
     expect(read("src/lib/sync-hubspot.ts")).toBeTruthy();
     capturesToAll();
-    expect(crmSync, "HubSpot is advertised but never synced on lead capture").toContain("syncLeadToHubSpot(");
+    expect(crmSync, "HubSpot is advertised but never synced on lead capture").toContain("hubspot: hubspotProvider");
     expect(settingsUi, "HubSpot has no card in Settings → Integrations").toContain('title="HubSpot"');
   },
   "Google Contacts": () => {
     expect(read("src/lib/sync-google.ts")).toBeTruthy();
     capturesToAll();
-    expect(crmSync, "Google Contacts is advertised but never synced on lead capture").toContain("syncLeadToGoogle(");
+    expect(crmSync, "Google Contacts is advertised but never synced on lead capture").toContain("google: googleProvider");
     expect(settingsUi, "Google Contacts has no card in Settings → Integrations").toContain('name="Google Contacts"');
   },
   Zapier: () => {

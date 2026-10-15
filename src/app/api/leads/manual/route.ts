@@ -96,6 +96,7 @@ export async function POST(req: NextRequest) {
       capturedByCard: finalOwner as string,
       capturedByName: (card?.name as string | null) ?? null,
       capturedByCardId: (card?.id as string | undefined) ?? null,
+      leadId: (data?.id as string | undefined) ?? null,
     };
     after(
       Promise.allSettled([

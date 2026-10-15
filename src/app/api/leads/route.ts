@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { syncLeadToAllCrms, sendLeadToZapier } from "@/lib/crm-sync";
+import { loadCrmLead } from "@/lib/crm-lead";
 import { getSourceLabel, sourcePhrase } from "@/lib/source-labels";
 import { PLAN_LIMITS, LOCKED_LEAD_TAG, isPaidPlan } from "@/lib/plan";
 import { readUsage, bumpUsage } from "@/lib/usage";
@@ -213,7 +214,19 @@ export async function POST(req: NextRequest) {
     const known = knownRows?.[0];
     if (known) {
       const fill = sameContactFill(known, { email, company, message });
-      if (fill) await admin.from("leads").update(fill).eq("id", known.id);
+      if (fill) {
+        await admin.from("leads").update(fill).eq("id", known.id);
+        // What they just added belongs in the CRM too — it only ever reached
+        // SwiftCard's own row. Update mode against the record their first
+        // share created, filling blanks only (changedFields is left unset, so
+        // nothing a salesperson typed in the CRM is overwritten). Same paid
+        // gate as a new capture, inside syncLeadToAllCrms.
+        const knownId = known.id as string;
+        after(async () => {
+          const loaded = await loadCrmLead(knownId).catch(() => null);
+          if (loaded) await syncLeadToAllCrms(loaded.lead, loaded.capturedBy, { mode: "update", attachNote: "message" in fill });
+        });
+      }
       // This browser is theirs too, exactly as a first send binds it below, so
       // a re-share from a new phone is still recognised on later visits.
       if (!(await isOwnerRequest(admin, card_owner).catch(() => false))) {
@@ -333,6 +346,10 @@ export async function POST(req: NextRequest) {
         source: source ? getSourceLabel(source) : null,
         capturedByCard: card_owner,
         capturedByName: cardIdentity.name || null,
+        // "At an event?" — the row above stores it as where_met; the CRM note and
+        // the Zapier payload were the only places it never reached.
+        whereMet: eventTag?.label ?? null,
+        leadId: (insertedLead?.id as string | undefined) ?? null,
         // safeTags, NOT the raw client array: at capture time tags are
         // visitor-controlled, and they flow into HighLevel's first-class tags
         // field where a tag can fire the owner's workflows. Owner-chosen tags

@@ -15,7 +15,7 @@ import type { ReactNode } from "react";
 // our users actually run on. Keep the two of them first.
 //
 // Every entry here must correspond to something a user can really connect in
-// Settings → Integrations (see IntegrationsSettings.tsx). Do not add a logo we
+// Settings → Notifications and preferences (see IntegrationsSettings.tsx). Do not add a logo we
 // merely intend to support — tests/integrations-marketing-truth.test.ts fails
 // the build if this list and the product drift apart.
 
@@ -67,7 +67,7 @@ export const INTEGRATIONS: IntegrationBrand[] = [
     name: "HubSpot",
     short: "CRM record",
     blurb:
-      "Every contact lands in HubSpot, tagged with which card they scanned and the context of where you met — someone you meet again updates their existing record instead of becoming a duplicate.",
+      "Every contact lands in HubSpot, with a note on which card they scanned and where you met — someone you meet again updates their existing record instead of becoming a duplicate.",
     logo: (
       <svg viewBox="0 0 24 24" className="w-full h-full" fill="#FF7A59" aria-hidden="true">
         <path d="M18.5 7.3V4.9a1.85 1.85 0 10-1.1 0v2.4a5.6 5.6 0 00-2.66 1.17L8.2 4.02a2.1 2.1 0 10-1 1.72l6.42 4.42a5.6 5.6 0 00.02 6.06l-1.95 1.95a1.8 1.8 0 101.06 1.06l1.93-1.93A5.62 5.62 0 1018.5 7.3zm-2.16 8.42a2.9 2.9 0 112.9-2.9 2.9 2.9 0 01-2.9 2.9z" />

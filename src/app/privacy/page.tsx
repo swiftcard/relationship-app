@@ -187,7 +187,7 @@ export default function PrivacyPage() {
         </ul>
         <P>
           If you connect an integration yourself — Salesforce, GoHighLevel, Pipedrive, HubSpot, Google Contacts or Zapier — we send new contacts to that
-          service because you asked us to. Disconnect anytime in Settings → Integrations. SwiftCard&apos;s use of
+          service because you asked us to. Disconnect anytime in Settings → Notifications and preferences. SwiftCard&apos;s use of
           information received from Google APIs adheres to the Google API Services User Data Policy, including the
           Limited Use requirements.
         </P>

@@ -10,6 +10,7 @@ import { normalizeSocial } from "@/lib/social-url";
 import { getOfficeSubUserContext } from "@/lib/office-roles";
 import { cardContentChanged, signatureContentChanged } from "@/lib/card-changed";
 import { clampCardWrite } from "@/lib/card-limits";
+import { dropCardFromScopes } from "@/lib/crm-scope-server";
 
 const ALLOWED = ["name", "title", "company", "phone", "email", "website", "linkedin", "instagram", "twitter", "tiktok", "template", "customization", "logo_url", "label"];
 const SOCIAL_COLUMNS = ["linkedin", "instagram", "twitter", "tiktok"] as const;
@@ -508,6 +509,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     .eq("user_id", user.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // Out of every CRM / Zapier "only these cards" choice (lib/crm-scope-server).
+  await dropCardFromScopes(admin, user.id, id);
   // Again AFTER the row is gone: a visit during the cleanup above re-cached
   // the live card, and that entry is served stale to the first visitor after
   // someone else claims the address (isolation audit 2026-09-24).

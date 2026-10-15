@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
-import { isPaidPlan } from "@/lib/plan";
+import { isPaidProfile, PLAN_COLUMNS } from "@/lib/effective-plan";
 import { encryptToken } from "@/lib/token-crypto";
 import { sanitizeCardScope } from "@/lib/crm-scope";
 import { scopeIsOwned } from "@/lib/crm-scope-server";
@@ -23,8 +23,8 @@ export async function POST(request: NextRequest) {
   const admin = getAdminSupabase();
 
   // Pro/Office feature, same as the other CRM integrations.
-  const { data: planRow } = await admin.from("profiles").select("plan").eq("id", user.id).single();
-  if (!isPaidPlan(planRow?.plan)) {
+  const { data: planRow } = await admin.from("profiles").select(PLAN_COLUMNS).eq("id", user.id).single();
+  if (!isPaidProfile(planRow)) {
     return NextResponse.json({ code: "INTEGRATION_PRO_ONLY", error: "upgrade", message: "HighLevel is a Pro feature.", upgrade: "/upgrade" }, { status: 402 });
   }
 
@@ -91,11 +91,14 @@ export async function DELETE() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  await getAdminSupabase()
+  // Checked: the Settings card only shows "disconnected" when this really
+  // removed the connection, never on a failure it couldn't see.
+  const { error } = await getAdminSupabase()
     .from("integrations")
     .delete()
     .eq("user_id", user.id)
     .eq("provider", "highlevel");
+  if (error) return NextResponse.json({ error: "disconnect_failed", message: "Couldn't disconnect — try again." }, { status: 500 });
 
   return NextResponse.json({ ok: true });
 }

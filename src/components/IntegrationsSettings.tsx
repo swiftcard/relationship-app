@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import CardScopePicker, { ScopeChooser, scopeChoiceReady, scopeChoiceValue, type ScopeChoice, type ScopeCard, type Scope } from "@/components/CardScopePicker";
 import { PlanGate } from "@/components/PlanGate";
 import { IapProPill, IapProLock, Lock, Spark } from "@/components/NativePaywall";
 import { detectNativeApp } from "@/lib/platform";
+import { relativeTime } from "@/lib/relative-time";
 
 /**
  * Start an integration's OAuth, correctly for wherever we are.
@@ -56,6 +57,109 @@ const INTEGRATIONS_NATIVE_COPY =
 
 type Integration = "google" | "hubspot" | "pipedrive" | "highlevel" | "salesforce";
 
+/** Delivery facts for one connection, read on the server. */
+export type ConnectionHealth = {
+  /** When the last contact actually reached it. */
+  lastSyncedAt: string | null;
+  /** Contacts it couldn't take yet, waiting for the daily retry. */
+  waiting: number;
+};
+
+/**
+ * The badge for a connection with a problem. "Reconnect needed" only when
+ * reconnecting is the fix — a CRM that refused one contact's details, or a
+ * card choice left empty by a deleted card, needs something else, and telling
+ * someone to reconnect a working connection sends them round in circles.
+ */
+function problemBadge(message: string): string {
+  return /reconnect|sign in again|signed swiftcard out/i.test(message) ? "Reconnect needed" : "Needs attention";
+}
+
+/** True when signing in again is the fix — the only time a Reconnect button helps. */
+const needsSignIn = (message: string | null | undefined) => !!message && problemBadge(message) === "Reconnect needed";
+
+/** Connected / Paused (plan ended) / the problem, in one place for both card kinds. */
+function StatusBadge({ connected, unlocked, syncError }: { connected: boolean; unlocked: boolean; syncError?: string | null }) {
+  if (!connected) return null;
+  if (!unlocked) return <span className="text-xs bg-slate-200 text-slate-600 font-medium px-2 py-0.5 rounded-full">Paused</span>;
+  if (syncError) return <span className="text-xs bg-amber-100 text-amber-700 font-medium px-2 py-0.5 rounded-full">{problemBadge(syncError)}</span>;
+  return <span className="text-xs bg-green-100 text-green-700 font-medium px-2 py-0.5 rounded-full">Connected</span>;
+}
+
+/**
+ * Under every connected CRM: whether contacts are actually arriving, and a
+ * button to prove it. "Connected" only ever meant a token was saved; this is
+ * the part that says something reached the other side.
+ */
+function ConnectionHealthRow({ provider, label, health }: { provider: Integration; label: string; health?: ConnectionHealth }) {
+  const [test, setTest] = useState<{ state: "idle" | "sending" | "done"; ok?: boolean; message?: string; url?: string | null }>({ state: "idle" });
+
+  async function sendTest() {
+    setTest({ state: "sending" });
+    try {
+      const res = await fetch("/api/integrations/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { ok?: boolean; message?: string; recordUrl?: string | null };
+      setTest({ state: "done", ok: !!d.ok, message: d.message || (d.ok ? `Sent to ${label}.` : `Couldn't send to ${label}. Try again.`), url: d.recordUrl ?? null });
+    } catch {
+      setTest({ state: "done", ok: false, message: "Couldn't reach SwiftCard. Check your connection and try again." });
+    }
+  }
+
+  const waiting = health?.waiting ?? 0;
+  return (
+    <div className="mt-2 space-y-1">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <p className="text-[0.6875rem] text-slate-500">
+          {waiting > 0 ? (
+            <>{waiting} contact{waiting === 1 ? "" : "s"} waiting to send — SwiftCard tries again every day</>
+          ) : health?.lastSyncedAt ? (
+            // Relative to "now", which differs between the server render and
+            // the browser by however long the page took to arrive.
+            <>Last contact sent <span suppressHydrationWarning>{relativeTime(health.lastSyncedAt).toLowerCase()}</span></>
+          ) : (
+            <>No contacts sent yet</>
+          )}
+        </p>
+        <button
+          type="button"
+          onClick={sendTest}
+          disabled={test.state === "sending"}
+          className="text-xs font-semibold text-[#1D4ED8] hover:text-[#1740C4] disabled:opacity-50 transition-colors"
+        >
+          {test.state === "sending" ? "Sending…" : "Send test contact"}
+        </button>
+      </div>
+      {test.state === "done" && (
+        <p role="status" className={`text-xs ${test.ok ? "text-green-700" : "text-red-600"}`}>
+          {test.message}
+          {test.ok && test.url && (
+            <>
+              {" "}
+              <a href={test.url} target="_blank" rel="noopener noreferrer" className="font-semibold underline">Open it</a>
+            </>
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Shared by both card kinds: DELETE, and only call it disconnected if it was. */
+async function requestDisconnect(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, { method: "DELETE" });
+    if (res.ok) return null;
+    const d = (await res.json().catch(() => ({}))) as { message?: string };
+    return d.message || "Couldn't disconnect — try again.";
+  } catch {
+    return "Couldn't reach SwiftCard — check your connection and try again.";
+  }
+}
+
 type Props = {
   googleConnected: boolean;
   hubspotConnected: boolean;
@@ -89,9 +193,30 @@ type Props = {
   cards?: ScopeCard[];
   /** Current scope per provider. null (or missing) = all cards. */
   scopes?: Partial<Record<Integration, Scope>>;
+  /** Last delivery and queued contacts per provider. */
+  health?: Partial<Record<Integration, ConnectionHealth>>;
 };
 
+/**
+ * One connected card on a lapsed account. Connecting is Pro; DISCONNECTING
+ * never is — the privacy policy promises "disconnect anytime", and a padlock
+ * where the Disconnect button was made that untrue the day a plan ended.
+ * No upgrade wording here: it renders in the iPhone app too.
+ */
+function PausedNotice() {
+  return <p className="text-xs text-slate-500 mt-2">Paused — contacts aren&apos;t being sent to it right now. You can still disconnect it.</p>;
+}
+
+function FlashLine({ status, name }: { status?: string | null; name: string }) {
+  if (status === "connected") return <p className="text-xs text-green-600 font-medium mt-2">Connected! New contacts will go to {name} from now on.</p>;
+  if (status === "unconfigured") return <p className="text-xs text-amber-600 font-medium mt-2">{name} isn&apos;t switched on for SwiftCard yet — check back soon.</p>;
+  if (status === "cancelled") return <p className="text-xs text-slate-500 mt-2">Nothing changed — you cancelled before {name} was connected.</p>;
+  if (status === "error") return <p className="text-xs text-red-500 mt-2">{name} didn&apos;t finish connecting. Try again — if it keeps happening, make sure you&apos;re signing in to the right {name} account.</p>;
+  return null;
+}
+
 function IntegrationCard({
+  provider,
   name,
   description,
   logo,
@@ -104,7 +229,10 @@ function IntegrationCard({
   proGated = true,
   scopeSlot,
   cards,
+  health,
 }: {
+  provider: Integration;
+  health?: ConnectionHealth;
   name: string;
   description: string;
   logo: React.ReactNode;
@@ -144,21 +272,34 @@ function IntegrationCard({
     return `${connectUrl}${sep}cards=${v === null ? "all" : v.join(",")}`;
   }
 
+  const [disconnectError, setDisconnectError] = useState<string | null>(null);
+
   async function disconnect() {
     setDisconnecting(true);
-    try {
-      await fetch(disconnectUrl, { method: "DELETE" });
-      setConnected(false);
-    } catch { /* ignore */ } finally {
-      setDisconnecting(false);
-    }
+    setDisconnectError(null);
+    // Only flip to "not connected" when the server really removed it. The
+    // old version flipped on ANY answer, so a failed delete showed
+    // disconnected while contacts kept going to the CRM.
+    const failure = await requestDisconnect(disconnectUrl);
+    if (failure) setDisconnectError(failure);
+    else setConnected(false);
+    setDisconnecting(false);
   }
 
-  const needsReconnect = connected && !!syncError;
+  const needsReconnect = unlocked && connected && !!syncError;
+  const disconnectButton = (
+    <button
+      onClick={disconnect}
+      disabled={disconnecting}
+      className="text-xs text-slate-400 hover:text-red-500 transition-colors font-medium shrink-0"
+    >
+      {disconnecting ? "..." : "Disconnect"}
+    </button>
+  );
 
   return (
     <div className={`bg-[#EDE5D8] border rounded-2xl px-5 py-4 shadow-sm ${!unlocked ? "opacity-60" : ""}`}
-      style={{ borderColor: needsReconnect ? "#fcd34d" : connected ? "#86efac" : "#D4C8B8" }}>
+      style={{ borderColor: needsReconnect ? "#fcd34d" : connected && unlocked ? "#86efac" : "#D4C8B8" }}>
       <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-xl bg-[#F0EBE1] border border-[#D4C8B8] flex items-center justify-center shrink-0">
           {logo}
@@ -166,32 +307,14 @@ function IntegrationCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-slate-900 font-semibold text-sm">{name}</p>
-            {needsReconnect ? (
-              <span className="text-xs bg-amber-100 text-amber-700 font-medium px-2 py-0.5 rounded-full">Reconnect needed</span>
-            ) : connected ? (
-              <span className="text-xs bg-green-100 text-green-700 font-medium px-2 py-0.5 rounded-full">Connected</span>
-            ) : null}
+            <StatusBadge connected={connected} unlocked={unlocked} syncError={syncError} />
           </div>
           <p className="text-slate-400 text-xs mt-0.5">{description}</p>
         </div>
 
         {unlocked ? (
-          needsReconnect ? (
-            <a
-              href={connectUrl}
-              onClick={(e) => { e.preventDefault(); void openConnect(connectUrl); }}
-              className="text-xs bg-amber-500 hover:bg-amber-600 text-white font-semibold px-3 py-1.5 rounded-full transition-colors shrink-0"
-            >
-              Reconnect
-            </a>
-          ) : connected ? (
-            <button
-              onClick={disconnect}
-              disabled={disconnecting}
-              className="text-xs text-slate-400 hover:text-red-500 transition-colors font-medium shrink-0"
-            >
-              {disconnecting ? "..." : "Disconnect"}
-            </button>
+          connected ? (
+            disconnectButton
           ) : (
             <a
               href={connectUrl}
@@ -205,9 +328,11 @@ function IntegrationCard({
               Connect
             </a>
           )
+        ) : connected ? (
+          disconnectButton
         ) : (
           <PlanGate
-            feature="integration-google"
+            feature={`integration-${provider}`}
             nativeCopy={INTEGRATIONS_NATIVE_COPY}
             nativeContent={<span className="shrink-0"><IapProLock /></span>}
           >
@@ -217,8 +342,22 @@ function IntegrationCard({
       </div>
 
       {needsReconnect && (
-        <p className="text-xs text-amber-700 mt-2">{syncError}</p>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p className="text-xs text-amber-700">{syncError}</p>
+          {needsSignIn(syncError) && (
+            <a
+              href={connectUrl}
+              onClick={(e) => { e.preventDefault(); void openConnect(connectUrl); }}
+              className="text-xs bg-amber-500 hover:bg-amber-600 text-white font-semibold px-3 py-1.5 rounded-full transition-colors shrink-0"
+            >
+              Reconnect
+            </a>
+          )}
+        </div>
       )}
+      {disconnectError && <p className="text-xs text-red-600 mt-2">{disconnectError}</p>}
+      {!unlocked && connected && <PausedNotice />}
+      {unlocked && connected && <ConnectionHealthRow provider={provider} label={name} health={health} />}
       {unlocked && !connected && choosing && (
         <div className="mt-3 pt-3 border-t border-[#D4C8B8]/60 space-y-2">
           <ScopeChooser
@@ -248,15 +387,7 @@ function IntegrationCard({
       {/* Only once there's a live connection: choosing which cards feed a
           destination that doesn't exist yet would be configuring nothing. */}
       {unlocked && connected && scopeSlot}
-      {flashStatus === "connected" && (
-        <p className="text-xs text-green-600 font-medium mt-2">Successfully connected!</p>
-      )}
-      {flashStatus === "unconfigured" && (
-        <p className="text-xs text-amber-600 font-medium mt-2">This integration isn&apos;t switched on yet — check back soon.</p>
-      )}
-      {flashStatus === "error" && (
-        <p className="text-xs text-red-500 mt-2">Connection failed. Check your app credentials and try again.</p>
-      )}
+      <FlashLine status={flashStatus} name={name} />
     </div>
   );
 }
@@ -282,7 +413,7 @@ const HIGHLEVEL_LOGO = (
 // HubSpot connects with a pasted service key / private-app token (see the /token
 // route for why) instead of the OAuth redirect the other cards use, so it
 // gets its own small form in place of a plain Connect link.
-// Paste-a-token integrations (HubSpot, Pipedrive — HighLevel next) are the same
+// Paste-a-token integrations (GoHighLevel, Pipedrive, HubSpot) are the same
 // card with different words. Generalised rather than copied: this file would
 // otherwise hold three then four identical 145-line components, which is the
 // same trap the sync files fell into, where one fix landed in one copy and not
@@ -305,8 +436,10 @@ function TokenCard({
   flashStatus,
   scopeSlot,
   cards,
+  health,
 }: {
-  provider: string;
+  provider: Integration;
+  health?: ConnectionHealth;
   title: string;
   description: string;
   logo: React.ReactNode;
@@ -339,6 +472,7 @@ function TokenCard({
   /** The account's cards, for the REQUIRED pre-connect scope choice. */
   cards?: ScopeCard[];
 }) {
+  const router = useRouter();
   const [connected, setConnected] = useState(initialConnected);
   const [showForm, setShowForm] = useState(!initialConnected);
   const [token, setToken] = useState("");
@@ -348,11 +482,14 @@ function TokenCard({
   // Pre-connect scope (owner order 2026-08-27): a first-time connect on a
   // multi-card account must actively choose all-cards vs only-these before
   // Save unlocks. Reconnects (already connected) keep their stored scope and
-  // don't re-ask.
-  const askScope = (cards?.length ?? 0) > 1 && !initialConnected;
+  // don't re-ask. Keyed on the LIVE state, not the first render: disconnect
+  // and connect again in one visit is a first-time connect (the row and its
+  // scope are gone), and it used to skip the choice and silently send every
+  // card.
+  const askScope = (cards?.length ?? 0) > 1 && !connected;
   const [choice, setChoice] = useState<ScopeChoice>({ mode: "unset", ids: [] });
 
-  const needsReconnect = connected && !!syncError;
+  const needsReconnect = isPro && connected && !!syncError;
 
   // Both values are required when a provider needs a second one — saving with
   // only the token would store a connection that fails on every lead.
@@ -384,6 +521,9 @@ function TokenCard({
       setToken("");
       setExtraValue("");
       setStatus("idle");
+      // Re-read the server props: the card choice just saved (the picker
+      // would otherwise show the page-load scope) and a cleared banner.
+      router.refresh();
     } catch {
       setError("Couldn't reach SwiftCard. Try again.");
       setStatus("error");
@@ -392,18 +532,33 @@ function TokenCard({
 
   async function disconnect() {
     setStatus("disconnecting");
-    try {
-      await fetch(disconnectEndpoint, { method: "DELETE" });
+    setError(null);
+    // Only "disconnected" when the server really removed it — see
+    // IntegrationCard's disconnect for the bug this replaced.
+    const failure = await requestDisconnect(disconnectEndpoint);
+    if (failure) {
+      setError(failure);
+    } else {
       setConnected(false);
-      setShowForm(true);
-    } catch { /* ignore */ } finally {
-      setStatus("idle");
+      setShowForm(isPro);
+      setChoice({ mode: "unset", ids: [] });
     }
+    setStatus("idle");
   }
+
+  const disconnectButton = (
+    <button
+      onClick={disconnect}
+      disabled={status === "disconnecting"}
+      className="text-xs text-slate-400 hover:text-red-500 transition-colors font-medium shrink-0"
+    >
+      {status === "disconnecting" ? "..." : "Disconnect"}
+    </button>
+  );
 
   return (
     <div className={`bg-[#EDE5D8] border rounded-2xl px-5 py-4 shadow-sm ${!isPro ? "opacity-60" : ""}`}
-      style={{ borderColor: needsReconnect ? "#fcd34d" : connected ? "#86efac" : "#D4C8B8" }}>
+      style={{ borderColor: needsReconnect ? "#fcd34d" : connected && isPro ? "#86efac" : "#D4C8B8" }}>
       <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-xl bg-[#F0EBE1] border border-[#D4C8B8] flex items-center justify-center shrink-0">
           {logo}
@@ -411,16 +566,14 @@ function TokenCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-slate-900 font-semibold text-sm">{title}</p>
-            {needsReconnect ? (
-              <span className="text-xs bg-amber-100 text-amber-700 font-medium px-2 py-0.5 rounded-full">Reconnect needed</span>
-            ) : connected ? (
-              <span className="text-xs bg-green-100 text-green-700 font-medium px-2 py-0.5 rounded-full">Connected</span>
-            ) : null}
+            <StatusBadge connected={connected} unlocked={isPro} syncError={syncError} />
           </div>
           <p className="text-slate-400 text-xs mt-0.5">{description}</p>
         </div>
 
-        {!isPro ? (
+        {!isPro && connected ? (
+          disconnectButton
+        ) : !isPro ? (
           <PlanGate
             feature={`integration-${provider}`}
             nativeCopy={INTEGRATIONS_NATIVE_COPY}
@@ -429,13 +582,7 @@ function TokenCard({
             <Link href="/upgrade" title="Get Pro to connect this integration" className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#D4C8B8] bg-[#F0EBE1] px-2 py-1 text-[0.6875rem] font-semibold text-slate-500 transition-colors hover:border-[#1D4ED8] hover:text-[#1D4ED8]"><Lock className="h-2.5 w-2.5" />Pro</Link>
           </PlanGate>
         ) : connected && !showForm ? (
-          <button
-            onClick={disconnect}
-            disabled={status === "disconnecting"}
-            className="text-xs text-slate-400 hover:text-red-500 transition-colors font-medium shrink-0"
-          >
-            {status === "disconnecting" ? "..." : "Disconnect"}
-          </button>
+          disconnectButton
         ) : !connected && !showForm ? (
           <button onClick={() => setShowForm(true)} className="text-xs bg-[#1D4ED8] hover:bg-[#1740C4] text-white font-semibold px-3 py-1.5 rounded-full transition-colors shrink-0">
             Connect
@@ -446,11 +593,17 @@ function TokenCard({
       {isPro && needsReconnect && !showForm && (
         <div className="mt-2 flex items-center justify-between gap-2">
           <p className="text-xs text-amber-700">{syncError}</p>
-          <button onClick={() => setShowForm(true)} className="text-xs bg-amber-500 hover:bg-amber-600 text-white font-semibold px-3 py-1.5 rounded-full transition-colors shrink-0">
-            Reconnect
-          </button>
+          {needsSignIn(syncError) && (
+            <button onClick={() => setShowForm(true)} className="text-xs bg-amber-500 hover:bg-amber-600 text-white font-semibold px-3 py-1.5 rounded-full transition-colors shrink-0">
+              Reconnect
+            </button>
+          )}
         </div>
       )}
+      {!isPro && connected && <PausedNotice />}
+      {!isPro && error && <p className="text-red-500 text-xs mt-2">{error}</p>}
+      {isPro && connected && !showForm && error && <p className="text-red-500 text-xs mt-2">{error}</p>}
+      {isPro && connected && !showForm && <ConnectionHealthRow provider={provider} label={title} health={health} />}
 
       {isPro && showForm && (
         <div className="mt-3 space-y-2">
@@ -508,9 +661,7 @@ function TokenCard({
           while the token form is open — the form is already the focus there. */}
       {isPro && connected && !showForm && scopeSlot}
 
-      {flashStatus === "connected" && (
-        <p className="text-xs text-green-600 font-medium mt-2">Successfully connected!</p>
-      )}
+      <FlashLine status={flashStatus} name={title} />
     </div>
   );
 }
@@ -566,7 +717,7 @@ function CrmProCard() {
   );
 }
 
-export default function IntegrationsSettings({ googleConnected, hubspotConnected, pipedriveConnected, highlevelConnected, salesforceConnected, googleSyncError, hubspotSyncError, pipedriveSyncError, highlevelSyncError, salesforceSyncError, teamCrmNames = [], isOfficeOwner = false, isPro, cards = [], scopes = {} }: Props) {
+export default function IntegrationsSettings({ googleConnected, hubspotConnected, pipedriveConnected, highlevelConnected, salesforceConnected, googleSyncError, hubspotSyncError, pipedriveSyncError, highlevelSyncError, salesforceSyncError, teamCrmNames = [], isOfficeOwner = false, isPro, cards = [], scopes = {}, health = {} }: Props) {
   const searchParams = useSearchParams();
   const [flashIntegration, setFlashIntegration] = useState<Integration | null>(null);
   const [flashStatus, setFlashStatus] = useState<string | null>(null);
@@ -588,6 +739,9 @@ export default function IntegrationsSettings({ googleConnected, hubspotConnected
   const scopeFor = (provider: Integration, name: string) =>
     cards.length > 1 ? (
       <CardScopePicker
+        // Keyed on the stored scope, so a refresh after connecting shows the
+        // choice that was just saved rather than the one the page loaded with.
+        key={JSON.stringify(scopes[provider] ?? null)}
         target={provider}
         targetName={name}
         cards={cards}
@@ -595,10 +749,9 @@ export default function IntegrationsSettings({ googleConnected, hubspotConnected
       />
     ) : undefined;
 
-  // Order is by how often they're actually used, not alphabetical or
-  // chronological: GoHighLevel and Pipedrive lead because they're the common
-  // choice for this audience, then HubSpot, with Google Contacts last — it's an
-  // address book rather than a CRM, so it's the odd one out in this group.
+  // Order: Salesforce, GoHighLevel, Pipedrive, HubSpot, then Google Contacts
+  // last — it's an address book rather than a CRM, so it's the odd one out in
+  // this group. (lib/crm-sync CRM_PROVIDERS keeps the same order.)
   return (
     <div className="space-y-3">
       {/* An Office sub-user's leads already have a destination: with no
@@ -636,6 +789,8 @@ export default function IntegrationsSettings({ googleConnected, hubspotConnected
       {!isPro && <CrmProCard />}
 
       <IntegrationCard
+        provider="salesforce"
+        health={health.salesforce}
         name="Salesforce"
         description="New leads are created as Salesforce Leads — source, meeting context and tags included"
         logo={
@@ -655,6 +810,7 @@ export default function IntegrationsSettings({ googleConnected, hubspotConnected
 
       <TokenCard
         provider="highlevel"
+        health={health.highlevel}
         title="GoHighLevel"
         description="New leads are added to your sub-account and tagged, so your existing workflows run"
         logo={HIGHLEVEL_LOGO}
@@ -682,6 +838,7 @@ export default function IntegrationsSettings({ googleConnected, hubspotConnected
 
       <TokenCard
         provider="pipedrive"
+        health={health.pipedrive}
         title="Pipedrive"
         description="New leads become Pipedrive people, with a note on where you met them"
         logo={PIPEDRIVE_LOGO}
@@ -706,6 +863,7 @@ export default function IntegrationsSettings({ googleConnected, hubspotConnected
 
       <TokenCard
         provider="hubspot"
+        health={health.hubspot}
         title="HubSpot"
         description="New leads are automatically created as HubSpot contacts"
         logo={HUBSPOT_LOGO}
@@ -734,6 +892,8 @@ export default function IntegrationsSettings({ googleConnected, hubspotConnected
       />
 
       <IntegrationCard
+        provider="google"
+        health={health.google}
         name="Google Contacts"
         description="New leads are saved straight to your Google Contacts"
         logo={

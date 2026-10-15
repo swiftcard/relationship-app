@@ -35,6 +35,8 @@ import { resolveOfficeContext, canViewOfficeAdmin, canSeeBilling } from "@/lib/o
 import { Suspense } from "react";
 import Link from "next/link";
 import { isPaidPlan } from "@/lib/plan";
+import { isPaidProfile, PLAN_COLUMNS } from "@/lib/effective-plan";
+import { countWaiting } from "@/lib/crm-outbox";
 
 // Rail icons — small, uniform, and deliberately plain so the labels do the work.
 const I = {
@@ -179,11 +181,11 @@ export default async function FlowSettingsPage({
     const [{ data: ownerIntegrations }, { data: ownerZap }, { data: officeRow }, { data: ownerCard }] = await Promise.all([
       admin
         .from("integrations")
-        .select("provider")
+        .select("provider, sync_error")
         .eq("user_id", officeCtx.ownerId),
       // The owner's Zapier webhook is inherited the same way (resolveZapierTarget),
       // so it belongs in the same sentence — unless this member saved their own.
-      admin.from("profiles").select("zapier_webhook_url, name").eq("id", officeCtx.ownerId).maybeSingle(),
+      admin.from("profiles").select(`zapier_webhook_url, name, ${PLAN_COLUMNS}`).eq("id", officeCtx.ownerId).maybeSingle(),
       admin.from("offices").select("name").eq("id", officeCtx.officeId).maybeSingle(),
       // The owner's name as the world sees it: profiles.name is empty for a
       // normal signup, which writes the name to the card.
@@ -193,10 +195,21 @@ export default async function FlowSettingsPage({
       name: (officeRow?.name as string | null)?.trim() || "your team",
       admin: (ownerZap?.name as string | null)?.trim() || (ownerCard?.name as string | null)?.trim() || null,
     };
-    teamCrmNames = (ownerIntegrations ?? [])
-      .map((i) => CRM_LABEL[i.provider as string])
-      .filter(Boolean);
-    if (ownerZap?.zapier_webhook_url && !profile.zapier_webhook_url) teamCrmNames.push("Zapier");
+    // Only what is REALLY flowing: the owner still paid up (a lapsed owner's
+    // CRM stops receiving the team's contacts — resolveCrmOwnerId), the
+    // connection not reporting a problem, and not one this member overrides
+    // with their own connection of the same CRM. This line used to name
+    // every row the owner had, so a member could be told "your contacts go
+    // there automatically" while nothing was going anywhere.
+    const ownerLive = isPaidProfile(ownerZap as Parameters<typeof isPaidProfile>[0]);
+    const ownOverrides = new Set((integrations ?? []).map((i) => i.provider as string));
+    teamCrmNames = ownerLive
+      ? (ownerIntegrations ?? [])
+          .filter((i) => !i.sync_error && !ownOverrides.has(i.provider as string))
+          .map((i) => CRM_LABEL[i.provider as string])
+          .filter(Boolean)
+      : [];
+    if (ownerLive && ownerZap?.zapier_webhook_url && !profile.zapier_webhook_url) teamCrmNames.push("Zapier");
   }
 
   const pipedriveIntegration = integrations?.find((i) => i.provider === "pipedrive");
@@ -210,6 +223,26 @@ export default async function FlowSettingsPage({
   const salesforceConnected = !!salesforceIntegration;
   const salesforceSyncError = (salesforceIntegration as { sync_error?: string | null } | undefined)?.sync_error ?? null;
   const highlevelSyncError = (highlevelIntegration as { sync_error?: string | null } | undefined)?.sync_error ?? null;
+
+  // Integrations unlock on the plan the account has RIGHT NOW: an expired
+  // timed grant is Free even before the daily job rewrites the column — the
+  // same rule every send uses (lib/effective-plan), so Settings can't show
+  // "Connected" and unlocked for a destination nothing is being sent to.
+  const crmUnlocked = isPaidProfile(profile);
+
+  // Delivery health: when a contact last reached each connection, and how many
+  // are waiting for the daily retry (lib/crm-outbox). Separate reads, so a
+  // database without the newer columns still renders this page.
+  const [{ data: syncRows }, waiting, { data: zapHealth }] = await Promise.all([
+    admin.from("integrations").select("provider, last_synced_at").eq("user_id", authedUserId),
+    countWaiting(authedUserId),
+    admin.from("profiles").select("zapier_error, zapier_last_sent_at").eq("id", authedUserId).maybeSingle(),
+  ]);
+  const lastSynced = new Map((syncRows ?? []).map((r) => [r.provider as string, (r.last_synced_at as string | null) ?? null]));
+  const healthOf = (p: "google" | "hubspot" | "pipedrive" | "highlevel" | "salesforce") => ({
+    lastSyncedAt: lastSynced.get(p) ?? null,
+    waiting: waiting[p] ?? 0,
+  });
 
   // Cards for the per-card scope picker. Same rows already fetched above, just
   // narrowed to what the picker shows — the picker itself is hidden entirely
@@ -379,8 +412,15 @@ export default async function FlowSettingsPage({
               salesforceSyncError={salesforceSyncError}
               teamCrmNames={teamCrmNames}
               isOfficeOwner={!!officeCtx?.isOwner}
-              isPro={isPro}
+              isPro={crmUnlocked}
               cards={scopeCards}
+              health={{
+                google: healthOf("google"),
+                hubspot: healthOf("hubspot"),
+                pipedrive: healthOf("pipedrive"),
+                highlevel: healthOf("highlevel"),
+                salesforce: healthOf("salesforce"),
+              }}
               scopes={{
                 google: parseCardScope(googleIntegration?.card_ids),
                 hubspot: parseCardScope(hubspotIntegration?.card_ids),
@@ -396,7 +436,10 @@ export default async function FlowSettingsPage({
           </p>
           <ZapierSettings
             initialUrl={profile.zapier_webhook_url ?? null}
-            isPro={isPro}
+            isPro={crmUnlocked}
+            lastError={(zapHealth as { zapier_error?: string | null } | null)?.zapier_error ?? null}
+            lastSentAt={(zapHealth as { zapier_last_sent_at?: string | null } | null)?.zapier_last_sent_at ?? null}
+            waiting={waiting.zapier ?? 0}
             crmConnected={googleConnected || hubspotConnected || pipedriveConnected || highlevelConnected || salesforceConnected}
             cards={scopeCards}
             zapierScope={parseCardScope(profile.zapier_card_ids)}
@@ -408,7 +451,7 @@ export default async function FlowSettingsPage({
             initialNotifications={!!(profile.customization as { crm?: { notifications?: boolean } } | null)?.crm?.notifications}
             initialViews={!!(profile.customization as { crm?: { views?: boolean } } | null)?.crm?.views}
             zapierConnected={!!profile.zapier_webhook_url}
-            isPro={isPro}
+            isPro={crmUnlocked}
           />
         </div>
       ),

@@ -36,50 +36,64 @@ function functionBody(src: string, name: string): string {
 // This is the same shape as the Twilio "said Sent, never arrived" bug.
 
 describe("CRM sync failures are visible, not silent", () => {
-  for (const [provider, file, fn] of [
-    ["Google Contacts", "src/lib/sync-google.ts", "syncLeadToGoogle"],
-    ["HubSpot", "src/lib/sync-hubspot.ts", "syncLeadToHubSpot"],
-    ["Pipedrive", "src/lib/sync-pipedrive.ts", "syncLeadToPipedrive"],
-    ["HighLevel", "src/lib/sync-highlevel.ts", "syncLeadToHighLevel"],
+  // Recording an outcome used to be repeated in every provider file, which is
+  // how a fix landed in one and not another. Every provider now returns a
+  // PushResult and does no database work; lib/crm-run records the outcome, once,
+  // for all five — so these pins check the runner, and that every provider
+  // goes through it. (Behaviour: tests/crm-provider-contract.test.ts.)
+  // Sliced by declaration rather than functionBody: runCrmSync's `opts = {}`
+  // default is the first brace pair after its name.
+  const runSrc = stripComments(read("src/lib/crm-run.ts"));
+  const run = runSrc.slice(runSrc.indexOf("function runCrmSync("), runSrc.indexOf("async function queueIfPossible("));
+
+  it("a contact the CRM refuses for good writes sync_error", () => {
+    // Must match the FAILURE call specifically. A bare "setSyncError(" check
+    // is worthless — the success path also calls it, to clear the banner, so
+    // deleting the failure report would still leave a match.
+    expect(run).toMatch(/await setSyncError\(key, ownerId, result\.message\)/);
+  });
+
+  it("a busy or unreachable CRM queues the contact instead of nagging — and still reports it if it can't be queued", () => {
+    expect(run).toMatch(/if \(result\.retryable\)[\s\S]*?queueIfPossible\(/);
+    const queue = runSrc.slice(runSrc.indexOf("async function queueIfPossible("));
+    expect(queue).toMatch(/enqueueCrmRetry\(/);
+    expect(queue).toMatch(/await setSyncError\(key, ownerId, result\.message\)/);
+  });
+
+  it("a later success clears the banner, and only when one is showing", () => {
+    // The guard matters: clearing unconditionally would write to the database
+    // on every captured lead just to set null to null.
+    expect(run).toMatch(/conn\.syncError \? setSyncError\(key, ownerId, null\) : null/);
+  });
+
+  for (const [provider, file] of [
+    ["Google Contacts", "src/lib/sync-google.ts"],
+    ["HubSpot", "src/lib/sync-hubspot.ts"],
+    ["Pipedrive", "src/lib/sync-pipedrive.ts"],
+    ["HighLevel", "src/lib/sync-highlevel.ts"],
+    ["Salesforce", "src/lib/sync-salesforce.ts"],
   ] as const) {
-    const body = functionBody(stripComments(read(file)), fn);
-
-    it(`${provider}: a rejected contact writes sync_error`, () => {
-      // Must match the FAILURE call specifically. A bare "setSyncError(" check
-      // is worthless here — the success path also calls it, to clear the
-      // banner, so deleting the failure report still left a match. Mutation
-      // testing caught that; the passing assertion was proving nothing.
-      expect(body).toMatch(/setSyncError\(\s*"[a-z]+",\s*userId,\s*connectionErrorMessage\(/);
-    });
-
-    it(`${provider}: a later success clears the banner, and only when one is showing`, () => {
-      // The guard matters: clearing unconditionally would write to the database
-      // on every captured lead just to set null to null.
-      expect(body).toMatch(/if \(conn\.syncError\) await setSyncError\(/);
+    it(`${provider} reports every failure through the shared classifier`, () => {
+      const src = stripComments(read(file));
+      expect(src).toMatch(/return runCrmSync\(/);
+      expect(src).toMatch(/pushFailure\(LABEL, res\.status/);
+      // No answer at all is a failure too, not a crash.
+      expect(src).toMatch(/CrmNoAnswerError\) return pushFailure\(LABEL, null\)/);
     });
   }
 
-  it("auth failures tell the user to reconnect, transient ones don't", () => {
-    // This assertion used to sit in each sync file. The 401/403 distinction now
-    // lives in the shared helper both providers call, so it is checked once,
-    // where it actually is — not weakened, relocated.
-    //
+  it("auth failures tell the user to reconnect; busy ones promise a retry that now exists; data ones don't blame the connection", () => {
     // The distinction matters: a 403 means a scope was never granted or an API
     // isn't enabled, and no amount of retrying fixes it, so the copy has to say
-    // "reconnect". A 5xx is transient and shouldn't send anyone to settings.
+    // "reconnect". A 5xx is transient — it is queued (lib/crm-outbox), so "will
+    // try again" is true. A 400 is one contact's details, and "reconnect"
+    // would send someone round in circles with a working connection.
     const helper = stripComments(read("src/lib/crm-connection.ts"));
     const body = functionBody(helper, "connectionErrorMessage");
     expect(body).toMatch(/status === 401 \|\| status === 403/);
     expect(body.toLowerCase()).toContain("reconnect");
-    expect(body.toLowerCase()).toContain("keep trying");
-  });
-
-  it("the shared helper is what both providers use, so a fix lands once", () => {
-    // The duplication this replaced is why the "surface API failures" fix had
-    // to be written twice by hand. Two more providers would have made it four.
-    for (const f of ["src/lib/sync-google.ts", "src/lib/sync-hubspot.ts"]) {
-      expect(read(f)).toContain('from "./crm-connection"');
-    }
+    expect(body.toLowerCase()).toContain("will try again");
+    expect(body.toLowerCase()).toContain("your connection is fine");
   });
 });
 
@@ -126,8 +140,13 @@ describe("Office: a sub-user's leads reach the agency's CRM", () => {
     // A provider that calls getCrmConnection with the capturing user directly
     // would work for solo accounts and silently do nothing for a 12-agent
     // agency — the failure would only show up for the customers paying most.
-    for (const f of ["src/lib/sync-google.ts", "src/lib/sync-hubspot.ts", "src/lib/sync-pipedrive.ts", "src/lib/sync-highlevel.ts"]) {
-      expect(read(f), `${f} must resolve the office owner`).toContain("resolveCrmOwnerId(");
+    // Every provider is driven by runCrmSync, which resolves the destination
+    // before it fetches a token — only the Settings test (the presser's own
+    // connection, by definition) skips it.
+    const run = stripComments(read("src/lib/crm-run.ts"));
+    expect(run).toMatch(/opts\.test \? capturedBy : await resolveCrmOwnerId\(key, capturedBy\)/);
+    for (const f of ["src/lib/sync-google.ts", "src/lib/sync-hubspot.ts", "src/lib/sync-pipedrive.ts", "src/lib/sync-highlevel.ts", "src/lib/sync-salesforce.ts"]) {
+      expect(read(f), `${f} must sync through the runner`).toContain("runCrmSync(");
     }
   });
 
@@ -172,10 +191,17 @@ describe("Office: a sub-user is told where their leads already go", () => {
   it("reads the OWNER's integrations, not the caller's", () => {
     // The bug this prevents is subtle: querying the caller here would show a
     // sub-user their own connections and claim the team set them up.
-    const at = page.indexOf("teamCrmNames = ");
+    const at = page.indexOf("teamCrmNames = ownerLive");
     expect(at).toBeGreaterThan(-1);
-    const block = page.slice(Math.max(0, at - 400), at);
+    const block = page.slice(Math.max(0, at - 2000), at);
     expect(block).toMatch(/\.eq\("user_id", officeCtx\.ownerId\)/);
+  });
+
+  it("names only what is REALLY flowing: owner still paid, no problem on it, not overridden", () => {
+    // It used to name every row the owner had — so a member could read "your
+    // contacts go there automatically" while nothing was going anywhere.
+    expect(page).toMatch(/const ownerLive = isPaidProfile\(/);
+    expect(page).toMatch(/\.filter\(\(i\) => !i\.sync_error && !ownOverrides\.has\(/);
   });
 
   it("shows nothing at all when there is no team CRM", () => {
@@ -200,11 +226,14 @@ describe("integrations are re-checked against the plan at send time", () => {
   const src = stripComments(read("src/app/api/leads/route.ts"));
 
   it("every CRM sync happens only for a paid owner", () => {
-    // Walks back to the ENCLOSING `if` rather than looking a fixed number of
-    // characters behind. The character-window version broke the moment a
-    // comment was added between the gate and the call — a false failure that
-    // says nothing about the gate, which is the worst kind of test.
-    const at = src.indexOf("syncLeadToAllCrms(");
+    // The gate that can't be skipped is INSIDE syncLeadToAllCrms (expiry-
+    // aware), so a returning visitor's fill-in and any future caller are
+    // covered. The new-capture call is additionally inside the route's own
+    // paid branch, found by walking back to the ENCLOSING `if` rather than a
+    // fixed character window (which broke the moment a comment was added).
+    const lib = stripComments(read("src/lib/crm-sync.ts"));
+    expect(functionBody(lib, "syncLeadToAllCrms")).toMatch(/if \(!isPaidProfile\(data\)\) return \[\];/);
+    const at = src.indexOf("syncLeadToAllCrms(leadData");
     expect(at).toBeGreaterThan(-1);
     const openIf = src.lastIndexOf("if (", at);
     expect(openIf).toBeGreaterThan(-1);
@@ -234,9 +263,11 @@ describe("integrations are re-checked against the plan at send time", () => {
     expect(src.slice(openIf, at)).toMatch(/isPaidPlan\(ownerProfile\.plan\)/);
     // And again inside the resolver, for the manual-add path and for an
     // inherited office webhook (whose OWNER must be paid too).
+    // Expiry-aware (isPaidProfile) — the raw plan column kept firing Zaps for
+    // a day after a timed grant ran out, while the native CRMs had stopped.
     const zap = stripComments(read("src/lib/crm-sync.ts"));
-    expect(zap).toMatch(/if \(!own \|\| !isPaidPlan\(own\.plan\)\) return null;/);
-    expect(zap).toMatch(/!isPaidPlan\(owner\.plan\)/);
+    expect(zap).toMatch(/if \(!own \|\| !isPaidProfile\(own\)\) return null;/);
+    expect(zap).toMatch(/!isPaidProfile\(owner\)/);
   });
 
   it("the Zapier URL is still allowlisted before any PII leaves", () => {
@@ -261,6 +292,10 @@ describe("integrations are re-checked against the plan at send time", () => {
 
   it("edits sync in UPDATE mode, so a CRM record is updated rather than re-noted", () => {
     const edit = stripComments(read("src/app/api/leads/[id]/route.ts"));
-    expect(edit).toMatch(/syncLeadToAllCrms\(leadData, ownerProfile\.id, \{\s*mode: "update"/);
+    expect(edit).toMatch(/syncLeadToAllCrms\(loaded\.lead, loaded\.capturedBy, \{\s*mode: "update"/);
+    // Only a real change syncs, and only the changed fields may overwrite.
+    expect(edit).toMatch(/crmChanges\(before, loaded\.row\)/);
+    expect(edit).toMatch(/changedFields: change\.fields/);
+    expect(edit).toMatch(/previousEmail:/);
   });
 });

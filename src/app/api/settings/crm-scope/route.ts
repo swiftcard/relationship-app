@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
-import { isPaidPlan } from "@/lib/plan";
+import { isPaidProfile, PLAN_COLUMNS } from "@/lib/effective-plan";
 import { sanitizeCardScope } from "@/lib/crm-scope";
+import { SCOPE_EMPTIED_MARK } from "@/lib/crm-scope-server";
 
 // Which of your cards feed a given destination.
 //
@@ -29,8 +30,8 @@ export async function PATCH(request: NextRequest) {
 
   // Same gate as connecting an integration in the first place — scoping one you
   // shouldn't have shouldn't be reachable either.
-  const { data: planRow } = await admin.from("profiles").select("plan").eq("id", user.id).single();
-  if (!isPaidPlan(planRow?.plan)) {
+  const { data: planRow } = await admin.from("profiles").select(PLAN_COLUMNS).eq("id", user.id).single();
+  if (!isPaidProfile(planRow)) {
     return NextResponse.json(
       { code: "INTEGRATION_PRO_ONLY", error: "upgrade", message: "Integrations are a Pro feature.", upgrade: "/upgrade" },
       { status: 402 },
@@ -67,9 +68,13 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
+  // Choosing cards again answers the "the cards you chose were deleted" line
+  // (lib/crm-scope-server dropCardFromScopes), so it goes — and ONLY that line:
+  // any other problem on the connection is still true and stays.
   if (target === "zapier") {
     const { error } = await admin.from("profiles").update({ zapier_card_ids: scope }).eq("id", user.id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await admin.from("profiles").update({ zapier_error: null }).eq("id", user.id).like("zapier_error", `%${SCOPE_EMPTIED_MARK}%`).then(() => {}, () => {});
     return NextResponse.json({ ok: true, card_ids: scope });
   }
 
@@ -87,6 +92,13 @@ export async function PATCH(request: NextRequest) {
   if (!updated || updated.length === 0) {
     return NextResponse.json({ error: "not_connected", message: "Connect this integration first." }, { status: 404 });
   }
+  await admin
+    .from("integrations")
+    .update({ sync_error: null })
+    .eq("user_id", user.id)
+    .eq("provider", target)
+    .like("sync_error", `%${SCOPE_EMPTIED_MARK}%`)
+    .then(() => {}, () => {});
 
   return NextResponse.json({ ok: true, card_ids: scope });
 }
