@@ -19,6 +19,7 @@
 import { chromium } from "playwright";
 import { existsSync, readFileSync, mkdirSync } from "node:fs";
 import { markInternal } from "./qa-internal.mjs";
+import { signInByLink } from "./lib/qa-sign-in.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const BASE = process.env.BASE || "http://localhost:3222";
@@ -242,15 +243,8 @@ async function signInOnce(who) {
     } catch { /* private mode */ }
   });
   const page = await ctx.newPage();
-  await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(700);
-  for (const [sel, val] of [["#auth-email", who.email], ["#auth-password", password]]) {
-    await page.waitForSelector(sel, { timeout: 30000 });
-    await page.fill(sel, val);
-    await page.waitForTimeout(200);
-    if ((await page.inputValue(sel)) !== val) { await page.waitForTimeout(600); await page.fill(sel, val); }
-  }
-  await page.click('button[type="submit"]');
+  // By link, not the form: the form is behind the human check (lib/qa-sign-in).
+  await signInByLink(page, { adm, base: BASE, email: who.email });
   await page.waitForURL(/dashboard|onboarding|welcome|office|settings/, { timeout: 45000 });
   // Let the post-login redirect chain finish before capturing cookies.
   await page.waitForTimeout(3500);

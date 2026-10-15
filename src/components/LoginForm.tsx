@@ -9,6 +9,7 @@ import PasswordField from "@/components/PasswordField";
 import { safeNextPath } from "@/lib/safe-next";
 import { assessPassword, CONFIRM_MISMATCH, MIN_LENGTH, type PasswordAssessment } from "@/lib/password-policy";
 import { suggestDomain } from "@/lib/email-typo";
+import { useHumanCheck, isHumanCheckError, HUMAN_CHECK_FAILED } from "@/components/HumanCheck";
 
 // Auth redirects are pinned to the SwiftCard domain, NOT window.location.origin.
 // Origin-based redirects break sign-in if the form is ever loaded on a Vercel
@@ -111,6 +112,9 @@ export default function LoginForm({
   // only one-tap sign-in the app has, so the coupling below is iOS-only.
   const androidApp = useNativePlatform() === "android";
   const socialInApp = androidApp || APPLE_SIGNIN_ENABLED;
+  // Bot check for the three calls Supabase's CAPTCHA switch guards: password
+  // sign-in, sign-up and the reset email. Google/Apple don't go through it.
+  const human = useHumanCheck();
 
   // Surface a failed OAuth round-trip (auth/callback redirects here with
   // ?error=oauth) or a sign-in attempt for an email with no account
@@ -263,9 +267,13 @@ export default function LoginForm({
     setExistingAccount(false);
 
     if (mode === "signin") {
-      const { error } = await supabase.auth.signInWithPassword({ email: emailNow, password: passwordNow });
+      const captchaToken = await human.token();
+      const { error } = await supabase.auth.signInWithPassword({ email: emailNow, password: passwordNow, options: { captchaToken } });
+      human.reset();
       if (error) {
-        if (error.message === "Invalid login credentials" && lockedEmail) {
+        if (isHumanCheckError(error)) {
+          setErrorMsg(HUMAN_CHECK_FAILED);
+        } else if (error.message === "Invalid login credentials" && lockedEmail) {
           // An invite's sign-in: the invite page only sends people here when
           // the invited address already has an account, so this is the
           // password — including an account first made by an emailed link or
@@ -338,11 +346,16 @@ export default function LoginForm({
       const emailRedirectTo = safeNext
         ? `${APP_URL}/auth/callback?next=${encodeURIComponent(safeNext)}`
         : `${APP_URL}/auth/callback`;
-      const { data, error } = await supabase.auth.signUp({ email: emailNow, password: passwordNow, options: { emailRedirectTo } });
+      const captchaToken = await human.token();
+      const { data, error } = await supabase.auth.signUp({ email: emailNow, password: passwordNow, options: { emailRedirectTo, captchaToken } });
+      human.reset();
       // Supabase's enumeration-safe shape for "this email already has an
       // account": a user with no identities and no session, and no error.
       const silentDuplicate = !error && !!data.user && !data.session && (data.user.identities?.length ?? 0) === 0;
-      if (error || silentDuplicate) {
+      if (isHumanCheckError(error)) {
+        setErrorMsg(HUMAN_CHECK_FAILED);
+        setStatus("error");
+      } else if (error || silentDuplicate) {
         const friendly = friendlySignupError(error ?? { message: "user already registered" }, policy);
         if (lockedEmail && friendly.existing) {
           // The invited address turned out to have an account after all (made
@@ -389,15 +402,18 @@ export default function LoginForm({
       return;
     }
     setStatus("loading");
+    const captchaToken = await human.token();
     const { error } = await supabase.auth.resetPasswordForEmail(emailNow, {
       // Straight to the "set a new password" page, which exchanges the code
       // itself — NOT /auth/callback?next=..., which depends on Supabase's
       // redirect-URL allowlist preserving that extra query param (it doesn't
       // reliably), silently falling back to the dashboard instead.
       redirectTo: `${APP_URL}/auth/reset-password`,
+      captchaToken,
     });
+    human.reset();
     if (error) {
-      setErrorMsg(error.message);
+      setErrorMsg(isHumanCheckError(error) ? HUMAN_CHECK_FAILED : error.message);
       setStatus("error");
     } else {
       // A dedicated confirmation screen, not an inline message styled like an
@@ -743,16 +759,21 @@ export default function LoginForm({
             a password manager that fills and submits, a fast Enter, a slow
             phone. A disabled default button also blocks implicit (Enter)
             submission, so the gap is closed in the markup. Faded only while
-            signing in, so the first paint looks exactly as before. */}
-        <button
-          type="submit"
-          disabled={!hydrated || status === "loading"}
-          className={`w-full bg-[#1D4ED8] hover:bg-[#1740C4] text-white font-semibold py-3 px-6 rounded-full transition-colors text-sm ${status === "loading" ? "opacity-50" : ""}`}
-        >
-          {status === "loading"
-            ? mode === "signin" ? "Signing in…" : "Creating your account…"
-            : mode === "signin" ? "Sign in →" : "Create account →"}
-        </button>
+            signing in, so the first paint looks exactly as before.
+            The human check sits in the same block, just above the button:
+            it has no height until Cloudflare asks for a click. */}
+        <div>
+          {human.slot}
+          <button
+            type="submit"
+            disabled={!hydrated || status === "loading"}
+            className={`w-full bg-[#1D4ED8] hover:bg-[#1740C4] text-white font-semibold py-3 px-6 rounded-full transition-colors text-sm ${status === "loading" ? "opacity-50" : ""}`}
+          >
+            {status === "loading"
+              ? mode === "signin" ? "Signing in…" : "Creating your account…"
+              : mode === "signin" ? "Sign in →" : "Create account →"}
+          </button>
+        </div>
 
         {mode === "signup" && (
           <p className="text-center text-[0.6875rem] leading-relaxed text-slate-600">

@@ -18,6 +18,7 @@
 import { chromium } from "playwright";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { markInternal } from "./qa-internal.mjs";
+import { signInByLink } from "./lib/qa-sign-in.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const BASE = process.env.BASE || "http://localhost:3111";
@@ -314,10 +315,8 @@ async function visit(page, screenRef, name, path, opts) {
 }
 
 async function login(page, email) {
-  await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
-  await page.fill("#auth-email", email);
-  await page.fill("#auth-password", password);
-  await page.click('button[type="submit"]');
+  // By link, not the form: the form is behind the human check (lib/qa-sign-in).
+  await signInByLink(page, { adm, base: BASE, email });
   await page.waitForURL(/dashboard|onboarding|welcome|office/, { timeout: 45000 }).catch(() => {});
   await page.waitForTimeout(2500);
   // A sign-in that silently fails turns every later screen into a clean-looking

@@ -5,6 +5,7 @@ import { useIsNativeApp } from "@/lib/platform";
 import { createBrowserClient } from "@supabase/ssr";
 import DownloadLink from "@/components/DownloadLink";
 import { releaseDevice } from "@/lib/device-sign-out";
+import { useHumanCheck, isHumanCheckError, HUMAN_CHECK_FAILED } from "@/components/HumanCheck";
 import {
   reasonsFor,
   reasonById,
@@ -90,6 +91,9 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
+  // The password re-check below is a password sign-in, which Supabase's
+  // CAPTCHA switch guards. Dark: it renders inside the dark dialog.
+  const human = useHumanCheck({ theme: "dark" });
 
   async function openModal() {
     setStep("why");
@@ -214,9 +218,11 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
           setLoading(false);
           return;
         }
-        const { error: authErr } = await supabase.auth.signInWithPassword({ email, password });
+        const captchaToken = await human.token();
+        const { error: authErr } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken } });
+        human.reset();
         if (authErr) {
-          setError("That password doesn't match. Please try again.");
+          setError(isHumanCheckError(authErr) ? HUMAN_CHECK_FAILED : "That password doesn't match. Please try again.");
           setLoading(false);
           return;
         }
@@ -520,6 +526,7 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
                           autoComplete="current-password"
                           className="w-full bg-gray-900 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-red-500 mb-3"
                         />
+                        {human.slot}
                       </>
                     )}
                     <label className="block text-xs text-gray-500 mb-1.5">Type DELETE to confirm</label>

@@ -35,6 +35,7 @@
 import { chromium } from "playwright";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { markInternal } from "./qa-internal.mjs";
+import { signInByLink } from "./lib/qa-sign-in.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1").replace(/\/$/, "");
 const BASE = process.env.BASE || "https://swiftcard.me";
@@ -94,24 +95,13 @@ async function submitLead(person, n) {
   });
 }
 
-async function typeInto(page, selector, value) {
-  await page.waitForSelector(selector, { timeout: 30000 });
-  await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
-  await page.waitForTimeout(400);
-  await page.fill(selector, value);
-  await page.waitForTimeout(250);
-  if ((await page.inputValue(selector)) !== value) { await page.waitForTimeout(600); await page.fill(selector, value); }
-}
-
 /** Signed in as this person: what the two notification APIs hand them. */
 async function readAs(person) {
   const ctx = await markInternal(await browser.newContext({ viewport: { width: 1280, height: 900 } }), BASE);
   const page = await ctx.newPage();
   try {
-    await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
-    await typeInto(page, "#auth-email", person.email);
-    await typeInto(page, "#auth-password", password);
-    await page.click('button[type="submit"]');
+    // By link, not the form: the form is behind the human check (lib/qa-sign-in).
+    await signInByLink(page, { adm, base: BASE, email: person.email });
     await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 45000 }).catch(() => {});
     const bellRes = await page.request.get(`${BASE}/api/notifications`);
     const teamRes = await page.request.get(`${BASE}/api/office/notifications`);

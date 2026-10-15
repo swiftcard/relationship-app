@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import PasswordField from "@/components/PasswordField";
+import { useHumanCheck, isHumanCheckError, HUMAN_CHECK_FAILED } from "@/components/HumanCheck";
 import { assessPassword, CONFIRM_MISMATCH, MIN_LENGTH } from "@/lib/password-policy";
 
 type Stage = "checking" | "ready" | "no-session" | "saving" | "done" | "error";
@@ -31,6 +32,8 @@ export default function ResetPasswordForm() {
   const [userEmail, setUserEmail] = useState("");
   const [resendEmail, setResendEmail] = useState("");
   const [resendState, setResendState] = useState<"idle" | "sending" | "sent">("idle");
+  // The resend is a reset email, which Supabase's CAPTCHA switch guards.
+  const human = useHumanCheck();
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -101,12 +104,23 @@ export default function ResetPasswordForm() {
     const target = resendEmail.trim();
     if (!target) return;
     setResendState("sending");
+    const captchaToken = await human.token();
     const { error } = await supabase.auth.resetPasswordForEmail(target, {
       // /auth/reset-password — the route this form lives on. It said
       // /reset-password, which is no page at all, so the one link a stuck user
       // asked this form to resend landed on a blank screen (email audit 2026-09-08).
       redirectTo: `${APP_URL}/auth/reset-password`,
+      captchaToken,
     });
+    human.reset();
+    // A failed human check is the one error worth showing: nothing was sent,
+    // and "a new link is on its way" would leave them waiting for nothing.
+    // It says nothing about whether the account exists.
+    if (isHumanCheckError(error)) {
+      setErrorMsg(HUMAN_CHECK_FAILED);
+      setResendState("idle");
+      return;
+    }
     // Deliberately the same outcome either way: whether an account exists for
     // an address is not something an unauthenticated form should reveal.
     setResendState(error ? "sent" : "sent");
@@ -194,14 +208,20 @@ export default function ResetPasswordForm() {
               placeholder="you@company.com"
               className="w-full border border-slate-300 rounded-full px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/30"
             />
-            <button
-              type="button"
-              onClick={resend}
-              disabled={resendState === "sending" || !resendEmail.trim()}
-              className="w-full bg-[#1D4ED8] hover:bg-[#1740C4] disabled:opacity-50 text-white font-semibold py-3 px-6 rounded-full transition-colors text-sm"
-            >
-              {resendState === "sending" ? "Sending…" : "Send me a new link"}
-            </button>
+            {errorMsg && <p role="alert" className="text-red-700 text-xs">{errorMsg}</p>}
+            {/* One block with the button, so the (normally zero-height) human
+                check adds no space-y gap of its own. */}
+            <div>
+              {human.slot}
+              <button
+                type="button"
+                onClick={resend}
+                disabled={resendState === "sending" || !resendEmail.trim()}
+                className="w-full bg-[#1D4ED8] hover:bg-[#1740C4] disabled:opacity-50 text-white font-semibold py-3 px-6 rounded-full transition-colors text-sm"
+              >
+                {resendState === "sending" ? "Sending…" : "Send me a new link"}
+              </button>
+            </div>
             <Link href="/login" className="inline-block text-sm text-slate-500 hover:text-slate-700 transition-colors">
               Back to sign in
             </Link>

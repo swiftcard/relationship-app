@@ -16,6 +16,7 @@
 import { chromium } from "playwright";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { markInternal } from "./qa-internal.mjs";
+import { signInByLink } from "./lib/qa-sign-in.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const BASE = process.env.BASE || "http://localhost:3111";
@@ -106,10 +107,10 @@ async function typeInto(page, selector, value) {
 async function signInOnce() {
   const ctx = await markInternal(await browser.newContext({ viewport: { width: 1280, height: 900 } }));
   const page = await ctx.newPage();
-  await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
-  await typeInto(page, "#auth-email", email);
-  await typeInto(page, "#auth-password", password);
-  await page.click('button[type="submit"]');
+  // By link, not the form: the form's password sign-in is behind the human
+  // check (lib/qa-sign-in). The form itself is driven by login-failure and
+  // signup-ui below.
+  await signInByLink(page, { adm, base: BASE, email });
   await page.waitForURL(/dashboard|onboarding|welcome/, { timeout: 45000 });
   await page.waitForTimeout(2500);
   storageState = await ctx.storageState();
@@ -562,6 +563,14 @@ FLOWS["login-failure"] = async () => {
       console.log("  – sign-in rate limited by the auth provider, cannot assert the rejection copy");
       return;
     }
+    // With Supabase's CAPTCHA switch on, a headless browser is turned away by
+    // the human check before the password is ever compared. That IS a
+    // rejection with a message and a reset button — the product working.
+    if (/confirm you.re a person/i.test(body)) {
+      if (page.url().includes("/dashboard")) fail("login-failure", "a WRONG password reached the dashboard");
+      else pass("login-failure", "stopped by the human check (CAPTCHA on), with its message");
+      return;
+    }
     const stuck = label === "…" || /Signing/i.test(label);
     const said = /invalid|incorrect|wrong|could ?n.t|couldn.t|not match|try again/i.test(body);
     if (stuck) fail("login-failure", `submit button still reads "${label}" 6s after a rejected sign-in`);
@@ -652,10 +661,7 @@ FLOWS["empty-account"] = async () => {
   const page = await ctx.newPage();
   page.on("pageerror", (err) => fail("empty-account", `js-error on ${page.url().replace(BASE, "")} — ${err.message.split("\n")[0].slice(0, 140)}`));
   try {
-    await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
-    await typeInto(page, "#auth-email", e2);
-    await typeInto(page, "#auth-password", password);
-    await page.click('button[type="submit"]');
+    await signInByLink(page, { adm, base: BASE, email: e2 });
     await page.waitForURL(/dashboard|onboarding|welcome/, { timeout: 45000 }).catch(() => {});
     await page.waitForTimeout(2500);
     await dismissOverlays(page);
@@ -1092,6 +1098,12 @@ FLOWS["signup-ui"] = async () => {
     // /dashboard here is the fresh-install bug coming back.
     await page.waitForURL((u) => /^\/(cards\/new|dashboard|welcome)/.test(u.pathname), { timeout: 45000 }).catch(() => {});
     const landed = new URL(page.url()).pathname;
+    // With the CAPTCHA switch on, the headless signup itself is (rightly)
+    // stopped by the human check. Steps 1–2 above still ran on the real form.
+    if (landed === "/login" && /confirm you.re a person/i.test(await page.locator("body").innerText())) {
+      pass("signup-ui", "typo caught, mismatch caught; the real signup was stopped by the human check (CAPTCHA on), with its message");
+      return;
+    }
     // Find the account so the finally block removes it whatever happened next.
     const found = await (await adm(`/auth/v1/admin/users?page=1&per_page=50`)).json().catch(() => null);
     const created = found?.users?.find((u) => u.email === e2);

@@ -13,5 +13,11 @@ for (const [email, password] of [
 ]) {
   if (!password) { console.log(email, "— no pw provided, skipped"); continue; }
   const { data, error } = await anon().auth.signInWithPassword({ email, password });
+  // With Supabase's CAPTCHA switch on, no script can sign in by password —
+  // that is the point of it. Not a broken account: sign in once in the app.
+  if (error && /captcha/i.test(error.message)) {
+    console.log(email, "— CAPTCHA is on, a script can't check this password. Sign in once in the iPhone app instead.");
+    continue;
+  }
   console.log(email, error ? `FAILED: ${error.message}` : `OK (user ${data.user.id.slice(0, 8)})`);
 }

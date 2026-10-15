@@ -20,6 +20,7 @@
 import { chromium } from "playwright";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { markInternal } from "./qa-internal.mjs";
+import { signInByLink } from "./lib/qa-sign-in.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const BASE = process.env.BASE || "http://localhost:3222";
@@ -92,12 +93,8 @@ async function macContext(width, height) {
 }
 
 async function login(page) {
-  await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
-  await page.waitForLoadState("networkidle").catch(() => {});
-  await page.waitForTimeout(600);
-  await page.fill("#auth-email", email);
-  await page.fill("#auth-password", password);
-  await page.click('button[type="submit"]');
+  // By link, not the form: the form is behind the human check (lib/qa-sign-in).
+  await signInByLink(page, { adm, base: BASE, email });
   await page.waitForURL(/dashboard|onboarding|welcome/, { timeout: 45000 }).catch(() => {});
   await page.waitForTimeout(2000);
   for (const label of ["Allow", "Not now", "Skip tour", "Skip", "Got it"]) {

@@ -11,6 +11,7 @@ import { chromium } from "playwright";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { markInternal } from "./qa-internal.mjs";
+import { signInByLink } from "./lib/qa-sign-in.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 const BASE = process.env.BASE || "https://swiftcard.me";
@@ -76,9 +77,8 @@ async function newShellPage() {
 }
 
 async function login(page, email) {
-  await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
-  await page.fill('input[type="email"]', email); await page.fill('input[type="password"]', password);
-  await page.click('button:has-text("Sign in →")');
+  // By link, not the form: the form is behind the human check (lib/qa-sign-in).
+  await signInByLink(page, { adm, base: BASE, email });
   await page.waitForURL(/dashboard|onboarding|welcome|join|office/, { timeout: 45000 }).catch(() => {});
   await page.waitForTimeout(3500);
 }
