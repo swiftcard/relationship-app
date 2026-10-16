@@ -46,8 +46,8 @@ function contactHref(n: Notification): string {
 
 // Referral rows open the Refer a friend section, where the Claim button is.
 // "Congratulations — … Tap here and it comes off your next bill" was a row
-// that could not be tapped (2026-10-02 notification audit). Hidden in the app
-// either way (referral_claim, below).
+// that could not be tapped (2026-10-02 notification audit). In the app too
+// since 2026-10-07, with the billing wording swapped (NATIVE_BODY_REMAP).
 const REFERRAL_ROW_TYPES = new Set(["referral_claim", "referral_progress"]);
 
 /** Where tapping this row goes, or null for a row that is just information. */
@@ -98,7 +98,7 @@ export default function NotificationBell({
   const isNative = useIsNativeApp();
   const shown = isNative
     ? notifications
-        .filter((n) => n.type !== "referral_claim" && !NATIVE_HIDDEN_TYPES.has(n.type))
+        .filter((n) => !NATIVE_HIDDEN_TYPES.has(n.type))
         .map((n) => (NATIVE_BODY_REMAP[n.type] ? { ...n, body: NATIVE_BODY_REMAP[n.type] } : n))
     : notifications;
   const unread = shown.filter((n) => !n.read).length;

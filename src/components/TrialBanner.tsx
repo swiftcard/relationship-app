@@ -8,10 +8,13 @@ import { useIsNativeApp } from "@/lib/platform";
 // render it, which is the account's first day only (lib/billing-state
 // showsTrialBubble); after that the days left are in Settings → Profile.
 //
-// NATIVE (App Store 3.1.1): the status line is neutral information and stays,
-// but the "Keep Pro →" /pricing CTA is a selling surface and must never render
-// inside the Capacitor shell. Web is byte-identical (native is false on SSR and
-// first paint).
+// "Keep Pro →" opens /upgrade on every device (owner, 2026-10-07): in the
+// iPhone app that page IS Apple's in-app purchase (UpgradeClient's native
+// branch), the same way the Pro-ended panel sells it there. It used to be
+// hidden in the app, leaving the banner with no way to act on it. Two things
+// stay web-only because the app has no path for them: "Manage plan" for a
+// Stripe trial (Stripe billing is managed on the website) and "Keep Office"
+// (Office is not sold in the app).
 export default function TrialBanner({ daysLeft, isTrial, planName = "Pro", billedFrom, canceled = false }: {
   daysLeft: number;
   isTrial: boolean;
@@ -58,7 +61,7 @@ export default function TrialBanner({ daysLeft, isTrial, planName = "Pro", bille
           Manage plan
         </Link>
       )}
-      {!native && !billedFrom && (
+      {!billedFrom && (!native || planName === "Pro") && (
         <Link
           href="/upgrade"
           className={`shrink-0 text-xs font-bold px-4 py-2 rounded-full text-white transition-colors ${

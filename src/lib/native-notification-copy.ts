@@ -18,12 +18,17 @@ export const NATIVE_BODY_REMAP: Record<string, string> = {
     "Anyone else who shares their info this month is still saved — nothing is lost. Your free contacts reset on the 1st.",
   plan_downgraded:
     "Your account is back on the Free plan. Extra cards are offline and follow-up sequences are paused — nothing has been deleted.",
+  // Shown in the app since 2026-10-07 (it was hidden outright). The stored
+  // body for a paying web account says the month "comes off your next bill"
+  // — web billing copy — so the app says what to do, and the tap opens Refer
+  // a friend, where the Claim button is.
+  referral_claim:
+    "You've earned a free month of Pro. Tap here to claim it.",
 };
 
 /**
  * Rows about managing a WEB subscription: nothing to act on in the app, and
  * "cancel your own subscription in Plan and billing" is billing copy. The web
- * still shows them. (referral_claim is filtered separately — pinned in
- * tests/native-suppression.test.ts.)
+ * still shows them.
  */
 export const NATIVE_HIDDEN_TYPES = new Set(["personal_sub_reminder"]);

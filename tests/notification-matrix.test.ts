@@ -137,7 +137,8 @@ describe("the notification matrix", () => {
 
 describe("inside the iPhone app, no row sells (App Review 3.1.1)", () => {
   // Rows that remain visible after the app's own filter (NotificationBell:
-  // referral_claim and NATIVE_HIDDEN_TYPES hidden, NATIVE_BODY_REMAP bodies).
+  // NATIVE_HIDDEN_TYPES hidden, NATIVE_BODY_REMAP bodies — referral_claim
+  // shows since 2026-10-07, reworded).
   // referral_progress is deliberately allowed: referrals returned to the app
   // with in-app purchase (owner, 2026-08-26) and the app's own Refer a friend
   // section says the same thing.
@@ -145,7 +146,7 @@ describe("inside the iPhone app, no row sells (App Review 3.1.1)", () => {
   for (const p of PERSONAS) {
     it(p.name, () => {
       const shown = bellFor(p)
-        .filter((n) => n.type !== "referral_claim" && !NATIVE_HIDDEN_TYPES.has(n.type))
+        .filter((n) => !NATIVE_HIDDEN_TYPES.has(n.type))
         .filter((n) => n.type !== "referral_progress")
         .map((n) => (NATIVE_BODY_REMAP[n.type] ? { ...n, body: NATIVE_BODY_REMAP[n.type] } : n));
       for (const r of shown) {

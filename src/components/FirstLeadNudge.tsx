@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { trackCta } from "@/lib/events";
-import { useIsNativeApp } from "@/lib/platform";
 
 // A one-time, dismissible "refer a friend" nudge at a happy moment — right after
 // a free user captures their very first contact.
@@ -16,7 +15,6 @@ import { useIsNativeApp } from "@/lib/platform";
 // to make one. It's a link now.
 export default function FirstLeadNudge({ leadCount, isPro }: { leadCount: number; isPro: boolean }) {
   const [show, setShow] = useState(false);
-  const native = useIsNativeApp();
 
   useEffect(() => {
     if (isPro || leadCount !== 1) return;
@@ -27,8 +25,11 @@ export default function FirstLeadNudge({ leadCount, isPro }: { leadCount: number
     setShow(true);
   }, [leadCount, isPro]);
 
-  // Native app: this is a referral promo (earn a month of Pro free) — suppressed.
-  if (!show || native) return null;
+  // In the app too (owner, 2026-10-07). It was hidden there as a referral
+  // promo while the app had no purchase path; referrals came back to the app
+  // with in-app purchase (2026-08-26) — Settings and /grow show them — so the
+  // first-contact moment says the same thing on every device.
+  if (!show) return null;
 
   function dismiss() {
     try { localStorage.setItem("sc_firstlead_nudge", "1"); } catch { /* ignore */ }

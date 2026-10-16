@@ -9,7 +9,6 @@ import AppTopNav from "@/components/AppTopNav";
 import MobileNavGate from "@/components/MobileNavGate";
 import HelpWidget from "@/components/HelpWidget";
 import ReferAFriend from "@/components/ReferAFriend";
-import NativeHidden from "@/components/NativeHidden";
 import RateUsCard from "@/components/RateUsCard";
 import { APP_STORE_ID } from "@/lib/app-store";
 import GrowShare from "@/components/GrowShare";
@@ -95,7 +94,7 @@ export default async function GrowPage() {
             {/* Not to an Office account: its referral panel is hidden below and
                 /api/referrals/claim refuses it, so "earns you free Pro" was a
                 promise this page could never keep for them. */}
-            SwiftCard grows by word of mouth. A few seconds here goes a long way{profile.plan !== "enterprise" && <NativeHidden> — and most of it earns <span className="text-gray-300">you</span> free Pro</NativeHidden>}.
+            SwiftCard grows by word of mouth. A few seconds here goes a long way{profile.plan !== "enterprise" && <> — and most of it earns <span className="text-gray-300">you</span> free Pro</>}.
           </p>
         </div>
 

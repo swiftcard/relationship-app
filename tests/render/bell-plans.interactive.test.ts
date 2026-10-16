@@ -252,13 +252,21 @@ describe("Office", () => {
 });
 
 describe("inside the iPhone app", () => {
-  it("Free: still blurred, but no upgrade link, and the Free-state row carries no purchase words", async () => {
+  // Owner, 2026-10-07: the app, the phone website and the computer website
+  // line up. "See who and where →" opens /upgrade in the app too — there that
+  // page is Apple's in-app purchase — so a blurred name is not a dead end in
+  // the app any more. The rows themselves still carry no purchase words.
+  it("Free: still blurred, the same See who and where links as the website, and no purchase words in the rows", async () => {
+    const web = await open(FREE, 390, false);
+    let webLinks = 0;
+    try { webLinks = (await read(web)).seeWho; } finally { await web.context().close(); }
     const page = await open(FREE, 390, true);
     try {
       const r = await read(page);
       expect(r.raw).not.toContain("New York");
       expect(r.blurred.length).toBeGreaterThanOrEqual(5);
-      expect(r.seeWho, "an upgrade link inside the app (App Review 3.1.1)").toBe(0);
+      expect(webLinks).toBeGreaterThan(0);
+      expect(r.seeWho, "the app shows a different number of See who links than the website").toBe(webLinks);
       expect(r.text).not.toMatch(/Subscribe/);
     } finally { await page.context().close(); }
   });

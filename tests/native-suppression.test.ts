@@ -77,14 +77,21 @@ const GUARDS: Guard[] = [
     absent: [/<NativeHidden>\s*\n\s*<div data-tour="settings-refer"/],
   },
   { file: "src/components/ReferAFriend.tsx", patterns: [], absent: [/if \(native\) return null/] },
-  { file: "src/components/FirstLeadNudge.tsx", patterns: [/if \(!show \|\| native\) return null/] },
-  { file: "src/components/GrowShare.tsx", patterns: [/native\s*\n?\s*\?/, /help more people discover SwiftCard/] },
-  { file: "src/app/grow/page.tsx", patterns: [/<NativeHidden>/] },
+  // The rest of the referral loop followed it into the app on 2026-10-07
+  // (owner: the app, the phone website and the computer website must line
+  // up): the first-contact nudge, /grow's "earns you free Pro", Spread the
+  // word's free-month sentence, and the bell's claim row. None may grow its
+  // app-only suppression back.
+  { file: "src/components/FirstLeadNudge.tsx", patterns: [/if \(!show\) return null/], absent: [/useIsNativeApp/] },
+  { file: "src/components/GrowShare.tsx", patterns: [/every friend who joins moves you toward a free month of Pro/], absent: [/help more people discover SwiftCard/, /useIsNativeApp/] },
+  { file: "src/app/grow/page.tsx", patterns: [/earns <span className="text-gray-300">you<\/span> free Pro/], absent: [/<NativeHidden>/] },
   {
     // The bell is the app's one notification list (the dashboard's went with
-    // Quick Contacts, 2026-09-29): referral claims never show in the app.
+    // Quick Contacts, 2026-09-29). The claim row shows in the app, its web
+    // billing wording swapped through NATIVE_BODY_REMAP.
     file: "src/components/NotificationBell.tsx",
-    patterns: [/\.filter\(\(n\) => n\.type !== "referral_claim" && !NATIVE_HIDDEN_TYPES\.has\(n\.type\)\)/],
+    patterns: [/\.filter\(\(n\) => !NATIVE_HIDDEN_TYPES\.has\(n\.type\)\)/],
+    absent: [/n\.type !== "referral_claim"/],
   },
   {
     file: "src/components/HelpWidget.tsx",
@@ -104,9 +111,10 @@ const GUARDS: Guard[] = [
     patterns: [/detectNativeApp\(\)/, /state === "native"/, /native: true/],
   },
   // ── App Store 3.1.1 leak fixes (overnight iOS review audit) ────────────────
-  // Dashboard trial banner: status info may stay, the "Keep Pro →" /pricing CTA
-  // must not render on native.
-  { file: "src/components/TrialBanner.tsx", patterns: [/useIsNativeApp/, /\{!native && !billedFrom && \(/, /\{!native && billedFrom && \(/] },
+  // Dashboard trial banner: "Keep Pro →" opens /upgrade everywhere — in the app
+  // that page is Apple's in-app purchase (2026-10-07). "Keep Office" and the
+  // Stripe trial's "Manage plan" have no app path and stay web-only.
+  { file: "src/components/TrialBanner.tsx", patterns: [/useIsNativeApp/, /\{!billedFrom && \(!native \|\| planName === "Pro"\) && \(/, /\{!native && billedFrom && \(/, /href="\/upgrade"/] },
   // The shared plan chooser (welcome + card-wizard guest step): native gets ONLY
   // the free continue action — no prices, no paid plans, no checkout.
   { file: "src/components/PlanCards.tsx", patterns: [/useIsNativeApp/, /if \(native\) \{/] },

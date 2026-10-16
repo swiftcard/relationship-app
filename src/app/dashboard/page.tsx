@@ -1090,10 +1090,12 @@ export default async function DashboardPage({
                   ? `Pro feature — ${lockedCount} new leads are locked this month. Unlimited leads are only available on the Pro plan`
                   : "Pro feature — You've used your 5 free leads this month. Unlimited leads are only available on the Pro plan"
               }
-              // Native: show only the neutral notice for the cap/locked states
-              // (no UpgradeButton, no referral promo — both are selling). When
-              // it's just the usage counter (near-limit but not at-limit / not
-              // locked), keep it as a pure fact with no selling attached.
+              // Native: the notice with Apple's subscribe button (PlanNotice)
+              // for the cap/locked states, and the same "Invite 3 friends"
+              // line the website shows under it — referrals are in the app
+              // too (owner, 2026-10-07). When it's just the usage counter
+              // (near-limit but not at-limit / not locked), keep it as a pure
+              // fact, as on the web.
               nativeContent={
                 lockedCount > 0 || atLimit ? (
                   <div className="mb-5">
@@ -1105,6 +1107,9 @@ export default async function DashboardPage({
                           : "Pro feature — You've used your 5 free leads this month. Unlimited leads are only available on the Pro plan"
                       }
                     />
+                    <p className="text-amber-200/60 text-xs mt-2 px-1">
+                      Not ready to upgrade? <Link href="/grow" className="font-semibold text-amber-200 underline underline-offset-2">Invite 3 friends</Link> — when they sign up, you get a month of Pro free (up to 3 months).
+                    </p>
                   </div>
                 ) : (
                   <div className="rounded-2xl px-5 py-3.5 mb-5 bg-amber-950/40 border border-amber-800/40">
@@ -1128,7 +1133,7 @@ export default async function DashboardPage({
                   <UpgradeButton />
                 </div>
                 <p className="text-amber-200/60 text-xs mt-2">
-                  Not ready to upgrade? <strong className="text-amber-200">Invite 3 friends</strong> — when they sign up, you get a month of Pro free (up to 3 months).
+                  Not ready to upgrade? <Link href="/grow" className="font-semibold text-amber-200 underline underline-offset-2">Invite 3 friends</Link> — when they sign up, you get a month of Pro free (up to 3 months).
                 </p>
               </div>
             </PlanGate>

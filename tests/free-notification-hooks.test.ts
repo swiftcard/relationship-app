@@ -56,9 +56,13 @@ describe("someone who keeps coming back", () => {
 });
 
 describe("the way to the blurred part", () => {
-  it("is web-only, only on a redacted row, and names no plan or price", () => {
+  it("is on every device, only on a redacted row, and names no plan or price", () => {
     const c = code("src/components/SeeWhoLink.tsx");
-    expect(c).toMatch(/if \(isNative \|\| !text\.includes\("█"\)\) return null/);
+    // In the app too since 2026-10-07: /upgrade there is Apple's in-app
+    // purchase, so the blurred name is no longer a dead end in the app.
+    expect(c).toMatch(/if \(!text\.includes\("█"\)\) return null/);
+    expect(c).not.toMatch(/useIsNativeApp/);
+    expect(c).toContain('href="/upgrade?from=notification"');
     expect(c).not.toMatch(/\bPro\b|upgrade to|price|\$\d/i);
     expect(c).toContain("See who and where");
   });
@@ -83,7 +87,9 @@ describe("the app never shows selling or billing copy in a notification", () => 
     const bell = read("src/components/NotificationBell.tsx");
     expect(bell).toMatch(/NATIVE_HIDDEN_TYPES\.has\(n\.type\)/);
     expect(bell).toMatch(/NATIVE_BODY_REMAP\[n\.type\]/);
-    expect(bell).toMatch(/n\.type !== "referral_claim"/);
+    // The claim row shows in the app (2026-10-07) with a neutral body.
+    expect(NATIVE_BODY_REMAP.referral_claim).toBeDefined();
+    expect(bell).not.toMatch(/n\.type !== "referral_claim"/);
     expect(bell).toMatch(/useIsNativeApp\(\)/);
   });
 });
