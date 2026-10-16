@@ -104,9 +104,35 @@ export async function GET() {
   // ── Cards ────────────────────────────────────────────────────────────────
   const { count: cardTotal } = await admin.from("cards").select("*", { count: "exact", head: true });
 
+  // WHAT COUNTS (audit A-03, A-06). Leads and views are keyed by card slug, and
+  // a deleted or QA account's rows outlive it: 84% of leads and a third of card
+  // views belonged to cards that no longer exist. And every new card is seeded
+  // with a sample contact (lib/demo-contact, tagged "demo", source "qr_code"):
+  // 219 of 245 "leads" were that sample, so the total read ~9x real, "QR code"
+  // looked like the dominant channel and "activated cards" equalled "cards".
+  // Every customer-facing reader already left the sample out; this one forgot.
+  // So: only rows of cards that exist now, and never the sample contact.
+  const liveSlugs = new Set<string>();
+  for (let from = 0; ; from += 1000) {
+    const { data } = await admin.from("cards").select("username").range(from, from + 999);
+    for (const c of data ?? []) if (c.username) liveSlugs.add(c.username as string);
+    if (!data || data.length < 1000) break;
+  }
+  const isLiveSlug = (slug: unknown) => typeof slug === "string" && liveSlugs.has(slug.replace(/__links$/, ""));
+  const isRealLead = (l: { card_owner?: unknown; tags?: unknown }) =>
+    isLiveSlug(l.card_owner) && !(Array.isArray(l.tags) && (l.tags as unknown[]).includes("demo"));
+
   // ── Leads (contacts captured) ────────────────────────────────────────────
-  const { count: leadTotal } = await admin.from("leads").select("*", { count: "exact", head: true });
-  const { data: recentLeads } = await admin.from("leads").select("created_at, source").gte("created_at", iso(30)).limit(1000);
+  const allLeads: { card_owner: unknown; tags: unknown }[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data } = await admin.from("leads").select("card_owner, tags").range(from, from + 999);
+    allLeads.push(...((data ?? []) as { card_owner: unknown; tags: unknown }[]));
+    if (!data || data.length < 1000) break;
+  }
+  const realLeads = allLeads.filter(isRealLead);
+  const leadTotal = realLeads.length;
+  const { data: recentLeadRows } = await admin.from("leads").select("created_at, source, card_owner, tags").gte("created_at", iso(30)).limit(1000);
+  const recentLeads = (recentLeadRows ?? []).filter(isRealLead);
   const leadsSeries: Record<string, number> = {};
   for (let i = 29; i >= 0; i--) leadsSeries[dayKey(now - i * DAY)] = 0;
   const bySource: Record<string, number> = {};
@@ -121,10 +147,9 @@ export async function GET() {
     bySource[src] = (bySource[src] ?? 0) + 1;
   });
 
-  // Top cards by leads (all-time, from card_owner).
-  const { data: leadOwners } = await admin.from("leads").select("card_owner").limit(5000);
+  // Top cards by leads (all-time, from card_owner) — live cards, real leads.
   const ownerCounts: Record<string, number> = {};
-  (leadOwners ?? []).forEach((l) => {
+  realLeads.forEach((l) => {
     const o = (l.card_owner as string) || "";
     if (o) ownerCounts[o] = (ownerCounts[o] ?? 0) + 1;
   });
@@ -139,10 +164,18 @@ export async function GET() {
   // silently dropped them (NULL LIKE is NULL), so `total` and the 30-day loop
   // below (whose isSeededView(null) is false) were counting two different
   // populations.
-  const { count: viewTotal } = await admin
-    .from("card_views")
-    .select("*", { count: "exact", head: true })
-    .or(`visitor_id.is.null,visitor_id.not.like.${SEEDED_VISITOR_PREFIX}%`);
+  // Live cards only (A-03), counted here because the filter can't be expressed
+  // as one query without a join PostgREST doesn't have for a slug key.
+  let viewTotal = 0;
+  for (let from = 0; ; from += 1000) {
+    const { data } = await admin
+      .from("card_views")
+      .select("username, visitor_id")
+      .or(`visitor_id.is.null,visitor_id.not.like.${SEEDED_VISITOR_PREFIX}%`)
+      .range(from, from + 999);
+    for (const v of data ?? []) if (isLiveSlug(v.username)) viewTotal++;
+    if (!data || data.length < 1000) break;
+  }
   // card_views has viewed_at (NOT created_at) — selecting the wrong column made
   // this whole block silently return nothing and the views charts showed 0.
   // Ordered newest-first: with no order, hitting the 5000 cap kept an ARBITRARY
@@ -156,6 +189,7 @@ export async function GET() {
   let cardViews30 = 0, linkViews30 = 0, views7 = 0;
   (recentViews ?? []).forEach((v) => {
     if (isSeededView(v.visitor_id as string | null)) return;
+    if (!isLiveSlug(v.username)) return;
     const t = new Date(v.viewed_at as string).getTime();
     if (t >= now - 7 * DAY) views7++;
     if (((v.username as string) || "").endsWith("__links")) linkViews30++; else cardViews30++;

@@ -75,6 +75,10 @@ async function countRecentVisits(
   }
 }
 
+/** Cookieless views + saves one IP may add to one card per day (audit A-09). */
+const UNPROVEN_VIEWS_PER_DAY = 300;
+const UNPROVEN_VIEWS_WINDOW_MS = 86_400_000;
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -132,6 +136,17 @@ export async function POST(req: NextRequest) {
 
     const visitIdentity = resolveVisitIdentity(req, client_visitor_id);
     const visitor_id = visitIdentity.visitorId;
+    // No visitor cookie came with this request: the id is the client's word
+    // (taken from the body) or freshly minted. That is every real first-time
+    // visitor — the tracker always sends its own new id — AND the whole of a
+    // forged view: a direct POST with a fresh random visitor_id each time
+    // counted as a new unique visitor, pushed the owner and advanced
+    // milestones (audit A-09). The two can't be told apart from the request,
+    // and the device-key dedupe is no answer: two iPhones on one Wi-Fi share
+    // that key, which deleted the second person's view of a QR code passed
+    // around a room (owner, 2026-09-18). So such views are bounded instead —
+    // see UNPROVEN_VIEWS_PER_DAY below.
+    const identityUnproven = visitIdentity.setCookie;
 
     // ── Every exit from here on records WHY ───────────────────────────────────
     // The pipeline used to decline a request and keep no trace, so "why is that
@@ -180,6 +195,16 @@ export async function POST(req: NextRequest) {
     // flood, not shape normal traffic.
     const RATE_BUDGET: Record<string, number> = { viewed_card: 60, clicked_link: 60, downloaded_vcard: 20 };
     if (await isRateLimited(`card-events:${ip}:${card_owner_username}:${event_type}`, RATE_BUDGET[event_type] ?? 20, 10 * 60 * 1000)) {
+      return decided("rate_limited", { rateLimited: true });
+    }
+    // …and a daily ceiling for views and saves from cookieless identities, per
+    // IP per card, that no rotating of visitor ids or user agents gets past
+    // (A-09): one machine went from 8,640 forged views a day per card to this.
+    // Set well above any real crowd — a trade-show Wi-Fi is hundreds of genuine
+    // first-time visitors on one IP (A-08), each counted; a returning visitor
+    // carries the cookie and is never held to it.
+    if (identityUnproven && (event_type === "viewed_card" || event_type === "downloaded_vcard")
+      && await isRateLimited(`views-unproven-day:${ip}:${card_owner_username}`, UNPROVEN_VIEWS_PER_DAY, UNPROVEN_VIEWS_WINDOW_MS)) {
       return decided("rate_limited", { rateLimited: true });
     }
 
