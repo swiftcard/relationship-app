@@ -66,6 +66,12 @@ export async function sendPushToUser(userId: string, payload: {
   context?: string | null;
   /** iOS notification group (aps thread-id). Defaults to the tag. */
   thread?: string;
+  /**
+   * The bell row this push announces. It rides in the payload so a tap on the
+   * lock screen (NativeAppBridge, sw.js) marks that row read: the bell and the
+   * icon's red number used to keep counting news already answered (audit N-01).
+   */
+  notificationId?: string | null;
 }) {
   const admin = getAdminSupabase();
 

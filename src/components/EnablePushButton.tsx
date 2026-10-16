@@ -193,17 +193,22 @@ export function usePushState(): [State, () => Promise<boolean>, FailReason, Rech
           const perm = await PushNotifications.checkPermissions();
           if (perm.receive === "denied") { setDeviceState("denied"); return; }
           let stored: string | null = null;
-          try { stored = localStorage.getItem(APNS_ENDPOINT_KEY); } catch { /* ignore */ }
-          const on = perm.receive === "granted" && !!stored;
+          let owner: string | null = null;
+          try {
+            stored = localStorage.getItem(APNS_ENDPOINT_KEY);
+            owner = localStorage.getItem(PUSH_UID_KEY);
+          } catch { /* ignore */ }
+          const uid = await sessionUid();
+          // ON only when this phone's binding belongs to whoever is signed in.
+          // A token left from someone else (or from before a sign-out) used to
+          // read "On for this device" while the server had no row for this
+          // account at all, so nothing ever arrived (audit N-11).
+          const on = perm.receive === "granted" && !!stored && !!uid && owner === uid;
           setDeviceState(on ? "subscribed" : "idle");
-          // Only for the account that enabled push on this device — never bind
-          // a device to an account that did not ask (lib/push-device.ts).
-          if (on && stored) {
-            let owner: string | null = null;
-            try { owner = localStorage.getItem(PUSH_UID_KEY); } catch { /* ignore */ }
-            const uid = await sessionUid();
-            if (uid && owner === uid) reconfirmSubscription({ endpoint: stored, p256dh: "apns", auth: "apns" });
-          }
+          // …and the server row is put back if it went missing. Only for the
+          // account that enabled push here — never bind a device to an
+          // account that did not ask (lib/push-device.ts).
+          if (on && stored) reconfirmSubscription({ endpoint: stored, p256dh: "apns", auth: "apns" });
         } catch {
           setDeviceState("native");
         }

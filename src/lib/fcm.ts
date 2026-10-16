@@ -48,6 +48,8 @@ export type FcmAlertPayload = {
   /** Notification group. Android stacks by `tag`; `thread` maps onto it when
    *  set, so team news groups apart from personal alerts, as it does on iOS. */
   thread?: string;
+  /** The bell row this push is about, so tapping it marks that row read (audit N-01). */
+  notificationId?: string | null;
 };
 
 /**
@@ -154,7 +156,7 @@ export function buildFcmMessage(payload: FcmAlertPayload, token: string): Record
     message: {
       token,
       notification: { title: payload.title, body: payload.body },
-      data: { url: payload.url },
+      data: { url: payload.url, ...(payload.notificationId ? { nid: payload.notificationId } : {}) },
       android: {
         priority: silent ? "NORMAL" : "HIGH",
         ...(group ? { collapse_key: group } : {}),

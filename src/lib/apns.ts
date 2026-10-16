@@ -230,6 +230,8 @@ export type ApnsAlertPayload = {
   thread?: string;
   /** The app icon's red number: the person's unread notifications (0 clears it). */
   badge?: number;
+  /** The bell row this push is about, so tapping it marks that row read (audit N-01). */
+  notificationId?: string | null;
 };
 
 /**
@@ -271,6 +273,9 @@ export function buildApnsAlert(payload: ApnsAlertPayload, topic: string): {
     // Custom key: the in-app destination. NativeAppBridge navigates here when
     // the user taps the notification.
     url: payload.url,
+    // Custom key: the bell row it is about. NativeAppBridge marks it read on
+    // the tap, so answering from the lock screen clears it (audit N-01).
+    ...(payload.notificationId ? { nid: payload.notificationId } : {}),
   });
 
   // apns-collapse-id is what makes "one notification per visitor per visit"

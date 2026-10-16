@@ -248,8 +248,10 @@ describe("turning notifications on", () => {
 
   it("a switch that shows ON re-confirms this device with the server, once per session", () => {
     expect(src).toMatch(/function reconfirmSubscription\(/);
-    // Native: only for the account that enabled push on this device.
-    expect(src).toMatch(/if \(uid && owner === uid\) reconfirmSubscription\(/);
+    // Native: only for the account that enabled push on this device, and the
+    // switch only reads ON for that account (audit N-11).
+    expect(src).toMatch(/const on = perm\.receive === "granted" && !!stored && !!uid && owner === uid;/);
+    expect(src).toMatch(/if \(on && stored\) reconfirmSubscription\(/);
     expect(src).toMatch(/sessionStorage\.getItem\(RECONFIRM_KEY\) === body\.endpoint/);
   });
 

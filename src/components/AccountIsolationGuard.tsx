@@ -102,7 +102,17 @@ export default function AccountIsolationGuard() {
       // binding would otherwise keep pushing the previous account's activity
       // to this device. Fire-and-forget — identity hygiene must never delay a
       // page.
-      void import("@/lib/push-device").then(({ unbindDevicePush }) => unbindDevicePush()).catch(() => {});
+      //
+      // Except when the binding IS this person's (its owner stamp names them:
+      // a session that lapsed and came back, say). Severing it then turned
+      // push off for the same person, for good (audit NS-05). And when this
+      // person had push on here when they last signed out, it comes back
+      // (resumePushForSameAccount), without asking again.
+      void import("@/lib/push-device").then(async ({ pushBindingOwner, unbindDevicePush, resumePushForSameAccount }) => {
+        if (sessionUid && pushBindingOwner() === sessionUid) return;
+        await unbindDevicePush();
+        if (sessionUid) await resumePushForSameAccount(sessionUid);
+      }).catch(() => {});
       // The visitor cookie too (httpOnly — only the server can drop it): kept,
       // the next person's card views were credited to whoever used this
       // browser before them (isolation audit 2026-09-24).

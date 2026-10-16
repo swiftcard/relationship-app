@@ -61,7 +61,8 @@ describe("silent token refresh — rotated APNs tokens stop being silent death",
   it("the enable button stamps which uid opted in; unbind clears the stamp", () => {
     expect(enable).toMatch(/PUSH_UID_KEY = "swiftcard_push_uid"/);
     expect(enable).toMatch(/localStorage\.setItem\(PUSH_UID_KEY, uid\)/);
-    expect(device).toMatch(/removeItem\("swiftcard_push_uid"\)/);
+    expect(device).toMatch(/export const PUSH_UID_KEY = "swiftcard_push_uid"/);
+    expect(device).toMatch(/removeItem\(PUSH_UID_KEY\)/);
   });
 });
 

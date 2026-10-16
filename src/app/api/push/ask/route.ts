@@ -30,6 +30,22 @@ async function alreadyOn(userId: string, platform: AskPlatform): Promise<boolean
   return pushAlreadyOn((data ?? []).map((r) => String(r.endpoint)), platform);
 }
 
+/**
+ * Did push once WORK for this account? A delivered push on record, read only
+ * once nothing of theirs is receiving any more (the caller checks that): then
+ * it was lost, not refused, and one more reminder is allowed (lib/push-ask).
+ * A failed read says no: never nag on a guess.
+ */
+async function hadPushBefore(userId: string): Promise<boolean> {
+  const { data, error } = await getAdminSupabase()
+    .from("push_log")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("outcome", "sent")
+    .limit(1);
+  return !error && (data ?? []).length > 0;
+}
+
 /** For the dashboard box: is there any point asking this account, here, now? */
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
@@ -100,8 +116,9 @@ export async function POST(req: NextRequest) {
   // different rows at once cannot both spend a reminder the budget does not
   // have — the loser re-decides against what the winner wrote.
   let show = false;
+  const lostPush = await hadPushBefore(user.id);
   const r = await mutateCustomization<unknown>(user.id, PUSH_ASK_KEY, (cur) => {
-    const d = decidePushAsk(readPushAsk(cur), platform, id);
+    const d = decidePushAsk(readPushAsk(cur), platform, id, Date.now(), { lostPush });
     show = d.show;
     return d.next ?? cur;
   });

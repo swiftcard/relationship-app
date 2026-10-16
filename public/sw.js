@@ -287,7 +287,8 @@ self.addEventListener("push", (event) => {
       tag: data.tag ?? "swiftcard",
       renotify: !silent,
       silent,
-      data: { url: data.url ?? "/dashboard" },
+      // nid: the bell row this is about, so the click below can mark it read.
+      data: { url: data.url ?? "/dashboard", nid: data.notificationId ?? null },
       actions,
     })
   );
@@ -301,8 +302,22 @@ self.addEventListener("notificationclick", (event) => {
   // is about. There is deliberately no path out of here that completes a task
   // without opening SwiftCard — see the note on `actions` above.
   const url = notifData.url ?? "/dashboard";
-  event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
+
+  // Clicking the notification is reading it: mark its bell row read, so the
+  // bell stops counting news already answered (audit N-01). Only with a real
+  // id — a PATCH with no id means "mark ALL read". Same-origin, so the
+  // session cookie goes with it; a failure costs nothing but the read mark.
+  const nid = typeof notifData.nid === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(notifData.nid) ? notifData.nid : null;
+  const markRead = nid
+    ? fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: nid, read: true }),
+        credentials: "same-origin",
+      }).catch(() => {})
+    : Promise.resolve();
+
+  event.waitUntil(Promise.all([markRead, clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
       // If a SwiftCard tab is already open, navigate it to the target URL and focus
       for (const client of windowClients) {
         if ("navigate" in client) {
@@ -311,6 +326,5 @@ self.addEventListener("notificationclick", (event) => {
         }
       }
       return clients.openWindow(url);
-    })
-  );
+    })]));
 });

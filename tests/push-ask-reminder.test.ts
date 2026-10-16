@@ -55,7 +55,7 @@ describe.each(["app", "web"] as AskPlatform[])("a few reminders, then never agai
   it("the first important notification gets a reminder, and it is recorded on this side", () => {
     const d = decidePushAsk(empty, platform, "lead-1", NOW);
     expect(d.show).toBe(true);
-    expect(d.next![platform]).toEqual({ n: 1, at: new Date(NOW).toISOString(), id: "lead-1", later: false });
+    expect(d.next![platform]).toEqual({ n: 1, at: new Date(NOW).toISOString(), id: "lead-1", later: false, again: false });
   });
 
   it("the SAME notification is one reminder however often the bell is opened", () => {
@@ -134,12 +134,12 @@ describe("the app's reminders are its own", () => {
 
   it("the first release's flat record is read as the website's — it can only make the website ask less", () => {
     const legacy = readPushAsk({ n: 1, at: new Date(NOW).toISOString(), id: "lead-1", later: true, stop: false });
-    expect(legacy.web).toEqual({ n: 1, at: new Date(NOW).toISOString(), id: "lead-1", later: true });
-    expect(legacy.app).toEqual({ n: 0, at: null, id: null, later: false });
+    expect(legacy.web).toEqual({ n: 1, at: new Date(NOW).toISOString(), id: "lead-1", later: true, again: false });
+    expect(legacy.app).toEqual({ n: 0, at: null, id: null, later: false, again: false });
   });
 
   it("reads anything stored — or nothing, or junk — as a sane ledger", () => {
-    const blank = { n: 0, at: null, id: null, later: false };
+    const blank = { n: 0, at: null, id: null, later: false, again: false };
     expect(readPushAsk(null)).toEqual({ app: blank, web: blank, stop: false });
     expect(readPushAsk({ app: { n: "7", later: 1 }, stop: "yes" })).toEqual({ app: blank, web: blank, stop: false });
     expect(readPushAsk({ app: { n: 2.9 }, stop: true })).toMatchObject({ app: { n: 2 }, stop: true });
@@ -196,7 +196,7 @@ describe("the server is the authority", () => {
   });
 
   it("decides inside the verified read-modify-write, and an unrecorded ask is not shown", () => {
-    expect(route).toMatch(/mutateCustomization<unknown>\(user\.id, PUSH_ASK_KEY, \(cur\) => \{\s*\n\s*const d = decidePushAsk\(readPushAsk\(cur\), platform, id\);/);
+    expect(route).toMatch(/mutateCustomization<unknown>\(user\.id, PUSH_ASK_KEY, \(cur\) => \{\s*\n\s*const d = decidePushAsk\(readPushAsk\(cur\), platform, id, Date\.now\(\), \{ lostPush \}\);/);
     expect(route).toMatch(/if \(!r\.ok\) return NextResponse\.json\(\{ show: false \}\);/);
   });
 });

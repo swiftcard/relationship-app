@@ -1,4 +1,6 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { isNativeRequest } from "@/lib/native-request";
+import { syncAppBadge } from "@/lib/push";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { createClient } from "@/lib/supabase-server";
@@ -67,6 +69,8 @@ export default async function ContactsPage({
   // the owner's own rows, and it never holds up the page.
   if (selectedLeadParam && /^[0-9a-f-]{36}$/i.test(selectedLeadParam)) {
     const ownerId = user.id;
+    // In the app the app sets its own icon number (lib/app-badge-sync).
+    const inApp = isNativeRequest((await headers()).get("user-agent"), cookieStore.get("sc_shell")?.value ?? null);
     after(async () => {
       try {
         await getAdminSupabase()
@@ -76,6 +80,18 @@ export default async function ContactsPage({
           .eq("lead_id", selectedLeadParam)
           .is("opened_at", null);
       } catch { /* measurement only */ }
+      // …and READ: looking at the contact is reading the news about them.
+      // Only the bell row tap used to mark anything read, so the bell and the
+      // icon's red number kept counting contacts already opened (audit N-01).
+      try {
+        const { error } = await getAdminSupabase()
+          .from("notifications")
+          .update({ read: true })
+          .eq("user_id", ownerId)
+          .eq("lead_id", selectedLeadParam)
+          .eq("read", false);
+        if (!error && !inApp) await syncAppBadge(ownerId);
+      } catch { /* the bell still has its own Read buttons */ }
     });
   }
   const cookieCard = cookieStore.get(ACTIVE_CARD_COOKIE)?.value ?? null;

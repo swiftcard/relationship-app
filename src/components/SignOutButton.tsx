@@ -37,7 +37,7 @@ export default function SignOutButton({ variant = "text" }: { variant?: Variant 
     // The one shared release (lib/device-sign-out): push binding severed,
     // session ended, every person-scoped key and the visitor cookie cleared —
     // the same steps on every path that lets go of a person.
-    await releaseDevice();
+    await releaseDevice({ rememberPush: true });
     // HARD navigation to the marketing front page, REPLACING this entry — a
     // full reload leaves no client state or cached screen behind, and Back
     // can't bring the signed-out account's page up from history.

@@ -404,7 +404,13 @@ export default function NativeAppBridge() {
       try {
         const { PushNotifications } = await import("@capacitor/push-notifications");
         const tapHandle = await PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
-          const dest = (action?.notification?.data as { url?: string } | undefined)?.url;
+          const data = action?.notification?.data as { url?: string; nid?: string } | undefined;
+          // Tapping the push is reading it: mark its bell row read, so the
+          // bell and the icon's red number stop counting news already
+          // answered from the lock screen (audit N-01). Only with a real id —
+          // a PATCH with no id means "mark ALL read".
+          markNotificationRead(data?.nid);
+          const dest = data?.url;
           if (typeof dest !== "string") return;
           // Senders pass ABSOLUTE urls (`${APP_URL}/dashboard?card=…`) — the
           // old relative-only guard rejected every one of them, so tapping a
@@ -475,6 +481,9 @@ export default function NativeAppBridge() {
                   body: JSON.stringify({ endpoint, p256dh: "apns", auth: "apns", replaces: previous, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
                 }).then((r) => {
                   if (r.ok) { try { localStorage.setItem("swiftcard_apns_endpoint", endpoint); } catch { /* ignore */ } }
+                  // A refused re-registration used to vanish: the phone
+                  // silently stopped receiving pushes (audit N-11).
+                  else if (r.status !== 401 && r.status !== 429) reportPushRefreshFailure(`launch re-register returned ${r.status}`);
                 }).catch(() => { /* offline — next launch retries */ });
               });
               const prevReg = removeListener;
@@ -482,7 +491,10 @@ export default function NativeAppBridge() {
               await PushNotifications.register();
             }
           }
-        } catch { /* refresh is best-effort — enable button remains the fallback */ }
+        } catch (e) {
+          // Best-effort — the enable button remains the fallback — but said.
+          reportPushRefreshFailure(`launch re-register threw: ${e instanceof Error ? e.message : String(e)}`);
+        }
       } catch { /* push plugin absent — fine */ }
 
       await syncWidgetCard();
@@ -497,6 +509,33 @@ export default function NativeAppBridge() {
   }, []);
 
   return null;
+}
+
+const NOTIFICATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** One bell row read, by id. keepalive: the tap navigates away at once. */
+function markNotificationRead(id: unknown): void {
+  if (typeof id !== "string" || !NOTIFICATION_ID.test(id)) return;
+  try {
+    fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, read: true }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch { /* never block the tap */ }
+}
+
+/** A push failure nobody would otherwise see, filed like the switch's own (EnablePushButton). */
+function reportPushRefreshFailure(message: string): void {
+  try {
+    fetch("/api/client-error", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ context: "push.refresh", message, url: location.origin + location.pathname }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch { /* reporting must never throw */ }
 }
 
 /** A swiftcard:// link that arrived while this page's chunks were stale. */

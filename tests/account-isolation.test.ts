@@ -151,14 +151,16 @@ describe("wiring — the guard and sign-out actually run this", () => {
     // lib/device-sign-out is the single sequence (isolation audit 2026-09-24:
     // Settings → Devices and account delete used to skip it).
     const release = read("src/lib/device-sign-out.ts");
-    const unbindAt = release.indexOf("await unbindDevicePush()");
+    const unbindAt = release.indexOf("await unbindDevicePush({ rememberFor })");
     const signOutAt = release.indexOf(".auth.signOut()");
     expect(unbindAt).toBeGreaterThan(-1);
     expect(signOutAt).toBeGreaterThan(unbindAt);
     expect(release).toMatch(/clearPersonScopedState\(\{ includeGuestFlow: true \}\)/);
     expect(release).toContain("LAST_AUTH_UID_KEY");
     expect(release).toContain('"/api/visit-identity/reset"');
-    expect(signOut).toContain("await releaseDevice();");
+    // A plain sign-out also remembers who had push on, for their own next
+    // sign-in (lib/push-device, audit NS-05); the other paths don't.
+    expect(signOut).toContain("await releaseDevice({ rememberPush: true });");
     expect(signOut).toContain('window.location.replace("/")');
     expect(read("src/components/JoinSwitchAccount.tsx")).toContain("await releaseDevice();");
     expect(read("src/components/DeviceManager.tsx")).toContain("await releaseDevice();");

@@ -218,6 +218,9 @@ export async function notifyVisit(opts: {
   // held back, and someone handing over their details after browsing is a big
   // enough change in the news to be worth the second buzz. The capped ones
   // (a view, a download) are nice to know: they update the row and wait.
+  // The bell row the push announces: its id rides in the payload so a tap on
+  // the lock screen marks it read (audit N-01). Set just before each push().
+  let notificationId: string | null = null;
   const push = async (onUpgrade = false) => {
     if (!notice.pushCategory) return;   // bell-only news
     if (onUpgrade && !UNCAPPED.includes(notice.pushCategory)) return;
@@ -232,10 +235,14 @@ export async function notifyVisit(opts: {
       // the banner instead of stacking a second one.
       tag,
       leadId: notice.leadId,
+      notificationId,
     }).catch(() => { /* a dead subscription must never fail the event */ });
   };
 
   const row = {
+    // Chosen here rather than by the database, so the push can carry it
+    // without a second round trip.
+    id: crypto.randomUUID(),
     user_id: opts.userId,
     card_owner: opts.cardOwner,
     type: notice.type,
@@ -249,9 +256,11 @@ export async function notifyVisit(opts: {
   // Known open visit: upgrade it, or stay quiet. No second row, no second buzz.
   if (open) {
     if (rankOf(notice.type) <= rankOf(open.type)) return "suppressed";
+    notificationId = open.id;
     return (await upgrade(admin, opts.userId, open.id, notice)) ? (await push(true), "upgraded") : "failed";
   }
 
+  notificationId = row.id;
   const { error } = await admin.from("notifications").insert(row);
   if (!error) {
     await push();
@@ -308,6 +317,7 @@ export async function notifyVisit(opts: {
       return "created";
     }
     if (rankOf(notice.type) <= rankOf(existing.type as string)) return "suppressed";
+    notificationId = existing.id as string;
     return (await upgrade(admin, opts.userId, existing.id as string, notice)) ? (await push(true), "upgraded") : "failed";
   }
 

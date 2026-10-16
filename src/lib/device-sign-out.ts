@@ -12,10 +12,17 @@ import { setAppBadge } from "@/lib/app-badge";
 // (isolation audit 2026-09-24). Every path runs this, then a HARD navigation
 // (location.replace) so no client router cache or back-forward entry keeps
 // their screens.
-export async function releaseDevice(opts: { serverAlreadySignedOut?: boolean } = {}): Promise<void> {
+export async function releaseDevice(opts: { serverAlreadySignedOut?: boolean; rememberPush?: boolean } = {}): Promise<void> {
   // Push first: the previous account's alerts must stop reaching this lock
-  // screen. Bounded internally, never throws.
-  await unbindDevicePush();
+  // screen. Bounded internally, never throws. A plain sign-out (rememberPush)
+  // also notes who had push on here, so their OWN next sign-in reconnects it
+  // (lib/push-device, audit NS-05). Switching account, signing a device out
+  // from Settings and deleting the account don't.
+  let rememberFor: string | null = null;
+  if (opts.rememberPush) {
+    try { rememberFor = localStorage.getItem(LAST_AUTH_UID_KEY); } catch { /* storage blocked */ }
+  }
+  await unbindDevicePush({ rememberFor });
   // …and their unread count must not stay on the app icon (lib/app-badge).
   setAppBadge(0);
   if (!opts.serverAlreadySignedOut) {

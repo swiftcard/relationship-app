@@ -25,7 +25,12 @@
 //             app does, a computer has nothing to add and stays quiet. An
 //             iPhone browser tab cannot get web push without "Add to Home
 //             Screen", so there the reminder points to the app instead.
-//   • EACH gets at most PUSH_ASK_MAX reminders, PUSH_ASK_GAP_MS apart.
+//   • EACH gets at most PUSH_ASK_MAX reminders, PUSH_ASK_GAP_MS apart. Plus
+//     ONE more, ever, when push used to WORK for this account and is now gone
+//     (a delivered push on record, no device left): their phone stopped
+//     getting what they had said yes to, which is not the same as having
+//     said no (audit N-11; production was down to one registered device).
+//     "Don't ask again" still beats it.
 //   • NEVER AGAIN, anywhere, once they chose "Don't ask again" or switched
 //     push OFF themselves — "if they really don't want push notifications on,
 //     they don't want it on." A "Don't Allow" at the phone's own prompt is
@@ -64,6 +69,8 @@ export type AskTrack = {
   id: string | null;
   /** "Not now" was tapped on that one. */
   later: boolean;
+  /** The one extra reminder for push that worked and was lost has been used. */
+  again: boolean;
 };
 
 export type PushAskLedger = {
@@ -73,7 +80,7 @@ export type PushAskLedger = {
   stop: boolean;
 };
 
-const EMPTY_TRACK: AskTrack = { n: 0, at: null, id: null, later: false };
+const EMPTY_TRACK: AskTrack = { n: 0, at: null, id: null, later: false, again: false };
 
 function readTrack(raw: unknown): AskTrack {
   if (!raw || typeof raw !== "object") return { ...EMPTY_TRACK };
@@ -83,6 +90,7 @@ function readTrack(raw: unknown): AskTrack {
     at: typeof r.at === "string" ? r.at : null,
     id: typeof r.id === "string" ? r.id : null,
     later: r.later === true,
+    again: r.again === true,
   };
 }
 
@@ -139,18 +147,20 @@ export function decidePushAsk(
   platform: AskPlatform,
   id: string,
   now: number = Date.now(),
+  opts: { lostPush?: boolean } = {},
 ): { show: boolean; next: PushAskLedger | null } {
   if (ledger.stop) return { show: false, next: null };
   const t = ledger[platform];
   if (t.id === id) return { show: !t.later, next: null };
-  if (t.n >= PUSH_ASK_MAX) return { show: false, next: null };
+  const spent = t.n >= PUSH_ASK_MAX;
+  if (spent && !(opts.lostPush && !t.again)) return { show: false, next: null };
   if (t.at) {
     const last = Date.parse(t.at);
     if (Number.isFinite(last) && now - last < PUSH_ASK_GAP_MS) return { show: false, next: null };
   }
   return {
     show: true,
-    next: withTrack(ledger, platform, { n: t.n + 1, at: new Date(now).toISOString(), id, later: false }),
+    next: withTrack(ledger, platform, { n: t.n + 1, at: new Date(now).toISOString(), id, later: false, again: t.again || spent }),
   };
 }
 
