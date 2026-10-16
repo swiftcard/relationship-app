@@ -315,15 +315,6 @@ html:not([data-sc-theme="light"]) .sc-app .sc-segmented > .is-active { backgroun
 .sc-alert-in { animation: sc-alert-in 0.22s var(--sc-spring) both; }
 .sc-scrim-in { animation: sc-scrim-in 0.25s ease both; }
 
-/* ── Dialogs arrive, they do not pop ─────────────────────────────────────────
-   Every modal panel in the app (role=dialog, aria-modal) fades in over 180ms.
-   Opacity only — a transform on a fixed panel makes it the containing block
-   for anything fixed inside it while it runs (the lesson of sc-step-in), and
-   layout tests measure the final geometry from the first frame. The scrim
-   behind it fades with it. Off under reduced motion (the catch-all below). */
-@keyframes sc-dialog-in { from { opacity: 0; } to { opacity: 1; } }
-.sc-app [role="dialog"][aria-modal="true"], [role="dialog"][aria-modal="true"].sc-app { animation: sc-dialog-in 0.18s ease-out both; }
-
 /* ── Press state: every control answers a touch (HIG: "always include a press
    state"). Transform only, so nothing reflows; the catch-all reduced-motion
    block further down strips the transform transition. Scoped to leaf controls:
