@@ -54,7 +54,16 @@ function makeQuery(name: string) {
   return chain;
 }
 
-vi.mock("@/lib/supabase-admin", () => ({ getAdminSupabase: () => ({ from: (t: string) => makeQuery(t) }) }));
+// merge_customization (supabase/merge-customization.sql): `(customization - remove) || set` on the one row.
+const rpc = async (_fn: string, a: { p_user: string; p_set: Record<string, unknown>; p_remove: string[] }) => {
+  const row = (db.profiles ?? []).find((r) => r.id === a.p_user);
+  if (!row) return { data: null, error: null };
+  const next = { ...((row.customization as Record<string, unknown> | null) ?? {}) };
+  for (const k of a.p_remove ?? []) delete next[k];
+  row.customization = { ...next, ...(a.p_set ?? {}) };
+  return { data: row.customization, error: null };
+};
+vi.mock("@/lib/supabase-admin", () => ({ getAdminSupabase: () => ({ from: (t: string) => makeQuery(t), rpc }) }));
 vi.mock("@/lib/supabase-server", () => ({ createClient: async () => ({ auth: { getUser: async () => ({ data: { user } }) } }) }));
 vi.mock("@/lib/token-crypto", () => ({ encryptToken: (s: string) => `enc:${s}`, decryptToken: (s: string) => s.replace(/^enc:/, "") }));
 vi.mock("@/lib/rate-limit", () => ({ isRateLimited: async () => false }));

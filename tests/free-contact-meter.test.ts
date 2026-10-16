@@ -42,6 +42,18 @@ const admin = {
       },
     }),
   }),
+  // merge_customization (supabase/merge-customization.sql): only the keys
+  // given are written, under the row's lock — so a concurrent writer can only
+  // land BEFORE or AFTER, never erase what this call set. The read-back guard
+  // in mutateCustomization still has to cope with "after".
+  rpc: async (_fn: string, a: { p_set: Record<string, unknown>; p_remove: string[] }) => {
+    writes.push({ customization: a.p_set });
+    const next = { ...stored };
+    for (const k of a.p_remove ?? []) delete next[k];
+    stored = { ...next, ...a.p_set };
+    if (clobberOnce) { stored = clobberOnce; clobberOnce = null; }
+    return { data: stored, error: null };
+  },
 } as unknown as Parameters<typeof bumpUsage>[0];
 
 import { bumpUsage, readUsage, currentPeriod } from "@/lib/usage";
