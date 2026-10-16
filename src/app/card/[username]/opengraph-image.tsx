@@ -42,7 +42,37 @@ export const dynamic = "force-dynamic";
 // sharp (used to compress the stored capture) needs the Node runtime.
 export const runtime = "nodejs";
 
-type Meta = NonNullable<Awaited<ReturnType<typeof resolveCardMeta>>>;
+type Meta = NonNullable<Awaited<ReturnType<typeof resolveCardMeta>>> & {
+  /** The embedded logo's own width ÷ height (logoAspectOf), when known. */
+  logoAspect?: number | null;
+};
+
+// ── The logo at its own shape ───────────────────────────────────────────────
+// Satori cannot size an image from its intrinsic proportions, so every logo
+// here used to be drawn in a fixed SQUARE box — and a wide or banner wordmark,
+// contained in it, came out a sliver (a 4:1 banner 56×14 in the Modern Bold
+// stand-in). The card itself gives a wide logo its natural width (owner,
+// 2026-10-15); this measures the embedded image once and sizes the box to it.
+async function logoAspectOf(dataUrl: string | null): Promise<number | null> {
+  if (!dataUrl?.startsWith("data:")) return null;
+  try {
+    const sharp = (await import("sharp")).default;
+    const { width, height } = await sharp(Buffer.from(dataUrl.slice(dataUrl.indexOf(",") + 1), "base64")).metadata();
+    return width && height ? width / height : null;
+  } catch {
+    return null;
+  }
+}
+
+/** A logo box `h` tall at the logo's own shape, never wider than `maxW`.
+ *  Unknown shape: the square box it always had. */
+function logoBox(p: Meta, h: number, maxW: number): { width: number; height: number } {
+  const a = p.logoAspect;
+  if (!a || !Number.isFinite(a)) return { width: h, height: h };
+  const width = Math.min(maxW, h * a);
+  return { width: Math.round(width), height: Math.round(Math.min(h, width / a)) };
+}
+
 
 function initialsOf(name: string | null | undefined) {
   return (name ?? "").split(" ").map((n) => n[0] ?? "").join("").toUpperCase().slice(0, 2) || "SC";
@@ -157,7 +187,7 @@ function ModernBoldOG(p: Meta) {
       {/* Company */}
       <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
         {p.logoUrl ? (
-          <img src={p.logoUrl} alt="" width={56} height={56} style={{ borderRadius: 12, objectFit: "contain" }} />
+          <img src={p.logoUrl} alt="" {...logoBox(p, 56, p.company ? 240 : 360)} style={{ borderRadius: 12, objectFit: "contain" }} />
         ) : null}
         {p.company ? <div style={{ fontSize: 26, letterSpacing: 5, color: "#cbd5e1", fontWeight: 700, textTransform: "uppercase" }}>{p.company}</div> : null}
       </div>
@@ -188,7 +218,7 @@ function ClassicProOG(p: Meta) {
       <div style={{ width: "37%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 26, background: "linear-gradient(160deg, #0e1b35 0%, #162947 100%)" }}>
         <Photo url={p.photoUrl} name={p.name ?? ""} size={220} radius={220} border="7px solid rgba(255,255,255,0.18)" bg={BLUE} />
         {p.logoUrl ? (
-          <img src={p.logoUrl} alt="" width={54} height={54} style={{ borderRadius: 12, objectFit: "contain" }} />
+          <img src={p.logoUrl} alt="" {...logoBox(p, 54, 300)} style={{ borderRadius: 12, objectFit: "contain" }} />
         ) : null}
       </div>
       {/* Right white panel */}
@@ -231,7 +261,7 @@ function PhotoFirstOG(p: Meta) {
             pixel-perfect capture landed went out without it. */}
         {p.logoUrl ? (
           <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 22 }}>
-            <img src={p.logoUrl} alt="" width={64} height={64} style={{ borderRadius: 12, objectFit: "contain" }} />
+            <img src={p.logoUrl} alt="" {...logoBox(p, 64, p.company ? 220 : 360)} style={{ borderRadius: 12, objectFit: "contain" }} />
             {p.company ? <div style={{ fontSize: 30, fontWeight: 700, color: ACCENT }}>{p.company}</div> : null}
           </div>
         ) : null}
@@ -257,9 +287,17 @@ function LocalBusinessOG(p: Meta) {
       {/* Header band */}
       <div style={{ height: "33%", display: "flex", alignItems: "center", gap: 24, padding: "0 56px", background: `linear-gradient(100deg, ${AMBER} 0%, #92400e 60%, #f59e0b 100%)` }}>
         {p.logoUrl ? (
-          <div style={{ width: 96, height: 96, borderRadius: 96, background: "rgba(255,255,255,0.92)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <img src={p.logoUrl} alt="" width={68} height={68} style={{ objectFit: "contain" }} />
-          </div>
+          (p.logoAspect ?? 1) > 1.25 ? (
+            // A wide logo gets a plate of its own shape — the card's own badge
+            // is a rounded rectangle — rather than a sliver inside a circle.
+            <div style={{ height: 96, padding: "0 16px", borderRadius: 20, background: "rgba(255,255,255,0.92)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <img src={p.logoUrl} alt="" {...logoBox(p, 68, 300)} style={{ objectFit: "contain" }} />
+            </div>
+          ) : (
+            <div style={{ width: 96, height: 96, borderRadius: 96, background: "rgba(255,255,255,0.92)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <img src={p.logoUrl} alt="" width={68} height={68} style={{ objectFit: "contain" }} />
+            </div>
+          )
         ) : null}
         <div style={{ fontSize: 48, fontWeight: 800, color: "#fff" }}>{p.company || p.name}</div>
       </div>
@@ -294,7 +332,11 @@ function LuxuryMinimalOG(p: Meta) {
               leave the logo off entirely. */}
           {p.logoUrl || p.company ? (
             <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-              {p.logoUrl ? <img src={p.logoUrl} alt="" width={72} height={72} style={{ borderRadius: 72, objectFit: "contain", background: "#ffffff" }} /> : null}
+              {/* A wide logo is not forced into the round badge: it would be
+                  a sliver inside it (logoBox). */}
+              {p.logoUrl ? ((p.logoAspect ?? 1) > 1.25
+                ? <img src={p.logoUrl} alt="" {...logoBox(p, 56, p.company ? 220 : 340)} style={{ borderRadius: 12, objectFit: "contain" }} />
+                : <img src={p.logoUrl} alt="" width={72} height={72} style={{ borderRadius: 72, objectFit: "contain", background: "#ffffff" }} />) : null}
               {p.company ? <div style={{ fontSize: 24, letterSpacing: 7, textTransform: "uppercase", color: "#8c7b60", fontWeight: 600 }}>{p.company}</div> : null}
             </div>
           ) : null}
@@ -400,7 +442,7 @@ function GenericOG(p: Meta) {
       {/* The logo, which this stand-in used to drop. Top-right, clear of the
           name block. */}
       {p.logoUrl ? (
-        <img src={p.logoUrl} alt="" width={96} height={96} style={{ position: "absolute", top: 44, right: 56, borderRadius: 16, objectFit: "contain" }} />
+        <img src={p.logoUrl} alt="" {...logoBox(p, 96, 300)} style={{ position: "absolute", top: 44, right: 56, borderRadius: 16, objectFit: "contain" }} />
       ) : null}
       <div style={{ display: "flex", flex: 1, padding: "44px 56px", alignItems: "center", gap: 48 }}>
         <Photo url={p.photoUrl} name={p.name ?? ""} size={230} radius={230} border={`8px solid ${accent}`} bg={accent} />
@@ -561,6 +603,7 @@ export default async function Image({
     const wantedPhoto = !!meta.photoUrl;
     const wantedLogo = !!meta.logoUrl;
     [meta.photoUrl, meta.logoUrl] = await Promise.all([embedImage(meta.photoUrl, "headshot"), embedImage(meta.logoUrl, "logo")]);
+    meta.logoAspect = await logoAspectOf(meta.logoUrl);
     const complete = (!wantedPhoto || !!meta.photoUrl) && (!wantedLogo || !!meta.logoUrl);
 
     // Format the phone ONCE here rather than at each template's <Contact>, so
