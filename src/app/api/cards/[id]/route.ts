@@ -379,7 +379,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         // until the client re-captures an exact copy on the next dashboard/editor
         // render. The versioned og:image URL busts the messenger cache in step.
         // Best-effort — never blocks the save.
-        admin.storage.from("card-shares").remove([`${username}.png`]).then(() => {}, () => {});
+        //
+        // After a rename, the NEW slug too: a card renamed back to an address
+        // it once had can still find an old picture stored there (C02-004).
+        const capturedAt = [`${username}.png`, ...(renamedTo ? [`${renamedTo}.png`] : [])];
+        admin.storage.from("card-shares").remove(capturedAt).then(() => {}, () => {});
 
         // SWIFT SIGNATURE freshness: same problem, and it was never handled —
         // only the share preview above was invalidated. card-signatures/<u>.png
@@ -395,7 +399,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         // card for a current one — in new mail AND in mail already delivered —
         // and never leaves a broken image. Best-effort, never blocks the save.
         if (signatureChanged) {
-          admin.storage.from("card-signatures").remove([`${username}.png`]).then(() => {}, () => {});
+          admin.storage.from("card-signatures").remove(capturedAt).then(() => {}, () => {});
         }
 
         // One pending (unread) reminder per card is enough — skip if one exists.

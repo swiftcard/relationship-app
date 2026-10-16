@@ -865,10 +865,12 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
       flagNickname();
       return;
     }
-    if (!username) {
-      setError("Please enter a name we can turn into a URL.");
-      return;
-    }
+    // No "we can't turn that into a URL" stop here any more: a name written
+    // only in another script (李明, Иван) gives no Latin letters to build the
+    // address from, and that left step 1 a dead end — for an Office member
+    // with no company field to fill in, a permanent one (audit C02-A52). The
+    // server picks the address then (the email's first part, else "my-card",
+    // numbered if taken), and the card can be renamed later.
     setError("");
     setStep(2);
   }
@@ -1183,7 +1185,9 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
     const saveTemplate = design?.template ?? template;
     const saveTemplateStyle = design?.templateStyleState ?? templateStyleState;
     const saveLinkStyle = design?.linkStyleState ?? linkStyleState;
-    if (!name.trim() || !username) {
+    // Only the name is required; an empty address (a name in another script)
+    // is the server's to fill (see goNextFrom1).
+    if (!name.trim()) {
       setStep(1);
       setError("Full name is required.");
       return;

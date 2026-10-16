@@ -1,5 +1,6 @@
 import NativeSplash from "@/components/NativeSplash";
 import TimezoneSync from "@/components/TimezoneSync";
+import NativeRequestBoundary from "@/components/NativeRequestBoundary";
 
 // Why a layout exists for /dashboard at all: it hosts the iOS shell's launch
 // animation. A cold launch loads "/" and src/proxy.ts redirects the shell here
@@ -20,7 +21,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           because the dashboard is where every signed-in session lands, the iOS
           shell included, and it is behind the login wall in src/proxy.ts. */}
       <TimezoneSync />
-      {children}
+      {/* The app's gates render the app's branch from the first frame
+          (audit NS-04, components/NativeRequestBoundary). */}
+      <NativeRequestBoundary>{children}</NativeRequestBoundary>
     </>
   );
 }

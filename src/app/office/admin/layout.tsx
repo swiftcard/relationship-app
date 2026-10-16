@@ -8,6 +8,7 @@ import MobileNavGate from "@/components/MobileNavGate";
 import { requireOfficeAdmin } from "@/lib/office-admin-guard";
 import { listOfficeNotifications } from "@/lib/office-notify";
 import { DisplayClockProvider } from "@/components/DisplayClock";
+import NativeRequestBoundary from "@/components/NativeRequestBoundary";
 import TimezoneCookie from "@/components/TimezoneCookie";
 import { safeTimeZone } from "@/lib/tz-days";
 import { cookies } from "next/headers";
@@ -74,7 +75,7 @@ export default async function OfficeAdminLayout({ children }: { children: React.
           server and while hydrating (components/DisplayClock). */}
       <main className="max-w-6xl mx-auto px-5 pt-6 pb-28 md:pb-16">
         <DisplayClockProvider now={renderedAt} timeZone={viewerTimeZone}>
-          {children}
+          <NativeRequestBoundary>{children}</NativeRequestBoundary>
         </DisplayClockProvider>
       </main>
       {/* Reports the browser's zone (sc_tz) for the next server render, so an

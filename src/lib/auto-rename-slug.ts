@@ -59,16 +59,14 @@ export async function autoRenameCardSlug(opts: {
       const result = (data ?? {}) as { ok?: boolean; error?: string; unchanged?: boolean };
       if (result.ok) {
         if (result.unchanged) return null;
-        // Copy the stored images so link previews / signatures keep rendering
-        // at the new slug. KEEP the old files — installed signatures embed them.
-        for (const bucket of ["card-shares", "card-signatures"] as const) {
-          try {
-            const dl = await admin.storage.from(bucket).download(`${before.username}.png`);
-            if (!dl.error && dl.data) {
-              await admin.storage.from(bucket).upload(`${candidate}.png`, dl.data, { contentType: "image/png", upsert: true });
-            }
-          } catch { /* best-effort */ }
-        }
+        // The stored pictures are NOT copied to the new slug. A rename only
+        // ever follows a name or company change, so the pictures at the old
+        // slug show the OLD name or company: copied, the new address unfurled
+        // in iMessage and Slack — and signed email — with the card the edit
+        // was meant to fix (audit C02-004). With nothing stored at the new
+        // slug, its preview and signature are drawn live from the card as it
+        // is now, until the next exact capture. The save route clears both
+        // slugs' pictures.
         // lead_messages.card_owner is denormalized and OUTSIDE the RPC's
         // table list — move it here so conversation logs stay scoped to the
         // card under its new slug.

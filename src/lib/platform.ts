@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
+import { NativeRequestContext } from "@/components/NativeRequestProvider";
 
 /**
  * Native-platform detection for the SwiftCard Capacitor shells (iOS and Android).
@@ -85,7 +86,13 @@ export const isNativeApp: boolean = detectNativeApp();
  * client-only-derived values.
  */
 export function useIsNativeApp(): boolean {
-  const [native, setNative] = useState(false);
+  // Starts from what the SERVER knew (NativeRequestBoundary on the signed-in
+  // screens): the app's branch is then in the server HTML and the first
+  // client render alike, so the shell never paints the website's selling UI
+  // before hydrating (audit NS-04). Where no boundary provides it, false — the
+  // old behaviour exactly.
+  const serverKnew = useContext(NativeRequestContext);
+  const [native, setNative] = useState(serverKnew);
   useEffect(() => {
     // The value can only be read from `window`, so computing it during render
     // would make the server and first client render disagree and blow up
