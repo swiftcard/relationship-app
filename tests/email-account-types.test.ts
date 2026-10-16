@@ -17,8 +17,14 @@ describe("billing mail goes only to the account that pays", () => {
 
   it("renewals, changes and failures are addressed by the Stripe CUSTOMER — the owner, never a teammate", () => {
     // Every billing email resolves its recipient from the paying customer.
-    expect(hook.match(/\.eq\("stripe_customer_id", invoice\.customer as string\)/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(hook.match(/\.eq\("stripe_customer_id", invoice\.customer as string\)/g)?.length).toBeGreaterThanOrEqual(1);
     expect(hook).toContain('.eq("stripe_customer_id", opts.customerId)');
+    // Paid invoices: by customer, or (before checkout has stored the customer,
+    // audit B-04) by the account that checkout tagged the subscription with —
+    // never one already paying through a different customer.
+    expect(hook).toContain("const profile = await invoiceOwnerProfile(admin, invoice);");
+    expect(hook).toContain('.eq("stripe_customer_id", customerId).single();');
+    expect(hook).toContain("if (byAccount.stripe_customer_id && byAccount.stripe_customer_id !== customerId) return null;");
     // And nothing iterates a team to send it billing mail.
     expect(hook).not.toMatch(/for \(const m of [^)]*\)[\s\S]{0,400}sendReceiptForUser/);
   });

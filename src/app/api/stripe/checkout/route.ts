@@ -442,9 +442,15 @@ export async function POST(req: NextRequest) {
       // a trial checkout so billing starts automatically when the trial ends —
       // pinned explicitly so a future Stripe default change can't loosen it.
       payment_method_collection: "always",
-      ...(bridgeTrialEnd
-        ? { subscription_data: { trial_end: bridgeTrialEnd } }
-        : trialDays ? { subscription_data: { trial_period_days: trialDays } } : {}),
+      // The account rides on the SUBSCRIPTION too, so its invoices can find
+      // their owner. The first invoice.payment_succeeded usually lands before
+      // checkout.session.completed has stored stripe_customer_id, and a lookup
+      // by customer alone dropped it — the first payment never marked anyone
+      // as paying (audit B-04). Stripe copies this onto every invoice.
+      subscription_data: {
+        metadata: { user_id: user.id },
+        ...(bridgeTrialEnd ? { trial_end: bridgeTrialEnd } : trialDays ? { trial_period_days: trialDays } : {}),
+      },
       // Record the seat count so the webhook provisions the office reliably,
       // and the redemption so it can be marked spent on completion. Consumed
       // there rather than here on purpose: a customer who opens Checkout and

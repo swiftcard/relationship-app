@@ -335,7 +335,7 @@ describe("each promotion is once per PERSON, and billing honours it (owner, 2026
 
   it("subscribing during the gift bills from the day it ends, with no trial on top", () => {
     expect(checkout).toMatch(/retentionGiftEndsAt\(/);
-    expect(checkout).toMatch(/subscription_data: \{ trial_end: bridgeTrialEnd \}/);
+    expect(checkout).toMatch(/bridgeTrialEnd \? \{ trial_end: bridgeTrialEnd \} : trialDays \?/);
     expect(checkout).toMatch(/grant_bridge: "1"/);
     // Part of the idempotency key, like every other session parameter.
     expect(checkout).toMatch(/bridgeTrialEnd \?\? 0/);

@@ -9,7 +9,7 @@ import { getAccountEmail } from "@/lib/account-email";
 import { getOfficeBrand, stripBrandFromUserCards, memberFallbackPlan } from "@/lib/office-brand";
 import { planFromPriceId } from "@/lib/subscription";
 import { PLAN_LIMITS } from "@/lib/plan";
-import { isDuplicateStripeEvent, clearStripeEvent } from "@/lib/stripe-idempotency";
+import { claimStripeEvent, finishStripeEvent, clearStripeEvent } from "@/lib/stripe-idempotency";
 import { reportError } from "@/lib/report-error";
 import { insertNotification } from "@/lib/notify";
 import { sendPushToUser } from "@/lib/push";
@@ -31,6 +31,12 @@ import { revalidateCardPage, revalidateUserCards } from "@/lib/card-page-data";
 import { greetingFirstName } from "@/lib/greeting-name";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
+
+// A checkout runs about six Stripe calls, office provisioning and an email.
+// Stated, not left to the platform default, because lib/stripe-idempotency
+// treats a claim older than STRIPE_EVENT_STALE_MS (3 min) as a run that died —
+// which is only true while no run can legitimately last that long.
+export const maxDuration = 60;
 
 /**
  * Statuses in which Stripe will not bill again without the customer acting:
@@ -168,6 +174,30 @@ function invoicePlanName(invoice: Stripe.Invoice, fallbackPlan: string | null | 
     if (known) return known.plan === "office" ? "Office" : "Pro";
   }
   return fallbackPlan === "enterprise" ? "Office" : "Pro";
+}
+
+const ACCOUNT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The account a paid invoice belongs to. By Stripe customer first; failing
+ * that, by the user_id checkout puts on the subscription (Stripe copies it onto
+ * each invoice). A new subscriber's FIRST invoice event usually arrives before
+ * checkout.session.completed has stored stripe_customer_id, and was answered
+ * 200 with nobody found — so the first payment never marked anyone as paying
+ * (audit B-04: 0 accounts carried the flag after 15 paid invoices). Never an
+ * account already tied to a different Stripe customer.
+ */
+async function invoiceOwnerProfile(admin: ReturnType<typeof getAdminSupabase>, invoice: Stripe.Invoice) {
+  const customerId = invoice.customer as string;
+  const cols = "id, plan, customization, stripe_customer_id";
+  const { data: byCustomer } = await admin.from("profiles").select(cols).eq("stripe_customer_id", customerId).single();
+  if (byCustomer) return byCustomer;
+  const userId = invoice.parent?.subscription_details?.metadata?.user_id;
+  if (!userId || !ACCOUNT_ID.test(userId)) return null;
+  const { data: byAccount } = await admin.from("profiles").select(cols).eq("id", userId).maybeSingle();
+  if (!byAccount) return null;
+  if (byAccount.stripe_customer_id && byAccount.stripe_customer_id !== customerId) return null;
+  return byAccount;
 }
 
 async function sendPaymentFailedEmail(opts: { customerId: string; amountCents: number; situation: PaymentFailedSituation; invoice?: Stripe.Invoice }) {
@@ -333,9 +363,21 @@ export async function POST(req: NextRequest) {
 
   // Idempotency: Stripe redelivers events (and retries after our 500s), so skip
   // anything we've already processed to avoid double receipts / double cascades.
-  if (await isDuplicateStripeEvent(event.id, event.type)) {
+  // The claim becomes "done" only through `handled` below — every 2xx after
+  // this point goes through it (audit B-05).
+  const claim = await claimStripeEvent(event.id, event.type);
+  if (claim === "duplicate") {
     return NextResponse.json({ received: true, duplicate: true });
   }
+  if (claim === "in_progress") {
+    // Not a 200: that would close the event at Stripe even if the run holding
+    // it then dies. Stripe asks again later and finds it done (or abandoned).
+    return NextResponse.json({ error: "event in progress" }, { status: 409 });
+  }
+  const handled = async (res: NextResponse) => {
+    await finishStripeEvent(event.id);
+    return res;
+  };
 
   // Everything past signature verification runs inside a guard: an unexpected
   // failure while provisioning a plan / cascading a downgrade is a money-and-
@@ -450,7 +492,7 @@ export async function POST(req: NextRequest) {
               } catch (e) {
                 await reportError("stripe.webhook.supersede_cancel_failed", e, { userId, priorSubId: sub.id, newSubscriptionId: held.id });
               }
-              return NextResponse.json({ received: true, superseded: true });
+              return handled(NextResponse.json({ received: true, superseded: true }));
             }
           }
         }
@@ -687,11 +729,16 @@ export async function POST(req: NextRequest) {
     const invoice = event.data.object as Stripe.Invoice;
     if (invoice.customer) {
       const admin = getAdminSupabase();
-      const { data: profile } = await admin
-        .from("profiles")
-        .select("id, plan, customization")
-        .eq("stripe_customer_id", invoice.customer as string)
-        .single();
+      const profile = await invoiceOwnerProfile(admin, invoice);
+      // A subscription from before checkout tagged it with its account (or an
+      // event that simply beat checkout's write): nobody to credit YET. Ask
+      // Stripe to retry rather than answer 200 and lose the first payment —
+      // by then checkout.session.completed has stored the customer. Bounded to
+      // the first hour so an invoice that truly has no account can't loop.
+      if (!profile && invoice.billing_reason === "subscription_create" && (invoice.amount_paid ?? 0) > 0
+        && Date.now() / 1000 - (invoice.created ?? 0) < 60 * 60) {
+        throw new Error("first invoice arrived before its checkout was recorded; retrying");
+      }
 
       // The first money after a free trial arrives as an ordinary
       // "subscription_cycle" invoice, and its receipt said "Monthly renewal" —
@@ -887,7 +934,7 @@ export async function POST(req: NextRequest) {
             if (neverPaid) {
               await sendFailed("trial_ended");
               await getStripe().subscriptions.cancel(invoiceSubId);
-              return NextResponse.json({ received: true, canceledUnpaidTrial: true });
+              return handled(NextResponse.json({ received: true, canceledUnpaidTrial: true }));
             }
           }
           // Only set on the FIRST failure for this billing cycle — a later retry
@@ -1310,5 +1357,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "webhook handler failed" }, { status: 500 });
   }
 
-  return NextResponse.json({ received: true });
+  return handled(NextResponse.json({ received: true }));
 }

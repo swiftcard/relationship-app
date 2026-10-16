@@ -19,3 +19,13 @@ alter table public.stripe_events enable row level security;
 
 -- Housekeeping: drop the index name collision guard is unnecessary (PK covers it).
 create index if not exists stripe_events_created_at_idx on public.stripe_events (created_at);
+
+-- Completion, not arrival (audit B-05, applied 2026-10-16). The webhook claims
+-- an event as 'processing' and marks it 'done' when its handler finishes; a
+-- 'processing' row older than a few minutes is a run that died, and Stripe's
+-- retry takes it over (lib/stripe-idempotency). Defaults to 'done' so every
+-- row written before this column existed — and anything still inserting
+-- without it — keeps meaning "handled", exactly as it did.
+alter table public.stripe_events
+  add column if not exists state text not null default 'done'
+  check (state in ('processing', 'done'));

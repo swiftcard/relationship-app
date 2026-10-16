@@ -20,8 +20,11 @@
 // Hobby plan caps crons at two per project, once a day each — see
 // push-catchup.yml for the same reasoning). The daily reminders cron calls this
 // too, as a backstop: if the hourly schedule stalls, the notice still goes out
-// a little late rather than not at all. `_trialChargeWarnedFor` makes both
-// callers idempotent, so nobody is emailed twice.
+// a little late rather than not at all. Nobody is emailed twice: the send
+// carries an idempotency key (Resend answers a repeat within 24 hours with the
+// first email instead of a second), and `_trialChargeWarnedFor` is stamped once
+// it has gone — only then, so a failed send is tried again next hour instead
+// of being recorded as sent (audit B-22).
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { TRIAL_CHARGE_CENTS_KEY, TRIAL_CHARGE_INTERVAL_KEY, TRIAL_ENDS_KEY } from "./billing-state";
@@ -29,6 +32,8 @@ import { getAccountEmail } from "./account-email";
 import { greetingFirstName } from "./greeting-name";
 import { trialChargeSoonEmail } from "./email-templates";
 import { reportError } from "./report-error";
+import { mergeCustomization } from "./customization-merge";
+import { getStripe } from "./stripe";
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
@@ -54,6 +59,28 @@ export function trialNoticeDue(msLeft: number): boolean {
 
 export type TrialNoticeResult = { considered: number; sent: number; late: number };
 
+/** One key per person per charge date: an extended trial is a new date and a
+ *  new notice; the same date is the same email, however many runs ask. */
+export function trialNoticeIdempotencyKey(userId: string, endsAt: string): string {
+  return `trial-charge-notice/${userId}/${endsAt}`;
+}
+
+/** Our `_cancelAtPeriodEnd` is a copy of Stripe's, and a copy can be stale:
+ *  someone who pressed "Keep subscription" while a webhook was missed still
+ *  reads as cancelled here, and would be charged with no notice at all (audit
+ *  B-22). So the few marked cancelled are asked of Stripe before being skipped.
+ *  If Stripe can't be asked, our copy is all there is. */
+async function stillCancelling(subId: string | null): Promise<boolean> {
+  if (!subId) return true;
+  try {
+    const sub = await getStripe().subscriptions.retrieve(subId);
+    return sub.status === "canceled" || sub.cancel_at_period_end === true || sub.cancel_at != null;
+  } catch (e) {
+    await reportError("trial-notice.cancel_check", e, { subId });
+    return true;
+  }
+}
+
 export async function sendTrialChargeNotices(
   supabase: SupabaseClient,
   resend: Resend,
@@ -64,7 +91,7 @@ export async function sendTrialChargeNotices(
 
   const { data: trials } = await supabase
     .from("profiles")
-    .select("id, email, name, plan, customization")
+    .select("id, email, name, plan, customization, stripe_subscription_id")
     // Both paid plans: an Office trial converts by charging a card exactly like
     // a Pro one, and the card networks draw no distinction between them.
     .in("plan", ["pro", "enterprise"])
@@ -88,19 +115,16 @@ export async function sendTrialChargeNotices(
     // subscription starts then on the card you added — $4.99" to someone who
     // just cancelled reads as if the cancel didn't work. Not stamped, so
     // pressing "Keep subscription" before the date still gets the notice.
-    if (cust._cancelAtPeriodEnd === true) continue;
+    if (cust._cancelAtPeriodEnd === true && await stillCancelling((u.stripe_subscription_id as string | null) ?? null)) continue;
 
     result.considered += 1;
     if (msLeft < LATE_MS) result.late += 1;
 
-    // Claim before sending, exactly like the other reminder jobs: the hourly
-    // route and the daily backstop can overlap, and a post-send stamp would let
-    // both pass the check above and both email the same person.
-    await supabase
-      .from("profiles")
-      .update({ customization: { ...cust, _trialChargeWarnedFor: endsAt } })
-      .eq("id", u.id);
-
+    // NOT stamped yet. It used to be claimed here, before sending, so a send
+    // that failed (a Resend outage) or never happened (no account email yet)
+    // still read as "warned", and the trialist was charged with no notice.
+    // The hourly route and the daily backstop can overlap; the idempotency
+    // key on the send is what keeps that to one email.
     const to = await getAccountEmail(u.id as string, (u.email as string) ?? null);
     if (!to) continue;
 
@@ -131,13 +155,23 @@ export async function sendTrialChargeNotices(
     // Billing mail: sent regardless of marketing preferences. Someone who
     // muted product updates has not agreed to be charged without notice.
     const { data: sent, error: sendError } = await resend.emails
-      .send({ ...tpl, to })
+      .send({ ...tpl, to }, { idempotencyKey: trialNoticeIdempotencyKey(u.id as string, endsAt) })
       .catch((e: unknown) => ({ data: null, error: e instanceof Error ? e : new Error(String(e)) }));
     if (sendError || !sent?.id) {
+      // Left unstamped: the next hourly run tries again.
       await reportError("trial-notice.email", sendError ?? "no id returned", { userId: u.id });
       continue;
     }
     result.sent += 1;
+    // Merged, not a whole-blob write: this read of customization is from the
+    // start of the run, and writing it back would undo anything changed since
+    // (the audit's B-03 pattern).
+    const stamped = await mergeCustomization(u.id as string, { set: { _trialChargeWarnedFor: endsAt }, remove: [] }, { admin: supabase })
+      .catch(() => null);
+    if (!stamped) {
+      // The next run's send is answered by Resend's idempotency, not re-sent.
+      await reportError("trial-notice.stamp", "could not record the notice as sent", { userId: u.id });
+    }
     try {
       await supabase
         .from("email_logs")
