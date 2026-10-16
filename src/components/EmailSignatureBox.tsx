@@ -40,6 +40,7 @@ type Props = {
 
 import { legacySignatureContentSigV12, signatureContentSig } from "@/lib/signature-content";
 import { escapeHtml } from "@/lib/escape";
+import { toPngExact } from "@/lib/capture-exact";
 
 async function fetchAsDataUrl(url: string): Promise<string | null> {
   try {
@@ -127,6 +128,18 @@ function sigTag(sig: string): string {
   return (h >>> 0).toString(36);
 }
 
+/**
+ * What a signature image was DRAWN from: the card's markup as the template
+ * renders it, image sources left out (the capture swaps those for inlined
+ * copies). It changes when the template draws the card differently — new
+ * spacing, sizes, a layout fix — not only when the card's info changes, which
+ * is all the content hash can see. "r1" = the capture itself: bump it when the
+ * capture changes how it draws (r1 = fonts at their real size, 2026-10-07).
+ */
+function drawnSigOf(el: HTMLElement): string {
+  return `r1|${sigTag(el.innerHTML.replace(/\ssrc="[^"]*"/g, ""))}`;
+}
+
 // Name and company are owner- (or office-) typed and go into HTML the user
 // pastes into every outgoing email: escaped, so a "<" or "&" can't break the
 // signature and an office value can't inject markup into members' mail.
@@ -191,6 +204,11 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
   // Copy uses it at once instead of capturing again (which, on a phone, was
   // seconds of work on every first tap — and on an iPhone made that tap fail).
   const urlKey = `sc_sigurl_${username}`;
+  // How the image at urlKey was drawn (drawnSigOf). The content hash alone
+  // kept a signature on the layout of the day it was captured: every template
+  // change since — and the type-size fix in lib/capture-exact — never reached
+  // it, so the signature stopped matching the card it was copied from.
+  const drawnKey = `sc_sigdrawn_${username}`;
   // Separate from hashKey (which tracks the last CAPTURE): this tracks the last
   // content the user actually COPIED into their email. If the card design has
   // changed since then, the signature already pasted in their inbox is stale —
@@ -223,6 +241,7 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
       if (!el) { setCapture("error"); return null; }
       // Wait for the lazy-loaded template to actually render…
       for (let i = 0; i < 80 && el.offsetHeight < 150; i++) await new Promise((r) => setTimeout(r, 100));
+      const drawn = drawnSigOf(el);
       // …then inline the photo/logo as data URLs so they always embed (this is
       // what makes the signature a faithful copy of the real card). Falls back
       // to the un-proxied source if the same-origin proxy fetch fails.
@@ -264,7 +283,9 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
       // Render the card NATIVELY larger (transform scale) rather than bumping pixelRatio:
       // foreignObject HTML rasterizes at 1x and pixelRatio only upscales it (blurry), so
       // scaling the node up makes the text crisp at full resolution.
-      const { toPng, getFontEmbedCSS } = await import("html-to-image");
+      // toPngExact: html-to-image itself rounds every font size DOWN, which
+      // drew the card's rows 4–8% smaller than the card (lib/capture-exact).
+      const { getFontEmbedCSS } = await import("html-to-image");
       const w = el.offsetWidth || NATURAL;
       const h = el.offsetHeight || NATURAL;
       const SCALE = 4;
@@ -296,12 +317,12 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
       const stillWanted = async () => { await yieldToInput(); return aliveRef.current; };
       if (isWebKit) {
         if (!(await stillWanted())) return null;
-        await toPng(el, opts).catch(() => undefined);
+        await toPngExact(el, opts).catch(() => undefined);
         if (!(await stillWanted())) return null;
-        await toPng(el, opts).catch(() => undefined);
+        await toPngExact(el, opts).catch(() => undefined);
       }
       if (!(await stillWanted())) return null;
-      const dataUrl = await toPng(el, opts);
+      const dataUrl = await toPngExact(el, opts);
       if (!dataUrl || dataUrl.length < 5000) { setCapture("error"); return null; } // blank guard
       if (!aliveRef.current) return null;
       const res = await fetch("/api/card-signature", {
@@ -318,6 +339,7 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
       try {
         localStorage.setItem(hashKey, contentSig);
         localStorage.setItem(urlKey, url);
+        localStorage.setItem(drawnKey, drawn);
       } catch { /* ignore */ }
       return url;
     } catch {
@@ -391,7 +413,27 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
       lastSigRef.current = contentSig;
       capturedHereRef.current = false;
       setDisplaySrc(url);
-      return;
+      // …as long as it was DRAWN the way the template draws this card today.
+      // If not — the template changed since, or the picture predates
+      // lib/capture-exact — retake it, and have Copy wait for the new one.
+      // The parked card renders a moment after mount (the template loads
+      // lazily), so this looks once it has.
+      let stop = () => {};
+      let tries = 0;
+      const check = () => {
+        const el = cardRef.current;
+        if (!el || el.offsetHeight < 150) {
+          if (++tries < 80) { const t = setTimeout(check, 100); stop = () => clearTimeout(t); }
+          return;
+        }
+        let drawn = "";
+        try { drawn = localStorage.getItem(drawnKey) || ""; } catch { /* ignore */ }
+        if (drawn === drawnSigOf(el)) return;
+        lastSigRef.current = null;
+        stop = scheduleCapture();
+      };
+      check();
+      return () => stop();
     }
     // Unknown or changed content: show whatever is hosted now (usually the
     // card already) and refresh it in the background.

@@ -275,7 +275,12 @@ export default function LogoFirst({ data }: { data: CardData }) {
               ? { borderRadius: "50%", width: circleD, height: circleD, background: "#ffffff" }
               : { borderRadius: 12 }),
             overflow: "hidden",
-            boxShadow: `0 0 0 1px ${tileEdge}`,
+            // The hairline edge as an OUTLINE, not a 0 0 0 1px shadow: both
+            // sit just outside the box and follow its radius, but the iPhone's
+            // screenshot engine drew the shadow on this clipped tile as a
+            // stray square behind the logo — in every Swift Signature and
+            // link preview taken on an iPhone (lib/capture-exact's test).
+            outline: `1px solid ${tileEdge}`,
             maxWidth: "100%",
             maxHeight: "100%",
             // These two are load-bearing, not cosmetic. The tile shrink-wraps its

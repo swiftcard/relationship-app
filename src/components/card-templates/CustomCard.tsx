@@ -452,7 +452,9 @@ export function CustomBlockContent({
     return (
       // Clipped to its own radius: real logos are opaque rectangles, so rounding
       // the image itself is the only thing that looks deliberate for all of them.
-      <div style={{ borderRadius: 10, overflow: "hidden", boxShadow: `0 0 0 1px ${withOpacity(layout.textColor, 0.16)}`, display: "flex", maxWidth: "100%" }}>
+      // The edge is an outline, not a 0 0 0 1px shadow: the iPhone's screenshot
+      // engine drew that shadow on a clipped tile as a stray square (LogoFirst).
+      <div style={{ borderRadius: 10, overflow: "hidden", outline: `1px solid ${withOpacity(layout.textColor, 0.16)}`, display: "flex", maxWidth: "100%" }}>
         {/* Width and height are capped SEPARATELY. A wordmark needs room across,
             not down, and height is the scarce dimension — raising both together
             made a full card overflow again, which the fuzz caught immediately. */}

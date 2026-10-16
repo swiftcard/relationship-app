@@ -27,7 +27,10 @@
 
 // 9 = square corners, no drop shadow: the picture is the card edge to edge,
 // so a messenger's own rounding never shows page-colour wedges (2026-10-06).
-export const SHARE_CAPTURE_VERSION = 9;
+// 10 = every font at the card's real size: html-to-image had been rounding
+// each one down, so the details came out 4–8% small (lib/capture-exact,
+// 2026-10-07). Older pictures keep serving until the device retakes them.
+export const SHARE_CAPTURE_VERSION = 10;
 // The moment the pixel-verified capture (v8, 5633d26a) went live: its Vercel
 // deploy turned READY at 18:35:50Z. It was first set to 20:00Z, a guess in
 // the FUTURE, so a verified re-capture taken at 19:27Z was ignored and the

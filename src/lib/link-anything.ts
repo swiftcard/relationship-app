@@ -31,6 +31,7 @@
 
 import { EMAIL_MAX_WIDTH } from "@/lib/create-link";
 import { pixelsOf } from "@/lib/capture-verify";
+import { toPngExact } from "@/lib/capture-exact";
 
 export const MAX_PASTE_CHARS = 400_000;
 const MAX_ELEMENTS = 3000;
@@ -397,10 +398,10 @@ export async function snapshotPng(html: string): Promise<Blob> {
     }));
     try { await document.fonts?.ready; } catch { /* fonts API absent */ }
     await new Promise((r) => setTimeout(r, 120));
-    const { toPng } = await import("html-to-image");
+    // toPngExact: the pasted signature's text at its real size (lib/capture-exact).
     const w = Math.ceil(host.getBoundingClientRect().width) || EMAIL_MAX_WIDTH;
     const h = Math.ceil(host.getBoundingClientRect().height) || 200;
-    const raster = () => toPng(host, {
+    const raster = () => toPngExact(host, {
       width: w * SNAP_SCALE,
       height: h * SNAP_SCALE,
       pixelRatio: 1,

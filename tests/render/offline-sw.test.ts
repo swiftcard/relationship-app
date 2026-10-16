@@ -319,7 +319,10 @@ for (const [engine, type] of [["chromium", chromium], ["webkit", webkit]] as con
         await page.evaluate(() => window.dispatchEvent(new Event("online")));
         await expect.poll(() => leads.length, { timeout: 10_000 }).toBe(1);
         expect(leads[0]).toMatchObject({ name: "Jordan Lee", phone: "4155550123", card_owner: "alex", source: "qr_code" });
-        expect(await page.evaluate(() => localStorage.getItem("sc_outbox_v1"))).toBeNull();
+        // Polled: the outbox drops its entry after the send resolves, which on
+        // a loaded WebKit can land a beat after the request itself (one flake
+        // under a full render run, 2026-10-06).
+        await expect.poll(() => page.evaluate(() => localStorage.getItem("sc_outbox_v1")), { timeout: 10_000 }).toBeNull();
         // A second "online" sends nothing twice.
         await page.evaluate(() => window.dispatchEvent(new Event("online")));
         await page.waitForTimeout(500);

@@ -14,6 +14,7 @@
 // share preview uses) before anything is saved.
 
 import { capturePainted } from "@/lib/capture-verify";
+import { toPngExact } from "@/lib/capture-exact";
 
 // Inline every <img> src as a data URL before capturing — html-to-image
 // re-fetches images while rasterizing and can drop them otherwise. Falls back
@@ -104,12 +105,12 @@ async function captureOnce(el: HTMLElement, name: string): Promise<Blob> {
   // Same proven recipe as the share/signature captures: html-to-image
   // (handles Tailwind 4's oklch colors, which html2canvas chokes on) with
   // the node rendered natively larger — pixelRatio-only upscaling is blurry.
-  const { toPng } = await import("html-to-image");
+  // toPngExact: every font at the card's real size (lib/capture-exact).
   const w = el.offsetWidth || 460;
   const h = el.offsetHeight || 263;
   const shownW = el.getBoundingClientRect().width || w;
   const raster = () => Promise.race([
-    toPng(el, {
+    toPngExact(el, {
       width: w * SCALE,
       height: h * SCALE,
       pixelRatio: 1,

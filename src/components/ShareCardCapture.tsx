@@ -12,6 +12,7 @@ import type { CardData } from "@/components/card-templates/types";
 import { withoutSocials } from "@/components/card-templates/types";
 import { warmSharePreview } from "@/lib/share-preview";
 import { capturePainted } from "@/lib/capture-verify";
+import { toPngExact } from "@/lib/capture-exact";
 import { SHARE_CAPTURE_VERSION } from "@/lib/share-capture-version";
 
 const ClassicPro    = dynamic(() => import("@/components/card-templates/ClassicPro"),    { ssr: false });
@@ -234,12 +235,12 @@ export default function ShareCardCapture({
     // (blurry), so scaling the node up keeps text crisp at full resolution.
     // No cacheBust: the node was just freshly rendered (nothing stale to bust),
     // and appending cache-bust queries to every resource is a common hang cause.
-    const { toPng } = await import("html-to-image");
+    // toPngExact: every font at the card's real size (lib/capture-exact).
     const w = el.offsetWidth || NATURAL;
     const h = el.offsetHeight || NATURAL;
     const SCALE = 4;
     const raster = () => Promise.race([
-      toPng(el, {
+      toPngExact(el, {
         width: w * SCALE,
         height: h * SCALE,
         pixelRatio: 1,
