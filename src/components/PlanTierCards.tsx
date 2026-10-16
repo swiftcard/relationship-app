@@ -96,14 +96,15 @@ type CardProps = {
 };
 
 /** Free Forever. The button is the caller's: /pricing starts the builder,
- *  the plan step settles the plan. */
-export function FreePlanCard({ cta, offTab, reveal }: CardProps & { cta: ReactNode }) {
+ *  the plan step settles the plan. `hidePrice`: the Android app, which shows
+ *  no price anywhere — not even $0, which only invites "and what is Pro?". */
+export function FreePlanCard({ cta, offTab, reveal, hidePrice = false }: CardProps & { cta: ReactNode; hidePrice?: boolean }) {
   return (
     <div data-reveal={reveal ? "" : undefined} className={`${tierClass(offTab)} rounded-[28px] p-6 sm:p-8 flex flex-col bg-white border border-slate-200 shadow-[0_18px_40px_-24px_rgba(15,23,42,0.3)]`}>
       {/* "Forever" inherits the heading's size/weight/font from this <p>;
           the span overrides ONLY the color. */}
       <p className="text-[1.4rem] font-extrabold tracking-tight text-slate-900 mb-3">Free <span className="text-slate-500">Forever</span></p>
-      <div className="flex items-end gap-1 mb-1"><span className="text-[2.6rem] font-bold text-slate-900 leading-none">$0</span><span className="text-slate-500 text-sm mb-1">/ month</span></div>
+      {!hidePrice && <div className="flex items-end gap-1 mb-1"><span className="text-[2.6rem] font-bold text-slate-900 leading-none">$0</span><span className="text-slate-500 text-sm mb-1">/ month</span></div>}
       <p className="text-slate-500 text-sm mb-7 mt-2">{PLAN_DESCRIPTIONS.free}</p>
       <ul className="space-y-2.5 mb-8 flex-1">
         {PLAN_FEATURES.free.map((f) => (<li key={f} className="flex items-start gap-2.5 text-[0.84375rem] text-slate-500"><PlanCheck />{f}</li>))}

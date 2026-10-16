@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import UpgradeClient from "./UpgradeClient";
@@ -7,6 +8,8 @@ import { isProTrialEligible } from "@/lib/trial-eligibility";
 import { trialHistoryFor } from "@/lib/trial-ledger";
 import { findPendingInviteForEmail } from "@/lib/pending-invite";
 import { resolveOfficeContext, canSeeBilling } from "@/lib/office-roles";
+import { isAndroidAppRequest } from "@/lib/native-request";
+import AndroidProInfo from "@/components/AndroidProInfo";
 
 export const metadata = { title: "Upgrade — SwiftCard" };
 
@@ -73,6 +76,18 @@ export default async function UpgradePage({
     trialHistoryFor(user.id, user.email),
   ]);
   if (invite) redirect(`/join/${encodeURIComponent(invite.token)}`);
+
+  // The ANDROID app sells nothing (owner, 2026-10-08): no StoreKit, no Play
+  // Billing, and a web checkout link is steering under Play policy. Decided on
+  // the server from the user agent, which Android sends from its first request,
+  // so the iPhone purchase card below never paints there for even one frame.
+  if (isAndroidAppRequest((await headers()).get("user-agent"))) {
+    return (
+      <main className="min-h-screen bg-gray-950 px-5 py-12">
+        <AndroidProInfo from={from} />
+      </main>
+    );
+  }
 
   const trialEligible = await isProTrialEligible(
     profile?.stripe_customer_id as string | null,

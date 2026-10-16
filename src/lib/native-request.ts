@@ -31,3 +31,15 @@
 export function isNativeRequest(userAgent: string | null, scShellCookie: string | null): boolean {
   return (userAgent ?? "").includes("SwiftCardApp") || scShellCookie === "1";
 }
+
+/**
+ * True when the request comes from the ANDROID shell. Android carries its
+ * `SwiftCardAndroid/N` token (capacitor.config.ts android.appendUserAgent) on
+ * its very first request, so unlike iOS there is no cookie fallback to need:
+ * the server can decide an Android-only screen before the first byte. Used for
+ * what Android must never show — the app sells nothing there (owner,
+ * 2026-10-08; Google Play payments policy).
+ */
+export function isAndroidAppRequest(userAgent: string | null): boolean {
+  return (userAgent ?? "").includes("SwiftCardAndroid/");
+}

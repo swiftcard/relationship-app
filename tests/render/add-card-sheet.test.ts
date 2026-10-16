@@ -33,7 +33,7 @@ afterAll(async () => { await browser?.close(); });
 
 async function render(native: boolean, width: number, height: number) {
   vi.resetModules();
-  vi.doMock("@/lib/platform", () => ({ useIsNativeApp: () => native, detectNativeApp: () => native, isNativeApp: native }));
+  vi.doMock("@/lib/platform", () => ({ useIsNativeApp: () => native, useIsAndroidApp: () => false, detectNativeApp: () => native, isNativeApp: native }));
   const { SecondCardSheet } = await import("@/components/AddCardButton");
   const css = await appCss();
   const html = renderToStaticMarkup(createElement(SecondCardSheet, { trialEligible: true, onClose: () => {} }));
@@ -107,7 +107,7 @@ describe.each(WIDTHS)("$name", ({ width, height }) => {
 describe("the iOS shell is not sold to (App Store 3.1.1)", () => {
   it("renders no price, no checkout link and no 'upgrade' verb", async () => {
     vi.resetModules();
-    vi.doMock("@/lib/platform", () => ({ useIsNativeApp: () => true, detectNativeApp: () => true, isNativeApp: true }));
+    vi.doMock("@/lib/platform", () => ({ useIsNativeApp: () => true, useIsAndroidApp: () => false, detectNativeApp: () => true, isNativeApp: true }));
     const { SecondCardSheet } = await import("@/components/AddCardButton");
     const html = renderToStaticMarkup(createElement(SecondCardSheet, { trialEligible: true, onClose: () => {} }));
     expect(html).not.toMatch(/\$\d/);

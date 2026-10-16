@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useIsNativeApp } from "@/lib/platform";
+import { detectNativePlatform, useIsNativeApp } from "@/lib/platform";
 import { redeemAppleOfferCode, syncIapAfterRedeem } from "@/lib/iap";
 import MobilePlanTabs, { type PlanTier } from "@/components/MobilePlanTabs";
 import { PLAN_LIMITS, TRIAL_DAYS } from "@/lib/plan";
@@ -87,6 +87,25 @@ export default function PlanCards({
   // with the selling done Apple's way — see NativePlanChooser. No web price,
   // no checkout hand-off (onPaid) ever reaches it.
   if (native) {
+    // ANDROID SELLS NOTHING (owner, 2026-10-08; Google Play payments policy).
+    // No Pro card, no Office card, no promo box, no price: the step is Free,
+    // and the one button settles it. `native` is false on the server and on
+    // the first client render, so reading the platform here never runs during
+    // SSR and cannot split hydration.
+    if (detectNativePlatform() === "android") {
+      return (
+        <div className="max-w-md mx-auto">
+          <FreePlanCard
+            hidePrice
+            cta={
+              <button type="button" onClick={onFree} disabled={busy !== null} className={FREE_CTA_CLASS}>
+                {busy === "free" ? "Setting up…" : freeLabel}
+              </button>
+            }
+          />
+        </div>
+      );
+    }
     return (
       <NativePlanChooser
         onFree={onFree}

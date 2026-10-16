@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { PLAN_PRICES, PLAN_LIMITS } from "@/lib/plan";
 import { formatUsd, seatSubtotalCents } from "@/lib/currency";
 import ManageBillingButton from "@/components/ManageBillingButton";
-import { useIsNativeApp } from "@/lib/platform";
+import { useIsAndroidApp, useIsNativeApp } from "@/lib/platform";
 import IapSubscribeButton from "@/components/NativePaywall";
 import { manageIapSubscription } from "@/lib/iap";
 import { trialStatusLine } from "@/lib/billing-state";
@@ -130,6 +130,10 @@ export default function BillingManager() {
   // ever mounted anywhere else, it must still never paint plan prices, seat
   // purchase, retention offers, or the Stripe portal inside the iOS shell.
   const native = useIsNativeApp();
+  // The ANDROID app sells nothing (owner, 2026-10-08) and has no App Store, no
+  // Apple account and no pull-to-refresh: every sentence below that names one
+  // of those has an Android twin, and no button there buys or manages anything.
+  const android = useIsAndroidApp();
 
   const load = useCallback(async () => {
     try {
@@ -196,7 +200,7 @@ export default function BillingManager() {
     // Apple "Upgrade to Pro" purchase to accounts already paying for Office or
     // Pro — and an Apple Pro bought on an Office account buys nothing.
     if (!sub) {
-      return <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5 text-sm text-gray-400">{err ?? "Couldn't load your plan — pull down to refresh, or try again in a moment."}</div>;
+      return <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5 text-sm text-gray-400">{err ?? (android ? "Couldn't load your plan — try again in a moment." : "Couldn't load your plan — pull down to refresh, or try again in a moment.")}</div>;
     }
     // A team member's OWN subscription from before they joined. The panel below
     // would call their plan "Office" and say Apple bills it — true of neither:
@@ -208,11 +212,15 @@ export default function BillingManager() {
         <div className="rounded-2xl border border-gray-800 bg-gray-900 p-5">
           <p className="text-sm font-semibold text-white">Your own Pro subscription</p>
           <p className="mt-1.5 text-[0.8125rem] leading-relaxed text-gray-400">
-            {viaApple
+            {android
+              ? viaApple
+                ? "Your team plan already includes everything in Pro. You also have your own Pro subscription from before you joined, bought on an iPhone or iPad — it's managed from that device's Settings, under Subscriptions."
+                : "Your team plan already includes everything in Pro. You also have your own Pro subscription from before you joined."
+              : viaApple
               ? "Your team plan already includes everything in Pro. The Pro subscription you had before joining is still billed through your Apple account — cancel it there and you lose nothing, or keep it for if you ever leave the team."
               : "Your team plan already includes everything in Pro. You also have your own Pro subscription from before you joined. It isn't billed through Apple, so it isn't managed in your Apple account settings."}
           </p>
-          {viaApple && (
+          {viaApple && !android && (
             <button
               type="button"
               onClick={() => manageIapSubscription()}
@@ -241,7 +249,15 @@ export default function BillingManager() {
           Your plan: {nPlan === "office" ? "Office" : nPlan === "pro" ? "Pro" : "Free"}
         </p>
         <p className="mt-1.5 text-[0.8125rem] leading-relaxed text-gray-400">
-          {appleBilled
+          {android
+            ? appleBilled
+              // Bought on an iPhone or iPad: true, and the only place it can be
+              // changed. No button — nothing on Android can open it.
+              ? "Your subscription was bought on an iPhone or iPad — it's managed from that device's Settings, under Subscriptions."
+              : nPaid
+                ? nPlan === "office" ? "Office is active on this account." : "Pro is active on this account."
+                : "You're on the Free plan."
+            : appleBilled
             ? "Your subscription is billed through your Apple account."
             : externallyBilled
               // A real subscription billed elsewhere. 3.1.3(b) permits
@@ -288,7 +304,7 @@ export default function BillingManager() {
         {nPaid && !sub?.trialEnd && sub?.grantEndsAt && (
           <p className="mt-1 text-[0.8125rem] text-gray-400">Free {nPlan === "office" ? "Office" : "Pro"} · ends {fmtDate(sub.grantEndsAt)}</p>
         )}
-        {appleBilled ? (
+        {android ? null : appleBilled ? (
           <button
             type="button"
             onClick={() => manageIapSubscription()}

@@ -13,7 +13,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
 import { appCss } from "./harness";
 
-vi.mock("@/lib/platform", () => ({ useIsNativeApp: () => false }));
+vi.mock("@/lib/platform", () => ({ useIsNativeApp: () => false, useIsAndroidApp: () => false }));
 const { default: ProRequiredDialog } = await import("@/components/ProRequiredDialog");
 
 const WIDTHS = [
@@ -217,7 +217,7 @@ describe("the native sheet is readable inside the light-themed app", () => {
 
   it("every line clears AA against what is actually behind it", async () => {
     vi.resetModules();
-    vi.doMock("@/lib/platform", () => ({ useIsNativeApp: () => true, detectNativeApp: () => true, isNativeApp: true }));
+    vi.doMock("@/lib/platform", () => ({ useIsNativeApp: () => true, useIsAndroidApp: () => false, detectNativeApp: () => true, isNativeApp: true }));
     const { default: NativeDialog } = await import("@/components/ProRequiredDialog");
     const css = await appCss();
     const html = renderToStaticMarkup(
@@ -272,7 +272,7 @@ describe("the native sheet is readable inside the light-themed app", () => {
 describe("the native shell gets no price and no CTA", () => {
   it("renders neither the price block nor the upgrade link", async () => {
     vi.resetModules();
-    vi.doMock("@/lib/platform", () => ({ useIsNativeApp: () => true }));
+    vi.doMock("@/lib/platform", () => ({ useIsNativeApp: () => true, useIsAndroidApp: () => false }));
     const { default: NativeDialog } = await import("@/components/ProRequiredDialog");
     const html = renderToStaticMarkup(
       createElement(NativeDialog, { features: FEATURES, onSaveWithoutPro: () => {}, onCancel: () => {} }),

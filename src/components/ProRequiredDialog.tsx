@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { TRIAL_DAYS } from "@/lib/plan";
 import { ProOfferBlock, ProOfferCta } from "@/components/ProOffer";
+import { useIsAndroidApp } from "@/lib/platform";
 
 /**
  * Save Changes, blocked because the card is using Pro design.
@@ -59,6 +60,10 @@ export default function ProRequiredDialog({
   /** First-time subscriber → offer the free trial. Resolved server-side. */
   trialEligible?: boolean;
 }) {
+  // No trial and no "keep them with Pro" in the Android app — it sells nothing
+  // (owner, 2026-10-08). The dialog still names the features and saves without them.
+  const android = useIsAndroidApp();
+  const offerTrial = trialEligible && !android;
 
   // Esc closes, and the page behind must not scroll under the sheet on a phone.
   useEffect(() => {
@@ -124,9 +129,11 @@ export default function ProRequiredDialog({
           {/* ONE sentence, both platforms. The shell used to get a different
               one, which is half of why the two popups did not match. */}
           <p className="text-slate-300/90 text-[0.875rem] leading-snug mt-1.5">
-            {trialEligible
+            {offerTrial
               ? `The features you selected are part of Pro. Try it free for ${TRIAL_DAYS} days and keep them on your live card:`
-              : "The features you selected are only available on Pro. Keep them on your live card with Pro:"}
+              : android
+                ? "The features you selected are only available on Pro:"
+                : "The features you selected are only available on Pro. Keep them on your live card with Pro:"}
           </p>
 
           <ul className="mt-3.5 space-y-1.5">
@@ -146,14 +153,14 @@ export default function ProRequiredDialog({
               on a laptop — see components/ProOffer. */}
           <div className="mt-5">
             <ProOfferBlock
-              trialEligible={trialEligible}
+              trialEligible={offerTrial}
               blurb="Every finish, any color, photo and video backgrounds, unlimited links, and no SwiftCard branding on your Swift Links page."
             />
           </div>
         </div>
 
         <div className="px-5 pt-4 mt-auto shrink-0 flex flex-col gap-2 border-t border-white/[0.07]">
-          <ProOfferCta trialEligible={trialEligible} />
+          <ProOfferCta trialEligible={offerTrial} />
 
           {/* The way out is plainly labelled and says what actually happens. */}
           <button

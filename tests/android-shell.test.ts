@@ -201,6 +201,37 @@ describe("the Android app sells nothing, on purpose", () => {
     expect(androidReturn).toBeLessThan(firstReport);
   });
 
+  it("every Apple purchase button bows out on Android, at the one place they all ask", () => {
+    // IapSubscribeButton, IapProPill and IapProLock all read resolveStatus().
+    // It used to answer "ready" for ANY shell, so every Get Pro, Upgrade and
+    // PRO pill in the Android app opened an Apple sheet that could not sell
+    // ("Plans aren't available right now", "Restore Purchases"). What each one
+    // shows instead is pinned on screen by render/android-sells-nothing.
+    const src = code(read("src/components/NativePaywall.tsx"));
+    const fn = src.slice(src.indexOf("async function resolveStatus"), src.indexOf("function useIapStatus"));
+    const android = fn.indexOf(`if (detectNativePlatform() === "android") return "unavailable";`);
+    expect(android, "resolveStatus has no Android exit").toBeGreaterThan(-1);
+    expect(android).toBeLessThan(fn.indexOf(`return "ready"`));
+  });
+
+  it("/upgrade is decided on the SERVER for Android, so the purchase card never paints", () => {
+    // Plenty points at /upgrade: the card cap, a claim, "See who and where",
+    // "Keep Pro". On Android each lands on what Pro is, with nothing to buy.
+    const page = code(read("src/app/upgrade/page.tsx"));
+    expect(page).toContain(`isAndroidAppRequest((await headers()).get("user-agent"))`);
+    expect(page.indexOf("isAndroidAppRequest(")).toBeLessThan(page.indexOf("<UpgradeClient"));
+    const info = code(read("src/components/AndroidProInfo.tsx"));
+    expect(info, "a price or a checkout reached the Android Pro page").not.toMatch(/PLAN_PRICES|\$\{|\/checkout|IapSubscribeButton|openExternalPurchase/);
+    expect(read("src/lib/native-request.ts")).toContain(`includes("SwiftCardAndroid/")`);
+  });
+
+  it("the plan step on Android is Free alone, with no price", () => {
+    const src = code(read("src/components/PlanCards.tsx"));
+    const branch = src.slice(src.indexOf(`if (detectNativePlatform() === "android")`), src.indexOf("<NativePlanChooser"));
+    expect(branch).toMatch(/<FreePlanCard\s+hidePrice/);
+    expect(branch).not.toMatch(/NativePro|IapSubscribeButton|ProPlanCard|OfficePlanCard/);
+  });
+
   it("no Google Play billing key has crept in while that stands", () => {
     // When Play Billing is switched on, this test is the reminder to revisit
     // everything above rather than bolt a key on beside an early return.

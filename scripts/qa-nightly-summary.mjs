@@ -6,6 +6,7 @@ const SECTIONS = [
   ["Flows (sign in, save, sign out, back/forward)", "nightly/flows/failures.json", (j) => j.map((f) => (typeof f === "string" ? f : `${f.flow ?? "?"}: ${f.detail ?? JSON.stringify(f)}`))],
   ["Every screen, both widths, all plans", "nightly/sweep/issues.json", (j) => j.map((i) => `${i.screen ?? i.page ?? "?"}: ${i.kind ?? ""} ${i.detail ?? ""}`.trim())],
   ["Office admin + member (iPhone shell)", "nightly/office-shell/issues.json", (j) => j.map((i) => `${i.screen}: ${i.kind} — ${i.detail}`)],
+  ["Android app: every screen, Free + Pro, both themes", "nightly/android-shell/issues.json", (j) => j.map((i) => `${i.screen}: ${i.kind} — ${i.detail}`)],
   ["Office Swift Links branding", "nightly/office-links/failures.json", (j) => j],
   ["Analytics + notifications end to end", "nightly/probe/failures.json", (j) => j],
   ["Notifications for every plan and account type", "nightly/notifications/failures.json", (j) => j],

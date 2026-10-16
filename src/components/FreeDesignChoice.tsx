@@ -1,7 +1,7 @@
 "use client";
 
 import { TRIAL_DAYS } from "@/lib/plan";
-import { useIsNativeApp } from "@/lib/platform";
+import { useIsAndroidApp, useIsNativeApp } from "@/lib/platform";
 import IapSubscribeButton from "@/components/NativePaywall";
 import { useIapOffer } from "@/lib/use-iap-price";
 
@@ -31,6 +31,9 @@ import { useIapOffer } from "@/lib/use-iap-price";
  *     Restore, renewal terms), never Stripe, and its fine print names Apple.
  *     (It used to hide the offer entirely, from before in-app purchase existed;
  *     owner, 2026-09-16: "the same exact way that it does on the web app".)
+ *  4. ANDROID offers no purchase at all — the Android app sells nothing (owner,
+ *     2026-10-08). The panel still says exactly what changes, and Free is the
+ *     one way on; there is no trial button and no renewal fine print.
  */
 export default function FreeDesignChoice({
   changes,
@@ -53,6 +56,7 @@ export default function FreeDesignChoice({
   busy?: boolean;
 }) {
   const native = useIsNativeApp();
+  const android = useIsAndroidApp();
   const { trial } = useIapOffer();
   // Apple's answer AND the account's: null (StoreKit still answering) used to
   // promise the free trial — the same rule as the Pro plan card.
@@ -104,7 +108,7 @@ export default function FreeDesignChoice({
         </>
       )}
 
-      {native && onIapPurchased && (
+      {native && !android && onIapPurchased && (
         <>
           <IapSubscribeButton
             className="!mt-4 !w-full !py-3.5 !text-sm !font-bold"
@@ -127,7 +131,7 @@ export default function FreeDesignChoice({
       <button
         onClick={onContinueFree}
         disabled={busy}
-        className={`w-full py-3 px-5 rounded-full text-sm leading-snug font-semibold border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 disabled:opacity-50 transition-colors ${native && !onIapPurchased ? "mt-4" : "mt-3"}`}
+        className={`w-full py-3 px-5 rounded-full text-sm leading-snug font-semibold border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 disabled:opacity-50 transition-colors ${native && (android || !onIapPurchased) ? "mt-4" : "mt-3"}`}
       >
         {busy ? "Saving…" : "Continue with Free and redesign using free features only"}
       </button>

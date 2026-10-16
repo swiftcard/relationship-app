@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useIsNativeApp } from "@/lib/platform";
+import { useIsAndroidApp, useIsNativeApp } from "@/lib/platform";
 import IapSubscribeButton from "@/components/NativePaywall";
 
 /**
@@ -37,6 +37,9 @@ export default function ProEndedPanel({
   designChanges: string[];
 }) {
   const native = useIsNativeApp();
+  // ANDROID sells nothing (owner, 2026-10-08): no "Keep Pro" there, and no
+  // sentence offering it. What ended and what is kept is still said plainly.
+  const android = useIsAndroidApp();
   const router = useRouter();
   const [choosingFree, setChoosingFree] = useState(false);
   const [liveCardId, setLiveCardId] = useState<string | null>(defaultLiveCardId ?? cards[0]?.id ?? null);
@@ -71,14 +74,18 @@ export default function ProEndedPanel({
         {wasTrial ? "Your Pro trial has ended" : "Your Pro plan has ended"}
       </p>
       <p className="text-blue-200/80 text-[0.8125rem] mt-1 leading-snug">
-        {multipleCards
+        {android
+          ? multipleCards
+            ? "Your account is on Free now, which includes one live card. Nothing has been deleted."
+            : "Your account is on Free now. Nothing has been deleted."
+          : multipleCards
           ? "Keep Pro to keep every card live and your design exactly as it is, or continue on Free with one card. Nothing has been deleted."
           : "Keep Pro to keep your design exactly as it is, or continue on Free. Nothing has been deleted."}
       </p>
 
       {!choosingFree && (
         <div className="mt-4 flex flex-col sm:flex-row gap-2.5">
-          {native ? (
+          {android ? null : native ? (
             <IapSubscribeButton label="Keep Pro" sublabel="" className="sm:w-auto" />
           ) : (
             <Link
@@ -104,7 +111,7 @@ export default function ProEndedPanel({
             <fieldset>
               <legend className="text-white text-sm font-semibold">Which card stays live?</legend>
               <p className="text-gray-400 text-xs mt-0.5">
-                Free includes one live card. The others stay saved and come back if you upgrade.
+                {android ? "Free includes one live card. The others stay saved." : "Free includes one live card. The others stay saved and come back if you upgrade."}
               </p>
               <div className="mt-2.5 space-y-2">
                 {cards.map((c) => (

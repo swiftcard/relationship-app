@@ -91,6 +91,12 @@ jobs:
           if OUT=nightly/office-links node scripts/qa-office-links-brand.mjs > nightly/office-links/log.txt 2>&1; then echo "[]" > nightly/office-links/failures.json; else grep -E "^FAIL" nightly/office-links/log.txt | node -e 'const l=require("fs").readFileSync(0,"utf8").split("\n").filter(Boolean);console.log(JSON.stringify(l.length?l:["script exited non-zero — see log"]))' > nightly/office-links/failures.json; fi
       - name: Office admin + member (iPhone shell)
         run: OUT=nightly/office-shell node scripts/qa-office-shell.mjs || true
+      # The Android app is the live site in a WebView — and until 2026-10-08
+      # nothing looked at the site AS the Android app. Status/nav bars,
+      # Apple wording, anything that sells (the Android app sells nothing),
+      # the back key, new-tab links, splash and status-bar style.
+      - name: Android app (every screen, Free + Pro, both themes)
+        run: OUT=nightly/android-shell node scripts/qa-android-shell.mjs || true
       - name: Every screen, both widths, all plans
         run: OUT=nightly/sweep node scripts/qa-sweep.mjs || true
       - name: Summarise

@@ -42,7 +42,8 @@ describe("every plan chooser draws the shared cards", () => {
 
   it("Free is offered wherever all three plans are", () => {
     expect(code("src/app/pricing/page.tsx")).toMatch(/<FreePlanCard /);
-    expect(code("src/components/PlanCards.tsx").match(/<FreePlanCard/g)?.length).toBe(2); // web + app
+    // web + the iPhone app + the Android app (Free alone there — it sells nothing)
+    expect(code("src/components/PlanCards.tsx").match(/<FreePlanCard/g)?.length).toBe(3);
   });
 });
 

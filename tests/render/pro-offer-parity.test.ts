@@ -29,6 +29,7 @@ async function render(dialog: Dialog, native: boolean, trialEligible = true) {
   vi.resetModules();
   vi.doMock("@/lib/platform", () => ({
     useIsNativeApp: () => native,
+    useIsAndroidApp: () => false,
     detectNativeApp: () => native,
     isNativeApp: native,
   }));

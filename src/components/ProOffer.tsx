@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PLAN_PRICES, TRIAL_DAYS } from "@/lib/plan";
-import { useIsNativeApp } from "@/lib/platform";
+import { useIsAndroidApp, useIsNativeApp } from "@/lib/platform";
 import { getIapPackages } from "@/lib/iap";
 import dynamic from "next/dynamic";
 
@@ -93,9 +93,22 @@ export function ProOfferBlock({
   blurb: string;
 }) {
   const native = useIsNativeApp();
+  const android = useIsAndroidApp();
   const iapPrice = useIapMonthlyPrice();
   const webPrice = `$${(PLAN_PRICES.PRO_MONTHLY_CENTS / 100).toFixed(2)}`;
   const price = native ? iapPrice : webPrice;
+
+  // ANDROID sells nothing (owner, 2026-10-08; Google Play payments policy): no
+  // price, no trial, no "cancel anytime" — and nothing to tap. What the
+  // dialog is about is still said by its heading and sentence; this box only
+  // says why there is no button under it.
+  if (android) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3.5">
+        <p className="text-slate-300/85 text-[0.8125rem] leading-snug">Pro isn&apos;t sold in the Android app. Everything on Free keeps working.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-blue-400/25 bg-blue-500/[0.07] px-4 py-3.5">
@@ -140,7 +153,10 @@ export function ProOfferBlock({
  */
 export function ProOfferCta({ trialEligible }: { trialEligible: boolean }) {
   const native = useIsNativeApp();
+  const android = useIsAndroidApp();
   const label = trialEligible ? `Start my ${TRIAL_DAYS}-day free trial` : "Upgrade to Pro";
+
+  if (android) return null;
 
   if (native) {
     return (

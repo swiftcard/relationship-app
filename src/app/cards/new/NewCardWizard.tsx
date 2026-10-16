@@ -22,7 +22,7 @@ import ClassicPro from "@/components/card-templates/ClassicPro";
 import CustomCard from "@/components/card-templates/CustomCard";
 import CustomCardDesigner from "@/components/CustomCardDesigner";
 import { PlanGate, PlanNotice } from "@/components/PlanGate";
-import { isNativeApp } from "@/lib/platform";
+import { detectNativePlatform, isNativeApp } from "@/lib/platform";
 import TemplateStyleControls from "@/components/card-templates/TemplateStyleControls";
 import TemplatePicker, { PRESET_TEMPLATES } from "@/components/card-templates/TemplatePicker";
 import LinkButtonsControls from "@/components/LinkButtonsControls";
@@ -2412,7 +2412,15 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                     // First-card design preview on an authed Free account →
                     // force the same Free/Pro choice a guest gets, since they
                     // may have used Pro-only colors/the custom designer.
-                    if (showAuthedFirstCardGate) { setShowPlan(true); return; }
+                    if (showAuthedFirstCardGate) {
+                      // ANDROID sells nothing (owner, 2026-10-08), so there is
+                      // no plan to choose: go straight to Free. The overlay
+                      // still opens when the card uses Pro design — that is
+                      // where FreeDesignChoice says what changes before it does.
+                      setShowPlan(true);
+                      if (detectNativePlatform() === "android") handleAuthedFirstCardFree();
+                      return;
+                    }
                     requireAuth("save", handleCreate);
                     return;
                   }

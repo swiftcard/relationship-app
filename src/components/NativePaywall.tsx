@@ -14,7 +14,7 @@ import {
 } from "@/lib/iap";
 import { TRIAL_DAYS } from "@/lib/plan";
 import { useIapOffer } from "@/lib/use-iap-price";
-import { detectNativeApp } from "@/lib/platform";
+import { detectNativeApp, detectNativePlatform } from "@/lib/platform";
 
 // Short, countable unlocks for the sheet — no prices, no numbers that could
 // drift from StoreKit.
@@ -76,7 +76,8 @@ const PERKS = [
 //                     card wizard used to render the Pro card with NO button
 //                     at all, which is a price and a feature list and no way
 //                     to buy — the 3.1.1 dead end, on the very first run.
-//   "unavailable"   → not the shell. Web sells through Stripe elsewhere.
+//   "unavailable"   → not the shell (web sells through Stripe elsewhere), or the
+//                     ANDROID shell, which sells nothing.
 export type IapStatus = "ready" | "needs-account" | "unavailable";
 
 let statusOnce: Promise<IapStatus> | null = null;
@@ -84,6 +85,14 @@ let statusOnce: Promise<IapStatus> | null = null;
 async function resolveStatus(): Promise<IapStatus> {
   // Not the shell (or no bridge at all) → no purchase UI here.
   if (!detectNativeApp()) return "unavailable";
+  // THE ANDROID APP SELLS NOTHING (owner, 2026-10-08). There is no StoreKit on
+  // Android and no Play Billing product, and a link to a web checkout is what
+  // Google Play calls steering. "ready" here used to hand every Android user an
+  // Apple purchase sheet that could not sell — "Plans aren't available right
+  // now", "Restore Purchases", "App Store account settings" — behind every
+  // Get Pro, Upgrade and PRO pill in the app. "unavailable" makes each of them
+  // what it is on the website without a price: a plain Pro marker, no button.
+  if (detectNativePlatform() === "android") return "unavailable";
   // The RevenueCat identity must be the Supabase uid BEFORE any purchase — it
   // is how the webhook maps the sub to a profile. Read from the LOCAL session
   // (no network): getUser() cost a server round trip on every mount, which is

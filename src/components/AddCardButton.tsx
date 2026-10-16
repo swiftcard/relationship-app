@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { TRIAL_DAYS } from "@/lib/plan";
 import { ProOfferBlock, ProOfferCta } from "@/components/ProOffer";
+import { useIsAndroidApp } from "@/lib/platform";
 
 // ── "Add card", for everyone ─────────────────────────────────────────────────
 //
@@ -73,6 +74,9 @@ export function SecondCardSheet({
   trialEligible: boolean;
   onClose: () => void;
 }) {
+  // No trial is offered in the Android app — it sells nothing (owner, 2026-10-08).
+  const android = useIsAndroidApp();
+  const offerTrial = trialEligible && !android;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -127,21 +131,21 @@ export function SecondCardSheet({
           </h2>
           {/* ONE sentence, both platforms. */}
           <p className="text-slate-300/90 text-[0.875rem] leading-snug mt-1.5">
-            {trialEligible
+            {offerTrial
               ? `Keep a card for each role, company or language — each with its own link, design and contacts. Try Pro free for ${TRIAL_DAYS} days.`
               : "Keep a card for each role, company or language — each with its own link, design and contacts."}
           </p>
 
           <div className="mt-5">
             <ProOfferBlock
-              trialEligible={trialEligible}
+              trialEligible={offerTrial}
               blurb="Unlimited cards, every finish and colour, photo and video backgrounds, unlimited links, and no SwiftCard branding on your Swift Links page."
             />
           </div>
         </div>
 
         <div className="px-5 pt-4 mt-auto shrink-0 flex flex-col gap-2 border-t border-white/[0.07]">
-          <ProOfferCta trialEligible={trialEligible} />
+          <ProOfferCta trialEligible={offerTrial} />
           <button
             type="button"
             onClick={onClose}

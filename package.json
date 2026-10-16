@@ -13,6 +13,7 @@
     "qa:sweep": "node scripts/qa-sweep.mjs",
     "qa:flows": "node scripts/qa-flows.mjs",
     "qa:office-links": "node scripts/qa-office-links-brand.mjs",
+    "qa:android": "node scripts/qa-android-shell.mjs",
     "qa:a11y": "node scripts/qa-a11y.mjs",
     "qa:mac": "node scripts/qa-mac.mjs",
     "kb:check": "node scripts/kb-drift.mjs",

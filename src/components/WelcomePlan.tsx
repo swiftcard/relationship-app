@@ -12,7 +12,7 @@ import { GetTheAppCard } from "@/components/AppStoreBadge";
 import PlanCards, { type PaidPlan } from "@/components/PlanCards";
 import FreeDesignChoice from "@/components/FreeDesignChoice";
 import { consumePlanIntent, type PlanIntent } from "@/lib/plan-intent";
-import { detectNativeApp, useIsNativeApp } from "@/lib/platform";
+import { detectNativeApp, useIsAndroidApp, useIsNativeApp } from "@/lib/platform";
 import { TRIAL_DAYS, PLAN_PRICES, PLAN_LIMITS } from "@/lib/plan";
 import { formatUsd, seatSubtotalCents } from "@/lib/currency";
 import ReferralGiftPanel from "@/components/ReferralGiftPanel";
@@ -77,6 +77,9 @@ export default function WelcomePlan({
 }) {
   const router = useRouter();
   const native = useIsNativeApp();
+  // The ANDROID app sells nothing (owner, 2026-10-08): its plan step is Free
+  // alone (PlanCards), so it is not worded as a choice between plans.
+  const android = useIsAndroidApp();
   // undefined = not read yet (avoids a hydration flash); null = no stored choice.
   const [intent, setIntent] = useState<PlanIntent | null | undefined>(undefined);
   const [loading, setLoading] = useState<"free" | PaidPlan | null>(null);
@@ -376,7 +379,7 @@ export default function WelcomePlan({
               chosen, not before (owner, 2026-09-16; lib/card-active rule 5). */}
           <h1 className="text-white font-bold text-2xl sm:text-3xl">Your account is ready</h1>
           {cardSlug && <p className="text-blue-400 text-sm mt-1.5 font-mono">swiftcard.me/{cardSlug}</p>}
-          <p className="text-gray-400 text-sm mt-3 max-w-md mx-auto">{paidIntent && !pendingFreeConfirm ? "Finish checkout below and your card goes live at this link." : "Choose your plan below and your card goes live at this link."}</p>
+          <p className="text-gray-400 text-sm mt-3 max-w-md mx-auto">{paidIntent && !pendingFreeConfirm ? "Finish checkout below and your card goes live at this link." : android ? "Start on Free below and your card goes live at this link." : "Choose your plan below and your card goes live at this link."}</p>
         </div>
 
         {/* Plan finalize / chooser */}
@@ -459,8 +462,8 @@ export default function WelcomePlan({
           // has somewhere real to go the moment it is given.
           <>
             <div className="text-center mb-6">
-              <h2 className="text-white font-bold text-xl">Choose your plan</h2>
-              <p className="text-gray-400 text-sm mt-1">Your card is saved either way — pick how you want to run it.</p>
+              <h2 className="text-white font-bold text-xl">{android ? "Start on Free" : "Choose your plan"}</h2>
+              <p className="text-gray-400 text-sm mt-1">{android ? "Your card is saved. Here is everything Free includes." : "Your card is saved either way — pick how you want to run it."}</p>
             </div>
             {canceled && (
               <p className="max-w-md mx-auto mb-5 text-center text-sm text-gray-400 bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">

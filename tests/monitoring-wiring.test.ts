@@ -28,7 +28,7 @@ describe("always-on production guards", () => {
     const wf = read(".github/workflows/nightly-qa.yml");
     expect(wf).toMatch(/- cron: "0 9 \* \* \*"/);
     expect(wf).toContain("deployment_status:");
-    for (const s of ["qa-prod-probe.mjs", "health-check.mjs", "qa-flows.mjs", "qa-office-links-brand.mjs", "qa-office-shell.mjs", "qa-sweep.mjs", "qa-share-preview.mjs", "qa-offline.mjs", "qa-nightly-summary.mjs"]) {
+    for (const s of ["qa-prod-probe.mjs", "health-check.mjs", "qa-flows.mjs", "qa-office-links-brand.mjs", "qa-office-shell.mjs", "qa-android-shell.mjs", "qa-sweep.mjs", "qa-share-preview.mjs", "qa-offline.mjs", "qa-nightly-summary.mjs"]) {
       expect(wf, s).toContain(`scripts/${s}`);
     }
     expect(wf).toContain("labels: 'nightly-qa'");
@@ -86,7 +86,7 @@ describe("always-on production guards", () => {
   });
 
   it("every QA script can take its secrets from the environment, so CI can run it", () => {
-    for (const s of ["qa-flows", "qa-sweep", "qa-office-shell", "qa-office-links-brand", "qa-a11y", "qa-mac", "qa-prod-probe", "qa-share-preview"]) {
+    for (const s of ["qa-flows", "qa-sweep", "qa-office-shell", "qa-android-shell", "qa-office-links-brand", "qa-a11y", "qa-mac", "qa-prod-probe", "qa-share-preview"]) {
       const src = read(`scripts/${s}.mjs`);
       expect(src, s).toContain("process.env[k]");
       expect(src, s).not.toMatch(/const env = readFileSync\(`\$\{ROOT\}\/\.env\.local`/);
