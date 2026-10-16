@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { IAP_ENTITLEMENT } from "@/lib/iap-shared";
 import { recordProTrialStarted } from "@/lib/trial-ledger";
+import { mergeCustomization, writeCustomizationChanges } from "@/lib/customization-merge";
 
 // ── Instant entitlement sync after an in-app purchase ───────────────────────
 //
@@ -37,7 +38,7 @@ export async function POST() {
       const { data: p } = await admin.from("profiles").select("customization").eq("id", user.id).maybeSingle();
       const cust = { ...((p?.customization as Record<string, unknown> | null) ?? {}) };
       if (!cust[PLAN_CHOSEN_KEY]) {
-        await admin.from("profiles").update({ customization: { ...cust, [PLAN_CHOSEN_KEY]: "pro_pending" } }).eq("id", user.id);
+        await mergeCustomization(user.id, { set: { [PLAN_CHOSEN_KEY]: "pro_pending" }, remove: [] });
         await revalidateUserCards(user.id);
       }
     } catch { /* best-effort */ }
@@ -87,10 +88,14 @@ export async function POST() {
   // higher, Stripe-billed tier) is never overwritten by this grant.
   if (isOfficePlan(profile?.plan) || profile?.office_id) return NextResponse.json({ ok: true, applied: "none" });
   const customization = { ...((profile?.customization as Record<string, unknown> | null) ?? {}) };
+  // The plan columns, then only the customization keys the grant changed
+  // (lib/customization-merge, audit B-03).
+  const grant = appleGrantPatch(customization);
   await admin
     .from("profiles")
-    .update(appleGrantPatch(customization))
+    .update({ plan: grant.plan, plan_expires_at: grant.plan_expires_at })
     .eq("id", user.id);
+  await writeCustomizationChanges(user.id, profile?.customization as Record<string, unknown> | null, grant.customization);
   // Same trial record as the RevenueCat webhook — whichever lands first.
   if (introTrial) await recordProTrialStarted(user.id, user.email ?? null);
   // Buying Pro in the app IS the plan choice: the cards go live now and the

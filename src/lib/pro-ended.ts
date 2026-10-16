@@ -2,6 +2,7 @@ import { getAdminSupabase } from "./supabase-admin";
 import { insertNotification } from "./notify";
 import { revalidateCardPage } from "./card-page-data";
 import { PRO_ENDED_PENDING_KEY, TRIAL_ENDS_KEY, proEndedNotice } from "./billing-state";
+import { mergeCustomization } from "@/lib/customization-merge";
 
 /**
  * Pro just ended on this account and it is on Free now — for a reason OTHER
@@ -22,10 +23,9 @@ export async function markProEnded(userId: string, opts: { wasTrial: boolean; no
   try {
     const { data } = await admin.from("profiles").select("plan, customization").eq("id", userId).maybeSingle();
     if (!data || data.plan !== "free") return; // re-upgraded in the meantime — nothing ended
-    const cust = { ...((data.customization as Record<string, unknown> | null) ?? {}) };
-    cust[PRO_ENDED_PENDING_KEY] = true;
-    delete cust[TRIAL_ENDS_KEY];
-    await admin.from("profiles").update({ customization: cust }).eq("id", userId).eq("plan", "free");
+    // Only these keys, and only while still on Free (lib/customization-merge,
+    // audit B-03).
+    await mergeCustomization(userId, { set: { [PRO_ENDED_PENDING_KEY]: true }, remove: [TRIAL_ENDS_KEY] }, { requirePlan: "free" });
   } catch { /* the downgrade itself already happened; the prompt is extra */ }
 
   if (opts.notify !== false) {

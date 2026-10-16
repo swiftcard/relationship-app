@@ -25,7 +25,9 @@ describe("nothing but the team changes a member's plan", () => {
     expect(decideRcEvent({ eventType: "EXPIRATION", currentPlan: "enterprise", planSource: "stripe", hasStripeSubscription: true }).action).toBe("ignore");
     const rc = code("src/app/api/iap/revenuecat/route.ts");
     const forget = rc.slice(rc.indexOf('decision.action === "forget_apple"'));
-    expect(forget).toMatch(/delete customization\._planSource;\s*await admin\.from\("profiles"\)\.update\(\{ customization \}\)\.eq\("id", profile\.id\);/);
+    // Only _planSource goes (lib/customization-merge, audit B-03); the plan is not touched.
+    expect(forget).toMatch(/await mergeCustomization\(profile\.id as string, \{ set: \{\}, remove: \["_planSource"\] \}\);/);
+    expect(forget.slice(0, forget.indexOf('return "forget_apple"'))).not.toMatch(/plan:/);
     // A plain Pro-by-Apple account still loses Pro when Apple says so.
     expect(decideRcEvent({ eventType: "EXPIRATION", currentPlan: "pro", planSource: "apple", hasStripeSubscription: false }).action).toBe("revoke");
   });

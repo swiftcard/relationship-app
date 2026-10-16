@@ -4,6 +4,7 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { getStripe } from "@/lib/stripe";
 import { getAccountEmail } from "@/lib/account-email";
 import { officeSubUserBlockMessage, resolveBillingSubjectId } from "@/lib/office-roles";
+import { mergeCustomization } from "@/lib/customization-merge";
 import {
   discountRefusalFor,
   discountRefusalMessage,
@@ -116,11 +117,8 @@ export async function POST() {
   }
   await recordRetentionDiscount(accountEmail, fingerprint);
 
-  const nextCust: Record<string, unknown> = { ...cust, _retentionUsed: true };
-  delete nextCust._cancelAtPeriodEnd;
-  delete nextCust._cancelAt;
-  delete nextCust._cancelReason;
-  await admin.from("profiles").update({ customization: nextCust }).eq("id", subjectId);
+  // Only these keys (lib/customization-merge, audit B-03).
+  await mergeCustomization(subjectId, { set: { _retentionUsed: true }, remove: ["_cancelAtPeriodEnd", "_cancelAt", "_cancelReason"] });
 
   return NextResponse.json({ ok: true });
 }

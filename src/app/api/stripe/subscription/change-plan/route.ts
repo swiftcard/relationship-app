@@ -9,6 +9,7 @@ import { provisionOfficeForOwner, tearDownOfficeForOwner } from "@/lib/office-bi
 import { restorePendingSeatReduction } from "@/lib/office-scheduled-seats";
 import type Stripe from "stripe";
 import { officeSubUserBlockMessage, resolveBillingSubjectId } from "@/lib/office-roles";
+import { mergeCustomization } from "@/lib/customization-merge";
 
 // POST /api/stripe/subscription/change-plan { plan: "pro"|"office", interval, seats? }
 // Switches an EXISTING paid subscription between Pro and Office (and between
@@ -177,14 +178,17 @@ export async function POST(req: NextRequest) {
   }
 
   // Reflect the new plan immediately (the webhook also reconciles this).
-  const cust = await getPlanCleanCustomization(admin, subjectId);
-  if (endsTrial) {
-    // The trial is over: no "trial ends" banner or day-7 charge notice for it.
-    delete cust._trialEndsAt;
-    delete cust._trialChargeCents;
-    delete cust._trialChargeInterval;
-  }
-  await admin.from("profiles").update({ plan: DB_PLAN[targetPlan], customization: cust }).eq("id", subjectId);
+  await admin.from("profiles").update({ plan: DB_PLAN[targetPlan] }).eq("id", subjectId);
+  // Switching plans means the customer is staying: clear any pending-cancel
+  // mirror. And when the trial is over, no "trial ends" banner or day-7
+  // charge notice for it. Only these keys (lib/customization-merge, B-03).
+  await mergeCustomization(subjectId, {
+    set: {},
+    remove: [
+      "_cancelAtPeriodEnd", "_cancelAt", "_cancelReason",
+      ...(endsTrial ? ["_trialEndsAt", "_trialChargeCents", "_trialChargeInterval"] : []),
+    ],
+  });
 
   if (targetPlan === "office") {
     await provisionOfficeForOwner(admin, subjectId, seats);
@@ -199,12 +203,3 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true, plan: targetPlan, interval, seats });
 }
 
-// Switching plans means the customer is staying — clear any pending-cancel mirror.
-async function getPlanCleanCustomization(admin: ReturnType<typeof getAdminSupabase>, userId: string) {
-  const { data } = await admin.from("profiles").select("customization").eq("id", userId).single();
-  const cust = { ...((data?.customization as Record<string, unknown> | null) ?? {}) };
-  delete cust._cancelAtPeriodEnd;
-  delete cust._cancelAt;
-  delete cust._cancelReason;
-  return cust;
-}

@@ -4,6 +4,7 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { getStripe, subscriptionPeriodEndIso } from "@/lib/stripe";
 import type Stripe from "stripe";
 import { officeSubUserBlockMessage, resolveBillingSubjectId } from "@/lib/office-roles";
+import { mergeCustomization } from "@/lib/customization-merge";
 
 // POST /api/stripe/subscription/cancel
 // Schedules the paid plan to end at the period boundary (cancel_at_period_end),
@@ -57,13 +58,12 @@ export async function POST(req: NextRequest) {
   // Keep Subscription button without a Stripe round-trip. plan_expires_at is left
   // untouched (that field means app-grant expiry; a real subscriber keeps access
   // via plan + stripe_subscription_id until the webhook deletes it at period end).
-  const cust = (profile.customization as Record<string, unknown> | null) ?? {};
-  await admin
-    .from("profiles")
-    .update({
-      customization: { ...cust, _cancelAtPeriodEnd: true, _cancelAt: periodEnd, _cancelReason: reason || null },
-    })
-    .eq("id", subjectId);
+  // Only these keys (lib/customization-merge, audit B-03): the webhook this
+  // cancel fires writes its own mirror of the same state alongside.
+  await mergeCustomization(subjectId, {
+    set: { _cancelAtPeriodEnd: true, _cancelAt: periodEnd, _cancelReason: reason || null },
+    remove: [],
+  });
 
   return NextResponse.json({ ok: true, cancelAt: periodEnd });
 }

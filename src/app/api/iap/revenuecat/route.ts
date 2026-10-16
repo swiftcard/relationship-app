@@ -8,6 +8,7 @@ import { recordProTrialStarted } from "@/lib/trial-ledger";
 import { markProEnded } from "@/lib/pro-ended";
 import { rcProActive } from "@/lib/revenuecat-rest";
 import { recordAppleRedemption } from "@/lib/apple-offer-codes";
+import { mergeCustomization, writeCustomizationChanges } from "@/lib/customization-merge";
 
 // ── RevenueCat webhook: the durable path from an App Store purchase to the
 //    profiles.plan column ─────────────────────────────────────────────────────
@@ -83,10 +84,14 @@ async function applyEvent(
     // 2026-09-24). Ask RevenueCat what is true now; only a definite "no" stops
     // the grant, so an outage never keeps a paying customer out.
     if ((await rcProActive(profile.id as string)) === false) return "stale_grant";
+    // The plan columns, then only the customization keys the grant changed
+    // (lib/customization-merge, audit B-03).
+    const grant = appleGrantPatch(customization);
     await admin
       .from("profiles")
-      .update(appleGrantPatch(customization))
+      .update({ plan: grant.plan, plan_expires_at: grant.plan_expires_at })
       .eq("id", profile.id);
+    await writeCustomizationChanges(profile.id as string, profile.customization as Record<string, unknown> | null, grant.customization);
     // Apple's intro offer is the Pro trial in the app. Apple enforces one per
     // Apple ID itself; recording it here stops the WEB offering a second one.
     if (opts.periodType?.toUpperCase() === "TRIAL") {
@@ -100,19 +105,18 @@ async function applyEvent(
   }
 
   if (decision.action === "revoke") {
-    delete customization._planSource;
     await admin
       .from("profiles")
-      .update({ plan: "free", customization })
+      .update({ plan: "free" })
       .eq("id", profile.id);
+    await mergeCustomization(profile.id as string, { set: {}, remove: ["_planSource"] });
     // Same "Pro ended — choose" experience as a Stripe cancellation.
     await markProEnded(profile.id as string, { wasTrial: opts.periodType?.toUpperCase() === "TRIAL" });
     return "revoke";
   }
 
   if (decision.action === "forget_apple") {
-    delete customization._planSource;
-    await admin.from("profiles").update({ customization }).eq("id", profile.id);
+    await mergeCustomization(profile.id as string, { set: {}, remove: ["_planSource"] });
     return "forget_apple";
   }
 

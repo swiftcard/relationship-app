@@ -79,8 +79,15 @@ export async function mutateCustomization<T>(
     const wanted = canonicalJson(next);
     if (wanted === before) return { ok: true, customization };
 
-    const updated = { ...customization, [key]: next };
-    const { error } = await admin.from("profiles").update({ customization: updated }).eq("id", userId);
+    // THIS key only, in one statement (supabase/merge-customization.sql).
+    // Writing the whole object back from our copy erased every other key
+    // another writer had set since we read it (audit B-03). The read-back
+    // below still guards this key against a concurrent writer of the same key.
+    const { error } = await admin.rpc("merge_customization", {
+      p_user: userId,
+      p_set: next === undefined ? {} : { [key]: next },
+      p_remove: next === undefined ? [key] : [],
+    });
     if (error) return { ok: false };
 
     const { data: after } = await admin

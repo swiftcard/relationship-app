@@ -8,6 +8,7 @@ import { ledgerAdd } from "@/lib/trial-ledger";
 import { TRIAL_ENDS_KEY } from "@/lib/billing-state";
 import { TRIAL_EXTENDED_META_KEY } from "@/lib/trial-extension";
 import { trialExtensionOfferFor } from "@/lib/trial-extension-server";
+import { mergeCustomization } from "@/lib/customization-merge";
 
 // POST /api/stripe/subscription/extend-trial
 // The trial-stretch retention offer (lib/trial-extension): a 14-day Pro trial
@@ -81,16 +82,14 @@ export async function POST() {
   // Re-read: the webhook for this very update may already have rewritten
   // customization, and the copy read above would undo it.
   const { data: fresh } = await admin.from("profiles").select("customization").eq("id", user.id).maybeSingle();
-  const nextCust: Record<string, unknown> = { ...((fresh?.customization as Record<string, unknown> | null) ?? cust) };
-  const rec = (nextCust._retention as Record<string, unknown> | undefined) ?? {};
-  nextCust._retention = { ...rec, trialExtendedAt: now };
-  // The new date at once, so the dashboard banner and the day-7 charge notice
-  // (keyed to this date) don't wait on the webhook to catch up.
-  nextCust[TRIAL_ENDS_KEY] = offer.until;
-  delete nextCust._cancelAtPeriodEnd;
-  delete nextCust._cancelAt;
-  delete nextCust._cancelReason;
-  await admin.from("profiles").update({ customization: nextCust }).eq("id", user.id);
+  const rec = (((fresh?.customization as Record<string, unknown> | null) ?? cust)._retention as Record<string, unknown> | undefined) ?? {};
+  // Only these keys (lib/customization-merge, audit B-03). The new date at
+  // once, so the dashboard banner and the day-7 charge notice (keyed to this
+  // date) don't wait on the webhook to catch up.
+  await mergeCustomization(user.id, {
+    set: { _retention: { ...rec, trialExtendedAt: now }, [TRIAL_ENDS_KEY]: offer.until },
+    remove: ["_cancelAtPeriodEnd", "_cancelAt", "_cancelReason"],
+  });
 
   return NextResponse.json({ ok: true, until: offer.until, extraDays: offer.extraDays });
 }

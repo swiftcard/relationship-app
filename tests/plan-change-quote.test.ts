@@ -46,7 +46,8 @@ describe("Office has no free trial", () => {
   });
 
   it("and clears the trial markers, so no trial banner or day-7 notice follows", () => {
-    expect(change).toMatch(/if \(endsTrial\) \{\s*\/\/[^\n]*\n\s*delete cust\._trialEndsAt;/);
+    // Removed key by key, alongside the cancel mirror (lib/customization-merge, audit B-03).
+    expect(change).toMatch(/\.\.\.\(endsTrial \? \["_trialEndsAt", "_trialChargeCents", "_trialChargeInterval"\] : \[\]\)/);
   });
 });
 

@@ -650,7 +650,23 @@ export async function POST(req: NextRequest) {
         // a caller rotating ids could still ring the owner's phone once per
         // request. One IP can only reach an owner's lock screen a few times an
         // hour — events above the cap still record, they just don't buzz.
-        const flooded = await isRateLimited(`notify-ip:${card_owner_username}:${ip}`, 6, 60 * 60 * 1000);
+        //
+        // THE BUZZ, not the record (audit N-08). This cap used to skip the
+        // bell row, the CRM event and the milestone too, and every event
+        // counted against it, link taps that can never notify included. Six
+        // taps from venue Wi-Fi, an office or iCloud Private Relay (one IP for
+        // many real people) and the next person's contact download left no
+        // trace in the bell or the CRM. Now only events that would notify are
+        // counted; over six an hour they stop BUZZING and still land in the
+        // bell and the CRM. A far wider ceiling (sixty an hour from one IP on
+        // one card) still bounds the record itself, so a caller rotating
+        // visitor ids cannot fill the bell with fabricated rows.
+        const flooded = notice
+          ? await isRateLimited(`notify-ip:${card_owner_username}:${ip}`, 6, 60 * 60 * 1000)
+          : false;
+        const recordFlooded = notice && flooded
+          ? await isRateLimited(`notify-ip-row:${card_owner_username}:${ip}`, 60, 60 * 60 * 1000)
+          : false;
 
         // EVERY view is a candidate to buzz; the throttles decide which ones do.
         //
@@ -687,8 +703,8 @@ export async function POST(req: NextRequest) {
             ? "associated"
             : "anonymous";
 
-        if (flooded) notified = "suppressed";
-        if (notice && !flooded) {
+        if (recordFlooded) notified = "suppressed";
+        if (notice && !recordFlooded) {
           // ONE NOTIFICATION PER PERSON PER VISIT. A view then a save by the
           // same visitor upgrades the notification the owner already has
           // (and replaces the banner) instead of buzzing a second time.
@@ -699,7 +715,8 @@ export async function POST(req: NextRequest) {
             ip,
             notice: {
               type: notice.type,
-              ...(pushCategory ? { pushCategory } : {}),
+              // Over the buzz cap: the row is written, the phone stays quiet.
+              ...(pushCategory && !flooded ? { pushCategory } : {}),
               title: notice.title,
               body: notice.body,
               ...(returnNotice?.pushBody ? { pushBody: returnNotice.pushBody } : {}),

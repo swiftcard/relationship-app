@@ -32,11 +32,19 @@ function table() {
   });
   return q;
 }
-vi.mock("@/lib/supabase-admin", () => ({ getAdminSupabase: () => ({ from: table }) }));
+// merge_customization (supabase/merge-customization.sql): only the keys given.
+const rpc = async (_fn: string, a: { p_set: Record<string, unknown>; p_remove: string[] }) => {
+  writes++;
+  const next = { ...row };
+  for (const k of a.p_remove ?? []) delete next[k];
+  row = JSON.parse(JSON.stringify({ ...next, ...a.p_set }));
+  return { data: row, error: null };
+};
+vi.mock("@/lib/supabase-admin", () => ({ getAdminSupabase: () => ({ from: table, rpc }) }));
 
 const { bumpUsage, readUsage } = await import("@/lib/usage");
 const { mutateCustomization, canonicalJson } = await import("@/lib/profile-customization");
-const admin = { from: table } as never;
+const admin = { from: table, rpc } as never;
 
 beforeEach(() => { row = {}; writes = 0; });
 

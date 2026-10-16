@@ -16,6 +16,7 @@ import { sendPushToUser } from "@/lib/push";
 import { stripeDowngradeAllowed } from "@/lib/iap-entitlement";
 import { provisionOfficeForOwner, tearDownOfficeForOwner, officeAccessEndedMessage } from "@/lib/office-billing-sync";
 import { seatSyncDecision } from "@/lib/office-seat-plan";
+import { mergeCustomization, writeCustomizationChanges } from "@/lib/customization-merge";
 import { cancelReplacedSubscription, isLiveSubscription, survivingSubscription } from "@/lib/stripe-supersede";
 import { applyScheduledReduction } from "@/lib/office-scheduled-seats";
 import { recordOfficeDeparture, type OfficeDepartureReason } from "@/lib/office-departure";
@@ -30,6 +31,13 @@ import { revalidateCardPage, revalidateUserCards } from "@/lib/card-page-data";
 import { greetingFirstName } from "@/lib/greeting-name";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
+
+/**
+ * Statuses in which Stripe will not bill again without the customer acting:
+ * paid access ends (audit B-06). Not "canceled": that always comes with its
+ * own customer.subscription.deleted, which ends it.
+ */
+const STRIPE_ENDED_STATUSES = new Set<string>(["unpaid", "paused", "incomplete_expired"]);
 
 // invoiceUrl is Stripe's CUSTOMER-facing hosted invoice link, passed in by the
 // caller. It used to be built here as
@@ -302,7 +310,7 @@ async function releaseOfficeMember(
       const { data: prof } = await admin.from("profiles").select("customization").eq("id", userId).maybeSingle();
       const pc = (prof?.customization as Record<string, unknown> | null) ?? {};
       if (!pc[PLAN_CHOSEN_KEY]) {
-        await admin.from("profiles").update({ customization: { ...pc, [PLAN_CHOSEN_KEY]: "office_member" } }).eq("id", userId);
+        await mergeCustomization(userId, { set: { [PLAN_CHOSEN_KEY]: "office_member" }, remove: [] });
       }
     } catch { /* best-effort */ }
   }
@@ -611,9 +619,14 @@ export async function POST(req: NextRequest) {
           delete srcCust[TRIAL_CHARGE_CENTS_KEY];
           delete srcCust[TRIAL_CHARGE_INTERVAL_KEY];
         }
-        await admin.from("profiles").update({
-          customization: { ...srcCust, _planSource: "stripe", [PLAN_CHOSEN_KEY]: plan },
-        }).eq("id", userId);
+        // Only the keys this changed (lib/customization-merge, audit B-03):
+        // the subscription.updated and invoice events of the same checkout
+        // land in the same second and write their own keys alongside.
+        await writeCustomizationChanges(
+          userId,
+          srcProfile?.customization as Record<string, unknown> | null,
+          { ...srcCust, _planSource: "stripe", [PLAN_CHOSEN_KEY]: plan },
+        );
       } catch { /* best-effort */ }
 
       // The plan is settled and the card already exists (the guest flow creates
@@ -705,7 +718,7 @@ export async function POST(req: NextRequest) {
             rest[EVER_PAID_KEY] = true;
             delete rest[TRIAL_ENDS_KEY];
           }
-          await admin.from("profiles").update({ customization: rest }).eq("id", profile.id);
+          await writeCustomizationChanges(profile.id, cust, rest);
         }
       }
 
@@ -883,9 +896,7 @@ export async function POST(req: NextRequest) {
           // subscription, and arming the fuse for one put a current customer
           // seven days from cancellation.
           if (isCycleInvoice && !cust._paymentFailedAt) {
-            await admin.from("profiles").update({
-              customization: { ...cust, _paymentFailedAt: new Date().toISOString() },
-            }).eq("id", profile.id);
+            await mergeCustomization(profile.id, { set: { _paymentFailedAt: new Date().toISOString() }, remove: [] });
           }
         }
       } catch (e) {
@@ -903,6 +914,14 @@ export async function POST(req: NextRequest) {
   // Fires for portal actions AND our own in-app endpoints; reconciles the DB so
   // the billing UI always reflects Stripe truth regardless of where the change
   // was made.
+  // A subscription Stripe has stopped billing without deleting it: unpaid,
+  // paused, or never paid at all. Set below when customer.subscription.updated
+  // finds one, so the cancellation block further down ends paid access exactly
+  // as a deletion does (audit B-06). Only "deleted" used to end anything; with
+  // Stripe's dunning set to "mark unpaid" a customer who stopped paying kept
+  // Pro or Office forever.
+  let endedByStatus: Stripe.Subscription | null = null;
+
   if (event.type === "customer.subscription.updated") {
     // The LIVE subscription, never the event's snapshot (audit B-02). Stripe
     // doesn't promise order, and a delivery that failed is retried for up to
@@ -919,9 +938,22 @@ export async function POST(req: NextRequest) {
       .eq("stripe_subscription_id", sub.id)
       .maybeSingle();
 
+    // Still on a paid plan backed by THIS subscription: the first such update
+    // ends it; later ones (Stripe sends several while unpaid) find Free and
+    // leave it alone.
+    if (subProfile?.id && STRIPE_ENDED_STATUSES.has(sub.status) && subProfile.plan !== "free") endedByStatus = sub;
+
     if (subProfile?.id) {
       const cust = { ...((subProfile.customization as Record<string, unknown> | null) ?? {}) };
       let dirty = false;
+      // A renewal that failed puts the subscription past_due. The 7-day grace
+      // clock (lib/reminders) was armed only by invoice.payment_failed, which
+      // this account's webhook has never once received (audit B-06): past_due
+      // arms it too. First time only, never pushed back by a later update.
+      if (sub.status === "past_due" && !cust._paymentFailedAt) {
+        cust._paymentFailedAt = new Date().toISOString();
+        dirty = true;
+      }
       // Captured BEFORE any plan write below, so the Pro<->Office transition
       // is judged against the PRIOR plan, not the freshly-reconciled one —
       // gating the office provision/teardown on the post-write plan (as this
@@ -992,6 +1024,9 @@ export async function POST(req: NextRequest) {
         if (subProfile.plan !== targetDbPlan && !seatOutranks) {
           await admin.from("profiles").update({ plan: targetDbPlan }).eq("id", subProfile.id);
           subProfile.plan = targetDbPlan;
+          // Paying again (an unpaid subscription recovered, say): the "Pro
+          // ended — choose" prompt no longer describes this account.
+          delete cust[PRO_ENDED_PENDING_KEY];
           // This live Stripe sub now backs the plan (see lib/iap-entitlement).
           cust._planSource = "stripe";
           dirty = true;
@@ -1011,7 +1046,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      if (dirty) await admin.from("profiles").update({ customization: cust }).eq("id", subProfile.id);
+      if (dirty) await writeCustomizationChanges(subProfile.id, subProfile.customization as Record<string, unknown> | null, cust);
     }
 
     if (quantity) {
@@ -1097,8 +1132,12 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Cancellation ─────────────────────────────────────────────────────────────
-  if (event.type === "customer.subscription.deleted") {
-    const sub = event.data.object as Stripe.Subscription;
+  if (event.type === "customer.subscription.deleted" || endedByStatus) {
+    const sub = endedByStatus ?? (event.data.object as Stripe.Subscription);
+    // Ended by status, not deleted: the subscription can still recover (the
+    // customer updates their card, a pause ends). Keep the account linked to
+    // it, so the update that brings it back restores the plan and the team.
+    const keepLink = !!endedByStatus;
     const admin2 = getAdminSupabase();
     // Find the owner profile WITHOUT clearing stripe_subscription_id yet — the
     // previous version nulled that column in the SAME statement used to find
@@ -1126,7 +1165,9 @@ export async function POST(req: NextRequest) {
       // shell via IAP — see lib/iap-entitlement.ts), the customer is still
       // paying and this cancellation must not touch the plan.
       const src = ((profile.customization as Record<string, unknown> | null) ?? {})._planSource;
-      if (stripeDowngradeAllowed(src as "stripe" | "apple" | undefined)) {
+      // Already Free: this subscription stopped being paid earlier (ended by
+      // status, then deleted now) — it was ended then, and announced then.
+      if (stripeDowngradeAllowed(src as "stripe" | "apple" | undefined) && profile.plan !== "free") {
         const { data: downgradedRows } = await admin2
           .from("profiles")
           .update({ plan: "free" })
@@ -1153,7 +1194,8 @@ export async function POST(req: NextRequest) {
       // resubscribed customer's NEW subscription's cancel-mirror/expiry must
       // not be silently cleared by a stale write for the OLD, now-cancelled
       // one (code review).
-      await admin2.from("profiles").update({ plan_expires_at: null, customization: cust }).eq("id", profile.id).eq("stripe_subscription_id", sub.id);
+      await admin2.from("profiles").update({ plan_expires_at: null }).eq("id", profile.id).eq("stripe_subscription_id", sub.id);
+      await writeCustomizationChanges(profile.id, profile.customization as Record<string, unknown> | null, cust, { requireSub: sub.id });
     }
 
     // If the person whose PERSONAL subscription just ended is still an active
@@ -1178,10 +1220,7 @@ export async function POST(req: NextRequest) {
             await admin2.from("profiles").update({ plan: "enterprise", office_id: membership.office_id }).eq("id", profile.id);
             if (stripeDowngraded) {
               stripeDowngraded = false;
-              const { data: restored } = await admin2.from("profiles").select("customization").eq("id", profile.id).maybeSingle();
-              const restoredCust = { ...((restored?.customization as Record<string, unknown> | null) ?? {}) };
-              delete restoredCust[PRO_ENDED_PENDING_KEY];
-              await admin2.from("profiles").update({ customization: restoredCust }).eq("id", profile.id);
+              await mergeCustomization(profile.id, { set: {}, remove: [PRO_ENDED_PENDING_KEY] });
             }
           }
         }
@@ -1258,7 +1297,7 @@ export async function POST(req: NextRequest) {
     // just id) so a stale retry can never null out a DIFFERENT subscription
     // the customer resubscribed to in the meantime — it just no-ops instead,
     // same as the original single atomic UPDATE this replaced (code review).
-    if (profile?.id) {
+    if (profile?.id && !keepLink) {
       await admin2.from("profiles").update({ stripe_subscription_id: null }).eq("id", profile.id).eq("stripe_subscription_id", sub.id);
     }
   }

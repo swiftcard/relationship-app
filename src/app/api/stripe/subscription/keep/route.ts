@@ -4,6 +4,7 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { getStripe, subscriptionPeriodEndIso } from "@/lib/stripe";
 import type Stripe from "stripe";
 import { officeSubUserBlockMessage, resolveBillingSubjectId } from "@/lib/office-roles";
+import { mergeCustomization } from "@/lib/customization-merge";
 
 // POST /api/stripe/subscription/keep
 // Reverses a scheduled cancellation: clears cancel_at_period_end so the plan
@@ -48,11 +49,8 @@ export async function POST() {
   }
 
   // Clear the mirrored scheduled-cancel state.
-  const cust = { ...((profile.customization as Record<string, unknown> | null) ?? {}) };
-  delete cust._cancelAtPeriodEnd;
-  delete cust._cancelAt;
-  delete cust._cancelReason;
-  await admin.from("profiles").update({ customization: cust }).eq("id", subjectId);
+  // Only these keys (lib/customization-merge, audit B-03).
+  await mergeCustomization(subjectId, { set: {}, remove: ["_cancelAtPeriodEnd", "_cancelAt", "_cancelReason"] });
 
   return NextResponse.json({ ok: true, renewalAt });
 }
