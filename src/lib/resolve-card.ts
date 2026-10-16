@@ -1,5 +1,5 @@
 import { getCardPageData } from "@/lib/card-page-data";
-import { cardIsOffline, cardWithinPlanLimit } from "@/lib/card-active";
+import { cardIsOffline } from "@/lib/card-active";
 import { cardHeadshot } from "@/lib/card-media";
 import { templateStyle, type TemplateStyle } from "@/lib/template-style";
 import { normalizeCustomLayout } from "@/lib/custom-layout";
@@ -61,7 +61,7 @@ export async function resolveCardMeta(username: string): Promise<ResolvedCardMet
   // card view's database work for identical data. Callers outside a request
   // (the Wallet pass builder, the OG image) get a cache read too, which is
   // equally correct: an edit invalidates the tag.
-  const { cardRow, cardOwner: owner, profileRow, awaitingPlan } = await getCardPageData(username);
+  const { cardRow, cardOwner: owner, profileRow, awaitingPlan, withinLimit } = await getCardPageData(username);
 
   const deleted = cardRow
     ? !!(owner?.customization as { _deleted?: boolean } | null)?._deleted
@@ -73,8 +73,10 @@ export async function resolveCardMeta(username: string): Promise<ResolvedCardMet
   if (cardIsOffline(cardRow)) return null;
 
   // Plan kill-switch — extra Pro-era cards resolve to nothing (kills the OG
-  // share image and the wallet pass alongside the page itself).
-  if (cardRow && !(await cardWithinPlanLimit(cardRow.id, cardRow.user_id, owner?.plan))) return null;
+  // share image and the wallet pass alongside the page itself). The cached
+  // answer, not a second query: re-asking here cost every Free owner's card
+  // view two more database round trips, outside the cache (audit P-03).
+  if (cardRow && !withinLimit) return null;
 
   // Not live until a plan is chosen (lib/card-active rule 5) — no share image,
   // no link unfurl, no wallet pass for a card nobody else can open yet.

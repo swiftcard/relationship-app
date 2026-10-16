@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { encryptToken } from "@/lib/token-crypto";
+import { CRM_CALL_TIMEOUT_MS } from "@/lib/crm-http";
 import { verifyState } from "@/lib/oauth-state";
 import { parseCardsParam } from "@/lib/crm-scope-server";
 import { isSalesforceInstanceUrl } from "@/lib/sync-salesforce";
@@ -56,7 +57,9 @@ export async function GET(request: NextRequest) {
   const codeVerifier = request.cookies.get("sf_pkce")?.value;
   if (!codeVerifier) return DONE("error");
 
+  // Bounded like every other provider call (lib/crm-http, audit I-01).
   const tokenRes = await fetch("https://login.salesforce.com/services/oauth2/token", {
+    signal: AbortSignal.timeout(CRM_CALL_TIMEOUT_MS),
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -67,7 +70,11 @@ export async function GET(request: NextRequest) {
       grant_type: "authorization_code",
       code_verifier: codeVerifier,
     }),
+  }).catch((e: unknown) => {
+    console.error("[salesforce/callback] token exchange got no answer:", e instanceof Error ? e.message : e);
+    return null;
   });
+  if (!tokenRes) return DONE("error");
   if (!tokenRes.ok) {
     console.error("[salesforce/callback] token exchange failed:", tokenRes.status, await tokenRes.text().catch(() => ""));
     return DONE("error");

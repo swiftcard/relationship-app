@@ -79,6 +79,20 @@ const nextConfig: NextConfig = {
         destination: "https://swiftcard.me/:path*",
         permanent: true,
       },
+      // Legacy card URLs: /card/<username> → /<username> (canonical since
+      // 2026-08-19). Every /card/ link ever printed, written to an NFC tag, put
+      // in a Wallet pass or an email signature keeps working forever. As a rule
+      // here it is answered at the edge; as a page (app/card/[username]/page.tsx,
+      // kept only as a fallback) every scan paid a serverless render — a cold
+      // start, ~2 s of blank screen — before the 308 was even sent (audit P-03).
+      // The query string (?source=qr_code and friends) is carried over by Next
+      // itself. One segment only, so /card/<u>/opengraph-image, which mail
+      // clients and unfurl caches hold directly, still serves its picture.
+      {
+        source: "/card/:username",
+        destination: "/:username",
+        permanent: true,
+      },
       // /signup is the most-guessed URL for a product like this; land it on the
       // real card-creation flow instead of a 404.
       {

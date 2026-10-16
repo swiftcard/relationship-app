@@ -130,8 +130,28 @@ export default async function ContactsPage({
   // migrated yet fails the WHOLE query and would empty the contacts list, so a
   // 42703/PGRST204 retries without it — contacts matter far more than a label.
   const LEAD_COLS = "id, name, email, phone, company, company_description, location, notes, status, tags, follow_up_date, source, visitor_id, card_owner, where_met, convo_details, message, follow_up_sequence, created_at";
-  const loadLeads = async (cols: string) =>
-    admin.from("leads").select(cols).in("card_owner", allUsernames).order("name", { ascending: true });
+  // PAGED, never one select: the database hands back at most 1,000 rows, so
+  // past an account's 1,000th contact everyone after it alphabetically simply
+  // wasn't on the list or in search, with nothing saying so (audit P-06). The
+  // dashboard pages the same way. Sorted by name then id so a page boundary
+  // can never skip or repeat a contact.
+  const LEADS_PAGE = 1000;
+  const loadLeads = async (cols: string) => {
+    const rows: unknown[] = [];
+    for (let p = 0; p < 50; p++) {
+      const res = await admin
+        .from("leads")
+        .select(cols)
+        .in("card_owner", allUsernames)
+        .order("name", { ascending: true })
+        .order("id", { ascending: true })
+        .range(p * LEADS_PAGE, p * LEADS_PAGE + LEADS_PAGE - 1);
+      if (res.error) return { data: null, error: res.error };
+      rows.push(...(res.data ?? []));
+      if ((res.data ?? []).length < LEADS_PAGE) break;
+    }
+    return { data: rows, error: null };
+  };
   const [leadsRes, showOfficeAdmin, officeSubUser] = await Promise.all([
     (async () => {
       const withGeo = await loadLeads(`${LEAD_COLS}, geo_accuracy`);

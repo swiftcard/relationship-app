@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { encryptToken } from "@/lib/token-crypto";
+import { CRM_CALL_TIMEOUT_MS } from "@/lib/crm-http";
 import { verifyState, stateBoundToBrowser, oauthBindCookieName } from "@/lib/oauth-state";
 import { parseCardsParam } from "@/lib/crm-scope-server";
 import { isNativeGoogleLoginState } from "@/lib/native-google-login";
@@ -82,8 +83,11 @@ export async function GET(request: NextRequest) {
   const scopeUpdate = scopeCookie === undefined ? {} : { card_ids: parseCardsParam(scopeCookie) ?? null };
 
 
-  // Exchange code for tokens
+  // Exchange code for tokens. Bounded like every other provider call
+  // (lib/crm-http, audit I-01): a token endpoint that never answers must end
+  // as "connection failed", not hold the function until Vercel kills it.
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+    signal: AbortSignal.timeout(CRM_CALL_TIMEOUT_MS),
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -93,9 +97,9 @@ export async function GET(request: NextRequest) {
       redirect_uri: `${APP_URL}/api/integrations/google/callback`,
       grant_type: "authorization_code",
     }),
-  });
+  }).catch(() => null);
 
-  if (!tokenRes.ok) {
+  if (!tokenRes || !tokenRes.ok) {
     return DONE("error");
   }
 
