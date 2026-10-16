@@ -299,6 +299,16 @@ html:not([data-sc-theme="light"]) .sc-app .sc-segmented > .is-active { backgroun
 .sc-sheet::before { content: ""; position: absolute; top: 6px; left: 50%; width: 36px; height: 5px; margin-left: -18px; border-radius: 999px; background: var(--sc-label-3); }
 @media (min-width: 640px) { .sc-sheet { border-radius: var(--sc-r-sheet); } .sc-sheet::before { display: none; } }
 .sc-sheet-elevated { background: var(--sc-bg-elevated); }
+/* The app's existing bottom sheets (the Add-card and Pro-required sheets are
+   `.sc-dark-sheet … rounded-t-3xl`) get iOS's grabber on a phone: a 36×5
+   pill centred at the top, drawn as a pseudo-element so nothing inside the
+   sheet moves. From sm up they are centred dialogs and show none. */
+@media (max-width: 639.98px) {
+  .sc-app .sc-dark-sheet.rounded-t-3xl::before {
+    content: ""; position: absolute; top: 6px; left: 50%; width: 36px; height: 5px; margin-left: -18px;
+    border-radius: 999px; background: rgba(255, 255, 255, 0.28); pointer-events: none;
+  }
+}
 .sc-alert { width: min(270px, 100%); background: var(--sc-glass); -webkit-backdrop-filter: blur(40px) saturate(1.8); backdrop-filter: blur(40px) saturate(1.8); color: var(--sc-label); border-radius: 14px; overflow: hidden; text-align: center; box-shadow: var(--sc-shadow-float); }
 .sc-alert-title { font-size: 1.0625rem; font-weight: 600; padding: 1.25rem 1rem 0.25rem; }
 .sc-alert-message { font-size: 0.8125rem; color: var(--sc-label); padding: 0 1rem 1.125rem; }
