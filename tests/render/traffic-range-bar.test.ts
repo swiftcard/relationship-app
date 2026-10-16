@@ -47,7 +47,7 @@ async function measure(width: number) {
   const css = await appCss();
   const boxCls = classNameContaining("bg-gray-900 border border-gray-800/80 rounded-2xl p-5 mb-5");
   const headerCls = classNameContaining("flex items-center mb-4");
-  const barCls = classNameContaining("bg-gray-800 rounded-lg p-0.5");
+  const barCls = classNameContaining("sc-segmented grid grid-cols-4 w-full lg:flex lg:w-auto items-center rounded-lg p-0.5");
   // The Free lock beside "Locations", with its real classes. A flex svg with no
   // shrink-0 squeezed to a dot in a quarter-width tab — which a label-overflow
   // check alone reported as fine, so its own width is measured below.

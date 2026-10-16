@@ -55,6 +55,274 @@ body {
   font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE APP'S DESIGN LANGUAGE (Apple, 2026-10-15)
+   ═══════════════════════════════════════════════════════════════════════════
+   The owner asked for the signed-in product — dashboard, card builder and
+   editor, sign-in, contacts, settings, Links, Grow, Office — to look the way
+   Apple designs: one typeface, semantic colours that adapt to light and dark,
+   inset grouped surfaces, capsule buttons, a glass layer for navigation only,
+   and motion that is brief and springy. This block is the vocabulary; the
+   remap layer further down paints the existing dark-authored utilities with
+   it, and the primitive classes (.sc-btn, .sc-field, .sc-group, .sc-switch,
+   .sc-segmented, .sc-sheet, .sc-alert …) are the components.
+
+   Rules, from Apple's Human Interface Guidelines:
+   • Semantic, not literal: --sc-bg / --sc-bg-elevated / --sc-label / --sc-label-2
+     / --sc-separator / --sc-fill / --sc-tint. Never a raw hex in a component.
+   • ONE tint for everything interactive — SwiftCard blue, the owner's choice —
+     and nothing non-interactive borrows it.
+   • Glass (blur + translucency) lives on bars only. Content never gets glass.
+   • Hit regions ≥ 44px. Every button has a press state. Prominence by STYLE
+     (filled → tinted → gray → plain), never by size.
+   • Minimum type 11px; body 17px; weights Regular/Medium/Semibold/Bold only.
+   • Everything moving is off under prefers-reduced-motion (the catch-all below).
+
+   NOTHING here changes where anything sits or what it does. It is paint. */
+.sc-app, .sc-auth, .sc-tabbar {
+  /* Light (default) — iOS system colours with SwiftCard's tint. */
+  --sc-bg: #F2F2F7;                           /* systemGroupedBackground */
+  --sc-bg-elevated: #FFFFFF;                  /* secondarySystemGroupedBackground */
+  --sc-bg-tertiary: #F2F2F7;                  /* a group INSIDE a white surface */
+  --sc-fill: rgba(120, 120, 128, 0.12);       /* tertiarySystemFill */
+  --sc-fill-2: rgba(120, 120, 128, 0.16);     /* secondarySystemFill */
+  --sc-fill-3: rgba(120, 120, 128, 0.20);     /* systemFill */
+  --sc-label: #000000;
+  --sc-label-2: rgba(60, 60, 67, 0.60);
+  --sc-label-3: rgba(60, 60, 67, 0.30);
+  --sc-label-4: rgba(60, 60, 67, 0.18);
+  --sc-separator: rgba(60, 60, 67, 0.29);
+  --sc-separator-opaque: #C6C6C8;
+  --sc-tint: #1D4ED8;
+  --sc-tint-hover: #1740C4;
+  --sc-tint-soft: rgba(29, 78, 216, 0.12);    /* tinted buttons, selected rows */
+  --sc-tint-ring: rgba(29, 78, 216, 0.28);
+  --sc-tint-office: #7E22CE;
+  --sc-green: #34C759;
+  --sc-red: #FF3B30;
+  --sc-orange: #FF9500;
+  --sc-yellow: #FFCC00;
+  --sc-gray: #8E8E93;
+  --sc-glass: rgba(249, 249, 249, 0.80);
+  --sc-glass-border: rgba(0, 0, 0, 0.10);
+  --sc-glass-sheen: rgba(255, 255, 255, 0.70);
+  --sc-scrim: rgba(0, 0, 0, 0.40);
+  --sc-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px -12px rgba(0, 0, 0, 0.10);
+  --sc-shadow-float: 0 12px 32px -8px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.06);
+  --sc-shadow-sheet: 0 -8px 40px rgba(0, 0, 0, 0.18);
+  --sc-shadow-knob: 0 3px 8px rgba(0, 0, 0, 0.15), 0 3px 1px rgba(0, 0, 0, 0.06);
+  /* Shape — iOS 26: capsules for buttons, large soft corners for surfaces. */
+  --sc-r-control: 12px;
+  --sc-r-card: 20px;
+  --sc-r-sheet: 26px;
+  --sc-r-pill: 999px;
+  /* Motion. */
+  --sc-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --sc-tap: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --sc-dur-fast: 0.15s;
+  --sc-dur-med: 0.30s;
+  --sc-dur-slow: 0.45s;
+  /* The typeface. On an iPhone, iPad or Mac this IS San Francisco — Apple's
+     own font, which may not be shipped as a webfont. Everywhere else, Inter
+     (loaded by layout.tsx as --font-inter), drawn to the same proportions.
+     Marketing pages keep Geist and Bricolage; card templates set their own
+     font from customization.fontFamily and never inherit this. */
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", var(--font-inter), "Inter", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+html:not([data-sc-theme="light"]) .sc-app, html:not([data-sc-theme="light"]) .sc-auth, html:not([data-sc-theme="light"]) .sc-tabbar {
+  --sc-bg: #000000;
+  --sc-bg-elevated: #1C1C1E;
+  --sc-bg-tertiary: #2C2C2E;
+  --sc-fill: rgba(120, 120, 128, 0.24);
+  --sc-fill-2: rgba(120, 120, 128, 0.32);
+  --sc-fill-3: rgba(120, 120, 128, 0.36);
+  --sc-label: #FFFFFF;
+  --sc-label-2: rgba(235, 235, 245, 0.60);
+  --sc-label-3: rgba(235, 235, 245, 0.30);
+  --sc-label-4: rgba(235, 235, 245, 0.18);
+  --sc-separator: rgba(84, 84, 88, 0.65);
+  --sc-separator-opaque: #38383A;
+  --sc-tint: #3B82F6;
+  --sc-tint-hover: #60A5FA;
+  --sc-tint-soft: rgba(59, 130, 246, 0.18);
+  --sc-tint-ring: rgba(59, 130, 246, 0.36);
+  --sc-tint-office: #A855F7;
+  --sc-green: #30D158;
+  --sc-red: #FF453A;
+  --sc-orange: #FF9F0A;
+  --sc-yellow: #FFD60A;
+  --sc-glass: rgba(28, 28, 30, 0.72);
+  --sc-glass-border: rgba(255, 255, 255, 0.10);
+  --sc-glass-sheen: rgba(255, 255, 255, 0.08);
+  --sc-scrim: rgba(0, 0, 0, 0.55);
+  --sc-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+  --sc-shadow-float: 0 12px 32px -8px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --sc-shadow-sheet: 0 -8px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Type scale (Apple text styles, in rem so Dynamic Type still scales) ──── */
+.sc-t-large    { font-size: 2.125rem; line-height: 1.2;  font-weight: 700; letter-spacing: -0.02em; }
+.sc-t-title1   { font-size: 1.75rem;  line-height: 1.2;  font-weight: 700; letter-spacing: -0.02em; }
+.sc-t-title2   { font-size: 1.375rem; line-height: 1.27; font-weight: 700; letter-spacing: -0.015em; }
+.sc-t-title3   { font-size: 1.25rem;  line-height: 1.25; font-weight: 600; letter-spacing: -0.01em; }
+.sc-t-headline { font-size: 1.0625rem; line-height: 1.3; font-weight: 600; letter-spacing: -0.01em; }
+.sc-t-body     { font-size: 1.0625rem; line-height: 1.3; font-weight: 400; letter-spacing: -0.01em; }
+.sc-t-callout  { font-size: 1rem;     line-height: 1.3;  font-weight: 400; }
+.sc-t-subhead  { font-size: 0.9375rem; line-height: 1.33; font-weight: 400; }
+.sc-t-footnote { font-size: 0.8125rem; line-height: 1.38; font-weight: 400; }
+.sc-t-caption  { font-size: 0.75rem;  line-height: 1.33; font-weight: 400; }
+.sc-eyebrow    { font-size: 0.8125rem; line-height: 1.38; font-weight: 400; color: var(--sc-label-2); text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* ── Buttons ──────────────────────────────────────────────────────────────────
+   Four styles, one shape. Prominence by style, never size (HIG). Every one
+   has a press state; the spring transition is shared with the tab bar. */
+.sc-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  min-height: 44px; padding: 0 1.25rem; border-radius: var(--sc-r-pill);
+  font-size: 1.0625rem; font-weight: 600; letter-spacing: -0.01em; line-height: 1.2;
+  border: 1px solid transparent; cursor: pointer; white-space: nowrap; text-decoration: none;
+  -webkit-tap-highlight-color: transparent; user-select: none;
+  transition: transform var(--sc-dur-fast) var(--sc-tap), opacity var(--sc-dur-fast) ease, background-color var(--sc-dur-fast) ease, color var(--sc-dur-fast) ease, box-shadow var(--sc-dur-fast) ease;
+}
+.sc-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.sc-btn-filled { background: var(--sc-tint); color: #fff; box-shadow: 0 1px 2px rgba(29, 78, 216, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.18); }
+.sc-btn-filled:hover { background: var(--sc-tint-hover); }
+.sc-btn-tinted { background: var(--sc-tint-soft); color: var(--sc-tint); }
+.sc-btn-tinted:hover { background: var(--sc-tint-ring); }
+.sc-btn-gray { background: var(--sc-fill); color: var(--sc-label); }
+.sc-btn-gray:hover { background: var(--sc-fill-2); }
+.sc-btn-plain { background: transparent; color: var(--sc-tint); padding-left: 0.5rem; padding-right: 0.5rem; }
+.sc-btn-plain:hover { background: var(--sc-fill); }
+.sc-btn-destructive { background: transparent; color: var(--sc-red); }
+.sc-btn-destructive:hover { background: rgba(255, 59, 48, 0.10); }
+.sc-btn-destructive.sc-btn-filled { background: var(--sc-red); color: #fff; box-shadow: none; }
+.sc-btn-sm { min-height: 32px; padding: 0 0.875rem; font-size: 0.9375rem; }
+.sc-btn-xs { min-height: 28px; padding: 0 0.75rem; font-size: 0.8125rem; }
+.sc-btn-lg { min-height: 50px; padding: 0 1.5rem; }
+.sc-btn-block { display: flex; width: 100%; }
+.sc-btn-icon { width: 44px; height: 44px; padding: 0; border-radius: var(--sc-r-pill); background: var(--sc-fill); color: var(--sc-label); }
+.sc-btn-icon:hover { background: var(--sc-fill-2); }
+.sc-btn-icon.sc-btn-sm { width: 36px; height: 36px; }
+.sc-btn-icon.sc-btn-xs { width: 32px; height: 32px; }
+.sc-btn-icon.sc-btn-tinted { background: var(--sc-tint-soft); color: var(--sc-tint); }
+.sc-btn-icon.sc-btn-filled { background: var(--sc-tint); color: #fff; }
+.sc-btn-icon.sc-btn-plain { background: transparent; }
+
+/* ── Text fields ─────────────────────────────────────────────────────────────
+   Filled, borderless, 44px, 12px corners; a ring on focus. Placeholder is the
+   tertiary label. The 16px coarse-pointer floor above still applies. */
+.sc-field {
+  display: block; width: 100%; min-height: 44px; padding: 0.625rem 0.875rem;
+  background: var(--sc-fill); color: var(--sc-label); border: 1px solid transparent;
+  border-radius: var(--sc-r-control); font-size: 1.0625rem; line-height: 1.3;
+  transition: background-color var(--sc-dur-fast) ease, box-shadow var(--sc-dur-fast) ease, border-color var(--sc-dur-fast) ease;
+}
+.sc-field::placeholder { color: var(--sc-label-3); }
+.sc-field:focus, .sc-field:focus-visible { outline: none; background: var(--sc-bg-elevated); border-color: var(--sc-tint); box-shadow: 0 0 0 3px var(--sc-tint-ring); }
+.sc-field[aria-invalid="true"] { border-color: var(--sc-red); }
+textarea.sc-field { min-height: 88px; resize: vertical; }
+select.sc-field { appearance: none; -webkit-appearance: none; padding-right: 2.25rem; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1.5l5 5 5-5' fill='none' stroke='%238E8E93' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>"); background-repeat: no-repeat; background-position: right 0.875rem center; }
+.sc-field-label { display: block; font-size: 0.8125rem; font-weight: 600; color: var(--sc-label-2); margin-bottom: 0.375rem; }
+
+/* ── Inset grouped lists ──────────────────────────────────────────────────── */
+.sc-group { background: var(--sc-bg-elevated); border-radius: var(--sc-r-card); box-shadow: var(--sc-shadow-card); overflow: hidden; }
+.sc-canvas-white .sc-group { background: var(--sc-bg-tertiary); box-shadow: none; }
+.sc-row { display: flex; align-items: center; gap: 0.75rem; min-height: 44px; padding: 0.625rem 1rem; color: var(--sc-label); position: relative; }
+.sc-row + .sc-row::before, .sc-group > * + .sc-row::before { content: ""; position: absolute; left: 1rem; right: 0; top: 0; height: 1px; background: var(--sc-separator); transform: scaleY(0.5); transform-origin: top; }
+.sc-row-chevron { color: var(--sc-label-3); flex: none; width: 0.5rem; height: 0.875rem; }
+.sc-row-check { color: var(--sc-tint); flex: none; }
+a.sc-row:hover, button.sc-row:hover { background: var(--sc-fill); }
+.sc-group-title { padding: 0 1rem 0.5rem; font-size: 0.8125rem; color: var(--sc-label-2); text-transform: uppercase; letter-spacing: 0.04em; }
+.sc-group-foot { padding: 0.5rem 1rem 0; font-size: 0.8125rem; color: var(--sc-label-2); }
+
+/* ── Switch (iOS: 51×31, green when on) ─────────────────────────────────────
+   Put on the TRACK element. The knob is ::after, so a component keeps its own
+   markup (its role, its aria, its label row) and only its look changes. */
+.sc-switch { position: relative; display: inline-block; flex: none; width: 51px; height: 31px; border-radius: 999px; background: var(--sc-fill-3); transition: background-color var(--sc-dur-med) ease; }
+.sc-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 999px; background: #fff; box-shadow: var(--sc-shadow-knob); transition: transform var(--sc-dur-med) var(--sc-spring); }
+.sc-switch[data-on="true"], [aria-checked="true"] > .sc-switch, [aria-checked="true"].sc-switch { background: var(--sc-green); }
+.sc-switch[data-on="true"]::after, [aria-checked="true"] > .sc-switch::after, [aria-checked="true"].sc-switch::after { transform: translateX(20px); }
+.sc-switch-sm { width: 42px; height: 26px; }
+.sc-switch-sm::after { width: 22px; height: 22px; }
+.sc-switch-sm[data-on="true"]::after, [aria-checked="true"] > .sc-switch-sm::after, [aria-checked="true"].sc-switch-sm::after { transform: translateX(16px); }
+
+/* ── Segmented control ───────────────────────────────────────────────────── */
+/* Layout (grid or flex, gaps, widths) belongs to the caller; this is the track. */
+.sc-segmented { padding: 2px; border-radius: 9px; background: var(--sc-fill); }
+/* Size, weight and width are the caller's (the Traffic bar is four equal
+   columns on a phone and compact on a computer); this is only the look. */
+.sc-segmented > * { border-radius: 7px; color: var(--sc-label); transition: background-color var(--sc-dur-fast) ease, color var(--sc-dur-fast) ease, box-shadow var(--sc-dur-fast) ease; }
+.sc-segmented > :is([aria-pressed="true"], [aria-current], [aria-selected="true"], [data-active="true"], .is-active) { background: var(--sc-bg-elevated); box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 3px 1px rgba(0, 0, 0, 0.04); }
+html:not([data-sc-theme="light"]) .sc-app .sc-segmented > :is([aria-pressed="true"], [aria-current], [aria-selected="true"], [data-active="true"], .is-active) { background: #636366; }
+.sc-segmented-tint > :is([aria-pressed="true"], [aria-current], [aria-selected="true"], [data-active="true"], .is-active) { background: var(--sc-tint); color: #fff; }
+
+/* ── Badges ──────────────────────────────────────────────────────────────── */
+.sc-badge { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.125rem 0.5rem; border-radius: 999px; font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.02em; background: var(--sc-fill); color: var(--sc-label-2); line-height: 1.4; white-space: nowrap; }
+.sc-badge-tint { background: var(--sc-tint-soft); color: var(--sc-tint); }
+.sc-badge-green { background: rgba(52, 199, 89, 0.14); color: #1E8E3E; }
+.sc-badge-red { background: rgba(255, 59, 48, 0.12); color: #C62828; }
+.sc-badge-orange { background: rgba(255, 149, 0, 0.14); color: #A85C00; }
+.sc-badge-office { background: rgba(126, 34, 206, 0.12); color: var(--sc-tint-office); }
+
+/* ── Callout (a banner that speaks, not shouts) ───────────────────────────── */
+.sc-callout { display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.875rem 1rem; border-radius: var(--sc-r-card); background: var(--sc-tint-soft); color: var(--sc-label); }
+.sc-callout-neutral { background: var(--sc-bg-elevated); box-shadow: var(--sc-shadow-card); }
+.sc-callout-warn { background: rgba(255, 149, 0, 0.12); }
+.sc-callout-danger { background: rgba(255, 59, 48, 0.10); }
+.sc-callout-success { background: rgba(52, 199, 89, 0.12); }
+
+/* ── Glass bars (navigation layer only) ──────────────────────────────────── */
+.sc-glass { background: var(--sc-glass); -webkit-backdrop-filter: blur(24px) saturate(1.8); backdrop-filter: blur(24px) saturate(1.8); border-color: var(--sc-glass-border); box-shadow: inset 0 1px 0 var(--sc-glass-sheen); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .sc-glass { background: var(--sc-bg-elevated); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .sc-glass { background: var(--sc-bg-elevated); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+/* ── Sheets and alerts ───────────────────────────────────────────────────── */
+.sc-sheet { position: relative; background: var(--sc-bg); color: var(--sc-label); border-radius: var(--sc-r-sheet) var(--sc-r-sheet) 0 0; box-shadow: var(--sc-shadow-sheet); }
+.sc-sheet::before { content: ""; position: absolute; top: 6px; left: 50%; width: 36px; height: 5px; margin-left: -18px; border-radius: 999px; background: var(--sc-label-3); }
+@media (min-width: 640px) { .sc-sheet { border-radius: var(--sc-r-sheet); } .sc-sheet::before { display: none; } }
+.sc-sheet-elevated { background: var(--sc-bg-elevated); }
+.sc-alert { width: min(270px, 100%); background: var(--sc-glass); -webkit-backdrop-filter: blur(40px) saturate(1.8); backdrop-filter: blur(40px) saturate(1.8); color: var(--sc-label); border-radius: 14px; overflow: hidden; text-align: center; box-shadow: var(--sc-shadow-float); }
+.sc-alert-title { font-size: 1.0625rem; font-weight: 600; padding: 1.25rem 1rem 0.25rem; }
+.sc-alert-message { font-size: 0.8125rem; color: var(--sc-label); padding: 0 1rem 1.125rem; }
+.sc-alert-actions { display: flex; border-top: 1px solid var(--sc-separator); }
+.sc-alert-actions > * { flex: 1 1 0; min-height: 44px; font-size: 1.0625rem; color: var(--sc-tint); background: transparent; }
+.sc-alert-actions > * + * { border-left: 1px solid var(--sc-separator); }
+.sc-alert-actions > *:hover { background: var(--sc-fill); }
+.sc-alert-actions > .is-destructive { color: var(--sc-red); }
+.sc-alert-actions > .is-cancel { font-weight: 600; }
+@keyframes sc-sheet-up { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes sc-alert-in { from { transform: scale(1.08); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes sc-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+.sc-sheet-in { animation: sc-sheet-up var(--sc-dur-slow) var(--sc-spring) both; }
+.sc-alert-in { animation: sc-alert-in 0.22s var(--sc-spring) both; }
+.sc-scrim-in { animation: sc-scrim-in 0.25s ease both; }
+
+/* ── Press state: every control answers a touch (HIG: "always include a press
+   state"). Transform only, so nothing reflows; the catch-all reduced-motion
+   block further down strips the transform transition. Scoped to leaf controls:
+   a full-width row or card link highlights instead (see .sc-row). */
+@media (prefers-reduced-motion: no-preference) {
+  .sc-app :is(button, a, [role="button"], [role="switch"], [role="tab"], summary):not(.sc-row):not(.sc-no-press) {
+    transition-property: transform, opacity, background-color, color, border-color, box-shadow;
+    transition-timing-function: var(--sc-tap);
+    transition-duration: 0.28s;
+  }
+  .sc-app :is(button, a, [role="button"], [role="switch"], [role="tab"], summary):not(.sc-row):not(.sc-no-press):active {
+    transform: scale(0.96);
+  }
+}
+
+/* ── The decorative top stripe is gone everywhere (owner, 2026-10-15) ──────
+   The DOM keeps the element so nothing else shifts and tests still find it. */
+.sc-top-stripe { display: none !important; }
+
 @keyframes marquee {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
@@ -413,126 +681,120 @@ body {
   .sc-btn-glow { animation: none !important; box-shadow: 0 0 16px rgba(37,99,235,0.75) !important; }
 }
 
-/* ── Light mode (cream white) for app surfaces ──────────────────────────────
-   Applied when <html data-sc-theme="light"> (set by ThemeToggle) to elements
-   inside a .sc-app container (dashboard, contacts, settings, card editors).
-   Dark stays exactly as designed; public cards/links pages are untouched. */
+/* ── Light mode for app surfaces ─────────────────────────────────────────────
+   Applied when <html data-sc-theme="light"> (set by ThemeToggle / sc-boot) to
+   elements inside a .sc-app container (dashboard, contacts, settings, card
+   editors). Components are authored in the dark utilities; this layer paints
+   them with the Apple tokens above. Public cards/links pages are untouched.
+   2026-10-15: the cream (#FAF7F2 / #F3EDE3 / #E4DDD4) became iOS's grouped
+   background, white surfaces and hairline separators. */
 [data-sc-theme="light"] .sc-app.bg-gray-950,
-[data-sc-theme="light"] .sc-app .bg-gray-950 { background-color: #FAF7F2 !important; }
-/* ── The card builder's canvas is WHITE, not the app cream ─────────────────
+[data-sc-theme="light"] .sc-app .bg-gray-950 { background-color: var(--sc-bg) !important; }
+/* ── The card builder's canvas is WHITE, not the app ground ────────────────
    /cards/new is where "Get started free", "Start for free", "Create your free
    card" and every similar button land, and where "Add card" and the
-   mini-builders' "Make it live" open. The site is white; arriving on cream read
-   as landing somewhere else. Scoped with .sc-canvas-white so the dashboard,
-   settings and other app screens keep the cream. Same rule at every width, and
-   the iPhone shell's own canvas (behind the status bar and the bounce-scroll)
-   follows it below. Dark theme is untouched. */
+   mini-builders' "Make it live" open. The site is white; arriving on a grey
+   ground read as landing somewhere else. Scoped with .sc-canvas-white so the
+   dashboard, settings and other app screens keep the grouped ground. Same
+   rule at every width, and the iPhone shell's own canvas (behind the status
+   bar and the bounce-scroll) follows it below. Dark theme is untouched. */
 [data-sc-theme="light"] .sc-app.sc-canvas-white { background-color: #FFFFFF !important; }
 /* The pinned Card design preview (PinnedCardPreview) paints the page's own
    canvas behind the card, so the controls scrolling under it never show
-   through: charcoal in dark, cream on app screens, white in the card builder. */
+   through: black in dark, the grouped ground on app screens, white in the
+   card builder. */
 /* A card lays itself out LEFT-aligned, whatever holds it. No template sets its
    own text-align, so inside a <button> (the pinned preview is one) every line
    inherited the button's centring: Photo First's name moved from the bottom-
    left of its panel to the middle, Local Business drifted off its left edge
    (owner, 2026-09-17). Elements that centre say so themselves. */
 .sc-card { text-align: left; }
-.sc-pinned-preview { background-color: #030712; }
-[data-sc-theme="light"] .sc-app .sc-pinned-preview { background-color: #FAF7F2; }
+.sc-pinned-preview { background-color: #000000; }
+[data-sc-theme="light"] .sc-app .sc-pinned-preview { background-color: #F2F2F7; }
 [data-sc-theme="light"] .sc-app.sc-canvas-white .sc-pinned-preview { background-color: #FFFFFF; }
 /* The mobile tab bar is a top-level sibling of .sc-app (not inside it), so the
-   rules above never reach it — without this it stays dark charcoal under a
-   cream dashboard on the web. (Native has its own rules further down.) */
+   rules above never reach it. It is glass (see .sc-glass) in both themes. */
 [data-sc-theme="light"] .sc-tabbar {
-  background-color: rgba(250, 247, 242, 0.95) !important;
-  border-color: #E4DDD4 !important;
+  background-color: rgba(249, 249, 249, 0.80) !important;
+  border-color: rgba(0, 0, 0, 0.10) !important;
 }
 [data-sc-theme="light"] .sc-app.bg-gray-950\/95,
 [data-sc-theme="light"] .sc-app .bg-gray-950\/95,
-[data-sc-theme="light"] .sc-app .bg-gray-950\/90 { background-color: rgba(250,247,242,0.95) !important; }
+[data-sc-theme="light"] .sc-app .bg-gray-950\/90 { background-color: rgba(249, 249, 249, 0.80) !important; }
 [data-sc-theme="light"] .sc-app .bg-gray-900,
 [data-sc-theme="light"] .sc-app .bg-gray-900\/60,
-[data-sc-theme="light"] .sc-app .bg-gray-900\/50 { background-color: #FFFFFF !important; }
+[data-sc-theme="light"] .sc-app .bg-gray-900\/50 { background-color: var(--sc-bg-elevated) !important; }
 [data-sc-theme="light"] .sc-app .bg-gray-800,
 [data-sc-theme="light"] .sc-app .bg-gray-800\/60,
 [data-sc-theme="light"] .sc-app .bg-gray-800\/40,
-[data-sc-theme="light"] .sc-app .bg-gray-800\/30 { background-color: #F3EDE3 !important; }
+[data-sc-theme="light"] .sc-app .bg-gray-800\/30 { background-color: var(--sc-fill) !important; }
 [data-sc-theme="light"] .sc-app .hover\:bg-gray-800:hover,
 [data-sc-theme="light"] .sc-app .hover\:bg-gray-800\/60:hover,
-[data-sc-theme="light"] .sc-app .hover\:bg-gray-700:hover { background-color: #EAE2D4 !important; }
-[data-sc-theme="light"] .sc-app .bg-gray-700 { background-color: #E4DBCB !important; }
+[data-sc-theme="light"] .sc-app .hover\:bg-gray-700:hover { background-color: var(--sc-fill-2) !important; }
+[data-sc-theme="light"] .sc-app .bg-gray-700 { background-color: var(--sc-fill-3) !important; }
 
 [data-sc-theme="light"] .sc-app .border-gray-800,
 [data-sc-theme="light"] .sc-app .border-gray-800\/80,
 [data-sc-theme="light"] .sc-app .border-gray-800\/60,
 [data-sc-theme="light"] .sc-app .border-gray-700,
-[data-sc-theme="light"] .sc-app .border-gray-700\/60 { border-color: #E4DDD4 !important; }
-[data-sc-theme="light"] .sc-app :is(.divide-gray-800, .divide-gray-800\/60) > :not([hidden]) ~ :not([hidden]) { border-color: #EBE4D9 !important; }
+[data-sc-theme="light"] .sc-app .border-gray-700\/60 { border-color: var(--sc-separator) !important; }
+[data-sc-theme="light"] .sc-app :is(.divide-gray-800, .divide-gray-800\/60) > :not([hidden]) ~ :not([hidden]) { border-color: var(--sc-separator) !important; }
 
-/* Primary text → near-black so headings, names and labels read clearly on the
-   cream surface. text-gray-100 was previously unmapped (stayed near-white and
-   became invisible in light mode). */
+/* Primary text → the label colour (pure black, as iOS draws it). text-gray-100
+   was previously unmapped (stayed near-white and became invisible in light). */
 [data-sc-theme="light"] .sc-app .text-white,
-[data-sc-theme="light"] .sc-app .text-gray-100 { color: #111827 !important; }
+[data-sc-theme="light"] .sc-app .text-gray-100 { color: var(--sc-label) !important; }
 /* …but keep white text white on colored buttons/badges, where the background
    class and text-white sit on the same element (higher specificity → wins). */
-[data-sc-theme="light"] .sc-app :is(.bg-blue-500, .bg-blue-600, .bg-blue-700, .bg-indigo-600, .bg-violet-600, .bg-purple-600, .bg-green-500, .bg-green-600, .bg-emerald-600, .bg-red-500, .bg-red-600).text-white { color: #FFFFFF !important; }
-/* Danger text. red-400 (#f87171) was drawn for the dark surface; on the cream
-   it sits at 2.9:1 (axe, /settings). red-700 holds 5.9:1 on white and still
-   reads as the same warning. */
-[data-sc-theme="light"] .sc-app .text-red-400 { color: #b91c1c !important; }
+[data-sc-theme="light"] .sc-app :is(.bg-blue-500, .bg-blue-600, .bg-blue-700, .bg-indigo-600, .bg-violet-600, .bg-purple-600, .bg-green-500, .bg-green-600, .bg-emerald-600, .bg-red-500, .bg-red-600, .sc-btn-filled).text-white { color: #FFFFFF !important; }
+/* Danger text. red-400 (#f87171) was drawn for the dark surface; on white it
+   sits under 3:1. This red holds 4.6:1 on white and reads as the same warning. */
+[data-sc-theme="light"] .sc-app .text-red-400 { color: #C62828 !important; }
 [data-sc-theme="light"] .sc-app .text-gray-200,
-[data-sc-theme="light"] .sc-app .text-gray-300 { color: #1F2937 !important; }
-/* The muted end of this ramp did not survive its own remap. Measured against
-   the two surfaces these actually sit on — cream #FAF7F2 and warm-card #EDE5D8:
-
-     text-gray-400  #57534E   7.14 / 6.10  ✓
-     text-gray-500  #78716C   4.49 / 3.84  ✗ fails AA on the card
-     text-gray-600  #A29D93   2.53 / 2.16  ✗ fails everything, incl. the 3:1
-                                             large-text floor
-
-   These carry real reading text in light mode — "Not set" values, timestamps,
-   helper lines, the source pill on a contact. Dark mode was fine, so nobody
-   caught that the light remap had quietly dropped two tiers below legible.
-
-   Re-anchored so every tier clears 4.5:1 on the DARKER of the two surfaces,
-   while staying ordered (400 darkest → 600 most muted) so hierarchy survives.
-   The range compresses, which is the honest cost: on a cream ground there is
-   simply less room below the body colour than a dark theme has. */
-[data-sc-theme="light"] .sc-app .text-gray-400 { color: #57534E !important; } /* 6.10 on card */
-[data-sc-theme="light"] .sc-app .text-gray-500 { color: #615A54 !important; } /* 5.42 on card */
-[data-sc-theme="light"] .sc-app .text-gray-600 { color: #6B635C !important; } /* 4.71 on card */
+[data-sc-theme="light"] .sc-app .text-gray-300 { color: #1C1C1E !important; }
+/* The muted tiers, measured against the two surfaces they sit on — the
+   grouped ground #F2F2F7 and the white card. Every tier clears 4.5:1 on the
+   DARKER of the two, and the ramp stays ordered (400 darkest → 600 most muted)
+   so hierarchy survives:
+     text-gray-400  #545458   7.66 on white / 6.86 on #F2F2F7
+     text-gray-500  #636366   6.01 / 5.37
+     text-gray-600  #6E6E73   5.07 / 4.54
+   Apple's own secondaryLabel (60% black) is 3.5:1 and would fail AA; these are
+   the nearest neutrals that pass. */
+[data-sc-theme="light"] .sc-app .text-gray-400 { color: #545458 !important; }
+[data-sc-theme="light"] .sc-app .text-gray-500 { color: #636366 !important; }
+[data-sc-theme="light"] .sc-app .text-gray-600 { color: #6E6E73 !important; }
 /* Placeholders are held to the same floor — WCAG makes no exception for them,
    and a placeholder nobody can read is the field with no label all over again. */
-[data-sc-theme="light"] .sc-app .placeholder-gray-600::placeholder { color: #6B635C !important; }
-[data-sc-theme="light"] .sc-app .hover\:text-white:hover { color: #0F172A !important; }
-[data-sc-theme="light"] .sc-app .hover\:text-gray-300:hover { color: #44403C !important; }
+[data-sc-theme="light"] .sc-app .placeholder-gray-600::placeholder { color: #6E6E73 !important; }
+[data-sc-theme="light"] .sc-app .hover\:text-white:hover { color: #000000 !important; }
+[data-sc-theme="light"] .sc-app .hover\:text-gray-300:hover { color: #3A3A3C !important; }
 
 /* Accent panels: dark tints → light tints so text stays readable */
-[data-sc-theme="light"] .sc-app :is(.bg-blue-950, .bg-blue-950\/30, .bg-blue-950\/40) { background-color: #EFF6FF !important; }
-[data-sc-theme="light"] .sc-app .border-blue-800\/40 { border-color: #BFDBFE !important; }
+[data-sc-theme="light"] .sc-app :is(.bg-blue-950, .bg-blue-950\/30, .bg-blue-950\/40) { background-color: #EEF3FD !important; }
+[data-sc-theme="light"] .sc-app .border-blue-800\/40 { border-color: #C7D7F8 !important; }
 /* Blue text on a light surface.
    400 and 500 were MISSING from this list while 100-300 were remapped, and the
    gap was invisible while light mode was opt-in. Measured in Chromium against
    the real painted background once light became the default:
-       blue-400  2.64:1 on the white card, 2.27:1 on the warm panel
-       blue-500  3.76:1                   3.23:1
-       blue-600  5.25:1                   4.50:1   (kept — passes)
-       blue-700  6.83:1                   5.87:1   (kept — passes)
+       blue-400  2.64:1 on the white card
+       blue-500  3.76:1
+       blue-600  5.25:1   (kept — passes)
+       blue-700  6.83:1   (kept — passes)
    text-blue-400 alone is used in 41 files, so this was the most widespread
    contrast failure in the app. Only the two that FAIL are remapped; 600 and 700
    keep their own shade so the blue scale still reads as a scale.
    Safe for the card preview: .sc-card restores its own palette below, and the
    card renderer uses no blue text at all. */
-[data-sc-theme="light"] .sc-app :is(.text-blue-100, .text-blue-200, .text-blue-200\/90, .text-blue-200\/80, .text-blue-300, .text-blue-300\/80, .text-blue-300\/70, .text-blue-400, .text-blue-400\/60, .text-blue-500) { color: #1D4ED8 !important; }
-[data-sc-theme="light"] .sc-app :is(.bg-amber-950\/30, .bg-amber-950\/40) { background-color: #FFFBEB !important; }
-[data-sc-theme="light"] .sc-app .border-amber-800\/40 { border-color: #FDE68A !important; }
-[data-sc-theme="light"] .sc-app :is(.text-amber-100, .text-amber-100\/90, .text-amber-200, .text-amber-200\/80, .text-amber-200\/70, .text-amber-200\/60, .text-amber-300, .text-amber-300\/90) { color: #92400E !important; }
-[data-sc-theme="light"] .sc-app :is(.bg-emerald-950\/40, .bg-green-950\/30, .bg-green-900\/40) { background-color: #ECFDF5 !important; }
-[data-sc-theme="light"] .sc-app :is(.border-emerald-800\/40, .border-green-800\/40, .border-green-700\/40) { border-color: #A7F3D0 !important; }
-[data-sc-theme="light"] .sc-app :is(.text-emerald-100\/90, .text-emerald-200, .text-emerald-300, .text-emerald-300\/60, .text-emerald-400, .text-green-300, .text-green-400) { color: #047857 !important; }
-[data-sc-theme="light"] .sc-app .bg-red-950\/40 { background-color: #FEF2F2 !important; }
-[data-sc-theme="light"] .sc-app .border-red-800\/40 { border-color: #FECACA !important; }
+[data-sc-theme="light"] .sc-app :is(.text-blue-100, .text-blue-200, .text-blue-200\/90, .text-blue-200\/80, .text-blue-300, .text-blue-300\/80, .text-blue-300\/70, .text-blue-400, .text-blue-400\/60, .text-blue-500) { color: var(--sc-tint) !important; }
+[data-sc-theme="light"] .sc-app :is(.bg-amber-950\/30, .bg-amber-950\/40) { background-color: #FFF7E6 !important; }
+[data-sc-theme="light"] .sc-app .border-amber-800\/40 { border-color: #FFE0A3 !important; }
+[data-sc-theme="light"] .sc-app :is(.text-amber-100, .text-amber-100\/90, .text-amber-200, .text-amber-200\/80, .text-amber-200\/70, .text-amber-200\/60, .text-amber-300, .text-amber-300\/90) { color: #8A4B00 !important; }
+[data-sc-theme="light"] .sc-app :is(.bg-emerald-950\/40, .bg-green-950\/30, .bg-green-900\/40) { background-color: #EAF9EE !important; }
+[data-sc-theme="light"] .sc-app :is(.border-emerald-800\/40, .border-green-800\/40, .border-green-700\/40) { border-color: #B7E8C4 !important; }
+[data-sc-theme="light"] .sc-app :is(.text-emerald-100\/90, .text-emerald-200, .text-emerald-300, .text-emerald-300\/60, .text-emerald-400, .text-green-300, .text-green-400) { color: #1E7D3A !important; }
+[data-sc-theme="light"] .sc-app .bg-red-950\/40 { background-color: #FFF0EF !important; }
+[data-sc-theme="light"] .sc-app .border-red-800\/40 { border-color: #FFC7C2 !important; }
 
 /* ── Light-mode completeness pass (billing/team glitch, Jul 2026) ───────────
    The mappings above covered the common utilities, but any UNMAPPED dark
@@ -542,27 +804,31 @@ body {
    surface / pale tinted text used inside .sc-app, found by auditing the
    source for utility classes absent from this section. */
 
-/* Gray translucents: inset panels on white cards → faint cream insets. */
-[data-sc-theme="light"] .sc-app :is(.bg-gray-950\/50, .bg-gray-950\/40) { background-color: #F6F1E7 !important; }
+/* Gray translucents: inset panels on white cards → the grouped ground. */
+[data-sc-theme="light"] .sc-app :is(.bg-gray-950\/50, .bg-gray-950\/40) { background-color: var(--sc-bg-tertiary) !important; }
 /* Full-screen modal scrims (e.g. the wizard's plan chooser): a light scrim so
-   the modal headings — which flip to near-black — stay readable on it. */
-[data-sc-theme="light"] .sc-app .bg-gray-950\/97 { background-color: rgba(250,247,242,0.97) !important; }
-[data-sc-theme="light"] .sc-app .bg-gray-900\/95 { background-color: rgba(255,255,255,0.95) !important; }
-[data-sc-theme="light"] .sc-app .bg-gray-900\/40 { background-color: #FCFAF5 !important; }
-[data-sc-theme="light"] .sc-app :is(.bg-gray-800\/20, .bg-gray-800\/50, .bg-gray-800\/80) { background-color: #F3EDE3 !important; }
+   the modal headings — which flip to black — stay readable on it. */
+[data-sc-theme="light"] .sc-app .bg-gray-950\/97 { background-color: rgba(242, 242, 247, 0.97) !important; }
+[data-sc-theme="light"] .sc-app .bg-gray-900\/95 { background-color: rgba(255, 255, 255, 0.95) !important; }
+/* A group INSIDE a surface (FormSection, MoreOptions): on the white card
+   builder it is the grouped grey; on a white panel over the grey ground it is
+   white. Both are how iOS nests groups. */
+[data-sc-theme="light"] .sc-app .bg-gray-900\/40 { background-color: var(--sc-bg-elevated) !important; }
+[data-sc-theme="light"] .sc-app.sc-canvas-white .bg-gray-900\/40 { background-color: var(--sc-bg-tertiary) !important; }
+[data-sc-theme="light"] .sc-app :is(.bg-gray-800\/20, .bg-gray-800\/50, .bg-gray-800\/80) { background-color: var(--sc-fill) !important; }
 
 /* Purple — the Office/team accent (badges, banners, admin chrome). */
-[data-sc-theme="light"] .sc-app :is(.bg-purple-900, .bg-purple-950\/60, .bg-purple-950\/40, .bg-purple-950\/30) { background-color: #F3E8FF !important; }
-[data-sc-theme="light"] .sc-app :is(.text-purple-200, .text-purple-200\/70, .text-purple-300, .text-purple-300\/80, .text-purple-400) { color: #7E22CE !important; }
-[data-sc-theme="light"] .sc-app :is(.border-purple-500\/20, .border-purple-500\/25, .border-purple-500\/30, .border-purple-500\/40, .border-purple-700\/50) { border-color: #D8B4FE !important; }
+[data-sc-theme="light"] .sc-app :is(.bg-purple-900, .bg-purple-950\/60, .bg-purple-950\/40, .bg-purple-950\/30) { background-color: #F5EDFF !important; }
+[data-sc-theme="light"] .sc-app :is(.text-purple-200, .text-purple-200\/70, .text-purple-300, .text-purple-300\/80, .text-purple-400) { color: var(--sc-tint-office) !important; }
+[data-sc-theme="light"] .sc-app :is(.border-purple-500\/20, .border-purple-500\/25, .border-purple-500\/30, .border-purple-500\/40, .border-purple-700\/50) { border-color: #DCC6F5 !important; }
 [data-sc-theme="light"] .sc-app .hover\:text-purple-300:hover { color: #6B21A8 !important; }
 
 /* Amber / blue / green / red / rose dark tints → their light-panel colors. */
-[data-sc-theme="light"] .sc-app :is(.bg-amber-900, .bg-amber-900\/60, .bg-amber-950\/20, .bg-amber-950\/60) { background-color: #FFFBEB !important; }
-[data-sc-theme="light"] .sc-app :is(.bg-blue-800, .bg-blue-900, .bg-blue-900\/50, .bg-blue-950\/10) { background-color: #DBEAFE !important; }
-[data-sc-theme="light"] .sc-app :is(.bg-emerald-900\/50, .bg-emerald-900\/60, .bg-emerald-950\/10, .bg-emerald-950\/20, .bg-emerald-950\/30, .bg-green-900\/30) { background-color: #ECFDF5 !important; }
-[data-sc-theme="light"] .sc-app :is(.bg-red-800, .bg-red-900, .bg-red-900\/60, .bg-red-950\/60, .bg-rose-900) { background-color: #FEF2F2 !important; }
-[data-sc-theme="light"] .sc-app :is(.text-red-200, .text-red-300, .text-rose-300) { color: #B91C1C !important; }
+[data-sc-theme="light"] .sc-app :is(.bg-amber-900, .bg-amber-900\/60, .bg-amber-950\/20, .bg-amber-950\/60) { background-color: #FFF7E6 !important; }
+[data-sc-theme="light"] .sc-app :is(.bg-blue-800, .bg-blue-900, .bg-blue-900\/50, .bg-blue-950\/10) { background-color: #E1EAFB !important; }
+[data-sc-theme="light"] .sc-app :is(.bg-emerald-900\/50, .bg-emerald-900\/60, .bg-emerald-950\/10, .bg-emerald-950\/20, .bg-emerald-950\/30, .bg-green-900\/30) { background-color: #EAF9EE !important; }
+[data-sc-theme="light"] .sc-app :is(.bg-red-800, .bg-red-900, .bg-red-900\/60, .bg-red-950\/60, .bg-rose-900) { background-color: #FFF0EF !important; }
+[data-sc-theme="light"] .sc-app :is(.text-red-200, .text-red-300, .text-rose-300) { color: #C62828 !important; }
 
 /* Pale tinted text that was designed for dark surfaces. */
 [data-sc-theme="light"] .sc-app .text-cyan-300 { color: #0E7490 !important; }
@@ -570,13 +836,91 @@ body {
 
 /* Chart hover tooltip (TrafficChart): bg-slate-800 is the app's only slate
    surface and was never remapped, so the tooltip stayed dark while its
-   .text-white flipped to near-black — dark-on-dark over a cream chart. */
+   .text-white flipped to black — dark-on-dark over a light chart. */
 [data-sc-theme="light"] .sc-app .bg-slate-800 { background-color: #FFFFFF !important; }
-[data-sc-theme="light"] .sc-app .text-slate-400 { color: #615A54 !important; }
+[data-sc-theme="light"] .sc-app .text-slate-400 { color: #636366 !important; }
 
 /* Solid dark buttons (e.g. PlanCards' "Start free") stay dark chips — their
    white text must NOT flip dark. Same carve-out as the colored buttons above. */
 [data-sc-theme="light"] .sc-app :is(.bg-slate-900, .bg-slate-800, .bg-purple-500).text-white { color: #FFFFFF !important; }
+
+/* ── Panels are Apple cards, in both themes ─────────────────────────────────
+   The common panel idiom is `bg-gray-900 border border-gray-800/80 rounded-2xl`
+   (109 places). On the grouped ground a card is a white surface with large soft
+   corners and a whisper of depth — no outline. The border stays 1px wide (so
+   nothing moves) and goes transparent. Inside the white card builder the same
+   idiom is a grouped-grey inset instead. The native shell's own rule further
+   down adds its specular hairline on top. */
+[data-sc-theme="light"] .sc-app :is(.bg-gray-900, .bg-gray-900\/60, .bg-gray-900\/50, .bg-gray-800\/40, .bg-gray-800\/30, .bg-gray-900\/40).rounded-2xl {
+  border-color: transparent !important;
+  border-radius: var(--sc-r-card);
+  box-shadow: var(--sc-shadow-card);
+}
+[data-sc-theme="light"] .sc-app.sc-canvas-white :is(.bg-gray-900, .bg-gray-900\/60, .bg-gray-900\/50, .bg-gray-800\/40, .bg-gray-800\/30, .bg-gray-900\/40).rounded-2xl {
+  background-color: var(--sc-bg-tertiary) !important;
+  box-shadow: none;
+}
+html:not([data-sc-theme="light"]) .sc-app :is(.bg-gray-900, .bg-gray-900\/60, .bg-gray-900\/50, .bg-gray-800\/40, .bg-gray-800\/30, .bg-gray-900\/40).rounded-2xl {
+  border-color: transparent !important;
+  border-radius: var(--sc-r-card);
+}
+
+/* Inset cells inside a card (stat tiles, list rows, the Looks well): a fill
+   with no outline, as iOS draws cells inside a group. Border width stays. */
+.sc-app :is(.bg-gray-800\/40, .bg-gray-800\/30, .bg-gray-800\/60, .bg-gray-900\/40):is(.rounded-xl, .rounded-lg) { border-color: transparent !important; }
+
+/* ── The tab bar is a floating glass capsule on the web too ────────────────
+   iOS 26's tab bar (owner, 2026-10-15: the iPhone app already does this, the
+   phone website now matches it). Same height, same tabs, same place; inset
+   12px from the sides and sitting on the home indicator. Pages already keep
+   their content clear of it (pb-16/pb-24/pb-36). The native shell's own rules
+   further down restate these with the real safe-area inset. */
+.sc-tabbar {
+  left: 12px; right: 12px;
+  bottom: calc(env(safe-area-inset-bottom) + 2px);
+  padding-bottom: 0 !important;
+  border-radius: 28px; border-width: 1px; overflow: hidden;
+  background: var(--sc-glass) !important; border-color: var(--sc-glass-border) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.8); backdrop-filter: blur(24px) saturate(1.8);
+  box-shadow: inset 0 1px 0 var(--sc-glass-sheen), 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .sc-tabbar { background: var(--sc-bg-elevated) !important; } }
+@media (prefers-reduced-transparency: reduce) { .sc-tabbar { background: var(--sc-bg-elevated) !important; -webkit-backdrop-filter: none; backdrop-filter: none; } }
+
+/* ── Dark mode: Apple black, not Tailwind's blue-grey ───────────────────────
+   Components are authored in the dark utilities, so dark mode used to be their
+   raw values (#030712 / #111827 / #1f2937 — a cool navy-grey). iOS dark is
+   pure black with #1C1C1E and #2C2C2E surfaces and neutral greys; this layer
+   paints the same class list with those. Unlayered, so it beats the utility
+   without !important; written AFTER the light layer, scoped to the opposite
+   theme, so the two never overlap. The .sc-card and .sc-dark-sheet
+   restorations below run later and win. */
+html:not([data-sc-theme="light"]) .sc-app.bg-gray-950,
+html:not([data-sc-theme="light"]) .sc-app .bg-gray-950 { background-color: var(--sc-bg); }
+html:not([data-sc-theme="light"]) .sc-app.bg-gray-950\/95,
+html:not([data-sc-theme="light"]) .sc-app .bg-gray-950\/95,
+html:not([data-sc-theme="light"]) .sc-app .bg-gray-950\/90 { background-color: rgba(28, 28, 30, 0.72); }
+html:not([data-sc-theme="light"]) .sc-tabbar { background-color: rgba(28, 28, 30, 0.72); border-color: rgba(255, 255, 255, 0.10); }
+html:not([data-sc-theme="light"]) .sc-app :is(.bg-gray-900, .bg-gray-900\/60, .bg-gray-900\/50) { background-color: var(--sc-bg-elevated); }
+html:not([data-sc-theme="light"]) .sc-app :is(.bg-gray-900\/40, .bg-gray-950\/50, .bg-gray-950\/40) { background-color: #161618; }
+html:not([data-sc-theme="light"]) .sc-app :is(.bg-gray-800, .bg-gray-800\/60, .bg-gray-800\/40, .bg-gray-800\/30, .bg-gray-800\/20, .bg-gray-800\/50, .bg-gray-800\/80) { background-color: var(--sc-bg-tertiary); }
+html:not([data-sc-theme="light"]) .sc-app :is(.hover\:bg-gray-800:hover, .hover\:bg-gray-800\/60:hover, .hover\:bg-gray-700:hover) { background-color: #3A3A3C; }
+html:not([data-sc-theme="light"]) .sc-app .bg-gray-700 { background-color: #3A3A3C; }
+html:not([data-sc-theme="light"]) .sc-app :is(.border-gray-800, .border-gray-800\/80, .border-gray-800\/60, .border-gray-700, .border-gray-700\/60) { border-color: var(--sc-separator); }
+html:not([data-sc-theme="light"]) .sc-app :is(.divide-gray-800, .divide-gray-800\/60) > :not([hidden]) ~ :not([hidden]) { border-color: var(--sc-separator); }
+html:not([data-sc-theme="light"]) .sc-app :is(.text-gray-200, .text-gray-300) { color: #D1D1D6; }
+html:not([data-sc-theme="light"]) .sc-app .text-gray-400 { color: #AEAEB2; }
+html:not([data-sc-theme="light"]) .sc-app .text-gray-500 { color: #98989D; }
+html:not([data-sc-theme="light"]) .sc-app .text-gray-600 { color: #8E8E93; }
+html:not([data-sc-theme="light"]) .sc-app .placeholder-gray-600::placeholder { color: #8E8E93; }
+html:not([data-sc-theme="light"]) .sc-app .bg-slate-800 { background-color: var(--sc-bg-tertiary); }
+/* The card templates keep their own palette in dark too. */
+html:not([data-sc-theme="light"]) .sc-app .sc-card :is(.text-gray-200, .text-gray-300) { color: #d1d5db; }
+html:not([data-sc-theme="light"]) .sc-app .sc-card .text-gray-200 { color: #e5e7eb; }
+html:not([data-sc-theme="light"]) .sc-app .sc-card .text-gray-400 { color: #9ca3af; }
+html:not([data-sc-theme="light"]) .sc-app .sc-card .text-gray-500 { color: #6b7280; }
+html:not([data-sc-theme="light"]) .sc-app .sc-card .text-gray-600 { color: #4b5563; }
+html:not([data-sc-theme="light"]) .sc-app .sc-card :is(.bg-gray-900, .bg-gray-800, .bg-gray-950) { background-color: revert-layer; }
 
 /* ── Testimonials marquee: two rows auto-scroll opposite ways, never pause ── */
 .sc-tmarq {
@@ -1177,7 +1521,7 @@ html {
 html.native-app {
   /* Overscroll rubber-banding reveals the canvas — match the app background
      so bounces feel native, never gray. */
-  background: #030712;
+  background: #000000;
   -webkit-text-size-adjust: 100%;
   /* THE WHITE THAT ONLY APPEARS AT THE VERY TOP OR BOTTOM OF A SCROLL.
      That is the rubber-band bounce, and it is a different mechanism from the
@@ -1220,7 +1564,7 @@ html.native-app body {
   touch-action: pan-x pan-y;
 }
 
-html.native-app[data-sc-theme="light"] { background: #FAF7F2; }
+html.native-app[data-sc-theme="light"] { background: #F2F2F7; }
 /* Cream screens (login, profile, legal pages) regardless of app theme: the
    full-bleed shell paints html's canvas behind the status bar, and a DARK
    strip over a cream page reads as a glitch band. Match the page instead. */
@@ -1326,7 +1670,7 @@ html.native-app body {
 /* ── Glass chrome: top app nav + bottom tab bar ─────────────────────────── */
 html.native-app .sc-app.fixed,
 html.native-app .sc-tabbar {
-  background: rgba(9, 13, 28, 0.58) !important;
+  background: rgba(28, 28, 30, 0.64) !important;
   -webkit-backdrop-filter: blur(24px) saturate(1.8);
   backdrop-filter: blur(24px) saturate(1.8);
   border-color: rgba(255, 255, 255, 0.07) !important;
@@ -1371,8 +1715,8 @@ html.native-app .sc-overlay-topbar {
 /* Light theme: warm glass instead of dark */
 html.native-app[data-sc-theme="light"] .sc-app.fixed,
 html.native-app[data-sc-theme="light"] .sc-tabbar {
-  background: rgba(250, 247, 242, 0.62) !important;
-  border-color: rgba(17, 24, 39, 0.08) !important;
+  background: rgba(249, 249, 249, 0.72) !important;
+  border-color: rgba(0, 0, 0, 0.10) !important;
 }
 html.native-app[data-sc-theme="light"] .sc-app.fixed {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65), 0 8px 32px rgba(15, 23, 42, 0.10);
@@ -1383,14 +1727,6 @@ html.native-app[data-sc-theme="light"] .sc-tabbar {
 
 /* ── Interactive glass: springy tap feedback ────────────────────────────── */
 @media (prefers-reduced-motion: no-preference) {
-  html.native-app :is(button, a, [role="button"], [role="switch"]) {
-    transition-property: transform, opacity, background-color, color, border-color, box-shadow;
-    transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); /* spring w/ overshoot */
-    transition-duration: 0.28s;
-  }
-  html.native-app :is(button, a, [role="button"], [role="switch"]):active {
-    transform: scale(0.96);
-  }
   /* Tab items get the bigger, bouncier press of a native tab bar. */
   html.native-app .sc-tabbar a:active { transform: scale(0.88); }
   html.native-app .sc-tabbar a:active svg { transform: translateY(1px) scale(0.94); }
@@ -1539,7 +1875,7 @@ html.native-app[data-sc-theme="light"] .sc-app :is(.bg-gray-900, .bg-gray-800\/4
   }
   html.native-app[data-sc-theme="light"] .sc-app.fixed,
   html.native-app[data-sc-theme="light"] .sc-tabbar {
-    background: rgba(250, 247, 242, 0.98) !important;
+    background: rgba(249, 249, 249, 0.98) !important;
   }
 }
 /* Increased Contrast: strengthen hairlines so chrome edges stay legible. */
@@ -1554,5 +1890,5 @@ html.native-app[data-sc-theme="light"] .sc-app :is(.bg-gray-900, .bg-gray-800\/4
   html.native-app .sc-app.fixed,
   html.native-app .sc-tabbar { background: rgba(6, 10, 22, 0.96) !important; }
   html.native-app[data-sc-theme="light"] .sc-app.fixed,
-  html.native-app[data-sc-theme="light"] .sc-tabbar { background: rgba(250, 247, 242, 0.97) !important; }
+  html.native-app[data-sc-theme="light"] .sc-tabbar { background: rgba(249, 249, 249, 0.97) !important; }
 }

@@ -140,7 +140,9 @@ export default function MobileNav({ showAdmin: showAdminProp, showSite: showSite
           // (rgba(250,247,242)) those measured 3.44:1 and 3.6:1 — under the
           // 4.5:1 AA floor for this 10px label. These clear it on the light bar
           // and stay legible on the dark one.
-          const activeColor = href === "/office/admin" ? "#7E22CE" : "#1D4ED8";
+          // Tokens (globals.css sets them on .sc-tabbar): the tint, the Office
+          // tint, and Apple's idle tab grey — each theme supplies its own.
+          const activeColor = href === "/office/admin" ? "var(--sc-tint-office)" : "var(--sc-tint)";
           return (
             <Link
               key={href}
@@ -148,7 +150,7 @@ export default function MobileNav({ showAdmin: showAdminProp, showSite: showSite
               data-tour={tour}
               aria-current={active ? "page" : undefined}
               className={`flex flex-col items-center gap-0.5 py-1.5 rounded-xl transition-colors min-w-0 ${tight ? "px-1.5" : "px-3"} ${active ? "font-bold" : ""}`}
-              style={{ color: active ? activeColor : "#6b7280" }}
+              style={{ color: active ? activeColor : "var(--sc-gray)" }}
             >
               {icon}
               <span className="text-[0.625rem] font-semibold">{label}</span>

@@ -54,10 +54,10 @@ export default function AppTopNav({
 }) {
   const q = card ? `?card=${encodeURIComponent(card)}` : "";
   const tab = (on: boolean) =>
-    `text-sm px-3 py-1.5 rounded-lg transition-colors ${on ? "text-white font-medium bg-gray-800" : "text-gray-400 hover:text-white hover:bg-gray-800/60"}`;
+    `text-[0.9375rem] px-3.5 py-1.5 rounded-full transition-colors ${on ? "text-white font-semibold bg-gray-800" : "text-gray-400 font-medium hover:text-white hover:bg-gray-800/60"}`;
 
   return (
-    <nav className="sc-app fixed top-0.5 left-0 right-0 z-30 bg-gray-950/95 backdrop-blur border-b border-gray-800/60">
+    <nav className="sc-app sc-glass fixed top-0.5 left-0 right-0 z-30 bg-gray-950/95 backdrop-blur border-b border-gray-800/60">
       <div className={`${wide ? "max-w-6xl px-6" : "max-w-5xl px-5"} mx-auto h-14 flex items-center justify-between gap-4`}>
         <div className="flex items-center gap-3 shrink-0">
           <DashboardLink card={card} className="flex items-center gap-2">
@@ -78,14 +78,14 @@ export default function AppTopNav({
             Links
           </Link>
           {showAdmin && (
-            <Link href="/office/admin" data-tour="nav-admin" className="text-sm text-purple-400 hover:text-purple-300 hover:bg-gray-800/60 px-3 py-1.5 rounded-lg transition-colors font-medium">
+            <Link href="/office/admin" data-tour="nav-admin" className="text-[0.9375rem] text-purple-400 hover:text-purple-300 hover:bg-gray-800/60 px-3.5 py-1.5 rounded-full transition-colors font-medium">
               Admin
             </Link>
           )}
           {/* Site-owner console — a different thing entirely from the Office
               "Admin" above, so it's labelled separately to keep them apart. */}
           {showSite && (
-            <Link href="/admin" className="text-sm text-blue-400 hover:text-blue-300 hover:bg-gray-800/60 px-3 py-1.5 rounded-lg transition-colors font-medium">
+            <Link href="/admin" className="text-[0.9375rem] text-blue-400 hover:text-blue-300 hover:bg-gray-800/60 px-3.5 py-1.5 rounded-full transition-colors font-medium">
               Site
             </Link>
           )}

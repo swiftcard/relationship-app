@@ -46,7 +46,7 @@ export default function MoreShareOptions({ url, walletUsername }: { url: string;
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="w-full flex items-center justify-center gap-2 text-xs font-semibold text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-full py-2.5 transition-colors"
+        className="w-full flex items-center justify-center gap-2 text-sm font-semibold text-gray-200 hover:text-white bg-gray-800/60 hover:bg-gray-700 border border-transparent rounded-full py-3 transition-colors"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5">
           <circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" />

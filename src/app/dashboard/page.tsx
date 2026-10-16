@@ -968,7 +968,7 @@ export default async function DashboardPage({
           <div data-tour="my-cards" className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5 mb-5">
             <div className="flex items-center justify-between gap-3 mb-3">
               <div className="min-w-0">
-                <p className="text-white font-semibold text-sm">My Cards</p>
+                <p className="text-white font-semibold text-[0.9375rem] tracking-tight">My Cards</p>
                 {/* Desktop-only: the rows below are checkboxes and behave like
                     checkboxes, and on a phone this ran to two lines directly
                     under the title — the tallest thing in the box explaining
@@ -998,7 +998,7 @@ export default async function DashboardPage({
                   target="_blank"
                   rel="noopener noreferrer"
                   title="Open your live card in a new tab"
-                  className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg border border-gray-700 text-gray-300 text-[0.6875rem] sm:text-xs font-semibold hover:border-gray-500 hover:text-white hover:bg-gray-800 transition-colors"
+                  className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-full border border-transparent bg-gray-800/60 text-gray-200 text-[0.6875rem] sm:text-xs font-semibold hover:text-white hover:bg-gray-700 transition-colors"
                 >
                   <svg viewBox="0 0 20 20" fill="currentColor" className="w-3 h-3 sm:w-3.5 sm:h-3.5" aria-hidden="true">
                     <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
@@ -1018,7 +1018,7 @@ export default async function DashboardPage({
                 {!isOfficeMember && <AddCardButton
                   locked={!canAddCard}
                   trialEligible={trialEligible}
-                  className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg border border-gray-700 text-blue-400 text-[0.6875rem] sm:text-xs font-semibold hover:border-blue-600/60 hover:text-blue-300 hover:bg-blue-600/5 transition-colors"
+                  className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-full border border-transparent bg-blue-500/10 text-blue-400 text-[0.6875rem] sm:text-xs font-semibold hover:text-blue-300 hover:bg-blue-500/15 transition-colors"
                 />}
               </div>
             </div>
@@ -1161,7 +1161,7 @@ export default async function DashboardPage({
                     it keeps its compact size (owner's pick). lg: is the
                     dashboard's own phone/computer split. */}
                 <div className="flex items-center mb-4">
-                  <div className="grid grid-cols-4 w-full lg:flex lg:w-auto items-center bg-gray-800 rounded-lg p-0.5">
+                  <div className="sc-segmented grid grid-cols-4 w-full lg:flex lg:w-auto items-center rounded-lg p-0.5">
                     {([
                       { id: "today", label: "Today" },
                       { id: "week", label: "Week" },
@@ -1169,7 +1169,7 @@ export default async function DashboardPage({
                       { id: "locations", label: "Locations" },
                     ] as const).map((r) => (
                       <Link key={r.id} scroll={false} href={`?vrange=${r.id}${selectedCard ? `&card=${selectedCard}` : ""}`}
-                        className={`text-[0.6875rem] min-[375px]:text-xs font-semibold px-0.5 py-1.5 lg:px-2.5 lg:py-1 rounded-md whitespace-nowrap transition-colors inline-flex items-center justify-center gap-0.5 lg:gap-1 ${viewsRange === r.id ? "bg-gray-700 text-white" : "text-gray-500 hover:text-gray-300"}`}>
+                        className={`text-[0.6875rem] min-[375px]:text-xs font-semibold px-0.5 py-1.5 lg:px-2.5 lg:py-1 rounded-md whitespace-nowrap transition-colors inline-flex items-center justify-center gap-0.5 lg:gap-1 ${viewsRange === r.id ? "is-active text-white" : "text-gray-500 hover:text-gray-300"}`}>
                         {r.label}
                         {r.id === "locations" && !isPro && (
                           // shrink-0: in a quarter-width phone tab a flex svg

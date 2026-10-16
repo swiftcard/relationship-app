@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Bricolage_Grotesque } from "next/font/google";
+import { Geist, Bricolage_Grotesque, Inter } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
@@ -22,6 +22,12 @@ const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
 // so nothing inside the product can pick it up by accident. Variable font,
 // one file, optical-size axis so the big sizes get the display cut.
 const display = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-display", axes: ["opsz"], display: "swap" });
+// The signed-in app is set in San Francisco on Apple devices (-apple-system,
+// which may not be shipped as a webfont) and in Inter everywhere else — the
+// same proportions, so Windows and Android see the same design. Only .sc-app
+// and .sc-auth in globals.css read this variable; the marketing site stays
+// on Geist / Bricolage and the card templates on their own fonts.
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
@@ -98,7 +104,7 @@ export default function RootLayout({
   return (
     // suppressHydrationWarning: the inline script below mutates <html> (adds
     // .sc-js + the saved theme attr) BEFORE React hydrates — expected mismatch.
-    <html lang="en" className={`${geist.variable} ${display.variable} h-full antialiased`} suppressHydrationWarning>
+    <html lang="en" className={`${geist.variable} ${display.variable} ${inter.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="min-h-full flex flex-col">
         {/* NativeSplash (the shell's launch animation) deliberately does NOT
             live here anymore. It reads headers()/cookies(), and a dynamic API

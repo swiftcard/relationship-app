@@ -93,7 +93,7 @@ export default function PushNudge({ viewCount = 0 }: { viewCount?: number }) {
   return (
     <div
       className="rounded-2xl px-5 py-4 mb-5 border"
-      style={{ background: "rgba(37,99,235,0.10)", borderColor: "rgba(37,99,235,0.35)" }}
+      style={{ background: "var(--sc-tint-soft, rgba(37,99,235,0.10))", borderColor: "transparent" }}
     >
       <p className="text-sm font-semibold text-blue-100">
         {hasActivity ? "Your card is getting opened" : "Know the moment someone connects"}

@@ -73,7 +73,7 @@ async function measure(width: number, longTitle = false) {
   // which sits first in source, and every "rightmost / flush with the edge"
   // assertion below would be measuring the wrong button. Each is located by the
   // colour that distinguishes it instead.
-  const viewBtnCls = classNameContaining("border-gray-700 text-gray-300 text-[0.6875rem]");
+  const viewBtnCls = classNameContaining("bg-gray-800/60 text-gray-200 text-[0.6875rem]");
   const addBtnCls = classNameContaining("text-blue-400 text-[0.6875rem]");
   const actionsCls = classNameContaining("flex items-center gap-2 shrink-0");
   const captionCls = classNameContaining("hidden sm:block text-gray-600 text-xs mt-0.5");

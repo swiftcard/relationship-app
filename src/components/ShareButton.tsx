@@ -123,7 +123,7 @@ export default function ShareButton({
       // (2026-09-23 free-account review) — the classes remap to readable ones.
       <button
         disabled
-        className={`w-full flex items-center justify-center gap-2 font-semibold py-3 px-6 rounded-full text-sm${isGhost ? " bg-transparent border border-gray-700 text-gray-300" : ""}`}
+        className={`w-full flex items-center justify-center gap-2 font-semibold py-3 px-6 rounded-full text-sm${isGhost ? " bg-blue-500/10 border border-transparent text-blue-400" : ""}`}
         style={isGhost
           ? undefined
           : isPrimary
@@ -141,7 +141,7 @@ export default function ShareButton({
   return (
     <button
       onClick={handleShare}
-      className={`w-full flex items-center justify-center gap-2 font-semibold py-3 px-6 rounded-full transition-colors text-sm${isGhost ? " bg-transparent border border-gray-700 text-gray-300 hover:text-white hover:bg-gray-800" : ""}`}
+      className={`w-full flex items-center justify-center gap-2 font-semibold py-3 px-6 rounded-full transition-colors text-sm${isGhost ? " bg-blue-500/10 border border-transparent text-blue-400 hover:text-blue-300 hover:bg-blue-500/15" : ""}`}
       style={
         isGhost
           ? undefined

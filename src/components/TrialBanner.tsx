@@ -34,8 +34,8 @@ export default function TrialBanner({ daysLeft, isTrial, planName = "Pro", bille
       className="flex items-center justify-between gap-3 rounded-2xl px-5 py-3.5 mb-5 border flex-wrap"
       style={
         urgent
-          ? { background: "rgba(180,83,9,0.12)", borderColor: "rgba(180,83,9,0.4)" }
-          : { background: "rgba(37,99,235,0.10)", borderColor: "rgba(37,99,235,0.35)" }
+          ? { background: "rgba(255,149,0,0.12)", borderColor: "transparent" }
+          : { background: "var(--sc-tint-soft, rgba(37,99,235,0.10))", borderColor: "transparent" }
       }
     >
       <div className="flex items-center gap-2.5 min-w-0">
@@ -53,7 +53,7 @@ export default function TrialBanner({ daysLeft, isTrial, planName = "Pro", bille
       {!native && billedFrom && (
         <Link
           href="/settings/flows?billing=1"
-          className="shrink-0 text-xs font-semibold px-4 py-2 rounded-full text-gray-200 border border-gray-700 hover:border-gray-500 transition-colors"
+          className="shrink-0 text-xs font-semibold px-4 py-2 rounded-full text-gray-200 bg-gray-800/60 border border-transparent hover:bg-gray-700 transition-colors"
         >
           Manage plan
         </Link>
