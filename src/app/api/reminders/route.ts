@@ -38,6 +38,7 @@ import { getAccountEmail } from "@/lib/account-email";
 import { expireFreeMonths } from "@/lib/referral-server";
 import { purgeExpiredDeletedAccounts, reconcileDeletedSubscriptions } from "@/lib/account-purge";
 import { applyDueSeatReductions } from "@/lib/office-scheduled-seats";
+import { releaseOrphanedOffices } from "@/lib/office-billing-sync";
 import { mirrorPendingPromosToApple, turnOffUsedUpAppleOffers } from "@/lib/apple-offer-codes";
 import { insertNotification } from "@/lib/notify";
 import { officeEndedNotice } from "@/lib/billing-state";
@@ -255,6 +256,15 @@ export async function GET(req: NextRequest) {
     seatReductionsApplied = await applyDueSeatReductions();
   } catch (e) {
     await reportError("reminders.apply-seat-reductions", e);
+  }
+
+  // Members of a team whose owner's account is gone: released like an ended
+  // subscription, since nothing keyed on the owner ever will (audit B-08).
+  let orphanMembersReleased = 0;
+  try {
+    orphanMembersReleased = await releaseOrphanedOffices(supabase);
+  } catch (e) {
+    await reportError("reminders.release-orphaned-offices", e);
   }
 
   // Promo codes not on Apple yet (made before App Store Connect was
@@ -796,5 +806,5 @@ export async function GET(req: NextRequest) {
   }
   // === END PRESET-BASED SEQUENCE PROCESSING ===
 
-  return NextResponse.json({ sent: totalSent, checkedHour: currentUTCHour, downgraded, purged, seatReductionsApplied, subscriptionsStopped, appleOfferCodesMade, crmCatchUp });
+  return NextResponse.json({ sent: totalSent, checkedHour: currentUTCHour, downgraded, purged, seatReductionsApplied, orphanMembersReleased, subscriptionsStopped, appleOfferCodesMade, crmCatchUp });
 }

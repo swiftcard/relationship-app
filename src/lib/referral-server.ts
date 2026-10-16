@@ -107,6 +107,23 @@ async function grantAppFreeMonths(userId: string, months: number, extend: boolea
 /** "credit": taken off a paying subscriber's next Stripe bill. "grant": app-level Pro days. */
 export type ReferralRewardKind = "credit" | "grant";
 
+/**
+ * A month of what they actually pay, per month promised (audit B-10). An
+ * annual price's unit_amount is the whole YEAR, so crediting it gave annual
+ * subscribers twelve free months for the one promised; and an Office price is
+ * per seat, so one seat's price was a fraction of a team's month.
+ */
+export function referralCreditCents(
+  price: { unit_amount?: number | null; recurring?: { interval?: string | null; interval_count?: number | null } | null } | null | undefined,
+  quantity: number | null | undefined,
+  months: number,
+): number {
+  const unit = price?.unit_amount ?? 0;
+  const every = Math.max(1, price?.recurring?.interval_count ?? 1);
+  const monthsPerBill = price?.recurring?.interval === "year" ? 12 * every : price?.recurring?.interval === "month" ? every : 1;
+  return Math.round(unit / monthsPerBill) * Math.max(1, quantity ?? 1) * months;
+}
+
 async function grantReferrerReward(userId: string, months: number): Promise<ReferralRewardKind> {
   const admin = getAdminSupabase();
   const { data: p } = await admin
@@ -126,8 +143,9 @@ async function grantReferrerReward(userId: string, months: number): Promise<Refe
     try {
       const stripe = getStripe();
       const sub = await stripe.subscriptions.retrieve(p.stripe_subscription_id as string);
-      const price = sub.items.data[0]?.price;
-      const amount = (price?.unit_amount ?? 0) * months;
+      const item = sub.items.data[0];
+      const price = item?.price;
+      const amount = referralCreditCents(price, item?.quantity, months);
       if (amount > 0) {
         await stripe.customers.createBalanceTransaction(p.stripe_customer_id as string, {
           amount: -amount,

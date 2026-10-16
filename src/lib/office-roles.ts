@@ -86,6 +86,16 @@ export const resolveOfficeContext = cache(async (userId: string): Promise<Office
   const role: OfficeRole = rawRole && isAssignableRole(rawRole) ? rawRole : "employee";
 
   const { data: office } = await admin.from("offices").select("owner_id").eq("id", member.office_id).maybeSingle();
+  // A team nobody owns any more — the office row gone, or its owner's account
+  // deleted outside the app — has nobody paying and nobody who can manage it.
+  // Its members are no one's sub-users: they can delete their account or buy
+  // their own plan, rather than being refused with "ask your Office admin"
+  // until the daily sweep (releaseOrphanedOffices) releases them (audit B-08).
+  if (!office) return null;
+  if (office.owner_id) {
+    const { data: owner } = await admin.from("profiles").select("id").eq("id", office.owner_id as string).maybeSingle();
+    if (!owner) return null;
+  }
   return {
     officeId: member.office_id as string,
     ownerId: (office?.owner_id as string) ?? "",

@@ -61,7 +61,7 @@ export async function provisionOfficeForOwner(admin: Admin, ownerId: string, sea
       .insert({ owner_id: ownerId, name: officeName, seats })
       .select("id")
       .maybeSingle();
-    officeId = (created?.id as string | null) ?? null;
+    officeId = await settleOneOffice(admin, ownerId, (created?.id as string | null) ?? null, seats);
   }
 
   // Seed the brand from the owner's earliest card right now, so a freshly-
@@ -72,6 +72,67 @@ export async function provisionOfficeForOwner(admin: Admin, ownerId: string, sea
     try { await seedBrandFromOwnersFirstCard(officeId, ownerId); } catch { /* best-effort — the console self-heal covers it */ }
     try { await restoreSuspendedMembers(admin, officeId, seats); } catch { /* best-effort — the team can always be re-invited */ }
   }
+}
+
+/**
+ * Exactly one office per owner (audit B-07). A new Office checkout provisions
+ * from checkout.session.completed AND customer.subscription.updated, often in
+ * the same second; an in-app Pro→Office swap from the route AND the webhook.
+ * Both saw no office and both inserted — and with two rows every
+ * `.eq("owner_id").maybeSingle()` errors, so the owner lost the console,
+ * invites failed and seat changes silently did nothing. The OLDEST office is
+ * the one; a racer deletes only the row it just made itself, which nothing can
+ * point at yet. With offices_owner_uidx (supabase/offices-one-per-owner.sql)
+ * the second insert fails outright and lands here with nothing to delete.
+ */
+async function settleOneOffice(admin: Admin, ownerId: string, createdId: string | null, seats: number): Promise<string | null> {
+  const { data: all } = await admin
+    .from("offices")
+    .select("id")
+    .eq("owner_id", ownerId)
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
+  const keep = ((all ?? [])[0]?.id as string | undefined) ?? createdId;
+  if (createdId && keep && createdId !== keep) {
+    await admin.from("offices").delete().eq("id", createdId);
+  }
+  if (keep && keep !== createdId) await admin.from("offices").update({ seats }).eq("id", keep);
+  return keep ?? null;
+}
+
+/**
+ * Offices whose owner's account no longer exists (audit B-08). Every cascade
+ * that releases a team is keyed on the owner — their subscription ending,
+ * their own delete, the 30-day purge — so an owner removed any other way (in
+ * the Supabase dashboard, by a QA cleanup) left the members on unpaid Office,
+ * and as "sub-users" unable to delete their account or buy their own plan.
+ * The daily sweep releases them exactly as an ended subscription does.
+ * Returns how many members it released.
+ */
+export async function releaseOrphanedOffices(admin: Admin): Promise<number> {
+  const { data: offices } = await admin.from("offices").select("id, owner_id");
+  const owners = [...new Set((offices ?? []).map((o) => o.owner_id as string | null).filter((id): id is string => !!id))];
+  const alive = new Set<string>();
+  for (let i = 0; i < owners.length; i += 200) {
+    const { data: present, error } = await admin.from("profiles").select("id").in("id", owners.slice(i, i + 200));
+    // A failed read must never look like "every owner is gone".
+    if (error) throw error;
+    for (const p of present ?? []) alive.add(p.id as string);
+  }
+  let released = 0;
+  for (const ownerId of owners) {
+    if (alive.has(ownerId)) continue;
+    const officeIds = (offices ?? []).filter((o) => o.owner_id === ownerId).map((o) => o.id as string);
+    const { count } = await admin
+      .from("office_members")
+      .select("id", { count: "exact", head: true })
+      .in("office_id", officeIds)
+      .eq("status", "active");
+    if (!count) continue;
+    await tearDownOfficeForOwner(admin, ownerId);
+    released += count;
+  }
+  return released;
 }
 
 /**
