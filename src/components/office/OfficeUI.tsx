@@ -15,7 +15,7 @@ export function PageHead({ title, desc, action }: { title: string; desc?: string
   return (
     <div className="flex items-start justify-between gap-4 mb-5">
       <div className="min-w-0">
-        <h1 className="text-xl font-bold text-white tracking-tight">{title}</h1>
+        <h1 className="text-[1.75rem] font-bold text-white tracking-tight">{title}</h1>
         {desc && <p className="text-gray-500 text-sm mt-0.5">{desc}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}

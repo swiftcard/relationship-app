@@ -99,3 +99,12 @@ One line per review, newest last.
   so the one doc sentence a confused customer would have been answered with
   pointed at the exact button that charged them. It now names
   "Continue with Free →" and says plainly what the Pro button beside it does.
+
+- **2026-10-16 · up to `b9bc511f`** — Two commits of the owner's Apple-style
+  restyle (`51cc514b`, `b9bc511f`) plus the earlier `0736ea6d` (link-preview
+  stand-in artwork). **No doc change needed.** The restyle is paint only, by
+  the owner's rule: every page, tab, button, label, step and plan line is where
+  it was and says what it said — semantic colours, the San Francisco / Inter
+  typeface, glass bars, capsule buttons and filled fields replaced the cream
+  theme and outlined controls. Nothing a user is told about navigating the
+  product changed; the docs name buttons by their labels, and none moved.

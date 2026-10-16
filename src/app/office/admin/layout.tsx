@@ -47,7 +47,7 @@ export default async function OfficeAdminLayout({ children }: { children: React.
       {/* Top accent stripe */}
       <div className="sc-top-stripe fixed top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-purple-600 via-violet-500 to-blue-400 z-50" />
 
-      <header className="sc-office-header sticky top-0 z-40 bg-gray-950/90 backdrop-blur border-b border-gray-800/80">
+      <header className="sc-office-header sc-glass sticky top-0 z-40 bg-gray-950/90 backdrop-blur border-b border-gray-800/80">
         <div className="max-w-6xl mx-auto px-5">
           <div className="flex items-center justify-between h-12">
             <div className="flex items-center gap-3 min-w-0">
