@@ -196,23 +196,31 @@ export async function PATCH(req: NextRequest) {
     ...linkFields,
   };
 
-  // Save, retrying without the newer columns if the migration isn't run yet, so
-  // the core logo/company/website/template save never fails.
+  // Save, retrying without the newer columns ONLY when the database says those
+  // columns don't exist yet (a migration not run). Any other failure used to
+  // fall into the same retries, so a save could keep just the logo, company,
+  // website and template, drop phone, fax, address, the design, the locks and
+  // every Swift Links field, and still answer ok: "Applied ✓" for a change
+  // that mostly didn't happen (audit C02-A01). Now any other error is an error.
+  const missingColumn = (e: { code?: string } | null) => e?.code === "42703" || e?.code === "PGRST204";
   let { error } = await admin.from("offices").update(brand).eq("id", office.id);
-  if (error && Object.keys(linkFields).length) {
+  if (error && missingColumn(error) && Object.keys(linkFields).length) {
     // Swift Links columns missing (pre office-swiftlinks-branding.sql) — the
     // Card tab must still save.
     const withoutLinks = { ...brand };
     for (const k of Object.keys(linkFields)) delete (withoutLinks as Record<string, unknown>)[k];
     ({ error } = await admin.from("offices").update(withoutLinks).eq("id", office.id));
   }
-  if (error) {
+  if (error && missingColumn(error)) {
     ({ error } = await admin.from("offices").update({
       brand_logo_url: brand.brand_logo_url, brand_company: brand.brand_company,
       brand_website: brand.brand_website, brand_template: brand.brand_template,
     }).eq("id", office.id));
   }
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("[office brand] save failed:", error.message);
+    return NextResponse.json({ error: "Couldn't save the branding. Nothing was changed — try again." }, { status: 500 });
+  }
 
   // Propagate to all cards owned by the admin + every active member. Cross-check
   // profiles.office_id too, not just office_members.status='active' — a member

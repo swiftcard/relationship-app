@@ -87,7 +87,10 @@ describe("the Branding page is the brand source", () => {
     // the admin's personal cards with the office template.
     const lib = read("src/lib/office-brand.ts");
     expect(lib).toContain("propagateBrandToOfficeCards");
-    expect(lib).toMatch(/uid !== ownerId/);
+    // Through the same target rule as the Branding route: owner excluded, and
+    // only members still verifiably in the office (audit C02-A02).
+    expect(lib).toMatch(/resolveBrandTargetIds\(ownerId \?\? "", memberIds, verifiedInOffice\)/);
+    expect(read("src/lib/office-brand-targets.ts")).toMatch(/id !== ownerId && verified\.has\(id\)/);
     // And the card-write overlays resolve the brand member-only.
     expect(lib).toContain("getMemberBrandForUser");
     for (const f of [

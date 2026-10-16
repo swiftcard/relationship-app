@@ -48,6 +48,7 @@ import FormSection from "@/components/ui/FormSection";
 import LinkPreviewThumb from "@/components/LinkPreviewThumb";
 import CardUrlEditor from "@/components/CardUrlEditor";
 import { unitLine } from "@/lib/address-unit";
+import UnsavedLeaveGuard from "@/components/UnsavedLeaveGuard";
 
 
 type SocialKey = "linkedin" | "instagram" | "tiktok" | "facebook" | "twitter" | "snapchat" | "youtube";
@@ -1509,8 +1510,11 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
         )}
 
         {/* Actions */}
+        {/* Every in-app link on the page asks before dropping unsaved edits;
+            beforeunload alone never saw a <Link> (audit C02-A39). */}
+        <UnsavedLeaveGuard when={dirty && status !== "saved"} />
         {confirmDiscard && dirty && (
-          <div role="alert" className="mt-6 rounded-xl border border-amber-800/50 bg-amber-950/40 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+          <div role="alert" data-leave-ok className="mt-6 rounded-xl border border-amber-800/50 bg-amber-950/40 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
             <p className="text-amber-200 text-sm font-medium">Discard your unsaved changes?</p>
             <div className="flex items-center gap-2 shrink-0">
               <button type="button" onClick={() => setConfirmDiscard(false)} className="text-sm font-semibold text-white bg-gray-800 hover:bg-gray-700 border border-transparent px-4 py-2 rounded-full transition-colors">

@@ -3,6 +3,7 @@ import { isApplePaid } from "@/lib/iap-entitlement";
 import { PRO_CUSTOMIZATION_KEYS } from "@/lib/plan";
 import { OFFICE_LINK_DESIGN_KEYS } from "@/lib/office-link-design";
 import { withoutFaceImage } from "@/lib/custom-layout";
+import { resolveBrandTargetIds } from "@/lib/office-brand-targets";
 
 export type OfficeAddress = { street?: string; unit?: string; city?: string; state?: string; zip?: string };
 
@@ -642,12 +643,18 @@ export async function propagateBrandToOfficeCards(officeId: string): Promise<voi
     .eq("office_id", officeId)
     .eq("status", "active");
 
-  const seen = new Set<string>();
-  const targets: string[] = [];
-  for (const m of members ?? []) {
-    const uid = m.user_id as string | null;
-    if (uid && uid !== ownerId && !seen.has(uid)) { targets.push(uid); seen.add(uid); }
+  // Only members still VERIFIABLY in this office (profiles.office_id), the
+  // same intersection the Branding route's own pass uses (lib/office-brand-
+  // targets). A departed member whose membership row was never cleaned up had
+  // this office's design, links and Instagram written over their own card
+  // (audit C02-A02).
+  const memberIds = (members ?? []).map((m) => m.user_id as string | null).filter(Boolean) as string[];
+  let verifiedInOffice: string[] = [];
+  if (memberIds.length) {
+    const { data: stillHere } = await admin.from("profiles").select("id").in("id", memberIds).eq("office_id", officeId);
+    verifiedInOffice = (stillHere ?? []).map((p) => p.id as string);
   }
+  const targets = resolveBrandTargetIds(ownerId ?? "", memberIds, verifiedInOffice);
 
   for (const uid of targets) {
     try {
