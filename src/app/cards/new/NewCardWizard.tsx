@@ -74,7 +74,7 @@ const EMPTY_SOCIALS: Socials = {
 
 
 const inputCls =
-  "w-full bg-gray-900 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors";
+  "sc-field w-full px-4 py-3 text-white placeholder-gray-600 focus:outline-none transition-colors";
 
 // The control at the top-left of every wizard step — "Back" on steps 2–4, the
 // way out ("Home" / "Dashboard") on step 1 and the success screen. ONE string
@@ -113,7 +113,7 @@ function resumesSilently(): boolean {
 }
 
 const topControlCls =
-  "text-gray-500 hover:text-white text-sm transition-colors flex items-center gap-1.5 mb-8 w-fit cursor-pointer";
+  "text-blue-400 hover:text-blue-300 text-[0.9375rem] font-medium transition-colors flex items-center gap-1.5 mb-8 w-fit cursor-pointer";
 
 // Company information owned by the user's Office organization (sub-users only).
 // Managed fields are shown as already prepared instead of asked for; blanks the
@@ -1571,12 +1571,12 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
             {[1, 2, 3, 4].map((n) => (
               <div key={n} className="flex items-center gap-2 flex-1">
                 <div
-                  className="w-6 h-6 rounded-full flex items-center justify-center text-[0.6875rem] font-bold shrink-0 transition-colors"
-                  style={{ background: step >= n ? "#2563eb" : "#1f2937", color: step >= n ? "#fff" : "#6b7280" }}
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors"
+                  style={{ background: step >= n ? "var(--sc-tint)" : "var(--sc-fill-2)", color: step >= n ? "#fff" : "var(--sc-label-2)" }}
                 >
                   {n}
                 </div>
-                {n < 4 && <div className="flex-1 h-px" style={{ background: step > n ? "#2563eb" : "#1f2937" }} />}
+                {n < 4 && <div className="flex-1 h-px" style={{ background: step > n ? "var(--sc-tint)" : "var(--sc-separator)" }} />}
               </div>
             ))}
           </div>
@@ -1586,7 +1586,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
         {step === 1 && (
           <div className="space-y-4 sc-step-in">
             <div className="mb-1">
-              <h1 className="text-2xl font-bold text-white">New card</h1>
+              <h1 className="text-[1.75rem] font-bold tracking-tight text-white">New card</h1>
               {/* The required rule lives here now, in the heading — it was a
                   separate blue banner, one more box to read before any field. */}
               <p className="text-gray-400 text-sm mt-1">{org ? "Start with the basics — only your name is required." : "Start with the basics — only your name and a card nickname are required."}</p>
@@ -1754,7 +1754,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                           aria-label={`Label for phone number ${i + 1}`}
                           value={p.label}
                           onChange={(e) => updatePhone(i, { label: e.target.value as PhoneLabel })}
-                          className="bg-gray-900 border border-gray-700 text-gray-200 rounded-xl px-2 py-3 text-sm focus:outline-none focus:border-blue-500 shrink-0"
+                          className="sc-field text-gray-200 px-2 py-3 text-sm focus:outline-none shrink-0"
                         >
                           <option value="mobile">Mobile</option>
                           <option value="office">Office</option>
@@ -1786,7 +1786,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                         // is 6.82:1, still clearly quieter than the blue "on"
                         // state, and it is the shade the template chips below
                         // already use for exactly the same unselected job.
-                        className={`shrink-0 px-3 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${p.showOnCard ? "bg-blue-600 border-blue-600 text-white" : "bg-gray-900 border-gray-700 text-gray-400"}`}
+                        className={`shrink-0 px-3 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${p.showOnCard ? "bg-blue-600 border-blue-600 text-white" : "bg-gray-800/60 border-transparent text-gray-300"}`}
                       >
                         {p.showOnCard ? "On card ✓" : "Off card"}
                       </button>
@@ -1888,7 +1888,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
 
             {error && !nameMissing && <p role="alert" className="text-red-400 text-sm">{error}</p>}
 
-            <button onClick={goNextFrom1} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-full transition-colors text-sm mt-2">
+            <button onClick={goNextFrom1} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3.5 rounded-full transition-colors text-[0.9375rem] mt-2">
               Next: Card design →
             </button>
           </div>
@@ -1898,7 +1898,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
         {step === 3 && (
           <div className="space-y-5 sc-step-in">
             <div className="mb-1">
-              <h1 className="text-2xl font-bold text-white">Socials</h1>
+              <h1 className="text-[1.75rem] font-bold tracking-tight text-white">Socials</h1>
               <p className="text-gray-400 text-sm mt-1">What goes on your Swift Links page — the page people open from your card. Only the bio is required.</p>
             </div>
 
@@ -1935,7 +1935,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                   aria-describedby={bioMissing ? "wizard-bio-error" : undefined}
                   rows={3}
                   placeholder="e.g. Austin realtor helping first-time buyers find their dream home — 10+ years, 200+ closings. Let's talk!"
-                  className={`w-full bg-gray-900 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors resize-none ${bioManaged ? "opacity-70 cursor-default" : ""}${bioMissing ? " ring-2 ring-red-500/70 border-red-500" : ""}`}
+                  className={`sc-field w-full px-4 py-3 text-white placeholder-gray-600 focus:outline-none transition-colors resize-none ${bioManaged ? "opacity-70 cursor-default" : ""}${bioMissing ? " ring-2 ring-red-500/70 border-red-500" : ""}`}
                 />
                 {bioMissing && <p id="wizard-bio-error" role="alert" className="text-red-400 text-xs mt-1">Add a bio to continue.</p>}
               </div>
@@ -2054,10 +2054,10 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
             <div className="lg:hidden">{mobileLinkPagePreview}</div>
 
             <div className="flex gap-3 mt-2">
-              <button onClick={() => setStep(2)} className="flex-1 border border-gray-700 text-gray-400 hover:border-gray-500 font-semibold py-3 rounded-full transition-colors text-sm">
+              <button onClick={() => setStep(2)} className="flex-1 bg-gray-800/60 border border-transparent text-gray-200 hover:bg-gray-700 font-semibold py-3.5 rounded-full transition-colors text-[0.9375rem]">
                 ← Back
               </button>
-              <button onClick={() => { if (requireBio()) setStep(4); }} className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-full transition-colors text-sm">
+              <button onClick={() => { if (requireBio()) setStep(4); }} className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3.5 rounded-full transition-colors text-[0.9375rem]">
                 Next: Social design →
               </button>
             </div>
@@ -2073,7 +2073,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
               </svg>
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white">Your card is live!</h1>
+              <h1 className="text-[1.75rem] font-bold tracking-tight text-white">Your card is live!</h1>
               {/* The link with its own Copy — it used to be plain text, so the
                   first thing a new owner wanted to do (send it to someone)
                   meant selecting a URL by hand. */}
@@ -2126,7 +2126,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
               <PinnedCardPreview undo={cardHistory}>{cardTemplateEl}</PinnedCardPreview>
             )}
             <div className="mb-1">
-              <h1 className="text-2xl font-bold text-white">Card design</h1>
+              <h1 className="text-[1.75rem] font-bold tracking-tight text-white">Card design</h1>
               <p className="text-gray-400 text-sm mt-1">{org ? (designLocked ? "Add your headshot — your organization sets the logo and the design." : "Add your headshot, then pick a design. Your organization sets the logo.") : "Add your logo and headshot, then pick a design."}</p>
             </div>
 
@@ -2283,10 +2283,10 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
             )}
 
             <div className="flex gap-3 mt-1">
-              <button onClick={() => setStep(1)} className="flex-1 border border-gray-700 text-gray-400 hover:border-gray-500 font-semibold py-3 rounded-full transition-colors text-sm">
+              <button onClick={() => setStep(1)} className="flex-1 bg-gray-800/60 border border-transparent text-gray-200 hover:bg-gray-700 font-semibold py-3.5 rounded-full transition-colors text-[0.9375rem]">
                 ← Back
               </button>
-              <button onClick={() => setStep(3)} className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-full transition-colors text-sm">
+              <button onClick={() => setStep(3)} className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3.5 rounded-full transition-colors text-[0.9375rem]">
                 Next: Socials →
               </button>
             </div>
@@ -2303,7 +2303,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                 see the whole page. */}
             <PinnedLinkPreview undo={linkHistory}>{linkPageEl}</PinnedLinkPreview>
             <div className="mb-1">
-              <h1 className="text-2xl font-bold text-white">Social design</h1>
+              <h1 className="text-[1.75rem] font-bold tracking-tight text-white">Social design</h1>
               <p className="text-gray-400 text-sm mt-1">How your Swift Links page looks.</p>
             </div>
 
@@ -2391,7 +2391,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                 at 360px and up is byte-identical to the owner's fix
                 (audit 2026-09-29). */}
             <div className="flex items-center gap-3 mt-1">
-              <button onClick={() => setStep(3)} className="shrink-0 border border-gray-700 text-gray-400 hover:border-gray-500 font-semibold px-3.5 min-[360px]:px-5 py-3.5 rounded-full transition-colors text-sm">
+              <button onClick={() => setStep(3)} className="shrink-0 bg-gray-800/60 border border-transparent text-gray-200 hover:bg-gray-700 font-semibold px-3.5 min-[360px]:px-5 py-3.5 rounded-full transition-colors text-sm">
                 ← Back
               </button>
               {/* ── A GUEST NEVER PICKS A PLAN HERE (2026-09-15) ──────────────

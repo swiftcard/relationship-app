@@ -1090,14 +1090,14 @@ export default function ContactsClient({
               placeholder="Search contacts…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-gray-900 border border-gray-700 text-gray-200 placeholder-gray-500 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+              className="sc-field w-full text-gray-200 placeholder-gray-500 pl-9 pr-4 py-2.5 text-sm focus:outline-none transition-colors"
             />
           </div>
           <select
             aria-label="Sort contacts"
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-            className="bg-gray-900 border border-gray-700 text-gray-300 rounded-xl px-3 py-2 text-xs focus:outline-none w-full"
+            className="sc-field text-gray-300 px-3 py-2 text-xs focus:outline-none w-full"
           >
             <option value="alpha">Alphabetical</option>
             <option value="recent">Recently Added</option>
@@ -1638,9 +1638,9 @@ export default function ContactsClient({
                             if (isDrafting) cancelDraft(); else startDraft(ch);
                           }}
                           className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${!can ? "opacity-60 cursor-not-allowed" : ""}`}
-                          style={{ background: switchOn ? (ch === "sms" ? "#059669" : "#2563eb") : "#374151" }}
+                          style={{ background: switchOn ? "var(--sc-green, #059669)" : "var(--sc-fill-3, #374151)" }}
                         >
-                          <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all" style={{ left: switchOn ? "22px" : "2px" }} />
+                          <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-[0_3px_8px_rgba(0,0,0,0.15),0_1px_1px_rgba(0,0,0,0.06)] transition-all" style={{ left: switchOn ? "22px" : "2px" }} />
                         </button>
                       </div>
 

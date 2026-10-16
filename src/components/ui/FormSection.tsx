@@ -33,7 +33,7 @@ export default function FormSection({
   children: ReactNode;
   id?: string;
 }) {
-  const headingCls = "text-[0.8125rem] font-semibold text-white";
+  const headingCls = "text-[0.9375rem] font-semibold text-white tracking-tight";
   const heading = (
     <>
       {title}

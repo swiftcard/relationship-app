@@ -100,7 +100,7 @@ export default function SettingsShell({
             <div
               key={s.id}
               className={`rounded-2xl border overflow-hidden transition-colors ${
-                openHere ? "border-gray-700 bg-gray-900/60" : s.quiet ? "border-gray-800/60 bg-gray-900/30" : "border-gray-800 bg-gray-900/40"
+                openHere ? "border-transparent bg-gray-900/60" : s.quiet ? "border-transparent bg-gray-900/30" : "border-transparent bg-gray-900/40"
               }`}
             >
               <button
@@ -167,7 +167,7 @@ export default function SettingsShell({
         {current && (
           <div key={current.id}>
             <div className="mb-5">
-              <h2 className="text-white text-lg font-bold tracking-tight">{current.label}</h2>
+              <h2 className="text-white text-[1.375rem] font-bold tracking-tight">{current.label}</h2>
               <p className="text-gray-500 text-xs mt-0.5">{current.desc}</p>
             </div>
             <div className="space-y-3">{current.content}</div>
@@ -194,7 +194,7 @@ function RailItem({
       type="button"
       onClick={onClick}
       aria-current={active ? "page" : undefined}
-      className={`shrink-0 md:w-full flex items-center gap-2.5 text-sm rounded-xl px-3 py-2 transition-colors whitespace-nowrap ${
+      className={`shrink-0 md:w-full flex items-center gap-2.5 text-[0.9375rem] rounded-xl px-3 py-2 transition-colors whitespace-nowrap ${
         active
           ? "bg-gray-800 text-white font-medium"
           : quiet

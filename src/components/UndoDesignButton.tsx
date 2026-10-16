@@ -48,7 +48,7 @@ export default function UndoDesignButton({ history, variant, className = "" }: {
       aria-hidden={!history.canUndo}
       tabIndex={history.canUndo ? 0 : -1}
       title="Undo your last design change"
-      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[0.6875rem] font-semibold border border-gray-700 bg-gray-800/40 text-gray-200 hover:border-gray-500 transition-opacity ${history.canUndo ? "opacity-100" : "opacity-0 pointer-events-none"} ${className}`}
+      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[0.6875rem] font-semibold border border-transparent bg-gray-800/60 text-gray-200 hover:bg-gray-700 transition-opacity ${history.canUndo ? "opacity-100" : "opacity-0 pointer-events-none"} ${className}`}
     >
       <UndoIcon className="w-3.5 h-3.5" />
       Undo

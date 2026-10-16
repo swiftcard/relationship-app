@@ -89,8 +89,8 @@ export default async function GrowPage() {
       <div className="max-w-sm mx-auto pt-20">
         {/* Header */}
         <div className="mb-8">
-          <p className="text-[0.6875rem] font-bold tracking-[0.25em] text-blue-500 uppercase mb-1">SwiftCard</p>
-          <h1 className="text-2xl font-bold text-white">Help us grow</h1>
+          <p className="text-[0.8125rem] font-semibold tracking-[0.04em] text-gray-500 uppercase mb-1">SwiftCard</p>
+          <h1 className="text-[2.125rem] leading-tight font-bold tracking-tight text-white">Help us grow</h1>
           <p className="text-gray-500 text-sm mt-1 leading-relaxed">
             {/* Not to an Office account: its referral panel is hidden below and
                 /api/referrals/claim refuses it, so "earns you free Pro" was a

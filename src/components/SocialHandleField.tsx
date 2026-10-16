@@ -264,7 +264,7 @@ const TONE: Record<Variant, {
   app: {
     label: "text-gray-300",
     chip: "bg-gray-800 text-gray-300",
-    box: "bg-gray-900 border-gray-700 focus-within:border-blue-500",
+    box: "sc-field-box border-transparent focus-within:border-blue-500",
     prefix: "text-gray-500",
     input: "text-white placeholder-gray-600",
     note: "text-gray-500",

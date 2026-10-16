@@ -51,7 +51,8 @@ export const PRESET_TEMPLATES = [
 ] as const;
 
 /** Same offset ring the swatches and Looks use: a tile whose face IS the preview takes the ring, not a fill. */
-const RING = "0 0 0 2px #0b0f16, 0 0 0 4px #3b82f6";
+// A tint ring with a gap the colour of the surface it sits on (tokens from globals.css).
+const RING = "0 0 0 2px var(--sc-bg-tertiary, #0b0f16), 0 0 0 4px var(--sc-tint, #3b82f6)";
 
 const Thumb = memo(function Thumb({
   Component,

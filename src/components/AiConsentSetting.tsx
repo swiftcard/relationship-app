@@ -79,11 +79,11 @@ export default function AiConsentSetting() {
           aria-label="AI features"
           disabled={saving}
           onClick={() => setDecision(on ? "declined" : "accepted")}
-          className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-60 ${on ? "bg-blue-600" : "bg-gray-700"}`}
+          className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-60 ${on ? "bg-[var(--sc-green)]" : "bg-[var(--sc-fill-3)]"}`}
         >
           <span
             aria-hidden
-            className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-all ${on ? "left-6" : "left-1"}`}
+            className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-[0_3px_8px_rgba(0,0,0,0.15),0_1px_1px_rgba(0,0,0,0.06)] transition-all ${on ? "left-6" : "left-1"}`}
           />
         </button>
       </div>

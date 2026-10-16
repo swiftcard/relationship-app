@@ -25,9 +25,9 @@ type Variant = "app" | "site";
 const TONE: Record<Variant, { label: string; input: string; chip: string; chipOn: string; idle: string }> = {
   app: {
     label: "text-gray-400",
-    input: "w-full bg-gray-900 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors",
-    chip: "border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white",
-    chipOn: "border-blue-500 bg-blue-600/15 text-blue-300",
+    input: "sc-field w-full px-4 py-3 text-white placeholder-gray-600 focus:outline-none transition-colors",
+    chip: "border-transparent bg-gray-800/60 text-gray-200 hover:bg-gray-700",
+    chipOn: "border-transparent bg-blue-500/15 text-blue-400",
     idle: "border border-dashed border-gray-700 text-gray-400 disabled:opacity-40",
   },
   site: {

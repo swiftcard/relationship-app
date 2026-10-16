@@ -415,9 +415,9 @@ function Switch({ on, busy, onClick }: { on: boolean; busy: boolean; onClick: ()
       disabled={busy}
       onClick={onClick}
       className="relative w-12 h-7 rounded-full transition-colors shrink-0 disabled:opacity-60"
-      style={{ background: on ? "#059669" : "#4b5563" }}
+      style={{ background: on ? "var(--sc-green, #059669)" : "var(--sc-fill-3, #4b5563)" }}
     >
-      <span className="absolute top-0.5 w-6 h-6 rounded-full bg-white shadow transition-all" style={{ left: on ? "22px" : "2px" }} />
+      <span className="absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-[0_3px_8px_rgba(0,0,0,0.15),0_1px_1px_rgba(0,0,0,0.06)] transition-all" style={{ left: on ? "22px" : "2px" }} />
     </button>
   );
 }

@@ -237,8 +237,8 @@ export default function ImageUpload({ field, currentUrl, label, hint, shape = "s
             className={`${boxSize} overflow-hidden border-2 border-dashed flex items-center justify-center shrink-0 transition-all hover:border-blue-500`}
             style={{
               borderRadius: isCircle ? "9999px" : "12px",
-              borderColor: "#374151",
-              background: "#111827",
+              borderColor: "var(--sc-separator-opaque, #374151)",
+              background: "var(--sc-fill, #111827)",
             }}
           >
             {preview ? (
@@ -263,7 +263,7 @@ export default function ImageUpload({ field, currentUrl, label, hint, shape = "s
                 type="button"
                 onClick={() => inputRef.current?.click()}
                 disabled={uploadStatus === "uploading"}
-                className="text-xs font-medium text-blue-700 hover:text-blue-800 transition-colors disabled:opacity-50"
+                className="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-50"
               >
                 {uploadStatus === "uploading" ? "Uploading…" : preview ? "Change" : "Upload"}
               </button>
@@ -271,7 +271,7 @@ export default function ImageUpload({ field, currentUrl, label, hint, shape = "s
                 <button
                   type="button"
                   onClick={adjustCurrent}
-                  className="text-xs font-medium text-blue-700 hover:text-blue-800 transition-colors"
+                  className="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors"
                 >
                   Adjust
                 </button>

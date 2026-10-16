@@ -103,6 +103,7 @@ body {
   --sc-orange: #FF9500;
   --sc-yellow: #FFCC00;
   --sc-gray: #8E8E93;
+  --sc-label-muted: #636366;              /* secondary text that must clear 4.5:1 */
   --sc-glass: rgba(249, 249, 249, 0.80);
   --sc-glass-border: rgba(0, 0, 0, 0.10);
   --sc-glass-sheen: rgba(255, 255, 255, 0.70);
@@ -154,6 +155,7 @@ html:not([data-sc-theme="light"]) .sc-app, html:not([data-sc-theme="light"]) .sc
   --sc-red: #FF453A;
   --sc-orange: #FF9F0A;
   --sc-yellow: #FFD60A;
+  --sc-label-muted: #98989D;
   --sc-glass: rgba(28, 28, 30, 0.72);
   --sc-glass-border: rgba(255, 255, 255, 0.10);
   --sc-glass-sheen: rgba(255, 255, 255, 0.08);
@@ -215,13 +217,22 @@ html:not([data-sc-theme="light"]) .sc-app, html:not([data-sc-theme="light"]) .sc
    Filled, borderless, 44px, 12px corners; a ring on focus. Placeholder is the
    tertiary label. The 16px coarse-pointer floor above still applies. */
 .sc-field {
-  display: block; width: 100%; min-height: 44px; padding: 0.625rem 0.875rem;
-  background: var(--sc-fill); color: var(--sc-label); border: 1px solid transparent;
-  border-radius: var(--sc-r-control); font-size: 1.0625rem; line-height: 1.3;
+  display: block; min-height: 44px;
+  background-color: var(--sc-fill); color: var(--sc-label); border: 1px solid transparent;
+  border-radius: var(--sc-r-control); font-size: 1rem; line-height: 1.3;
   transition: background-color var(--sc-dur-fast) ease, box-shadow var(--sc-dur-fast) ease, border-color var(--sc-dur-fast) ease;
 }
+/* On the white card builder the groups are the grouped grey, so the fields
+   inside them are white cells — Apple's inset form, inverted for a white
+   canvas. A disclosure row (MoreOptions) is a white cell too. */
+.sc-canvas-white .sc-field { background-color: var(--sc-bg-elevated); }
+.sc-canvas-white .sc-field:focus { background-color: var(--sc-bg-elevated); }
+/* A field that wraps its own prefix (the social handle rows): the box takes
+   the field look, the input inside stays bare. */
+.sc-field-box { background-color: var(--sc-fill); }
+.sc-canvas-white .sc-field-box { background-color: var(--sc-bg-elevated); }
 .sc-field::placeholder { color: var(--sc-label-3); }
-.sc-field:focus, .sc-field:focus-visible { outline: none; background: var(--sc-bg-elevated); border-color: var(--sc-tint); box-shadow: 0 0 0 3px var(--sc-tint-ring); }
+.sc-field:focus, .sc-field:focus-visible { outline: none; background-color: var(--sc-bg-elevated); border-color: var(--sc-tint); box-shadow: 0 0 0 3px var(--sc-tint-ring); }
 .sc-field[aria-invalid="true"] { border-color: var(--sc-red); }
 textarea.sc-field { min-height: 88px; resize: vertical; }
 select.sc-field { appearance: none; -webkit-appearance: none; padding-right: 2.25rem; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1.5l5 5 5-5' fill='none' stroke='%238E8E93' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>"); background-repeat: no-repeat; background-position: right 0.875rem center; }
@@ -255,9 +266,9 @@ a.sc-row:hover, button.sc-row:hover { background: var(--sc-fill); }
 /* Size, weight and width are the caller's (the Traffic bar is four equal
    columns on a phone and compact on a computer); this is only the look. */
 .sc-segmented > * { border-radius: 7px; color: var(--sc-label); transition: background-color var(--sc-dur-fast) ease, color var(--sc-dur-fast) ease, box-shadow var(--sc-dur-fast) ease; }
-.sc-segmented > :is([aria-pressed="true"], [aria-current], [aria-selected="true"], [data-active="true"], .is-active) { background: var(--sc-bg-elevated); box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 3px 1px rgba(0, 0, 0, 0.04); }
-html:not([data-sc-theme="light"]) .sc-app .sc-segmented > :is([aria-pressed="true"], [aria-current], [aria-selected="true"], [data-active="true"], .is-active) { background: #636366; }
-.sc-segmented-tint > :is([aria-pressed="true"], [aria-current], [aria-selected="true"], [data-active="true"], .is-active) { background: var(--sc-tint); color: #fff; }
+.sc-segmented > .is-active { background: var(--sc-bg-elevated); box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 3px 1px rgba(0, 0, 0, 0.04); }
+html:not([data-sc-theme="light"]) .sc-app .sc-segmented > .is-active { background: #636366; }
+.sc-segmented-tint > .is-active { background: var(--sc-tint); color: #fff; }
 
 /* ── Badges ──────────────────────────────────────────────────────────────── */
 .sc-badge { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.125rem 0.5rem; border-radius: 999px; font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.02em; background: var(--sc-fill); color: var(--sc-label-2); line-height: 1.4; white-space: nowrap; }
@@ -318,6 +329,47 @@ html:not([data-sc-theme="light"]) .sc-app .sc-segmented > :is([aria-pressed="tru
     transform: scale(0.96);
   }
 }
+
+/* ── Sign in / sign up / reset (.sc-auth) ───────────────────────────────────
+   These pages were authored light, in cream and slate utilities. The layer
+   below paints those with the same tokens as the app, so the sign-in card is
+   the app's card: white on the grouped ground, filled fields, capsule buttons.
+   Unlayered, so it beats the utilities without !important. */
+.sc-auth.bg-cream { background-color: var(--sc-bg); }
+.sc-auth .bg-warm-card { background-color: var(--sc-bg-elevated); border-color: transparent; border-radius: var(--sc-r-card); box-shadow: var(--sc-shadow-card); }
+.sc-auth :is(.text-slate-900, .text-slate-800, .text-slate-700, .text-gray-900) { color: var(--sc-label); }
+.sc-auth .text-slate-600 { color: #545458; }
+.sc-auth .text-slate-500 { color: #636366; }
+.sc-auth .text-slate-400 { color: #8E8E93; }
+html:not([data-sc-theme="light"]) .sc-auth .text-slate-600 { color: #AEAEB2; }
+html:not([data-sc-theme="light"]) .sc-auth .text-slate-500 { color: #98989D; }
+html:not([data-sc-theme="light"]) .sc-auth .text-slate-400 { color: #8E8E93; }
+.sc-auth .text-red-700 { color: var(--sc-red); }
+.sc-auth .text-amber-700 { color: #A85C00; }
+.sc-auth :is(.bg-\[\#E4DDD4\], .bg-\[\#EDE8E0\]) { background-color: var(--sc-separator); }
+.sc-auth .border-\[\#E4DDD4\] { border-color: var(--sc-separator); }
+/* Fields: filled, borderless, 44px, a tint ring on focus (the .sc-field look). */
+.sc-auth .sc-input { background-color: var(--sc-fill); border-color: transparent; color: var(--sc-label); min-height: 44px; font-size: 1rem; }
+.sc-auth .sc-input::placeholder { color: var(--sc-label-3); }
+.sc-auth .sc-input:focus, .sc-auth .sc-input:focus-visible { background-color: var(--sc-bg-elevated); border-color: var(--sc-tint); box-shadow: 0 0 0 3px var(--sc-tint-ring); }
+.sc-auth .sc-input.bg-\[\#F4F0EA\] { background-color: var(--sc-fill-2); }
+.sc-auth .placeholder-slate-400::placeholder { color: var(--sc-label-3); }
+/* Buttons: the tint capsule, the Google white capsule with a hairline, the
+   black Apple capsule. All 44px+. */
+.sc-auth :is(.bg-\[\#1D4ED8\]) { background-color: var(--sc-tint); min-height: 44px; }
+.sc-auth :is(.hover\:bg-\[\#1740C4\]:hover) { background-color: var(--sc-tint-hover); }
+.sc-auth :is(.text-\[\#1D4ED8\]) { color: var(--sc-tint); }
+.sc-auth :is(.hover\:text-\[\#1740C4\]:hover) { color: var(--sc-tint-hover); }
+.sc-auth .bg-white.rounded-full { background-color: var(--sc-bg-elevated); border: 1px solid var(--sc-separator); min-height: 44px; }
+.sc-auth .bg-white.rounded-full:hover { background-color: var(--sc-fill); }
+.sc-auth .bg-black.rounded-full { min-height: 44px; }
+html:not([data-sc-theme="light"]) .sc-auth .bg-black.rounded-full { background-color: #FFFFFF; color: #000000; }
+html:not([data-sc-theme="light"]) .sc-auth .bg-black.rounded-full:hover { background-color: #E5E5EA; }
+.sc-auth .bg-green-50 { background-color: rgba(52, 199, 89, 0.14); border-color: transparent; }
+.sc-auth .text-green-500 { color: var(--sc-green); }
+.sc-auth .bg-\[\#F4F0EA\] { background-color: var(--sc-fill-2); }
+.sc-auth .border-slate-300 { border-color: var(--sc-separator); }
+.sc-auth h1 { letter-spacing: -0.02em; }
 
 /* ── The decorative top stripe is gone everywhere (owner, 2026-10-15) ──────
    The DOM keeps the element so nothing else shifts and tests still find it. */
@@ -815,6 +867,7 @@ html:not([data-sc-theme="light"]) .sc-app .sc-segmented > :is([aria-pressed="tru
    white. Both are how iOS nests groups. */
 [data-sc-theme="light"] .sc-app .bg-gray-900\/40 { background-color: var(--sc-bg-elevated) !important; }
 [data-sc-theme="light"] .sc-app.sc-canvas-white .bg-gray-900\/40 { background-color: var(--sc-bg-tertiary) !important; }
+[data-sc-theme="light"] .sc-app.sc-canvas-white details.bg-gray-900\/40 { background-color: var(--sc-bg-elevated) !important; }
 [data-sc-theme="light"] .sc-app :is(.bg-gray-800\/20, .bg-gray-800\/50, .bg-gray-800\/80) { background-color: var(--sc-fill) !important; }
 
 /* Purple — the Office/team accent (badges, banners, admin chrome). */

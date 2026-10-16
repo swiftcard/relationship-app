@@ -487,7 +487,7 @@ export default function LoginForm({
           Not shown at all for a team invite (lockedEmail): one address, one
           way in, chosen by the invite page. */}
       {!lockedEmail && (
-      <div className="flex bg-[#EDE8E0] border border-[#E4DDD4] rounded-full p-1">
+      <div className="sc-segmented flex rounded-full p-1">
         {(["signin", "signup"] as const).map((m) => (
           <button
             key={m}
@@ -499,8 +499,8 @@ export default function LoginForm({
             }}
             className="flex-1 py-2 text-sm font-semibold rounded-full transition-colors"
             style={{
-              background: mode === m ? "#1D4ED8" : "transparent",
-              color: mode === m ? "#fff" : "#5B5247",
+              background: mode === m ? "var(--sc-tint, #1D4ED8)" : "transparent",
+              color: mode === m ? "#fff" : "var(--sc-label, #5B5247)",
             }}
           >
             {m === "signin" ? "Sign in" : !redirectTo && mode !== "signup" ? "Get Started" : "Create account"}

@@ -3,7 +3,7 @@ import SwiftCardLogo from "@/components/SwiftCardLogo";
 
 export default function ResetPasswordPage() {
   return (
-    <main className="min-h-screen bg-cream flex items-center justify-center px-5">
+    <main className="sc-auth min-h-screen bg-cream flex items-center justify-center px-5">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-6">

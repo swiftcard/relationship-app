@@ -61,10 +61,10 @@ export default function PushPreferencesForm({ billingAlerts = true }: { billingA
   }
 
   return (
-    <div className="rounded-2xl p-5 space-y-4" style={{ background: "#fff", border: "1px solid #E4DDD4" }}>
+    <div className="rounded-2xl p-5 space-y-4" style={{ background: "var(--sc-bg-elevated, #fff)", border: "1px solid transparent", boxShadow: "var(--sc-shadow-card)" }}>
       <div>
-        <p className="text-sm font-semibold" style={{ color: "#0f172a" }}>What we notify you about</p>
-        <p className="text-xs mt-0.5" style={{ color: "#64748b" }}>
+        <p className="text-sm font-semibold" style={{ color: "var(--sc-label, #0f172a)" }}>What we notify you about</p>
+        <p className="text-xs mt-0.5" style={{ color: "var(--sc-label-muted, #64748b)" }}>
           These are the only things SwiftCard will ever send to your phone. Nothing else — no tips, no promotions.
         </p>
       </div>
@@ -80,7 +80,7 @@ export default function PushPreferencesForm({ billingAlerts = true }: { billingA
         />
       ))}
 
-      <div className="pt-1" style={{ borderTop: "1px solid #F1EBE3" }} />
+      <div className="pt-1" style={{ borderTop: "1px solid var(--sc-separator, #F1EBE3)" }} />
 
       <Toggle
         label="Quiet hours"
@@ -94,7 +94,7 @@ export default function PushPreferencesForm({ billingAlerts = true }: { billingA
       />
 
       {error && (
-        <p role="alert" className="text-xs text-center" style={{ color: "#B91C1C" }}>{error}</p>
+        <p role="alert" className="text-xs text-center" style={{ color: "var(--sc-red, #B91C1C)" }}>{error}</p>
       )}
     </div>
   );
@@ -112,20 +112,20 @@ function Toggle({
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <p className="text-sm font-semibold" style={{ color: "#0f172a" }}>{label}</p>
-        <p className="text-xs mt-0.5" style={{ color: "#64748b" }}>{description}</p>
+        <p className="text-sm font-semibold" style={{ color: "var(--sc-label, #0f172a)" }}>{label}</p>
+        <p className="text-xs mt-0.5" style={{ color: "var(--sc-label-muted, #64748b)" }}>{description}</p>
       </div>
       <button
         onClick={() => onChange(!checked)}
         disabled={disabled}
         className="shrink-0 w-10 h-5 rounded-full transition-colors relative mt-0.5"
-        style={{ background: checked ? "#1D4ED8" : "#E4DDD4", opacity: disabled ? 0.5 : 1 }}
+        style={{ background: checked ? "var(--sc-green, #1D4ED8)" : "var(--sc-fill-3, #E4DDD4)", opacity: disabled ? 0.5 : 1 }}
         aria-label={label}
         aria-checked={checked}
         role="switch"
       >
         <span
-          className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+          className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-[0_3px_8px_rgba(0,0,0,0.15),0_1px_1px_rgba(0,0,0,0.06)] transition-transform"
           style={{ left: checked ? "calc(100% - 18px)" : "2px" }}
         />
       </button>

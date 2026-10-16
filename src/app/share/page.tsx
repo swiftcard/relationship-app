@@ -186,8 +186,8 @@ export default async function SharePage({
         {/* Header — names the card these belong to, so it's unambiguous which
             card's Swift Links / signature are shown. */}
         <div className="mb-6">
-          <p className="text-[0.6875rem] font-bold tracking-[0.25em] text-blue-500 uppercase mb-1">SwiftCard</p>
-          <h1 className="text-2xl font-bold text-white">Links</h1>
+          <p className="text-[0.8125rem] font-semibold tracking-[0.04em] text-gray-500 uppercase mb-1">SwiftCard</p>
+          <h1 className="text-[2.125rem] leading-tight font-bold tracking-tight text-white">Links</h1>
           <p className="text-gray-500 text-sm mt-1">
             For <span className="text-gray-300 font-medium">{(activeCard.label || activeCard.name || activeUsername) as string}</span>
             <span className="text-gray-600"> · /{activeUsername}</span>
@@ -250,11 +250,11 @@ export default async function SharePage({
                   <CopyButton text={swiftUrl} />
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2">
-                  <a href={ownLiveHref(user.id, swiftUrl, APP_URL)} target="_blank" rel="noopener noreferrer" className="block text-center text-xs font-semibold text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-full py-2 transition-colors">
+                  <a href={ownLiveHref(user.id, swiftUrl, APP_URL)} target="_blank" rel="noopener noreferrer" className="block text-center text-xs font-semibold text-gray-200 hover:text-white bg-gray-800 hover:bg-gray-700 border border-transparent rounded-full py-2 transition-colors">
                     Open Swift Links →
                   </a>
                   {/* Straight to the editor's Socials tab — bio, socials and links. */}
-                  <Link href={`/cards/${activeCard.id}/edit?tab=sharing`} className="block text-center text-xs font-semibold text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-full py-2 transition-colors">
+                  <Link href={`/cards/${activeCard.id}/edit?tab=sharing`} className="block text-center text-xs font-semibold text-gray-200 hover:text-white bg-gray-800 hover:bg-gray-700 border border-transparent rounded-full py-2 transition-colors">
                     Edit my links
                   </Link>
                 </div>

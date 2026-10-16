@@ -468,7 +468,7 @@ export default async function FlowSettingsPage({
               <p className="text-white text-sm font-semibold">Password</p>
               <p className="text-gray-500 text-xs mt-0.5">Set a new password for your account.</p>
             </div>
-            <Link href="/auth/reset-password" className="text-xs font-semibold text-blue-400 hover:text-blue-300 border border-blue-500/30 rounded-full px-4 py-2 transition-colors shrink-0">
+            <Link href="/auth/reset-password" className="text-xs font-semibold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/15 border border-transparent rounded-full px-4 py-2 transition-colors shrink-0">
               Change password
             </Link>
           </div>
@@ -520,7 +520,7 @@ export default async function FlowSettingsPage({
                 <div className="flex items-center gap-3 flex-wrap">
                   <RateUsLink
                     placement="settings"
-                    className="text-xs font-semibold text-blue-400 hover:text-blue-300 border border-blue-500/30 rounded-full px-4 py-2 transition-colors"
+                    className="text-xs font-semibold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/15 border border-transparent rounded-full px-4 py-2 transition-colors"
                   />
                   <AppStoreBadge size="sm" />
                 </div>
@@ -587,8 +587,8 @@ export default async function FlowSettingsPage({
 
       <div className="max-w-4xl mx-auto pt-20">
         <div className="mb-8">
-          <p className="text-[0.6875rem] font-bold tracking-[0.25em] text-blue-500 uppercase mb-1">SwiftCard</p>
-          <h1 className="text-2xl font-bold text-white">Settings</h1>
+          <p className="text-[0.8125rem] font-semibold tracking-[0.04em] text-gray-500 uppercase mb-1">SwiftCard</p>
+          <h1 className="text-[2.125rem] leading-tight font-bold tracking-tight text-white">Settings</h1>
           <p className="text-gray-500 text-sm mt-1">{user.email}</p>
         </div>
 

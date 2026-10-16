@@ -116,7 +116,7 @@ export default function LinksPageTabs({
         role="tablist"
         aria-label="Swift Links, Swift Signature or Create"
         onKeyDown={onKeyDown}
-        className="grid grid-cols-3 gap-1 p-1 mb-6 rounded-xl bg-gray-900 border border-gray-800"
+        className="sc-segmented grid grid-cols-3 gap-1 p-1 mb-6 rounded-xl"
       >
         {TABS.map((t) => {
           const on = tab === t.id;
@@ -137,7 +137,7 @@ export default function LinksPageTabs({
               // Icons and 14px come back from sm up, where there's room.
               // min-h-10: the same 40px tap height at every text size.
               className={`relative flex items-center justify-center gap-1.5 min-w-0 min-h-10 py-2 px-1 sm:px-2 rounded-lg text-xs min-[375px]:text-[0.8125rem] sm:text-sm leading-tight font-semibold transition-colors ${
-                on ? "bg-blue-600 text-white shadow-sm" : "text-gray-400 hover:text-white hover:bg-gray-800"
+                on ? "bg-blue-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"
               }`}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden className="hidden sm:block w-4 h-4 shrink-0">

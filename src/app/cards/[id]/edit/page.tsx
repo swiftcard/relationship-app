@@ -139,14 +139,14 @@ export default async function CardEditPage({
         <div className="flex items-center justify-between mb-8">
           {joined ? (
             // Just joined: every way out of here leads to the tour.
-            <Link href={`/dashboard?card=${encodeURIComponent(card.username as string)}&tour=1`} className="text-gray-500 hover:text-white text-sm transition-colors flex items-center gap-1.5">
+            <Link href={`/dashboard?card=${encodeURIComponent(card.username as string)}&tour=1`} className="text-blue-400 hover:text-blue-300 text-[0.9375rem] font-medium transition-colors flex items-center gap-1.5">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
               </svg>
               Dashboard
             </Link>
           ) : (
-            <DashboardLink card={card.username} className="text-gray-500 hover:text-white text-sm transition-colors flex items-center gap-1.5">
+            <DashboardLink card={card.username} className="text-blue-400 hover:text-blue-300 text-[0.9375rem] font-medium transition-colors flex items-center gap-1.5">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
               </svg>
@@ -157,7 +157,7 @@ export default async function CardEditPage({
 
         <div className="mb-6">
           <p className="text-[0.6875rem] font-bold tracking-[0.25em] text-gray-500 uppercase mb-1">SwiftCard</p>
-          <h1 className="text-2xl font-bold text-white">Edit card</h1>
+          <h1 className="text-[1.75rem] font-bold tracking-tight text-white">Edit card</h1>
           {/* Arrived from accepting a team invite with a card already built:
               say what just happened and where to go next, instead of a bare
               editor (2026-09-16 website audit). */}

@@ -246,10 +246,10 @@ export function Switch({
       </span>
       <span
         aria-hidden
-        className={`relative w-[42px] h-[26px] rounded-full shrink-0 transition-colors ${checked ? "bg-blue-600" : "bg-gray-600"}`}
+        className={`relative w-[42px] h-[26px] rounded-full shrink-0 transition-colors ${checked ? "bg-[var(--sc-green)]" : "bg-[var(--sc-fill-3)]"}`}
       >
         <span
-          className={`absolute top-[3px] left-[3px] w-5 h-5 rounded-full bg-white transition-transform ${checked ? "translate-x-4" : ""}`}
+          className={`absolute top-[3px] left-[3px] w-5 h-5 rounded-full bg-white shadow-[0_3px_8px_rgba(0,0,0,0.15),0_1px_1px_rgba(0,0,0,0.06)] transition-transform ${checked ? "translate-x-4" : ""}`}
         />
       </span>
     </button>
@@ -324,7 +324,7 @@ export type DesignStep = {
  */
 export function DesignSteps({ steps, label, name }: { steps: DesignStep[]; label: string; /** Lets a live preview follow the step being edited (data-design-steps). */ name?: string }) {
   return (
-    <ol className="bg-gray-900 border border-gray-800 rounded-xl divide-y divide-gray-800" aria-label={label} data-design-steps={name}>
+    <ol className="bg-gray-900 border border-gray-800 rounded-2xl divide-y divide-gray-800" aria-label={label} data-design-steps={name}>
       {steps.map((st, i) => (
         <li key={st.key} className="flex gap-3 p-4" title={st.title} data-design-step={st.key}>
           <span

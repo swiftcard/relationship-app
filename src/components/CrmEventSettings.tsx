@@ -24,9 +24,9 @@ function Toggle({ on, onClick, disabled }: { on: boolean; onClick: () => void; d
       disabled={disabled}
       onClick={onClick}
       className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}
-      style={{ background: on ? "#2563eb" : "#374151" }}
+      style={{ background: on ? "var(--sc-green, #2563eb)" : "var(--sc-fill-3, #374151)" }}
     >
-      <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all" style={{ left: on ? "22px" : "2px" }} />
+      <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-[0_3px_8px_rgba(0,0,0,0.15),0_1px_1px_rgba(0,0,0,0.06)] transition-all" style={{ left: on ? "22px" : "2px" }} />
     </button>
   );
 }

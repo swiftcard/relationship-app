@@ -98,7 +98,7 @@ export default function GuestGateModal() {
           <a
             href={loginHref}
             onClick={() => markClaimConsent()}
-            className="block w-full rounded-full border border-gray-700 px-6 py-3 text-center text-sm font-semibold text-gray-300 transition-colors hover:border-gray-500 hover:text-white"
+            className="block w-full rounded-full bg-gray-800/60 border border-transparent px-6 py-3 text-center text-sm font-semibold text-gray-200 transition-colors hover:bg-gray-700 hover:text-white"
           >
             Log in
           </a>

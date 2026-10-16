@@ -59,7 +59,7 @@ const SOCIALS = SOCIAL_INPUTS;
 
 
 const inputCls =
-  "w-full bg-gray-900 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-colors";
+  "sc-field w-full px-4 py-3 text-white placeholder-gray-600 focus:outline-none transition-colors";
 
 // The same four sections as the new-card wizard, in the same order:
 // 1 Card information · 2 Card design · 3 Socials · 4 Social design.
@@ -857,7 +857,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
       {/* ── EDITOR (left on desktop; the whole page on mobile) ── */}
       <div className="min-w-0 order-2 lg:order-1">
         {/* Tabs */}
-        <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1 mb-2">
+        <div className="sc-segmented flex gap-1 rounded-xl p-1 mb-2">
           {TABS.map((t) => {
             const on = tab === t.id;
             return (
@@ -867,7 +867,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                 onClick={() => setTab(t.id)}
                 // text-[0.6875rem] on phones: four tabs share the row now, and
                 // "Social design" must never clip inside its pill.
-                className={`flex-1 text-[0.6875rem] sm:text-sm leading-tight font-semibold py-2 px-0.5 rounded-lg transition-colors ${on ? "bg-blue-600 text-white" : "text-gray-400 hover:text-white hover:bg-gray-800"}`}
+                className={`flex-1 text-[0.6875rem] sm:text-sm leading-tight font-semibold py-2 px-0.5 rounded-lg transition-colors ${on ? "bg-blue-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"}`}
               >
                 {t.label}
               </button>
@@ -992,7 +992,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                           aria-label={`Label for phone number ${i + 1}`}
                           value={p.label}
                           onChange={(e) => updatePhone(i, { label: e.target.value as PhoneLabel })}
-                          className="bg-gray-900 border border-gray-700 text-gray-200 rounded-xl px-2 py-3 text-sm focus:outline-none focus:border-blue-500 shrink-0"
+                          className="sc-field text-gray-200 px-2 py-3 text-sm focus:outline-none shrink-0"
                         >
                           <option value="mobile">Mobile</option>
                           <option value="office">Office</option>
@@ -1013,7 +1013,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                         // gray-400, not gray-500: same button as the wizard, same
                         // reason — gray-500 on gray-900 is 3.67:1, under the 4.5:1
                         // this 12px label needs (see NewCardWizard "Off card").
-                        className={`shrink-0 px-3 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${p.showOnCard ? "bg-blue-600 border-blue-600 text-white" : "bg-gray-900 border-gray-700 text-gray-400"}`}
+                        className={`shrink-0 px-3 py-2.5 rounded-xl text-xs font-semibold border transition-colors ${p.showOnCard ? "bg-blue-600 border-blue-600 text-white" : "bg-gray-800/60 border-transparent text-gray-300"}`}
                       >
                         {p.showOnCard ? "On card ✓" : "Off card"}
                       </button>
@@ -1513,7 +1513,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
           <div role="alert" className="mt-6 rounded-xl border border-amber-800/50 bg-amber-950/40 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
             <p className="text-amber-200 text-sm font-medium">Discard your unsaved changes?</p>
             <div className="flex items-center gap-2 shrink-0">
-              <button type="button" onClick={() => setConfirmDiscard(false)} className="text-sm font-semibold text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 px-4 py-2 rounded-full transition-colors">
+              <button type="button" onClick={() => setConfirmDiscard(false)} className="text-sm font-semibold text-white bg-gray-800 hover:bg-gray-700 border border-transparent px-4 py-2 rounded-full transition-colors">
                 Keep editing
               </button>
               <DashboardLink card={card.username} className="text-sm font-semibold text-white bg-red-600 hover:bg-red-500 px-4 py-2 rounded-full transition-colors">
@@ -1524,11 +1524,11 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
         )}
         <div className="flex gap-3 mt-6">
           {dirty && !confirmDiscard ? (
-            <button type="button" onClick={() => setConfirmDiscard(true)} className="flex-1 text-center border border-gray-700 text-gray-400 hover:border-gray-500 font-semibold py-3 rounded-full transition-colors text-sm">
+            <button type="button" onClick={() => setConfirmDiscard(true)} className="flex-1 text-center bg-gray-800/60 border border-transparent text-gray-200 hover:bg-gray-700 font-semibold py-3 rounded-full transition-colors text-sm">
               Cancel
             </button>
           ) : (
-            <DashboardLink card={card.username} className="flex-1 text-center border border-gray-700 text-gray-400 hover:border-gray-500 font-semibold py-3 rounded-full transition-colors text-sm">
+            <DashboardLink card={card.username} className="flex-1 text-center bg-gray-800/60 border border-transparent text-gray-200 hover:bg-gray-700 font-semibold py-3 rounded-full transition-colors text-sm">
               Cancel
             </DashboardLink>
           )}

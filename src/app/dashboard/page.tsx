@@ -1169,7 +1169,7 @@ export default async function DashboardPage({
                       { id: "locations", label: "Locations" },
                     ] as const).map((r) => (
                       <Link key={r.id} scroll={false} href={`?vrange=${r.id}${selectedCard ? `&card=${selectedCard}` : ""}`}
-                        className={`text-[0.6875rem] min-[375px]:text-xs font-semibold px-0.5 py-1.5 lg:px-2.5 lg:py-1 rounded-md whitespace-nowrap transition-colors inline-flex items-center justify-center gap-0.5 lg:gap-1 ${viewsRange === r.id ? "is-active text-white" : "text-gray-500 hover:text-gray-300"}`}>
+                        className={`text-[0.6875rem] min-[375px]:text-xs font-semibold px-0.5 py-1.5 lg:px-2.5 lg:py-1 rounded-md whitespace-nowrap transition-colors inline-flex items-center justify-center gap-0.5 lg:gap-1 ${viewsRange === r.id ? "bg-blue-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"}`}>
                         {r.label}
                         {r.id === "locations" && !isPro && (
                           // shrink-0: in a quarter-width phone tab a flex svg

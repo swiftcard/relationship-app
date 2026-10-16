@@ -376,7 +376,7 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
                       onChange={(e) => setComment(e.target.value)}
                       rows={3}
                       placeholder={picked?.placeholder ?? "Optional"}
-                      className="w-full bg-gray-900 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:border-blue-500"
+                      className="sc-field w-full px-3 py-2 text-white placeholder-gray-600 text-sm resize-none focus:outline-none focus:border-blue-500"
                     />
                     <div className="flex gap-2 mt-4">
                       <button type="button" onClick={() => setStep("why")} className={ghostBtn}>Back</button>

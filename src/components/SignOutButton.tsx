@@ -46,7 +46,7 @@ export default function SignOutButton({ variant = "text" }: { variant?: Variant 
 
   const triggerClass =
     variant === "danger"
-      ? "shrink-0 text-xs font-semibold text-red-400 hover:text-red-300 border border-red-900/60 hover:border-red-700 rounded-full px-4 py-2 transition-colors"
+      ? "shrink-0 text-xs font-semibold text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/15 border border-transparent rounded-full px-4 py-2 transition-colors"
       : "text-sm text-gray-500 hover:text-white transition-colors";
 
   return (
@@ -93,7 +93,7 @@ export default function SignOutButton({ variant = "text" }: { variant?: Variant 
                 type="button"
                 onClick={() => setConfirming(false)}
                 disabled={busy}
-                className="flex-1 rounded-full border border-gray-700 py-2.5 text-sm font-semibold text-gray-300 transition-colors hover:border-gray-600 hover:text-white disabled:opacity-40"
+                className="flex-1 rounded-full bg-gray-800/60 border border-transparent py-2.5 text-sm font-semibold text-gray-200 transition-colors hover:bg-gray-700 hover:text-white disabled:opacity-40"
               >
                 Cancel
               </button>

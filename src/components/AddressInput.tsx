@@ -15,7 +15,7 @@ export function formatAddress(a?: CardAddress | null): string {
 }
 
 const fieldCls =
-  "w-full bg-gray-900 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors";
+  "sc-field w-full px-4 py-3 text-white placeholder-gray-600 focus:outline-none transition-colors";
 
 export default function AddressInput({
   value,
@@ -35,7 +35,7 @@ export default function AddressInput({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="w-full text-left bg-gray-900 border border-gray-700 hover:border-gray-600 rounded-xl px-4 py-3 text-sm transition-colors"
+          className="sc-field w-full text-left px-4 py-3 hover:bg-gray-800/60 text-sm transition-colors"
         >
           {summary ? <span className="text-white">{summary}</span> : <span className="text-gray-600">Add address (optional)</span>}
         </button>
