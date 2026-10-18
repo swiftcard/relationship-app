@@ -9,6 +9,20 @@ import { PLAN_CHOSEN_KEY, sendWelcomeWhenCardLive } from "@/lib/welcome-email";
 import { revalidateUserCards } from "@/lib/card-page-data";
 import { provisionOfficeForOwner } from "@/lib/office-billing-sync";
 import { officeSubUserBlockMessage } from "@/lib/office-roles";
+import { isApplePaid } from "@/lib/iap-entitlement";
+import { isPaidPlan } from "@/lib/plan";
+
+const GRANT_NEEDS_NO_SUBSCRIPTION = "This code only works on an account with no subscription.";
+
+/** Paying for their own plan right now: a Stripe subscription, or Pro billed by Apple. */
+async function paysForOwnPlan(admin: ReturnType<typeof getAdminSupabase>, userId: string): Promise<boolean> {
+  const { data: p } = await admin
+    .from("profiles")
+    .select("plan, stripe_subscription_id, customization")
+    .eq("id", userId)
+    .maybeSingle();
+  return !!p?.stripe_subscription_id || (isPaidPlan(p?.plan as string | null) && isApplePaid(p?.customization));
+}
 
 // What the person is shown about a code — one shape for the signed-in
 // redemption and the signed-out preview, so /pricing describes a code the same
@@ -114,6 +128,16 @@ export async function POST(req: NextRequest) {
   });
   if (subUserBlock) return NextResponse.json({ error: subUserBlock }, { status: 403 });
 
+  // A GRANT code never lands on a real subscriber — Stripe OR Apple (audit
+  // B-11). On an Apple subscriber, _planSource stays "apple", so the expiry
+  // cron took the row for a paying customer and never ended the grant, and
+  // when Apple ended the Pro it saw an Office plan and left it: Office, with
+  // seats, free for good. Asked here, before anything is recorded, so a
+  // refused code is still unused (it used to be asked after, which spent it).
+  if (isGrantCode(promo) && await paysForOwnPlan(admin, user.id)) {
+    return NextResponse.json({ error: GRANT_NEEDS_NO_SUBSCRIPTION }, { status: 409 });
+  }
+
   // Check if user already redeemed it
   const { data: existing } = await admin
     .from("promo_code_redemptions")
@@ -186,14 +210,12 @@ export async function POST(req: NextRequest) {
       .eq("id", user.id)
       .maybeSingle();
 
-    // Never touch a REAL subscriber: their plan is Stripe's to set, and writing
-    // plan_expires_at onto a paying account would have the cron downgrade
-    // someone who is still being charged.
-    if (prof?.stripe_subscription_id) {
-      return NextResponse.json(
-        { error: "This code only works on an account with no subscription." },
-        { status: 409 },
-      );
+    // Never touch a REAL subscriber: their plan is Stripe's (or Apple's) to
+    // set, and writing plan_expires_at onto a paying account would have the
+    // cron downgrade someone who is still being charged. Asked again here for
+    // a subscription that started between the check above and this write.
+    if (prof?.stripe_subscription_id || (isPaidPlan(prof?.plan as string | null) && isApplePaid(prof?.customization))) {
+      return NextResponse.json({ error: GRANT_NEEDS_NO_SUBSCRIPTION }, { status: 409 });
     }
 
     // A grant is a gift: it can only ever be at least what they already had

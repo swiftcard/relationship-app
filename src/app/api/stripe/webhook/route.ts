@@ -10,6 +10,7 @@ import { getOfficeBrand, stripBrandFromUserCards, memberFallbackPlan } from "@/l
 import { planFromPriceId } from "@/lib/subscription";
 import { PLAN_LIMITS } from "@/lib/plan";
 import { claimStripeEvent, finishStripeEvent, clearStripeEvent } from "@/lib/stripe-idempotency";
+import { cardFingerprintFor } from "@/lib/stripe-card-fingerprint";
 import { reportError } from "@/lib/report-error";
 import { insertNotification } from "@/lib/notify";
 import { sendPushToUser } from "@/lib/push";
@@ -434,8 +435,10 @@ export async function POST(req: NextRequest) {
         } catch {
           sub = await retrieveSub();
         }
-        const pm = sub.default_payment_method as Stripe.PaymentMethod | null;
-        paymentFingerprint = pm?.card?.fingerprint ?? null;
+        paymentFingerprint = await cardFingerprintFor(sub);
+        if (!paymentFingerprint && sub.trial_end) {
+          await reportError("stripe.webhook.trial_without_card_fingerprint", new Error("A trial checkout left no card to fingerprint"), { userId, subscription: sub.id });
+        }
         trialEndsAt = stripeTrialEndIso(sub);
         // trial_end is the moment billing starts. Also treat a $0.00 total
         // as a trial even if trial_end is somehow absent — a "receipt" for

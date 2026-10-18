@@ -87,10 +87,14 @@ async function applyEvent(
     // The plan columns, then only the customization keys the grant changed
     // (lib/customization-merge, audit B-03).
     const grant = appleGrantPatch(customization);
-    await admin
+    // A write that failed is thrown, not answered 200: RevenueCat only retries
+    // a non-2xx, and an acknowledged failure left a paying customer on Free
+    // until their next renewal (audit B-12).
+    const { error: grantError } = await admin
       .from("profiles")
       .update({ plan: grant.plan, plan_expires_at: grant.plan_expires_at })
       .eq("id", profile.id);
+    if (grantError) throw grantError;
     await writeCustomizationChanges(profile.id as string, profile.customization as Record<string, unknown> | null, grant.customization);
     // Apple's intro offer is the Pro trial in the app. Apple enforces one per
     // Apple ID itself; recording it here stops the WEB offering a second one.
@@ -105,10 +109,17 @@ async function applyEvent(
   }
 
   if (decision.action === "revoke") {
-    await admin
+    // The mirror of the grant check above (audit B-12): an EXPIRATION can
+    // arrive late too — RevenueCat retrying it after the customer had already
+    // re-subscribed — and it dropped a paying customer to Free until their
+    // next renewal, a month or a year away. Only a definite "still active"
+    // stops it, so an outage never keeps someone who stopped paying on Pro.
+    if ((await rcProActive(profile.id as string)) === true) return "stale_revoke";
+    const { error: revokeError } = await admin
       .from("profiles")
       .update({ plan: "free" })
       .eq("id", profile.id);
+    if (revokeError) throw revokeError;
     await mergeCustomization(profile.id as string, { set: {}, remove: ["_planSource"] });
     // Same "Pro ended — choose" experience as a Stripe cancellation.
     await markProEnded(profile.id as string, { wasTrial: opts.periodType?.toUpperCase() === "TRIAL" });

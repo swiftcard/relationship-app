@@ -20,6 +20,8 @@ export async function rcProActive(uid: string): Promise<boolean | null> {
     const r = await fetch(`https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(uid)}`, {
       headers: { Authorization: `Bearer ${secret}` },
       cache: "no-store",
+      // No answer is "unknown" (null), never a hung webhook (audit I-01).
+      signal: AbortSignal.timeout(8_000),
     });
     if (!r.ok) return null;
     const d = await r.json();
