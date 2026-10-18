@@ -72,6 +72,20 @@ const parseJson = (text: string | null): unknown => {
   try { return JSON.parse(m[0]); } catch { return null; }
 };
 
+/**
+ * What KIND of contact detail a rejected redraw still carried, for the log:
+ * "email", "phone", "website", "address". The values themselves are the
+ * details printed on someone's card, often a third party's, and a log line is
+ * kept where no account deletion reaches (audit SEC-03).
+ */
+function leakKinds(leaks: readonly string[]): string[] {
+  return leaks.map((l) =>
+    /@/.test(l) ? "email"
+      : /\d[\d\s().+-]{6,}\d/.test(l) ? "phone"
+      : /^(https?:\/\/|www\.)|\.[a-z]{2,}(\/|$)/i.test(l) ? "website"
+      : "address");
+}
+
 export async function POST(request: NextRequest) {
   const userSupabase = await createClient();
   const { data: { user } } = await userSupabase.auth.getUser();
@@ -173,7 +187,9 @@ export async function POST(request: NextRequest) {
     // were indistinguishable the first time this failed in production.
     console.error(
       `[design-transfer] measurement failed for ${user.id}:`,
-      measureRaw === null ? "aiVision returned null" : `unusable: ${String(measureRaw).slice(0, 300)}`,
+      // The length, never the text: it is what was read off someone's card
+      // (audit SEC-03).
+      measureRaw === null ? "aiVision returned null" : `unusable (${String(measureRaw).length} chars)`,
     );
     return NextResponse.json({ error: "generation_failed" }, { status: 502 });
   }
@@ -235,7 +251,7 @@ export async function POST(request: NextRequest) {
     if (image) { art = image; break; }
     console.error(
       `[design-transfer] artwork attempt ${attempt + 1} rejected for ${user.id}:`,
-      [...problems.leaks, ...(problems.photo ? ["(looks like a photo of paper)"] : []), ...(problems.scene ? ["(card drawn small in a scene)"] : [])].join(", "),
+      [...leakKinds(problems.leaks), ...(problems.photo ? ["(looks like a photo of paper)"] : []), ...(problems.scene ? ["(card drawn small in a scene)"] : [])].join(", "),
     );
     last = problems;
   }
@@ -245,7 +261,7 @@ export async function POST(request: NextRequest) {
     // measurement missed a line, it is still on there and must not ship.
     const { image, problems } = await check({ data: Buffer.from(masked.imageBase64, "base64"), mediaType: "image/jpeg" });
     if (image) { art = image; artworkFrom = "masked-source"; }
-    else console.error(`[design-transfer] masked source rejected for ${user.id}:`, [...problems.leaks, ...(problems.photo ? ["(photo look)"] : []), ...(problems.scene ? ["(scene)"] : [])].join(", "));
+    else console.error(`[design-transfer] masked source rejected for ${user.id}:`, [...leakKinds(problems.leaks), ...(problems.photo ? ["(photo look)"] : []), ...(problems.scene ? ["(scene)"] : [])].join(", "));
   }
   console.log(`[design-transfer] ${user.id}: source ${prepared.kind}${prepared.flattened ? " (cropped)" : ""}, masked ${maskBoxes(face).length} boxes, artwork from ${artworkFrom}`);
 

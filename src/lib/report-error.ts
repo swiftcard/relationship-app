@@ -10,6 +10,7 @@
 // Never throws: reporting an error must not itself break the path that failed.
 
 import { isRateLimited } from "@/lib/rate-limit";
+import { scrubDeep, scrubString } from "@/lib/sentry-scrub";
 
 const ALERT_URL = process.env.ALERT_WEBHOOK_URL;
 const APP_ENV = process.env.VERCEL_ENV || process.env.NODE_ENV || "development";
@@ -37,7 +38,15 @@ export async function reportError(
   error: unknown,
   extra?: Record<string, unknown>,
 ): Promise<void> {
-  const err = error instanceof Error ? error : new Error(String(error));
+  const raw = error instanceof Error ? error : new Error(String(error));
+  // Every sink below — the log line, the error_events row, the chat alert —
+  // gets the SCRUBBED report, as Sentry always did (lib/sentry-scrub). Callers
+  // pass a recipient, a sender, or an error whose text quotes the offending
+  // value, and those were written out verbatim, beyond the reach of any
+  // account deletion (audit SEC-03). Emails and phone numbers are redacted;
+  // keys that only ever hold a person's details are dropped.
+  const err = Object.assign(new Error(scrubString(raw.message)), { stack: raw.stack ? scrubString(raw.stack) : undefined });
+  extra = extra ? scrubDeep(extra) : undefined;
   const payload = {
     level: "error",
     context,

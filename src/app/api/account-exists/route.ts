@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { isRateLimited } from "@/lib/rate-limit";
 import { clientIp } from "@/lib/client-ip";
+import { VISITOR_COOKIE } from "@/lib/visit-identity";
 
 export const runtime = "nodejs";
 
@@ -17,9 +18,9 @@ const EMAIL_SHAPE = /^[a-z0-9._+-]{1,64}@[a-z0-9-]+(\.[a-z0-9-]+)+$/;
 //   2. The email they just shared is tied to an existing account (matches an
 //      account's auth email, a profile email, or a card's contact email).
 //
-// Boolean-only + rate-limited per IP so it can't be abused as an email
-// enumeration oracle, and it only ever answers about an address the visitor
-// themselves typed into a share form.
+// Boolean-only, rate-limited per IP, and only about an address THIS browser
+// shared on a card (below), so it can't be used as an email enumeration
+// oracle.
 export async function POST(req: NextRequest) {
   // 1. Signed-in caller → yes, without needing any email.
   try {
@@ -48,6 +49,29 @@ export async function POST(req: NextRequest) {
   const pattern = email.replace(/_/g, "\\_");
 
   const admin = getAdminSupabase();
+
+  // ONLY ABOUT AN ADDRESS THIS BROWSER SHARED (audit SEC-02). The nudge asks
+  // about the email the visitor typed into a card's share form, and that
+  // share left a contact stamped with this browser's sc_vid (httpOnly, set by
+  // the server). Without the tie, anyone could POST any address and learn
+  // whether it is a SwiftCard customer — 30 a time, from as many IPs as they
+  // liked. Now an address this browser never shared answers "no", which only
+  // means the signup nudge shows.
+  const visitorId = req.cookies.get(VISITOR_COOKIE)?.value ?? "";
+  if (!visitorId) return NextResponse.json({ exists: false });
+  try {
+    const { data: shared } = await admin
+      .from("leads")
+      .select("id")
+      .eq("visitor_id", visitorId)
+      .ilike("email", pattern)
+      .limit(1)
+      .maybeSingle();
+    if (!shared) return NextResponse.json({ exists: false });
+  } catch {
+    return NextResponse.json({ exists: false });
+  }
+
   try {
     // A profile whose contact email OR a card whose contact email matches means
     // this address already belongs to a SwiftCard account. ilike with no

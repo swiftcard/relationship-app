@@ -29,6 +29,35 @@ import { sameContactFill } from "@/lib/same-contact";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
+/**
+ * Is this browser already known as THIS contact? Its first share stamped the
+ * contact with its visitor id, or bound it in contact_devices (the binding a
+ * confirmed device keeps, until superseded or marked wrong). A typed phone
+ * number alone proves nothing (audit SEC-01). Any doubt reads as "no", which
+ * only means the repeat share changes nothing.
+ */
+async function isKnownBrowserOf(
+  admin: ReturnType<typeof getAdminSupabase>,
+  lead: { id: string; visitor_id?: string | null },
+  visitorId: string | null | undefined,
+): Promise<boolean> {
+  if (!visitorId) return false;
+  if (lead.visitor_id && lead.visitor_id === visitorId) return true;
+  try {
+    const { data, error } = await admin
+      .from("contact_devices")
+      .select("id")
+      .eq("lead_id", lead.id)
+      .eq("visitor_id", visitorId)
+      .is("superseded_at", null)
+      .is("wrong_at", null)
+      .limit(1);
+    return !error && !!data?.length;
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { name, email, phone, company, message, card_owner, tags, source, visitor_id: client_visitor_id } = await req.json();
@@ -203,9 +232,17 @@ export async function POST(req: NextRequest) {
     // the contact lacked is added — a missing email or company, and a new
     // message appended — never overwriting anything the owner has edited.
     // Nothing to reconcile on SMS consent: this route cannot change it.
+    //
+    // ONLY THE SAME PERSON (audit SEC-01). The match is on a phone number
+    // anyone can type, so a stranger who knew someone's number could append
+    // text to that contact (pushing the owner's own message out), fill its
+    // email, and claim the contact's device identity. Now a repeat share
+    // changes the contact only from a browser already known as that contact
+    // (bound by its first share), and the answer is the same as a new share's,
+    // so it reveals nothing about who is already in whose contacts.
     const { data: knownRows } = await admin
       .from("leads")
-      .select("id, email, company, message")
+      .select("id, email, company, message, visitor_id")
       .eq("card_owner", card_owner)
       .eq("phone", phone)
       .not("tags", "cs", "{demo}")
@@ -213,7 +250,8 @@ export async function POST(req: NextRequest) {
       .limit(1);
     const known = knownRows?.[0];
     if (known) {
-      const fill = sameContactFill(known, { email, company, message });
+      const sameBrowser = await isKnownBrowserOf(admin, known as { id: string; visitor_id?: string | null }, visitor_id);
+      const fill = sameBrowser ? sameContactFill(known, { email, company, message }) : null;
       if (fill) {
         await admin.from("leads").update(fill).eq("id", known.id);
         // What they just added belongs in the CRM too — it only ever reached
@@ -227,15 +265,16 @@ export async function POST(req: NextRequest) {
           if (loaded) await syncLeadToAllCrms(loaded.lead, loaded.capturedBy, { mode: "update", attachNote: "message" in fill });
         });
       }
-      // This browser is theirs too, exactly as a first send binds it below, so
-      // a re-share from a new phone is still recognised on later visits.
-      if (!(await isOwnerRequest(admin, card_owner).catch(() => false))) {
+      // Refreshes the binding of a browser that is already theirs. A NEW
+      // browser is never bound from a typed phone number: that is the device
+      // identity a stranger could otherwise take over.
+      if (sameBrowser && !(await isOwnerRequest(admin, card_owner).catch(() => false))) {
         after(
           bindFormDevice(admin, { leadId: known.id as string, ownerId: ownerProfile.id as string, visitorId: visitor_id, email, phone })
             .catch((e) => reportError("leads.bindFormDevice", e)),
         );
       }
-      return attachVisitIdentity(NextResponse.json({ success: true, deduped: true }), visitIdentity);
+      return attachVisitIdentity(NextResponse.json({ success: true }), visitIdentity);
     }
 
     // Free plan: 5 new leads/month. We NEVER reject a visitor's info — over the

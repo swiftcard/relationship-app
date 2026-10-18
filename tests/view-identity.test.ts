@@ -566,14 +566,18 @@ describe("the pipeline is wired the way the tests assume", () => {
     expect(leadsSrc).toMatch(/const visitor_id = visitIdentity\.visitorId;/);
     // Every success exit sets the cookie, including the deduped re-submit.
     expect(leadsSrc).toMatch(/attachVisitIdentity\(NextResponse\.json\(\{ success: true \}\), visitIdentity\)/);
-    expect(leadsSrc).toMatch(/attachVisitIdentity\(NextResponse\.json\(\{ success: true, deduped: true \}\), visitIdentity\)/);
+    // (The re-submit now answers exactly like a new share — audit SEC-01 — so
+    // both exits are the same call.)
+    expect(leadsSrc.match(/attachVisitIdentity\(NextResponse\.json\(\{ success: true \}\), visitIdentity\)/g)?.length).toBeGreaterThanOrEqual(2);
     // A minted id is unique per request, so it must not narrow the double-submit
     // dedupe. The same-person check (2026-10-06) is card + phone only — no
     // visitor id at all, so neither a minted id nor another device gets a
     // second contact through.
     const knownQuery = leadsSrc.slice(leadsSrc.indexOf("const { data: knownRows }"), leadsSrc.indexOf("const known = knownRows"));
     expect(knownQuery).toMatch(/\.eq\("phone", phone\)/);
-    expect(knownQuery).not.toMatch(/visitor_id/);
+    // Never FILTERED by it. (It is read back since audit SEC-01, to decide
+    // whether this browser may change the contact — not whether it matches.)
+    expect(knownQuery).not.toMatch(/\.(eq|is|in|or)\("visitor_id"/);
   });
 
   it("a lead submitted by a browser whose storage was wiped still lands on the cookie's id", () => {
