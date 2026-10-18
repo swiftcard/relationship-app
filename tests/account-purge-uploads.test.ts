@@ -21,7 +21,7 @@ function fakeAdmin(buckets: Record<string, string[]>) {
 
   const table = () => {
     const chain: Record<string, unknown> = {};
-    for (const m of ["select", "delete", "update", "eq", "in", "maybeSingle", "single"]) {
+    for (const m of ["select", "delete", "update", "eq", "in", "or", "not", "maybeSingle", "single"]) {
       chain[m] = () => chain;
     }
     // Awaiting the chain yields an empty result set.

@@ -141,12 +141,15 @@ export async function POST(req: NextRequest) {
   // Check if user already redeemed it
   const { data: existing } = await admin
     .from("promo_code_redemptions")
-    .select("id")
+    .select("id, consumed_at")
     .eq("code_id", promo.id)
     .eq("user_id", user.id)
     .single();
 
-  if (existing) {
+  // A grant is spent the moment it is applied. A money-off or free-days code
+  // only once a purchase with it completes (consumed_at): a checkout they
+  // walked away from has cost them nothing, and they can apply it again.
+  if (existing && (isGrantCode(promo) || existing.consumed_at)) {
     return NextResponse.json({ error: "You have already used this promo code" }, { status: 409 });
   }
 
@@ -169,6 +172,17 @@ export async function POST(req: NextRequest) {
     if (promo.plan_target === "pro" && plan === "free") {
       return NextResponse.json({ error: "This code is for accounts that already subscribe." }, { status: 403 });
     }
+  }
+
+  // A money-off or free-days code is only CHECKED here (audit B-18). It used
+  // to be recorded and counted on every Apply, so a flyer code with 50 uses
+  // ran out after 50 people TRIED it, whether or not anyone bought, and real
+  // buyers were told it had "reached its usage limit". Checkout claims the use
+  // when it opens a payment page for it, the webhook marks it spent when the
+  // purchase completes, and the daily cron gives back a claim whose checkout
+  // was abandoned (releaseAbandonedPromoClaims).
+  if (!isGrantCode(promo)) {
+    return NextResponse.json({ success: true, promo: promoPayload(promo) });
   }
 
   // Record the redemption. The UNIQUE(code_id, user_id) constraint is the

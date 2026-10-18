@@ -214,6 +214,15 @@ export async function POST(req: NextRequest) {
         // claim (typed on /pricing, then left Stripe without paying). The cap
         // and audience were checked above for a new claim.
         let redemption = check.redemption;
+        if (redemption) {
+          // Still wanted: this new payment page restarts the clock the daily
+          // release of abandoned claims reads (lib/promo-claim, audit B-18).
+          await getAdminSupabase()
+            .from("promo_code_redemptions")
+            .update({ redeemed_at: new Date().toISOString() })
+            .eq("id", redemption.id)
+            .is("consumed_at", null);
+        }
         if (!redemption) {
           const admin = getAdminSupabase();
           const { data: inserted } = await admin

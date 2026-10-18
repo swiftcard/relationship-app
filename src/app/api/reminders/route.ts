@@ -39,6 +39,7 @@ import { expireFreeMonths } from "@/lib/referral-server";
 import { purgeExpiredDeletedAccounts, reconcileDeletedSubscriptions } from "@/lib/account-purge";
 import { applyDueSeatReductions } from "@/lib/office-scheduled-seats";
 import { releaseOrphanedOffices } from "@/lib/office-billing-sync";
+import { releaseAbandonedPromoClaims } from "@/lib/promo-claim";
 import { mirrorPendingPromosToApple, turnOffUsedUpAppleOffers } from "@/lib/apple-offer-codes";
 import { insertNotification } from "@/lib/notify";
 import { officeEndedNotice } from "@/lib/billing-state";
@@ -265,6 +266,15 @@ export async function GET(req: NextRequest) {
     orphanMembersReleased = await releaseOrphanedOffices(supabase);
   } catch (e) {
     await reportError("reminders.release-orphaned-offices", e);
+  }
+
+  // Promo uses claimed by a checkout nobody finished go back to the code, so
+  // a capped code is used up by buyers, not by people who looked (audit B-18).
+  let promoClaimsReleased = 0;
+  try {
+    promoClaimsReleased = await releaseAbandonedPromoClaims(supabase);
+  } catch (e) {
+    await reportError("reminders.release-promo-claims", e);
   }
 
   // Promo codes not on Apple yet (made before App Store Connect was
@@ -806,5 +816,5 @@ export async function GET(req: NextRequest) {
   }
   // === END PRESET-BASED SEQUENCE PROCESSING ===
 
-  return NextResponse.json({ sent: totalSent, checkedHour: currentUTCHour, downgraded, purged, seatReductionsApplied, orphanMembersReleased, subscriptionsStopped, appleOfferCodesMade, crmCatchUp });
+  return NextResponse.json({ sent: totalSent, checkedHour: currentUTCHour, downgraded, purged, seatReductionsApplied, orphanMembersReleased, promoClaimsReleased, subscriptionsStopped, appleOfferCodesMade, crmCatchUp });
 }

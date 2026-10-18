@@ -32,14 +32,20 @@ export function isPurgeDue(deletionAtIso: string | null | undefined, nowMs: numb
   return nowMs - at >= PURGE_GRACE_DAYS * 24 * 60 * 60 * 1000;
 }
 
-// Each table delete is best-effort: a missing table/column in some environment
-// must never block the core deletion (cards → profile → auth user). We log and
-// continue rather than throw.
-async function safeDelete(fn: () => PromiseLike<unknown>): Promise<void> {
+// A table or column this environment doesn't have is nothing to delete, never
+// a failure. Anything else is: supabase-js RESOLVES with { error } rather than
+// throwing, so the old try/catch saw no failure at all — a delete that errored
+// or timed out was skipped, the profile and auth user were deleted next, and
+// what was left (contacts with names, phones, emails) was unreachable for good
+// (audit B-17). Returns whether the step succeeded.
+const NOTHING_THERE = new Set(["42P01", "42703", "PGRST204", "PGRST205"]);
+async function safeDelete(fn: () => PromiseLike<unknown>): Promise<boolean> {
   try {
-    await fn();
-  } catch {
-    /* table/column may not exist in this schema — keep purging */
+    const res = (await fn()) as { error?: { code?: string } | null } | null | undefined;
+    const error = res && typeof res === "object" ? res.error : null;
+    return !error || NOTHING_THERE.has(error.code ?? "");
+  } catch (e) {
+    return NOTHING_THERE.has((e as { code?: string } | null)?.code ?? "");
   }
 }
 
@@ -57,6 +63,12 @@ type Admin = ReturnType<typeof getAdminSupabase>;
 // Stripe can't be reached the account is left exactly as it is and retried on
 // the next run. Returns whether the account was purged.
 export async function purgeUserData(admin: Admin, userId: string): Promise<boolean> {
+  // Every step that fails is named here; any failure stops the purge before
+  // the account itself is deleted, so tomorrow's run can finish the job.
+  const failed: string[] = [];
+  const del = async (step: string, fn: () => PromiseLike<unknown>) => {
+    if (!(await safeDelete(fn))) failed.push(step);
+  };
   const { data: billing } = await admin.from("profiles").select("stripe_subscription_id").eq("id", userId).maybeSingle();
   const subId = (billing?.stripe_subscription_id as string | null) ?? null;
   if (subId) {
@@ -67,7 +79,7 @@ export async function purgeUserData(admin: Admin, userId: string): Promise<boole
       )).catch(() => {});
       return false;
     }
-    await safeDelete(() => admin.from("profiles").update({ stripe_subscription_id: null }).eq("id", userId));
+    await del("profiles", () => admin.from("profiles").update({ stripe_subscription_id: null }).eq("id", userId));
   }
 
   // Card usernames own the lead/view/event data (keyed by slug, not user_id).
@@ -89,24 +101,29 @@ export async function purgeUserData(admin: Admin, userId: string): Promise<boole
     leadIds = (leads ?? []).map((l) => l.id as string).filter(Boolean);
   }
   if (leadIds.length) {
-    await safeDelete(() => admin.from("lead_messages").delete().in("lead_id", leadIds));
-    await safeDelete(() => admin.from("lead_reminders").delete().in("lead_id", leadIds));
-    await safeDelete(() => admin.from("message_opt_outs").delete().in("lead_id", leadIds));
+    await del("lead_messages", () => admin.from("lead_messages").delete().in("lead_id", leadIds));
+    await del("lead_reminders", () => admin.from("lead_reminders").delete().in("lead_id", leadIds));
+    await del("message_opt_outs", () => admin.from("message_opt_outs").delete().in("lead_id", leadIds));
   }
+
+  // The private links and device bindings sent to their contacts — keyed by
+  // the owner, and gone before the leads they point at.
+  await del("contact_devices", () => admin.from("contact_devices").delete().eq("owner_id", userId));
+  await del("contact_links", () => admin.from("contact_links").delete().eq("owner_id", userId));
 
   // Slug-scoped analytics + the leads themselves.
   if (usernames.length) {
-    await safeDelete(() => admin.from("leads").delete().in("card_owner", usernames));
-    await safeDelete(() => admin.from("card_events").delete().in("card_owner_username", usernames));
+    await del("leads", () => admin.from("leads").delete().in("card_owner", usernames));
+    await del("card_events", () => admin.from("card_events").delete().in("card_owner_username", usernames));
     // analytics_events is keyed by USERNAME, not user_id. The delete further
     // down used .eq("user_id", …) against a column that doesn't exist, so
     // safeDelete swallowed the error and nothing was ever removed — the rows
     // outlived the account (a deletion-promise gap) and would be inherited by
     // whoever registered the slug next.
-    await safeDelete(() => admin.from("analytics_events").delete().in("username", usernames));
+    await del("analytics_events", () => admin.from("analytics_events").delete().in("username", usernames));
   }
   if (viewKeys.length) {
-    await safeDelete(() => admin.from("card_views").delete().in("username", viewKeys));
+    await del("card_views", () => admin.from("card_views").delete().in("username", viewKeys));
   }
 
   // If this user OWNS an office, release its members (back to free, unbranded)
@@ -126,27 +143,34 @@ export async function purgeUserData(admin: Admin, userId: string): Promise<boole
         // them. And their own fallback, not a flat Free — a member paying for
         // their own Pro keeps it (the same rule as every other release path).
         const fallback = await memberFallbackPlan(m.user_id as string).catch(() => "free" as const);
-        await safeDelete(() => admin.from("profiles").update({ plan: fallback, office_id: null }).eq("id", m.user_id as string).eq("office_id", officeId));
+        await del("profiles", () => admin.from("profiles").update({ plan: fallback, office_id: null }).eq("id", m.user_id as string).eq("office_id", officeId));
       }
     }
-    await safeDelete(() => admin.from("office_members").delete().eq("office_id", officeId));
-    await safeDelete(() => admin.from("offices").delete().eq("id", officeId));
+    await del("office_members", () => admin.from("office_members").delete().eq("office_id", officeId));
+    await del("office_notifications", () => admin.from("office_notifications").delete().eq("office_id", officeId));
+    await del("offices", () => admin.from("offices").delete().eq("id", officeId));
   }
 
   // Everything keyed directly to this user_id.
-  await safeDelete(() => admin.from("office_members").delete().eq("user_id", userId)); // memberships they hold
-  await safeDelete(() => admin.from("notifications").delete().eq("user_id", userId));
-  await safeDelete(() => admin.from("integrations").delete().eq("user_id", userId));
-  await safeDelete(() => admin.from("push_subscriptions").delete().eq("user_id", userId));
-  await safeDelete(() => admin.from("email_preferences").delete().eq("user_id", userId));
-  await safeDelete(() => admin.from("email_logs").delete().eq("user_id", userId));
+  await del("office_members", () => admin.from("office_members").delete().eq("user_id", userId)); // memberships they hold
+  await del("notifications", () => admin.from("notifications").delete().eq("user_id", userId));
+  await del("integrations", () => admin.from("integrations").delete().eq("user_id", userId));
+  await del("push_subscriptions", () => admin.from("push_subscriptions").delete().eq("user_id", userId));
+  await del("email_preferences", () => admin.from("email_preferences").delete().eq("user_id", userId));
+  await del("email_logs", () => admin.from("email_logs").delete().eq("user_id", userId));
   // (analytics_events is slug-keyed and handled above — it has no user_id column.)
-  await safeDelete(() => admin.from("promo_code_redemptions").delete().eq("user_id", userId));
-  await safeDelete(() => admin.from("referrals").delete().eq("referrer_id", userId));
+  await del("promo_code_redemptions", () => admin.from("promo_code_redemptions").delete().eq("user_id", userId));
+  await del("referrals", () => admin.from("referrals").delete().eq("referrer_id", userId));
   // Neither has a foreign key to the account, so deleting the auth user left
   // them behind: which invite code it used, and the audit trail naming it.
-  await safeDelete(() => admin.from("signup_invite_uses").delete().eq("user_id", userId));
-  await safeDelete(() => admin.from("audit_logs").delete().or(`actor_id.eq.${userId},target_id.eq.${userId}`));
+  await del("signup_invite_uses", () => admin.from("signup_invite_uses").delete().eq("user_id", userId));
+  // Never purged before (audit B-17): their devices, Sign in with Apple's
+  // refresh token, every push sent to them, and their unsubscribes.
+  await del("user_devices", () => admin.from("user_devices").delete().eq("user_id", userId));
+  await del("apple_refresh_tokens", () => admin.from("apple_refresh_tokens").delete().eq("user_id", userId));
+  await del("push_log", () => admin.from("push_log").delete().eq("user_id", userId));
+  await del("unsubscribe_events", () => admin.from("unsubscribe_events").delete().eq("user_id", userId));
+  await del("audit_logs", () => admin.from("audit_logs").delete().or(`actor_id.eq.${userId},target_id.eq.${userId}`));
 
   // Stored card IMAGES live in PUBLIC storage buckets keyed by card slug, so
   // deleting the rows above does not remove them: without this, a purged
@@ -177,21 +201,40 @@ export async function purgeUserData(admin: Admin, userId: string): Promise<boole
   // what it just listed, so the next list from the top returns the next batch.
   // The pass cap is a safety stop, not the expected exit — if a remove ever
   // fails silently, this ends rather than spinning forever.
-  await safeDelete(async () => {
+  await del("card-uploads", async () => {
     for (let pass = 0; pass < 100; pass++) {
       const { data: files } = await admin.storage.from("card-uploads").list(userId, { limit: 100 });
       if (!files?.length) return;
       const { error } = await admin.storage
         .from("card-uploads")
         .remove(files.map((f) => `${userId}/${f.name}`));
-      if (error) return;
+      if (error) throw error;
     }
   });
 
+  // Anything left behind would be unreachable once the profile is gone: stop
+  // here, say what failed, and let the next daily run finish the job.
+  if (failed.length) {
+    await reportError("account.purge-incomplete", new Error(`Purge of ${userId} stopped before the account: ${failed.join(", ")}`)).catch(() => {});
+    return false;
+  }
+
   // Cards, then the profile row, then the auth identity.
-  await safeDelete(() => admin.from("cards").delete().eq("user_id", userId));
-  await safeDelete(() => admin.from("profiles").delete().eq("id", userId));
-  await safeDelete(() => admin.auth.admin.deleteUser(userId));
+  await del("cards", () => admin.from("cards").delete().eq("user_id", userId));
+  if (failed.length) {
+    await reportError("account.purge-incomplete", new Error(`Purge of ${userId} could not delete its cards`)).catch(() => {});
+    return false;
+  }
+  await del("profiles", () => admin.from("profiles").delete().eq("id", userId));
+  if (failed.length) {
+    await reportError("account.purge-incomplete", new Error(`Purge of ${userId} could not delete its profile`)).catch(() => {});
+    return false;
+  }
+  // The profile is gone, so no later run will find this account again: a
+  // sign-in identity left behind must at least be seen.
+  if (!(await safeDelete(() => admin.auth.admin.deleteUser(userId)))) {
+    await reportError("account.purge-auth-user-left", new Error(`Purge of ${userId} deleted everything but the sign-in identity`)).catch(() => {});
+  }
   return true;
 }
 

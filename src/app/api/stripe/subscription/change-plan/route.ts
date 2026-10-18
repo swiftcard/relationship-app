@@ -4,7 +4,6 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { getStripe } from "@/lib/stripe";
 import { PLAN_LIMITS } from "@/lib/plan";
 import { priceIdForPlan, planFromPriceId, isUpgrade, DB_PLAN, type BillingPlan, type BillingInterval } from "@/lib/subscription";
-import { getOfficeSeatUsage } from "@/lib/office-seats";
 import { provisionOfficeForOwner, tearDownOfficeForOwner } from "@/lib/office-billing-sync";
 import { restorePendingSeatReduction } from "@/lib/office-scheduled-seats";
 import type Stripe from "stripe";
@@ -71,36 +70,44 @@ export async function POST(req: NextRequest) {
   // Perform the swap on Stripe with proration.
   try {
     let sub = (await getStripe().subscriptions.retrieve(profile.stripe_subscription_id)) as Stripe.Subscription;
+    if (!sub.items.data[0]) return NextResponse.json({ error: "Subscription has no billable item." }, { status: 400 });
+
+    // When staying on Office and the caller didn't explicitly ask to change
+    // seats, DEFAULT to the seats they've paid for — never to the plan minimum.
+    // The old code defaulted to 2, so an Office→Office call with seats omitted
+    // slammed quantity down to 2 and the webhook trim loop deleted active
+    // members. (billing audit #4)
+    //
+    // And a plan change never LOWERS seats (audit B-16). Swapped here, a
+    // reduction applied at once with a prorated credit — months of seats back
+    // on an annual plan — where the Team seats control keeps a removed seat
+    // paid until the billing date (free only within 24 hours of adding it).
+    // One rule for removing a seat, so this sends them there. Asked before a
+    // pending reduction is touched below, so a refusal changes nothing.
+    if (targetPlan === "office") {
+      const { data: officeRow } = wasOffice
+        ? await admin.from("offices").select("seats, scheduled_seats").eq("owner_id", subjectId).maybeSingle()
+        : { data: null };
+      const stripeQty = sub.items.data[0].quantity ?? PLAN_LIMITS.OFFICE_MIN_SEATS;
+      // During a scheduled reduction Stripe already holds the lower count; the
+      // seats they have paid for are the office's (lib/office-scheduled-seats).
+      const paidQty = officeRow?.scheduled_seats != null ? Math.max(stripeQty, (officeRow.seats as number | null) ?? 0) : stripeQty;
+      const requested = seatsProvided ? Math.floor(Number(body.seats)) : (wasOffice ? paidQty : PLAN_LIMITS.OFFICE_MIN_SEATS);
+      seats = Math.max(PLAN_LIMITS.OFFICE_MIN_SEATS, requested);
+      if (wasOffice && seats < paidQty) {
+        return NextResponse.json(
+          { error: "use_seats_control", message: `Your plan has ${paidQty} seats. To use fewer, lower them under Team seats in Plan and billing, then switch your plan here.` },
+          { status: 409 },
+        );
+      }
+    }
+
     // A pending seat reduction already sits in Stripe at the lower count (audit
     // B-01). A swap prorates against Stripe's count, so put the paid seats back
     // first, or the swap credits too little and re-charges seats already paid.
     if (wasOffice) sub = (await restorePendingSeatReduction(subjectId, sub)) ?? sub;
     const item = sub.items.data[0];
     if (!item) return NextResponse.json({ error: "Subscription has no billable item." }, { status: 400 });
-
-    // When staying on Office and the caller didn't explicitly ask to change
-    // seats, DEFAULT to the current quantity — never to the plan minimum. The
-    // old code defaulted to 2, so an Office→Office call with seats omitted
-    // slammed quantity down to 2 and the webhook trim loop deleted active
-    // members. And a reduction may never go below what is currently in use
-    // (owner + active + pending). (billing audit #4)
-    if (targetPlan === "office") {
-      const currentQty = item.quantity ?? PLAN_LIMITS.OFFICE_MIN_SEATS;
-      const requested = seatsProvided ? Math.floor(Number(body.seats)) : (wasOffice ? currentQty : PLAN_LIMITS.OFFICE_MIN_SEATS);
-      seats = Math.max(PLAN_LIMITS.OFFICE_MIN_SEATS, requested);
-      if (wasOffice && seats < currentQty) {
-        const { data: office } = await admin.from("offices").select("id").eq("owner_id", subjectId).maybeSingle();
-        if (office?.id) {
-          const usage = await getOfficeSeatUsage(office.id as string, currentQty);
-          if (seats < usage.used) {
-            return NextResponse.json(
-              { error: "seats_in_use", message: `You have ${usage.used} seats in use. Remove members before reducing below that, or reduce seats from the billing page.` },
-              { status: 409 }
-            );
-          }
-        }
-      }
-    }
 
     const current = planFromPriceId(item.price?.id);
     if (current && current.plan === targetPlan && current.interval === interval && targetPlan !== "office") {

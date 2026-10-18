@@ -641,7 +641,8 @@ function ChangePlanModal({ sub, onClose, onCancelInstead, onChanged }: {
         window.location.href = "/upgrade";
         return;
       }
-      if (!res.ok) { setErr(data.error || "Couldn't change plan."); return; }
+      // The sentence before the machine code (use_seats_control, seats_in_use).
+      if (!res.ok) { setErr(data.message || data.error || "Couldn't change plan."); return; }
       await onChanged(
         sub.plan === "office" && plan === "pro"
           ? `You're now on Pro (${interval}). Your teammates have moved to their own plans, and the unused part of Office is credited to your next invoice.`
