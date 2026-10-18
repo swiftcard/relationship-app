@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { uploadToPublicBucket } from "@/lib/public-bucket";
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { getOwnerUsernames } from "@/lib/owner-usernames";
@@ -72,10 +73,9 @@ export async function POST(req: NextRequest) {
   }
 
   const admin = getAdminSupabase();
-  await admin.storage.createBucket(BUCKET, { public: true }).catch(() => {}); // idempotent
-
+  // Created only if missing (lib/public-bucket, audit C02-001).
   const path = `${username}.png`;
-  const { error } = await admin.storage.from(BUCKET).upload(path, buffer, {
+  const { error } = await uploadToPublicBucket(admin, BUCKET, path, buffer, {
     contentType: "image/png",
     upsert: true,
     cacheControl: "60",

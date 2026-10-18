@@ -22,6 +22,7 @@ import {
 } from "@/lib/draft-claim";
 import { ensureUniqueUsername } from "@/lib/username";
 import { adoptGuestUploads } from "@/lib/guest-uploads";
+import { clampCardWrite } from "@/lib/card-limits";
 
 // Claim converts a guest's localStorage draft into a real `cards` row under the
 // SESSION user. It mirrors src/app/api/cards (field allow-list, username +
@@ -194,7 +195,10 @@ export async function POST(req: NextRequest) {
   // ── Build the insert (ownership: user_id is ALWAYS this session user) ─────
   const built = buildClaimInsert(user.id, (payload ?? {}) as Record<string, unknown>, treatAsPaidForDesign);
   if (!built.ok) return NextResponse.json({ error: built.error }, { status: built.status });
-  const insert: ClaimInsert = built.insert;
+  // Clamped to lib/card-limits, the most the card prints — as POST /api/cards
+  // and the PATCH route do. A claimed draft could store a 2,000-character
+  // title (audit C02-008).
+  const insert: ClaimInsert = clampCardWrite(built.insert);
   const designConverted = built.designConverted;
 
   // ── Upload deferred base64 images ─────────────────────────────────────────
@@ -229,6 +233,11 @@ export async function POST(req: NextRequest) {
     // An already-hosted headshot (e.g. imported): kept, same as the logo above.
     cust.photoUrl = imgs.photo;
   }
+  // Always the key, as POST /api/cards writes it: with no photoUrl at all the
+  // card reads as "legacy" and shows the ACCOUNT's photo (lib/card-media), so
+  // a card built without a headshot took whatever picture the account set
+  // later — another card's face (audit C02-008).
+  if (cust.photoUrl === undefined) cust.photoUrl = null;
 
   // ── Office uniform branding overlay (mirror api/cards) ────────────────────
   // Only auto-applied (and flagged is_office_card) on the account's FIRST card
@@ -320,6 +329,28 @@ export async function POST(req: NextRequest) {
 
   if (error || !card) {
     return NextResponse.json({ error: error?.message ?? "Couldn't create the card." }, { status: 500 });
+  }
+
+  // ONE CARD PER DRAFT, even when two claims ran at once (audit C02-008). The
+  // idempotency check above reads before it inserts, so a second tab or a
+  // doubled OAuth return both saw "not claimed" and both inserted — two cards,
+  // a Free account over its one, the sample contact seeded twice. Settled
+  // after the fact: the OLDEST card from this draft is the one; a racer
+  // deletes only the card it just made (nothing points at it yet) and answers
+  // with the survivor, before seeding anything.
+  if (safeDraftId) {
+    const { data: fromDraft } = await admin
+      .from("cards")
+      .select("id, username, customization, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
+    const twins = (fromDraft ?? []).filter((c) => (c.customization as Record<string, unknown> | null)?.[CLAIM_DRAFT_ID_KEY] === safeDraftId);
+    const first = twins[0];
+    if (first && first.id !== card.id) {
+      await admin.from("cards").delete().eq("id", card.id).eq("user_id", user.id);
+      return NextResponse.json({ slug: first.username, id: first.id, step: safeStep, first: count === 0, designConverted });
+    }
   }
 
   // First card on the account → seed a sample contact (mirror api/cards).

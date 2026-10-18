@@ -32,6 +32,11 @@ export const RESERVED_SLUGS = new Set([
   "links", "login", "office", "onboarding", "preview", "pricing", "privacy",
   "products", "profile", "r", "settings", "share", "sms-consent", "sms-terms",
   "templates", "terms", "testimonials", "unsubscribe", "upgrade", "welcome",
+  // Live pages the list missed (audit C02-003): a card at any of these was
+  // unreachable. tests/audit-round-20-cards now checks src/app itself, so a
+  // new top-level page can't be forgotten again.
+  "business-card-view-tracking", "download", "email", "faq", "link-in-bio-with-analytics",
+  "linkedin-connected", "pin", "review", "splash-preview",
   // platform/static paths
   "favicon", "robots", "sitemap", "manifest", "icon", "apple-icon",
   "opengraph-image", "_next", "well-known",
