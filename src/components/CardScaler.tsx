@@ -55,10 +55,21 @@ export default function CardScaler({ children, natural = DEFAULT_NATURAL }: { ch
   const [scale, setScale] = useState(0);
   const [height, setHeight] = useState(0);
 
+  const lastScaleRef = useRef(0);
   useEffect(() => {
     function recompute() {
-      const w = outerRef.current?.clientWidth ?? NATURAL;
+      // A 0 width is "not measurable yet", never "scale to nothing" — the
+      // same rule the boot script below has always used (`clientWidth||460`).
+      // Read as a real width it set scale 0, opacity 0, height 0, hiding the
+      // card the server HTML and the boot script had shown, until something
+      // resized: Safari's link previews and Quick Look render the page at 0
+      // width first, a background tab lays out lazily (audit C02-009). So a
+      // 0 keeps the last good scale, or the natural one before there is any.
+      const measured = outerRef.current?.clientWidth || 0;
+      if (!measured && lastScaleRef.current > 0) return;
+      const w = measured || NATURAL;
       const s = Math.min(1, w / NATURAL);
+      lastScaleRef.current = s;
       const naturalH = innerRef.current?.offsetHeight ?? Math.round(NATURAL / 1.75);
       setScale(s);
       setHeight(naturalH * s);
@@ -72,7 +83,13 @@ export default function CardScaler({ children, natural = DEFAULT_NATURAL }: { ch
     // display:none (mobile plan tabs, a closed modal) measures 0 correctly and
     // must not be reported.
     const collapseTimer = setTimeout(() => {
-      if (isCollapsedWhileVisible(outerRef.current)) reportCollapse(NATURAL);
+      // Not a page anyone is looking at — a prerender, a background tab, a
+      // zero-wide preview window — measures 0 for reasons that are not a
+      // defect, and reporting them buried the real ones (audit C02-009).
+      const unseen = document.visibilityState !== "visible"
+        || (document as Document & { prerendering?: boolean }).prerendering === true
+        || window.innerWidth === 0;
+      if (!unseen && isCollapsedWhileVisible(outerRef.current)) reportCollapse(NATURAL);
     }, COLLAPSE_CHECK_MS);
     return () => { ro.disconnect(); clearTimeout(collapseTimer); };
   }, [NATURAL]);
