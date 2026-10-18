@@ -32,6 +32,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (key in body) updates[key] = body[key];
   }
 
+  // The same rule as creating a card (api/cards, cards audit M5): an edit may
+  // not leave a card with no name. It rendered "Save 's contact" and a blank
+  // hero, and wrote a vCard with an empty FN — invalid — from any client that
+  // skips the editor's own check (an old build, the API) (audit C02-005).
+  if ("name" in updates && (typeof updates.name !== "string" || !updates.name.trim())) {
+    return NextResponse.json({ error: "invalid", message: "A name is required." }, { status: 400 });
+  }
+
   // Bring-back-online is the ONE offline transition an owner may make, and only
   // on a card that is not currently an office card.
   //

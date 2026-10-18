@@ -41,6 +41,8 @@ type Props = {
 import { legacySignatureContentSigV12, signatureContentSig } from "@/lib/signature-content";
 import { escapeHtml } from "@/lib/escape";
 import { toPngExact } from "@/lib/capture-exact";
+import { capturePainted } from "@/lib/capture-verify";
+import { SIGNATURE_CAPTURE_VERSION } from "@/lib/share-capture-version";
 
 async function fetchAsDataUrl(url: string): Promise<string | null> {
   try {
@@ -324,9 +326,15 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
       if (!(await stillWanted())) return null;
       const dataUrl = await toPngExact(el, opts);
       if (!dataUrl || dataUrl.length < 5000) { setCapture("error"); return null; } // blank guard
+      // The name, logo and photo must be IN the picture, not just in the DOM —
+      // the same check the share preview and Download PNG run (lib/capture-
+      // verify). WebKit can paint the card before they decode, and this image
+      // is hot-linked from every email already sent (audit C02-010).
+      const raster = () => toPngExact(el, opts).catch(() => null);
+      if (!(await capturePainted(el, cardData.name ?? "", dataUrl, w, raster))) { setCapture("error"); return null; }
       if (!aliveRef.current) return null;
       const res = await fetch("/api/card-signature", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dataUrl, username }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dataUrl, username, v: SIGNATURE_CAPTURE_VERSION }),
       });
       if (!res.ok) { setCapture("error"); return null; }
 

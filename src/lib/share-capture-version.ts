@@ -52,3 +52,11 @@ export const DROPPED_OLD_CAPTURES: ReadonlySet<string> = new Set([
 export const RETAKE_CAPTURES_AFTER: Readonly<Record<string, number>> = {
   "jordankhani-douglaselliman": Date.parse("2026-10-12T16:27:00Z"),
 };
+
+// The email signature's capture (EmailSignatureBox). 1 = pixel-verified like
+// the share preview — the name, logo and headshot must be IN the picture
+// (lib/capture-verify) — and sent with this number. The signature image is
+// hot-linked from every email the person ever sent, so the route refuses
+// anything older: a stale tab's unverified capture replaced the good one
+// everywhere at once (audit C02-002, C02-010).
+export const SIGNATURE_CAPTURE_VERSION = 1;
