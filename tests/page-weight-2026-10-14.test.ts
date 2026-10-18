@@ -9,30 +9,20 @@ import { drawQr, qrSvgMarkup, qrTarget } from "@/lib/qr-svg";
 const read = (p: string) => readFileSync(p, "utf8");
 const code = (p: string) => read(p).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
 
-describe("the homepage hero paints its poster first", () => {
+describe("the homepage hero paints with no media to download", () => {
   const home = code("src/app/page.tsx");
 
-  it("the first HTML holds no autoplaying <video> — HeroVideo adds it after load", () => {
+  // Owner, 2026-10-18: the networking video was replaced by the navy-tinted
+  // gradient from the launch posts. The hero must not quietly grow a video
+  // (the old LCP at 6.0 s) or a full-bleed photo back.
+  it("the hero has no <video>, no HeroVideo and no background photo", () => {
     expect(home).not.toMatch(/<video/);
-    expect(home).toContain("<HeroVideo />");
+    expect(home).not.toContain("HeroVideo");
+    expect(home).not.toContain("hero-bg-poster");
   });
 
-  it("the poster is an eager, high-priority <img> with sizes for a phone", () => {
-    const img = home.slice(home.indexOf('src="/hero-bg-poster.jpg'), home.indexOf("<HeroVideo />"));
-    expect(img).toMatch(/fetchPriority="high"/);
-    expect(img).toMatch(/loading="eager"/);
-    expect(img).toMatch(/srcSet="\/hero-bg-poster-640\.jpg 640w/);
-  });
-
-  it("HeroVideo waits for load + idle, honours reduced motion and Save-Data, and plays the small file", () => {
-    const src = code("src/components/site/HeroVideo.tsx");
-    expect(src).toMatch(/prefers-reduced-motion: reduce/);
-    expect(src).toMatch(/saveData/);
-    expect(src).toMatch(/addEventListener\("load"/);
-    expect(src).toMatch(/requestIdleCallback/);
-    expect(src).toContain('src="/hero-bg-720.mp4"');
-    expect(src).not.toContain('"/hero-bg.mp4');
-    expect(src).toMatch(/motion-reduce:hidden/);
+  it("the hero background is the launch-post gradient", () => {
+    expect(home).toContain("radial-gradient(110% 75% at 82% 8%, #EDF2FB 0%, #DDE6F6 45%, #CFDBF1 100%)");
   });
 });
 

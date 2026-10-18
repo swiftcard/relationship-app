@@ -22,7 +22,6 @@ import NativeHidden from "@/components/NativeHidden";
 import NativeHomeGate from "@/components/NativeHomeGate";
 import GuestFlowReset from "@/components/GuestFlowReset";
 import BadgeCloseButton from "@/components/BadgeCloseButton";
-import HeroVideo from "@/components/site/HeroVideo";
 import { QrAsImages } from "@/components/card-templates/qr-render-mode";
 import "./home.css";
 
@@ -100,42 +99,16 @@ export default function Home() {
       <main className="hp overflow-clip">
         {/* ═══════════════ HERO ═══════════════ */}
         <section className="relative flex flex-col justify-center min-h-[calc(100svh-56px)] pt-24 pb-14 overflow-hidden">
-          {/* Ambient video background (owner request 2026-08-19): a bright
-              networking scene looping muted behind the hero. The white wash is
-              strongest over the text and nearly clear on the right so the
-              footage reads as footage. motion-reduce hides the video; the
-              poster paints the first frame before the file arrives.
-              Owner, 2026-10-02: "way too white" — the wash was lightened
-              (0.88/0.70 → 0.74/0.52, phones 0.46 → 0.30) and the hero's small
-              text (subtitle, feature list) went from grey to ink to keep it
-              readable: measured against the footage it now reads BETTER than
-              before (darkest spot 6.1:1 desktop, 4.7:1 phone; was 5.3 / 4.3).
-              The first frame is a real, eager, high-priority <img> — the
-              page's Largest Contentful Paint — and HeroVideo lays the footage
-              over it only after the page has loaded (SEO audit 2026-10-14:
-              as an autoplaying <video> the hero was the LCP at 6.0 s). */}
-          {/* eslint-disable-next-line @next/next/no-img-element -- the LCP element: a plain <img> is in the first HTML, with no loader in front of it */}
-          <img
-            src="/hero-bg-poster.jpg?v=2"
-            srcSet="/hero-bg-poster-640.jpg 640w, /hero-bg-poster-1024.jpg 1024w, /hero-bg-poster.jpg?v=2 1600w"
-            sizes="100vw"
-            width={1600}
-            height={900}
-            alt=""
-            fetchPriority="high"
-            loading="eager"
-            decoding="async"
-            className="absolute inset-0 w-full h-full object-cover"
-            aria-hidden="true"
-          />
-          <HeroVideo />
+          {/* Background (owner, 2026-10-18): the navy-tinted near-white from
+              the pinned launch posts replaced the networking video. Pure CSS,
+              so nothing to download and nothing between the visitor and the
+              headline. The ink text and white "See how it works" button were
+              already drawn for a light hero. */}
           <div
             className="absolute inset-0 pointer-events-none"
             aria-hidden="true"
-            style={{ background: "linear-gradient(90deg, rgba(255,255,255,0.74) 0%, rgba(255,255,255,0.52) 48%, rgba(255,255,255,0.1) 78%, rgba(255,255,255,0) 100%)" }}
+            style={{ background: "radial-gradient(110% 75% at 82% 8%, #EDF2FB 0%, #DDE6F6 45%, #CFDBF1 100%)" }}
           />
-          {/* Phones: the text spans the full width, so one even wash more. */}
-          <div className="absolute inset-0 pointer-events-none sm:hidden" aria-hidden="true" style={{ background: "rgba(255,255,255,0.3)" }} />
 
           <div className="relative w-full min-w-0 max-w-7xl mx-auto px-5 sm:px-6 lg:flex lg:items-center lg:gap-8">
             <div className="max-w-[640px] lg:flex-1">
