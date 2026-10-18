@@ -136,7 +136,7 @@ describe("the client tracker fires once per visit, not once per JS context", () 
   it("declares the surface explicitly so the links page can carry real ?source= attribution", () => {
     expect(tracker).toMatch(/surface: viewSurface/);
     const links = read("src/app/links/[username]/page.tsx");
-    expect(links).toMatch(/sourceParam \?\? "swift_links"/);
+    expect(links).toMatch(/storedSource\(sourceParam, "swift_links"\)/);
     // Resolved slug, not the raw route param — a case/alias divergence would
     // record rows under a key the dashboard never reads.
     expect(links).toMatch(/\(cardOrLegacy\.username as string\) \|\| username/);

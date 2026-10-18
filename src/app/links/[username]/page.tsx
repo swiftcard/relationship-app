@@ -1,4 +1,5 @@
 import { profilePageJsonLd, jsonLdScript } from "@/lib/brand";
+import { storedSource } from "@/lib/source-labels";
 import { forwardQuery } from "@/lib/forward-query";
 import { notFound, permanentRedirect } from "next/navigation";
 import { cookies } from "next/headers";
@@ -134,7 +135,8 @@ export default async function SwiftLinksPage({ params, searchParams }: { params:
   // carried separately (viewSurface="links"), so the source no longer has to
   // double as one.
   const sourceParam = Array.isArray(rawSource) ? rawSource[0] : rawSource;
-  const source = (sourceParam ?? "swift_links").slice(0, 48);
+  // Only a source SwiftCard puts on its own links (audit A-02).
+  const source = storedSource(sourceParam, "swift_links");
   const { cardOrLegacy, photoUrl, ownerPlan, awaitingPlan } = await resolve(username);
   if (!cardOrLegacy) {
     const { findSlugAlias } = await import("@/lib/slug-alias");

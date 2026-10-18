@@ -214,7 +214,7 @@ try {
 } finally {
   if (browser) await browser.close().catch(() => {});
   if (!process.env.KEEP && userId) {
-    await adm(`/rest/v1/card_views?username=eq.${uname}`, { method: "DELETE" });
+    await adm(`/rest/v1/card_views?username=in.(${uname},${uname}__links)`, { method: "DELETE" });
     await adm(`/rest/v1/leads?card_owner=eq.${uname}`, { method: "DELETE" });
     await adm(`/rest/v1/notifications?user_id=eq.${userId}`, { method: "DELETE" });
     await adm(`/rest/v1/cards?user_id=eq.${userId}`, { method: "DELETE" });

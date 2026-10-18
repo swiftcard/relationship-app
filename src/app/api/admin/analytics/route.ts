@@ -269,12 +269,28 @@ export async function GET() {
     lockedFeatures: [string, number][];
   } = { available: false, d30: {}, d7: {}, internal30: 0, topCtas: [], lockedFeatures: [] };
   {
-    const { data: evRows, error: evErr } = await admin
-      .from("product_events")
-      .select("name, props, is_internal, created_at")
-      .gte("created_at", iso(30))
-      .order("created_at", { ascending: false })
-      .limit(20_000);
+    // PAGED, every row of the 30 days (audit A-11). One select is answered
+    // with at most the database's 1,000-row page whatever .limit() says, so
+    // the funnel was counting only the newest sliver of 12,000+ events — the
+    // bottom of the funnel (checkouts, finished cards) understated first, with
+    // no sign of it. The cap below is a runaway guard, and says when it bites.
+    type EventRow = { name: string; props: unknown; is_internal: boolean | null; created_at: string };
+    const evRows: EventRow[] = [];
+    let evErr: unknown = null;
+    const PAGE = 1000;
+    for (let p = 0; p < 200; p++) {
+      const { data, error } = await admin
+        .from("product_events")
+        .select("name, props, is_internal, created_at")
+        .gte("created_at", iso(30))
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(p * PAGE, p * PAGE + PAGE - 1);
+      if (error) { evErr = error; break; }
+      evRows.push(...((data ?? []) as EventRow[]));
+      if ((data ?? []).length < PAGE) break;
+      if (p === 199) console.warn("[admin/analytics] product_events: stopped at 200,000 rows for 30 days");
+    }
     // Table not migrated yet (supabase/product-events.sql) — the rest of the
     // admin page must still render, exactly like the ingest block above.
     if (!evErr && evRows) {

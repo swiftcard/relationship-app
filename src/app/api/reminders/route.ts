@@ -42,6 +42,7 @@ import { applyDueSeatReductions } from "@/lib/office-scheduled-seats";
 import { releaseOrphanedOffices } from "@/lib/office-billing-sync";
 import { releaseAbandonedPromoClaims } from "@/lib/promo-claim";
 import { purgeStaleGuestUploads } from "@/lib/guest-uploads";
+import { pruneLogTables } from "@/lib/log-retention";
 import { mirrorPendingPromosToApple, turnOffUsedUpAppleOffers } from "@/lib/apple-offer-codes";
 import { insertNotification } from "@/lib/notify";
 import { officeEndedNotice } from "@/lib/billing-state";
@@ -292,6 +293,10 @@ export async function GET(req: NextRequest) {
   } catch (e) {
     await reportError("reminders.purge-guest-uploads", e);
   }
+
+  // The log tables' own retention, which nothing ever applied (audit A-11).
+  const logPrune = await pruneLogTables(supabase);
+  if (logPrune.failed.length) await reportError("reminders.prune-logs", new Error(`Could not prune: ${logPrune.failed.join(", ")}`));
 
   // Promo codes not on Apple yet (made before App Store Connect was
   // connected, or Apple refused at the time) — so every code also works on the

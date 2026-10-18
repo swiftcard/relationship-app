@@ -174,7 +174,7 @@ try {
 } finally {
   for (const [uid, un] of [[userId, uname], [userIdN, unameN]]) {
     if (!uid) continue;
-    for (const p of [`/rest/v1/notifications?user_id=eq.${uid}`, `/rest/v1/card_events?card_owner_username=eq.${un}`, `/rest/v1/card_views?username=eq.${un}`, `/rest/v1/leads?card_owner=eq.${un}`, `/rest/v1/cards?user_id=eq.${uid}`, `/rest/v1/profiles?id=eq.${uid}`]) {
+    for (const p of [`/rest/v1/notifications?user_id=eq.${uid}`, `/rest/v1/card_events?card_owner_username=eq.${un}`, `/rest/v1/card_views?username=in.(${un},${un}__links)`, `/rest/v1/leads?card_owner=eq.${un}`, `/rest/v1/cards?user_id=eq.${uid}`, `/rest/v1/profiles?id=eq.${uid}`]) {
       await adm(p, { method: "DELETE" }).catch(() => {});
     }
     await adm(`/auth/v1/admin/users/${uid}`, { method: "DELETE" }).catch(() => {});

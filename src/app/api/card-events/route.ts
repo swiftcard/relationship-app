@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server";
+import { storedSource } from "@/lib/source-labels";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { createClient } from "@/lib/supabase-server";
 import { cardEventNotice, REPEAT_VISIT_LOOKBACK_MS } from "@/lib/card-event-notify";
@@ -89,7 +90,10 @@ export async function POST(req: NextRequest) {
     const card_owner_username = str(body?.card_owner_username, 80)?.toLowerCase() ?? null;
     const client_visitor_id = str(body?.visitor_id, 64);
     const event_type = str(body?.event_type, 40);
-    const source = str(body?.source, 48);
+    // Only a source SwiftCard puts on its own links; anything else is a plain
+    // card link (audit A-02). Absent stays absent.
+    const rawSource = str(body?.source, 48);
+    const source = rawSource ? storedSource(rawSource) : null;
     const surface: "card" | "links" = body?.surface === "links" ? "links" : "card";
     const visitor_name = str(body?.visitor_name, 120);
     const visitor_email = str(body?.visitor_email, 200);

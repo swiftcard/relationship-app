@@ -1,4 +1,5 @@
 import { profilePageJsonLd, jsonLdScript } from "@/lib/brand";
+import { storedSource } from "@/lib/source-labels";
 import { forwardQuery } from "@/lib/forward-query";
 import { notFound, permanentRedirect } from "next/navigation";
 import { cookies } from "next/headers";
@@ -139,7 +140,8 @@ export default async function CardPage({
   // ?source= drives real attribution and must survive the hop.
   // EVERY param, not a hand-picked list (?ct= used to be dropped here).
   if (rawUsername !== username) permanentRedirect(forwardQuery(`/${username}`, query));
-  const source = (sourceParam ?? "direct_link").slice(0, 48);
+  // Only a source SwiftCard puts on its own links (audit A-02).
+  const source = storedSource(sourceParam);
   // ?save=1 — arrived by scanning the desktop QR. The card renders normally and
   // ScanSaveContact hands the phone the contact on top of it, so dismissing the
   // "Add to Contacts" sheet leaves them on the card instead of a blank page.

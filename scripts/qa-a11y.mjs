@@ -391,7 +391,7 @@ try {
   if (browser) await browser.close().catch(() => {});
   if (!process.env.KEEP) {
     for (const u of users) {
-      await adm(`/rest/v1/card_views?username=eq.${u.uname}`, { method: "DELETE" });
+      await adm(`/rest/v1/card_views?username=in.(${u.uname},${u.uname}__links)`, { method: "DELETE" });
       await adm(`/rest/v1/leads?card_owner=eq.${u.uname}`, { method: "DELETE" });
       await adm(`/rest/v1/notifications?user_id=eq.${u.id}`, { method: "DELETE" });
       await adm(`/rest/v1/cards?user_id=eq.${u.id}`, { method: "DELETE" });

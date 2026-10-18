@@ -25,7 +25,21 @@ export const SOURCE_LABELS: Record<string, string> = {
   imported: "CSV import",
   scanner: "Card scanner",
   unknown: "Not tracked",
+  // The iPhone home-screen widget opens (and its QR encodes) the card with
+  // ?source=widget (NativeAppBridge). It had no label, so it printed "widget".
+  widget: "Home-screen widget",
 };
+
+/**
+ * The source to STORE for a visit: a key SwiftCard itself puts on links, or a
+ * plain card link (audit A-02). ?source= is whatever the URL says, and every
+ * string up to 48 characters was stored as-is — a typed ?source=nfc_card
+ * counted as a tag tap, and any made-up word became a row on the owner's
+ * Traffic chart.
+ */
+export function storedSource(raw: unknown, fallback = "direct_link"): string {
+  return typeof raw === "string" && Object.prototype.hasOwnProperty.call(SOURCE_LABELS, raw) ? raw : fallback;
+}
 
 /**
  * " from a QR code" — how a source reads INSIDE a notification sentence.

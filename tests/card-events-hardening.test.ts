@@ -28,9 +28,13 @@ describe("input hardening", () => {
     // The str() helper is the single funnel: non-strings and oversized values
     // degrade to absent instead of becoming permanent row values.
     expect(route).toMatch(/function str\(v: unknown, max: number\)/);
-    for (const field of ["card_owner_username", "event_type", "source", "visitor_name", "visitor_email", "visitor_phone", "device_info"]) {
+    for (const field of ["card_owner_username", "event_type", "visitor_name", "visitor_email", "visitor_phone", "device_info"]) {
       expect(route).toMatch(new RegExp(`const ${field} = (\\(?)str\\(body\\?\\.${field}`));
     }
+    // source: through str() first, then only a key SwiftCard itself puts on
+    // links is stored (lib/source-labels storedSource, audit A-02).
+    expect(route).toContain("const rawSource = str(body?.source, 48);");
+    expect(route).toContain("const source = rawSource ? storedSource(rawSource) : null;");
     // visitor_id goes through str() like the rest AND then through the
     // server-side identity resolution — the body's value is never what a row
     // is keyed on (lib/visit-identity.ts, tests/view-identity.test.ts).

@@ -1149,7 +1149,7 @@ try {
         await adm(`/auth/v1/admin/users/${x.id}`, { method: "DELETE" });
       }
       await adm(`/rest/v1/card_views?username=in.(${uname},${uname}__links)`, { method: "DELETE" });
-      await adm(`/rest/v1/card_events?username=in.(${uname},${uname}__links)`, { method: "DELETE" });
+      await adm(`/rest/v1/card_events?card_owner_username=eq.${uname}`, { method: "DELETE" });
       await adm(`/rest/v1/leads?card_owner=eq.${uname}`, { method: "DELETE" });
       // The signature image signature-copy generated for the throwaway card.
       await adm(`/storage/v1/object/card-signatures/${uname}.png`, { method: "DELETE" }).catch(() => {});

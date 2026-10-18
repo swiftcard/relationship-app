@@ -479,7 +479,7 @@ try {
         const un = prof?.[0]?.username;
         if (un) {
           await adm(`/rest/v1/card_views?username=in.(${un},${un}__links)`, { method: "DELETE" });
-          await adm(`/rest/v1/card_events?username=in.(${un},${un}__links)`, { method: "DELETE" });
+          await adm(`/rest/v1/card_events?card_owner_username=eq.${un}`, { method: "DELETE" });
           await adm(`/rest/v1/leads?card_owner=eq.${un}`, { method: "DELETE" });
         }
         await adm(`/rest/v1/notifications?user_id=eq.${id}`, { method: "DELETE" });
