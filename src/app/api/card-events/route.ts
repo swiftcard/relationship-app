@@ -198,7 +198,15 @@ export async function POST(req: NextRequest) {
     // pushes are separately capped per IP per hour, so this only has to stop a
     // flood, not shape normal traffic.
     const RATE_BUDGET: Record<string, number> = { viewed_card: 60, clicked_link: 60, downloaded_vcard: 20 };
-    if (await isRateLimited(`card-events:${ip}:${card_owner_username}:${event_type}`, RATE_BUDGET[event_type] ?? 20, 10 * 60 * 1000)) {
+    // WHOSE budget (audit A-08). A visitor carrying our cookie is one person,
+    // and gets a budget of their own — a booth's Wi-Fi is one IP for hundreds
+    // of phones, and sixty views per card per ten minutes shared between all
+    // of them silently dropped real visits at the very event the card was
+    // printed for. A cookieless request is still pooled by IP, under a much
+    // wider ten-minute ceiling: the daily one above is what bounds forging.
+    const budgetKey = identityUnproven ? `ip:${ip}` : `v:${visitIdentity.visitorId}`;
+    const budget = (RATE_BUDGET[event_type] ?? 20) * (identityUnproven ? 5 : 1);
+    if (await isRateLimited(`card-events:${budgetKey}:${card_owner_username}:${event_type}`, budget, 10 * 60 * 1000)) {
       return decided("rate_limited", { rateLimited: true });
     }
     // …and a daily ceiling for views and saves from cookieless identities, per
@@ -690,8 +698,13 @@ export async function POST(req: NextRequest) {
         // bell and the CRM. A far wider ceiling (sixty an hour from one IP on
         // one card) still bounds the record itself, so a caller rotating
         // visitor ids cannot fill the bell with fabricated rows.
+        // Per PERSON when the visitor carries our cookie (audit A-08): from the
+        // seventh phone on one venue Wi-Fi the owner used to hear nothing. A
+        // cookieless request stays pooled by IP — the cap that stops a looped
+        // username from buzzing an owner's phone all night.
+        const notifyWho = identityUnproven ? ip : `v:${visitIdentity.visitorId}`;
         const flooded = notice
-          ? await isRateLimited(`notify-ip:${card_owner_username}:${ip}`, 6, 60 * 60 * 1000)
+          ? await isRateLimited(`notify-ip:${card_owner_username}:${notifyWho}`, 6, 60 * 60 * 1000)
           : false;
         const recordFlooded = notice && flooded
           ? await isRateLimited(`notify-ip-row:${card_owner_username}:${ip}`, 60, 60 * 60 * 1000)

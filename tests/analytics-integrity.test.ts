@@ -67,7 +67,9 @@ describe("a recorded view is a real visit", () => {
   });
 
   it("rate-limits per IP and card", () => {
-    expect(route).toMatch(/isRateLimited\(`card-events:\$\{ip\}:\$\{card_owner_username\}:\$\{event_type\}`/);
+    // Per visitor once they carry our cookie, per IP until then (audit A-08).
+    expect(route).toMatch(/isRateLimited\(`card-events:\$\{budgetKey\}:\$\{card_owner_username\}:\$\{event_type\}`/);
+    expect(route).toContain("const budgetKey = identityUnproven ? `ip:${ip}` : `v:${visitIdentity.visitorId}`;");
   });
 
   it("counts one visitor once per VISIT window, and survives the race", () => {

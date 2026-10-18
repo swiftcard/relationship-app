@@ -110,7 +110,8 @@ describe("a relay or datacenter network cannot support a town", () => {
     // ordinary iPhone users.
     const src = read("src/lib/request-geo.ts");
     expect(src).toMatch(/RELAY_OR_HOSTING/);
-    expect(src).toMatch(/isRelay && \(base\.accuracy === "city" \|\| base\.accuracy === "city_approx"\)/);
+    // …and an unverified request from a cloud-region town (audit A-07).
+    expect(src).toMatch(/\(isRelay \|\| cloudTownUnverified\) && \(base\.accuracy === "city" \|\| base\.accuracy === "city_approx"\)/);
     // Nothing in the geo layer may refuse, drop, or bot-flag on this signal.
     expect(src).not.toMatch(/isRelay \) return null|if \(isRelay\) return/);
   });

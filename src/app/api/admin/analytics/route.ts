@@ -274,14 +274,14 @@ export async function GET() {
     // the funnel was counting only the newest sliver of 12,000+ events — the
     // bottom of the funnel (checkouts, finished cards) understated first, with
     // no sign of it. The cap below is a runaway guard, and says when it bites.
-    type EventRow = { name: string; props: unknown; is_internal: boolean | null; created_at: string };
+    type EventRow = { name: string; props: unknown; is_internal: boolean | null; created_at: string; session_key: string | null };
     const evRows: EventRow[] = [];
     let evErr: unknown = null;
     const PAGE = 1000;
     for (let p = 0; p < 200; p++) {
       const { data, error } = await admin
         .from("product_events")
-        .select("name, props, is_internal, created_at")
+        .select("name, props, is_internal, created_at, session_key")
         .gte("created_at", iso(30))
         .order("created_at", { ascending: false })
         .order("id", { ascending: false })
@@ -299,15 +299,23 @@ export async function GET() {
       const ctas: Record<string, number> = {};
       const features: Record<string, number> = {};
       let internal30 = 0;
-      for (const r of evRows) {
-        if (r.is_internal) { internal30++; continue; }
+      // PEOPLE, not rows (audit A-17): "started a card" fired on every mount
+      // of the editor — each reload, each Back to /cards/new, each sign-in
+      // mid-build — and the funnel counted every one, so the abandonment it
+      // showed could not be acted on. Each step counts a session once; a row
+      // with no session key still counts as its own.
+      const seen30 = new Set<string>();
+      const seen7 = new Set<string>();
+      evRows.forEach((r, i) => {
+        if (r.is_internal) { internal30++; return; }
         const name = r.name as string;
-        d30[name] = (d30[name] ?? 0) + 1;
-        if (new Date(r.created_at as string).getTime() >= now - 7 * DAY) d7[name] = (d7[name] ?? 0) + 1;
+        const who = `${name}|${r.session_key ?? `row:${i}`}`;
+        if (!seen30.has(who)) { seen30.add(who); d30[name] = (d30[name] ?? 0) + 1; }
+        if (new Date(r.created_at as string).getTime() >= now - 7 * DAY && !seen7.has(who)) { seen7.add(who); d7[name] = (d7[name] ?? 0) + 1; }
         const props = (r.props ?? {}) as { cta?: string; feature?: string };
         if (name === "cta_clicked" && props.cta) ctas[props.cta] = (ctas[props.cta] ?? 0) + 1;
         if (name === "upgrade_prompt_viewed" && props.feature) features[props.feature] = (features[props.feature] ?? 0) + 1;
-      }
+      });
       const top = (m: Record<string, number>) => Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 8) as [string, number][];
       funnel = { available: true, d30, d7, internal30, topCtas: top(ctas), lockedFeatures: top(features) };
     }

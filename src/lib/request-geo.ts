@@ -139,18 +139,24 @@ export async function resolveGeo(req: NextRequest, ip: string): Promise<GeoResul
   const second = await secondOpinion(ip);
   const org = second?.org ?? null;
   const isRelay = !!org && RELAY_OR_HOSTING.test(org);
+  // No second opinion at all (it timed out, refused, or the IP is not public)
+  // leaves only the edge's town — and for a request from a cloud region that
+  // town is the datacenter's (audit A-07: "Ashburn, US" rows kept appearing
+  // after the hosting exclusion shipped). Not dropped, since it may be a
+  // person; just never named as a town nobody there was in.
+  const cloudTownUnverified = !second && isCloudRegionTown(edge.city, edge.regionCode);
   // A relay can't support a town, so it gets the REGION rung's LABEL too, not
   // just its accuracy (2026-10-06). Downgrading only the accuracy kept
   // "Newark, NJ" as the label, which then rendered "Newark (approximate)" /
   // "in the Newark area" — a town presented as a region — and in the Locations
   // tab one relay row demoted a whole group of confirmed "Newark, NJ" views.
-  const base = reconcileDetailed(edge, second, { townUnsupported: isRelay });
+  const base = reconcileDetailed(edge, second, { townUnsupported: isRelay || cloudTownUnverified });
   return {
     label: base.label,
     // A relay or cloud egress can never support a town: Private Relay promises
     // only the right country and rough region, and a datacenter IP is a
     // building. Downgrade rather than drop — the region is still true.
-    accuracy: isRelay && (base.accuracy === "city" || base.accuracy === "city_approx")
+    accuracy: (isRelay || cloudTownUnverified) && (base.accuracy === "city" || base.accuracy === "city_approx")
       ? "region"
       : base.accuracy,
     source: base.label === null ? null : second ? "edge+second" : "edge",
@@ -292,6 +298,7 @@ export function locationAliases(labels: Iterable<string>): Map<string, string> {
 
 const LOOKUP_TIMEOUT_MS = 600;
 const CACHE_TTL_MS = 15 * 60 * 1000;
+const FAILED_LOOKUP_TTL_MS = 60 * 1000;
 const CACHE_MAX = 5000;
 // Keyed by IP — the one key that cannot cross-contaminate visitors: the same
 // address IS the same network, whoever is on it.
@@ -308,7 +315,9 @@ async function secondOpinion(ip: string): Promise<GeoGuess | null> {
     guess = null; // timeout, network, quota: the edge answer stands alone
   }
   if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value as string);
-  cache.set(ip, { guess, expires: Date.now() + CACHE_TTL_MS });
+  // A FAILED lookup is remembered for a minute, not fifteen (audit A-07): one
+  // timeout used to wave a scanner's whole burst through as people.
+  cache.set(ip, { guess, expires: Date.now() + (guess ? CACHE_TTL_MS : FAILED_LOOKUP_TTL_MS) });
   return guess;
 }
 
@@ -380,12 +389,23 @@ const PRIVACY_RELAY =
   /\b(akamai|cloudflare|fastly|nordvpn|expressvpn|surfshark|mullvad|private internet access|proton|ipvanish|cyberghost|windscribe|tunnelbear)\b/i;
 
 const CLOUD_HOSTING =
-  /\b(amazon|aws|amazon technologies|google cloud|google llc|microsoft|azure|digitalocean|linode|ovh|hetzner|vultr|contabo|m247|datacamp|leaseweb|choopa|quadranet|hostinger|godaddy|namecheap|oracle cloud|alibaba|tencent cloud|scaleway|upcloud|packet|equinix|zenlayer|hosting|datacenter|data center|colocation)\b/i;
+  /\b(amazon|aws|amazon technologies|google cloud|google llc|microsoft|azure|digitalocean|linode|ovh|hetzner|vultr|contabo|m247|datacamp|leaseweb|choopa|quadranet|hostinger|godaddy|namecheap|oracle cloud|oracle corporation|alibaba|tencent cloud|scaleway|upcloud|packet|equinix|zenlayer|vercel|fly\.io|ovhcloud|colocrossing|psychz|limestone networks|hosting|datacenter|data center|colocation)\b/i;
 
 /** Either family: the IP belongs to infrastructure, so a town derived from it
  *  is the infrastructure's town. Drives the accuracy downgrade only — unchanged
  *  in meaning and in effect from the single pattern it replaced. */
 const RELAY_OR_HOSTING = new RegExp(`${PRIVACY_RELAY.source}|${CLOUD_HOSTING.source}`, "i");
+
+/**
+ * Towns that are, above all, a cloud provider's region: AWS us-east-1 and
+ * us-west-2, Azure West US 2, Google us-central1 and us-west1. Their edge
+ * label on an unverified request is far more often a rack than a resident.
+ */
+const CLOUD_REGION_TOWNS = new Set(["ashburn|VA", "boardman|OR", "quincy|WA", "the dalles|OR", "council bluffs|IA"]);
+/** Town AND state: Quincy, Massachusetts is a real place full of people. */
+export function isCloudRegionTown(city: string | null | undefined, regionCode: string | null | undefined): boolean {
+  return !!city && !!regionCode && CLOUD_REGION_TOWNS.has(`${city.trim().toLowerCase()}|${regionCode}`);
+}
 
 /** Cloud/hosting egress and NOT a known privacy relay. The relay check wins on
  *  purpose: an org string naming both ("Cloudflare, Inc. hosting") is far more

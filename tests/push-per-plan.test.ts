@@ -465,7 +465,7 @@ describe("every view is a push candidate, and the throttles do the limiting", ()
   });
 
   it("keeps the per-IP flood backstop on top of the policy throttles", () => {
-    expect(src).toMatch(/isRateLimited\(`notify-ip:\$\{card_owner_username\}:\$\{ip\}`, 6, 60 \* 60 \* 1000\)/);
+    expect(src).toMatch(/isRateLimited\(`notify-ip:\$\{card_owner_username\}:\$\{notifyWho\}`, 6, 60 \* 60 \* 1000\)/);
   });
 
   it("names a card's first view instead of burying it among the rest", () => {

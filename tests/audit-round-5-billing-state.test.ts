@@ -205,7 +205,7 @@ describe("N-08: the per-IP cap stops the buzz, not the record", () => {
   const route = read("src/app/api/card-events/route.ts");
 
   it("only events that would notify are counted", () => {
-    expect(route).toMatch(/const flooded = notice\s*\?\s*await isRateLimited\(`notify-ip:\$\{card_owner_username\}:\$\{ip\}`, 6, 60 \* 60 \* 1000\)\s*:\s*false;/);
+    expect(route).toMatch(/const flooded = notice\s*\?\s*await isRateLimited\(`notify-ip:\$\{card_owner_username\}:\$\{notifyWho\}`, 6, 60 \* 60 \* 1000\)\s*:\s*false;/);
   });
 
   it("over the cap the row and the CRM event are still written, without the buzz", () => {

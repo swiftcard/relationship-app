@@ -80,7 +80,8 @@ describe("one visit → one event → one notification", () => {
   });
 
   it("rotating visitor ids can't ring the owner's phone all day — per-IP notify cap, events still record", () => {
-    expect(route).toMatch(/notify-ip:\$\{card_owner_username\}:\$\{ip\}`, 6, 60 \* 60 \* 1000/);
+    expect(route).toContain("const notifyWho = identityUnproven ? ip : `v:${visitIdentity.visitorId}`;");
+    expect(route).toMatch(/notify-ip:\$\{card_owner_username\}:\$\{notifyWho\}`, 6, 60 \* 60 \* 1000/);
   });
 
   it("created_at is set explicitly — the dedup window and conversation sort filter on it", () => {

@@ -129,7 +129,7 @@ function Bars({ rows, color = "#3b82f6", labeler }: { rows: [string, number][]; 
  */
 const FUNNEL_STEPS: { key: string; label: string; hint: string; fromAccounts?: boolean }[] = [
   { key: "page_viewed", label: "Landed on the site", hint: "Home, pricing or the builder" },
-  { key: "card_creation_started", label: "Started building a card", hint: "Typed the first field" },
+  { key: "card_creation_started", label: "Started building a card", hint: "Opened the card editor (once per visit)" },
   { key: "card_creation_completed", label: "Finished the card", hint: "Reached the end of the builder" },
   // Counted from the accounts table, not an event: a real row is exact, can't
   // double-count a revisit, and can't be lost to a blocked request. Never
