@@ -2,6 +2,7 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { sendPushToUser } from "@/lib/push";
 import { VIEW_VISIT_WINDOW_MS } from "@/lib/view-window";
 import { UNCAPPED, type PushCategory } from "@/lib/push-policy";
+import { reportError } from "@/lib/report-error";
 
 // ONE NOTIFICATION PER PERSON, PER CARD, PER VISIT.
 //
@@ -156,6 +157,17 @@ type OpenVisit = { id: string; type: string; visit_key: string };
 // someone else can register "alex" at once. Unscoped, the new owner's lead
 // found the OLD owner's open row and rewrote it — the old owner's bell showed a
 // stranger's contact (isolation audit 2026-09-24).
+/**
+ * A visit key for ONE owner. The unique index is on the key alone, so when a
+ * card address changed hands inside the visit window the previous owner's row
+ * still holds the plain key; this owner's row used to be written with no key
+ * at all, outside the ledger, and the visitor's next action opened a second
+ * row and a second buzz (audit N-02). Scoped, it is still found by openVisit.
+ */
+export function ownVisitKey(key: string, userId: string): string {
+  return `${key}#${userId}`;
+}
+
 async function openVisit(
   admin: ReturnType<typeof getAdminSupabase>,
   userId: string,
@@ -166,7 +178,7 @@ async function openVisit(
     .from("notifications")
     .select("id, type, visit_key, created_at")
     .eq("user_id", userId)
-    .in("visit_key", [keys.current, keys.previous])
+    .in("visit_key", [keys.current, keys.previous, ownVisitKey(keys.current, userId), ownVisitKey(keys.previous, userId)])
     .gte("created_at", new Date(now - VIEW_VISIT_WINDOW_MS).toISOString())
     .order("created_at", { ascending: false })
     .limit(1);
@@ -273,6 +285,11 @@ export async function notifyVisit(opts: {
   // Tries dropping the NEWER column first (milestone, supabase/milestone-one-bell.sql)
   // so an environment that has visit_key but not milestone keeps its visit dedupe.
   if (code === "42703" || code === "PGRST204") {
+    // Every column exists in production, so this is PostgREST's schema cache
+    // lagging a migration — and each row written here is outside the visit
+    // ledger, free to buzz twice. Written anyway (a missing notification is
+    // worse), but no longer silently (audit N-02).
+    await reportError("visit-notify.column-fallback", error, { code, type: notice.type }).catch(() => {});
     // Newest column first: lead_id (warm-lead-alerts.sql) — keep the visit
     // dedupe and the milestone ledger when only the contact stamp is missing.
     if ("lead_id" in row) {
@@ -309,10 +326,11 @@ export async function notifyVisit(opts: {
       // The key is held by ANOTHER account's row (the unique index is on the
       // key alone, and this slug belonged to them minutes ago). Never touch
       // theirs: this owner still gets their own row, just outside the ledger.
-      const { visit_key: _k, ...unkeyed } = row;
-      void _k;
-      const { error: e2 } = await admin.from("notifications").insert(unkeyed);
-      if (e2) return "failed";
+      const { error: e2 } = await admin.from("notifications").insert({ ...row, visit_key: ownVisitKey(key, opts.userId) });
+      if (e2) {
+        await reportError("visit-notify.scoped-insert-failed", e2, { code: (e2 as { code?: string }).code ?? null }).catch(() => {});
+        return "failed";
+      }
       await push();
       return "created";
     }

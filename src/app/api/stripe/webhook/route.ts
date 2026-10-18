@@ -12,7 +12,7 @@ import { PLAN_LIMITS } from "@/lib/plan";
 import { claimStripeEvent, finishStripeEvent, clearStripeEvent } from "@/lib/stripe-idempotency";
 import { cardFingerprintFor } from "@/lib/stripe-card-fingerprint";
 import { reportError } from "@/lib/report-error";
-import { insertNotification } from "@/lib/notify";
+import { insertNotification, writeNotification } from "@/lib/notify";
 import { sendPushToUser } from "@/lib/push";
 import { stripeDowngradeAllowed } from "@/lib/iap-entitlement";
 import { provisionOfficeForOwner, tearDownOfficeForOwner, officeAccessEndedMessage } from "@/lib/office-billing-sync";
@@ -264,13 +264,16 @@ async function sendPaymentFailedEmail(opts: { customerId: string; amountCents: n
   //     throws. insertNotification refuses identical words inside ten minutes,
   //     so the redelivery finds the row, returns false, and the phone does not
   //     buzz a second time for the same declined charge.
-  const wrote = await insertNotification({
+  //   • A bell row that could not be WRITTEN is not a reason to stay silent:
+  //     this is the warning before access ends, and a rare double buzz is far
+  //     better than none (audit N-04). Only a duplicate holds the push.
+  const wrote = await writeNotification({
     user_id: profile.id as string,
     type: "payment_failed",
     title: "Payment failed",
     body: `Your ${planName} payment didn't go through.`,
-  }).catch(() => false);
-  if (!wrote) return;
+  });
+  if (wrote === "duplicate") return;
   await sendPushToUser(profile.id as string, {
     category: "billing_problem",
     title: "Payment failed",

@@ -180,15 +180,16 @@ describe("one event, one notification", () => {
     expect(src).toMatch(/const messageSid = \(params\.MessageSid \|\| params\.SmsSid \|\| ""\)/);
     expect(src).toMatch(/\.eq\("provider_sid", messageSid\)[\s\S]{0,120}?if \(seen\?\.length\) return twiml\(\);/);
     expect(src).toMatch(/providerSid: messageSid/);
-    // …and the push rides on the bell row actually being written.
-    expect(src).toMatch(/if \(wrote\) await sendPushToUser\(/);
+    // …and a duplicate bell row never buzzes again; a bell row that failed to
+    // write still does — the MessageSid check is the dedupe (audit N-04).
+    expect(src).toMatch(/if \(wrote !== "duplicate"\) await sendPushToUser\(/);
   });
 
   it("identical words inside ten minutes are a redelivery, not news", () => {
     const src = read("src/lib/notify.ts");
     expect(src).toMatch(/DUPLICATE_WINDOW_MS = 10 \* 60 \* 1000/);
     expect(src).toMatch(/\.eq\("title", row\.title\)\s*\n\s*\.eq\("body", row\.body\)/);
-    expect(src).toMatch(/if \(twin\?\.length\) return false;/);
+    expect(src).toMatch(/if \(twin\?\.length\) return "duplicate";/);
     // A contact texting "Yes" twice is two replies: the caller with its own
     // idempotency key opts out.
     expect(src).toMatch(/if \(!opts\.allowRepeat\) try/);
@@ -198,7 +199,7 @@ describe("one event, one notification", () => {
   it("a Stripe retry does not re-send 'Payment failed', and the failure leaves a bell row", () => {
     const src = read("src/app/api/stripe/webhook/route.ts");
     expect(src).toMatch(/type: "payment_failed",/);
-    expect(src).toMatch(/if \(!wrote\) return;\s*\n\s*await sendPushToUser\(profile\.id as string, \{\s*\n\s*category: "billing_problem"/);
+    expect(src).toMatch(/if \(wrote === "duplicate"\) return;\s*\n\s*await sendPushToUser\(profile\.id as string, \{\s*\n\s*category: "billing_problem"/);
     // The 8am catch-up is built from bell rows of exactly this type.
     expect(read("src/app/api/push/catchup/route.ts")).toMatch(/payment_failed/);
   });

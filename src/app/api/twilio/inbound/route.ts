@@ -3,7 +3,7 @@ import twilio from "twilio";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { addOptOut, removeOptOut, normalizePhone, logMessage } from "@/lib/messaging";
 import { sendPushToUser } from "@/lib/push";
-import { insertNotification } from "@/lib/notify";
+import { writeNotification } from "@/lib/notify";
 import { reportError } from "@/lib/report-error";
 import { isLockedLead } from "@/lib/lead-access";
 import { isPaidPlan } from "@/lib/plan";
@@ -176,7 +176,7 @@ export async function POST(req: NextRequest) {
             // reads no such param and would have dumped them on the dashboard.
             const base = (process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me").replace(/\/$/, "");
             const url = `${base}/contacts?card=${encodeURIComponent(target.card_owner)}&lead=${encodeURIComponent(target.id)}`;
-            const wrote = await insertNotification({
+            const wrote = await writeNotification({
               user_id: owner.id as string,
               card_owner: target.card_owner,
               // Without it the bell row opened the contacts list rather than
@@ -187,10 +187,12 @@ export async function POST(req: NextRequest) {
               // The message itself, trimmed by push-policy to the lock-screen
               // budget. Seeing the actual words is why this is worth a buzz.
               body: shownText.replace(/\s+/g, " ").trim().slice(0, 300),
-            }, { allowRepeat: true }).catch(() => false);
-            // Never buzz for a row that was not written (notify.ts's contract):
-            // a rejected duplicate means someone already announced this reply.
-            if (wrote) await sendPushToUser(owner.id as string, {
+            }, { allowRepeat: true });
+            // Never buzz for a duplicate: someone already announced this reply.
+            // A bell row that failed to write still buzzes — this message is
+            // deduped on MessageSid above, so the push is the only copy of the
+            // news left (audit N-04).
+            if (wrote !== "duplicate") await sendPushToUser(owner.id as string, {
               category: "lead_reply",
               title: `${who} replied`,
               body: shownText,

@@ -62,7 +62,9 @@ describe("the visit is what gets deduped", () => {
 
   it("looks the previous bucket up and only joins a visit still inside the window", () => {
     const lib = read("src/lib/visit-notify.ts");
-    expect(lib).toMatch(/\.in\("visit_key", \[keys\.current, keys\.previous\]\)/);
+    // …and this owner's own scoped keys, for an address that changed hands
+    // inside the window (audit N-02).
+    expect(lib).toMatch(/\.in\("visit_key", \[keys\.current, keys\.previous, ownVisitKey\(keys\.current, userId\), ownVisitKey\(keys\.previous, userId\)\]\)/);
     expect(lib).toMatch(/\.gte\("created_at", new Date\(now - VIEW_VISIT_WINDOW_MS\)\.toISOString\(\)\)/);
   });
 

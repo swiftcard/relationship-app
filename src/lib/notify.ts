@@ -1,4 +1,5 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
+import { reportError } from "@/lib/report-error";
 
 // In-app notification writer, resilient to the notifications.card_owner column
 // not existing yet (supabase/notifications-card-scope.sql not applied). Inserts
@@ -13,7 +14,7 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 /** How long an identical notification counts as a redelivery of the same event. */
 export const DUPLICATE_WINDOW_MS = 10 * 60 * 1000;
 
-export async function insertNotification(row: {
+type NotificationRow = {
   user_id: string;
   card_owner?: string | null;
   /** The contact this row is about. The bell opens THAT contact with it
@@ -23,12 +24,40 @@ export async function insertNotification(row: {
   type: string;
   title: string;
   body: string;
-}, opts: {
+};
+
+type NotificationOpts = {
   /** The caller has its OWN idempotency key and identical words can be real
    *  news: a contact texting "Yes" twice is two replies. (Twilio inbound dedupes
    *  on MessageSid.) Skips the identical-words check below. */
   allowRepeat?: boolean;
-} = {}): Promise<boolean> {
+};
+
+/**
+ * What a write did (audit N-04). "duplicate": this exact news was already
+ * written — a retry, or a race another call won. "failed": nothing was
+ * written. These used to be one `false`, and callers gate their push on it,
+ * so a database blip at the moment a payment failed meant no bell row, no
+ * push and no trace — the account lost access later with no warning. A caller
+ * whose news must reach the phone pushes on anything but "duplicate".
+ */
+export type NotificationWrite = "created" | "duplicate" | "failed";
+
+/** Write a bell row. TRUE only when this call wrote it (see writeNotification). */
+export async function insertNotification(row: NotificationRow, opts: NotificationOpts = {}): Promise<boolean> {
+  return (await writeNotification(row, opts)) === "created";
+}
+
+export async function writeNotification(row: NotificationRow, opts: NotificationOpts = {}): Promise<NotificationWrite> {
+  try {
+    return await writeOnce(row, opts);
+  } catch (e) {
+    await reportError("notify.insert_threw", e, { type: row.type }).catch(() => {});
+    return "failed";
+  }
+}
+
+async function writeOnce(row: NotificationRow, opts: NotificationOpts): Promise<NotificationWrite> {
   const admin = getAdminSupabase();
 
   // THE SAME WORDS TWICE IN TEN MINUTES IS A RETRY, NOT NEWS.
@@ -57,23 +86,30 @@ export async function insertNotification(row: {
       .gte("created_at", new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString())
       .limit(1);
     q = row.card_owner ? q.eq("card_owner", row.card_owner) : q.is("card_owner", null);
+    // …and the same contact: two different people doing the same thing in ten
+    // minutes are two pieces of news, whatever the words (audit N-06).
+    if (row.lead_id) q = q.eq("lead_id", row.lead_id);
     const { data: twin } = await q;
-    if (twin?.length) return false;
+    if (twin?.length) return "duplicate";
   } catch { /* fall through and write it */ }
 
   const { error } = await admin.from("notifications").insert(row);
-  if (!error) return true;
+  if (!error) return "created";
   // Missing column surfaces as 42703 (Postgres) or PGRST204 (PostgREST schema
   // cache) depending on the path — retry without the card scope on either.
   const code = (error as { code?: string } | null)?.code;
-  if (code === "42703" || code === "PGRST204") {
-    if (row.card_owner === undefined) return false;
+  if ((code === "42703" || code === "PGRST204") && row.card_owner !== undefined) {
     const { card_owner: _unused, ...rest } = row;
     void _unused;
     const { error: retryError } = await admin.from("notifications").insert(rest);
-    return !retryError;
+    if (!retryError) return "created";
+    await reportError("notify.insert_failed", retryError, { type: row.type, code: (retryError as { code?: string }).code ?? null }).catch(() => {});
+    return "failed";
   }
   // 23505 = a dedupe index rejected this as a duplicate: someone else already
   // wrote it. Not an error, but this call did NOT create it.
-  return false;
+  if (code === "23505") return "duplicate";
+  // Anything else — a timeout, a 5xx, a constraint — wrote nothing.
+  await reportError("notify.insert_failed", error, { type: row.type, code: code ?? null }).catch(() => {});
+  return "failed";
 }
