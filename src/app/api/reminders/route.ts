@@ -41,6 +41,7 @@ import { purgeExpiredDeletedAccounts, reconcileDeletedSubscriptions } from "@/li
 import { applyDueSeatReductions } from "@/lib/office-scheduled-seats";
 import { releaseOrphanedOffices } from "@/lib/office-billing-sync";
 import { releaseAbandonedPromoClaims } from "@/lib/promo-claim";
+import { purgeStaleGuestUploads } from "@/lib/guest-uploads";
 import { mirrorPendingPromosToApple, turnOffUsedUpAppleOffers } from "@/lib/apple-offer-codes";
 import { insertNotification } from "@/lib/notify";
 import { officeEndedNotice } from "@/lib/billing-state";
@@ -281,6 +282,15 @@ export async function GET(req: NextRequest) {
     promoClaimsReleased = await releaseAbandonedPromoClaims(supabase);
   } catch (e) {
     await reportError("reminders.release-promo-claims", e);
+  }
+
+  // Files uploaded with no account, past any draft's useful life (audit
+  // SEC-04). A claimed card has its own copies (lib/guest-uploads).
+  let guestUploadsPurged = 0;
+  try {
+    guestUploadsPurged = await purgeStaleGuestUploads(supabase);
+  } catch (e) {
+    await reportError("reminders.purge-guest-uploads", e);
   }
 
   // Promo codes not on Apple yet (made before App Store Connect was
@@ -823,5 +833,5 @@ export async function GET(req: NextRequest) {
   }
   // === END PRESET-BASED SEQUENCE PROCESSING ===
 
-  return NextResponse.json({ sent: totalSent, checkedHour: currentUTCHour, downgraded, purged, seatReductionsApplied, orphanMembersReleased, promoClaimsReleased, subscriptionsStopped, appleOfferCodesMade, crmCatchUp });
+  return NextResponse.json({ sent: totalSent, checkedHour: currentUTCHour, downgraded, purged, seatReductionsApplied, orphanMembersReleased, promoClaimsReleased, guestUploadsPurged, subscriptionsStopped, appleOfferCodesMade, crmCatchUp });
 }

@@ -145,8 +145,10 @@ describe("export takes everything", () => {
 
   it("defuses spreadsheet formula injection, like the personal export", () => {
     // Every lead field is typed by whoever filled in the public form.
-    expect(route).toMatch(/\/\^\[=\+\\-@\\t\\r\]\//);
-    expect(route).toMatch(/replace\(\/"\/g, '""'\)/);
+    // One shared cell writer for both exports (lib/csv-cell, audit SEC-18);
+    // what it escapes is pinned in tests/audit-round-18-security.
+    expect(route).toContain("const esc = csvCell;");
+    expect(read("src/app/api/leads/export/route.ts")).toContain("const esc = csvCell;");
   });
 
   it("writes the person's name and the same follow-up label the table shows", () => {

@@ -155,6 +155,10 @@ export async function POST(req: Request) {
         ext = "jpg";
       }
     } catch {
+      // A GUEST's file that can't be read as a picture is not stored: kept
+      // raw it was any bytes at all under an image type, with its EXIF and GPS,
+      // at a permanent public URL, from no account (audit SEC-04).
+      if (!user) return NextResponse.json({ error: "We couldn't read that picture. Try a different photo." }, { status: 400 });
       // sharp failure → store the original rather than fail the upload.
       body = arrayBuffer;
       contentType = file.type;

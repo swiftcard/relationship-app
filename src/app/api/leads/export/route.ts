@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDownloadUserId } from "@/lib/download-auth";
 import { isRateLimited } from "@/lib/rate-limit";
+import { csvCell } from "@/lib/csv-cell";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 
 import { isPaidProfile } from "@/lib/effective-plan";
@@ -50,11 +51,7 @@ export async function GET(req: NextRequest) {
   // whoever submitted the public lead form) can be interpreted as a formula
   // by Excel/Sheets when this CSV is opened (CSV/formula injection —
   // security review).
-  function esc(v: string | null | undefined) {
-    const s = v ?? "";
-    const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
-    return `"${safe.replace(/"/g, '""')}"`;
-  }
+  const esc = csvCell;
 
   const rows = (leads ?? []).map((l) => [
     esc(l.name),
@@ -73,6 +70,8 @@ export async function GET(req: NextRequest) {
     headers: {
       "Content-Type": "text/csv",
       "Content-Disposition": `attachment; filename="swiftcard-leads.csv"`,
+      // Never cached: it is a snapshot of live customer data (audit SEC-18).
+      "Cache-Control": "no-store",
     },
   });
 }

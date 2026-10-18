@@ -21,6 +21,7 @@ import {
   type ClaimInsert,
 } from "@/lib/draft-claim";
 import { ensureUniqueUsername } from "@/lib/username";
+import { adoptGuestUploads } from "@/lib/guest-uploads";
 
 // Claim converts a guest's localStorage draft into a real `cards` row under the
 // SESSION user. It mirrors src/app/api/cards (field allow-list, username +
@@ -293,6 +294,11 @@ export async function POST(req: NextRequest) {
   // same-draft idempotency guard above already prevents duplicate cards for this
   // draft).
   insert.username = await ensureUniqueUsername(insert.username, admin);
+
+  // Pictures and videos uploaded before there was an account live under
+  // guest/, which the daily cron clears: the card gets its own copies first
+  // (lib/guest-uploads, audit SEC-04).
+  await adoptGuestUploads(admin, user.id, insert).catch(() => {});
 
   // ── Insert ────────────────────────────────────────────────────────────────
   let { data: card, error } = await admin.from("cards").insert(insert).select("id, username").single();

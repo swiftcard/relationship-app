@@ -32,12 +32,24 @@ export async function DELETE(req: Request) {
 
   const { data: member } = await supabase
     .from("office_members")
-    .select("user_id, status, invite_email")
+    .select("user_id, status, invite_email, role")
     .eq("id", memberId)
     .eq("office_id", office.id)
     .single();
 
   if (!member) return NextResponse.json({ error: "Member not found" }, { status: 404 });
+
+  // Only the OWNER removes an admin or a billing admin (audit SEC-09), as only
+  // the owner can make one (manage_roles). An admin could remove a fellow
+  // admin, or the billing contact, and removal cascades: plan down, office
+  // cards offline, branding off. Admins still remove managers and employees,
+  // and anyone's pending invite.
+  if (!ctx.isOwner && member.status !== "pending" && (member.role === "admin" || member.role === "billing_admin")) {
+    return NextResponse.json(
+      { error: "Only the team owner can remove an admin or a billing admin." },
+      { status: 403 },
+    );
+  }
 
   // Pending invite → revoke (tracked, seat released) instead of hard delete.
   if (member.status === "pending") {

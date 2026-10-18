@@ -3,6 +3,8 @@ import { resolveDownloadUserId } from "@/lib/download-auth";
 import { requireOfficeCapability } from "@/lib/office-roles";
 import { getAllOfficeLeads } from "@/lib/office-leads";
 import { FOLLOW_UP_COPY } from "@/lib/lead-followup";
+import { isRateLimited } from "@/lib/rate-limit";
+import { csvCell } from "@/lib/csv-cell";
 
 // GET /api/office/leads/export → every lead the office owns, as CSV.
 //
@@ -25,6 +27,12 @@ export async function GET(req: NextRequest) {
   const ctx = await requireOfficeCapability(userId, "view_org_analytics");
   if (!ctx) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+  // Each call pages through EVERY contact the office owns, so it is held to
+  // the personal export's pace (audit SEC-18).
+  if (await isRateLimited(`office-leads-export:${userId}`, 10, 10 * 60 * 1000)) {
+    return NextResponse.json({ error: "Too many exports — please wait a few minutes and try again." }, { status: 429 });
+  }
+
   const leads = await getAllOfficeLeads(ctx.officeId).catch(() => null);
   if (!leads) {
     return NextResponse.json({ error: "Couldn't build the export. Please try again." }, { status: 500 });
@@ -34,11 +42,7 @@ export async function GET(req: NextRequest) {
   // tab or CR with a quote before quoting, so a lead field — all of which are
   // typed by whoever filled in the public form — cannot be run as a formula
   // when the file is opened in Excel or Sheets.
-  const esc = (v: string | null | undefined) => {
-    const s = v ?? "";
-    const safe = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
-    return `"${safe.replace(/"/g, '""')}"`;
-  };
+  const esc = csvCell;
 
   const rows = leads.map((l) =>
     [
