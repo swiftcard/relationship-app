@@ -103,7 +103,8 @@ describe("both save routes gate on a REAL change", () => {
   it("the office snapshot is taken BEFORE the update, not after", () => {
     const c = code(OFFICE_ROUTE);
     const snap = c.indexOf("const { data: beforeCard }");
-    const write = c.indexOf('.from("cards").update(updates)');
+    // (clamped to lib/card-limits since audit F-OFFICE-03)
+    const write = c.indexOf('.from("cards").update(clampCardWrite(updates))');
     expect(snap).toBeGreaterThan(-1);
     expect(write).toBeGreaterThan(-1);
     expect(snap, "the snapshot reads the row AFTER it was written").toBeLessThan(write);

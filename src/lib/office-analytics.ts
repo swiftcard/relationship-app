@@ -21,11 +21,12 @@ async function getOfficeTeam(admin: Admin, officeId: string, ownerId: string): P
   // Team = owner + members whose profile STILL points at this office.
   const { data: memberRows } = await admin
     .from("office_members")
-    .select("user_id")
+    .select("user_id, invite_name, invite_email")
     .eq("office_id", officeId)
     .eq("status", "active")
     .not("user_id", "is", null);
   const memberIds = (memberRows ?? []).map((m) => m.user_id as string);
+  const inviteByUser = new Map((memberRows ?? []).map((m) => [m.user_id as string, m]));
 
   let verified: string[] = [];
   if (memberIds.length) {
@@ -64,7 +65,16 @@ async function getOfficeTeam(admin: Admin, officeId: string, ownerId: string): P
       // so this fell through to profiles.username and the admin's Team list
       // read "dana-3f9a2c" instead of "Dana Lee". Same reasoning as the slug
       // below: prefer the real card over the account handle.
-      name: (prof?.name as string) || (slugs[0]?.name as string) || (prof?.username as string) || "Member",
+      // …then the name they were invited under, then the address — the same
+      // ladder the Team tab uses (lib/office-team). Analytics, the person page
+      // and the CSV stopped at the handle, so a member with no card yet was
+      // "Dana Lee" on Team and "dana-3f9a2c" everywhere else (audit F-OFFICE-01).
+      name: (prof?.name as string)
+        || (slugs[0]?.name as string)
+        || (inviteByUser.get(uid)?.invite_name as string | null)
+        || (inviteByUser.get(uid)?.invite_email as string | null)
+        || (prof?.username as string)
+        || "Member",
       // The member's PUBLIC card slug, preferring a real card over the account
       // handle. The team drawer builds /<this> for its View, Copy and QR
       // actions — including a QR the admin is invited to print — and every one

@@ -58,7 +58,13 @@ export async function POST(req: Request) {
   const seatCap = (office.seats as number | null) ?? PLAN_LIMITS.OFFICE_MIN_SEATS;
 
   const { email, name } = await req.json();
-  if (!email?.trim()) return NextResponse.json({ error: "Email required" }, { status: 400 });
+  if (typeof email !== "string" || !email.trim()) return NextResponse.json({ error: "Email required" }, { status: 400 });
+  // An address, not any string (audit F-OFFICE-04): "bob" reserved a paid seat
+  // and sent an invite that could only bounce. The browser's type="email" is
+  // the only other check, and the API doesn't need a browser.
+  if (email.trim().length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    return NextResponse.json({ error: "That email address doesn't look right." }, { status: 400 });
+  }
 
   // Suppression gate — the same one every other send to a third party passes
   // through (scanner/send, leads/share-card). Mailing an address that already
@@ -77,7 +83,9 @@ export async function POST(req: Request) {
   // Optional display name: personalises the invite email AND is stored on the
   // office_members row (invite_name) so the admin's Team dashboard can show WHO
   // a pending invite went to, not just the email.
-  const inviteName = typeof name === "string" && name.trim() ? name.trim() : null;
+  // Capped like a card's name (lib/card-limits): it is shown in the roster and
+  // written into the invite email.
+  const inviteName = typeof name === "string" && name.trim() ? name.trim().slice(0, 120) : null;
   const inviteeFirst = inviteName ? inviteName.split(/\s+/)[0] : null;
 
   // Check for duplicate (case-insensitive — invite emails are stored lowercased).

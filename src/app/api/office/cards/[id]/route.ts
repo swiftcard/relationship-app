@@ -5,6 +5,7 @@ import { requireOfficeCapability } from "@/lib/office-roles";
 import { officeOwnsCard, isOwnersCard } from "@/lib/office-cards";
 import { getOfficeBrand, overlayOfficeContact, overlayOfficeDesign, overlayOfficeLinks } from "@/lib/office-brand";
 import { normalizeSocial } from "@/lib/social-url";
+import { clampCardWrite } from "@/lib/card-limits";
 import { writeAudit } from "@/lib/audit";
 import { cardContentChanged, signatureContentChanged } from "@/lib/card-changed";
 
@@ -48,6 +49,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   for (const key of ALLOWED) {
     if (key in body) updates[key] = body[key];
+  }
+  // The same rules an owner's own edit meets (audit F-OFFICE-03): text where
+  // text belongs, a name that isn't blank, an email that looks like one, and
+  // (at the write below) the lengths lib/card-limits prints. An admin's paste
+  // of 10,000 characters broke the employee's public card, vCard and preview.
+  for (const key of ["name", "title", "phone", "email", "label", ...SOCIAL_COLUMNS]) {
+    if (key in updates && updates[key] !== null && typeof updates[key] !== "string") {
+      return NextResponse.json({ error: `"${key}" must be text.` }, { status: 400 });
+    }
+  }
+  if ("customization" in updates && (typeof updates.customization !== "object" || updates.customization === null || Array.isArray(updates.customization))) {
+    return NextResponse.json({ error: "Invalid card settings." }, { status: 400 });
+  }
+  if ("name" in updates && !String(updates.name ?? "").trim()) {
+    return NextResponse.json({ error: "A name is required." }, { status: 400 });
+  }
+  if (typeof updates.email === "string" && updates.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(updates.email.trim())) {
+    return NextResponse.json({ error: "That email address doesn't look right." }, { status: 400 });
   }
   for (const key of SOCIAL_COLUMNS) {
     if (key in updates) updates[key] = normalizeSocial(String(updates[key] ?? ""), key);
@@ -123,7 +142,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
-  const { error } = await admin.from("cards").update(updates).eq("id", id);
+  const { error } = await admin.from("cards").update(clampCardWrite(updates)).eq("id", id);
   // Every other error on this route is a sentence written for the admin
   // ("That card isn't part of your team."). This one handed back Postgres's own
   // text, which OfficeCardActions then printed verbatim — an admin could be

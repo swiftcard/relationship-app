@@ -69,7 +69,9 @@ describe("the Team list shows people, not machine handles", () => {
     // profiles.username — a generated handle like "dana-3f9a2c" — in the Team
     // list, the member drawer and the analytics table.
     const analytics = read("src/lib/office-analytics.ts");
-    expect(analytics).toMatch(/name: \(prof\?\.name as string\) \|\| \(slugs\[0\]\?\.name as string\)/);
+    // (one ladder for every Office screen since audit F-OFFICE-01: card name,
+    // then the invited name and address, then the handle)
+    expect(analytics).toMatch(/name: \(prof\?\.name as string\)\s*\|\| \(slugs\[0\]\?\.name as string\)/);
   });
 
   it("falls back to the name the admin typed on the invite", () => {
