@@ -56,7 +56,8 @@ describe("a contact locked behind the Free cap is never named", () => {
 
   it("an SMS reply from a locked contact on Free shows neither name nor words", () => {
     const src = read("src/app/api/twilio/inbound/route.ts");
-    expect(src).toMatch(/const hidden = isLockedLead\(target\) && !isPaidPlan\(owner\.plan/);
+    // The effective plan: an expired grant is Free too (audit N-15).
+    expect(src).toMatch(/const hidden = isLockedLead\(target\) && !isPaidProfile\(owner as PlanRow\)/);
     expect(src).toMatch(/hidden \? markName\(rawWho\) : rawWho/);
     expect(src).toMatch(/body: shownText,/);
   });

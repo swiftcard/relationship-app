@@ -35,6 +35,7 @@ import { getStripe } from "@/lib/stripe";
 import { isPaidPlan } from "@/lib/plan";
 import { deliverToLead } from "@/lib/messaging";
 import { getAccountEmail } from "@/lib/account-email";
+import { ensureEmailPreferences } from "@/lib/email-prefs";
 import { expireFreeMonths } from "@/lib/referral-server";
 import { purgeExpiredDeletedAccounts, reconcileDeletedSubscriptions } from "@/lib/account-purge";
 import { applyDueSeatReductions } from "@/lib/office-scheduled-seats";
@@ -204,6 +205,11 @@ async function getEmailPrefs(
   supabase: ReturnType<typeof getAdminSupabase>,
   userId: string,
 ): Promise<{ unsubscribeUrl?: string; marketingOk: boolean }> {
+  // Provisioned first (audit N-10). The row — and with it the unsubscribe
+  // link no lifecycle mail may go without — was only ever made at signup, so
+  // every older account, or one that skipped onboarding, silently lost "your
+  // plan ends in 3 days" and "your trial has ended" for good. Idempotent.
+  await ensureEmailPreferences(userId, supabase);
   const { data } = await supabase
     .from("email_preferences")
     .select("unsubscribe_token, marketing_emails")

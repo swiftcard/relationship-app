@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { sendPushToUser } from "@/lib/push";
-import { isPaidPlan } from "@/lib/plan";
+import { isPaidProfile, PLAN_COLUMNS, type PlanRow } from "@/lib/effective-plan";
 import { unlockedLeadBody } from "@/lib/notification-privacy";
 import {
   localHour, quietWindowStart, readPushPrefs, QUIET_END_HOUR, QUIET_WINDOW_MS, DEFAULT_TIMEZONE, type PushCategory,
@@ -185,7 +185,7 @@ export async function GET(req: NextRequest) {
   const profiles = new Map<string, Row>();
   for (let i = 0; i < userIds.length; i += 200) {
     const { data } = await admin
-      .from("profiles").select("id, plan, customization").in("id", userIds.slice(i, i + 200));
+      .from("profiles").select(`id, ${PLAN_COLUMNS}`).in("id", userIds.slice(i, i + 200));
     for (const p of data ?? []) profiles.set(p.id as string, p as Row);
   }
 
@@ -193,7 +193,12 @@ export async function GET(req: NextRequest) {
     try {
       const profile = profiles.get(userId);
       const prefs = readPushPrefs(profile?.customization);
-      const paid = isPaidPlan((profile?.plan as string | null) ?? null);
+      // The EFFECTIVE plan, as the live push, the bell and Contacts read it
+      // (audit N-07). From the column alone, a grant that expired overnight
+      // put a locked contact's real name on the morning lock screen, and a
+      // fresh Apple purchase the column hadn't caught up with was told to
+      // "open to unlock" what it had just paid for.
+      const paid = !!profile && isPaidProfile(profile as PlanRow);
 
       // Nothing was ever held for someone who switched quiet hours off.
       if (prefs.quietHours === false) continue;

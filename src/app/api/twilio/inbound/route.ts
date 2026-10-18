@@ -6,7 +6,7 @@ import { sendPushToUser } from "@/lib/push";
 import { writeNotification } from "@/lib/notify";
 import { reportError } from "@/lib/report-error";
 import { isLockedLead } from "@/lib/lead-access";
-import { isPaidPlan } from "@/lib/plan";
+import { isPaidProfile, PLAN_COLUMNS, type PlanRow } from "@/lib/effective-plan";
 import { markName } from "@/lib/contact-privacy";
 
 const STOP_WORDS = new Set(["stop", "stopall", "unsubscribe", "cancel", "end", "quit", "stop all"]);
@@ -160,14 +160,16 @@ export async function POST(req: NextRequest) {
           const { data: cardRow } = await admin
             .from("cards").select("user_id").eq("username", target.card_owner).maybeSingle();
           const { data: owner } = cardRow?.user_id
-            ? await admin.from("profiles").select("id, plan").eq("id", cardRow.user_id).maybeSingle()
-            : await admin.from("profiles").select("id, plan").eq("username", target.card_owner).maybeSingle();
+            ? await admin.from("profiles").select(`id, ${PLAN_COLUMNS}`).eq("id", cardRow.user_id).maybeSingle()
+            : await admin.from("profiles").select(`id, ${PLAN_COLUMNS}`).eq("username", target.card_owner).maybeSingle();
           if (owner?.id) {
             // A contact locked behind the Free cap is hidden on the Contacts
             // page, so neither their name nor their words go on the bell or the
             // lock screen (2026-10-06 notification audit). Sequences are Pro,
             // but one started before a downgrade can still draw a reply.
-            const hidden = isLockedLead(target) && !isPaidPlan(owner.plan as string | null);
+            // Effective plan, not the column (audit N-15): an expired grant is Free,
+            // and a locked contact's name and words stay locked on the lock screen.
+            const hidden = isLockedLead(target) && !isPaidProfile(owner as PlanRow);
             const rawWho = (target.name || "").trim();
             const who = !rawWho ? "A contact" : hidden ? markName(rawWho) : rawWho;
             const shownText = hidden ? "Open SwiftCard to read their reply." : bodyText;
