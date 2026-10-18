@@ -9,6 +9,7 @@ import { stripLocationMarks, teaseLocation } from "@/lib/location-privacy";
 import { genericNames, stripNameMarks } from "@/lib/contact-privacy";
 import { NATIVE_HIDDEN_TYPES } from "@/lib/native-notification-copy";
 import { FREE_STATE_TYPES } from "@/lib/notification-privacy";
+import { hiddenTypesForReader, notificationReader } from "@/lib/office-account-notifications";
 import {
   decidePush, fitBody, fitBodyKeepingPlace, readPushPrefs, pushCardTag, cardTagLine, MAX_TITLE_CHARS, OWN_CAP, UNCAPPED, VIEW_ROLLUP_TAG, SOFT_CAP_CATEGORIES,
   type PushCategory, type PushCardRow,
@@ -373,7 +374,12 @@ async function unreadBadgeCount(
   paid: boolean,
 ): Promise<number | undefined> {
   try {
-    const excluded = ["referral_claim", ...NATIVE_HIDDEN_TYPES, ...(paid ? FREE_STATE_TYPES : [])];
+    // …and whatever the bell hides from this reader: referral rows for any
+    // Office account, personal billing rows for a team member with no
+    // subscription of their own. Counted, they put a number on the icon that
+    // nothing in the bell could ever clear (audit N-13).
+    const reader = await notificationReader(userId);
+    const excluded = [...new Set(["referral_claim", ...NATIVE_HIDDEN_TYPES, ...(paid ? FREE_STATE_TYPES : []), ...hiddenTypesForReader(reader)])];
     const { count, error } = await admin
       .from("notifications")
       .select("id", { count: "exact", head: true })

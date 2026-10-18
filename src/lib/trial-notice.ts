@@ -28,7 +28,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { TRIAL_CHARGE_CENTS_KEY, TRIAL_CHARGE_INTERVAL_KEY, TRIAL_ENDS_KEY } from "./billing-state";
-import { getAccountEmail } from "./account-email";
+import { ownerMailAddress } from "./owner-mail";
 import { greetingFirstName } from "./greeting-name";
 import { trialChargeSoonEmail } from "./email-templates";
 import { reportError } from "./report-error";
@@ -125,7 +125,9 @@ export async function sendTrialChargeNotices(
     // still read as "warned", and the trialist was charged with no notice.
     // The hourly route and the daily backstop can overlap; the idempotency
     // key on the send is what keeps that to one email.
-    const to = await getAccountEmail(u.id as string, (u.email as string) ?? null);
+    // Not to an address that bounced or reported spam (audit N-09). Left
+    // unstamped, so a cleared address still gets it on a later run.
+    const to = await ownerMailAddress(u.id as string, (u.email as string) ?? null);
     if (!to) continue;
 
     const cents = typeof cust[TRIAL_CHARGE_CENTS_KEY] === "number" ? (cust[TRIAL_CHARGE_CENTS_KEY] as number) : null;

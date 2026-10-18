@@ -34,7 +34,7 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { getStripe } from "@/lib/stripe";
 import { isPaidPlan } from "@/lib/plan";
 import { deliverToLead } from "@/lib/messaging";
-import { getAccountEmail } from "@/lib/account-email";
+import { ownerMailAddress } from "@/lib/owner-mail";
 import { ensureEmailPreferences } from "@/lib/email-prefs";
 import { expireFreeMonths } from "@/lib/referral-server";
 import { purgeExpiredDeletedAccounts, reconcileDeletedSubscriptions } from "@/lib/account-purge";
@@ -338,7 +338,8 @@ export async function GET(req: NextRequest) {
             }),
       });
 
-      const to = await getAccountEmail(u.id, u.email);
+      // Never to an address that bounced or reported spam (audit N-09).
+      const to = await ownerMailAddress(u.id, u.email);
       if (!to) continue;
       const { unsubscribeUrl: unsub, marketingOk } = await getEmailPrefs(supabase, u.id);
       // Honor the opt-out for the EMAIL only — the in-app notice above is
@@ -413,7 +414,7 @@ export async function GET(req: NextRequest) {
       // means the second run sees _proWarnedFor and skips. Behaviour is
       // otherwise unchanged: this stamp always ran regardless of send outcome.
       await supabase.from("profiles").update({ customization: { ...cust, _proWarnedFor: expiresAt } }).eq("id", u.id);
-      const to = await getAccountEmail(u.id as string, (u.email as string) ?? null);
+      const to = await ownerMailAddress(u.id as string, (u.email as string) ?? null);
       if (to) {
         const { unsubscribeUrl: unsub, marketingOk } = await getEmailPrefs(supabase, u.id as string);
         // This one is an upgrade pitch — never send it to someone who opted

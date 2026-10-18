@@ -1,3 +1,4 @@
+import { isOptedOut } from "@/lib/messaging";
 import { Resend } from "resend";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { welcomeEmail, unsubUrl, marketingHeaders } from "@/lib/email-templates";
@@ -49,6 +50,8 @@ export async function sendWelcomeEmail(userId: string, accountEmail: string | nu
   // lib/test-mailbox.ts for the number. Skipped BEFORE the email_logs claim so
   // the log stays a record of mail that went to people.
   if (isTestMailbox(accountEmail)) return "skipped";
+  // Nor to an address that bounced or reported spam (audit N-09).
+  if (await isOptedOut("email", accountEmail)) return "skipped";
   try {
     const admin = getAdminSupabase();
 

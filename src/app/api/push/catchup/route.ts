@@ -98,9 +98,14 @@ const PAGE = 1000;
 /** The catch-up is due from the end of quiet hours (8am) until this hour. */
 const CATCHUP_LAST_HOUR = 20;
 
-function destinationFor(category: PushCategory, cardOwner: string | null): string {
+function destinationFor(category: PushCategory, cardOwner: string | null, paid: boolean): string {
   const card = cardOwner ? `?card=${encodeURIComponent(cardOwner)}` : "";
   if (category === "billing_problem") return `${APP_URL}/settings/flows?billing=1`;
+  // A returning contact on Free has its name withheld: the live push opens
+  // that card's dashboard, where the row waits in the bell, and so does this
+  // however many other things the night held — Contacts would only show the
+  // contact blurred (audit N-20).
+  if (category === "contact_return" && !paid) return `${APP_URL}/dashboard${card}`;
   // A contact who is waiting on a reply belongs in Contacts; a view belongs on
   // the dashboard that shows it. Both are the same screens the live pushes use.
   if (category === "new_lead" || category === "lead_reply" || category === "contact_return") return `${APP_URL}/contacts${card}`;
@@ -352,7 +357,7 @@ export async function GET(req: NextRequest) {
           ? paid
             ? contactUrl
             : `${APP_URL}/dashboard${top.row.card_owner ? `?card=${encodeURIComponent(String(top.row.card_owner))}` : ""}`
-          : destinationFor(top.category, (top.row.card_owner as string | null) ?? null),
+          : destinationFor(top.category, (top.row.card_owner as string | null) ?? null, paid),
         // Team news says which team, and sits in that team's thread, like every
         // team push (lib/team-alerts).
         ...(top.team ? { context: teamPushContext(top.team.officeName), thread: teamPushThread(top.team.officeId) } : {}),

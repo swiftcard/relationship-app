@@ -84,6 +84,10 @@ vi.mock("@/lib/supabase-admin", () => ({
 
 vi.mock("@/lib/email-prefs", () => ({ ensureEmailPreferences: async () => {} }));
 
+// The bounce/complaint list (message_opt_outs, audit N-09): empty unless a test fills it.
+const suppressed = new Set<string>();
+vi.mock("@/lib/messaging", () => ({ isOptedOut: async (_c: string, to: string) => suppressed.has(to) }));
+
 vi.mock("resend", () => ({
   Resend: class {
     emails = {
@@ -223,6 +227,17 @@ describe("the moment the first card exists", () => {
     authEmail = null;
     await sendWelcomeWhenCardLive("u1", "fallback@example.com");
     expect(sentEmails[0].to).toBe("fallback@example.com");
+  });
+
+  it("never goes to an address that bounced or reported spam (audit N-09)", async () => {
+    authEmail = "bounced@example.com";
+    suppressed.add("bounced@example.com");
+    try {
+      await sendWelcomeWhenCardLive("u1", null);
+      expect(sentEmails).toHaveLength(0);
+    } finally {
+      suppressed.clear();
+    }
   });
 
   it("does not send a second time for the same account", async () => {

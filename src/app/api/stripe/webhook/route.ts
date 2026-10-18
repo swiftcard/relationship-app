@@ -6,6 +6,7 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { receiptEmail, trialStartedEmail, paymentFailedEmail } from "@/lib/email-templates";
 import { markReferralConversion } from "@/lib/referral-server";
 import { getAccountEmail } from "@/lib/account-email";
+import { ownerMailAddress } from "@/lib/owner-mail";
 import { getOfficeBrand, stripBrandFromUserCards, memberFallbackPlan } from "@/lib/office-brand";
 import { planFromPriceId } from "@/lib/subscription";
 import { PLAN_LIMITS } from "@/lib/plan";
@@ -79,7 +80,8 @@ async function sendReceiptForUser(opts: {
 
   // Receipt goes to the ACCOUNT (auth) email, not profiles.email (which can be
   // the card's public contact address).
-  const accountEmail = await getAccountEmail(opts.userId, profile?.email ?? null);
+  // …and never to an address that bounced or reported spam (audit N-09).
+  const accountEmail = await ownerMailAddress(opts.userId, profile?.email ?? null);
   // The receipts switch mutes RECEIPTS. The trial-start email is the first
   // charge's disclosure (date and amount), so it goes regardless — the same
   // rule as the day-7 notice (lib/trial-notice).
@@ -211,7 +213,7 @@ async function sendPaymentFailedEmail(opts: { customerId: string; amountCents: n
 
   if (!profile) return;
   // Owner mail goes to the ACCOUNT (auth) email, not profiles.email.
-  const accountEmail = await getAccountEmail(profile.id as string, (profile.email as string) ?? null);
+  const accountEmail = await ownerMailAddress(profile.id as string, (profile.email as string) ?? null);
   if (!accountEmail) return;
 
   const firstName = await greetingFirstName(admin, profile.id as string, profile.name as string | null);

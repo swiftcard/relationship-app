@@ -38,6 +38,20 @@ export type NotificationReader = {
 
 export const ORDINARY_READER: NotificationReader = { officeAccount: false, teamMember: false, ownSubscription: false };
 
+/**
+ * The types hideForReader drops for this reader, as a list — for counts that
+ * are made in the database rather than by filtering rows (the iPhone icon's
+ * number, lib/push unreadBadgeCount). One rule, so the icon can never count a
+ * row the bell will not show (audit N-13).
+ */
+export function hiddenTypesForReader(reader: NotificationReader): string[] {
+  if (!reader.officeAccount && !reader.teamMember) return [];
+  return [
+    ...REFERRAL_TYPES,
+    ...(reader.teamMember && !reader.ownSubscription ? PERSONAL_BILLING_TYPES : []),
+  ];
+}
+
 export function hideForReader<T extends { type?: string | null }>(rows: T[], reader: NotificationReader): T[] {
   if (!reader.officeAccount && !reader.teamMember) return rows;
   return rows.filter((r) => {
