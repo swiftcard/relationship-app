@@ -23,20 +23,30 @@ async function suppress(token: string): Promise<boolean> {
   return !error && !!data?.length;
 }
 
+// A GET only ASKS (audit SEC-20). Mail security scanners open every link in a
+// message before the person sees it, and a GET that unsubscribed them did so
+// without their consent. The link in the email lands on a page with one
+// button; the button POSTs here. The one-click header (below) is untouched:
+// that POST is the mail provider acting on the person's own click.
 export async function GET(req: NextRequest) {
   const token = (req.nextUrl.searchParams.get("token") || "").trim();
   if (!token) return NextResponse.redirect(new URL("/unsubscribe?error=missing", req.url));
-
-  const ok = await suppress(token);
-  return NextResponse.redirect(new URL(ok ? "/unsubscribe?success=1" : "/unsubscribe?error=invalid", req.url));
+  return NextResponse.redirect(new URL(`/unsubscribe?confirm=1&token=${encodeURIComponent(token)}`, req.url));
 }
 
-// Also handles the List-Unsubscribe-Post header sent by Gmail, Yahoo and Outlook.
+// Handles the List-Unsubscribe-Post header sent by Gmail, Yahoo and Outlook,
+// and (with ?ui=1) the confirm page's button, which is sent back to a page.
 export async function POST(req: NextRequest) {
   const token = (req.nextUrl.searchParams.get("token") || "").trim();
-  if (!token) return NextResponse.json({ error: "Missing token" }, { status: 400 });
+  const fromPage = req.nextUrl.searchParams.get("ui") === "1";
+  if (!token) {
+    return fromPage
+      ? NextResponse.redirect(new URL("/unsubscribe?error=missing", req.url), 303)
+      : NextResponse.json({ error: "Missing token" }, { status: 400 });
+  }
 
   const ok = await suppress(token);
+  if (fromPage) return NextResponse.redirect(new URL(ok ? "/unsubscribe?success=1" : "/unsubscribe?error=invalid", req.url), 303);
   if (!ok) return NextResponse.json({ error: "Invalid token" }, { status: 404 });
   return NextResponse.json({ success: true });
 }

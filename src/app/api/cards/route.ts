@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { deletedAccountResponse } from "@/lib/live-account";
 import { after } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
@@ -16,6 +17,8 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  // A deleted account (its 30-day window) creates nothing (audit SEC-12).
+  { const gone = await deletedAccountResponse(user.id); if (gone) return gone; }
 
   const admin = getAdminSupabase();
 

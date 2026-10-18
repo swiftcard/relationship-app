@@ -90,8 +90,36 @@ export default function UnsubscribeContent() {
     );
   }
 
-  // Landing state — token in URL but not yet triggered (shouldn't normally happen
-  // since GET /api/unsubscribe redirects here, but covers direct navigation)
+  // The email's link lands here and asks (audit SEC-20): opening the link no
+  // longer unsubscribes, because mail scanners open every link. A plain form
+  // POST, so the button works before — or without — any JavaScript.
+  const token = params.get("token");
+  if (params.get("confirm") === "1" && token) {
+    return (
+      <div
+        className="w-full max-w-md rounded-2xl p-8 text-center"
+        style={{ background: "#fff", border: "1px solid #E4DDD4" }}
+      >
+        <h1 className="text-xl font-bold mb-2" style={{ color: "#0f172a" }}>
+          Unsubscribe from SwiftCard marketing emails?
+        </h1>
+        <p className="text-sm mb-6" style={{ color: "#64748b" }}>
+          Receipts and security notices still reach you.
+        </p>
+        <form method="post" action={`/api/unsubscribe?ui=1&token=${encodeURIComponent(token)}`}>
+          <button
+            type="submit"
+            className="inline-block text-sm font-semibold rounded-full px-6 py-3"
+            style={{ background: "#1D4ED8", color: "#fff" }}
+          >
+            Unsubscribe
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  // Landing state with no token — direct navigation.
   return (
     <div
       className="w-full max-w-md rounded-2xl p-8 text-center"

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase-server";
+import { deletedAccountResponse } from "@/lib/live-account";
 import { isRateLimited } from "@/lib/rate-limit";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { clientIpFromHeaders } from "@/lib/client-ip";
@@ -23,6 +24,8 @@ const EXT_BY_TYPE: Record<string, string> = { "video/mp4": "mp4", "video/quickti
 export async function POST(req: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+  // A deleted account (its 30-day window) uploads nothing (audit SEC-12).
+  if (user) { const gone = await deletedAccountResponse(user.id); if (gone) return gone; }
   // Guests (first card, homepage builders) get a signed URL too, into their own
   // random folder under guest/ and on a tighter per-connection throttle.
   const limitKey = user ? `upload-video:${user.id}` : `upload-video-guest:${clientIpFromHeaders(req.headers)}`;

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { deletedAccountResponse } from "@/lib/live-account";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { createClient } from "@/lib/supabase-server";
 import { aiVision, hasAiProvider } from "@/lib/ai";
@@ -10,6 +11,8 @@ export async function POST(request: NextRequest) {
   const userSupabase = await createClient();
   const { data: { user } } = await userSupabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  // A deleted account (its 30-day window) creates nothing (audit SEC-12).
+  { const gone = await deletedAccountResponse(user.id); if (gone) return gone; }
   // Declining the AI notice has to actually stop the data leaving —
   // see lib/ai-consent-server.ts (App Review 5.1.1(i)/5.1.2(i)).
   const consentBlocked = await aiConsentBlock(user.id, request);

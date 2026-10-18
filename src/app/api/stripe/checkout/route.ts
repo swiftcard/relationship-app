@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { deletedAccountResponse } from "@/lib/live-account";
 import { createHash } from "node:crypto";
 import { isShellRequest } from "@/lib/shell-request";
 import { createClient } from "@/lib/supabase-server";
@@ -49,6 +50,8 @@ export async function POST(req: NextRequest) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // A deleted account (its 30-day window) creates nothing (audit SEC-12).
+    { const gone = await deletedAccountResponse(user.id); if (gone) return gone; }
 
     // Office sub-users have no personal subscription to buy — billing is the
     // organization's. This includes a delegated billing_admin: their

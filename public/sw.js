@@ -108,7 +108,9 @@ function networkThenSaved(req) {
 async function navigate(event, url) {
   const key = url.origin + cardKey(url.pathname);
   const cache = await caches.open(CARDS);
-  const saved = await cache.match(key);
+  // An app page is never answered from the card cache, whatever is in it
+  // (audit SEC-21) — but it still gets the no-signal screen below.
+  const saved = APP_PATH.test(url.pathname) ? undefined : await cache.match(key);
   if (!saved) {
     try {
       return await fromNetwork(event);
@@ -197,10 +199,20 @@ async function fetchAsset(href) {
   return r && (r.ok || r.type === "opaque") ? r : null;
 }
 
+/**
+ * The signed-in app, never a card (audit SEC-21). Only public card pages post
+ * "save-card" today, but one wrong call would keep someone's dashboard,
+ * contacts or settings in CacheStorage, served again on a shared phone. Every
+ * page the sign-in proxy guards (src/proxy.ts matcher) is refused here, and
+ * never answered from the card cache on the way back in.
+ */
+const APP_PATH = /^\/(dashboard|onboarding|profile|cards|settings|office|contacts|admin|grow|welcome|upgrade|checkout|join|share|login|account|account-deleted|api)(\/|$)/i;
+
 async function saveCard(msg) {
   if (typeof msg.path !== "string" || !msg.path.startsWith("/") || msg.path.startsWith("//")) return;
   const path = cardKey(msg.path);
   if (path === "/") return;
+  if (APP_PATH.test(path)) return;
   const vcard = typeof msg.vcard === "string" && VCARD_PATH.test(msg.vcard) ? msg.vcard.toLowerCase() : null;
   const assets = [...new Set((Array.isArray(msg.assets) ? msg.assets : []).map(validAsset).filter(Boolean))].slice(0, MAX_ASSETS);
   const name = typeof msg.name === "string" ? msg.name.slice(0, 120) : "";

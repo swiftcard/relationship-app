@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase-server";
+import { deletedAccountResponse } from "@/lib/live-account";
 import { isRateLimited } from "@/lib/rate-limit";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { clientIpFromHeaders } from "@/lib/client-ip";
@@ -58,6 +59,8 @@ export async function POST(req: Request) {
   // write), lands in its own random folder under guest/, and is throttled per
   // connection far tighter than a signed-in user.
   if (user) {
+    // A deleted account (its 30-day window) uploads nothing (audit SEC-12).
+    { const gone = await deletedAccountResponse(user.id); if (gone) return gone; }
     // Per-user throttle on the EXPENSIVE path: sharp decode/resize/re-encode +
     // public-bucket write. Previously uncapped (cost/abuse guard).
     if (await isRateLimited(`upload:${user.id}`, 30, 10 * 60 * 1000)) {
