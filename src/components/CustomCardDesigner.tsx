@@ -622,7 +622,7 @@ export default function CustomCardDesigner({
                     setTransfer(null);
                     setScanNote("Design copied. Tap anything on the card to move it, resize it or change its font and colour — or Undo.");
                   }}
-                  className="text-[0.78125rem] font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-lg px-4 py-2"
+                  className="text-[0.78125rem] font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-full px-4 py-2"
                 >
                   Use this design
                 </button>
@@ -630,7 +630,7 @@ export default function CustomCardDesigner({
                   type="button"
                   disabled={scanning}
                   onClick={() => { const t = transfer; setTransfer(null); if (t) void transferDesign({ b64: t.b64, dataUrl: t.src }); }}
-                  className="text-[0.78125rem] font-semibold text-gray-200 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 disabled:opacity-60"
+                  className="text-[0.78125rem] font-semibold text-gray-200 bg-gray-800 hover:bg-gray-700 border border-transparent rounded-full px-4 py-2 disabled:opacity-60"
                 >
                   Try again
                 </button>

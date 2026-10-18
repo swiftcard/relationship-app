@@ -329,7 +329,11 @@ export default function NotificationBell({
       </button>
 
       {open && typeof document !== "undefined" && createPortal(
-        <>
+        // The app's theme tokens without making the panel itself `.sc-app`:
+        // the iPhone shell pins every fixed `.sc-app` to the top of the screen
+        // (that rule is for its nav bars), which put this panel over the bar.
+        // `contents` adds no box, so nothing here moves.
+        <div className="sc-app contents">
           {/* Backdrop — click anywhere outside to close.
               PORTALED to document.body: this bell sits inside a backdrop-blur
               nav bar, and backdrop-filter makes that bar the containing block
@@ -351,7 +355,7 @@ export default function NotificationBell({
           <div
             role="dialog"
             aria-label="Notifications"
-            className="sc-app sc-glass sc-drop-in fixed z-[61] left-0 right-0 mx-auto top-[calc(env(safe-area-inset-top)+4.25rem)] w-[min(360px,calc(100vw-1.5rem))] max-h-[70vh] border border-gray-800 rounded-2xl shadow-2xl shadow-black/20 overflow-hidden flex flex-col"
+            className="sc-glass sc-drop-in fixed z-[61] left-0 right-0 mx-auto top-[calc(env(safe-area-inset-top)+4.25rem)] w-[min(360px,calc(100vw-1.5rem))] max-h-[70vh] border border-gray-800 rounded-2xl shadow-2xl shadow-black/20 overflow-hidden flex flex-col"
             style={{ transformOrigin: "top center" }}
           >
 
@@ -451,7 +455,7 @@ export default function NotificationBell({
                         disabled={pendingIds.has(n.id)}
                         title={n.read ? "Mark as unread" : "Mark as read"}
                         aria-label={n.read ? "Mark as unread" : "Mark as read"}
-                        className={`shrink-0 text-[0.625rem] font-medium px-2 py-0.5 rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                        className={`shrink-0 text-[0.625rem] font-medium px-2 py-0.5 rounded-full border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                           n.read
                             ? "border-gray-700 text-gray-500 hover:text-gray-300 hover:border-gray-500"
                             : "border-blue-700 bg-blue-600/15 text-blue-300 hover:bg-blue-600/25"
@@ -480,7 +484,7 @@ export default function NotificationBell({
             {/* No "View all notifications" footer: the dashboard list it opened
                 went with Quick Contacts (owner, 2026-09-29) — this IS the list. */}
           </div>
-        </>,
+        </div>,
         document.body,
       )}
     </div>

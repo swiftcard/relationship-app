@@ -61,6 +61,10 @@ export default function SignOutButton({ variant = "text" }: { variant?: Variant 
           descendants, so the "full-screen" dialog was pinned inside the 56px
           bar and cut off at the top of the screen (owner, 2026-09-16). */}
       {confirming && typeof document !== "undefined" && createPortal(
+        // Box-less wrapper: the app theme (light/dark, Apple surfaces) reaches a
+        // dialog portalled out of the page, without the iPhone shell treating
+        // the fixed dialog as one of its `.sc-app` nav bars.
+        <div className="sc-app contents">
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center px-5"
           role="dialog"
@@ -107,6 +111,7 @@ export default function SignOutButton({ variant = "text" }: { variant?: Variant 
               </button>
             </div>
           </div>
+        </div>
         </div>,
         document.body,
       )}

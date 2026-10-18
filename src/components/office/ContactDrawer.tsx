@@ -151,7 +151,7 @@ export default function ContactDrawer({
                   setFailure(null);
                   setAttempt((n) => n + 1);
                 }}
-                className="mt-3 text-xs font-semibold text-gray-300 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
+                className="mt-3 text-xs font-semibold text-gray-200 hover:text-white bg-gray-800/60 border border-transparent hover:bg-gray-700 px-3 py-1.5 rounded-full transition-colors"
               >
                 Try again
               </button>

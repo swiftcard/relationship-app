@@ -213,7 +213,7 @@ export default async function NewCardPage({
 
   return (
     <>
-      {claimHere && <GuestDraftClaim />}
+      {claimHere && <div className="sc-app contents"><GuestDraftClaim /></div>}
       <Wizard
         isPro={isPro}
         guest={!authedAdd}

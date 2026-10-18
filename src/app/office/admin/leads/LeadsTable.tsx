@@ -190,7 +190,7 @@ export default function LeadsTable({
           <DownloadLink
             href="/api/office/leads/export"
             title="Download every contact your team has captured"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-300 hover:text-white border border-gray-700 hover:border-gray-500 px-3 py-1.5 rounded-lg transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-200 hover:text-white bg-gray-800/60 border border-transparent hover:bg-gray-700 px-3 py-1.5 rounded-full transition-colors"
           >
             <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5" aria-hidden="true">
               <path fillRule="evenodd" d="M8 1a.75.75 0 01.75.75v6.19l1.22-1.22a.75.75 0 111.06 1.06l-2.5 2.5a.75.75 0 01-1.06 0l-2.5-2.5a.75.75 0 111.06-1.06l1.22 1.22V1.75A.75.75 0 018 1zM1.5 10.5a.75.75 0 01.75.75v1.5c0 .138.112.25.25.25h11a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 0113.5 14.5h-11A1.75 1.75 0 01.75 12.75v-1.5a.75.75 0 01.75-.75z" clipRule="evenodd" />
@@ -207,13 +207,13 @@ export default function LeadsTable({
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by contact name…"
           aria-label="Search contacts by name"
-          className="flex-1 bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+          className="flex-1 sc-field px-3.5 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none"
         />
         <select
           value={person}
           onChange={(e) => setPerson(e.target.value)}
           aria-label="Filter by team member"
-          className="bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40 sm:w-48"
+          className="sc-field px-3.5 py-2.5 text-sm text-white focus:outline-none sm:w-48"
         >
           <option value="all">Everyone on the team</option>
           {people.map((p) => (
@@ -224,7 +224,7 @@ export default function LeadsTable({
           value={followUp}
           onChange={(e) => setFollowUp(e.target.value as "all" | FollowUpState)}
           aria-label="Filter by follow-up"
-          className="bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40 sm:w-44"
+          className="sc-field px-3.5 py-2.5 text-sm text-white focus:outline-none sm:w-44"
         >
           <option value="all">Any follow-up</option>
           {FOLLOW_UP_STATES.map((st) => (
@@ -301,7 +301,7 @@ export default function LeadsTable({
           <button
             onClick={loadMore}
             disabled={loadingMore}
-            className="w-full sm:w-auto px-5 py-2.5 rounded-full text-xs font-semibold border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 transition-colors disabled:opacity-50"
+            className="w-full sm:w-auto px-5 py-2.5 rounded-full text-xs font-semibold bg-gray-800/60 border border-transparent text-gray-200 hover:text-white hover:bg-gray-700 transition-colors disabled:opacity-50"
           >
             {loadingMore
               ? "Loading…"

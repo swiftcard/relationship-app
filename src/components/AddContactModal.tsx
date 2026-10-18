@@ -201,7 +201,7 @@ export default function AddContactModal({
                 aria-label="Close"
                 // Same 28px square to look at; the padding around it makes the
                 // tap target 44px without moving anything.
-                className="w-7 h-7 -m-2 box-content p-2 rounded-lg bg-clip-content bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+                className="w-7 h-7 -m-2 box-content p-2 rounded-full bg-clip-content bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
               >
                 <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="w-3 h-3">
                   <path d="M1 1l10 10M11 1L1 11"/>
@@ -230,7 +230,7 @@ export default function AddContactModal({
                 type="button"
                 onClick={openScanner}
                 disabled={scanState === "scanning"}
-                className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors"
+                className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white font-semibold py-2.5 rounded-full text-sm transition-colors"
               >
                 {scanState === "scanning" ? (
                   <>
@@ -281,7 +281,7 @@ export default function AddContactModal({
                   value={form.name}
                   onChange={(e) => set("name", e.target.value)}
                   placeholder="Sarah Williams"
-                  className="w-full bg-gray-800 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                  className="w-full sc-field text-white placeholder-gray-600 px-3 py-2.5 text-sm focus:outline-none transition-colors"
                 />
               </div>
 
@@ -293,7 +293,7 @@ export default function AddContactModal({
                     value={form.email}
                     onChange={(e) => set("email", e.target.value)}
                     placeholder="sarah@acme.com"
-                    className="w-full bg-gray-800 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                    className="w-full sc-field text-white placeholder-gray-600 px-3 py-2.5 text-sm focus:outline-none transition-colors"
                   />
                 </div>
                 <div>
@@ -303,7 +303,7 @@ export default function AddContactModal({
                     value={form.phone}
                     onChange={(e) => set("phone", e.target.value)}
                     placeholder="(555) 000-0000"
-                    className="w-full bg-gray-800 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                    className="w-full sc-field text-white placeholder-gray-600 px-3 py-2.5 text-sm focus:outline-none transition-colors"
                   />
                 </div>
               </div>
@@ -314,7 +314,7 @@ export default function AddContactModal({
                   value={form.company}
                   onChange={(e) => set("company", e.target.value)}
                   placeholder="Acme Corp"
-                  className="w-full bg-gray-800 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                  className="w-full sc-field text-white placeholder-gray-600 px-3 py-2.5 text-sm focus:outline-none transition-colors"
                 />
               </div>
 
@@ -324,7 +324,7 @@ export default function AddContactModal({
                   value={form.where_met}
                   onChange={(e) => set("where_met", e.target.value)}
                   placeholder="e.g. NAR Conference, booth #42"
-                  className="w-full bg-gray-800 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                  className="w-full sc-field text-white placeholder-gray-600 px-3 py-2.5 text-sm focus:outline-none transition-colors"
                 />
               </div>
 
@@ -335,7 +335,7 @@ export default function AddContactModal({
                   onChange={(e) => set("notes", e.target.value)}
                   placeholder="What you discussed, next steps…"
                   rows={3}
-                  className="w-full bg-gray-800 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-blue-500 transition-colors"
+                  className="w-full sc-field sc-field-fit text-white placeholder-gray-600 px-3 py-2.5 text-sm resize-none focus:outline-none transition-colors"
                 />
               </div>
 
@@ -356,14 +356,14 @@ export default function AddContactModal({
                 <button
                   type="button"
                   onClick={() => { setOpen(false); reset(); }}
-                  className="flex-1 text-sm font-semibold py-2.5 rounded-xl bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
+                  className="flex-1 text-sm font-semibold py-2.5 rounded-full bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-1 text-sm font-semibold py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors"
+                  className="flex-1 text-sm font-semibold py-2.5 rounded-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors"
                 >
                   {saving ? "Saving…" : "Add contact"}
                 </button>

@@ -81,9 +81,9 @@ const needsSignIn = (message: string | null | undefined) => !!message && problem
 /** Connected / Paused (plan ended) / the problem, in one place for both card kinds. */
 function StatusBadge({ connected, unlocked, syncError }: { connected: boolean; unlocked: boolean; syncError?: string | null }) {
   if (!connected) return null;
-  if (!unlocked) return <span className="text-xs bg-slate-200 text-slate-600 font-medium px-2 py-0.5 rounded-full">Paused</span>;
-  if (syncError) return <span className="text-xs bg-amber-100 text-amber-700 font-medium px-2 py-0.5 rounded-full">{problemBadge(syncError)}</span>;
-  return <span className="text-xs bg-green-100 text-green-700 font-medium px-2 py-0.5 rounded-full">Connected</span>;
+  if (!unlocked) return <span className="text-xs bg-gray-800 text-gray-400 font-medium px-2 py-0.5 rounded-full">Paused</span>;
+  if (syncError) return <span className="text-xs bg-amber-950/300/10 text-amber-300 font-medium px-2 py-0.5 rounded-full">{problemBadge(syncError)}</span>;
+  return <span className="text-xs bg-green-500/10 text-green-400 font-medium px-2 py-0.5 rounded-full">Connected</span>;
 }
 
 /**
@@ -113,7 +113,7 @@ function ConnectionHealthRow({ provider, label, health }: { provider: Integratio
   return (
     <div className="mt-2 space-y-1">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <p className="text-[0.6875rem] text-slate-500">
+        <p className="text-[0.6875rem] text-gray-500">
           {waiting > 0 ? (
             <>{waiting} contact{waiting === 1 ? "" : "s"} waiting to send — SwiftCard tries again every day</>
           ) : health?.lastSyncedAt ? (
@@ -128,13 +128,13 @@ function ConnectionHealthRow({ provider, label, health }: { provider: Integratio
           type="button"
           onClick={sendTest}
           disabled={test.state === "sending"}
-          className="text-xs font-semibold text-[#1D4ED8] hover:text-[#1740C4] disabled:opacity-50 transition-colors"
+          className="text-xs font-semibold text-blue-400 hover:text-blue-300 disabled:opacity-50 transition-colors"
         >
           {test.state === "sending" ? "Sending…" : "Send test contact"}
         </button>
       </div>
       {test.state === "done" && (
-        <p role="status" className={`text-xs ${test.ok ? "text-green-700" : "text-red-600"}`}>
+        <p role="status" className={`text-xs ${test.ok ? "text-green-400" : "text-red-600"}`}>
           {test.message}
           {test.ok && test.url && (
             <>
@@ -204,13 +204,13 @@ type Props = {
  * No upgrade wording here: it renders in the iPhone app too.
  */
 function PausedNotice() {
-  return <p className="text-xs text-slate-500 mt-2">Paused — contacts aren&apos;t being sent to it right now. You can still disconnect it.</p>;
+  return <p className="text-xs text-gray-500 mt-2">Paused — contacts aren&apos;t being sent to it right now. You can still disconnect it.</p>;
 }
 
 function FlashLine({ status, name }: { status?: string | null; name: string }) {
   if (status === "connected") return <p className="text-xs text-green-600 font-medium mt-2">Connected! New contacts will go to {name} from now on.</p>;
   if (status === "unconfigured") return <p className="text-xs text-amber-600 font-medium mt-2">{name} isn&apos;t switched on for SwiftCard yet — check back soon.</p>;
-  if (status === "cancelled") return <p className="text-xs text-slate-500 mt-2">Nothing changed — you cancelled before {name} was connected.</p>;
+  if (status === "cancelled") return <p className="text-xs text-gray-500 mt-2">Nothing changed — you cancelled before {name} was connected.</p>;
   if (status === "error") return <p className="text-xs text-red-500 mt-2">{name} didn&apos;t finish connecting. Try again — if it keeps happening, make sure you&apos;re signing in to the right {name} account.</p>;
   return null;
 }
@@ -291,25 +291,25 @@ function IntegrationCard({
     <button
       onClick={disconnect}
       disabled={disconnecting}
-      className="text-xs text-slate-400 hover:text-red-500 transition-colors font-medium shrink-0"
+      className="text-xs text-gray-500 hover:text-red-500 transition-colors font-medium shrink-0"
     >
       {disconnecting ? "..." : "Disconnect"}
     </button>
   );
 
   return (
-    <div className={`bg-[#EDE5D8] border rounded-2xl px-5 py-4 shadow-sm ${!unlocked ? "opacity-60" : ""}`}
-      style={{ borderColor: needsReconnect ? "#fcd34d" : connected && unlocked ? "#86efac" : "#D4C8B8" }}>
+    <div className={`bg-gray-900 border border-gray-800 rounded-2xl px-5 py-4  ${!unlocked ? "opacity-60" : ""}`}
+      style={{ boxShadow: needsReconnect ? "inset 0 0 0 1px #fcd34d" : connected && unlocked ? "inset 0 0 0 1px #86efac" : undefined }}>
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl bg-[#F0EBE1] border border-[#D4C8B8] flex items-center justify-center shrink-0">
+        <div className="w-9 h-9 rounded-xl bg-gray-800 border border-gray-800 flex items-center justify-center shrink-0">
           {logo}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <p className="text-slate-900 font-semibold text-sm">{name}</p>
+            <p className="text-white font-semibold text-sm">{name}</p>
             <StatusBadge connected={connected} unlocked={unlocked} syncError={syncError} />
           </div>
-          <p className="text-slate-400 text-xs mt-0.5">{description}</p>
+          <p className="text-gray-500 text-xs mt-0.5">{description}</p>
         </div>
 
         {unlocked ? (
@@ -336,19 +336,19 @@ function IntegrationCard({
             nativeCopy={INTEGRATIONS_NATIVE_COPY}
             nativeContent={<span className="shrink-0"><IapProLock /></span>}
           >
-            <Link href="/upgrade" title="Get Pro to connect this integration" className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#D4C8B8] bg-[#F0EBE1] px-2 py-1 text-[0.6875rem] font-semibold text-slate-500 transition-colors hover:border-[#1D4ED8] hover:text-[#1D4ED8]"><Lock className="h-2.5 w-2.5" />Pro</Link>
+            <Link href="/upgrade" title="Get Pro to connect this integration" className="inline-flex shrink-0 items-center gap-1 rounded-full border border-gray-800 bg-gray-800 px-2 py-1 text-[0.6875rem] font-semibold text-gray-500 transition-colors hover:text-blue-400"><Lock className="h-2.5 w-2.5" />Pro</Link>
           </PlanGate>
         )}
       </div>
 
       {needsReconnect && (
         <div className="mt-2 flex items-center justify-between gap-2">
-          <p className="text-xs text-amber-700">{syncError}</p>
+          <p className="text-xs text-amber-300">{syncError}</p>
           {needsSignIn(syncError) && (
             <a
               href={connectUrl}
               onClick={(e) => { e.preventDefault(); void openConnect(connectUrl); }}
-              className="text-xs bg-amber-500 hover:bg-amber-600 text-white font-semibold px-3 py-1.5 rounded-full transition-colors shrink-0"
+              className="text-xs bg-amber-950/300 hover:bg-amber-600 text-white font-semibold px-3 py-1.5 rounded-full transition-colors shrink-0"
             >
               Reconnect
             </a>
@@ -359,7 +359,7 @@ function IntegrationCard({
       {!unlocked && connected && <PausedNotice />}
       {unlocked && connected && <ConnectionHealthRow provider={provider} label={name} health={health} />}
       {unlocked && !connected && choosing && (
-        <div className="mt-3 pt-3 border-t border-[#D4C8B8]/60 space-y-2">
+        <div className="mt-3 pt-3 border-t border-gray-800/60 space-y-2">
           <ScopeChooser
             group={`preconnect-${connectUrl}`}
             targetName={name}
@@ -377,7 +377,7 @@ function IntegrationCard({
             </button>
             <button
               onClick={() => setChoosing(false)}
-              className="text-slate-400 hover:text-slate-600 text-xs font-medium transition-colors"
+              className="text-gray-500 hover:text-gray-300 text-xs font-medium transition-colors"
             >
               Cancel
             </button>
@@ -550,25 +550,25 @@ function TokenCard({
     <button
       onClick={disconnect}
       disabled={status === "disconnecting"}
-      className="text-xs text-slate-400 hover:text-red-500 transition-colors font-medium shrink-0"
+      className="text-xs text-gray-500 hover:text-red-500 transition-colors font-medium shrink-0"
     >
       {status === "disconnecting" ? "..." : "Disconnect"}
     </button>
   );
 
   return (
-    <div className={`bg-[#EDE5D8] border rounded-2xl px-5 py-4 shadow-sm ${!isPro ? "opacity-60" : ""}`}
-      style={{ borderColor: needsReconnect ? "#fcd34d" : connected && isPro ? "#86efac" : "#D4C8B8" }}>
+    <div className={`bg-gray-900 border border-gray-800 rounded-2xl px-5 py-4  ${!isPro ? "opacity-60" : ""}`}
+      style={{ boxShadow: needsReconnect ? "inset 0 0 0 1px #fcd34d" : connected && isPro ? "inset 0 0 0 1px #86efac" : undefined }}>
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl bg-[#F0EBE1] border border-[#D4C8B8] flex items-center justify-center shrink-0">
+        <div className="w-9 h-9 rounded-xl bg-gray-800 border border-gray-800 flex items-center justify-center shrink-0">
           {logo}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <p className="text-slate-900 font-semibold text-sm">{title}</p>
+            <p className="text-white font-semibold text-sm">{title}</p>
             <StatusBadge connected={connected} unlocked={isPro} syncError={syncError} />
           </div>
-          <p className="text-slate-400 text-xs mt-0.5">{description}</p>
+          <p className="text-gray-500 text-xs mt-0.5">{description}</p>
         </div>
 
         {!isPro && connected ? (
@@ -579,7 +579,7 @@ function TokenCard({
             nativeCopy={INTEGRATIONS_NATIVE_COPY}
             nativeContent={<span className="shrink-0"><IapProLock /></span>}
           >
-            <Link href="/upgrade" title="Get Pro to connect this integration" className="inline-flex shrink-0 items-center gap-1 rounded-full border border-[#D4C8B8] bg-[#F0EBE1] px-2 py-1 text-[0.6875rem] font-semibold text-slate-500 transition-colors hover:border-[#1D4ED8] hover:text-[#1D4ED8]"><Lock className="h-2.5 w-2.5" />Pro</Link>
+            <Link href="/upgrade" title="Get Pro to connect this integration" className="inline-flex shrink-0 items-center gap-1 rounded-full border border-gray-800 bg-gray-800 px-2 py-1 text-[0.6875rem] font-semibold text-gray-500 transition-colors hover:text-blue-400"><Lock className="h-2.5 w-2.5" />Pro</Link>
           </PlanGate>
         ) : connected && !showForm ? (
           disconnectButton
@@ -592,9 +592,9 @@ function TokenCard({
 
       {isPro && needsReconnect && !showForm && (
         <div className="mt-2 flex items-center justify-between gap-2">
-          <p className="text-xs text-amber-700">{syncError}</p>
+          <p className="text-xs text-amber-300">{syncError}</p>
           {needsSignIn(syncError) && (
-            <button onClick={() => setShowForm(true)} className="text-xs bg-amber-500 hover:bg-amber-600 text-white font-semibold px-3 py-1.5 rounded-full transition-colors shrink-0">
+            <button onClick={() => setShowForm(true)} className="text-xs bg-amber-950/300 hover:bg-amber-600 text-white font-semibold px-3 py-1.5 rounded-full transition-colors shrink-0">
               Reconnect
             </button>
           )}
@@ -607,14 +607,14 @@ function TokenCard({
 
       {isPro && showForm && (
         <div className="mt-3 space-y-2">
-          <label className="text-xs text-slate-500 block">{tokenLabel}</label>
+          <label className="text-xs text-gray-500 block">{tokenLabel}</label>
           <div className="flex gap-2">
             <input
               type="password"
               value={token}
               onChange={(e) => setToken(e.target.value)}
               placeholder={placeholder}
-              className="flex-1 min-w-0 bg-[#FAF7F2] border border-[#D4C8B8] text-slate-900 placeholder-slate-400 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#1D4ED8] transition-colors"
+              className="flex-1 min-w-0 sc-field px-4 py-2.5 text-sm transition-colors"
             />
             <button
               onClick={save}
@@ -626,13 +626,13 @@ function TokenCard({
           </div>
           {extra && (
             <>
-              <label className="text-xs text-slate-500 block pt-1">{extra.label}</label>
+              <label className="text-xs text-gray-500 block pt-1">{extra.label}</label>
               <input
                 type="text"
                 value={extraValue}
                 onChange={(e) => setExtraValue(e.target.value)}
                 placeholder={extra.placeholder}
-                className="w-full bg-[#FAF7F2] border border-[#D4C8B8] text-slate-900 placeholder-slate-400 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[#1D4ED8] transition-colors"
+                className="w-full sc-field px-4 py-2.5 text-sm transition-colors"
               />
             </>
           )}
@@ -647,9 +647,9 @@ function TokenCard({
               />
             </div>
           )}
-          <p className="text-slate-400 text-[0.6875rem] leading-relaxed">{help}</p>
+          <p className="text-gray-500 text-[0.6875rem] leading-relaxed">{help}</p>
           {connected && (
-            <button onClick={() => { setShowForm(false); setError(null); }} className="text-slate-400 hover:text-slate-600 text-xs font-medium transition-colors">
+            <button onClick={() => { setShowForm(false); setError(null); }} className="text-gray-500 hover:text-gray-300 text-xs font-medium transition-colors">
               Cancel
             </button>
           )}
@@ -681,7 +681,7 @@ function TokenCard({
  */
 function CrmProCard() {
   return (
-    <div className="rounded-2xl border border-[#D4C8B8] bg-[#F5F0E6] px-5 py-4">
+    <div className="rounded-2xl border border-gray-800 bg-gray-900 px-5 py-4">
       <div className="flex items-start gap-3">
         <span
           className="sc-dark-sheet mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white"
@@ -690,8 +690,8 @@ function CrmProCard() {
           <Spark className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-slate-900">Send your leads straight to your CRM</p>
-          <p className="mt-1 text-xs leading-relaxed text-slate-500">
+          <p className="text-sm font-semibold text-white">Send your leads straight to your CRM</p>
+          <p className="mt-1 text-xs leading-relaxed text-gray-500">
             Pro connects Salesforce, HubSpot, Pipedrive, GoHighLevel and Google Contacts, so every
             contact you capture lands where you already work — no copy-paste, no exports.
           </p>
@@ -762,11 +762,11 @@ export default function IntegrationsSettings({ googleConnected, hubspotConnected
           is the important one: the override is per-CRM, so connecting a
           DIFFERENT tool adds a destination rather than replacing the team's. */}
       {teamCrmNames.length > 0 && (
-        <div className="rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4">
-          <p className="text-blue-900 text-sm font-semibold">
+        <div className="rounded-2xl border border-blue-800/40 bg-blue-950/30 px-5 py-4">
+          <p className="text-white text-sm font-semibold">
             Your team already sends contacts to {teamCrmNames.join(" and ")}
           </p>
-          <p className="text-blue-800/80 text-xs mt-1 leading-relaxed">
+          <p className="text-blue-200/80 text-xs mt-1 leading-relaxed">
             Your admin set this up — your contacts go there automatically and there&apos;s nothing
             for you to do. Connect one below only if you want your own copy somewhere else;
             connecting the same CRM sends to yours instead of the team&apos;s.
@@ -779,7 +779,7 @@ export default function IntegrationsSettings({ googleConnected, hubspotConnected
           work card" would reasonably assume their team's leads were excluded
           too — they are not, and should not be: the agency CRM is the point. */}
       {isOfficeOwner && isPro && (
-        <p className="text-slate-500 text-xs leading-relaxed px-1">
+        <p className="text-gray-500 text-xs leading-relaxed px-1">
           Your team&apos;s leads go to the CRMs and Zapier webhook you connect here too — each member&apos;s contacts
           arrive with their name on them. A member who connects their own copy of a CRM sends
           to theirs instead.
@@ -822,10 +822,10 @@ export default function IntegrationsSettings({ googleConnected, hubspotConnected
         help={
           <>
             In HighLevel: Settings → Private Integrations → Create new Integration → tick{" "}
-            <code className="text-slate-600">contacts.write</code> and{" "}
-            <code className="text-slate-600">locations.readonly</code> → copy the token. Your Location ID is
+            <code className="text-gray-400">contacts.write</code> and{" "}
+            <code className="text-gray-400">locations.readonly</code> → copy the token. Your Location ID is
             the long code in the browser address bar while you&apos;re inside that sub-account, right
-            after <code className="text-slate-600">/location/</code>.
+            after <code className="text-gray-400">/location/</code>.
           </>
         }
         connected={highlevelConnected}
@@ -849,7 +849,7 @@ export default function IntegrationsSettings({ googleConnected, hubspotConnected
         help={
           <>
             In Pipedrive: click your name (top right) → Company settings → Personal preferences →{" "}
-            <code className="text-slate-600">API</code> → copy your personal API token here. If it&apos;s
+            <code className="text-gray-400">API</code> → copy your personal API token here. If it&apos;s
             not there, your Pipedrive admin may have API access switched off for your permission set.
           </>
         }
@@ -878,8 +878,8 @@ export default function IntegrationsSettings({ googleConnected, hubspotConnected
         help={
           <>
             In HubSpot: Settings → Integrations → Service Keys → Create service key → grant the{" "}
-            <code className="text-slate-600">crm.objects.contacts.read</code> and{" "}
-            <code className="text-slate-600">crm.objects.contacts.write</code> scopes → copy the key here. Already
+            <code className="text-gray-400">crm.objects.contacts.read</code> and{" "}
+            <code className="text-gray-400">crm.objects.contacts.write</code> scopes → copy the key here. Already
             have a private app token? That works too.
           </>
         }

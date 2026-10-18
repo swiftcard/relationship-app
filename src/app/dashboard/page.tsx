@@ -832,7 +832,8 @@ export default async function DashboardPage({
 
   return (
     <>
-      <AppStorePopup trigger={params.welcome === "1"} />
+      {/* sc-app contents: overlays mounted beside <main> still wear the app theme. */}
+      <div className="sc-app contents"><AppStorePopup trigger={params.welcome === "1"} /></div>
       {/* IAP preflight probe — dedicated test account only, renders nothing.
           See components/IapProbe.tsx for why the purchase chain is verified
           this way rather than by driving the simulator UI. */}
@@ -861,7 +862,7 @@ export default async function DashboardPage({
           bare dashboard visit — otherwise logging into an existing account would
           silently swallow a leftover guest draft into it (the "bleed" bug). The
           real claim already happens on /cards/new?claim=1 in every auth path. */}
-      {params.claim === "1" && <GuestDraftClaim />}
+      {params.claim === "1" && <div className="sc-app contents"><GuestDraftClaim /></div>}
       <Suspense>
         {/* Only a card THIS account owns is remembered: the raw ?card= could
             be the previous account's address carried over by the nav on the
@@ -901,7 +902,7 @@ export default async function DashboardPage({
       />
 
       <MobileNavGate showAdmin={canSeeOfficeAdmin} showSite={isAdmin} />
-      <HelpWidget floating member={isOfficeMember} />
+      <div className="sc-app contents"><HelpWidget floating member={isOfficeMember} /></div>
       {/* pb-36 on mobile (was pb-24): the floating help bubble is fixed at
           bottom-20 and is 52px tall, so it covers the band 80px–132px up from
           the bottom of the viewport. pb-24 ended the content at 96px — inside

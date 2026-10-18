@@ -561,10 +561,10 @@ function SeatManager({ sub, onChanged }: { sub: Sub; onChanged: () => Promise<vo
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
           <button onClick={() => setSeats((s) => Math.max(floor, s - 1))} disabled={seats <= floor}
-            className="w-8 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-white font-bold">−</button>
+            className="w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-700 disabled:opacity-40 text-white font-bold">−</button>
           <span className="w-10 text-center text-white font-bold tabular-nums">{seats}</span>
           <button onClick={() => setSeats((s) => s + 1)}
-            className="w-8 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 text-white font-bold">+</button>
+            className="w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-700 text-white font-bold">+</button>
         </div>
         <span className="text-xs text-gray-500">
           {`${formatUsd(seatSubtotalCents(sub.interval === "annual" ? PLAN_PRICES.OFFICE_ANNUAL_PER_SEAT_CENTS : PLAN_PRICES.OFFICE_MONTHLY_PER_SEAT_CENTS, seats))}/${sub.interval === "annual" ? "yr" : "mo"}`}
@@ -718,9 +718,9 @@ function ChangePlanModal({ sub, onClose, onCancelInstead, onChanged }: {
             <div className="flex items-center gap-2 mt-2.5">
               <span className="text-[0.6875rem] text-gray-500">Seats:</span>
               <button onClick={() => setSeats((s) => Math.max(PLAN_LIMITS.OFFICE_MIN_SEATS, s - 1))}
-                className="w-6 h-6 rounded bg-gray-800 text-white text-sm">−</button>
+                className="w-6 h-6 rounded-full bg-gray-800 text-white text-sm">−</button>
               <span className="w-6 text-center text-white text-xs tabular-nums">{seats}</span>
-              <button onClick={() => setSeats((s) => s + 1)} className="w-6 h-6 rounded bg-gray-800 text-white text-sm">+</button>
+              <button onClick={() => setSeats((s) => s + 1)} className="w-6 h-6 rounded-full bg-gray-800 text-white text-sm">+</button>
             </div>
           )}
         </div>

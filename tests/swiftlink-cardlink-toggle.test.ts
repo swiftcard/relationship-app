@@ -40,7 +40,8 @@ describe("the View SwiftCard button toggle", () => {
     // "the toggle falls out"). One implementation now, so this is asserted
     // once, where it lives.
     expect(read("src/components/ui/DesignControls.tsx"))
-      .toMatch(/absolute top-\[3px\] left-\[3px\] w-5 h-5 rounded-full bg-white/);
+      // 2026-10-18: one switch size app-wide (48×28 track, 24px knob).
+      .toMatch(/absolute top-0\.5 left-0\.5 w-6 h-6 rounded-full bg-white/);
     // Wizard writes the flag only when hidden (fresh rows stay clean)…
     expect(wizard).toMatch(/showCardLinkBtn \? \{\} : \{ hideCardLink: true \}/);
     // …the editor sends it explicitly both ways, so the server merge can CLEAR it.

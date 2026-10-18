@@ -1258,7 +1258,7 @@ export default function ContactsClient({
               {selected.phone ? (
                 <a
                   href={`tel:${selected.phone}`}
-                  className="flex items-center justify-center gap-1.5 flex-1 text-sm font-semibold py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
+                  className="flex items-center justify-center gap-1.5 flex-1 text-sm font-semibold py-2.5 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
                 >
                   <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
                     <path d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
@@ -1266,7 +1266,7 @@ export default function ContactsClient({
                   Call
                 </a>
               ) : (
-                <span className="flex-1 text-center text-xs text-gray-600 py-2.5 rounded-xl border border-dashed border-gray-800">No phone to call</span>
+                <span className="flex-1 text-center text-xs text-gray-600 py-2.5 rounded-full border border-dashed border-gray-800">No phone to call</span>
               )}
               {/* Text / email / share sheet hand off to the owner's own phone,
                   pre-addressed to this contact — nothing is sent or logged.
@@ -1285,7 +1285,7 @@ export default function ContactsClient({
               <button
                 onClick={saveContactToPhone}
                 title="Add this contact to your contacts"
-                className="flex items-center justify-center gap-1.5 flex-1 min-w-0 whitespace-nowrap text-sm font-semibold py-2.5 px-2 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 transition-colors"
+                className="flex items-center justify-center gap-1.5 flex-1 min-w-0 whitespace-nowrap text-sm font-semibold py-2.5 px-2 rounded-full bg-gray-800 hover:bg-gray-700 border border-transparent text-gray-200 transition-colors"
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-4 h-4 shrink-0">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
@@ -1301,7 +1301,7 @@ export default function ContactsClient({
             </div>
 
             {/* Tab switcher */}
-            <div className="flex bg-gray-900 rounded-xl p-1 gap-1 mb-6">
+            <div className="sc-segmented flex rounded-xl p-1 gap-1 mb-6">
               {([
                 { id: "conversation", label: "Conversation" },
                 { id: "info", label: "Contact info / Presets" },
@@ -1309,8 +1309,7 @@ export default function ContactsClient({
                 <button
                   key={t.id}
                   onClick={() => setDetailTab(t.id)}
-                  className="flex-1 py-2 rounded-lg text-xs font-semibold transition-colors"
-                  style={{ background: detailTab === t.id ? "#1D4ED8" : "transparent", color: detailTab === t.id ? "#fff" : "#6b7280" }}
+                  className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-colors ${detailTab === t.id ? "bg-blue-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"}`}
                 >
                   {t.label}
                 </button>
@@ -1335,16 +1334,16 @@ export default function ContactsClient({
               </div>
               {editingContact && (
                 <div className="space-y-2 mb-2">
-                  <input type="text" value={contactDraft.name} onChange={(e) => setContactDraft((d) => ({ ...d, name: e.target.value }))} placeholder="Name" className="w-full bg-gray-800 border border-gray-700 text-gray-200 placeholder-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
-                  <input type="text" value={contactDraft.company} onChange={(e) => setContactDraft((d) => ({ ...d, company: e.target.value }))} placeholder="Company" className="w-full bg-gray-800 border border-gray-700 text-gray-200 placeholder-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
-                  <input type="email" value={contactDraft.email} onChange={(e) => setContactDraft((d) => ({ ...d, email: e.target.value }))} placeholder="Email" className="w-full bg-gray-800 border border-gray-700 text-gray-200 placeholder-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
-                  <input type="tel" value={contactDraft.phone} onChange={(e) => setContactDraft((d) => ({ ...d, phone: e.target.value }))} placeholder="Phone" className="w-full bg-gray-800 border border-gray-700 text-gray-200 placeholder-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" />
+                  <input type="text" value={contactDraft.name} onChange={(e) => setContactDraft((d) => ({ ...d, name: e.target.value }))} placeholder="Name" className="w-full sc-field text-gray-200 placeholder-gray-600 px-3 py-2 text-sm focus:outline-none" />
+                  <input type="text" value={contactDraft.company} onChange={(e) => setContactDraft((d) => ({ ...d, company: e.target.value }))} placeholder="Company" className="w-full sc-field text-gray-200 placeholder-gray-600 px-3 py-2 text-sm focus:outline-none" />
+                  <input type="email" value={contactDraft.email} onChange={(e) => setContactDraft((d) => ({ ...d, email: e.target.value }))} placeholder="Email" className="w-full sc-field text-gray-200 placeholder-gray-600 px-3 py-2 text-sm focus:outline-none" />
+                  <input type="tel" value={contactDraft.phone} onChange={(e) => setContactDraft((d) => ({ ...d, phone: e.target.value }))} placeholder="Phone" className="w-full sc-field text-gray-200 placeholder-gray-600 px-3 py-2 text-sm focus:outline-none" />
                   <div className="flex items-center gap-2 pt-1">
                     <button
                       type="button"
                       onClick={() => { setEditingContact(false); setContactSaveStatus("idle"); }}
                       disabled={contactSaveStatus === "saving"}
-                      className="px-4 py-2.5 rounded-xl text-sm font-medium text-gray-400 border border-gray-700 hover:border-gray-500 hover:text-gray-200 transition-colors disabled:opacity-40"
+                      className="px-4 py-2.5 rounded-full text-sm font-medium text-gray-200 bg-gray-800/60 border border-transparent hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-40"
                     >
                       Cancel
                     </button>
@@ -1353,12 +1352,8 @@ export default function ContactsClient({
                       onClick={saveContact}
                       disabled={contactSaveStatus === "saving" || contactSaveStatus === "saved" || !contactDraft.name.trim()}
                       aria-busy={contactSaveStatus === "saving"}
-                      className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white shadow-sm transition-all active:scale-[0.98] disabled:cursor-not-allowed"
+                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-full text-sm font-bold text-white shadow-sm ${contactSaveStatus === "saved" ? "bg-green-600" : contactSaveStatus === "error" ? "bg-red-600" : "bg-blue-600"} transition-all active:scale-[0.98] disabled:cursor-not-allowed`}
                       style={{
-                        background:
-                          contactSaveStatus === "saved" ? "#16a34a"
-                          : contactSaveStatus === "error" ? "#dc2626"
-                          : "#2563eb",
                         opacity: contactSaveStatus === "idle" && !contactDraft.name.trim() ? 0.5 : 1,
                       }}
                     >
@@ -1468,7 +1463,7 @@ export default function ContactsClient({
                         value={notesText}
                         onChange={(e) => setNotesText(e.target.value)}
                         rows={3}
-                        className="w-full bg-gray-800 border border-gray-700 text-gray-200 placeholder-gray-600 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-blue-500"
+                        className="w-full sc-field sc-field-fit text-gray-200 placeholder-gray-600 px-3 py-2 text-sm resize-none focus:outline-none"
                       />
                       <div className="flex gap-2">
                         <button onClick={() => setEditingNotes(false)} className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Cancel</button>
@@ -1508,7 +1503,7 @@ export default function ContactsClient({
                         value={whereMetText}
                         onChange={(e) => setWhereMetText(e.target.value)}
                         placeholder="e.g. Networking event, LinkedIn, Conference…"
-                        className="w-full bg-gray-800 border border-gray-700 text-gray-200 placeholder-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                        className="w-full sc-field text-gray-200 placeholder-gray-600 px-3 py-2 text-sm focus:outline-none"
                       />
                       <div className="flex gap-2">
                         <button onClick={() => setEditingWhereMet(false)} className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Cancel</button>
@@ -1637,10 +1632,10 @@ export default function ContactsClient({
                             }
                             if (isDrafting) cancelDraft(); else startDraft(ch);
                           }}
-                          className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${!can ? "opacity-60 cursor-not-allowed" : ""}`}
+                          className={`relative w-12 h-7 rounded-full transition-colors shrink-0 ${!can ? "opacity-60 cursor-not-allowed" : ""}`}
                           style={{ background: switchOn ? "var(--sc-green, #059669)" : "var(--sc-fill-3, #374151)" }}
                         >
-                          <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-[0_3px_8px_rgba(0,0,0,0.15),0_1px_1px_rgba(0,0,0,0.06)] transition-all" style={{ left: switchOn ? "22px" : "2px" }} />
+                          <span className="absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-[0_3px_8px_rgba(0,0,0,0.15),0_1px_1px_rgba(0,0,0,0.06)] transition-all" style={{ left: switchOn ? "22px" : "2px" }} />
                         </button>
                       </div>
 
@@ -1693,14 +1688,14 @@ export default function ContactsClient({
                                       value={it.subject ?? ""}
                                       onChange={(e) => updateDraftSubject(i, e.target.value)}
                                       placeholder="Email subject"
-                                      className="w-full bg-gray-900 border border-gray-700 text-gray-100 rounded-lg px-3 py-1.5 text-xs mb-1.5 focus:outline-none focus:border-blue-500"
+                                      className="w-full sc-field sc-field-fit text-gray-100 px-3 py-1.5 text-xs mb-1.5 focus:outline-none"
                                     />
                                   )}
                                   <textarea
                                     value={it.message}
                                     onChange={(e) => updateDraftItem(i, e.target.value)}
                                     rows={2}
-                                    className="w-full bg-gray-900 border border-gray-700 text-gray-100 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-blue-500"
+                                    className="w-full sc-field sc-field-fit text-gray-100 px-3 py-2 text-sm resize-none focus:outline-none"
                                   />
                                 </div>
                               ))}
@@ -1959,7 +1954,7 @@ export default function ContactsClient({
                   <button onClick={() => setConfirmDeleteId(null)} className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Cancel</button>
                   <button
                     onClick={() => deleteLead(selected.id)}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-900/60 text-red-300 hover:bg-red-900 border border-red-800/60 transition-colors"
+                    className="text-xs font-semibold px-3 py-1.5 rounded-full bg-red-900/60 text-red-300 hover:bg-red-900 border border-red-800/60 transition-colors"
                   >
                     Delete
                   </button>

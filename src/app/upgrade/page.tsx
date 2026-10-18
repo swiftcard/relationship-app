@@ -83,7 +83,7 @@ export default async function UpgradePage({
   // so the iPhone purchase card below never paints there for even one frame.
   if (isAndroidAppRequest((await headers()).get("user-agent"))) {
     return (
-      <main className="min-h-screen bg-gray-950 px-5 py-12">
+      <main className="sc-app min-h-screen bg-gray-950 px-5 py-12">
         <AndroidProInfo from={from} />
       </main>
     );
@@ -96,7 +96,7 @@ export default async function UpgradePage({
   );
 
   return (
-    <main className="min-h-screen bg-gray-950 px-5 py-12">
+    <main className="sc-app min-h-screen bg-gray-950 px-5 py-12">
       {/* Arriving from a blocked card claim is a jarring jump unless we say why —
           and, crucially, that their card wasn't thrown away.
 

@@ -72,12 +72,12 @@ export default function EmployeeAnalyticsTable({ employees, range }: { employees
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by employee or card name…"
           aria-label="Search employees or cards"
-          className="flex-1 bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+          className="flex-1 sc-field px-3.5 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none"
         />
         <DownloadLink
           href={`/api/office/analytics/export?range=${encodeURIComponent(range)}`}
           title="Downloads the full current date range as CSV (not limited to the search above)"
-          className="text-xs font-semibold text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 px-3.5 py-2.5 rounded-xl transition-colors text-center whitespace-nowrap"
+          className="text-xs font-semibold text-gray-200 hover:text-white bg-gray-800/60 border border-transparent hover:bg-gray-700 px-3.5 py-2.5 rounded-full transition-colors text-center whitespace-nowrap"
         >
           Export CSV
         </DownloadLink>

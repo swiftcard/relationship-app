@@ -34,7 +34,7 @@ export default async function DevicesPage({
   const currentDeviceId = isDeviceId(raw) ? raw : null;
 
   return (
-    <main className="min-h-screen bg-[#0B1120] px-5 py-10 flex flex-col">
+    <main className="sc-app min-h-screen bg-gray-950 px-5 py-10 flex flex-col">
       <div className="max-w-md mx-auto w-full">
         <div className="flex items-center gap-2.5 mb-7">
           <span className="shrink-0 rounded-lg overflow-hidden flex"><SwiftCardIcon size={30} /></span>
@@ -51,7 +51,7 @@ export default async function DevicesPage({
 
       {full !== "1" && (
         <div className="max-w-md mx-auto w-full mt-8">
-          <Link href="/dashboard" className="text-slate-400 hover:text-slate-200 text-[0.875rem] transition-colors">
+          <Link href="/dashboard" className="text-gray-400 hover:text-white text-[0.875rem] transition-colors">
             ← Back to dashboard
           </Link>
         </div>

@@ -649,7 +649,7 @@ export default function EnablePushButton({
 
   return (
     <div className="space-y-2">
-      <div className="w-full flex items-center justify-between gap-3 bg-gray-800/50 border border-gray-700/60 rounded-2xl py-2.5 px-4">
+      <div className="w-full flex items-center justify-between gap-3 bg-gray-900 border border-gray-800/80 rounded-2xl py-2.5 px-4">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-gray-100">
             {isOn ? "Push notifications" : "Turn on Push notifications!"}

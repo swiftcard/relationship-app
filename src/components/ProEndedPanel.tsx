@@ -98,7 +98,7 @@ export default function ProEndedPanel({
           <button
             type="button"
             onClick={() => setChoosingFree(true)}
-            className="py-3 px-6 rounded-full text-sm font-semibold border border-gray-700 text-gray-300 hover:border-gray-500 transition-colors"
+            className="py-3 px-6 rounded-full text-sm font-semibold bg-gray-800/60 border border-transparent text-gray-200 hover:bg-gray-700 transition-colors"
           >
             Continue on Free
           </button>

@@ -113,12 +113,16 @@ export default function GlobalAiConsent() {
   // hiding the ask for good.
   const hold = state.ready === false || !aiConsentAskAllowedOn(pathname, currentSearch());
 
+  // Mounted in the root layout, outside every page's .sc-app: the box-less
+  // wrapper gives the sheet the app theme (light/dark, Apple surfaces).
   return (
-    <AiConsentGate
-      consent={state.consent}
-      provider={state.provider}
-      copy={state.copy}
-      hold={hold}
-    />
+    <div className="sc-app contents">
+      <AiConsentGate
+        consent={state.consent}
+        provider={state.provider}
+        copy={state.copy}
+        hold={hold}
+      />
+    </div>
   );
 }

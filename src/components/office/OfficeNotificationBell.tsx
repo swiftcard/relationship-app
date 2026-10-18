@@ -8,7 +8,7 @@ import { officeNotificationPath } from "@/lib/office-notification-links";
 // The /office/admin team-inbox bell. A DISTINCT component from the personal
 // NotificationBell: it polls /api/office/notifications (office_notifications
 // table, keyed by office_id) and never touches /api/notifications (the personal
-// per-user bell). Same interaction model, purple accent to match the console.
+// per-user bell). Same interaction model and the same look as that bell.
 
 type OfficeNotification = {
   id: string;
@@ -197,14 +197,16 @@ export default function OfficeNotificationBell({
           <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
         </svg>
         {unread > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-purple-500 text-white text-[0.5625rem] font-bold rounded-full flex items-center justify-center">
+          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[0.5625rem] font-bold rounded-full flex items-center justify-center">
             {unread > 9 ? "9+" : unread}
           </span>
         )}
       </button>
 
       {open && typeof document !== "undefined" && createPortal(
-        <>
+        // Same panel as the personal bell (NotificationBell): theme tokens via
+        // a box-less wrapper, glass surface, same rows and controls.
+        <div className="sc-app contents">
           {/* PORTALED to document.body for the same reason as the personal bell:
               this sits inside the backdrop-blur admin header, which becomes the
               containing block for `fixed` children — so in place this click-away
@@ -215,7 +217,7 @@ export default function OfficeNotificationBell({
           <div
             role="dialog"
             aria-label="Team notifications"
-            className="sc-drop-in fixed z-[61] left-0 right-0 mx-auto top-[calc(env(safe-area-inset-top)+86px)] w-[min(360px,calc(100vw-1.5rem))] max-h-[70vh] bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl shadow-black/40 overflow-hidden flex flex-col"
+            className="sc-drop-in fixed z-[61] left-0 right-0 mx-auto top-[calc(env(safe-area-inset-top)+86px)] w-[min(360px,calc(100vw-1.5rem))] max-h-[70vh] sc-glass border border-gray-800 rounded-2xl shadow-2xl shadow-black/20 overflow-hidden flex flex-col"
             style={{ transformOrigin: "top center" }}
           >
             <div className="relative flex items-center justify-between px-4 py-3 border-b border-gray-800 shrink-0">
@@ -228,7 +230,7 @@ export default function OfficeNotificationBell({
                   <button
                     onClick={markAllRead}
                     disabled={bulkPending !== null}
-                    className="text-xs text-purple-400 hover:text-purple-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="text-xs whitespace-nowrap text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {bulkPending === "markAll" ? "Marking…" : "Mark all read"}
                   </button>
@@ -237,7 +239,7 @@ export default function OfficeNotificationBell({
                   <button
                     onClick={clearRead}
                     disabled={bulkPending !== null}
-                    className="text-xs text-gray-500 hover:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="text-xs whitespace-nowrap text-gray-500 hover:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {bulkPending === "clearRead" ? "Clearing…" : "Clear read"}
                   </button>
@@ -254,16 +256,16 @@ export default function OfficeNotificationBell({
                 </div>
               ) : (
                 notifications.map((n) => (
-                  <div key={n.id} className={`group px-4 py-3 transition-colors ${n.read ? "" : "bg-purple-950/40"}`}>
+                  <div key={n.id} className={`group px-4 py-3 transition-colors ${n.read ? "" : "bg-blue-950"}`}>
                     <div className="flex items-start gap-3">
-                      <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${n.read ? "bg-gray-700" : "bg-purple-500"}`} />
+                      <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${n.read ? "bg-gray-700" : "bg-blue-500"}`} />
                       {/* The whole text block is the link. Titles WRAP: a
                           truncated "Your team passed 1,000 card vie…" hid the
                           one word that said what happened. */}
                       <Link
                         href={officeNotificationPath(n.type)}
                         onClick={() => openRow(n)}
-                        className="min-w-0 flex-1 rounded-md -m-1 p-1 hover:bg-white/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-purple-500"
+                        className="min-w-0 flex-1 rounded-md -m-1 p-1 hover:bg-white/[0.03] focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
                       >
                         <p className="text-white text-xs font-semibold leading-snug break-words">{n.title}</p>
                         {n.body && <p className="text-gray-400 text-xs mt-0.5 leading-relaxed break-words">{n.body}</p>}
@@ -274,10 +276,10 @@ export default function OfficeNotificationBell({
                         disabled={pendingIds.has(n.id)}
                         title={n.read ? "Mark as unread" : "Mark as read"}
                         aria-label={n.read ? "Mark as unread" : "Mark as read"}
-                        className={`shrink-0 text-[0.625rem] font-medium px-2 py-0.5 rounded-md border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                        className={`shrink-0 text-[0.625rem] font-medium px-2 py-0.5 rounded-full border transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                           n.read
                             ? "border-gray-700 text-gray-500 hover:text-gray-300 hover:border-gray-500"
-                            : "border-purple-700 bg-purple-600/15 text-purple-300 hover:bg-purple-600/25"
+                            : "border-blue-700 bg-blue-600/15 text-blue-300 hover:bg-blue-600/25"
                         }`}
                       >
                         {n.read ? "Unread" : "Read"}
@@ -299,7 +301,7 @@ export default function OfficeNotificationBell({
               )}
             </div>
           </div>
-        </>,
+        </div>,
         document.body,
       )}
     </div>

@@ -300,8 +300,8 @@ export default function LinkButtonsControls({
                       {size === "compact" ? "Frosted row — best over a photo or video." : "A frosted band behind the title."}
                     </span>
                   </span>
-                  <span aria-hidden className={`relative w-9 h-5 rounded-full shrink-0 transition-colors ${on ? "bg-blue-600" : "bg-gray-600"}`}>
-                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${on ? "left-[18px]" : "left-0.5"}`} />
+                  <span aria-hidden className={`relative w-12 h-7 rounded-full shrink-0 transition-colors ${on ? "bg-[var(--sc-green)]" : "bg-[var(--sc-fill-3)]"}`}>
+                    <span className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-[0_3px_8px_rgba(0,0,0,0.15),0_1px_1px_rgba(0,0,0,0.06)] transition-all ${on ? "left-[22px]" : "left-0.5"}`} />
                   </span>
                 </button>
               );

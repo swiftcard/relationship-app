@@ -50,7 +50,7 @@ export default function AiDesignSheet({
 
   const head = "text-[0.6875rem] font-bold uppercase tracking-[0.14em] text-gray-400";
   const toggle = (on: boolean, disabled: boolean) =>
-    `relative w-[42px] h-[24px] rounded-full shrink-0 transition-colors ${disabled ? "bg-gray-800 opacity-50" : on ? "bg-blue-600" : "bg-gray-700"}`;
+    `relative w-12 h-7 rounded-full shrink-0 transition-colors ${disabled ? "bg-[var(--sc-fill-3)] opacity-50" : on ? "bg-[var(--sc-green)]" : "bg-[var(--sc-fill-3)]"}`;
 
   return (
     <div
@@ -162,7 +162,7 @@ export default function AiDesignSheet({
                     onClick={() => set(!on)}
                     className={toggle(on && available, !available)}
                   >
-                    <span className={`absolute top-[3px] left-[3px] w-[18px] h-[18px] rounded-full bg-white transition-transform ${on && available ? "translate-x-[18px]" : ""}`} />
+                    <span className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow-[0_3px_8px_rgba(0,0,0,0.15),0_1px_1px_rgba(0,0,0,0.06)] transition-transform ${on && available ? "translate-x-5" : ""}`} />
                   </button>
                 </div>
               ))}

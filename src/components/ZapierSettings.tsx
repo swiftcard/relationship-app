@@ -111,14 +111,14 @@ export default function ZapierSettings({
       type="button"
       onClick={() => save("")}
       disabled={saveStatus === "saving"}
-      className="text-xs text-slate-400 hover:text-red-500 transition-colors font-medium shrink-0"
+      className="text-xs text-gray-500 hover:text-red-500 transition-colors font-medium shrink-0"
     >
       {saveStatus === "saving" ? "..." : "Remove"}
     </button>
   );
 
   return (
-    <div className={`bg-[#EDE5D8] border border-[#D4C8B8] rounded-2xl px-5 py-5 shadow-sm space-y-4 ${!isPro ? "opacity-60" : ""}`}>
+    <div className={`bg-gray-900 border border-gray-800 rounded-2xl px-5 py-5  space-y-4 ${!isPro ? "opacity-60" : ""}`}>
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">
@@ -127,8 +127,8 @@ export default function ZapierSettings({
           </svg>
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-slate-900 font-semibold text-sm">Zapier Webhook</p>
-          <p className="text-slate-400 text-xs">For anything not listed above — send leads to 6,000+ apps</p>
+          <p className="text-white font-semibold text-sm">Zapier Webhook</p>
+          <p className="text-gray-500 text-xs">For anything not listed above — send leads to 6,000+ apps</p>
         </div>
         {/* A saved webhook can always be removed — on any plan. Only adding
             one is Pro. */}
@@ -140,7 +140,7 @@ export default function ZapierSettings({
             nativeCopy={INTEGRATIONS_NATIVE_COPY}
             nativeContent={<span className="ml-auto"><IapProLock /></span>}
           >
-            <Link href="/upgrade" title="Get Pro to connect Zapier" className="ml-auto inline-flex items-center gap-1 rounded-full border border-[#D4C8B8] bg-[#F0EBE1] px-2 py-1 text-[0.6875rem] font-semibold text-slate-500 transition-colors hover:border-[#1D4ED8] hover:text-[#1D4ED8]"><Lock className="h-2.5 w-2.5" />Pro</Link>
+            <Link href="/upgrade" title="Get Pro to connect Zapier" className="ml-auto inline-flex items-center gap-1 rounded-full border border-gray-800 bg-gray-800 px-2 py-1 text-[0.6875rem] font-semibold text-gray-500 transition-colors hover:text-blue-400"><Lock className="h-2.5 w-2.5" />Pro</Link>
           </PlanGate>
         ) : null}
       </div>
@@ -153,8 +153,8 @@ export default function ZapierSettings({
               they've actually done both, so it's a real warning rather than
               noise on an empty form. */}
           {crmConnected && url.trim() && (
-            <div className="rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-2.5">
-              <p className="text-amber-800 text-xs leading-relaxed">
+            <div className="rounded-xl border border-amber-800/40 bg-amber-950/30 px-3.5 py-2.5">
+              <p className="text-amber-200 text-xs leading-relaxed">
                 You already have a CRM connected above. If your Zap also creates contacts in that
                 same CRM, you&apos;ll get each one twice — use the Zap for other tools instead.
               </p>
@@ -166,8 +166,8 @@ export default function ZapierSettings({
               only place that says so. */}
           {savedUrl && (
             <div className="space-y-1">
-              {error && <p className="text-xs text-amber-700">{error}</p>}
-              <p className="text-[0.6875rem] text-slate-500">
+              {error && <p className="text-xs text-amber-300">{error}</p>}
+              <p className="text-[0.6875rem] text-gray-500">
                 {waiting > 0 ? (
                   <>{waiting} contact{waiting === 1 ? "" : "s"} waiting to send — SwiftCard tries again every day</>
                 ) : lastSentAt ? (
@@ -181,7 +181,7 @@ export default function ZapierSettings({
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label htmlFor="zapier-url" className="text-xs text-slate-500 block">Webhook URL</label>
+              <label htmlFor="zapier-url" className="text-xs text-gray-500 block">Webhook URL</label>
               {savedUrl && removeButton}
             </div>
             <input
@@ -190,13 +190,13 @@ export default function ZapierSettings({
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://hooks.zapier.com/hooks/catch/..."
-              className="w-full bg-[#FAF7F2] border border-[#D4C8B8] text-slate-900 placeholder-slate-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#1D4ED8] transition-colors"
+              className="w-full sc-field px-4 py-3 text-sm transition-colors"
             />
           </div>
 
           {/* How to get the URL */}
-          <div className="bg-[#F0EBE1] rounded-xl px-4 py-3 text-xs text-slate-500 leading-relaxed">
-            <p className="font-medium text-slate-700 mb-1">How to set up:</p>
+          <div className="bg-gray-800 rounded-xl px-4 py-3 text-xs text-gray-500 leading-relaxed">
+            <p className="font-medium text-gray-300 mb-1">How to set up:</p>
             <p>1. Go to zapier.com → Create Zap</p>
             <p>2. Trigger: <strong>Webhooks by Zapier → Catch Hook</strong></p>
             <p>3. Copy the webhook URL and paste it above</p>
@@ -206,7 +206,7 @@ export default function ZapierSettings({
 
           {/* Payload preview */}
           <details className="group">
-            <summary className="text-xs text-slate-400 cursor-pointer hover:text-slate-600 transition-colors list-none flex items-center gap-1">
+            <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-300 transition-colors list-none flex items-center gap-1">
               <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
               Sample payload sent on each new lead
             </summary>
@@ -248,7 +248,7 @@ export default function ZapierSettings({
             <button
               onClick={sendTest}
               disabled={!url || test.state === "testing"}
-              className="flex-1 border border-slate-200 text-slate-600 hover:border-slate-300 disabled:opacity-40 font-medium py-2.5 rounded-full text-sm transition-colors"
+              className="flex-1 bg-gray-800 border border-transparent text-gray-200 hover:bg-gray-700 disabled:opacity-40 font-medium py-2.5 rounded-full text-sm transition-colors"
             >
               {test.state === "testing" ? "Sending..." : "Test"}
             </button>
@@ -262,7 +262,7 @@ export default function ZapierSettings({
           </div>
 
           {test.state === "done" && (
-            <p role="status" className={`text-xs text-center ${test.ok ? "text-green-700" : "text-red-600"}`}>{test.message}</p>
+            <p role="status" className={`text-xs text-center ${test.ok ? "text-green-400" : "text-red-600"}`}>{test.message}</p>
           )}
           {saveStatus === "error" && saveError && <p className="text-red-500 text-xs text-center">{saveError}</p>}
 
@@ -278,16 +278,16 @@ export default function ZapierSettings({
         // Lapsed with a webhook still saved: say it's paused, and leave the
         // Remove button above. No upgrade wording — this renders in the app.
         <div className="space-y-1">
-          <p className="text-xs text-slate-500">Paused — contacts aren&apos;t being sent to this webhook right now. You can still remove it.</p>
+          <p className="text-xs text-gray-500">Paused — contacts aren&apos;t being sent to this webhook right now. You can still remove it.</p>
           {saveStatus === "error" && saveError && <p className="text-red-500 text-xs">{saveError}</p>}
         </div>
       ) : (
         <PlanGate
           feature="integration-zapier"
           nativeCopy={INTEGRATIONS_NATIVE_COPY}
-          nativeContent={<p className="text-xs text-slate-400"><GateCopy copy={INTEGRATIONS_NATIVE_COPY} /></p>}
+          nativeContent={<p className="text-xs text-gray-500"><GateCopy copy={INTEGRATIONS_NATIVE_COPY} /></p>}
         >
-          <p className="text-xs text-slate-400">Upgrade to Pro to connect Zapier and automate your lead workflow.</p>
+          <p className="text-xs text-gray-500">Upgrade to Pro to connect Zapier and automate your lead workflow.</p>
         </PlanGate>
       )}
     </div>

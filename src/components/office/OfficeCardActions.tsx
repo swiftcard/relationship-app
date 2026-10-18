@@ -129,7 +129,7 @@ export default function OfficeCardActions({ card, appUrl }: { card: Card; appUrl
               type="button"
               onClick={() => { void setOfflineTo(true); }}
               disabled={busy}
-              className="flex-1 sm:flex-none min-w-[150px] bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+              className="flex-1 sm:flex-none min-w-[150px] bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white text-xs font-semibold px-4 py-2 rounded-full transition-colors"
             >
               {busy ? "Taking offline…" : "Yes, take it offline"}
             </button>
@@ -137,7 +137,7 @@ export default function OfficeCardActions({ card, appUrl }: { card: Card; appUrl
               type="button"
               onClick={() => setConfirming(false)}
               disabled={busy}
-              className="flex-1 sm:flex-none min-w-[110px] border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+              className="flex-1 sm:flex-none min-w-[110px] bg-gray-800/60 border border-transparent hover:bg-gray-700 text-gray-200 hover:text-white text-xs font-semibold px-4 py-2 rounded-full transition-colors"
             >
               Go back
             </button>
@@ -154,7 +154,7 @@ export default function OfficeCardActions({ card, appUrl }: { card: Card; appUrl
                 <input
                   value={draft[k]}
                   onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
-                  className="mt-1 w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                  className="mt-1 w-full sc-field px-3 py-2 text-sm text-white focus:outline-none"
                 />
               </label>
             ))}

@@ -251,7 +251,7 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
   }
 
   const primaryBtn = "flex-1 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 rounded-full py-2.5 transition-colors";
-  const ghostBtn = "flex-1 text-sm text-gray-400 hover:text-white border border-gray-700 rounded-full py-2.5 transition-colors";
+  const ghostBtn = "flex-1 text-sm text-gray-200 hover:text-white bg-gray-800/60 border border-transparent hover:bg-gray-700 rounded-full py-2.5 transition-colors";
   const stepLabel = progressLabel(steps, step);
 
   return (
@@ -524,7 +524,7 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="Your password"
                           autoComplete="current-password"
-                          className="w-full bg-gray-900 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-red-500 mb-3"
+                          className="w-full sc-field text-white placeholder-gray-600 px-4 py-2.5 text-sm focus:outline-none focus:border-red-500 mb-3"
                         />
                         {human.slot}
                       </>
@@ -535,7 +535,7 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
                       value={confirmText}
                       onChange={(e) => setConfirmText(e.target.value)}
                       placeholder="DELETE"
-                      className="w-full bg-gray-900 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-red-500 mb-3"
+                      className="w-full sc-field text-white placeholder-gray-600 px-4 py-2.5 text-sm focus:outline-none focus:border-red-500 mb-3"
                     />
                     {error && <p className="text-red-400 text-xs mb-2">{error}</p>}
                     <div className="flex gap-2">

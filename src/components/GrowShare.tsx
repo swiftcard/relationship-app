@@ -100,7 +100,7 @@ export default function GrowShare({ link }: { link: string }) {
             rel="noopener noreferrer"
             className="flex flex-col items-center gap-1.5 py-3 rounded-xl bg-gray-800/60 hover:bg-gray-800 border border-gray-700/60 transition-colors"
           >
-            <svg viewBox="0 0 24 24" fill={t.color === "#000000" ? "#e5e7eb" : t.color} className="w-5 h-5">{t.icon}</svg>
+            <svg viewBox="0 0 24 24" fill={t.color === "#000000" ? "currentColor" : t.color} className="w-5 h-5 text-white">{t.icon}</svg>
             <span className="text-[0.625rem] text-gray-400 font-medium">{t.label}</span>
           </a>
         ))}

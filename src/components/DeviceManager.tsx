@@ -116,20 +116,20 @@ export default function DeviceManager({
           <p className="text-white font-bold text-[1.0625rem] leading-tight">
             You&apos;re signed in on {DEVICE_LIMIT} devices already
           </p>
-          <p className="text-slate-300/90 text-[0.875rem] leading-snug mt-1.5">
+          <p className="text-gray-300 text-[0.875rem] leading-snug mt-1.5">
             SwiftCard allows {DEVICE_LIMIT} at a time. Sign one of these out and this
             device will take its place — no need to sign in again.
           </p>
         </div>
       ) : (
-        <p className="text-slate-400 text-[0.875rem] leading-snug mb-5">
+        <p className="text-gray-400 text-[0.875rem] leading-snug mb-5">
           You can be signed in on {DEVICE_LIMIT} devices at a time. Every tab and window of
           the same browser counts as one.
         </p>
       )}
 
       {rows.length === 0 ? (
-        <p className="text-slate-400 text-[0.875rem]">No other devices are signed in.</p>
+        <p className="text-gray-400 text-[0.875rem]">No other devices are signed in.</p>
       ) : (
         <ul className="space-y-2.5">
           {rows.map((d) => {
@@ -141,9 +141,9 @@ export default function DeviceManager({
             return (
               <li
                 key={d.device_id}
-                className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3.5 flex items-center gap-3"
+                className="rounded-2xl border border-gray-800 bg-gray-900 px-4 py-3.5 flex items-center gap-3"
               >
-                <span className="shrink-0 w-9 h-9 rounded-full bg-white/[0.07] flex items-center justify-center text-slate-300">
+                <span className="shrink-0 w-9 h-9 rounded-full bg-gray-800 flex items-center justify-center text-gray-300">
                   {handheld ? (
                     <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden="true">
                       <rect x="6" y="2.5" width="12" height="19" rx="3" />
@@ -166,14 +166,14 @@ export default function DeviceManager({
                       </span>
                     )}
                   </span>
-                  <span className="block text-slate-400 text-[0.75rem] mt-0.5">{when(d.last_seen)}</span>
+                  <span className="block text-gray-400 text-[0.75rem] mt-0.5">{when(d.last_seen)}</span>
                 </span>
 
                 <button
                   type="button"
                   onClick={() => remove(d.device_id)}
                   disabled={busy !== null}
-                  className="shrink-0 px-3 py-2 rounded-full text-[0.8125rem] font-semibold text-slate-200 bg-white/[0.07] border border-white/10 hover:bg-white/[0.12] transition-colors disabled:opacity-50"
+                  className="shrink-0 px-3 py-2 rounded-full text-[0.8125rem] font-semibold text-gray-200 bg-gray-800 border border-transparent hover:bg-gray-700 transition-colors disabled:opacity-50"
                 >
                   {busy === d.device_id ? "…" : "Sign out"}
                 </button>

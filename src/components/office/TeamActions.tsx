@@ -365,7 +365,7 @@ export function AddMemberButton({ canManageSeats, label, variant = "button" }: {
                   type="email" required autoFocus value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="dana@company.com"
-                  className="mt-1 w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                  className="mt-1 w-full sc-field px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none"
                 />
               </label>
               <label className="block mb-4">
@@ -374,7 +374,7 @@ export function AddMemberButton({ canManageSeats, label, variant = "button" }: {
                   type="text" value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Dana Lee"
-                  className="mt-1 w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                  className="mt-1 w-full sc-field px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none"
                 />
               </label>
               {error && <p className="text-red-400 text-xs mb-3" role="alert">{error}</p>}
@@ -726,7 +726,7 @@ export function DeleteMemberAccountButton({ memberId, personName, onPersonPage =
               </ul>
               <label htmlFor="del-confirm" className="block text-xs text-gray-400 mb-1.5">Type <strong className="text-white">DELETE</strong> to confirm</label>
               <input id="del-confirm" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off"
-                className="w-full rounded-xl bg-gray-950 border border-gray-800 text-sm text-white px-3.5 py-2.5 mb-3 focus:outline-none focus:border-gray-600" />
+                className="w-full sc-field text-sm text-white px-3.5 py-2.5 mb-3 focus:outline-none" />
               {error && <p className="text-red-400 text-xs mb-3" role="alert">{error}</p>}
               <button onClick={del} disabled={busy || typed.trim().toUpperCase() !== "DELETE"}
                 className="w-full bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white text-sm font-bold py-2.5 rounded-full transition-colors">

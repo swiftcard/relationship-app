@@ -352,7 +352,7 @@ export default function ShareMyInfoButton({ firstName, phone, email, cardOwner, 
         aria-haspopup="menu"
         aria-busy={state === "sending"}
         title={note || `Share your contact information with ${firstName}`}
-        className={`flex items-center justify-center gap-1.5 text-sm font-semibold py-2.5 px-4 rounded-xl transition-colors ${
+        className={`flex items-center justify-center gap-1.5 text-sm font-semibold py-2.5 px-4 rounded-full transition-colors ${
           state === "copied" || state === "sent"
             ? "bg-emerald-600/20 border border-emerald-600/50 text-emerald-300"
             : state === "partial"

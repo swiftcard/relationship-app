@@ -235,6 +235,9 @@ html:not([data-sc-theme="light"]) .sc-app, html:not([data-sc-theme="light"]) .sc
 .sc-field:focus, .sc-field:focus-visible { outline: none; background-color: var(--sc-bg-elevated); border-color: var(--sc-tint); box-shadow: 0 0 0 3px var(--sc-tint-ring); }
 .sc-field[aria-invalid="true"] { border-color: var(--sc-red); }
 textarea.sc-field { min-height: 88px; resize: vertical; }
+/* The look without the size floor: a field that was converted later and must
+   keep its own height (a compact textarea, an inline text-xs field). */
+.sc-field.sc-field-fit { min-height: 0; resize: none; }
 select.sc-field { appearance: none; -webkit-appearance: none; padding-right: 2.25rem; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path d='M1 1.5l5 5 5-5' fill='none' stroke='%238E8E93' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/></svg>"); background-repeat: no-repeat; background-position: right 0.875rem center; }
 .sc-field-label { display: block; font-size: 0.8125rem; font-weight: 600; color: var(--sc-label-2); margin-bottom: 0.375rem; }
 
@@ -299,16 +302,9 @@ html:not([data-sc-theme="light"]) .sc-app .sc-segmented > .is-active { backgroun
 .sc-sheet::before { content: ""; position: absolute; top: 6px; left: 50%; width: 36px; height: 5px; margin-left: -18px; border-radius: 999px; background: var(--sc-label-3); }
 @media (min-width: 640px) { .sc-sheet { border-radius: var(--sc-r-sheet); } .sc-sheet::before { display: none; } }
 .sc-sheet-elevated { background: var(--sc-bg-elevated); }
-/* The app's existing bottom sheets (the Add-card and Pro-required sheets are
-   `.sc-dark-sheet … rounded-t-3xl`) get iOS's grabber on a phone: a 36×5
-   pill centred at the top, drawn as a pseudo-element so nothing inside the
-   sheet moves. From sm up they are centred dialogs and show none. */
-@media (max-width: 639.98px) {
-  .sc-app .sc-dark-sheet.rounded-t-3xl::before {
-    content: ""; position: absolute; top: 6px; left: 50%; width: 36px; height: 5px; margin-left: -18px;
-    border-radius: 999px; background: rgba(255, 255, 255, 0.28); pointer-events: none;
-  }
-}
+/* The Add-card and Pro-required sheets draw their own grab handle (a span
+   at the top on phones). A pseudo-element grabber added on 2026-10-16 stacked
+   a second pill over it; removed in the 2026-10-18 review. */
 .sc-alert { width: min(270px, 100%); background: var(--sc-glass); -webkit-backdrop-filter: blur(40px) saturate(1.8); backdrop-filter: blur(40px) saturate(1.8); color: var(--sc-label); border-radius: 14px; overflow: hidden; text-align: center; box-shadow: var(--sc-shadow-float); }
 .sc-alert-title { font-size: 1.0625rem; font-weight: 600; padding: 1.25rem 1rem 0.25rem; }
 .sc-alert-message { font-size: 0.8125rem; color: var(--sc-label); padding: 0 1rem 1.125rem; }
@@ -809,6 +805,11 @@ html:not([data-sc-theme="light"]) .sc-auth .bg-black.rounded-full:hover { backgr
 /* …but keep white text white on colored buttons/badges, where the background
    class and text-white sit on the same element (higher specificity → wins). */
 [data-sc-theme="light"] .sc-app :is(.bg-blue-500, .bg-blue-600, .bg-blue-700, .bg-indigo-600, .bg-violet-600, .bg-purple-600, .bg-green-500, .bg-green-600, .bg-emerald-600, .bg-red-500, .bg-red-600, .sc-btn-filled).text-white { color: #FFFFFF !important; }
+/* Same carve-out for the filled buttons written with the brand hex or a
+   status colour (2026-10-18 review): "Upgrade · $…", the Integrations
+   Connect / Save / Reconnect buttons, the urgent "Keep Pro →", the cancel
+   confirm, the iOS PRO pills — all printed a black label on a dark fill. */
+[data-sc-theme="light"] .sc-app :is(.bg-\[\#1D4ED8\], .bg-\[\#3B82F6\], .bg-\[\#2563EB\], .bg-\[\#0A66C2\], .bg-\[\#15171F\], .bg-amber-500, .bg-amber-600, .bg-red-600\/80).text-white { color: #FFFFFF !important; }
 /* Danger text. red-400 (#f87171) was drawn for the dark surface; on white it
    sits under 3:1. This red holds 4.6:1 on white and reads as the same warning. */
 [data-sc-theme="light"] .sc-app .text-red-400 { color: #C62828 !important; }
@@ -907,6 +908,53 @@ html:not([data-sc-theme="light"]) .sc-auth .bg-black.rounded-full:hover { backgr
    white text must NOT flip dark. Same carve-out as the colored buttons above. */
 [data-sc-theme="light"] .sc-app :is(.bg-slate-900, .bg-slate-800, .bg-purple-500).text-white { color: #FFFFFF !important; }
 
+/* ── Apple-restyle review (2026-10-18): what the remap still missed ─────────
+   Status colours drawn for a black surface. tests/light-theme-contrast only
+   polices the 50–300 shades, but amber-400 is 1.7:1 on white, red-500 3.8:1,
+   green-500 2.3:1: the lead-cap warning, "follow-up due", every push / scan /
+   handle error and the Office status pills all but vanished in light. Each
+   maps to the same hue at ≥4.5:1 on white and on the grouped ground. */
+[data-sc-theme="light"] .sc-app :is(.text-amber-400, .text-amber-400\/90, .text-amber-500, .text-amber-500\/90) { color: #9A5300 !important; }
+[data-sc-theme="light"] .sc-app :is(.text-red-500, .text-red-500\/70, .text-red-400\/90, .text-rose-400) { color: #C62828 !important; }
+[data-sc-theme="light"] .sc-app :is(.text-green-500, .text-emerald-500) { color: #1E7D3A !important; }
+[data-sc-theme="light"] .sc-app .text-blue-400\/70 { color: var(--sc-tint) !important; }
+/* The "Welcome to Pro!" banner after a purchase (bg-green-950) stayed dark
+   green behind its dark-green light-mode text; the contact status pill
+   (bg-amber-900/50) the same in amber. */
+[data-sc-theme="light"] .sc-app .bg-green-950 { background-color: #EAF9EE !important; }
+[data-sc-theme="light"] .sc-app .border-green-800\/60 { border-color: #B7E8C4 !important; }
+[data-sc-theme="light"] .sc-app .bg-amber-900\/50 { background-color: #FFF7E6 !important; }
+/* Loading skeleton bars and a quiet Settings row: dark patches on a light page. */
+[data-sc-theme="light"] .sc-app .bg-gray-800\/70 { background-color: var(--sc-fill-2) !important; }
+[data-sc-theme="light"] .sc-app .bg-gray-900\/30 { background-color: var(--sc-bg-elevated) !important; }
+/* Hover states that went PALE on a white page: a link faded out under the
+   pointer instead of darkening. Same direction as Apple: hover deepens. */
+[data-sc-theme="light"] .sc-app :is(.hover\:text-blue-200, .hover\:text-blue-300):hover { color: var(--sc-tint-hover) !important; }
+[data-sc-theme="light"] .sc-app :is(.hover\:text-gray-200, .hover\:text-slate-200):hover { color: var(--sc-label) !important; }
+[data-sc-theme="light"] .sc-app :is(.hover\:text-red-300, .hover\:text-rose-300):hover { color: #A31515 !important; }
+[data-sc-theme="light"] .sc-app :is(.hover\:text-purple-200):hover { color: #6B21A8 !important; }
+[data-sc-theme="light"] .sc-app :is(.hover\:text-emerald-200, .hover\:text-green-300):hover { color: #17652F !important; }
+[data-sc-theme="light"] .sc-app :is(.hover\:text-amber-200):hover { color: #7A4200 !important; }
+[data-sc-theme="light"] .sc-app :is(.hover\:bg-gray-900, .hover\:bg-gray-900\/60, .hover\:bg-gray-800\/30, .hover\:bg-gray-800\/40, .hover\:bg-gray-800\/50, .hover\:bg-gray-700\/40, .hover\:bg-gray-700\/50):hover { background-color: var(--sc-fill) !important; }
+[data-sc-theme="light"] .sc-app .hover\:bg-red-900:hover { background-color: #FFE1DE !important; }
+/* Outlines and dividers drawn for black that the remap never named: the
+   contact list's row dividers, the delete-account and delete-card outlines,
+   billing's inner rules, neutral outline chips. Hairlines on white instead. */
+[data-sc-theme="light"] .sc-app :is(.border-gray-800\/50, .border-gray-800\/70, .border-gray-800\/40, .border-gray-600,.border-gray-600\/70, .border-gray-700\/50, .border-gray-700\/40) { border-color: var(--sc-separator) !important; }
+/* Cut-out rings (an unread dot, the logo/headshot stack) take the surface colour. */
+[data-sc-theme="light"] .sc-app .border-gray-900 { border-color: var(--sc-bg-elevated) !important; }
+[data-sc-theme="light"] .sc-app .border-gray-950 { border-color: var(--sc-bg) !important; }
+[data-sc-theme="light"] .sc-app :is(.divide-gray-800\/70,.divide-gray-800\/50, .divide-gray-700) > :not([hidden]) ~ :not([hidden]) { border-color: var(--sc-separator) !important; }
+[data-sc-theme="light"] .sc-app :is(.hover\:border-gray-500, .hover\:border-gray-600):hover { border-color: rgba(60, 60, 67, 0.45) !important; }
+[data-sc-theme="light"] .sc-app :is(.border-red-900\/40, .border-red-900\/60, .border-red-800\/60, .border-red-900) { border-color: #FFC7C2 !important; }
+[data-sc-theme="light"] .sc-app :is(.border-blue-700\/40, .border-blue-700\/50) { border-color: #C7D7F8 !important; }
+[data-sc-theme="light"] .sc-app :is(.border-amber-800\/50, .border-amber-800\/60) { border-color: #FFE0A3 !important; }
+[data-sc-theme="light"] .sc-app :is(.border-emerald-800\/60, .border-green-800\/50) { border-color: #B7E8C4 !important; }
+[data-sc-theme="light"] .sc-app .border-purple-700 { border-color: #DCC6F5 !important; }
+/* Login's black "Continue with Apple" keeps its own hover (it is the one
+   dark button on the sign-in card). */
+[data-sc-theme="light"] .sc-app .bg-black.hover\:bg-gray-900:hover { background-color: #1C1C1E !important; }
+
 /* ── Panels are Apple cards, in both themes ─────────────────────────────────
    The common panel idiom is `bg-gray-900 border border-gray-800/80 rounded-2xl`
    (109 places). On the grouped ground a card is a white surface with large soft
@@ -977,6 +1025,9 @@ html:not([data-sc-theme="light"]) .sc-app .text-gray-500 { color: #98989D; }
 html:not([data-sc-theme="light"]) .sc-app .text-gray-600 { color: #8E8E93; }
 html:not([data-sc-theme="light"]) .sc-app .placeholder-gray-600::placeholder { color: #8E8E93; }
 html:not([data-sc-theme="light"]) .sc-app .bg-slate-800 { background-color: var(--sc-bg-tertiary); }
+/* Blue highlight panels (an unread notification row, blue info banners) were
+   Tailwind's navy band on Apple black; iOS tints with the accent instead. */
+html:not([data-sc-theme="light"]) .sc-app :is(.bg-blue-950, .bg-blue-950\/30, .bg-blue-950\/40) { background-color: var(--sc-tint-soft); }
 /* The card templates keep their own palette in dark too. */
 html:not([data-sc-theme="light"]) .sc-app .sc-card :is(.text-gray-200, .text-gray-300) { color: #d1d5db; }
 html:not([data-sc-theme="light"]) .sc-app .sc-card .text-gray-200 { color: #e5e7eb; }

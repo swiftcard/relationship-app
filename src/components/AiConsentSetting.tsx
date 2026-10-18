@@ -83,7 +83,7 @@ export default function AiConsentSetting() {
         >
           <span
             aria-hidden
-            className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-[0_3px_8px_rgba(0,0,0,0.15),0_1px_1px_rgba(0,0,0,0.06)] transition-all ${on ? "left-6" : "left-1"}`}
+            className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow-[0_3px_8px_rgba(0,0,0,0.15),0_1px_1px_rgba(0,0,0,0.06)] transition-all ${on ? "left-[22px]" : "left-0.5"}`}
           />
         </button>
       </div>

@@ -54,5 +54,8 @@ export default function GuidedTourHost({ pausePathPrefix }: { pausePathPrefix?: 
   const isArmed = useSyncExternalStore(subscribe, readArmed, () => false);
 
   if (!isArmed) return null;
-  return <GuidedTour pausePathPrefix={pausePathPrefix} />;
+  // Root layout = outside every page's .sc-app. The box-less wrapper gives the
+  // tooltip the app theme, so it matches the Office admin tour (which already
+  // sat inside the console's .sc-app) instead of staying navy in light.
+  return <div className="sc-app contents"><GuidedTour pausePathPrefix={pausePathPrefix} /></div>;
 }

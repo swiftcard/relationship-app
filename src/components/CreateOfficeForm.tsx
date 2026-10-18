@@ -66,7 +66,7 @@ export default function CreateOfficeForm() {
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Acme Plumbing"
             required
-            className="w-full bg-gray-950 border border-gray-800 text-white placeholder-gray-600 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/40 transition-colors"
+            className="w-full sc-field text-white placeholder-gray-600 px-4 py-3 text-sm focus:outline-none transition-colors"
           />
         </div>
         {status === "error" && <p className="text-red-400 text-xs">{error}</p>}

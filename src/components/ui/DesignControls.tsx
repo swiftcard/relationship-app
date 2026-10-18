@@ -246,10 +246,10 @@ export function Switch({
       </span>
       <span
         aria-hidden
-        className={`relative w-[42px] h-[26px] rounded-full shrink-0 transition-colors ${checked ? "bg-[var(--sc-green)]" : "bg-[var(--sc-fill-3)]"}`}
+        className={`relative w-12 h-7 rounded-full shrink-0 transition-colors ${checked ? "bg-[var(--sc-green)]" : "bg-[var(--sc-fill-3)]"}`}
       >
         <span
-          className={`absolute top-[3px] left-[3px] w-5 h-5 rounded-full bg-white shadow-[0_3px_8px_rgba(0,0,0,0.15),0_1px_1px_rgba(0,0,0,0.06)] transition-transform ${checked ? "translate-x-4" : ""}`}
+          className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow-[0_3px_8px_rgba(0,0,0,0.15),0_1px_1px_rgba(0,0,0,0.06)] transition-transform ${checked ? "translate-x-5" : ""}`}
         />
       </span>
     </button>

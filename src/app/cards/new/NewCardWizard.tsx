@@ -2479,7 +2479,9 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
         to record a plan except localStorage, and that is precisely the hole that
         put someone on a trial they declined. Their plan step is /welcome. */}
     {showPlan && showAuthedFirstCardGate && (
-      <>
+      // sc-app contents: the gate renders after </main>, so without this it
+      // missed the app theme and opened near-black on the white builder.
+      <div className="sc-app contents">
       {/* Dim + blur live on their OWN non-scrolling layer. backdrop-filter on the
           SAME element as overflow-y-auto silently kills touch scrolling on iOS
           Safari — here that would trap a phone user in the plan gate, unable to
@@ -2547,7 +2549,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
           </div>
         </div>
       </div>
-      </>
+      </div>
     )}
     {/* Self-contained auth gate — the useGuestDraft hook opens it via a window
         event when a guest triggers a protected action. */}

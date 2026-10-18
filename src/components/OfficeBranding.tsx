@@ -71,7 +71,7 @@ type Brand = {
 };
 
 const inputCls =
-  "w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/40";
+  "w-full sc-field px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none";
 
 function Section({ n, title, desc, children }: {
   n: number; title: string; desc: string; children: React.ReactNode;
@@ -254,7 +254,7 @@ export default function OfficeBranding({ office }: { office: Brand }) {
         // without it the tour talked about the card and never mentioned that
         // the Swift Links page has its own half (lib/admin-tour-steps.ts).
         data-tour="admin-branding-tabs"
-        className="inline-flex items-center gap-1 p-1 mb-4 rounded-full bg-gray-900 border border-gray-800"
+        className="sc-segmented inline-flex items-center gap-1 p-1 mb-4 rounded-xl"
       >
         {([["card", "Card"], ["links", "Links"]] as const).map(([id, label]) => (
           <button
@@ -263,8 +263,8 @@ export default function OfficeBranding({ office }: { office: Brand }) {
             type="button"
             aria-selected={tab === id}
             onClick={() => setTab(id)}
-            className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-              tab === id ? "bg-purple-600 text-white" : "text-gray-400 hover:text-white"
+            className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              tab === id ? "bg-blue-600 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"
             }`}
           >
             {label}

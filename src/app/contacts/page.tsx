@@ -292,7 +292,7 @@ export default async function ContactsPage({
                 nativeContent={
                   <span
                     title="Exporting contacts is only available on the Pro plan"
-                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 border border-gray-700 px-3 py-1.5 rounded-lg shrink-0"
+                    className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 bg-gray-800/60 border border-transparent px-3 py-1.5 rounded-full shrink-0"
                   >
                     <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
                       <path fillRule="evenodd" d="M8 1a.75.75 0 01.75.75v6.19l1.22-1.22a.75.75 0 111.06 1.06l-2.5 2.5a.75.75 0 01-1.06 0l-2.5-2.5a.75.75 0 111.06-1.06l1.22 1.22V1.75A.75.75 0 018 1zM1.5 10.5a.75.75 0 01.75.75v1.5c0 .138.112.25.25.25h11a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 0113.5 14.5h-11A1.75 1.75 0 01.75 12.75v-1.5a.75.75 0 01.75-.75z" clipRule="evenodd"/>

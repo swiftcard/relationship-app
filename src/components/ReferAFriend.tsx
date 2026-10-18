@@ -115,7 +115,7 @@ export default function ReferAFriend({ progress, showShare = true }: { progress:
               type="button"
               onClick={claim}
               disabled={claiming}
-              className="w-full mb-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-sm font-bold py-3 transition-colors"
+              className="w-full mb-3 rounded-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-sm font-bold py-3 transition-colors"
             >
               {claiming ? "Activating…" : `Claim your free month of Pro${p.claimable > 1 ? ` (${p.claimable} ready)` : ""}`}
             </button>

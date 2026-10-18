@@ -27,7 +27,7 @@ export default async function AccountDeletedPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-950 flex flex-col items-center justify-center px-6 text-center">
+    <main className="sc-app min-h-screen bg-gray-950 flex flex-col items-center justify-center px-6 text-center">
       <div className="w-16 h-16 rounded-2xl bg-gray-800 border border-gray-700 flex items-center justify-center mb-6">
         <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth={1.5} className="w-8 h-8">
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m6 2.25a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -58,7 +58,7 @@ export default async function AccountDeletedPage() {
           </p>
           <Link
             href="/login?next=/account-deleted"
-            className="bg-white hover:bg-white/90 text-gray-900 font-bold text-sm px-6 py-3 rounded-full transition-colors"
+            className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm px-6 py-3 rounded-full transition-colors"
           >
             Sign in to reopen
           </Link>

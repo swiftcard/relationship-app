@@ -58,7 +58,7 @@ type OfficeRow = {
 };
 
 const inputCls =
-  "w-full bg-gray-950 border border-gray-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500/40";
+  "w-full sc-field px-3.5 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none";
 
 function Section({ n, title, desc, children }: { n: number; title: string; desc: string; children: React.ReactNode }) {
   return (

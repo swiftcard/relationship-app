@@ -5,14 +5,14 @@
 // the real content replaces it in place.
 export default function Loading() {
   return (
-    <main className="min-h-screen bg-gray-950 px-5 py-12" aria-busy="true" aria-label="Loading">
+    <main className="sc-app min-h-screen bg-gray-950 px-5 py-12" aria-busy="true" aria-label="Loading">
       <div className="max-w-4xl mx-auto animate-pulse">
-        <div className="mx-auto h-6 w-28 rounded-full bg-white/[0.06]" />
-        <div className="mx-auto mt-4 h-8 w-64 max-w-full rounded-lg bg-white/[0.06]" />
-        <div className="mx-auto mt-3 h-4 w-80 max-w-full rounded bg-white/[0.04]" />
+        <div className="mx-auto h-6 w-28 rounded-full bg-gray-800" />
+        <div className="mx-auto mt-4 h-8 w-64 max-w-full rounded-lg bg-gray-800" />
+        <div className="mx-auto mt-3 h-4 w-80 max-w-full rounded bg-gray-800" />
         <div className="mt-10 grid gap-4 md:grid-cols-2">
-          <div className="h-80 rounded-2xl bg-white/[0.04] border border-white/[0.06]" />
-          <div className="h-80 rounded-2xl bg-white/[0.04] border border-white/[0.06]" />
+          <div className="h-80 rounded-2xl bg-gray-900 border border-gray-800" />
+          <div className="h-80 rounded-2xl bg-gray-900 border border-gray-800" />
         </div>
       </div>
     </main>

@@ -206,7 +206,7 @@ export default function ManageCards({
                   type="button"
                   onClick={() => handleDelete(card)}
                   disabled={busy}
-                  className="flex-1 sm:flex-none min-w-[150px] bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+                  className="flex-1 sm:flex-none min-w-[150px] bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white text-xs font-semibold px-4 py-2 rounded-full transition-colors"
                 >
                   {busy ? "Deleting…" : "Yes, delete permanently"}
                 </button>
@@ -214,7 +214,7 @@ export default function ManageCards({
                   type="button"
                   onClick={() => setConfirmingId(null)}
                   disabled={busy}
-                  className="flex-1 sm:flex-none min-w-[110px] border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+                  className="flex-1 sm:flex-none min-w-[110px] bg-gray-800/60 border border-transparent hover:bg-gray-700 text-gray-200 hover:text-white text-xs font-semibold px-4 py-2 rounded-full transition-colors"
                 >
                   Go back
                 </button>
