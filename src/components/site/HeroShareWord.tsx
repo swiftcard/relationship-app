@@ -5,12 +5,12 @@ import { useEffect, useState } from "react";
 // The last line of the homepage headline: "The business card that / shares
 // everything". The server renders the final word, so no-JS visitors, search
 // engines and reduced-motion users get the real headline. With motion it
-// rotates through what a card actually shares, holds longer on "everything"
-// (with the underline drawn in), then goes round again (owner, 2026-09-17).
+// rotates once through what a card actually shares, then lands on
+// "everything" (with the underline drawn in) and stays there until the next
+// page load (owner, 2026-10-18; was an endless loop since 2026-09-17).
 const WORDS = ["your number", "your links", "your socials", "everything"];
 const FINAL = WORDS.length - 1;
-const STEP_MS = 1100; // each of the first three words
-const HOLD_MS = 3600; // "everything"
+const STEP_MS = 2000; // each of the first three words
 
 export default function HeroShareWord() {
   const [i, setI] = useState(FINAL);
@@ -23,12 +23,12 @@ export default function HeroShareWord() {
       setRan(true);
       return;
     }
-    let n = FINAL;
+    let n = -1;
     let timer = window.setTimeout(function tick() {
-      n = (n + 1) % WORDS.length;
+      n += 1;
       setRan(true);
       setI(n);
-      timer = window.setTimeout(tick, n === FINAL ? HOLD_MS : STEP_MS);
+      if (n < FINAL) timer = window.setTimeout(tick, STEP_MS);
     }, 900);
     return () => clearTimeout(timer);
   }, []);
