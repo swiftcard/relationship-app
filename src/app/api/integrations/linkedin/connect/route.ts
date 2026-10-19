@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { appUrl } from "@/lib/app-url";
 import { safeNextPath } from "@/lib/safe-next";
 import { resolveConnectUserId } from "@/lib/connect-user";
 import { signState, oauthBindCookieName, oauthBindCookieValue, OAUTH_BIND_COOKIE_OPTIONS } from "@/lib/oauth-state";
@@ -6,7 +7,8 @@ import { GUEST_STATE, isLinkedInEnabled, LINKEDIN_AUTH_URL, LINKEDIN_REDIRECT_UR
 
 export const runtime = "nodejs";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
+// This deployment's own address — never production from a preview (lib/app-url, audit E-02).
+const APP_URL = appUrl();
 
 // GET /api/integrations/linkedin/connect → redirect the user into LinkedIn's
 // official OAuth consent screen. Profile-photo import is a card-building

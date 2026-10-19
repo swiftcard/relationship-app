@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { appUrl } from "@/lib/app-url";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { encryptToken } from "@/lib/token-crypto";
 import { verifyState, stateBoundToBrowser, oauthBindCookieName } from "@/lib/oauth-state";
@@ -8,7 +9,8 @@ import { fetchLinkedInPhoto } from "@/lib/linkedin-photo";
 
 export const runtime = "nodejs";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
+// This deployment's own address — never production from a preview (lib/app-url, audit E-02).
+const APP_URL = appUrl();
 
 export async function GET(request: NextRequest) {
   // Return the user to where they started the connect (set by /connect?next=…,

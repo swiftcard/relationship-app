@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { appUrl } from "@/lib/app-url";
 import { resolveConnectUserId } from "@/lib/connect-user";
 import { isPaidProfile, PLAN_COLUMNS } from "@/lib/effective-plan";
 import { signState, oauthBindCookieName, oauthBindCookieValue, OAUTH_BIND_COOKIE_OPTIONS } from "@/lib/oauth-state";
@@ -8,7 +9,8 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 export const runtime = "nodejs";
 
 const SCOPES = "https://www.googleapis.com/auth/contacts";
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
+// This deployment's own address — never production from a preview (lib/app-url, audit E-02).
+const APP_URL = appUrl();
 
 export async function GET(request: Request) {
   const userId = await resolveConnectUserId(request);

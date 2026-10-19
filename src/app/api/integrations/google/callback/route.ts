@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { appUrl } from "@/lib/app-url";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { encryptToken } from "@/lib/token-crypto";
 import { CRM_CALL_TIMEOUT_MS } from "@/lib/crm-http";
@@ -9,7 +10,8 @@ import { handleNativeGoogleLoginCallback } from "@/lib/native-google-login-serve
 
 export const runtime = "nodejs";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
+// This deployment's own address — never production from a preview (lib/app-url, audit E-02).
+const APP_URL = appUrl();
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

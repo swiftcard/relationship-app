@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { appUrl } from "@/lib/app-url";
 import { deletedAccountResponse } from "@/lib/live-account";
 import { createHash } from "node:crypto";
 import { isShellRequest } from "@/lib/shell-request";
@@ -18,7 +19,8 @@ import { isProTrialEligible } from "@/lib/trial-eligibility";
 import { trialHistoryFor } from "@/lib/trial-ledger";
 import { giftBridgeTrialEnd, retentionGiftEndsAt } from "@/lib/billing-state";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
+// This deployment's own address — never production from a preview (lib/app-url, audit E-02).
+const APP_URL = appUrl();
 
 // The Stripe prices we actually sell. Anything else is rejected so a crafted
 // request can't check out against an arbitrary/mispriced Price.

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { appUrl } from "@/lib/app-url";
 import { resolveConnectUserId } from "@/lib/connect-user";
 import { isPaidProfile, PLAN_COLUMNS } from "@/lib/effective-plan";
 import { signState } from "@/lib/oauth-state";
@@ -8,7 +9,8 @@ import { createHash, randomBytes } from "crypto";
 
 export const runtime = "nodejs";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
+// This deployment's own address — never production from a preview (lib/app-url, audit E-02).
+const APP_URL = appUrl();
 
 // Salesforce OAuth 2.0 web-server flow. Mirrors google/connect exactly:
 // signed state, paid gate, native-shell cookie. Scopes: `api` (data access)

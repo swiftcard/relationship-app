@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
-import { getAdminSupabase } from "@/lib/supabase-admin";
+import { disconnectOAuthCrm } from "@/lib/oauth-revoke";
 
 export async function DELETE() {
   const supabase = await createClient();
@@ -10,7 +10,8 @@ export async function DELETE() {
   // Checked: the Settings card only shows "disconnected" when this really
   // removed the connection, never on a failure it couldn't see. No plan
   // check — disconnecting is always allowed.
-  const { error } = await getAdminSupabase().from("integrations").delete().eq("user_id", user.id).eq("provider", "google");
+  // Revoked at Google first, then removed here (lib/oauth-revoke, audit I-07).
+  const { error } = await disconnectOAuthCrm(user.id, "google");
   if (error) return NextResponse.json({ error: "disconnect_failed", message: "Couldn't disconnect — try again." }, { status: 500 });
 
   return NextResponse.json({ ok: true });

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server";
+import { appUrl } from "@/lib/app-url";
 import Stripe from "stripe";
 import { Resend } from "resend";
 import { getStripe, subscriptionPeriodEndIso } from "@/lib/stripe";
@@ -32,7 +33,8 @@ import { revalidateCardPage, revalidateUserCards } from "@/lib/card-page-data";
 // the day-7 trial notice so both read it the same way.
 import { greetingFirstName } from "@/lib/greeting-name";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
+// This deployment's own address — never production from a preview (lib/app-url, audit E-02).
+const APP_URL = appUrl();
 
 // A checkout runs about six Stripe calls, office provisioning and an email.
 // Stated, not left to the platform default, because lib/stripe-idempotency

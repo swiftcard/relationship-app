@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { appUrl } from "@/lib/app-url";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { encryptToken } from "@/lib/token-crypto";
 import { CRM_CALL_TIMEOUT_MS } from "@/lib/crm-http";
@@ -8,7 +9,8 @@ import { isSalesforceInstanceUrl } from "@/lib/sync-salesforce";
 
 export const runtime = "nodejs";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
+// This deployment's own address — never production from a preview (lib/app-url, audit E-02).
+const APP_URL = appUrl();
 
 // Mirrors google/callback: native return leg, signed-state verification,
 // encrypted token storage. Salesforce extras: `instance_url` (the customer

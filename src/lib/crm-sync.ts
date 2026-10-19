@@ -1,4 +1,5 @@
 import { getAdminSupabase } from "./supabase-admin";
+import { appUrl } from "@/lib/app-url";
 import { isZapierWebhookUrl } from "./safe-fetch";
 import { isCardInScope, parseCardScope } from "./crm-scope";
 import { resolveOfficeContext } from "./office-roles";
@@ -27,7 +28,8 @@ import { isPaidProfile, PLAN_COLUMNS } from "./effective-plan";
 // saved in SwiftCard before either runs, and a CRM being down must never turn
 // into "something went wrong" for the person who just shared their details.
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
+// This deployment's own address — never production from a preview (lib/app-url, audit E-02).
+const APP_URL = appUrl();
 
 /** How long a CRM webhook may hold a view or lead request open. */
 export const CRM_WEBHOOK_TIMEOUT_MS = 5000;

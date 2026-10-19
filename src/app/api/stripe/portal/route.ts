@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { appUrl } from "@/lib/app-url";
 import { isShellRequest } from "@/lib/shell-request";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
@@ -6,7 +7,8 @@ import { getStripe } from "@/lib/stripe";
 import { officeSubUserBlockMessage } from "@/lib/office-roles";
 import { getAccountEmail } from "@/lib/account-email";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
+// This deployment's own address — never production from a preview (lib/app-url, audit E-02).
+const APP_URL = appUrl();
 
 // Opens the Stripe customer portal on the account's DEFAULT configuration —
 // i.e. whatever is set at Settings → Billing → Customer portal in the Stripe
