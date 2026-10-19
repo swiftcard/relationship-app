@@ -74,6 +74,13 @@ export async function POST(req: NextRequest) {
   if (!subject || !headline || !message) {
     return NextResponse.json({ error: "subject, headline, message required" }, { status: 400 });
   }
+  // Bounded on the server, not only by the composer (audit F-ADMIN-06): this
+  // text is sent to every account in the segment.
+  if ([subject, headline, ctaLabel].some((v) => typeof v !== "string" || v.length > 200)
+    || typeof message !== "string" || message.length > 5000
+    || typeof ctaUrl !== "string" || ctaUrl.length > 500) {
+    return NextResponse.json({ error: "The subject, headline and button can be up to 200 characters, the message up to 5,000." }, { status: 400 });
+  }
 
   const admin = getAdminSupabase();
   const resend = new Resend(process.env.RESEND_API_KEY);
@@ -231,14 +238,13 @@ export async function POST(req: NextRequest) {
     // status='sent' only: email_logs also holds 'skipped' and 'failed' rows, and
     // counting those would burn the cap on mail that was never delivered — a run
     // that skipped 500 unsubscribed users would lock out the next 500 real sends.
-    const { count: sentToday } = await admin
-      .from("email_logs")
-      .select("*", { count: "exact", head: true })
-      .eq("type", "marketing")
-      .eq("status", "sent")
-      .gte("created_at", since);
+    // …and promo blasts, which go out from the same domain (audit F-ADMIN-03).
+    const [{ count: sentToday }, { count: promoToday }] = await Promise.all([
+      admin.from("email_logs").select("*", { count: "exact", head: true }).eq("type", "marketing").eq("status", "sent").gte("created_at", since),
+      admin.from("email_logs").select("*", { count: "exact", head: true }).like("type", "promo:%").gte("created_at", since),
+    ]);
 
-    const already = sentToday ?? 0;
+    const already = (sentToday ?? 0) + (promoToday ?? 0);
     const wanted = (profiles ?? []).length;
     if (already + wanted > dailyCap) {
       return NextResponse.json(

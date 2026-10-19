@@ -170,12 +170,19 @@ export default function MarketingClient() {
   }
 
   async function sendPromoEmail() {
-    if (!promoSend) return;
+    if (!promoSend || promoSending) return;
+    // Asked first, with how many it reaches, and sent with a key of its own,
+    // as a broadcast is (audit F-ADMIN-03): one click used to mail a whole
+    // segment, and a second click mailed it again.
+    const reach = counts ? counts[promoSend.segment as keyof Counts] : null;
+    const who = reach != null ? `about ${reach.toLocaleString()} ${promoSend.segment === "all" ? "" : `${promoSend.segment} `}accounts` : `every ${promoSend.segment} account`;
+    if (!window.confirm(`Email the ${promoSend.code} offer to ${who}? This can't be undone.`)) return;
+    const sendKey = crypto.randomUUID();
     setPromoSending(true);
     setPromoSendResult(null);
     try {
       const res = await fetch("/api/admin/promo-codes/send", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(promoSend),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...promoSend, sendKey }),
       });
       const d = await res.json();
       setPromoSendResult(res.ok

@@ -13,7 +13,8 @@ import { isOfficePlan, isPaidPlan } from "@/lib/plan";
 // POST /api/admin/promo-codes/send — email a promo code to targeted users.
 // Same session-based admin gate as the rest of the console.
 export async function POST(req: NextRequest) {
-  if (!(await requireAdmin())) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const adminUser = await requireAdmin();
+  if (!adminUser) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
   const {
@@ -21,11 +22,17 @@ export async function POST(req: NextRequest) {
     headline,        // email subject / h1
     message,         // body copy
     segment = "free", // "free" | "pro" | "all"
+    sendKey,         // one per confirm dialog: a double-click or retry can't send twice
   } = body;
 
   if (!code || !headline || !message) {
     return NextResponse.json({ error: "code, headline, message required" }, { status: 400 });
   }
+  // The same bounds the broadcast composer keeps (audit F-ADMIN-06).
+  if (typeof headline !== "string" || typeof message !== "string" || headline.length > 200 || message.length > 5000) {
+    return NextResponse.json({ error: "The headline can be up to 200 characters and the message up to 5,000." }, { status: 400 });
+  }
+  const key = typeof sendKey === "string" && sendKey.length <= 64 ? sendKey : null;
 
   const admin = getAdminSupabase();
 
@@ -121,6 +128,56 @@ export async function POST(req: NextRequest) {
     targets.map((p) => authEmails.get(p.id) ?? (p.email as string | null)),
   );
 
+  // ── The broadcast composer's protections (audit F-ADMIN-03) ────────────────
+  // A promo blast is marketing mail from the same domain, and had none of them.
+  //
+  // The warm-up cap: a rolling 24h count of what has gone out, broadcasts and
+  // promos together, refused rather than truncated — a partial send leaves half
+  // the list mailed with no record of where it stopped.
+  const dailyCap = Number(process.env.EMAIL_DAILY_SEND_CAP ?? 200);
+  if (Number.isFinite(dailyCap) && dailyCap > 0) {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const [{ count: broadcastToday }, { count: promoToday }] = await Promise.all([
+      admin.from("email_logs").select("*", { count: "exact", head: true }).eq("type", "marketing").eq("status", "sent").gte("created_at", since),
+      admin.from("email_logs").select("*", { count: "exact", head: true }).like("type", "promo:%").gte("created_at", since),
+    ]);
+    const already = (broadcastToday ?? 0) + (promoToday ?? 0);
+    if (already + targets.length > dailyCap) {
+      return NextResponse.json(
+        { error: `This send (${targets.length}) plus ${already} already sent in the last 24h would exceed the ${dailyCap}/day warm-up cap. Send to a smaller segment or wait.` },
+        { status: 429 },
+      );
+    }
+  }
+
+  // The campaign record, BEFORE sending: one row per confirm, so the same send
+  // can't go out twice, and there is a record of it afterwards.
+  let campaignId: string | null = null;
+  {
+    const { data: created, error: campErr } = await admin
+      .from("admin_email_campaigns")
+      .insert({
+        idempotency_key: key,
+        sent_by: adminUser.email ?? "admin",
+        segment: `${segment} · promo ${promo.code}`,
+        subject: headline,
+        headline,
+        body: message,
+        intended_count: targets.length,
+      })
+      .select("id")
+      .single();
+    if (campErr?.code === "23505" && key) {
+      const { data: existing } = await admin
+        .from("admin_email_campaigns")
+        .select("sent_count, skipped_count, status")
+        .eq("idempotency_key", key)
+        .maybeSingle();
+      return NextResponse.json({ duplicate: true, sent: existing?.sent_count ?? 0, skipped: existing?.skipped_count ?? 0, teamMembersSkipped: 0, errors: [] });
+    }
+    campaignId = (created?.id as string | null) ?? null;
+  }
+
   let sent = 0;
   let skipped = 0;
   const errors: string[] = [];
@@ -188,6 +245,13 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       errors.push(`${recipient}: ${e}`);
     }
+  }
+
+  if (campaignId) {
+    await admin
+      .from("admin_email_campaigns")
+      .update({ sent_count: sent, failed_count: errors.length, skipped_count: skipped, status: errors.length === 0 ? "sent" : sent === 0 ? "failed" : "partial", completed_at: new Date().toISOString() })
+      .eq("id", campaignId);
   }
 
   return NextResponse.json({ sent, skipped, teamMembersSkipped, errors });

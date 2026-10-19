@@ -126,7 +126,7 @@ export default function UsersClient() {
   const [sort, setSort] = useState<"joined" | "leads" | "views" | "cards">("joined");
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [createResult, setCreateResult] = useState<{ cardUrl?: string; error?: string } | null>(null);
+  const [createResult, setCreateResult] = useState<{ cardUrl?: string; error?: string; loginEmailed?: boolean; setupLink?: string | null } | null>(null);
   const [form, setForm] = useState({ name: "", email: "", company: "", title: "", phone: "", username: "", plan: "pro", template: "classic-pro", accentColor: "#2563eb", photoShape: "original", surfaceColor: "", titleColor: "", companyColor: "" });
 
   const load = useCallback(async () => {
@@ -177,7 +177,7 @@ export default function UsersClient() {
       });
       const data = await res.json();
       if (res.ok) {
-        setCreateResult({ cardUrl: data.cardUrl });
+        setCreateResult({ cardUrl: data.cardUrl, loginEmailed: data.loginEmailed !== false, setupLink: data.setupLink ?? null });
         setForm({ name: "", email: "", company: "", title: "", phone: "", username: "", plan: "pro", template: "classic-pro", accentColor: "#2563eb", photoShape: "original", surfaceColor: "", titleColor: "", companyColor: "" });
         load();
       } else {
@@ -330,7 +330,24 @@ export default function UsersClient() {
                 <a href={createResult.cardUrl} target="_blank" rel="noopener noreferrer" className="text-blue-400 text-sm underline break-all">
                   {createResult.cardUrl}
                 </a>
-                <p className="text-gray-500 text-xs mt-3">A password reset email was sent so the business owner can log in.</p>
+                {/* What actually happened (audit F-ADMIN-04): it always said the
+                    email went, even when it didn't — and the business owner had
+                    no way in, and no one knew. */}
+                {createResult.loginEmailed ? (
+                  <p className="text-gray-500 text-xs mt-3">A password reset email was sent so the business owner can log in.</p>
+                ) : (
+                  <div className="mt-3 text-left">
+                    <p className="text-amber-400 text-xs mb-1.5">The login email couldn&apos;t be sent. Send the business owner this link to set their password:</p>
+                    {createResult.setupLink ? (
+                      <div className="flex items-center gap-2">
+                        <input readOnly value={createResult.setupLink} className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-200" />
+                        <button type="button" onClick={() => navigator.clipboard?.writeText(createResult.setupLink ?? "").catch(() => {})} className="text-xs font-semibold text-white bg-gray-700 hover:bg-gray-600 rounded-lg px-2.5 py-1.5">Copy</button>
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 text-xs">No link could be made either — they can use “Forgot password” on the sign-in page.</p>
+                    )}
+                  </div>
+                )}
                 <button
                   onClick={() => { setShowCreate(false); setCreateResult(null); }}
                   className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-xl text-sm transition-colors"

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clampField } from "@/lib/card-limits";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { requireAdmin } from "@/lib/admin";
 import { ensureEmailPreferences } from "@/lib/email-prefs";
@@ -14,7 +15,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { name, email, company, title, phone, username, plan = "pro", template = "classic-pro", accentColor, photoShape, surfaceColor, titleColor, companyColor } = await req.json();
+  const raw = await req.json();
+  // Clamped to what the card prints (lib/card-limits), as every card write is
+  // (audit F-ADMIN-06). Non-text reads as empty.
+  const txt = (v: unknown) => (typeof v === "string" ? v : "");
+  const name = clampField("name", txt(raw.name));
+  const company = clampField("company", txt(raw.company));
+  const title = clampField("title", txt(raw.title));
+  const phone = clampField("phone", txt(raw.phone));
+  const { email, username, plan = "pro", template = "classic-pro", accentColor, photoShape, surfaceColor, titleColor, companyColor } = raw;
   // Title color / Company color: a plain hex only. "" (Default) or anything
   // else leaves the template's own colour for that line.
   const lineColor = (v: unknown) => (typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v) ? v : undefined);
