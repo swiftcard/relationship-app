@@ -46,8 +46,10 @@ export function scoreDoc(question: string, doc: KnowledgeDoc): number {
 
 export type Scope = {
   audience: Audience;
-  /** Native iOS shell session — no commerce content may reach it. */
+  /** Native app session (iPhone or Android) — no commerce content may reach it. */
   native?: boolean;
+  /** Which app, when native. Android gets `androidAnswer` (audit F-HELP-01). */
+  platform?: "ios" | "android";
 };
 
 /**
@@ -113,7 +115,9 @@ export function instantAnswer(
     if (score > best.score) best = { score, doc };
   }
   if (!best.doc || best.score < 1) return null;
-  const answer = scope.native ? best.doc.nativeAnswer ?? best.doc.answer : best.doc.answer;
+  const answer = !scope.native
+    ? best.doc.answer
+    : (scope.platform === "android" ? best.doc.androidAnswer : undefined) ?? best.doc.nativeAnswer ?? best.doc.answer;
   return fillPlaceholders(answer, { native: scope.native });
 }
 

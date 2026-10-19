@@ -82,6 +82,8 @@ export const accountDocs = defineDocs([
     commerce: true,
     nativeAnswer:
       "Settings → Plan and billing shows your current plan. If you subscribed in the app, tap \"Manage subscription\" there — it opens your Apple account's subscription settings, where the payment method and renewal live. If you subscribed on the web, it's managed where you subscribed.",
+    androidAnswer:
+      "Settings → Plan and billing shows your current plan: \"You're on the Free plan\", or that Pro or Office is active on this account. Nothing in the Android app buys or changes a plan. A subscription bought on an iPhone or iPad says so there, and it's managed from that device's Settings, under Subscriptions. Anything else is managed where you subscribed.",
   },
   {
     id: "upgrade",
@@ -99,6 +101,8 @@ export const accountDocs = defineDocs([
     commerce: true,
     nativeAnswer:
       "You can subscribe to Pro right in the app: tap \"Upgrade to Pro\" on any locked feature, or go to Settings → Plan and billing. The subscription sheet shows the plans and prices before anything is confirmed, and it starts with a {trial.days}-day free trial if you've never subscribed before. Pro takes every Free limit off — unlimited cards and new contacts, the AI business-card scanner, the custom card designer, text follow-ups and AI-written follow-ups (email follow-ups are on every plan), full analytics, and the CRM integrations.",
+    androidAnswer:
+      "Subscribing isn't available in the Android app — features that are part of Pro wear a plain \"Pro\" marker, and everything else works on the Free plan. If this account already has Pro or Office (from an iPhone or iPad, or from your team), it's on here too: sign in with the same account. Pro takes every Free limit off — unlimited cards and new contacts, the AI business-card scanner, the custom card designer, text follow-ups and AI-written follow-ups (email follow-ups are on every plan), full analytics, and the CRM integrations.",
   },
   {
     id: "promo-code-in-app",
@@ -116,6 +120,8 @@ export const accountDocs = defineDocs([
     commerce: true,
     nativeAnswer:
       "On the \"Choose your plan\" step, tap \"Have a promo code?\" under the plans, enter your code and press \"Apply\". When the box says \"Added to the Pro plan\", the Pro card changes to your code's offer — tap its button and Apple's code page opens with your code already filled in. Apple shows exactly what you get before you confirm, in the app with your Apple account. Come back to SwiftCard and Pro switches on by itself; if it doesn't, tap \"Continue\" under the button. Make sure you use the Pro card's button after applying the code — the code only counts once the button has changed. If Apple can't take your code, the Pro card's button says where to use it instead.",
+    androidAnswer:
+      "Promo codes aren't used in the Android app — there's nothing to buy in it, so there's no code box. Anything already on your account (a free month, a team seat) shows here as usual.",
   },
   {
     id: "office-promo-code-seats",
@@ -164,6 +170,8 @@ export const accountDocs = defineDocs([
     commerce: true,
     nativeAnswer:
       "If you subscribed in the app: Settings → Plan and billing → \"Manage subscription\" opens your Apple account's subscription settings, where you cancel. You keep everything until the end of the period you've already paid for, and nothing is deleted when a plan ends — the dashboard shows a panel where you choose which card stays live (\"Which card stays live?\" under \"Continue on Free\"), other cards go offline and over-cap contacts are hidden, and re-subscribing switches it all back on. If you subscribed on the web, cancel where you subscribed.",
+    androidAnswer:
+      "Nothing in the Android app bills you, so there's nothing to cancel here. A subscription bought on an iPhone or iPad is managed from that device's Settings, under Subscriptions; anything else is managed where you subscribed. When a plan ends, nothing is deleted — the dashboard shows a panel where you choose which card stays live (\"Which card stays live?\" under \"Continue on Free\"), other cards go offline and over-cap contacts are hidden.",
   },
   {
     id: "failed-payment",

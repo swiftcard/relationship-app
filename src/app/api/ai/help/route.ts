@@ -10,6 +10,7 @@ import {
   APP_PERSONA,
   OFFICE_ADMIN_PERSONA,
   NATIVE_RULES,
+  ANDROID_RULES,
   APP_FALLBACK,
   NATIVE_FALLBACK,
   OFFICE_ADMIN_FALLBACK,
@@ -91,10 +92,13 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
   const native = body.native === true;
+  // Which app (audit F-HELP-01): the Android app sells nothing, so it gets its
+  // own answers and rules rather than the iPhone's In-App Purchase ones.
+  const platform: Scope["platform"] = native ? (body.platform === "android" ? "android" : "ios") : undefined;
   // `area` scopes the assistant. "office-admin" gets the console persona and
   // the console's docs; every other value is the default app assistant.
   const isAdmin = body.area === "office-admin";
-  const scope: Scope = { audience: isAdmin ? "office-admin" : "user", native };
+  const scope: Scope = { audience: isAdmin ? "office-admin" : "user", native, platform };
   const persona = isAdmin ? OFFICE_ADMIN_PERSONA : APP_PERSONA;
   const fallback = isAdmin
     ? (native ? OFFICE_ADMIN_NATIVE_FALLBACK : OFFICE_ADMIN_FALLBACK)
@@ -142,7 +146,7 @@ export async function POST(req: NextRequest) {
       // A member's prompt carries no pricing facts either (derivedFacts is
       // commerce-free for a native scope).
       scope: member ? { ...scope, native: true } : scope,
-      extraRules: [native ? NATIVE_RULES : "", member ? MEMBER_RULES : ""].filter(Boolean).join("\n"),
+      extraRules: [native ? (platform === "android" ? ANDROID_RULES : NATIVE_RULES) : "", member ? MEMBER_RULES : ""].filter(Boolean).join("\n"),
     });
     const reply = await aiComplete(prompt, { maxTokens: 700 });
     if (reply) return NextResponse.json({ reply });

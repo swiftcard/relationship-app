@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useIsNativeApp } from "@/lib/platform";
+import { useIsAndroidApp, useIsNativeApp } from "@/lib/platform";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -72,6 +72,8 @@ export default function HelpWidget({ floating = false, area = "app", member = fa
   // module-level isNativeApp constant must never be read during render, or the
   // shell's first render mismatches the server HTML (platform.ts's own warning).
   const native = useIsNativeApp();
+  // The Android app gets Android answers: it sells nothing (audit F-HELP-01).
+  const android = useIsAndroidApp();
   const [messages, setMessages] = useState<Msg[]>(() => [isAdmin ? ADMIN_GREETING : member ? MEMBER_GREETING : GREETING]);
   useEffect(() => {
     // Swap in the no-selling greeting once the shell reveals itself — but only
@@ -106,7 +108,7 @@ export default function HelpWidget({ floating = false, area = "app", member = fa
         // Skip the static greeting when sending history. The `native` flag lets
         // the server apply the in-app guardrail (no pricing/upgrade/website);
         // `area` selects the admin-console persona + knowledge base.
-        body: JSON.stringify({ messages: next.slice(1), native, area }),
+        body: JSON.stringify({ messages: next.slice(1), native, ...(native ? { platform: android ? "android" : "ios" } : {}), area }),
       });
       const data = await res.json();
       setMessages((prev) => [...prev, { role: "assistant", content: data.reply || "Sorry, I couldn't answer that." }]);

@@ -34,6 +34,13 @@ export const NATIVE_RULES = `
 
 IMPORTANT — NATIVE APP SESSION: The app sells the Pro subscription through Apple's In-App Purchase only. You may tell the user they can subscribe in the app — the "Upgrade to Pro" button on a locked feature, or Settings → Plan and billing — and that an in-app subscription is managed or canceled through their Apple account. You must NEVER state a specific price or dollar amount (the subscription sheet shows the current price), NEVER mention Stripe, and NEVER tell the user to visit the website, swiftcard.me, or the Pricing page to buy, compare, or manage anything.`;
 
+// The Android app sells nothing (owner, 2026-10-08) — NATIVE_RULES above
+// describes the iPhone's In-App Purchase, which Android does not have, so an
+// Android session gets these instead (audit F-HELP-01).
+export const ANDROID_RULES = `
+
+IMPORTANT — ANDROID APP SESSION: The Android app sells nothing. There is no subscription, price, trial, promo code box or Apple account in it, and no button that buys. Never tell the user to upgrade, subscribe, buy, start a trial, enter a code or manage billing in the app, and never mention Apple, the App Store, Stripe, a price, or the website as a place to buy or manage anything. Pro features show a plain "Pro" marker. If they ask how to get Pro, say subscribing isn't available in the Android app. A subscription bought on an iPhone or iPad is managed from that device's Settings, under Subscriptions.`;
+
 export const APP_FALLBACK =
   "I can help with creating & editing cards, designs, sharing, Swift Links, contacts, analytics, notifications, billing, and account settings. Try asking something like \"How do I change my design?\", \"Where are my contacts?\", or \"How do I upgrade to Pro?\" — or reach the team via the Contact page in the footer.";
 

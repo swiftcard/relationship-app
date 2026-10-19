@@ -39,6 +39,15 @@ export type KnowledgeDoc = {
    */
   nativeAnswer?: string;
   /**
+   * The Android app's answer, when `nativeAnswer` describes the iPhone's
+   * In-App Purchase. The Android app sells nothing (owner, 2026-10-08): no
+   * price, no trial, no subscribe button, no Apple account, no web checkout —
+   * so an Android session gets this instead (audit F-HELP-01). Falls back to
+   * `nativeAnswer` when absent. tests/help-android.test.ts holds every answer
+   * an Android session can receive to the Android app's own no-selling list.
+   */
+  androidAnswer?: string;
+  /**
    * Everything else worth knowing — exact UI labels, edge cases, what users get
    * wrong. Never returned verbatim; it is grounding context for the LLM, so it
    * can be longer and denser than `answer`.
