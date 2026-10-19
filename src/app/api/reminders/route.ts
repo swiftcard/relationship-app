@@ -42,6 +42,7 @@ import { applyDueSeatReductions } from "@/lib/office-scheduled-seats";
 import { releaseOrphanedOffices } from "@/lib/office-billing-sync";
 import { releaseAbandonedPromoClaims } from "@/lib/promo-claim";
 import { purgeStaleGuestUploads } from "@/lib/guest-uploads";
+import { purgeLeftoverQaAccounts } from "@/lib/qa-account-sweep";
 import { mergeCustomization } from "@/lib/customization-merge";
 import { pruneLogTables } from "@/lib/log-retention";
 import { mirrorPendingPromosToApple, turnOffUsedUpAppleOffers } from "@/lib/apple-offer-codes";
@@ -322,6 +323,16 @@ export async function GET(req: NextRequest) {
     guestUploadsPurged = await purgeStaleGuestUploads(supabase);
   } catch (e) {
     await reportError("reminders.purge-guest-uploads", e);
+  }
+
+  // QA throwaway accounts a killed or failed QA run never deleted (audit
+  // F-AUTH-01; owner OK 2026-10-18). Reserved .invalid addresses only, and
+  // only once a day old, so a QA run in progress is never touched.
+  let qaAccountsPurged = 0;
+  try {
+    qaAccountsPurged = await purgeLeftoverQaAccounts(supabase);
+  } catch (e) {
+    await reportError("reminders.purge-qa-accounts", e);
   }
 
   // The log tables' own retention, which nothing ever applied (audit A-11).
@@ -872,5 +883,5 @@ export async function GET(req: NextRequest) {
   }
   // === END PRESET-BASED SEQUENCE PROCESSING ===
 
-  return NextResponse.json({ sent: totalSent, checkedHour: currentUTCHour, downgraded, purged, seatReductionsApplied, orphanMembersReleased, promoClaimsReleased, guestUploadsPurged, subscriptionsStopped, appleOfferCodesMade, crmCatchUp });
+  return NextResponse.json({ sent: totalSent, checkedHour: currentUTCHour, downgraded, purged, seatReductionsApplied, orphanMembersReleased, promoClaimsReleased, guestUploadsPurged, qaAccountsPurged, subscriptionsStopped, appleOfferCodesMade, crmCatchUp });
 }
