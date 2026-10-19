@@ -5,7 +5,7 @@ import { trackLinkClick } from "@/lib/track-link-click";
 import LinkMark from "@/components/LinkMark";
 import { fullHref } from "@/lib/link-brand";
 
-type CardLink = { emoji?: string; label: string; url: string };
+type CardLink = { emoji?: string; label: string; url: string; kind?: "link" | "header" };
 
 // The card's custom "link-in-bio" buttons: ONE container, uniform rows.
 //
@@ -25,6 +25,12 @@ type CardLink = { emoji?: string; label: string; url: string };
 // No scrape: the marks are site icons derived from the hostname (lazy, over an
 // always-painted monogram) via the edge-cached /api/link-icon, never an
 // og:image lookup.
+//
+// Section headers (Pro, from the Swift Links editor) render as a slim label
+// row INSIDE the same container — the cream of the card page, small uppercase
+// text, no icon, no chevron, not a link — so the box keeps its one edge and
+// reads like a short version of the Swift Links page. The caller (cardLinkRows)
+// drops a header that has no link under it.
 export default function CardActionLinks({
   links,
   trackFor = null,
@@ -40,14 +46,28 @@ export default function CardActionLinks({
   /** Owner looking at their own card. */
   suppressTracking?: boolean;
 }) {
-  if (!links.length) return null;
+  if (!links.some((l) => l.kind !== "header")) return null;
 
   return (
     <div
       className="rounded-[14px] overflow-hidden bg-white"
       style={{ boxShadow: "inset 0 0 0 1px #E7E0D7, 0 1px 2px rgba(15,23,42,0.04)" }}
     >
-      {links.map((l, i) => (
+      {links.map((l, i) => l.kind === "header" ? (
+        <h3
+          key={i}
+          // 28px tall, hairline included, against a link row's 52: a chapter
+          // mark, not a row of its own weight. One line — a long header
+          // truncates like a long link label — and the same hairline as the
+          // rows, so the table's rhythm holds. Slate-600: AA on the cream at
+          // this size (#64748B is 4.4:1). Inset 1px (mx-px, first:mt-px)
+          // because the box's border is an inset shadow, which a filled child
+          // would paint over.
+          className="block truncate mx-px first:mt-px first:rounded-t-[13px] px-3.5 pt-[7px] pb-[6px] bg-[#FAF7F2] border-b border-[#F1EBE3] text-[0.6875rem] leading-[14px] font-semibold uppercase tracking-[0.08em] text-[#475569]"
+        >
+          {l.emoji ? `${l.emoji} ` : ""}{l.label}
+        </h3>
+      ) : (
         <a
           key={i}
           href={fullHref(l.url)}

@@ -110,3 +110,19 @@ export function layoutTiles(links: SizedLink[], paid: boolean): { link: SizedLin
   }
   return out;
 }
+
+/**
+ * The rows the card page's "Swift Links" box lists: the same links, in the
+ * same order, with the owner's section headers between them — so the box
+ * reads like a short version of the Swift Links page. Headers follow the
+ * page's plan line (Pro only; Free renders none). A header with no link
+ * under it — at the end, or straight before another header — titles nothing
+ * and is dropped, so the box never shows an empty section.
+ */
+export function cardLinkRows<T extends { label?: string; url?: string; kind?: string }>(raw: unknown, paid: boolean): T[] {
+  const rows = (Array.isArray(raw) ? raw : []).filter(
+    (l): l is T => !!l && typeof l === "object" && !!String((l as T).label ?? "").trim()
+      && ((l as T).kind === "header" ? paid : !!String((l as T).url ?? "").trim()),
+  );
+  return rows.filter((l, i) => l.kind !== "header" || (i + 1 < rows.length && rows[i + 1].kind !== "header"));
+}

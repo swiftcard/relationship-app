@@ -32,6 +32,7 @@ import { cardPageTheme } from "@/lib/card-page-theme";
 import { isPaidPlan, sanitizeCustomizationForPlan } from "@/lib/plan";
 import { buildCardData } from "@/lib/card-data";
 import { buildConnectLinks } from "@/lib/social-url";
+import { cardLinkRows } from "@/lib/swiftlink-tiles";
 import SignupNudgeHost from "@/components/SignupNudgeHost";
 import ReportCardLink from "@/components/ReportCardLink";
 import { SwiftCardIcon } from "@/components/SwiftCardLogo";
@@ -249,7 +250,7 @@ export default async function CardPage({
     address?: { street?: string; unit?: string; city?: string; state?: string; zip?: string };
     accentColor?: string;
     font?: string;
-    links?: { emoji: string; label: string; url: string }[];
+    links?: { emoji: string; label: string; url: string; kind?: "link" | "header" }[];
     testimonials?: { name: string; text: string }[];
     phones?: { number: string; label: "mobile" | "office"; showOnCard: boolean }[];
     fax?: string;
@@ -261,7 +262,11 @@ export default async function CardPage({
   // Array.isArray guards: a corrupted/crafted customization where links,
   // testimonials, or phones is a non-array would throw on .filter and 500 the
   // public card. Coerce to [] instead. (cards audit M4)
-  const actionLinks = (Array.isArray(customization.links) ? customization.links : []).filter((l) => l && l.label && l.url);
+  // The Swift Links box's rows: the links, plus a paid owner's section headers
+  // between them (Free shows no headers, as on the Swift Links page). Empty
+  // headers are dropped, so a header always has a link under it.
+  const actionLinks = cardLinkRows<{ emoji: string; label: string; url: string; kind?: "link" | "header" }>(customization.links, isPaidPlan(profile.plan));
+  const realLinkCount = actionLinks.filter((l) => l.kind !== "header").length;
   const testimonials = (Array.isArray(customization.testimonials) ? customization.testimonials : []).filter((t) => t && t.name && t.text);
 
   // Still needed for the saved-contact (vCard) block below, which wants the
@@ -302,6 +307,7 @@ export default async function CardPage({
     snapchat,
     youtube,
     // The Swift Links buttons this page shows (already capped to the plan).
+    // Header rows ride along; buildVCard skips them, as cardContactLinks does.
     links: actionLinks,
     // Embed the CORRECT owner's headshot in the saved contact (same per-card
     // resolution the card render uses — never another card's/user's photo).
@@ -333,7 +339,7 @@ export default async function CardPage({
   });
 
   // Swift Links shows a bio, social links, and additional links
-  const hasConnectSection = !!bio || connectLinks.length > 0 || actionLinks.length > 0;
+  const hasConnectSection = !!bio || connectLinks.length > 0 || realLinkCount > 0;
 
   // Card-only mode (?embed=card): render just the card, used as the /preview inline preview.
   if (embed === "card") {
@@ -492,7 +498,7 @@ export default async function CardPage({
           {bio && (
             <p className="text-slate-600 text-[0.8125rem] leading-[1.6] whitespace-pre-wrap [text-wrap:pretty]">{bio}</p>
           )}
-          {bio && (connectLinks.length > 0 || actionLinks.length > 0) && (
+          {bio && (connectLinks.length > 0 || realLinkCount > 0) && (
             <div className="h-px bg-[#EFE9E1] my-4" />
           )}
           {/* Social links with intercept modal — unchanged mechanic, new layout. */}
@@ -509,10 +515,11 @@ export default async function CardPage({
               suppressTracking={isEmbed || isOwnerView}
             />
           )}
-          {connectLinks.length > 0 && actionLinks.length > 0 && (
+          {connectLinks.length > 0 && realLinkCount > 0 && (
             <div className="h-px bg-[#EFE9E1] my-4" />
           )}
-          {/* Custom action links: one hairline-ruled table, every row equal.
+          {/* Custom action links: one hairline-ruled table, every row equal,
+              with the owner's section headers as slim label rows inside it.
               Nothing here reads the card's accent — the section is deliberately
               free of saturated blocks. */}
           <CardActionLinks
