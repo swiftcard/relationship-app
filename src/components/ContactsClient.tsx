@@ -7,7 +7,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { getSourceLabel } from "@/lib/source-labels";
 import { locationLabel } from "@/lib/location-display";
 import { hasMarkedPlace, splitLocationParts } from "@/lib/location-privacy";
-import { sharedAccuracyLabel, sharedMapUrl } from "@/lib/shared-location";
 import { BlurredPlace } from "@/components/NotificationBody";
 import type { GeoAccuracy } from "@/lib/request-geo";
 import { CRON_HOUR_UTC } from "@/lib/cron-schedule";
@@ -33,13 +32,6 @@ type Lead = {
    *  field on this panel, which the contact typed in themselves. Absent on
    *  leads captured before the column existed; those render unchanged. */
   geo_accuracy?: string | null;
-  /** The exact spot the contact CHOSE to share from their phone (lib/shared-
-   *  location.ts). Null coordinates with a time = shared, but withheld on
-   *  Free (app/contacts/page.tsx); all null = never shared. */
-  shared_lat?: number | null;
-  shared_lng?: number | null;
-  shared_accuracy_m?: number | null;
-  shared_location_at?: string | null;
   notes: string | null;
   source: string | null;
   visitor_id: string | null;
@@ -1451,36 +1443,6 @@ export default function ContactsClient({
                     {hasMarkedPlace(selected.location)
                       ? <BlurredPlace text={splitLocationParts(selected.location).map((p) => p.text).join("")} />
                       : locationLabel(selected.location, selected.geo_accuracy as GeoAccuracy | null)}
-                  </span>
-                </div>
-              )}
-              {/* The spot they CHOSE to share from their phone — exact, unlike
-                  the line above, which is an IP guess. A paid account sees it
-                  and the map; a Free one gets the same blur as any other place
-                  (the coordinates were never sent to this browser). */}
-              {selected.shared_location_at && (
-                <div className="flex items-start gap-3">
-                  <svg className="w-4 h-4 text-gray-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
-                  </svg>
-                  <span className="min-w-0 text-sm">
-                    <span className="block text-gray-300">Exact location they shared</span>
-                    {selected.shared_lat != null && selected.shared_lng != null ? (
-                      <span suppressHydrationWarning className="block text-gray-500 text-xs mt-0.5">
-                        {[sharedAccuracyLabel(selected.shared_accuracy_m), formatDate(selected.shared_location_at)].filter(Boolean).join(" · ")}
-                        {" · "}
-                        <a
-                          href={sharedMapUrl(selected.shared_lat, selected.shared_lng, selected.name ? `${selected.name}` : "Shared location")}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-400 font-semibold hover:underline whitespace-nowrap"
-                        >
-                          Open in Maps ↗
-                        </a>
-                      </span>
-                    ) : (
-                      <span className="block text-xs mt-0.5"><BlurredPlace text="████████" /></span>
-                    )}
                   </span>
                 </div>
               )}

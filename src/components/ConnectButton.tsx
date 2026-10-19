@@ -5,7 +5,6 @@ import { createPortal } from "react-dom";
 import { triggerSignupNudge } from "@/lib/nudge";
 import { getVisitorId, getVisitorInfo, markSharedWith } from "@/lib/visitor";
 import { outbox, isQueuedOffline } from "@/lib/offline-outbox";
-import ShareLocationToggle, { type SharedLocation } from "@/components/ShareLocationToggle";
 
 export default function ConnectButton({
   cardOwner,
@@ -33,8 +32,6 @@ export default function ConnectButton({
   const [error, setError] = useState("");
   // No signal: kept on this phone and sent once there is (lib/offline-outbox.ts).
   const [queued, setQueued] = useState(false);
-  // Their exact spot, only if they choose to add it (components/ShareLocationToggle).
-  const [sharedLocation, setSharedLocation] = useState<SharedLocation | null>(null);
 
   function openModal() {
     const v = getVisitorInfo();
@@ -75,7 +72,6 @@ export default function ConnectButton({
           // Joins this contact to their own card_events — see SaveContactButton.
           visitor_id: getVisitorId(),
           source: "swift_connect",
-          ...(sharedLocation ? { shared_location: sharedLocation } : {}),
           // Submitting the share form IS the consent (the disclosure sits right
           // above the Send button) — so every share opts in to text + email.
         }),
@@ -180,7 +176,6 @@ export default function ConnectButton({
                     </>
                   )}
                   <textarea rows={3} placeholder={`Message for ${ownerFirstName}…`} value={form.message} onChange={(e) => setForm((f) => ({ ...f, message: e.target.value }))} className={`${inputCls} resize-none`} />
-                  <ShareLocationToggle value={sharedLocation} onChange={setSharedLocation} />
                   {error && <p className="text-red-500 text-xs">{error}</p>}
                   {/* SMS consent — separate affirmative opt-in (unchecked by
                       default, optional); same block as every capture surface. */}

@@ -4,8 +4,9 @@ import { join } from "node:path";
 import { buildRecentVisits, visitStarts, type VisitEventRow } from "@/lib/recent-visits";
 
 // ── The 2026-10-18 independent review of the four analytics commits ──────────
-// No critical or high findings; these pin the seven small ones it raised, each
-// fixed, so none can come back.
+// No critical or high findings; these pin the small ones it raised, each
+// fixed, so none can come back. (Its findings about the visitor-shared
+// location went with that feature, removed on the owner's word the same day.)
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 const T = (min: number) => new Date(Date.UTC(2026, 9, 18, 15, 0) + min * 60_000).toISOString();
@@ -46,50 +47,11 @@ describe("2. every event belongs to exactly one visit", () => {
   });
 });
 
-describe("3. a later share cannot erase that the first visit shared a location", () => {
-  const src = read("src/lib/recent-visits.ts");
-  it("the first location's time is kept apart and set only at capture", () => {
-    expect(src).toContain("const first = sh.shared_location_first_at");
-    expect(read("src/app/api/leads/route.ts")).toContain("shared_location_first_at: sharedCols.shared_location_at");
-    expect(read("src/app/api/leads/route.ts")).not.toMatch(/update\([^)]*shared_location_first_at/);
-  });
-  it("first share with location at 2, a repeat share with a new point at 120 → both visits say so", () => {
-    const events = [ev("vB", 119, "viewed_card"), ev("vA", 0, "viewed_card")];
-    const shares = [
-      { visitor_id: "visitor-aaaa", created_at: T(2), surface: "card" as const, location: true },
-      { visitor_id: "visitor-aaaa", created_at: T(120), surface: "card" as const, location: true },
-    ];
-    const [b, a] = buildRecentVisits({ events, history: [], leads: [], shares, paid: true, limit: 5 });
-    expect(a.actions).toEqual(["Shared their details and location"]);
-    expect(b.actions).toEqual(["Shared their details and location"]);
-  });
-});
-
-describe("4. time on page can only be raised by the visitor's own cookie", () => {
+describe("3. time on page can only be raised by the visitor's own cookie", () => {
   const dwell = read("src/app/api/card-events/dwell/route.ts").replace(/^\s*\/\/.*$/gm, "");
   it("no body visitor_id is read at all", () => {
     expect(dwell).not.toMatch(/body\?\.visitor_id/);
     expect(dwell).toContain("const visitorId = isVisitorId(cookieId) ? cookieId : null;");
     expect(read("src/components/CardEventTracker.tsx")).toContain("const json = JSON.stringify(payload);");
-  });
-});
-
-describe("5 & 6. the new-contact notice only claims a location that was saved, at its real time", () => {
-  const route = read("src/app/api/leads/route.ts");
-  it("locationSaved, not 'a point was sent'", () => {
-    expect(route).toContain("let locationSaved = !!sharedCols && !error;");
-    expect(route).toContain('shared their info${locationSaved ? " and their exact location" : ""}');
-  });
-});
-
-describe("7. the location switch is one control to a screen reader", () => {
-  const t = read("src/components/ShareLocationToggle.tsx");
-  it("a fixed visible name, the state in aria-checked, the rest as its description", () => {
-    expect(t).toContain('<span className="block text-gray-900 text-sm font-medium">Add my current location</span>');
-    expect(t).toContain("aria-describedby={`${ids}-hint ${ids}-status`}");
-  });
-  it("the live region is always mounted, so its message is announced", () => {
-    expect(t).toContain('role="status" className="text-gray-500 text-xs mt-1.5 px-1 empty:hidden"');
-    expect(t).not.toMatch(/\(state === "denied" \|\| state === "failed"\) && \(/);
   });
 });
