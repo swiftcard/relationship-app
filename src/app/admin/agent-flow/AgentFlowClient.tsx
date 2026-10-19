@@ -363,7 +363,10 @@ export default function AgentFlowClient() {
     return () => clearTimeout(t);
   }, []);
   const disconnect = async (provider: string) => {
-    await fetch(`/api/admin/connect/${provider}`, { method: "DELETE" }).catch(() => {});
+    // Only a confirmed disconnect is shown as one (audit F-ADMIN-05): a failed
+    // DELETE used to say "Disconnected" while the account stayed connected.
+    const res = await fetch(`/api/admin/connect/${provider}`, { method: "DELETE" }).catch(() => null);
+    if (!res?.ok) { say("Couldn't disconnect — it's still connected. Try again."); return; }
     say("Disconnected — Approve is back to the copy flow for that platform.");
     setBoard((b) => b && b.connections ? { ...b, connections: { ...b.connections, [provider]: { ...b.connections[provider], connected: false, account: null, note: null } } } : b);
   };

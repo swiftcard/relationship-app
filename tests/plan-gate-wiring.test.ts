@@ -68,7 +68,9 @@ const SITES: Site[] = [
       "Upgrade to Pro →",
     ],
     native: [
-      "Pro feature — You've used your 5 free leads this month. Unlimited leads are only available on the Pro plan",
+      // Built in lib/plan from FREE_LEADS_PER_MONTH (audit F-DASH-01); its exact
+      // words are pinned in audit-round-33-*.test.ts.
+      ": LEADS_CAP_NATIVE_COPY",
       "Pro feature — Detailed analytics are only available on the Pro plan",
       // CSV export is NOT listed here any more. The dashboard's Quick Contacts
       // header carried a second Export button that hit the same
@@ -142,7 +144,7 @@ const SITES: Site[] = [
     web: ["Upgrade to Pro · keep capturing every lead →"],
     native: [
       "Pro feature — The card scanner is only available on the Pro plan",
-      "Pro feature — You've used your 5 free leads this month. Unlimited leads are only available on the Pro plan",
+      "nativeCopy={LEADS_CAP_NATIVE_COPY}",
     ],
   },
   {

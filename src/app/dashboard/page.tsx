@@ -54,7 +54,8 @@ import { PlanGate, PlanNotice } from "@/components/PlanGate";
 import CardSelectionPersist from "@/components/CardSelectionPersist";
 import TourContextPersist from "@/components/TourContextPersist";
 import { Suspense } from "react";
-import { PLAN_LIMITS, LOCKED_LEAD_TAG, describeFreeDesignChanges, proLinkFeaturesInUse } from "@/lib/plan";
+import { PLAN_LIMITS, LEADS_CAP_NATIVE_COPY, LOCKED_LEAD_TAG, describeFreeDesignChanges, proLinkFeaturesInUse } from "@/lib/plan";
+import { REFERRAL } from "@/lib/referral";
 import { isPaidProfile } from "@/lib/effective-plan";
 import { pickFreeLiveCardIds } from "@/lib/card-active";
 import { redactForPlan } from "@/lib/notification-privacy";
@@ -1118,10 +1119,10 @@ export default async function DashboardPage({
               nativeCopy={
                 lockedCount > 0
                   ? `Pro feature — ${lockedCount} new leads are locked this month. Unlimited leads are only available on the Pro plan`
-                  : "Pro feature — You've used your 5 free leads this month. Unlimited leads are only available on the Pro plan"
+                  : LEADS_CAP_NATIVE_COPY
               }
               // Native: the notice with Apple's subscribe button (PlanNotice)
-              // for the cap/locked states, and the same "Invite 3 friends"
+              // for the cap/locked states, and the same "Invite friends"
               // line the website shows under it — referrals are in the app
               // too (owner, 2026-10-07). When it's just the usage counter
               // (near-limit but not at-limit / not locked), keep it as a pure
@@ -1134,11 +1135,11 @@ export default async function DashboardPage({
                       copy={
                         lockedCount > 0
                           ? `Pro feature — ${lockedCount} new leads are locked this month. Unlimited leads are only available on the Pro plan`
-                          : "Pro feature — You've used your 5 free leads this month. Unlimited leads are only available on the Pro plan"
+                          : LEADS_CAP_NATIVE_COPY
                       }
                     />
                     <p className="text-amber-200/60 text-xs mt-2 px-1">
-                      Not ready to upgrade? <Link href="/grow" className="font-semibold text-amber-200 underline underline-offset-2">Invite 3 friends</Link> — when they sign up, you get a month of Pro free (up to 3 months).
+                      Not ready to upgrade? <Link href="/grow" className="font-semibold text-amber-200 underline underline-offset-2">Invite {REFERRAL.SIGNUPS_PER_REWARD} friends</Link> — when they sign up, you get a month of Pro free (up to {REFERRAL.MAX_REFERRAL_REWARDS * REFERRAL.REFERRER_FREE_MONTHS} months).
                     </p>
                   </div>
                 ) : (
@@ -1163,7 +1164,7 @@ export default async function DashboardPage({
                   <UpgradeButton />
                 </div>
                 <p className="text-amber-200/60 text-xs mt-2">
-                  Not ready to upgrade? <Link href="/grow" className="font-semibold text-amber-200 underline underline-offset-2">Invite 3 friends</Link> — when they sign up, you get a month of Pro free (up to 3 months).
+                  Not ready to upgrade? <Link href="/grow" className="font-semibold text-amber-200 underline underline-offset-2">Invite {REFERRAL.SIGNUPS_PER_REWARD} friends</Link> — when they sign up, you get a month of Pro free (up to {REFERRAL.MAX_REFERRAL_REWARDS * REFERRAL.REFERRER_FREE_MONTHS} months).
                 </p>
               </div>
             </PlanGate>

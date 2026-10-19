@@ -4,7 +4,7 @@
 // month), acquisition attribution, every card with per-card stats + live
 // links, 30-day activity, recent captured contacts, referral tools.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getSignupSourceLabel, getSourceLabel } from "@/lib/source-labels";
 import Link from "next/link";
 import { adminErrorText, grantMonthWarning, planChangeWarning, takeOfflineWarning } from "@/lib/admin-confirm";
@@ -43,13 +43,23 @@ export default function UserDetailClient({ userId }: { userId: string }) {
   const [codeInput, setCodeInput] = useState("");
   const [codeMsg, setCodeMsg] = useState("");
   const [actionError, setActionError] = useState("");
+  const loaded = useRef(false);
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/admin/users/${userId}`);
-    if (!res.ok) { setError(res.status === 404 ? "User not found" : "Failed to load user"); return; }
-    const d = await res.json();
-    setData(d);
-    setCodeInput(d.user.referral_code ?? "");
+    // A thrown fetch left "Loading…" up forever (audit F-ADMIN-05). After an
+    // action the page already shows the user, so a failed refresh keeps it
+    // and says so instead of replacing it with an error.
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`);
+      if (!res.ok) { setError(res.status === 404 ? "User not found" : "Failed to load user"); return; }
+      const d = await res.json();
+      loaded.current = true;
+      setData(d);
+      setCodeInput(d.user.referral_code ?? "");
+    } catch {
+      if (loaded.current) setActionError("Couldn't refresh — what's shown may be out of date. Reload the page.");
+      else setError("Couldn't reach the server. Reload the page to try again.");
+    }
   }, [userId]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time data fetch on mount

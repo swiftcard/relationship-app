@@ -6,6 +6,7 @@ import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import Link from "next/link";
 import { scanBusinessCard, ProRequiredError, AiConsentRequiredError, EmptyScanError, ScanServiceError } from "@/lib/scan-card";
 import { PlanGate } from "@/components/PlanGate";
+import { LEADS_CAP_NATIVE_COPY } from "@/lib/plan";
 import CardScanCamera from "@/components/CardScanCamera";
 
 export default function AddContactModal({
@@ -349,7 +350,7 @@ export default function AddContactModal({
               {atLimit && (
                 <PlanGate
                   feature="leads-cap"
-                  nativeCopy="Pro feature — You've used your 5 free leads this month. Unlimited leads are only available on the Pro plan"
+                  nativeCopy={LEADS_CAP_NATIVE_COPY}
                 >
                   <div className="rounded-xl px-3 py-2.5 bg-blue-950/40 border border-blue-800/40">
                     <p className="text-blue-200 text-xs">{error}</p>

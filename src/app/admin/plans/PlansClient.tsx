@@ -38,17 +38,24 @@ export default function PlansClient({ userId, email, initialPlan }: { userId: st
   async function setTo(next: string, label: string) {
     setSaving(next);
     setMsg(null);
-    const res = await fetch("/api/admin/set-plan", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, plan: next }),
-    });
-    setSaving(null);
-    if (res.ok) {
-      setPlan(next);
-      setMsg(`✓ Your account is now on ${label}. Open the dashboard (below) to experience it — refresh if it's already open.`);
-    } else {
-      setMsg("Couldn't switch plan. Try again.");
+    // A dropped connection used to leave every button disabled until a
+    // reload (audit F-ADMIN-05).
+    try {
+      const res = await fetch("/api/admin/set-plan", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, plan: next }),
+      });
+      if (res.ok) {
+        setPlan(next);
+        setMsg(`✓ Your account is now on ${label}. Open the dashboard (below) to experience it — refresh if it's already open.`);
+      } else {
+        setMsg("Couldn't switch plan. Try again.");
+      }
+    } catch {
+      setMsg("Couldn't reach the server. Your plan wasn't changed.");
+    } finally {
+      setSaving(null);
     }
   }
 

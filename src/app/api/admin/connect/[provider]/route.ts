@@ -38,6 +38,10 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ provide
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { provider } = await ctx.params;
   if (!isAgentProvider(provider)) return NextResponse.json({ error: "unknown provider" }, { status: 404 });
-  await deleteConnection(provider);
+  try {
+    await deleteConnection(provider);
+  } catch {
+    return NextResponse.json({ error: "Couldn't disconnect — try again." }, { status: 500 });
+  }
   return NextResponse.json({ ok: true });
 }

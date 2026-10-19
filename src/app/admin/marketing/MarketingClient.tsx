@@ -139,11 +139,19 @@ export default function MarketingClient() {
 
   async function checkDomain() {
     setDomainChecking(true);
-    const res = await fetch("/api/admin/email-domain", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify" }),
-    });
-    setDomain(await res.json().catch(() => null));
-    setDomainChecking(false);
+    // try/finally: a thrown fetch left "Checking…" up for good (audit
+    // F-ADMIN-05). The last known status stays on screen when it fails.
+    try {
+      const res = await fetch("/api/admin/email-domain", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify" }),
+      });
+      const d = await res.json().catch(() => null);
+      if (d) setDomain(d);
+    } catch {
+      /* keep the last status */
+    } finally {
+      setDomainChecking(false);
+    }
   }
 
   async function copyVal(key: string, val: string) {
@@ -205,7 +213,10 @@ export default function MarketingClient() {
   }, []);
 
   const loadPromos = useCallback(async () => {
-    const res = await fetch("/api/admin/promo-codes");
+    // A dropped connection keeps the list as it was rather than throwing
+    // out of the effect (audit F-ADMIN-05).
+    const res = await fetch("/api/admin/promo-codes").catch(() => null);
+    if (!res) return;
     if (res.ok) {
       const data = await res.json();
       setPromos(data.codes ?? []);

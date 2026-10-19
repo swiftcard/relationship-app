@@ -8,6 +8,14 @@ import ScrollReveal from "@/components/ScrollReveal";
 import NativeHidden from "@/components/NativeHidden";
 import HomeHeadingReveal from "@/components/site/HomeHeadingReveal";
 import "@/app/home.css";
+import { PLAN_LIMITS, PLAN_PRICES } from "@/lib/plan";
+import { formatUsd } from "@/lib/currency";
+
+// SwiftCard's own figures come from lib/plan, so a price change can't leave
+// these pages advertising the old one (audit F-MKT-01). Competitors' stay literal.
+const PRO = formatUsd(PLAN_PRICES.PRO_MONTHLY_CENTS);
+const SEAT = formatUsd(PLAN_PRICES.OFFICE_MONTHLY_PER_SEAT_CENTS);
+const MIN_SEATS = PLAN_LIMITS.OFFICE_MIN_SEATS;
 
 export const metadata: Metadata = {
   title: "SwiftCard vs Linktree, Popl & Blinq — Digital Business Card Comparison",
@@ -29,12 +37,12 @@ type Row = { label: string; swiftcard: string; linktree: string; popl: string; b
 // since plans and prices change. SwiftCard's numbers are the same ones live on /pricing.
 const ROWS: Row[] = [
   { label: "Starting price", swiftcard: "Free", linktree: "Free (12% fee on sales)", popl: "Free", blinq: "Free" },
-  { label: "Cheapest paid plan", pricing: true, swiftcard: "$4.99/mo", linktree: "$8/mo (Starter)", popl: "$7.99/mo (Pro)", blinq: "~$3–10/mo (Premium, by billing term)" },
+  { label: "Cheapest paid plan", pricing: true, swiftcard: `${PRO}/mo`, linktree: "$8/mo (Starter)", popl: "$7.99/mo (Pro)", blinq: "~$3–10/mo (Premium, by billing term)" },
   { label: "Built-in lead CRM (notes, history, follow-ups)", swiftcard: "✓", linktree: "✗", popl: "Via 3rd-party integrations", blinq: "Via 3rd-party integrations" },
   { label: "Automated follow-up sequences (email + text)", swiftcard: "✓", linktree: "✗", popl: "✗", blinq: "✗" },
   { label: "NFC tap-to-share", swiftcard: "✓", linktree: "✗", popl: "✓", blinq: "✓" },
   { label: "Custom card designer", swiftcard: "✓ (Pro)", linktree: "N/A — link-in-bio, not a card", popl: "Limited", blinq: "✓" },
-  { label: "Team/office pricing", pricing: true, swiftcard: "$3.99/seat/mo · min 2 seats", linktree: "N/A", popl: "$5/user/mo · min 5 seats", blinq: "$4.99/user/mo · min 5 seats" },
+  { label: "Team/office pricing", pricing: true, swiftcard: `${SEAT}/seat/mo · min ${MIN_SEATS} seats`, linktree: "N/A", popl: "$5/user/mo · min 5 seats", blinq: "$4.99/user/mo · min 5 seats" },
 ];
 
 function Cell({ value, brand }: { value: string; brand?: boolean }) {

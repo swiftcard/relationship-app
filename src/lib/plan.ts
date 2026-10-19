@@ -20,6 +20,11 @@ export const PLAN_LIMITS = {
   OFFICE_MIN_SEATS: 2,         // minimum seats for the Office plan
 } as const;
 
+// The leads-cap notice inside the iOS/Android app (PlanGate nativeCopy) on the
+// dashboard and in Add contact. Built from the limit above so the app can never
+// name a different cap from the website beside it (audit F-DASH-01).
+export const LEADS_CAP_NATIVE_COPY = `Pro feature — You've used your ${PLAN_LIMITS.FREE_LEADS_PER_MONTH} free leads this month. Unlimited leads are only available on the Pro plan`;
+
 // Displayed prices on /pricing, in cents (USD) — the ONE source of truth for
 // what SwiftCard charges. The checkout route fetches the actual Stripe Price
 // object for whatever priceId is requested and refuses to check out if its

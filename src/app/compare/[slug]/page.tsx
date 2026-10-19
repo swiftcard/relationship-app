@@ -10,6 +10,14 @@ import ScrollReveal from "@/components/ScrollReveal";
 import NativeHidden from "@/components/NativeHidden";
 import HomeHeadingReveal from "@/components/site/HomeHeadingReveal";
 import "@/app/home.css";
+import { PLAN_LIMITS, PLAN_PRICES } from "@/lib/plan";
+import { formatUsd } from "@/lib/currency";
+
+// SwiftCard's own figures come from lib/plan, so a price change can't leave
+// these pages advertising the old one (audit F-MKT-01). Competitors' stay literal.
+const PRO = formatUsd(PLAN_PRICES.PRO_MONTHLY_CENTS);
+const SEAT = formatUsd(PLAN_PRICES.OFFICE_MONTHLY_PER_SEAT_CENTS);
+const MIN_SEATS = PLAN_LIMITS.OFFICE_MIN_SEATS;
 
 // ── Competitor-alternative pages: /compare/<x>-alternative ──────────────────
 //
@@ -68,7 +76,7 @@ const COMPETITORS: Record<string, Competitor> = {
       { label: "Automated follow-up (email + text)", swiftcard: "✓", them: "✗" },
       { label: "NFC tap-to-share", swiftcard: "✓", them: "✗" },
       { label: "Starting price", swiftcard: "Free", them: "Free (12% fee on storefront sales)" },
-      { label: "Cheapest paid plan", swiftcard: "$4.99/mo", them: "$8/mo (Starter)", pricing: true },
+      { label: "Cheapest paid plan", swiftcard: `${PRO}/mo`, them: "$8/mo (Starter)", pricing: true },
     ],
     switchReasons: [
       { t: "Your bio link becomes a lead machine", d: "Same job Linktree does — links, socials, video tiles — plus a Connect button that puts the visitor's name, phone, and email in your contacts." },
@@ -105,7 +113,7 @@ const COMPETITORS: Record<string, Competitor> = {
       { label: "Automated follow-up sequences (email + text)", swiftcard: "✓", them: "✗" },
       { label: "Link-in-bio page included", swiftcard: "✓ (Swift Links)", them: "Limited" },
       { label: "Starting price", swiftcard: "Free", them: "Free" },
-      { label: "Cheapest paid plan", swiftcard: "$4.99/mo", them: "$7.99/mo (Pro)", pricing: true },
+      { label: "Cheapest paid plan", swiftcard: `${PRO}/mo`, them: "$7.99/mo (Pro)", pricing: true },
     ],
     switchReasons: [
       { t: "Follow-up is the product, not a plug-in", d: "Captured a lead at 2pm? Your check-in text goes out on schedule without Zapier, webhooks, or a second subscription." },
@@ -123,7 +131,7 @@ const COMPETITORS: Record<string, Competitor> = {
     faq: [
       { q: "Can I keep using my NFC card or tag?", a: "Yes — SwiftCard writes your card link to any NFC tag, including ones you already own. Tags store the link, so your card keeps working even after you edit it." },
       { q: "What does SwiftCard automate that Popl doesn't?", a: "Follow-up: when a lead shares their info, switch on your email and text sequence for them and SwiftCard sends it on schedule (STOP-compliant). With Popl you'd wire that through third-party tools." },
-      { q: "How does pricing compare?", a: "Both start free. SwiftCard Pro is $4.99/month; Popl Pro lists at $7.99/month. Team plans: SwiftCard is $3.99/seat (min 2), Popl $5/user (min 5). Verify current pricing with them — plans change." },
+      { q: "How does pricing compare?", a: `Both start free. SwiftCard Pro is ${PRO}/month; Popl Pro lists at $7.99/month. Team plans: SwiftCard is ${SEAT}/seat (min ${MIN_SEATS}), Popl $5/user (min 5). Verify current pricing with them — plans change.` },
       { q: "Do I need to buy anything to switch?", a: "No — create your card free, and share by QR, link, or Apple Wallet immediately. NFC is optional." },
       { q: "Can my team switch together?", a: "SwiftCard Office gives every teammate an on-brand card with their own leads under one admin dashboard, unlimited seats." },
     ],
@@ -142,7 +150,7 @@ const COMPETITORS: Record<string, Competitor> = {
       { label: "Automated follow-up sequences (email + text)", swiftcard: "✓", them: "✗" },
       { label: "Link-in-bio page included", swiftcard: "✓ (Swift Links)", them: "Limited" },
       { label: "Starting price", swiftcard: "Free", them: "Free" },
-      { label: "Cheapest paid plan", swiftcard: "$4.99/mo", them: "~$3–10/mo (Premium, by billing term)", pricing: true },
+      { label: "Cheapest paid plan", swiftcard: `${PRO}/mo`, them: "~$3–10/mo (Premium, by billing term)", pricing: true },
     ],
     switchReasons: [
       { t: "The card feeds a real pipeline", d: "Every captured contact lands in a built-in CRM with notes, tags, and follow-up status — not a CSV you promise yourself you'll import somewhere." },
@@ -160,9 +168,9 @@ const COMPETITORS: Record<string, Competitor> = {
     faq: [
       { q: "Can I recreate my Blinq card design on SwiftCard?", a: "Yes — pick from designer templates and customize colors, fonts, photo, and logo. Pro users can even upload a picture of any card design (including a physical card) and SwiftCard's AI rebuilds it with your details." },
       { q: "What does SwiftCard do after someone saves my card?", a: "They can share their info back; it lands in your built-in CRM tagged with time and source, and the email/text follow-up you switch on for them takes it from there — that whole after-the-tap layer is the difference." },
-      { q: "How does pricing compare?", a: "Both start free. SwiftCard Pro is $4.99/month flat; Blinq Premium ranges roughly $3–10/month depending on billing term. Verify current pricing with them — plans change." },
+      { q: "How does pricing compare?", a: `Both start free. SwiftCard Pro is ${PRO}/month flat; Blinq Premium ranges roughly $3–10/month depending on billing term. Verify current pricing with them — plans change.` },
       { q: "Does SwiftCard work without an app for the other person?", a: "Yes — your card opens in any browser; saving your contact and sharing theirs back are one tap, no installs." },
-      { q: "Is there a team version?", a: "SwiftCard Office: on-brand cards for every teammate, individual lead books, one admin dashboard — $3.99/seat/month with a 2-seat minimum, unlimited seats." },
+      { q: "Is there a team version?", a: `SwiftCard Office: on-brand cards for every teammate, individual lead books, one admin dashboard — ${SEAT}/seat/month with a ${MIN_SEATS}-seat minimum, unlimited seats.` },
     ],
   },
   "hihello-alternative": {
@@ -179,7 +187,7 @@ const COMPETITORS: Record<string, Competitor> = {
       { label: "Automated follow-up sequences (email + text)", swiftcard: "✓", them: "✗" },
       { label: "Link-in-bio page included", swiftcard: "✓ (Swift Links)", them: "Limited" },
       { label: "Starting price", swiftcard: "Free", them: "Free" },
-      { label: "Cheapest paid plan", swiftcard: "$4.99/mo", them: "$6+/mo (Professional)", pricing: true },
+      { label: "Cheapest paid plan", swiftcard: `${PRO}/mo`, them: "$6+/mo (Professional)", pricing: true },
     ],
     switchReasons: [
       { t: "From contact exchange to pipeline", d: "SwiftCard doesn't stop at swapping details — every captured contact gets notes, full history, and a follow-up sequence you can switch on in one tap." },
@@ -198,7 +206,7 @@ const COMPETITORS: Record<string, Competitor> = {
       { q: "Does SwiftCard do email signatures like HiHello?", a: "Yes — Swift Signature turns your card into an email signature for Gmail, Outlook, and Apple Mail: a live image of your card that links to your card page. It's on every plan." },
       { q: "What's the biggest difference from HiHello?", a: "What happens after the exchange: SwiftCard captures leads into a built-in CRM and runs automated email + text follow-up sequences. HiHello focuses on the card and signature; the pipeline layer is where SwiftCard goes further." },
       { q: "Can I have different cards for different roles?", a: "Yes — SwiftCard Pro includes unlimited cards, each with its own URL, design, links page, contacts, and analytics." },
-      { q: "How does pricing compare?", a: "Both start free. SwiftCard Pro is $4.99/month; HiHello's paid plans start around $6/month. Verify current pricing with them — plans change." },
+      { q: "How does pricing compare?", a: `Both start free. SwiftCard Pro is ${PRO}/month; HiHello's paid plans start around $6/month. Verify current pricing with them — plans change.` },
       { q: "Do recipients need the app?", a: "No — your card opens in the browser on any phone, and saving your contact is one tap." },
     ],
   },
@@ -219,7 +227,7 @@ const COMPETITORS: Record<string, Competitor> = {
       { label: "Card link format", swiftcard: "swiftcard.me/FirstLast-Company", them: "Tracking-style redirect link" },
       { label: "Billing", swiftcard: "Monthly or annual, cancel anytime", them: "Paid plans billed annually" },
       { label: "Starting price", swiftcard: "Free", them: "Free" },
-      { label: "Cheapest paid plan", swiftcard: "$4.99/mo", them: "$3/user/mo (Pro, billed annually)", pricing: true },
+      { label: "Cheapest paid plan", swiftcard: `${PRO}/mo`, them: "$3/user/mo (Pro, billed annually)", pricing: true },
     ],
     switchReasons: [
       { t: "Pay month to month, leave in two taps", d: "SwiftCard Pro is a flat monthly (or annual, your choice) plan. On iPhone the subscription is billed by Apple and cancelled in Settings — no support ticket, no surprise renewal." },
@@ -237,9 +245,9 @@ const COMPETITORS: Record<string, Competitor> = {
     faq: [
       { q: "Do I need to buy a card to use SwiftCard?", a: "No. The free plan shares by QR code, link, Apple Wallet and Apple Watch. NFC is optional and works with any blank NFC tag, including hardware you already own." },
       { q: "Can I keep my Mobilo NFC card?", a: "Yes — an NFC card stores a link, and SwiftCard writes your new card link to any tag. Tap it and your SwiftCard opens." },
-      { q: "How does pricing compare?", a: "Both start free. SwiftCard Pro is $4.99/month, or less on the annual plan, with a free trial. Mobilo's Pro plan lists at $3 per user per month billed annually, and their cards are sold separately. Verify current pricing with them — plans change." },
+      { q: "How does pricing compare?", a: `Both start free. SwiftCard Pro is ${PRO}/month, or less on the annual plan, with a free trial. Mobilo's Pro plan lists at $3 per user per month billed annually, and their cards are sold separately. Verify current pricing with them — plans change.` },
       { q: "How do I cancel SwiftCard?", a: "On iPhone, the subscription is managed by Apple — cancel in Settings → Subscriptions in two taps. On the web, cancel from Settings → Plan and billing. Either way it takes effect at the end of the period you paid for." },
-      { q: "Does SwiftCard work for a team?", a: "Yes — SwiftCard Office gives every teammate an on-brand card with their own leads under one admin dashboard, $3.99 per seat per month with a 2-seat minimum." },
+      { q: "Does SwiftCard work for a team?", a: `Yes — SwiftCard Office gives every teammate an on-brand card with their own leads under one admin dashboard, ${SEAT} per seat per month with a ${MIN_SEATS}-seat minimum.` },
     ],
   },
   "linq-alternative": {
@@ -258,7 +266,7 @@ const COMPETITORS: Record<string, Competitor> = {
       { label: "Link-in-bio page included", swiftcard: "✓ (Swift Links)", them: "Limited" },
       { label: "AI card designer (copy any card from a photo)", swiftcard: "✓ (Pro)", them: "✗" },
       { label: "Starting price", swiftcard: "Free", them: "Free" },
-      { label: "Cheapest paid plan", swiftcard: "$4.99/mo", them: "Paid plans priced per seat; see their site", pricing: true },
+      { label: "Cheapest paid plan", swiftcard: `${PRO}/mo`, them: "Paid plans priced per seat; see their site", pricing: true },
     ],
     switchReasons: [
       { t: "One price, everything in it", d: "Card, Swift Links page, lead CRM, automation, analytics and Apple Wallet — one flat plan, no per-seat tiers to decode." },
@@ -276,9 +284,9 @@ const COMPETITORS: Record<string, Competitor> = {
     faq: [
       { q: "Can I keep my Linq card or tag?", a: "Yes — NFC hardware stores a link, and SwiftCard writes your new card link to any tag. Tap it and your SwiftCard opens." },
       { q: "Is SwiftCard free?", a: "Yes — the card, QR and link sharing, Apple Wallet, contact capture and the Swift Links page are free. Pro adds automation, analytics, the AI designer and more." },
-      { q: "How does pricing compare?", a: "SwiftCard Pro is $4.99/month flat, or less annually, with a free trial. Linq's paid plans are priced per seat and have changed recently — check their site for current figures. Plans change, so verify before deciding." },
+      { q: "How does pricing compare?", a: `SwiftCard Pro is ${PRO}/month flat, or less annually, with a free trial. Linq's paid plans are priced per seat and have changed recently — check their site for current figures. Plans change, so verify before deciding.` },
       { q: "Do recipients need an app?", a: "No — your card opens in any browser; saving your contact and sharing theirs back are one tap, no installs." },
-      { q: "Is there a team version?", a: "SwiftCard Office: on-brand cards for every teammate, individual lead books, one admin dashboard — $3.99 per seat per month with a 2-seat minimum, unlimited seats." },
+      { q: "Is there a team version?", a: `SwiftCard Office: on-brand cards for every teammate, individual lead books, one admin dashboard — ${SEAT} per seat per month with a ${MIN_SEATS}-seat minimum, unlimited seats.` },
     ],
   },
   "dot-alternative": {
@@ -298,7 +306,7 @@ const COMPETITORS: Record<string, Competitor> = {
       { label: "Link-in-bio page included", swiftcard: "✓ (Swift Links)", them: "✗" },
       { label: "AI card designer (copy any card from a photo)", swiftcard: "✓ (Pro)", them: "✗" },
       { label: "Starting price", swiftcard: "Free", them: "$30 device (one-time)" },
-      { label: "Cheapest paid plan", swiftcard: "$4.99/mo", them: "Teams from $8/member/mo (billed annually)", pricing: true },
+      { label: "Cheapest paid plan", swiftcard: `${PRO}/mo`, them: "Teams from $8/member/mo (billed annually)", pricing: true },
     ],
     switchReasons: [
       { t: "Nothing to buy first", d: "Create the card, share it by QR, link or Apple Wallet in the next five minutes. Add NFC later with any blank tag, or keep using the device you already own." },
@@ -316,7 +324,7 @@ const COMPETITORS: Record<string, Competitor> = {
     faq: [
       { q: "Do I need to buy anything to use SwiftCard?", a: "No. The card, QR and link sharing, Apple Wallet and the Swift Links page are free with no device. NFC is optional and works with any blank tag." },
       { q: "Can I keep using my Dot card or band?", a: "Yes — Dot devices store a link, and SwiftCard writes your new card link to any NFC tag. Tap it and your SwiftCard opens." },
-      { q: "How does pricing compare?", a: "Dot's profile is free after a one-time device purchase (from $30); its team plans run $8 to $15 per member per month billed annually, and extra individual features sit in a paid tier. SwiftCard is free to start and Pro is $4.99/month flat with a free trial. Verify current pricing with them — plans change." },
+      { q: "How does pricing compare?", a: `Dot's profile is free after a one-time device purchase (from $30); its team plans run $8 to $15 per member per month billed annually, and extra individual features sit in a paid tier. SwiftCard is free to start and Pro is ${PRO}/month flat with a free trial. Verify current pricing with them — plans change.` },
       { q: "What does SwiftCard do that Dot doesn't?", a: "Automated follow-up by email and text, a built-in CRM for every lead, a Swift Links page, Apple Wallet and Apple Watch sharing, and an AI designer that rebuilds any card from a photo — all on one plan, no hardware required." },
       { q: "Does the person I meet need an app?", a: "No — with either product your card opens in the browser. With SwiftCard they also save your contact in one tap and can share theirs back." },
     ],

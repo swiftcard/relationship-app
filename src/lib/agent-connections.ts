@@ -113,8 +113,11 @@ export async function saveConnection(c: Omit<AgentConnection, "connected_at"> & 
   return !error;
 }
 
+// Throws when the row could not be removed, so the panel never reports a
+// disconnect that did not happen (audit F-ADMIN-05).
 export async function deleteConnection(p: AgentProvider): Promise<void> {
-  await getAdminSupabase().from("agent_connections").delete().eq("provider", p);
+  const { error } = await getAdminSupabase().from("agent_connections").delete().eq("provider", p);
+  if (error) throw new Error(`agent_connections delete failed: ${error.message}`);
 }
 
 // ── Refresh ──────────────────────────────────────────────────────────────────

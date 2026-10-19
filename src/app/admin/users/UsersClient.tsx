@@ -129,14 +129,25 @@ export default function UsersClient() {
   const [createResult, setCreateResult] = useState<{ cardUrl?: string; error?: string; loginEmailed?: boolean; setupLink?: string | null } | null>(null);
   const [form, setForm] = useState({ name: "", email: "", company: "", title: "", phone: "", username: "", plan: "pro", template: "classic-pro", accentColor: "#2563eb", photoShape: "original", surfaceColor: "", titleColor: "", companyColor: "" });
 
+  // A refusal or a dropped connection says so (audit F-ADMIN-05): it used to
+  // read "No users found", or sit on "Loading…" forever when fetch threw.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch("/api/admin/users");
-    if (res.ok) {
-      const data = await res.json();
-      setUsers(data.users ?? []);
+    try {
+      const res = await fetch("/api/admin/users");
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(data.users ?? []);
+        setLoadError(null);
+      } else {
+        setLoadError(await adminErrorText(res));
+      }
+    } catch {
+      setLoadError("Couldn't reach the server.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time data fetch on mount
@@ -249,6 +260,11 @@ export default function UsersClient() {
       <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
         {loading ? (
           <div className="px-5 py-10 text-center text-gray-500 text-sm">Loading…</div>
+        ) : loadError && users.length === 0 ? (
+          <div role="alert" className="px-5 py-10 text-center text-sm">
+            <p className="text-red-400">Couldn&apos;t load users — {loadError}</p>
+            <button onClick={load} className="mt-2 text-blue-400 hover:text-blue-300">Try again</button>
+          </div>
         ) : filtered.length === 0 ? (
           <div className="px-5 py-10 text-center text-gray-500 text-sm">No users found</div>
         ) : (
