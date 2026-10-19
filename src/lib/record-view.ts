@@ -53,6 +53,9 @@ export async function recordView(opts: {
   replayAt?: number | null;
   source: string | null;
   ip: string;
+  /** The visit's device / app / referrer as Zapier fields (lib/visit-device
+   *  visitDetailFields), from the caller's request. Optional. */
+  crmDetail?: Record<string, string>;
 }): Promise<{
   outcome: RecordViewOutcome;
   location: string | null;
@@ -91,7 +94,9 @@ export async function recordView(opts: {
   // below still judges the network it arrives on; but that network is where
   // the phone found signal again, not where the card was opened — so a replayed
   // row records no location rather than a wrong one.
-  const geo: GeoResult = replayAt ? { ...liveGeo, label: null, accuracy: null, source: null } : liveGeo;
+  // …and no network name either: the network it arrives on is not the one it
+  // was opened on (lib/work-network.ts).
+  const geo: GeoResult = replayAt ? { ...liveGeo, label: null, accuracy: null, source: null, workNetwork: null } : liveGeo;
   const location = geo.label;
   const supabase = getAdminSupabase();
 
@@ -228,10 +233,14 @@ export async function recordView(opts: {
 
   // Mirror the view to the owner's CRM (SwiftCard vs SwiftLink).
   const isLinks = username.endsWith("__links");
+  // The visit details go as fields of their own (2026-10-18), so a Zap can map
+  // them; the whole event is Pro-only (resolveZapierTarget).
   await dispatchCrmEvent(username, {
     type: isLinks ? "view.swiftlink" : "view.card",
     surface: isLinks ? "links" : "card",
     location: location ?? undefined,
+    ...(opts.crmDetail ?? {}),
+    ...(geo.workNetwork ? { network: geo.workNetwork } : {}),
   });
 
   // Milestone notification (5, 10, 25, 50, 100, …). Best-effort.

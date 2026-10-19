@@ -275,6 +275,27 @@ export function deviceSentence(device: VisitDevice | null, app: OpenedIn | null)
   return `${on}${via}`;
 }
 
+/**
+ * The same visit details as STRUCTURED fields, for the owner's Zapier events
+ * (lib/crm-events — a Pro feature, gated there). A Zap can map "device" into a
+ * CRM field; it cannot pull it back out of a sentence. Absent → omitted, never
+ * a placeholder.
+ */
+export function visitDetailFields(
+  userAgent: string | null | undefined,
+  hint: DeviceHint = {},
+  referrerUrl?: string | null,
+): { device?: string; opened_in?: string; came_from?: string } {
+  const device = describeDevice(userAgent, hint)?.label;
+  const app = openedIn(userAgent)?.name;
+  const from = referrerName(referrerUrl);
+  return {
+    ...(device ? { device } : {}),
+    ...(app ? { opened_in: app } : {}),
+    ...(from ? { came_from: from } : {}),
+  };
+}
+
 /** "1m 40s", "25s", "30m+" — the time a visit stayed on screen. */
 export function formatDuration(seconds: number | null | undefined): string | null {
   if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) return null;

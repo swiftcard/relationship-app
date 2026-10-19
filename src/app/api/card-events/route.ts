@@ -26,7 +26,7 @@ import { isPaidProfile } from "@/lib/effective-plan";
 import { isLockedLead } from "@/lib/lead-access";
 import { isPaidUser } from "@/lib/notification-privacy";
 import { notifyVisit, visitKey } from "@/lib/visit-notify";
-import { cleanModelHint, cleanOsHint, describeDevice, deviceSentence, openedIn } from "@/lib/visit-device";
+import { cleanModelHint, cleanOsHint, describeDevice, deviceSentence, openedIn, visitDetailFields } from "@/lib/visit-device";
 import type { PushCategory } from "@/lib/push-policy";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
@@ -112,6 +112,10 @@ export async function POST(req: NextRequest) {
     // Views only — a tap or a save describes the same visit's device already.
     const device_model = event_type === "viewed_card" ? cleanModelHint(body?.device_model) : null;
     const device_os = event_type === "viewed_card" ? cleanOsHint(body?.device_os) : null;
+    // The same details as fields for the owner's Zapier events (Pro-only,
+    // decided in lib/crm-events): device, the app it was opened in, the site
+    // the link was tapped on.
+    const crmDetail = visitDetailFields(device_info, { model: device_model, os: device_os }, referrer_url);
     // WHICH link, for clicked_link. Normalised to a bare host on the client
     // (lib/track-link-click.ts) and re-bounded here like every other stored
     // field, because a client value is a client value.
@@ -343,6 +347,7 @@ export async function POST(req: NextRequest) {
         replayAt,
         source,
         ip,
+        crmDetail,
       });
       milestone = crossed ?? null;
       if (outcome !== "recorded") {
@@ -378,6 +383,7 @@ export async function POST(req: NextRequest) {
         replayAt,
         source,
         ip,
+        crmDetail,
       });
       // Datacenter egress: recordView refused it as hosting — the save is
       // refused for the same reason just below; reuse its geo either way.
@@ -867,6 +873,10 @@ export async function POST(req: NextRequest) {
             ...(crmContact ? { contact: crmContact } : {}),
             source: source || "direct_link",
             location: location ?? undefined,
+            // The visit details as their own fields, like the view event's —
+            // the sentence above carries them too, but a Zap maps fields.
+            ...crmDetail,
+            ...(geo.workNetwork ? { network: geo.workNetwork } : {}),
           });
 
           // ── The milestone this view crossed, folded into the SAME row ──────
