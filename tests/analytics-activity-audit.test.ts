@@ -103,7 +103,8 @@ describe("Activity & Messages says only what happened", () => {
     expect(s).toMatch(/case "bounced":\s*return \{ text: "Not delivered"/);
     expect(s).toContain("Not sent — ${it.not_sent === \"opted_out\" ? \"they unsubscribed\"");
     expect(code("src/app/api/resend/webhook/route.ts")).toContain('update({ status: "bounced" })');
-    expect(code("src/app/api/reminders/route.ts")).toContain("await markNotSent(supabase, seqLead.id as string, item, r.status)");
+    // The reason is r.status, refined to "bad_number" for a text whose number can't take one.
+    expect(code("src/app/api/reminders/route.ts")).toContain("await markNotSent(supabase, seqLead.id as string, item, notSentReason(r.status, itemChannel, seqLead.phone))");
   });
   it("the bubble is the text that went", () => {
     expect(code("src/lib/messaging.ts")).toContain('channel: "sms", body: smsBody, status, providerSid: sid');

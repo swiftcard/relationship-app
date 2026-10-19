@@ -57,7 +57,9 @@ describe("the app", () => {
     // A downgraded account has to be able to stop the text flow it already
     // has: `!hasActive` keeps the gate off any card with steps on it.
     expect(contacts).toMatch(/const needsPro = !isPro && ch === "sms" && !hasActive;/);
-    const onClick = contacts.slice(contacts.indexOf("if (!can) return;"), contacts.indexOf("if (needsPro) {"));
+    // `locked` (missing contact details) never blocks a running flow either.
+    expect(contacts).toMatch(/const locked = !can && !running;/);
+    const onClick = contacts.slice(contacts.indexOf("if (locked) return;"), contacts.indexOf("if (needsPro) {"));
     expect(onClick).toMatch(/if \(running\) \{ toggleChannelPause\(ch\); return; \}/);
   });
 

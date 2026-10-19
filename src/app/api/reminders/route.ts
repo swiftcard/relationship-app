@@ -116,9 +116,11 @@ type SeqStep = {
   channel?: string;
   sent_at: string | null;
   anchor?: string;
-  /** Claimed but did NOT go: "opted_out" (they unsubscribed) or "no_contact"
-   *  (no email/phone for this channel). The claim (sent_at) stands so it is
-   *  never retried; this is what stops the contact panel saying "Sent". */
+  /** Claimed but did NOT go: "opted_out" (they unsubscribed), "no_contact"
+   *  (no email/phone for this channel) or "bad_number" (a phone number that
+   *  cannot get an automated text — see lib/sms-number). The claim (sent_at)
+   *  stands so it is never retried; this is what stops the contact panel
+   *  saying "Sent". */
   not_sent?: string;
 };
 
@@ -165,16 +167,43 @@ async function stampStep(
   // The owner may have removed this step while the run was in flight. Nothing
   // to claim, and re-adding it would resurrect something they deleted.
   if (!fresh.some((s) => sameStep(s, step))) return { ok: false, seq: fresh };
+  const current = fresh.find((s) => sameStep(s, step))!;
 
+  // TWO RUNS, ONE STEP. Vercel can deliver the same cron event more than once,
+  // and a manual run can overlap the scheduled one. Each run loops over the
+  // snapshot it read at the start, so both see the step unsent — and the claim
+  // used to overwrite whatever was there, so BOTH claimed it and the contact
+  // got the same text twice. A claim now only lands on a step that is still
+  // unclaimed: checked against the fresh read, and again by the database at
+  // write time (the update matches only while the row still holds that step
+  // with sent_at null), so the second run updates nothing and stands down.
+  if (sentAt && current.sent_at) return { ok: false, seq: fresh };
   const next = fresh.map((s) => (sameStep(s, step) ? { ...s, sent_at: sentAt } : s));
-  const { error: writeErr } = await supabase
+  let write = supabase
     .from("leads")
     .update({ follow_up_sequence: next })
     .eq("id", leadId);
+  // Only where the stored step spells out sent_at: null. A legacy step with no
+  // sent_at key at all would never match the containment test and could then
+  // never be claimed; those keep the read-time check above.
+  if (sentAt && "sent_at" in current && current.sent_at === null) {
+    const probe = { day: current.day, sent_at: null, ...(current.channel !== undefined ? { channel: current.channel } : {}) };
+    write = write.filter("follow_up_sequence", "cs", JSON.stringify([probe]));
+  }
+  const { data: wrote, error: writeErr } = await write.select("id");
   // The error was previously discarded, so a failed write meant the message
   // went out and the row still said unsent — a permanent daily re-send.
   if (writeErr) return { ok: false, seq: fresh };
+  // Matched nothing: another run claimed it between our read and our write.
+  if (!wrote?.length) return { ok: false, seq: fresh };
   return { ok: true, seq: next };
+}
+
+/** A text that found no usable number for a contact who HAS a phone means the
+ *  number itself can't take an automated text — the panel says that, rather
+ *  than "no phone number" while the number is right there on the contact. */
+function notSentReason(status: "opted_out" | "no_contact", channel: "email" | "sms", phone: string | null): string {
+  return status === "no_contact" && channel === "sms" && phone ? "bad_number" : status;
 }
 
 /** Record WHY a claimed step did not go, keeping its claim (same re-read as stampStep). */
@@ -807,6 +836,7 @@ export async function GET(req: NextRequest) {
         // Pro-gated anyway, so this is effectively always true here — passed
         // explicitly rather than assumed.)
         senderPaid: isPaidPlan(owner.profile.plan as string | null),
+        automated: true,
       });
 
       // The claim stands for anything final — delivered, opted out, or no
@@ -816,7 +846,7 @@ export async function GET(req: NextRequest) {
         totalSent++;
       } else if (r.status === "opted_out" || r.status === "no_contact") {
         // Final, and NOT sent — the panel must not say "Sent" for it.
-        await markNotSent(supabase, seqLead.id as string, item, r.status).catch(() => {});
+        await markNotSent(supabase, seqLead.id as string, item, notSentReason(r.status, itemChannel, seqLead.phone)).catch(() => {});
       } else {
         const released = await stampStep(supabase, seqLead.id as string, item, null);
         if (released.seq) curSeq = released.seq;

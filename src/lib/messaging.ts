@@ -7,6 +7,9 @@ import { reportError } from "@/lib/report-error";
 import { contactCardUrl } from "@/lib/contact-links";
 import { from as senderAddress, replyToFor, type SenderKey } from "@/lib/email-senders";
 import { isTestMailbox } from "@/lib/test-mailbox";
+import { nanpE164, autoTextable } from "@/lib/sms-number";
+
+export { nanpE164 };
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
@@ -268,6 +271,11 @@ export async function logMessage(opts: {
 // One emoji forces UCS-2 encoding → 70 chars/segment → 2-3x the cost.
 export function toGsm7(input: string): string {
   return input
+    // Accents come OFF the letter, not the letter off the word: the
+    // non-ASCII strip below turned "José García" into "Jos Garca" — in the
+    // sender's own signature, and in the contact's name in the message.
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
     .replace(/[–—]/g, "-")
@@ -284,9 +292,8 @@ export function toGsm7(input: string): string {
 // SwiftCard branding / 100% your brand", and this text goes out under the
 // sender's own name to THEIR contact.
 export function buildSmsBody(opts: { senderName: string; company?: string | null; text: string; cardUrl?: string | null; paid?: boolean }): string {
-  let body = opts.text.trim();
-  body += `\n\n— ${opts.senderName}${opts.company ? `, ${opts.company}` : ""}`;
-  if (opts.cardUrl) body += `\n${opts.cardUrl}`;
+  let footer = `— ${opts.senderName}${opts.company ? `, ${opts.company}` : ""}`;
+  if (opts.cardUrl) footer += `\n${opts.cardUrl}`;
   // A2P 10DLC: Swift Card Inc is the registered sender of every text this
   // program sends, so EVERY message identifies SwiftCard — paid plans included.
   // Only the signup CTA is plan-gated. Dropping the identification for paid
@@ -294,10 +301,16 @@ export function buildSmsBody(opts: { senderName: string; company?: string | null
   // is the third-party-sender pattern that drew error 30882 on campaign
   // CM6604b30972d05c50275bccb943ff133e. /sms-terms and /terms both now state
   // that we are the sender; this line is what makes that true on the wire.
-  body += opts.paid ? `\nvia SwiftCard` : `\nvia SwiftCard ${APP_URL}/join?src=follow_up`;
-  body = toGsm7(body);
-  if (body.length > 480) body = body.slice(0, 477) + "...";
-  return body;
+  footer += opts.paid ? `\nvia SwiftCard` : `\nvia SwiftCard ${APP_URL}/join?src=follow_up`;
+  footer = toGsm7(footer);
+  // The 480 cap comes out of the MESSAGE, never the footer. It used to cut the
+  // finished body, so a long edited step (or a long Custom note) lost the
+  // sender's name, their card link and the "via SwiftCard" line above — the
+  // identification every text in this program has to carry.
+  const room = 480 - footer.length - 2;
+  let text = toGsm7(opts.text);
+  if (text.length > room) text = text.slice(0, Math.max(0, room - 3)).trimEnd() + "...";
+  return text ? `${text}\n\n${footer}` : footer;
 }
 
 // ── SMS via ONE shared SwiftCard sender (Twilio Messaging Service) ──────────
@@ -307,39 +320,12 @@ export function buildSmsBody(opts: { senderName: string; company?: string | null
 // example, is silently dropped (error 30034) AFTER the API said yes. Callers
 // store the SID on the logged message (logMessage providerSid) so the
 // /api/twilio/status callback can mark it delivered/undelivered later.
-// The texting program is a US A2P 10DLC campaign, so a text only ever goes to a
-// North American (+1) number. Anything else is refused BEFORE Twilio: an
-// international premium route costs up to 50x a US text, and "text any number
-// in the world from a free account" is the SMS-pumping fraud pattern
-// (security audit 2026-09-24). Returns the E.164 form, or null.
-export function nanpE164(raw: string | null | undefined): string | null {
-  const s = (raw || "").trim();
-  if (!s) return null;
-  let digits = s.replace(/\D/g, "");
-  if (s.startsWith("+")) {
-    if (!digits.startsWith("1")) return null;
-    digits = digits.slice(1);
-  } else if (digits.length === 11 && digits.startsWith("1")) {
-    digits = digits.slice(1);
-  }
-  // NXX-NXX-XXXX: neither the area code nor the exchange starts with 0 or 1.
-  if (!/^[2-9]\d{2}[2-9]\d{6}$/.test(digits)) return null;
-  if (NOT_DOMESTIC_NANP.has(digits.slice(0, 3)) || /^[2-9]11$/.test(digits.slice(0, 3))) return null;
-  return `+1${digits}`;
-}
-
-// "+1" is not only the US and Canada. These area codes are other countries
-// that share the North American plan (the Caribbean, Bermuda), billed as
-// international, plus 900 premium-rate. Texting them from a free account is
-// the SMS-pumping pattern a +1 check alone lets through. US territories
-// (Puerto Rico 787/939, USVI 340, Guam 671, N. Marianas 670, Am. Samoa 684)
-// are domestic and stay allowed.
-const NOT_DOMESTIC_NANP = new Set([
-  "242", "246", "264", "268", "284", "345", "441", "473", "649", "658", "664",
-  "721", "758", "767", "784", "809", "829", "849", "868", "869", "876", "900",
-]);
-
-export async function sendSms(to: string, body: string): Promise<{ status: SendResult; sid: string | null }> {
+// Only North American numbers are ever texted — see lib/sms-number.
+//
+// `code` is Twilio's error code when it REFUSED the message outright. Most
+// refusals are transient, but some say the number will never take a text, and
+// retrying those every day forever is its own bug (see deliverToLead).
+export async function sendSms(to: string, body: string): Promise<{ status: SendResult; sid: string | null; code?: number | null }> {
   const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_MESSAGING_SERVICE_SID, TWILIO_PHONE_NUMBER } = process.env;
   if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || (!TWILIO_MESSAGING_SERVICE_SID && !TWILIO_PHONE_NUMBER)) {
     return { status: "not_configured", sid: null };
@@ -373,9 +359,21 @@ export async function sendSms(to: string, body: string): Promise<{ status: SendR
       const { reportError } = await import("@/lib/report-error");
       await reportError("sms.send", e);
     } catch { /* reporting is best-effort */ }
-    return { status: "failed", sid: null };
+    const code = Number((e as { code?: unknown })?.code);
+    return { status: "failed", sid: null, code: Number.isFinite(code) ? code : null };
   }
 }
+
+// Twilio refusals that are FINAL for the number, not for the moment.
+//   21610 — the number replied STOP to our sender. Twilio's own opt-out list
+//           holds it even when our STOP webhook never recorded it.
+//   21211 / 21217 — not a valid phone number.
+//   21612 / 21614 — not reachable by text (a landline, for one).
+// Treated as transient, every one of these was released and re-sent on every
+// daily run, reported as a fresh error each time, while the contact screen kept
+// saying "scheduled".
+const TWILIO_OPTED_OUT = 21610;
+const TWILIO_NUMBER_CANNOT_TEXT = new Set([21211, 21217, 21612, 21614]);
 
 // Quotes too — these values are interpolated into alt="…" attributes, where an
 // unescaped double quote closes the attribute and breaks the tag.
@@ -486,6 +484,9 @@ export async function deliverToLead(opts: {
    *  Drops the List-Unsubscribe headers that were filing hand-written mail
    *  under Gmail's Promotions tab. See personalHeaders(). */
   personal?: boolean;
+  /** A scheduler is sending this, not a person — a text then also has to be
+   *  to a number the daily run reaches inside quiet hours. */
+  automated?: boolean;
 }): Promise<DeliverResult> {
   const { lead, sender } = opts;
   const senderName = sender.name || "A SwiftCard user";
@@ -535,12 +536,25 @@ export async function deliverToLead(opts: {
 
   if (use === "sms" && lead.phone) {
     if (await isOptedOut("sms", lead.phone)) return { channel: "sms", status: "opted_out" };
+    // A number we will never text (outside North America, malformed) is a
+    // contact with no textable phone — final, like having no phone at all.
+    // sendSms refuses it too, but as "failed", which the scheduler reads as
+    // "try again tomorrow", forever. A SCHEDULED text also needs a number the
+    // daily run reaches inside 8am-9pm local (lib/sms-number autoTextable).
+    if (opts.automated ? !autoTextable(lead.phone) : !nanpE164(lead.phone)) return { channel: "sms", status: "no_contact" };
     // The contact's own link, same as the email path above.
     const cardUrl = opts.cardUsername
       ? await contactCardUrl(getAdminSupabase(), { leadId: opts.leadId, cardSlug: opts.cardUsername, channel: "sms" })
       : null;
     const smsBody = buildSmsBody({ senderName, company: sender.company, text: opts.text, cardUrl, paid: opts.senderPaid });
-    const { status, sid } = await sendSms(lead.phone, smsBody);
+    const { status, sid, code } = await sendSms(lead.phone, smsBody);
+    if (code === TWILIO_OPTED_OUT) {
+      // They texted STOP and our list missed it. Record it, so every other
+      // sender on the platform stops trying too.
+      await addOptOut("sms", lead.phone);
+      return { channel: "sms", status: "opted_out" };
+    }
+    if (code != null && TWILIO_NUMBER_CANNOT_TEXT.has(code)) return { channel: "sms", status: "no_contact" };
     // providerSid lets the delivery callback correct this row from "sent" to
     // "undelivered" if the carrier drops it after Twilio accepted it. The body
     // logged is the text that WENT (signature, link, the characters a phone

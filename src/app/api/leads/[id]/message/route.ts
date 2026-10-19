@@ -145,6 +145,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { channel, status } = result;
 
   if (status === "no_contact") {
+    // A text that found a phone on file it can't use: say so, not "no phone".
+    if (channel === "sms" && lead.phone) {
+      return NextResponse.json({ error: "This number can't receive texts from SwiftCard (only US and Canadian mobile numbers can)." }, { status: 400 });
+    }
     return NextResponse.json({ error: "This contact has no email or phone on file." }, { status: 400 });
   }
   if (status === "opted_out") {

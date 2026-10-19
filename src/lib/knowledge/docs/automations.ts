@@ -96,6 +96,20 @@ export const automationDocs = defineDocs([
       "STOP does not stop emails, and unsubscribing from emails does not stop texts; they're separate lists. If a contact says they aren't getting your messages, an earlier STOP or unsubscribe from a different SwiftCard user is a real possibility. They opt back in themselves — by replying START, or by ticking the consent box again next time they share their info.",
   },
   {
+    id: "which-numbers-get-texts",
+    title: "Which phone numbers can get automated texts",
+    audience: ["user"],
+    triggers: [
+      "cant turn on text automation", "text automation greyed out", "text switch disabled",
+      "international number", "uk number", "foreign number", "number can't get automated texts",
+      "not sent number", "guam", "landline",
+    ],
+    answer:
+      "Automated texts go to US and Canadian numbers only. If a contact's number is from another country or isn't a complete phone number, the Text automation switch stays off and reads \"This number can't get automated texts\" — fix the number with \"Edit\" next to Contact Info on that contact, and the switch works.",
+    detail:
+      "Guam, the Northern Mariana Islands and American Samoa are also excluded from AUTOMATED texts: the daily send lands there before 8am local time, which texting rules don't allow. A step that reaches a number which turns out not to take texts (a landline, a disconnected number) is marked \"Not sent — number can't get automated texts\" and is not retried; correct the number, then switch the text automation off, press \"Reset ↺\" and set it up again.",
+  },
+  {
     id: "replies-and-delivery",
     title: "Replies and delivery status",
     audience: ["user"],

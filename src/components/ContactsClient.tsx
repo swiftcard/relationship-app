@@ -9,6 +9,7 @@ import { hasMarkedPlace, splitLocationParts } from "@/lib/location-privacy";
 import { BlurredPlace } from "@/components/NotificationBody";
 import type { GeoAccuracy } from "@/lib/request-geo";
 import { CRON_HOUR_UTC } from "@/lib/cron-schedule";
+import { autoTextable } from "@/lib/sms-number";
 import AddContactModal from "@/components/AddContactModal";
 import ContactQuickActions from "@/components/ContactQuickActions";
 import ShareMyInfoButton, { type CardSigner } from "@/components/ShareMyInfoButton";
@@ -731,6 +732,12 @@ export default function ContactsClient({
   // NOW (not the contact's created date) so flows set up later still send.
   async function submitDraft() {
     if (!selected || !draftCh || !draftItems?.length) return;
+    // A step emptied in the editor would go out as a bare signature (a text) or
+    // "Hi Sam," and nothing else (an email), on a schedule, with nobody looking.
+    if (draftItems.some((it) => !it.message.trim())) {
+      fail("Every message needs some text before you activate it.");
+      return;
+    }
     setSeqSaving("saving");
     const nowIso = new Date().toISOString();
     const old = (selected.follow_up_sequence ?? []) as { day: number; time?: string; message: string; subject?: string; channel?: string; sent_at?: string | null; anchor?: string }[];
@@ -1565,7 +1572,10 @@ export default function ContactsClient({
               <div className="space-y-3">
                 {([
                   { ch: "email" as const, label: "Email", can: !!selected.email, word: "email", noun: "emails" },
-                  { ch: "sms" as const,   label: "Text",  can: !!selected.phone, word: "text",  noun: "texts" },
+                  // A number the sender will never text (outside the US and
+                  // Canada, malformed) can't START a text automation — it used
+                  // to switch on and sit at "Sends <date>" forever.
+                  { ch: "sms" as const,   label: "Text",  can: autoTextable(selected.phone), word: "text",  noun: "texts" },
                 ]).map(({ ch, label, can, word, noun }) => {
                   const activeItems = ((selected.follow_up_sequence ?? []) as { day: number; time?: string; message: string; subject?: string; channel?: string; sent_at?: string | null; anchor?: string; not_sent?: string }[])
                     .filter((i) => (i.channel ?? "email") === ch)
@@ -1584,6 +1594,10 @@ export default function ContactsClient({
                   // cron holds those anyway), and this card is where that
                   // switch lives, so an existing flow is never tagged.
                   const needsPro = !isPro && ch === "sms" && !hasActive;
+                  // Missing contact details block SETTING UP, never stopping:
+                  // a live flow whose number or address went bad must still be
+                  // switchable off from here.
+                  const locked = !can && !running;
 
                   return (
                     <div key={ch} className={`border rounded-xl p-4 ${switchOn ? (ch === "sms" ? "border-emerald-800/50 bg-emerald-950/10" : "border-blue-800/50 bg-blue-950/10") : "border-gray-800 bg-gray-800/20"}`}>
@@ -1599,7 +1613,7 @@ export default function ContactsClient({
                             {needsPro && <span className="text-[0.5rem] font-bold text-blue-400 shrink-0">PRO</span>}
                           </p>
                           <p className="text-gray-600 text-[0.6875rem] mt-0.5">
-                            {!can ? `No ${ch === "email" ? "email" : "phone"} on file for this contact`
+                            {locked ? (ch === "sms" && selected.phone ? "This number can't get automated texts" : `No ${ch === "email" ? "email" : "phone"} on file for this contact`)
                               : running && chPaused ? `Off — remaining ${noun} won't send. Switch on to resume.`
                               : running ? `On · ${presetName} · auto-sending ${noun}`
                               : allSent ? `Completed · all ${activeItems.length} ${noun} sent`
@@ -1613,12 +1627,12 @@ export default function ContactsClient({
                           type="button"
                           role="switch"
                           aria-checked={switchOn}
-                          disabled={!can}
-                          title={!can ? "No contact info"
+                          disabled={locked}
+                          title={locked ? "No contact info"
                             : running ? (chPaused ? `Resume ${word} automation` : `Turn ${word} automation off`)
                             : `Set up a ${word} follow-up`}
                           onClick={() => {
-                            if (!can) return;
+                            if (locked) return;
                             // A live flow toggles ITS OWN channel off/on; otherwise the
                             // switch opens (or closes) the setup flow.
                             if (running) { toggleChannelPause(ch); return; }
@@ -1632,7 +1646,7 @@ export default function ContactsClient({
                             }
                             if (isDrafting) cancelDraft(); else startDraft(ch);
                           }}
-                          className={`relative w-12 h-7 rounded-full transition-colors shrink-0 ${!can ? "opacity-60 cursor-not-allowed" : ""}`}
+                          className={`relative w-12 h-7 rounded-full transition-colors shrink-0 ${locked ? "opacity-60 cursor-not-allowed" : ""}`}
                           style={{ background: switchOn ? "var(--sc-green, #059669)" : "var(--sc-fill-3, #374151)" }}
                         >
                           <span className="absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-[0_3px_8px_rgba(0,0,0,0.15),0_1px_1px_rgba(0,0,0,0.06)] transition-all" style={{ left: switchOn ? "22px" : "2px" }} />
@@ -1745,7 +1759,7 @@ export default function ContactsClient({
                                 <div className="flex items-center justify-between gap-2 mb-1">
                                   <span suppressHydrationWarning className="text-[0.625rem] font-semibold text-gray-500">
                                     {it.not_sent
-                                      ? `Not sent — ${it.not_sent === "opted_out" ? "they unsubscribed" : ch === "sms" ? "no phone number" : "no email address"}`
+                                      ? `Not sent — ${it.not_sent === "opted_out" ? "they unsubscribed" : it.not_sent === "bad_number" ? "number can't get automated texts" : ch === "sms" ? "no phone number" : "no email address"}`
                                       : it.sent_at ? `Sent ${formatShort(it.sent_at)}` : `Sends ${sendWhen(it.anchor ?? selected.created_at, it.day)}`}
                                   </span>
                                   {it.not_sent
