@@ -30,6 +30,9 @@ concurrency:
 permissions:
   contents: read
   issues: write
+  # The health check reads the hourly jobs' run history (push-catchup.yml,
+  # trial-notice.yml), so a failing or stalled schedule is an incident too.
+  actions: read
 
 jobs:
   check:
@@ -61,6 +64,8 @@ jobs:
           # the truth:  curl -s -o /dev/null -w '%{http_code}\n' \
           #               https://swiftcard.me/api/card/<slug>/vcard   # 200 = real
           HEALTH_REAL_CARDS: "aaronlavi-malvecapital,aaronlavi-nadlanhomesllc"
+          # Reads push-catchup.yml / trial-notice.yml run history (audit N-21).
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -o pipefail
           node scripts/health-check.mjs > health.json || true

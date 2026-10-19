@@ -296,6 +296,42 @@ CHECKS.push({
   },
 });
 
+// ── The hourly GitHub jobs are running and succeeding (audit N-21) ──────────
+// The morning catch-up, the Monday recap, the getting-started push, due
+// deletions (push-catchup.yml) and the 7-day trial charge notice
+// (trial-notice.yml) all live on GitHub's scheduler, which is best-effort:
+// it skips hours, and a run that fails just turns red in a list nobody
+// reads. This puts them in the same incident as everything else. Two failed
+// runs in a row (one is a blip the next hour retries), or no success in 12
+// hours (the scheduler has gone ~5 hours between runs on a normal day).
+// Needs the repo and a token from the workflow; skipped anywhere else.
+const SCHEDULED_JOBS = [
+  ["push-catchup.yml", "morning catch-up, Monday recap, deletions"],
+  ["trial-notice.yml", "7-day trial charge notice"],
+];
+const SCHEDULED_STALE_MS = 12 * 60 * 60 * 1000;
+if (process.env.GITHUB_REPOSITORY) {
+  CHECKS.push({
+    name: "scheduled jobs ran and succeeded (push catch-up, trial notice)",
+    run: async () => {
+      const parts = [], bad = [];
+      for (const [file, what] of SCHEDULED_JOBS) {
+        const res = await fetch(`https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/actions/workflows/${file}/runs?per_page=10&status=completed`, {
+          headers: { Accept: "application/vnd.github+json", ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}) },
+        });
+        if (!res.ok) { bad.push(`${file}: GitHub API ${res.status}`); continue; }
+        const runs = (await res.json()).workflow_runs ?? [];
+        const lastOk = runs.find((r) => r.conclusion === "success");
+        const age = lastOk ? Date.now() - Date.parse(lastOk.updated_at) : Infinity;
+        if (runs[0]?.conclusion === "failure" && runs[1]?.conclusion === "failure") bad.push(`${file} (${what}): the last two runs failed — ${runs[0].html_url}`);
+        else if (age > SCHEDULED_STALE_MS) bad.push(`${file} (${what}): no successful run in ${lastOk ? `${Math.round(age / 3600000)}h` : "its last 10"}`);
+        else parts.push(`${file} ok ${Math.round(age / 60000)}m ago`);
+      }
+      return { ok: bad.length === 0, detail: bad.length ? bad.join("; ") : parts.join(", ") };
+    },
+  });
+}
+
 const started = Date.now();
 const results = [];
 for (const c of CHECKS) {
