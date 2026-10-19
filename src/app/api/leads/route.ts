@@ -67,6 +67,16 @@ export async function POST(req: NextRequest) {
     // location" and their phone allowed it (components/ShareLocationToggle).
     // Anything that is not a believable point is dropped, never stored.
     const sharedPoint = parseSharedLocation(shared_location);
+    // WHEN it was shared is the moment on their phone: a share the offline
+    // outbox kept and replays later carries that time (X-SC-Queued-At), the
+    // same header /api/card-events trusts — only within the outbox's 7 days
+    // and never in the future. Otherwise, now.
+    const queuedAt = Number(req.headers.get("x-sc-queued-at"));
+    const sharedAt = new Date(
+      Number.isFinite(queuedAt) && queuedAt > 0 && queuedAt <= Date.now() && Date.now() - queuedAt <= 7 * 24 * 3600 * 1000
+        ? queuedAt
+        : Date.now(),
+    ).toISOString();
     // Its columns (supabase/lead-shared-location.sql), kept apart from the row
     // so a lead is never lost to them (see the insert below).
     const sharedCols = sharedPoint
@@ -74,7 +84,7 @@ export async function POST(req: NextRequest) {
           shared_lat: sharedPoint.lat,
           shared_lng: sharedPoint.lng,
           shared_accuracy_m: sharedPoint.accuracy,
-          shared_location_at: new Date().toISOString(),
+          shared_location_at: sharedAt,
         }
       : null;
 
@@ -354,9 +364,23 @@ export async function POST(req: NextRequest) {
     // The shared location rides on a copy: if production cannot take its
     // columns, the lead is saved without them — a lead is never lost to a
     // location.
-    let { data: insertedLead, error } = await admin.from("leads").insert({ ...leadRow, ...(sharedCols ?? {}) }).select("id").single();
-    if (error && (error.code === "42703" || error.code === "PGRST204") && sharedPoint) {
-      ({ data: insertedLead, error } = await admin.from("leads").insert(leadRow).select("id").single());
+    // shared_location_first_at is set only HERE, at capture: a later share from
+    // the same person replaces the point but not the record that the first
+    // visit shared one.
+    let { data: insertedLead, error } = await admin.from("leads")
+      .insert({ ...leadRow, ...(sharedCols ? { ...sharedCols, shared_location_first_at: sharedCols.shared_location_at } : {}) })
+      .select("id").single();
+    // Whether the point actually reached the row — the notification below only
+    // says "and their exact location" when it did.
+    let locationSaved = !!sharedCols && !error;
+    if (error && (error.code === "42703" || error.code === "PGRST204") && sharedCols) {
+      // An older schema: first without the newest column, then without any.
+      ({ data: insertedLead, error } = await admin.from("leads").insert({ ...leadRow, ...sharedCols }).select("id").single());
+      locationSaved = !error;
+      if (error && (error.code === "42703" || error.code === "PGRST204")) {
+        ({ data: insertedLead, error } = await admin.from("leads").insert(leadRow).select("id").single());
+        locationSaved = false;
+      }
     }
     if (error && (error.code === "42703" || error.code === "PGRST204")) {
       // geo_accuracy not migrated yet (supabase/analytics-accuracy.sql). A LEAD
@@ -484,7 +508,7 @@ export async function POST(req: NextRequest) {
         ? `${shown} shared their info — open to unlock.`
         // "…and their exact location" says THAT they shared one, never where:
         // the place itself is on the contact, and Pro-only there.
-        : `${name} shared their info${sharedPoint ? " and their exact location" : ""} with you${sourceStr}.`;
+        : `${name} shared their info${locationSaved ? " and their exact location" : ""} with you${sourceStr}.`;
       // THE SAME PERSON THE VIEW TRACKER SAW. /api/card-events keys a visit on
       // resolveVisitIdentity — the httpOnly sc_vid cookie first, the page's own
       // id second. This route keyed it on the raw body id alone, so whenever

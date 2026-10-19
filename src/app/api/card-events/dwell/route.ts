@@ -44,11 +44,15 @@ export async function POST(req: NextRequest) {
     if (!slug || !Number.isFinite(seconds) || seconds <= 0) return ok();
     if (isLikelyBot(req.headers.get("user-agent"))) return ok();
 
-    // The cookie first, as everywhere: page script can neither read nor
-    // rotate it. The page's own id only when no cookie came with the request.
+    // THE COOKIE ONLY. Page script can neither read nor rotate it, so it is
+    // the one identity a caller cannot borrow. A body visitor_id is NOT
+    // accepted (2026-10-18 review): the sc_vid value is the same on every card
+    // and a card owner can see their contacts' ids, so a body id would let one
+    // owner raise a contact's time-on-page on someone else's card. The cookie
+    // is set by the view's own response, so every real beacon carries it; a
+    // browser that refuses cookies simply records no duration.
     const cookieId = req.cookies.get(VISITOR_COOKIE)?.value;
-    const clientId = typeof body?.visitor_id === "string" ? body.visitor_id.trim().slice(0, 64) : null;
-    const visitorId = isVisitorId(cookieId) ? cookieId : isVisitorId(clientId) ? clientId : null;
+    const visitorId = isVisitorId(cookieId) ? cookieId : null;
     if (!visitorId) return ok();
 
     if (await isRateLimited(`dwell:${visitorId}:${slug}`, 30, 10 * 60 * 1000)) return ok();

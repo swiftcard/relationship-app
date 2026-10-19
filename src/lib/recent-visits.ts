@@ -120,6 +120,39 @@ export function onePerson(leads: VisitLead[]): VisitLead | undefined {
 const surfaceOf = (r: { surface?: string | null }): "card" | "links" => (r.surface === "links" ? "links" : "card");
 const ms = (iso: string) => new Date(iso).getTime();
 
+/** How far before a visit's recorded start its own taps and saves can land. */
+const LEAD_IN_EVENT_MS = 60_000;
+/** The longest one sitting is taken to last when no later visit ends it. */
+const SITTING_MS = 2 * 60 * 60 * 1000;
+
+type StartRow = { visitor_id?: string | null; surface?: string | null; created_at: string; event_type?: string };
+const sameVisitorOn = (a: StartRow, b: StartRow) =>
+  !!a.visitor_id && a.visitor_id === b.visitor_id && surfaceOf(a) === surfaceOf(b);
+
+/**
+ * Which rows START a visit: every view, and every contact download that no
+ * view by the same visitor on the same page opened — none in the visit window
+ * before it, or in the minute after it (the human gate can record the view a
+ * moment after the save). A download with no such view is a visit of its own:
+ * the desktop QR's ?save=1 hands over the contact before the page can count a
+ * view. A view LATER than that is a later visit, never a reason to hide the
+ * save: the server records no second view inside one visit window (a save
+ * records the visit's view itself — api/card-events), so that case is a real
+ * return. Nothing is ever dropped by this rule. A row with no event_type is a
+ * view.
+ */
+export function visitStarts<T extends StartRow>(rows: T[]): T[] {
+  const isView = (r: StartRow) => (r.event_type ?? "viewed_card") === "viewed_card";
+  const views = rows.filter(isView);
+  return rows.filter((r) => {
+    if (isView(r)) return true;
+    if (r.event_type !== "downloaded_vcard") return false;
+    return !views.some((v) => sameVisitorOn(v, r)
+      && ms(v.created_at) <= ms(r.created_at) + LEAD_IN_EVENT_MS
+      && ms(r.created_at) - ms(v.created_at) < VIEW_VISIT_WINDOW_MS);
+  });
+}
+
 /**
  * Pure: the events of one window (newest first) → the visit rows.
  *
@@ -129,7 +162,9 @@ const ms = (iso: string) => new Date(iso).getTime();
  */
 export function buildRecentVisits(input: {
   events: VisitEventRow[];
-  history: Pick<VisitEventRow, "visitor_id" | "surface" | "created_at">[];
+  /** All-time views and saves of the visitors in the window. A row with no
+   *  event_type is a view. */
+  history: (Pick<VisitEventRow, "visitor_id" | "surface" | "created_at"> & { event_type?: string })[];
   leads: VisitLead[];
   bindings?: VisitBinding[];
   shares?: VisitShare[];
@@ -138,30 +173,26 @@ export function buildRecentVisits(input: {
 }): RecentVisit[] {
   const { events, paid, limit } = input;
   const leadById = new Map(input.leads.map((l) => [l.id, l]));
-  const sameVisitor = (a: VisitEventRow, b: VisitEventRow) =>
-    !!a.visitor_id && a.visitor_id === b.visitor_id && surfaceOf(a) === surfaceOf(b);
+  const sameVisitor = sameVisitorOn;
 
-  // The visit starts: every view, and every save no view of the same visitor
-  // opened within the visit window before it.
-  const views = events.filter((e) => e.event_type === "viewed_card");
-  const starts = events.filter((e) => {
-    if (e.event_type === "viewed_card") return true;
-    if (e.event_type !== "downloaded_vcard") return false;
-    return !views.some((v) => sameVisitor(v, e) && ms(v.created_at) <= ms(e.created_at) + 60_000 && ms(e.created_at) - ms(v.created_at) < VIEW_VISIT_WINDOW_MS);
-  });
+  const starts = visitStarts(events);
 
   const visits: RecentVisit[] = [];
   for (const start of starts.slice(0, limit)) {
     const surface = surfaceOf(start);
     const t0 = ms(start.created_at);
-    // The visit ends at the same visitor's next start on this page, or after
-    // the visit window — whichever comes first.
+    // EVERY EVENT BELONGS TO EXACTLY ONE VISIT (2026-10-18 review). A visit
+    // takes what happened from a minute before it started (a tap or save can
+    // land just ahead of the view the human gate records) until a minute
+    // before the same visitor's next visit on this page — or, with no next
+    // visit, for as long as one sitting can last (a tab kept open past the
+    // visit window still taps links, and those taps are this visit's).
     const next = starts
       .filter((s) => s !== start && sameVisitor(s, start) && ms(s.created_at) > t0)
       .reduce((min, s) => Math.min(min, ms(s.created_at)), Infinity);
-    const end = Math.min(next, t0 + VIEW_VISIT_WINDOW_MS);
+    const end = Math.min(next - LEAD_IN_EVENT_MS, t0 + SITTING_MS);
     const inVisit = start.visitor_id
-      ? events.filter((e) => e !== start && sameVisitor(e, start) && ms(e.created_at) >= t0 - 60_000 && ms(e.created_at) < end)
+      ? events.filter((e) => e !== start && sameVisitor(e, start) && ms(e.created_at) >= t0 - LEAD_IN_EVENT_MS && ms(e.created_at) < end)
       : [];
 
     const actions: string[] = [];
@@ -169,7 +200,7 @@ export function buildRecentVisits(input: {
     // that turns an anonymous visit into a named one.
     const sharedHere = start.visitor_id
       ? (input.shares ?? []).filter((sh) =>
-          sh.visitor_id === start.visitor_id && sh.surface === surface && ms(sh.created_at) >= t0 - 60_000 && ms(sh.created_at) < end)
+          sh.visitor_id === start.visitor_id && sh.surface === surface && ms(sh.created_at) >= t0 - LEAD_IN_EVENT_MS && ms(sh.created_at) < end)
       : [];
     if (sharedHere.length) {
       actions.push(sharedHere.some((sh) => sh.location) ? "Shared their details and location" : "Shared their details");
@@ -203,12 +234,14 @@ export function buildRecentVisits(input: {
     if (lead?.name?.trim()) who = isLockedLead(lead) && !paid ? null : lead.name.trim();
     else if (!start.lead_id && start.visitor_name?.trim()) who = start.visitor_name.trim();
 
+    // Which visit this is, all time, counted by the SAME rule that decides what
+    // a visit is above — so a visit that was only a contact download counts,
+    // and the view after it is the 2nd visit, not another 1st.
     const visitNumber = start.visitor_id
       ? Math.max(
           1,
-          input.history.filter(
-            (h) => h.visitor_id === start.visitor_id && surfaceOf(h) === surface && ms(h.created_at) <= t0,
-          ).length + (start.event_type === "downloaded_vcard" ? 1 : 0),
+          visitStarts(input.history.filter((h) => h.visitor_id === start.visitor_id && surfaceOf(h) === surface))
+            .filter((h) => ms(h.created_at) <= t0).length,
         )
       : null;
 
@@ -284,15 +317,20 @@ export async function loadRecentVisits(
       visitor_id: string; lead_id: string; bound_via: string; link_device_index: number | null;
       bound_at: string | null; superseded_at: string | null; wrong_at: string | null;
     };
-    type ShareRow = { id: string; visitor_id: string | null; created_at: string; source: string | null; shared_location_at?: string | null };
+    type ShareRow = {
+      id: string; visitor_id: string | null; created_at: string; source: string | null;
+      shared_location_at?: string | null; shared_location_first_at?: string | null;
+    };
     const none = <T,>() => Promise.resolve({ data: [] as T[], error: null });
     const [historyRes, bindingsRes, sharesRes] = await Promise.all([
       visitorIds.length
         ? admin
             .from("card_events")
-            .select("visitor_id, surface, created_at")
+            // Views AND saves: a visit that was only a contact download is a
+            // visit too, and the numbering must count it (visitStarts).
+            .select("visitor_id, surface, created_at, event_type")
             .eq("card_owner_username", opts.slug)
-            .eq("event_type", "viewed_card")
+            .in("event_type", ["viewed_card", "downloaded_vcard"])
             .in("visitor_id", visitorIds)
             .limit(5000)
         : none<VisitEventRow>(),
@@ -312,8 +350,11 @@ export async function loadRecentVisits(
       visitorIds.length
         ? (async () => {
             const q = (cols: string) => admin.from("leads").select(cols).eq("card_owner", opts.slug).in("visitor_id", visitorIds).limit(2000);
-            const r = await q("id, visitor_id, created_at, source, shared_location_at");
-            return r.error && (r.error.code === "42703" || r.error.code === "PGRST204") ? q("id, visitor_id, created_at, source") : r;
+            const missing = (e: { code?: string } | null) => !!e && (e.code === "42703" || e.code === "PGRST204");
+            const r = await q("id, visitor_id, created_at, source, shared_location_at, shared_location_first_at");
+            if (!missing(r.error)) return r;
+            const r2 = await q("id, visitor_id, created_at, source, shared_location_at");
+            return missing(r2.error) ? q("id, visitor_id, created_at, source") : r2;
           })()
         : none<ShareRow>(),
     ]);
@@ -350,13 +391,23 @@ export async function loadRecentVisits(
         // is on the card.
         .flatMap((sh) => {
           const surface = sh.source === "swift_connect" ? "links" as const : "card" as const;
-          const at = sh.shared_location_at ?? null;
-          // A location sent WITH the first share is part of it; one added by a
-          // later share from the same person is that later visit's.
-          const withFirst = !!at && Math.abs(ms(at) - ms(sh.created_at)) < 60_000;
+          const latest = sh.shared_location_at ?? null;
+          // The location sent WITH the first share is part of it, and stays so
+          // when a later share replaces the point (shared_location_first_at is
+          // set once, at capture). Rows from before that column fall back to
+          // "the latest one arrived with the first share".
+          const first = sh.shared_location_first_at
+            ?? (latest && Math.abs(ms(latest) - ms(sh.created_at)) < 60_000 ? latest : null);
+          // The share happened when it happened on their phone: an offline
+          // share replayed later is stamped with its real time on the location,
+          // while the contact row only knows when it arrived.
+          const sharedAt = first && ms(first) < ms(sh.created_at) ? first : sh.created_at;
+          // A newer point from a later share from the same person belongs to
+          // that later visit.
+          const later = latest && (!first || Math.abs(ms(latest) - ms(first)) >= 1000) ? latest : null;
           return [
-            { visitor_id: sh.visitor_id, created_at: sh.created_at, surface, location: withFirst },
-            ...(at && !withFirst ? [{ visitor_id: sh.visitor_id, created_at: at, surface, location: true }] : []),
+            { visitor_id: sh.visitor_id, created_at: sharedAt, surface, location: !!first },
+            ...(later ? [{ visitor_id: sh.visitor_id, created_at: later, surface, location: true }] : []),
           ];
         }),
       paid: opts.paid,

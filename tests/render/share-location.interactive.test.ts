@@ -86,9 +86,12 @@ describe("the visitor allows it", () => {
       expect(await toggle.innerText()).toContain("Add my current location");
       await ctx.grantPermissions(["geolocation"], { origin: ORIGIN });
       await toggle.click();
-      await page.getByText("Location added").waitFor();
+      await page.getByText(/^Added — within about/).waitFor();
       expect(await toggle.getAttribute("aria-checked")).toBe("true");
-      expect(await toggle.innerText()).toContain("Within about 12 m");
+      expect(await toggle.innerText()).toContain("Added — within about 12 m");
+      // One fixed name, whatever the state (a11y): the state is aria-checked.
+      expect(await toggle.getAttribute("aria-describedby")).toBeTruthy();
+      expect(await page.getByRole("switch", { name: "Add my current location" }).count()).toBe(1);
       await fillAndSend(page);
       expect(posted).toHaveLength(1);
       expect(posted[0].shared_location).toEqual({ lat: 40.748441, lng: -73.985664, accuracy: 12 });
@@ -102,7 +105,7 @@ describe("the visitor allows it", () => {
       await ctx.grantPermissions(["geolocation"], { origin: ORIGIN });
       const { page, posted, toggle } = await open(ctx);
       await toggle.click();
-      await page.getByText("Location added").waitFor();
+      await page.getByText(/^Added — within about/).waitFor();
       await toggle.click();
       expect(await toggle.getAttribute("aria-checked")).toBe("false");
       await fillAndSend(page);

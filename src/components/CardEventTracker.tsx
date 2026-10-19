@@ -78,7 +78,9 @@ async function deviceHints(): Promise<{ device_model?: string; device_os?: strin
 // make; keepalive fetch where there is no beacon. Never throws, never awaited.
 function sendDwell(payload: { card_owner_username: string; surface: "card" | "links"; seconds: number }) {
   try {
-    const json = JSON.stringify({ ...payload, visitor_id: getVisitorId() });
+    // No visitor id in the body: the endpoint trusts only the sc_vid cookie the
+    // beacon carries on its own (see the dwell route for why).
+    const json = JSON.stringify(payload);
     const blob = new Blob([json], { type: "application/json" });
     if (navigator.sendBeacon?.("/api/card-events/dwell", blob)) return;
     void fetch("/api/card-events/dwell", { method: "POST", headers: { "Content-Type": "application/json" }, body: json, keepalive: true }).catch(() => {});

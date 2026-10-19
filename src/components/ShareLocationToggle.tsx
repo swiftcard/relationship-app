@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 // ── "Add my location" on the share-your-info forms ───────────────────────────
 //
@@ -38,6 +38,7 @@ export default function ShareLocationToggle({
   // server and first client render agree (no geolocation on the server).
   const [supported, setSupported] = useState(false);
   const [state, setState] = useState<State>(value ? "on" : "off");
+  const ids = useId();
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time capability read after mount
@@ -78,12 +79,16 @@ export default function ShareLocationToggle({
   }
 
   const on = state === "on" && !!value;
+  // ONE NAME, whatever the state (2026-10-18 review): a switch's on/off is
+  // aria-checked, and a name that changed with it ("Location added") was
+  // announced as a different control. The changing words are the description.
   return (
     <div>
       <button
         type="button"
         role="switch"
         aria-checked={on}
+        aria-describedby={`${ids}-hint ${ids}-status`}
         onClick={toggle}
         disabled={state === "asking"}
         className={`w-full flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors disabled:opacity-70 ${on ? "border-blue-300 bg-blue-50" : "border-gray-200 bg-white hover:bg-gray-50"}`}
@@ -98,23 +103,26 @@ export default function ShareLocationToggle({
           )}
         </span>
         <span className="min-w-0">
-          <span className="block text-gray-900 text-sm font-medium">
-            {state === "asking" ? "Asking your phone…" : on ? "Location added" : "Add my current location"}
-          </span>
-          <span className="block text-gray-500 text-xs mt-0.5 leading-snug">
-            {on
-              ? `Within about ${value!.accuracy} m. Only the person you're sharing with sees it.`
-              : "Optional. Only the person you're sharing with sees it — your phone asks first."}
+          <span className="block text-gray-900 text-sm font-medium">Add my current location</span>
+          <span id={`${ids}-hint`} className="block text-gray-500 text-xs mt-0.5 leading-snug">
+            {state === "asking"
+              ? "Asking your phone…"
+              : on
+                ? `Added — within about ${value!.accuracy} m. Only the person you're sharing with sees it.`
+                : "Optional. Only the person you're sharing with sees it — your phone asks first."}
           </span>
         </span>
       </button>
-      {(state === "denied" || state === "failed") && (
-        <p role="status" className="text-gray-500 text-xs mt-1.5 px-1">
-          {state === "denied"
-            ? "Location not added — your phone didn't allow it. Your info still sends."
-            : "Couldn't get your location just now. Your info still sends."}
-        </p>
-      )}
+      {/* Always mounted, so a screen reader announces the message when it
+          APPEARS — a live region inserted with its text already in it is
+          usually read by nobody. Empty, it takes no space. */}
+      <p id={`${ids}-status`} role="status" className="text-gray-500 text-xs mt-1.5 px-1 empty:hidden">
+        {state === "denied"
+          ? "Location not added — your phone didn't allow it. Your info still sends."
+          : state === "failed"
+            ? "Couldn't get your location just now. Your info still sends."
+            : ""}
+      </p>
     </div>
   );
 }

@@ -59,14 +59,23 @@ describe("the server", () => {
   const route = read("src/app/api/leads/route.ts");
   it("parses it, and a lead is never lost to its columns", () => {
     expect(route).toContain("const sharedPoint = parseSharedLocation(shared_location);");
-    expect(route).toContain('insert({ ...leadRow, ...(sharedCols ?? {}) })');
-    expect(route).toMatch(/error\.code === "42703" \|\| error\.code === "PGRST204"\) && sharedPoint\) \{\n\s*\(\{ data: insertedLead, error \} = await admin\.from\("leads"\)\.insert\(leadRow\)/);
+    expect(route).toContain(".insert({ ...leadRow, ...(sharedCols ? { ...sharedCols, shared_location_first_at: sharedCols.shared_location_at } : {}) })");
+    // An older schema: without the newest column, then without any — the
+    // lead itself is always saved.
+    expect(route).toContain('({ data: insertedLead, error } = await admin.from("leads").insert({ ...leadRow, ...sharedCols }).select("id").single());');
+    expect(route).toContain('({ data: insertedLead, error } = await admin.from("leads").insert(leadRow).select("id").single());\n        locationSaved = false;');
+  });
+  it("is stamped with the moment on their phone — an offline share's queued time, never later than now", () => {
+    expect(route).toContain('const queuedAt = Number(req.headers.get("x-sc-queued-at"));');
+    expect(route).toContain("queuedAt > 0 && queuedAt <= Date.now() && Date.now() - queuedAt <= 7 * 24 * 3600 * 1000");
+    expect(route).toContain("shared_location_at: sharedAt,");
   });
   it("a repeat share updates it only from a browser already that contact's", () => {
     expect(route).toContain("if (sameBrowser && sharedCols) {");
   });
   it("the notification says THAT they shared one, never where", () => {
-    expect(route).toContain('shared their info${sharedPoint ? " and their exact location" : ""} with you${sourceStr}.');
+    // …and only when the point actually reached the row (2026-10-18 review).
+    expect(route).toContain('shared their info${locationSaved ? " and their exact location" : ""} with you${sourceStr}.');
   });
   it("Free never receives the coordinates; the panel blurs the line", () => {
     const page = read("src/app/contacts/page.tsx");

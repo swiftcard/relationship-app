@@ -24,7 +24,7 @@ describe("a locked Free lead's name never reaches the bell or the lock screen", 
     // The unlocked body may add "and their exact location" (2026-10-18, a
     // location the visitor chose to share) — that it was shared, never where.
     // The LOCKED body is unchanged: it names no one and says nothing more.
-    expect(route).toMatch(/\? `\$\{shown\} shared their info — open to unlock\.`\s*\n(\s*\/\/[^\n]*\n)*\s*: `\$\{name\} shared their info\$\{sharedPoint \? " and their exact location" : ""\} with you\$\{sourceStr\}\.`/);
+    expect(route).toMatch(/\? `\$\{shown\} shared their info — open to unlock\.`\s*\n(\s*\/\/[^\n]*\n)*\s*: `\$\{name\} shared their info\$\{locationSaved \? " and their exact location" : ""\} with you\$\{sourceStr\}\.`/);
   });
 
   it("the lock screen gets its own words with no name in them", () => {
