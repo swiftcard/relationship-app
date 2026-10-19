@@ -130,7 +130,7 @@ describe("the SwiftCard invite on a card page", () => {
       await page.waitForSelector('[aria-label="Create your own SwiftCard"]');
       // The example card: the real template, with its photo actually loaded.
       await page.waitForFunction(() => {
-        const img = document.querySelector('[aria-label="Create your own SwiftCard"] img[src*="maya.jpg"]') as HTMLImageElement | null;
+        const img = document.querySelector('[aria-label="Create your own SwiftCard"] img[src*="simone.jpg"]') as HTMLImageElement | null;
         return !!img && img.complete && img.naturalWidth > 0;
       }, undefined, { timeout: 15000 });
       await page.waitForTimeout(700); // the entrance animation
@@ -145,14 +145,18 @@ describe("the SwiftCard invite on a card page", () => {
       expect(await cta.getAttribute("href")).toBe("/cards/new?src=vcard");
       const example = await page.evaluate(() => {
         const t = document.querySelector('[aria-label="Create your own SwiftCard"]')!.textContent ?? "";
-        const img = document.querySelector('[aria-label="Create your own SwiftCard"] img[src*="maya.jpg"]')!.getBoundingClientRect();
-        return { hasName: t.includes("Maya Castillo"), hasCompany: t.includes("Harbor & Vine Realty"), imgW: img.width, imgH: img.height, stub: t.includes("Your Name") };
+        const img = document.querySelector('[aria-label="Create your own SwiftCard"] img[src*="simone.jpg"]')!.getBoundingClientRect();
+        const el = document.querySelector('[aria-label="Create your own SwiftCard"] img[src*="simone.jpg"]')!;
+        return { hasName: t.includes("Simone Adler"), hasCompany: t.includes("Adler & Grant LLP"), imgW: img.width, imgH: img.height, radius: getComputedStyle(el).borderTopLeftRadius, stub: t.includes("Your Name") };
       });
       expect(example.hasName).toBe(true);
       expect(example.hasCompany).toBe(true);
       expect(example.stub).toBe(false);
       expect(example.imgW).toBeGreaterThan(40);
       expect(example.imgH).toBeGreaterThan(40);
+      // Owner, 2026-10-19: the headshot is a circle — square box, fully rounded.
+      expect(Math.abs(example.imgW - example.imgH)).toBeLessThan(1.5);
+      expect(parseFloat(example.radius)).toBeGreaterThanOrEqual(example.imgW / 2 - 1);
       const fit = await panelFits(page, "Create your own SwiftCard");
       expect(fit.ok, fit.why).toBe(true);
       await shot(page, `card-invite-${width}`);
@@ -209,7 +213,7 @@ describe("a Swift Links page: every invite IS the corner badge's sheet", () => {
     await fire(page, "vcard");
     await page.locator('[aria-label="Create your own Swift Links"]').waitFor();
     await page.waitForTimeout(600);
-    expect(await page.locator('img[src*="maya.jpg"]').count()).toBe(0);
+    expect(await page.locator('img[src*="simone.jpg"]').count()).toBe(0);
     await page.close();
   });
 });

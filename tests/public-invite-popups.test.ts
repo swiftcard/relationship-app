@@ -60,8 +60,10 @@ describe("the SwiftCard invite", () => {
   it("shows a REAL card — the Portrait Pro template with a real headshot — not a drawn stand-in", () => {
     const ex = code("src/components/SignupCardExample.tsx");
     expect(ex).toContain("<PhotoFirst data={EXAMPLE} />");
-    expect(ex).toContain('photoUrl: "/showcase/maya.jpg"');
-    expect(existsSync(join(process.cwd(), "public/showcase/maya.jpg"))).toBe(true);
+    expect(ex).toContain('photoUrl: "/showcase/simone.jpg"');
+    expect(existsSync(join(process.cwd(), "public/showcase/simone.jpg"))).toBe(true);
+    // Owner, 2026-10-19: the headshot is circular (the template's own option).
+    expect(ex).toContain('photoShape: "circle"');
     const host = code("src/components/SignupNudgeHost.tsx");
     expect(host).toContain('lazy(() => import("@/components/SignupCardExample"))');
     expect(host).not.toContain(">Your Name<");

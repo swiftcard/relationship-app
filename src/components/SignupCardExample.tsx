@@ -3,38 +3,57 @@
 import CardScaler from "@/components/CardScaler";
 import PhotoFirst from "@/components/card-templates/PhotoFirst";
 import type { CardData } from "@/components/card-templates/types";
+import { CARD_FONT_OPTIONS, type TemplateStyle } from "@/lib/template-style";
 
 // ── The example card on the "create your free card" invite ──────────────────
 //
 // Owner, 2026-09-23: "make the design example card on that pop-up much nicer
 // and more realistic." It was a hand-drawn stand-in — a "YOU" circle, "Your
 // Name", grey bars. Now it IS a SwiftCard: the real Portrait Pro template
-// (PhotoFirst), rendered by the same code a customer's card uses, with the
-// same designed persona the marketing hero shows (components/site/
-// HeroShowcase — "Royal Violet" panel with a sheen). A visitor who taps "See
-// how yours looks" is looking at exactly what they will get.
+// (PhotoFirst), rendered by the same code a customer's card uses. A visitor
+// who taps "See how yours looks" is looking at exactly what they will get.
+//
+// Owner, 2026-10-19: "make that example gorgeous … make the headshot
+// circular." Chosen from three in-popup mockups: Champagne — the template's
+// own Circle photo on an espresso-to-gold panel, an ivory details panel (it
+// used to repeat the violet gradient, violet on violet on the indigo popup)
+// and the editor's Serif font. The persona is the homepage showcase's
+// (components/site/HeroShowcase), so one photo is one person site-wide.
 //
 // Its own module so SignupNudgeHost can load it lazily: a Swift Links page
 // never shows the card invite (it shows the Swift Links sheet), so it never
 // pays for the template code.
 
+const SERIF = CARD_FONT_OPTIONS.find((o) => o.label === "Serif")!.value;
+
+// Typed as what the template reads (templateStyle): CardCustomization does not
+// list the per-line colours, though every Look saves them.
+const CHAMPAGNE: TemplateStyle = {
+  photoShape: "circle",
+  surfaceColor: "linear-gradient(160deg, #1c1612 0%, #3f2d1a 55%, #7a5c2c 100%)",
+  bgColor: "#fdfaf3",
+  textColor: "#fdf6e3",
+  titleColor: "#e9d3a6",
+  companyColor: "#1c1612",
+  infoColor: "#2b2018",
+  accentColor: "#a07a3c",
+  fontFamily: SERIF,
+};
+
 const EXAMPLE: CardData = {
-  name: "Maya Castillo",
-  title: "Realtor®",
-  company: "Harbor & Vine Realty",
-  phone: "(415) 555-0132",
-  email: "maya@harborvine.com",
-  website: "harborvine.com",
-  cardUrl: "swiftcard.me/mayacastillo",
-  photoUrl: "/showcase/maya.jpg",
+  name: "Simone Adler",
+  // The homepage's job label for her: "Managing Partner" wrapped to two lines
+  // in the circle panel's narrow column and crowded the name.
+  title: "Attorney",
+  company: "Adler & Grant LLP",
+  phone: "(646) 555-0121",
+  email: "sadler@adlergrant.law",
+  website: "adlergrant.law",
+  cardUrl: "swiftcard.me/simoneadler",
+  photoUrl: "/showcase/simone.jpg",
   logoUrl: null,
-  initials: "MC",
-  customization: {
-    accentColor: "#6D28D9",
-    bgColor: "linear-gradient(145deg, #4f46e5 0%, #7c3aed 60%, #6d28d9 100%)",
-    textColor: "#ffffff",
-    finish: "sheen",
-  },
+  initials: "SA",
+  customization: CHAMPAGNE,
 };
 
 export default function SignupCardExample() {
