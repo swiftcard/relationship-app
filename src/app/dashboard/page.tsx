@@ -422,18 +422,26 @@ export default async function DashboardPage({
       const PAGE = 1000, MAX_PAGES = 50;
       // visitor_id rides along so the window's unique-viewer / repeat-view
       // split can be computed from the same rows the graph is built from.
-      const all: { viewed_at: string; username: string; visitor_id: string | null }[] = [];
-      for (let p = 0; p < MAX_PAGES; p++) {
-        const { data } = await getAdminSupabase()
-          .from("card_views")
-          .select("viewed_at, username, visitor_id")
-          .in("username", [analyticsUsername, linkUsername])
-          .gte("viewed_at", daysAgoISO(60))
-          .order("viewed_at", { ascending: false })
-          .range(p * PAGE, p * PAGE + PAGE - 1);
-        if (!data?.length) break;
-        all.push(...data);
-        if (data.length < PAGE) break;
+      type ViewRow = { viewed_at: string; username: string; visitor_id: string | null };
+      // The first page also says how many rows there are, and the rest are
+      // asked for SIX AT A TIME rather than one after another (audit P-05):
+      // the chart is the dashboard's slowest read, and on a busy card it was
+      // up to fifty round trips in a row every time the app opened.
+      const since = daysAgoISO(60);
+      const page = (p: number, withCount = false) => getAdminSupabase()
+        .from("card_views")
+        .select("viewed_at, username, visitor_id", withCount ? { count: "exact" } : undefined)
+        .in("username", [analyticsUsername, linkUsername])
+        .gte("viewed_at", since)
+        .order("viewed_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(p * PAGE, p * PAGE + PAGE - 1);
+      const first = await page(0, true);
+      const all: ViewRow[] = [...((first.data ?? []) as ViewRow[])];
+      const pages = Math.min(MAX_PAGES, Math.ceil((first.count ?? all.length) / PAGE));
+      for (let p = 1; p < pages; p += 6) {
+        const batch = await Promise.all(Array.from({ length: Math.min(6, pages - p) }, (_, k) => page(p + k)));
+        for (const r of batch) all.push(...((r.data ?? []) as ViewRow[]));
       }
       return { data: all };
     })(),

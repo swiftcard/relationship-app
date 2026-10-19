@@ -34,7 +34,8 @@ describe("after paying, nobody is bounced before the plan lands", () => {
 
   it("the waiting screen re-checks on its own", () => {
     const src = read("src/app/checkout/success/AwaitingPlan.tsx");
-    expect(src).toMatch(/setInterval\(\(\) => router\.refresh\(\), 2000\)/);
+    // Every 2 s at first, then backing off and stopping (audit P-08).
+    expect(src).toMatch(/tick = setTimeout\(\(\) => \{ router\.refresh\(\); next\(\); \}, STEPS\[i\+\+\]\);/);
   });
 });
 

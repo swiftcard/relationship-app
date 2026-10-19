@@ -27,7 +27,28 @@ export function aiProviderName(): string | null {
   return null;
 }
 
+/**
+ * A configured provider that answered nothing — a 429, a 5xx, an expired key,
+ * an empty reply — used to vanish: every feature quietly fell back to its
+ * generic template and nothing anywhere said the key had stopped working
+ * (audit I-05). Reported now, naming the provider. Still ONE provider per call:
+ * a second one would receive people's data the consent notice (aiProviderName,
+ * App Review 5.1.1) doesn't name.
+ */
+async function reportAiFailure(kind: "complete" | "vision"): Promise<void> {
+  try {
+    const { reportError } = await import("@/lib/report-error");
+    await reportError("ai.provider_failed", new Error(`${aiProviderName()} returned no ${kind} result`), { kind, provider: aiProviderName() });
+  } catch { /* reporting must never break the caller's fallback */ }
+}
+
 export async function aiComplete(prompt: string, opts?: { maxTokens?: number; json?: boolean }): Promise<string | null> {
+  const out = await aiCompleteOnce(prompt, opts);
+  if (out === null && hasAiProvider()) await reportAiFailure("complete");
+  return out;
+}
+
+async function aiCompleteOnce(prompt: string, opts?: { maxTokens?: number; json?: boolean }): Promise<string | null> {
   const maxTokens = opts?.maxTokens ?? 300;
 
   // ── OpenAI (gpt-4o-mini by default) ──
@@ -109,6 +130,12 @@ export async function aiComplete(prompt: string, opts?: { maxTokens?: number; js
 
 // Vision completion (e.g. business-card OCR). Same provider preference.
 export async function aiVision(opts: { imageBase64: string; mediaType: string; prompt: string; maxTokens?: number; json?: boolean }): Promise<string | null> {
+  const out = await aiVisionOnce(opts);
+  if (out === null && hasAiProvider()) await reportAiFailure("vision");
+  return out;
+}
+
+async function aiVisionOnce(opts: { imageBase64: string; mediaType: string; prompt: string; maxTokens?: number; json?: boolean }): Promise<string | null> {
   const maxTokens = opts.maxTokens ?? 500;
 
   if (process.env.OPENAI_API_KEY) {

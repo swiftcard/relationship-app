@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 // Shown for the few seconds between Stripe sending the buyer back and Stripe's
-// webhook actually giving them the plan. Re-asks the server every two seconds;
+// webhook actually giving them the plan. Re-asks the server, backing off;
 // the page redirects on its own the moment the plan is there.
 export default function AwaitingPlan({ planName, fallbackHref }: {
   planName: string;
@@ -18,10 +18,22 @@ export default function AwaitingPlan({ planName, fallbackHref }: {
   const [slow, setSlow] = useState(false);
 
   useEffect(() => {
-    const tick = setInterval(() => router.refresh(), 2000);
+    // Every 2 s while the webhook normally lands, then backing off, and done
+    // after about three minutes (audit P-08). It used to re-ask every 2 s for
+    // as long as the tab stayed open — each a sign-in check, a database read
+    // and a Stripe call — so one webhook outage became 30 Stripe reads a
+    // minute per waiting buyer. By then the note below offers a refresh.
+    const STEPS = [2000, 2000, 2000, 2000, 2000, 4000, 4000, 8000, 8000, 15000, 15000, 30000, 30000, 30000, 30000];
+    let i = 0;
+    let tick: ReturnType<typeof setTimeout> | null = null;
+    const next = () => {
+      if (i >= STEPS.length) return;
+      tick = setTimeout(() => { router.refresh(); next(); }, STEPS[i++]);
+    };
+    next();
     const late = setTimeout(() => setSlow(true), 45000);
     const giveUp = fallbackHref ? setTimeout(() => router.push(fallbackHref), 20000) : null;
-    return () => { clearInterval(tick); clearTimeout(late); if (giveUp) clearTimeout(giveUp); };
+    return () => { if (tick) clearTimeout(tick); clearTimeout(late); if (giveUp) clearTimeout(giveUp); };
   }, [router, fallbackHref]);
 
   return (
