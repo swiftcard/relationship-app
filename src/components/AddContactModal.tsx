@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { CONTACT_FIELD_MAX } from "@/lib/contact-limits";
 import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import Link from "next/link";
 import { scanBusinessCard, ProRequiredError, AiConsentRequiredError, EmptyScanError } from "@/lib/scan-card";
@@ -138,7 +139,11 @@ export default function AddContactModal({
       if (!res.ok) {
         // Contact cap reached → show an upgrade prompt instead of a raw error.
         if (res.status === 402 || data.error === "limit") setAtLimit(true);
-        setError(data.message || data.error || "Something went wrong.");
+        // An ended session said "Unauthorized" (audit F-CONTACTS-04); retrying
+        // can't work until they sign in again, so say that.
+        setError(res.status === 401
+          ? "You've been signed out, so this contact wasn't added. Sign in again — what you typed is still here."
+          : data.message || data.error || "Something went wrong.");
         setSaving(false);
         return;
       }
@@ -278,7 +283,7 @@ export default function AddContactModal({
                   // Not under the camera: on a phone a focused field behind it
                   // can raise the keyboard over the viewfinder.
                   autoFocus={!camera}
-                  value={form.name}
+                  value={form.name} maxLength={CONTACT_FIELD_MAX.name}
                   onChange={(e) => set("name", e.target.value)}
                   placeholder="Sarah Williams"
                   className="w-full sc-field text-white placeholder-gray-600 px-3 py-2.5 text-sm focus:outline-none transition-colors"
@@ -290,7 +295,7 @@ export default function AddContactModal({
                   <label className="text-xs text-gray-400 font-medium block mb-1">Email</label>
                   <input
                     type="email"
-                    value={form.email}
+                    value={form.email} maxLength={CONTACT_FIELD_MAX.email}
                     onChange={(e) => set("email", e.target.value)}
                     placeholder="sarah@acme.com"
                     className="w-full sc-field text-white placeholder-gray-600 px-3 py-2.5 text-sm focus:outline-none transition-colors"
@@ -300,7 +305,7 @@ export default function AddContactModal({
                   <label className="text-xs text-gray-400 font-medium block mb-1">Phone</label>
                   <input
                     type="tel"
-                    value={form.phone}
+                    value={form.phone} maxLength={CONTACT_FIELD_MAX.phone}
                     onChange={(e) => set("phone", e.target.value)}
                     placeholder="(555) 000-0000"
                     className="w-full sc-field text-white placeholder-gray-600 px-3 py-2.5 text-sm focus:outline-none transition-colors"
@@ -311,7 +316,7 @@ export default function AddContactModal({
               <div>
                 <label className="text-xs text-gray-400 font-medium block mb-1">Company</label>
                 <input
-                  value={form.company}
+                  value={form.company} maxLength={CONTACT_FIELD_MAX.company}
                   onChange={(e) => set("company", e.target.value)}
                   placeholder="Acme Corp"
                   className="w-full sc-field text-white placeholder-gray-600 px-3 py-2.5 text-sm focus:outline-none transition-colors"

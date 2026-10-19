@@ -1,3 +1,4 @@
+import { contactFieldProblem } from "@/lib/contact-limits";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
@@ -45,6 +46,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (Object.keys(body).length === 0) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
   }
+  // Text, and within lib/contact-limits (audit F-CONTACTS-05).
+  const tooBig = contactFieldProblem(body);
+  if (tooBig) return NextResponse.json({ error: "invalid", message: tooBig }, { status: 400 });
 
   const usernames = await getOwnerUsernames(user.id);
   const admin = getAdminSupabase();

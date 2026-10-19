@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CONTACT_FIELD_MAX } from "@/lib/contact-limits";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { getSourceLabel } from "@/lib/source-labels";
@@ -900,6 +901,12 @@ export default function ContactsClient({
   // Every mutator below only applies its local state change when the server
   // ACCEPTED the write — a failed PATCH (expired session, deleted lead, 500)
   // must never leave the UI pretending the save happened.
+  //
+  // …and says so (audit F-CONTACTS-03/04). A failed Notes or "Where we met"
+  // save used to put the button back to "Save" with no word at all, so people
+  // closed the tab believing it had saved. A session that ended is told apart:
+  // retrying can never work until they sign in again. The text stays in the
+  // box either way.
   async function updateField(leadId: string, field: string, value: string): Promise<boolean> {
     try {
       const res = await fetch(`/api/leads/${leadId}`, {
@@ -907,8 +914,14 @@ export default function ContactsClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ [field]: value }),
       });
+      if (res.status === 401) fail("You've been signed out, so this wasn't saved. Sign in again — what you typed is still here.", 8000);
+      else if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { message?: string };
+        fail(data.message || "Couldn't save that — please try again.");
+      }
       return res.ok;
     } catch {
+      fail("Couldn't save that — check your connection and try again.");
       return false;
     }
   }
@@ -1468,6 +1481,7 @@ export default function ContactsClient({
                     <div className="space-y-2">
                       <textarea
                         value={notesText}
+                        maxLength={CONTACT_FIELD_MAX.notes}
                         onChange={(e) => setNotesText(e.target.value)}
                         rows={3}
                         className="w-full sc-field sc-field-fit text-gray-200 placeholder-gray-600 px-3 py-2 text-sm resize-none focus:outline-none"
@@ -1508,6 +1522,7 @@ export default function ContactsClient({
                       <input
                         type="text"
                         value={whereMetText}
+                        maxLength={CONTACT_FIELD_MAX.where_met}
                         onChange={(e) => setWhereMetText(e.target.value)}
                         placeholder="e.g. Networking event, LinkedIn, Conference…"
                         className="w-full sc-field text-gray-200 placeholder-gray-600 px-3 py-2 text-sm focus:outline-none"

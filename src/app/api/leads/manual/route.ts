@@ -1,3 +1,4 @@
+import { contactFieldProblem } from "@/lib/contact-limits";
 import { NextRequest, NextResponse, after } from "next/server";
 import { deletedAccountResponse } from "@/lib/live-account";
 import { createClient } from "@/lib/supabase-server";
@@ -22,7 +23,12 @@ export async function POST(req: NextRequest) {
   const { data: profile } = await admin.from("profiles").select("username, plan, customization").eq("id", user.id).single();
   if (!profile) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
 
-  const { name, email, phone, company, notes, where_met, card_owner: requestedOwner } = await req.json();
+  const body = await req.json();
+  // Text, and within lib/contact-limits, before anything is read from it: a
+  // non-text name threw on .trim() — an uncaught 500 (audit F-CONTACTS-05).
+  const tooBig = contactFieldProblem(body);
+  if (tooBig) return NextResponse.json({ error: tooBig, message: tooBig }, { status: 400 });
+  const { name, email, phone, company, notes, where_met, card_owner: requestedOwner } = body;
   if (!name?.trim()) return NextResponse.json({ error: "Name is required." }, { status: 400 });
 
   // "At an event?" covers EVERY contact added while it is on (owner,
@@ -77,7 +83,12 @@ export async function POST(req: NextRequest) {
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // Not the database's own words, which can quote the value that failed
+  // (audit F-CONTACTS-05): reported for us, a plain sentence for them.
+  if (error) {
+    console.error("[leads/manual] insert failed:", error.code ?? "", error.message);
+    return NextResponse.json({ error: "Couldn't add that contact — please try again." }, { status: 500 });
+  }
   if (!paid) await bumpUsage(admin, user.id, profile.customization as Record<string, unknown> | null, "leads");
 
   // ── To the CRM, like every other new contact ──────────────────────────────
