@@ -29,6 +29,37 @@ async function endpointIsSafeToSend(endpoint: string): Promise<boolean> {
   }
 }
 
+// ── One more try for a push that didn't get an answer (audit N-05) ─────────
+//
+// Every device got exactly one attempt: a timeout, a dropped connection or a
+// busy/5xx answer from Apple, Google or a browser was logged as "failed" and
+// that notification was gone — and a lead at 2pm is never replayed, because
+// the morning catch-up only reads quiet-hours rows. Now a TRANSIENT failure
+// is tried once more, a moment later. A permanent one ("gone", a bad request,
+// a key we don't have) is not: trying again can't change the answer.
+// A retry after a lost reply could land twice; the tag rides as Apple's
+// apns-collapse-id and Android's notification tag, so the second replaces
+// the first rather than stacking.
+
+export const PUSH_RETRY_DELAY_MS = 1200;
+
+/** Worth one more try: no answer (status 0), a timeout, "busy" (429) or a
+ *  server error (5xx). FCM's 401 too — its access token is re-minted on the
+ *  next call. Never a missing token or signing key: those can't change. */
+export function isTransientPushFailure(r: { result: string; status: number; reason: string }, kind: "apns" | "fcm" | "web"): boolean {
+  if (r.result !== "error") return false;
+  if (r.status === 0) return !/^(no_token|bad_signing_key|empty token)$/.test(r.reason);
+  if (r.status === 401) return kind === "fcm";
+  return r.status === 429 || r.status >= 500;
+}
+
+async function withOneRetry<T extends { result: string; status: number; reason: string }>(kind: "apns" | "fcm" | "web", send: () => Promise<T>): Promise<T> {
+  const first = await send();
+  if (!isTransientPushFailure(first, kind)) return first;
+  await new Promise((r) => setTimeout(r, PUSH_RETRY_DELAY_MS));
+  return send();
+}
+
 /**
  * Send one push, if policy allows it.
  *
@@ -282,7 +313,7 @@ export async function sendPushToUser(userId: string, payload: {
 
   for (const sub of apnsSubs) {
     sends.push(
-      sendApnsDetailed(sub.endpoint, apnsPayload).then(async (r) => {
+      withOneRetry("apns", () => sendApnsDetailed(sub.endpoint, apnsPayload)).then(async (r) => {
         if (r.result === "sent") return true;
         if (r.result === "gone") {
           // Both Apple environments disowned it, or Apple said Unregistered.
@@ -303,7 +334,7 @@ export async function sendPushToUser(userId: string, payload: {
   // body or it is lost.
   for (const sub of fcmSubs) {
     sends.push(
-      sendFcmDetailed(sub.endpoint, webPayload).then(async (r) => {
+      withOneRetry("fcm", () => sendFcmDetailed(sub.endpoint, webPayload)).then(async (r) => {
         if (r.result === "sent") return true;
         if (r.result === "gone") {
           await admin.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
@@ -326,22 +357,25 @@ export async function sendPushToUser(userId: string, payload: {
       sends.push(
         endpointIsSafeToSend(sub.endpoint).then(async (safe): Promise<boolean> => {
           if (!safe) { failures.push("web blocked-endpoint"); return false; }
-          try {
-            await webpush.sendNotification(
-              { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-              payloadStr
-            );
-            return true;
-          } catch (err) {
-            const code = (err as { statusCode?: number })?.statusCode;
-            if (code === 404 || code === 410) {
-              // Expired browser subscription: prune, not a fault.
-              await admin.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
-              return false;
+          const r = await withOneRetry("web", async () => {
+            try {
+              await webpush.sendNotification(
+                { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+                payloadStr
+              );
+              return { result: "sent", status: 201, reason: "" };
+            } catch (err) {
+              return { result: "error", status: (err as { statusCode?: number })?.statusCode ?? 0, reason: "" };
             }
-            failures.push(`web ${code ?? "error"}`);
+          });
+          if (r.result === "sent") return true;
+          if (r.status === 404 || r.status === 410) {
+            // Expired browser subscription: prune, not a fault.
+            await admin.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
             return false;
           }
+          failures.push(`web ${r.status || "error"}`);
+          return false;
         })
       );
     }
