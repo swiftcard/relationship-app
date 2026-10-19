@@ -1193,7 +1193,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                   field="photo"
                   currentUrl={photoState}
                   label="Upload your headshot"
-                  hint="Recommended. This will also be used for your SwiftLink."
+                  hint="Recommended. This will also be used for your Swift Links page."
                   shape="circle"
                   defer
                   onUploaded={(url) => setPhotoState(url || null)}

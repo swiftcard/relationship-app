@@ -162,7 +162,7 @@ function Drawer({ person, appUrl, caps, self, onClose }: {
           <div className="grid grid-cols-2 gap-2 mb-5">
             {[
               ["Card views", person.views],
-              ["Swift Link views", person.swiftlinkViews],
+              ["Swift Links views", person.swiftlinkViews],
               ["Contacts captured", person.leads],
               ["Contact downloads", person.contactsSaved],
             ].map(([k, v]) => (

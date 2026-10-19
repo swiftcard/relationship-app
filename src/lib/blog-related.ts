@@ -21,7 +21,7 @@ const P = {
   analytics: { label: "Dashboard & analytics", href: "/products/analytics", desc: "See who's viewing and reaching out" },
   integrations: { label: "Integrations", href: "/products/integrations", desc: "Salesforce, GoHighLevel, Pipedrive & more" },
   teams: { label: "Teams & Offices", href: "/products/teams", desc: "One brand across everyone" },
-  links: { label: "SwiftLinks", href: "/products/swiftlinks", desc: "One link for everything you are" },
+  links: { label: "Swift Links", href: "/products/swiftlinks", desc: "One link for everything you are" },
   signature: { label: "Swift Signature", href: "/products/email-signatures", desc: "A live card in every email" },
   wallet: { label: "Ways to share", href: "/products/wallet", desc: "Wallet, QR, NFC and the share sheet" },
   compare: { label: "Compare", href: "/compare", desc: "SwiftCard vs Linktree, Popl & Blinq" },

@@ -120,7 +120,7 @@ export default function CrmEventSettings({ initialNotifications, initialViews, z
 
         <div className="flex items-center justify-between gap-3 bg-gray-800/40 border border-gray-800 rounded-xl px-4 py-3">
           <div className="min-w-0">
-            <p className="text-gray-200 text-sm">SwiftCard &amp; SwiftLink views</p>
+            <p className="text-gray-200 text-sm">SwiftCard &amp; Swift Links views</p>
             <p className="text-gray-600 text-[0.6875rem] mt-0.5">Every card and Swift Links view, with location. High-traffic cards use more Zapier tasks.</p>
           </div>
           <Toggle on={views} onClick={toggleViews} disabled={(locked && !views) || saving} />

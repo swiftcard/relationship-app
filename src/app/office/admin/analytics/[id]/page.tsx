@@ -91,7 +91,7 @@ export default async function OfficeAnalyticsMemberPage({
         {/* The same tiles, names and order as the team's Analytics page —
             and the same two view numbers as this person's own dashboard. */}
         <StatTile label="Card views" value={mine?.views ?? 0} hint="Repeat visits count; reloads within a visit don't" />
-        <StatTile label="Swift Link views" value={mine?.swiftlinkViews ?? 0} />
+        <StatTile label="Swift Links views" value={mine?.swiftlinkViews ?? 0} />
         <StatTile label="Contacts captured" value={mine?.leads ?? 0} />
         <StatTile label="Contact downloads" value={mine?.contactsSaved ?? 0} />
         <StatTile label="Unique visitors" value={mine?.uniqueVisitors ?? 0} />
@@ -102,7 +102,7 @@ export default async function OfficeAnalyticsMemberPage({
           they stack up against their colleagues (owner, 2026-10-06). */}
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-6">
         <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider">Views over time</p>
-        <p className="text-[0.6875rem] text-gray-600 mt-0.5 mb-3">Card and Swift Link views together</p>
+        <p className="text-[0.6875rem] text-gray-600 mt-0.5 mb-3">Card and Swift Links views together</p>
         {anyViews === 0 ? <Empty>No views yet for this range.</Empty> : <ViewsChart data={chartData} />}
       </div>
 

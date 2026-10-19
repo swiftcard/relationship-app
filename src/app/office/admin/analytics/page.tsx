@@ -83,8 +83,8 @@ export default async function OfficeAnalyticsPage({
     );
   }
 
-  // Card views and Swift Link views stay two numbers, as on each member's own
-  // dashboard ("SwiftCard views" / "Swift Link views"); the old "Total views"
+  // Card views and Swift Links views stay two numbers, as on each member's own
+  // dashboard ("SwiftCard views" / "Swift Links views"); the old "Total views"
   // tile added them together and matched nothing a member could see.
   const totalViews = employees.reduce((s, e) => s + e.views, 0);
   // TRUE distinct across the whole team when the RPC exists; summing the
@@ -118,7 +118,7 @@ export default async function OfficeAnalyticsPage({
         {/* The Team tab's four numbers first, for the chosen days, then the
             two that only make sense over a date range. */}
         <StatTile label="Card views" value={totalViews} hint={deltaLabel(totalViews, prevTotalViews)} />
-        <StatTile label="Swift Link views" value={totalSwiftlinkViews} hint={deltaLabel(totalSwiftlinkViews, prevTotalSwiftlinkViews)} />
+        <StatTile label="Swift Links views" value={totalSwiftlinkViews} hint={deltaLabel(totalSwiftlinkViews, prevTotalSwiftlinkViews)} />
         <StatTile label="Contacts captured" value={totalLeads} hint={deltaLabel(totalLeads, prevTotalLeads)} />
         <StatTile label="Contact downloads" value={totalContacts} hint={deltaLabel(totalContacts, prevTotalContacts)} />
         <StatTile label="Unique visitors" value={totalUnique} hint={officeUnique != null ? "Distinct visitors across the whole team" : "Summed per employee"} />
@@ -127,7 +127,7 @@ export default async function OfficeAnalyticsPage({
 
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-6">
         <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider">Views over time</p>
-        <p className="text-[0.6875rem] text-gray-600 mt-0.5 mb-3">Card and Swift Link views together</p>
+        <p className="text-[0.6875rem] text-gray-600 mt-0.5 mb-3">Card and Swift Links views together</p>
         {isEmpty ? (
           <Empty>No activity yet for this range — this fills in once your team&apos;s cards start getting views.</Empty>
         ) : (

@@ -12,7 +12,7 @@ const COLS: { title: string; links: { label: string; href: string }[] }[] = [
     title: "Product",
     links: [
       { label: "Digital Cards", href: "/products/digital-cards" },
-      { label: "SwiftLinks", href: "/products/swiftlinks" },
+      { label: "Swift Links", href: "/products/swiftlinks" },
       { label: "Swift Signature", href: "/products/email-signatures" },
       { label: "Lead Capture", href: "/products/lead-capture" },
       { label: "Dashboard & Analytics", href: "/products/analytics" },

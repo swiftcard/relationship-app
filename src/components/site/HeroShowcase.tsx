@@ -333,9 +333,13 @@ function MiniLinks({ persona }: { persona: Persona }) {
   // over it, ramped in over its first 64px so its top edge never shows.
   const wash = washGradient(L);
   const sheetMeet = wash ? hexAlpha(L.sheet, L.frost ?? 0.7) : L.sheet;
+  // Solid looks: the live page's soft sheet top (SwiftLinkProfile softTop),
+  // easing in over its first 72px instead of starting on a squared edge.
+  const softTop = [[0, 0], [12, 0.1], [24, 0.3], [36, 0.55], [48, 0.78], [60, 0.93], [72, 1]]
+    .map(([px, a]) => `${hexAlpha(L.sheet, a)} ${px}px`).join(", ");
   const sheetBg = wash
     ? `linear-gradient(180deg, ${hexAlpha(L.sheet, 0)} 0px, ${sheetMeet} 64px)`
-    : L.sheetTo ? `linear-gradient(180deg, ${L.sheet} 0%, ${L.sheetTo} 100%)` : L.sheet;
+    : `linear-gradient(180deg, ${softTop}, ${L.sheetTo ?? L.sheet} 100%)`;
   const heroFade = `linear-gradient(180deg, ${HERO_FADE_STOPS.map(([stop, a]) => `${hexAlpha(L.sheet, a)} ${stop}%`).join(", ")})`;
   return (
     <div style={{ width: LINKS_W, height: LINKS_H }} className="overflow-hidden">
@@ -450,11 +454,16 @@ function MiniLinks({ persona }: { persona: Persona }) {
             <div
               className={`w-full mb-2.5 flex items-center gap-3 rounded-[14px] px-3.5 py-3 ${L.mode === "light" ? "ring-1 bg-white ring-black/[0.08] shadow-[0_2px_10px_rgba(15,23,42,0.06)]" : "ring-1 bg-white/[0.07] ring-white/10"}`}
             >
+              {/* The live row's icon well. A persona's site is made up, so
+                  /api/link-icon has no logo for it and the live row shows
+                  the link glyph, as here. */}
               <span
-                className="w-[34px] h-[34px] rounded-full shrink-0 grid place-items-center text-[0.8125rem] font-bold"
-                style={{ background: L.mode === "light" ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.10)", color: text }}
+                className="w-[34px] h-[34px] rounded-full shrink-0 grid place-items-center"
+                style={{ background: L.mode === "light" ? "rgba(0,0,0,0.05)" : "rgba(255,255,255,0.10)" }}
               >
-                {(persona.data.website || "s").charAt(0).toUpperCase()}
+                <svg viewBox="0 0 24 24" fill="none" stroke={text} strokeOpacity={0.7} strokeWidth={2} className="w-4 h-4" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+                </svg>
               </span>
               <span className="flex-1 min-w-0 text-left font-semibold text-[0.875rem] truncate" style={{ color: text }}>{persona.compact}</span>
               <svg viewBox="0 0 24 24" fill="none" stroke={text} strokeOpacity={0.4} strokeWidth={2.2} className="w-4 h-4 shrink-0" aria-hidden="true">
@@ -617,6 +626,7 @@ function PhoneCard({ persona }: { persona: Persona }) {
           {/* ── Save Contact — the page's primary action ── */}
           <div className="w-full max-w-sm rounded-2xl p-4 shadow-sm" style={{ background: "#fff", border: "1px solid #E4DDD4" }}>
             <SectionHeading>Save {first}&apos;s contact</SectionHeading>
+            <p className="text-slate-500 text-xs mt-1">One tap adds them to your phone contacts. No app needed.</p>
             <div className="mt-3 w-full text-white font-semibold py-3 px-4 rounded-full text-sm flex items-center justify-center gap-2 whitespace-nowrap" style={{ background: persona.accent }}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
@@ -631,7 +641,7 @@ function PhoneCard({ persona }: { persona: Persona }) {
             <div className="flex mb-2.5">
               {/* Card page's accent-outline button, in this persona's Save Contact colour. */}
               <span className="inline-flex items-center whitespace-nowrap rounded-full border bg-white px-3.5 py-[7px] text-xs font-semibold" style={{ borderColor: persona.accent, color: persona.accent }}>
-                View my Swift Link page →
+                View my Swift Links page →
               </span>
             </div>
             <p className="text-slate-600 text-[0.8125rem] leading-[1.6]">{persona.bio}</p>

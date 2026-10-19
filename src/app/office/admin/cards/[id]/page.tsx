@@ -49,7 +49,7 @@ export default async function OfficeCardDetailPage({ params }: { params: Promise
       <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider mb-2">All time</p>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
         <StatTile label="Card views" value={stats.views} />
-        <StatTile label="Swift Link views" value={stats.swiftlinkViews} />
+        <StatTile label="Swift Links views" value={stats.swiftlinkViews} />
         <StatTile label="Contacts captured" value={stats.leads} />
         <StatTile label="Contact downloads" value={stats.contactsSaved} />
       </div>

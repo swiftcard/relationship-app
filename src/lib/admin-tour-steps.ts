@@ -30,7 +30,7 @@ export const ADMIN_TOUR_STEPS: TourStep[] = [
     path: TEAM,
     anchor: "admin-stats",
     title: "Your team at a glance",
-    body: "Your team's totals, all time: card views, Swift Link views, contacts captured and contact downloads — the sum of everyone listed below.",
+    body: "Your team's totals, all time: card views, Swift Links views, contacts captured and contact downloads — the sum of everyone listed below.",
     placement: "bottom",
   },
   {

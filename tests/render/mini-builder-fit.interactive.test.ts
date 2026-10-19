@@ -8,7 +8,7 @@ import { appCss, launchBrowser } from "./harness";
 // ── THE HOMEPAGE MINI-BUILDER, MEASURED ON A PHONE ───────────────────────────
 //
 // A REAL production bug, found 2026-09-15 by driving swiftcard.me at 390px: the
-// "Build your SwiftLink" panel measured 418px wide inside a 390px screen, so the
+// "Build your Swift Links page" panel measured 418px wide inside a 390px screen, so the
 // step subtitle, both inputs and the Continue button were clipped off the right
 // edge. It had been live.
 //
@@ -59,10 +59,10 @@ beforeAll(async () => {
       return h(MiniBuilderModal, {
         open: true,
         onClose: () => {},
-        eyebrow: "Build your SwiftLink",
+        eyebrow: "Build your Swift Links page",
         step, setStep,
         steps: [{
-          title: "Name your SwiftLink",
+          title: "Name your Swift Links page",
           subtitle: "Your link is built from your name and business — this is the page that lives in your bio.",
           content: h(LinkRow),
         }],
@@ -117,7 +117,7 @@ async function mount(width: number): Promise<Page> {
   await page.goto("https://swiftcard.me/");
   await page.evaluate(() => (window as never as { mount: () => void }).mount());
   // The modal is portaled, so wait for its own content rather than #root.
-  await page.waitForSelector("text=Name your SwiftLink");
+  await page.waitForSelector("text=Name your Swift Links page");
   return page;
 }
 
@@ -133,7 +133,7 @@ describe("the homepage mini-builder fits the phone", () => {
         const painted = await page.evaluate(() => {
           const t = document.body.innerText;
           // Title AND the nav row: proves the whole panel painted, not a shell.
-          return t.includes("Name your SwiftLink") && /Make it live|Continue/.test(t);
+          return t.includes("Name your Swift Links page") && /Make it live|Continue/.test(t);
         });
         expect(painted, "the modal did not mount — this test would be vacuous").toBe(true);
 

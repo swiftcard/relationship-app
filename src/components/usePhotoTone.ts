@@ -23,7 +23,9 @@ export function usePhotoTone(url: string | null | undefined): string | null {
     if (!url || toneCache.has(url)) return;
     const src = /^https:\/\//.test(url)
       ? `/api/img-proxy?url=${encodeURIComponent(url)}&w=96`
-      : /^(blob:|data:image\/)/.test(url) ? url : null;
+      // blob:/data: (a just-picked file) and same-origin paths (the
+      // marketing demo's /marketing/ photos) are read directly.
+      : /^(blob:|data:image\/|\/(?!\/))/.test(url) ? url : null;
     if (!src) return;
     let live = true;
     const img = new Image();

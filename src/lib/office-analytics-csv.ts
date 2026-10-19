@@ -30,7 +30,7 @@ const HEADER = [
   "Employee",
   "Card",
   "Card views",
-  "Swift Link views",
+  "Swift Links views",
   "Contacts captured",
   "Contact downloads",
   "Unique visitors",

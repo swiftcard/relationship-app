@@ -123,7 +123,7 @@ function laterTimestamp(a: string | null, b: string | null | undefined): string 
 // into "Card views" while the Analytics table kept them apart, so the same
 // person showed two different view counts on two tabs and neither matched the
 // "SwiftCard views" on their own dashboard. Every console number now means
-// exactly what the member's dashboard means: card views and Swift Link views
+// exactly what the member's dashboard means: card views and Swift Links views
 // separately, contacts without the sample contact, contact downloads.
 
 // "All time" for the Team tab and the person/card pages: from before the first
@@ -137,7 +137,7 @@ export function allTimeUntil(now = Date.now()): string {
 export type OfficeTotals = {
   members: number;
   cards: number;
-  /** Card views only — Swift Link views are their own number. */
+  /** Card views only — Swift Links views are their own number. */
   views: number;
   swiftlinkViews: number;
   /** Contacts captured (not the sample contact). */

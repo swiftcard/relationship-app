@@ -71,7 +71,7 @@ type Person = {
   id: string; name: string; title: string; email: string; photo: string;
   views: number; leads: number; cards: number; lastActive: string; status: MemberStatus; owner?: boolean;
   // Analytics (last 30 days). views = card views, leads = contacts captured,
-  // contacts = contact downloads, swiftlink = Swift Link views — the Team tab
+  // contacts = contact downloads, swiftlink = Swift Links views — the Team tab
   // shows the same four ALL TIME (allTime below).
   unique: number; scans: number; contacts: number; swiftlink: number; card: string;
 };
@@ -236,7 +236,7 @@ function TeamTab() {
         <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider mb-2">All time</p>
         <div className="grid grid-cols-1 @xl:grid-cols-2 @3xl:grid-cols-4 gap-3">
           <BigStat label="Card views" value={allTime(sum((p) => p.views))} explainer="Times someone opened a teammate's card" />
-          <BigStat label="Swift Link views" value={allTime(sum((p) => p.swiftlink))} explainer="Visits to your team's Swift Links pages" />
+          <BigStat label="Swift Links views" value={allTime(sum((p) => p.swiftlink))} explainer="Visits to your team's Swift Links pages" />
           <BigStat label="Contacts captured" value={CONTACTS_ALL_TIME} explainer="People who shared their info, plus contacts your team scanned or added" />
           <BigStat label="Contact downloads" value={allTime(sum((p) => p.contacts))} explainer="Times someone downloaded a teammate's contact card" />
         </div>
@@ -349,7 +349,7 @@ function PersonDrawer({ person, onClose }: { person: Person; onClose: () => void
         <div className="grid grid-cols-2 gap-2 mb-5">
           {([
             ["Card views", allTime(person.views)],
-            ["Swift Link views", allTime(person.swiftlink)],
+            ["Swift Links views", allTime(person.swiftlink)],
             ["Contacts captured", allTime(person.leads)],
             ["Contact downloads", allTime(person.contacts)],
           ] as const).map(([k, v]) => (
@@ -391,7 +391,7 @@ const COLUMNS: { key: SortKey | "last"; label: string; hint: string }[] = [
   { key: "name", label: "Employee", hint: "Team member name" },
   { key: "card", label: "Card", hint: "Their card, or how many cards they own" },
   { key: "views", label: "Card views", hint: "Times their card was opened — repeat visits count; reloads within a visit don't" },
-  { key: "swiftlink", label: "Swift Link views", hint: "Visits to their Swift Links page" },
+  { key: "swiftlink", label: "Swift Links views", hint: "Visits to their Swift Links page" },
   { key: "leads", label: "Contacts captured", hint: "People who shared their info, plus contacts they scanned or added" },
   { key: "contacts", label: "Contact downloads", hint: "Visitors who downloaded this card as a contact" },
   { key: "unique", label: "Unique visitors", hint: "Distinct visitors in the selected range" },
@@ -441,7 +441,7 @@ function AnalyticsTab() {
 
       <div className="grid grid-cols-2 @3xl:grid-cols-4 gap-3 mb-6">
         <StatTile label="Card views" value={sum((p) => p.views)} hint="+21% vs prior period" />
-        <StatTile label="Swift Link views" value={sum((p) => p.swiftlink)} hint="+12% vs prior period" />
+        <StatTile label="Swift Links views" value={sum((p) => p.swiftlink)} hint="+12% vs prior period" />
         <StatTile label="Contacts captured" value={sum((p) => p.leads)} hint="+18% vs prior period" />
         <StatTile label="Contact downloads" value={sum((p) => p.contacts)} hint="+9% vs prior period" />
         <StatTile label="Unique visitors" value={2231} hint="Distinct visitors across the whole team" />
@@ -450,7 +450,7 @@ function AnalyticsTab() {
 
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-6">
         <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider">Views over time</p>
-        <p className="text-[0.6875rem] text-gray-600 mt-0.5 mb-3">Card and Swift Link views together</p>
+        <p className="text-[0.6875rem] text-gray-600 mt-0.5 mb-3">Card and Swift Links views together</p>
         <ViewsChart data={DAILY_VIEWS} />
       </div>
 

@@ -60,7 +60,7 @@ export default async function OfficeMemberPage({ params }: { params: Promise<{ i
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
         <StatTile label="Card views" value={m.totals.views} hint="Times someone opened their card" />
-        <StatTile label="Swift Link views" value={m.totals.swiftlinkViews} hint="Visits to their Swift Links page" />
+        <StatTile label="Swift Links views" value={m.totals.swiftlinkViews} hint="Visits to their Swift Links page" />
         <StatTile label="Contacts captured" value={m.totals.leads} hint="Shared their info, or scanned or added by them" />
         <StatTile label="Contact downloads" value={m.totals.contactsSaved} hint="Times someone downloaded their contact card" />
       </div>

@@ -20,7 +20,7 @@ type Item = { label: string; href: string; desc: string };
 // (owner decision, Jul 2026). Product pages live under Products/Solutions.
 const PRODUCTS: Item[] = [
   { label: "Digital Cards", href: "/products/digital-cards", desc: "Your tap-to-share business card" },
-  { label: "SwiftLinks", href: "/products/swiftlinks", desc: "One link for everything you are" },
+  { label: "Swift Links", href: "/products/swiftlinks", desc: "One link for everything you are" },
   { label: "Swift Signature", href: "/products/email-signatures", desc: "A live card in every email" },
   { label: "Lead Capture", href: "/products/lead-capture", desc: "Turn every scan into a contact" },
 ];

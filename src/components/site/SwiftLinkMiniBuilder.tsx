@@ -14,7 +14,7 @@ import { Field, TextArea, SocialFields, LinkButtons } from "./BuilderFields";
 import { prettyCardSlug } from "@/lib/slug";
 import { useDesignHistory, useUndoShortcut, changedKeys, linkLooksOf, restoreLinkLooks, sameLinkList } from "@/lib/use-design-history";
 
-// "See how your SwiftLink would look" builder for the homepage SwiftLinks
+// "See how your Swift Links page would look" builder for the homepage SwiftLinks
 // section. Three steps: (1) name, business & profile photo, (2) bio, socials &
 // additional links, (3) style your page. The preview is the real link.me-style
 // profile driven by what you type; "Make it live" hands off to /cards/new (the
@@ -109,7 +109,7 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
   const steps: MiniStep[] = [
     // 1 — name, business & profile photo
     {
-      title: "Name your SwiftLink",
+      title: "Name your Swift Links page",
       subtitle: "Your link is built from your name and business — this is the page that lives in your bio.",
       canAdvance: sketch.name.trim().length > 0,
       content: (
@@ -198,14 +198,14 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
         className="rd-btn rd-btn-aurora rd-btn-lg mt-2"
         data-reveal
       >
-        See how your SwiftLink would look
+        See how your Swift Links page would look
       </button>
 
       <MiniBuilderModal
         open={open}
         onClose={close}
         onStartOver={startOver}
-        eyebrow="Build your SwiftLink"
+        eyebrow="Build your Swift Links page"
         step={step}
         setStep={setStep}
         steps={steps}

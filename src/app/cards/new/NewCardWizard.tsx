@@ -2193,7 +2193,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                   field="photo"
                   currentUrl={headshotUrl}
                   label="Upload your headshot"
-                  hint="Recommended. This will also be used for your SwiftLink."
+                  hint="Recommended. This will also be used for your Swift Links page."
                   shape="circle"
                   defer
                   guest={guest}

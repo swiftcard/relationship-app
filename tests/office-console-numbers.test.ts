@@ -58,7 +58,7 @@ describe("every console number goes through the Analytics tab's function", () =>
     }
   });
 
-  it("card views and Swift Link views are never added together into one tile", () => {
+  it("card views and Swift Links views are never added together into one tile", () => {
     for (const f of [
       "src/app/office/admin/analytics/page.tsx",
       "src/app/office/admin/analytics/[id]/page.tsx",
@@ -88,7 +88,7 @@ describe("every console number goes through the Analytics tab's function", () =>
 });
 
 describe("the same names everywhere in the console", () => {
-  const FOUR = ["Card views", "Swift Link views", "Contacts captured", "Contact downloads"];
+  const FOUR = ["Card views", "Swift Links views", "Contacts captured", "Contact downloads"];
 
   it("Team tab, drawer, person page, card page, Analytics and the CSV", () => {
     for (const f of [

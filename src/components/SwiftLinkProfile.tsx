@@ -66,6 +66,16 @@ const HERO_DISSOLVE =
  *  over (sheetGlassBg), so the frost has no starting edge. */
 const GLASS_EASE_IN = "linear-gradient(180deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0.15) 16px, rgba(0,0,0,0.45) 32px, rgba(0,0,0,0.8) 48px, rgba(0,0,0,1) 64px)";
 
+/** The nearest ancestor that scrolls vertically: the phone a scrollHost
+ *  render sits in. */
+function scrollParent(el: HTMLElement | null): HTMLElement | null {
+  for (let n = el?.parentElement ?? null; n; n = n.parentElement) {
+    const y = getComputedStyle(n).overflowY;
+    if (y === "auto" || y === "scroll") return n;
+  }
+  return null;
+}
+
 function initialsOf(name: string) {
   return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
 }
@@ -96,6 +106,7 @@ export default function SwiftLinkProfile({
   appUrl,
   pageStyle,
   embedded = false,
+  scrollHost,
   paidTiles = false,
   showCardLink = true,
   brandingFooter = true,
@@ -128,6 +139,12 @@ export default function SwiftLinkProfile({
    *  no page scroll to drive it). Everything else — hero, bio, socials, link
    *  cards, footer — is byte-for-byte the real page, so the preview is exact. */
   embedded?: boolean;
+  /** "phone": an embedded render that sits inside its OWN scrolling box (the
+   *  marketing site's phone), not a static preview. The pinned photo, the
+   *  mini header and the corner badge then run exactly as on the live page,
+   *  driven by that box's scroll instead of the window's. Still embedded in
+   *  every other way: no page background, no canvas colour, no tracking. */
+  scrollHost?: "phone";
   /** Paid owner: featured/grid image tiles + inline video. Defaults FALSE —
    *  fails closed to the Free rendering (every link compact). */
   paidTiles?: boolean;
@@ -186,18 +203,26 @@ export default function SwiftLinkProfile({
   const bgMediaVideo = bgMedia !== null && normalizePageMediaType(pageStyle?.bgMediaType) === "video";
   const bgDim = normalizePageDim(pageStyle?.bgDim);
 
-  // Mini header fades in once the hero scrolls out from under it. Not in a
-  // preview: there's no page scroll, so it would just sit invisible. Shorter
+  // The scroll-driven parts (mini header, pinned photo, corner badge) run on
+  // the live page and in a phone that scrolls on its own (scrollHost). Not in
+  // a static preview: there's no scroll there, so they would just sit still.
+  const live = !embedded || scrollHost === "phone";
+  const sheetRef = useRef<HTMLDivElement>(null);
+
+  // Mini header fades in once the hero scrolls out from under it. Shorter
   // headers get proportionally earlier thresholds.
   const scrollThreshold = heroStyle === "cover" ? 230 : heroBanner ? 150 : heroAvatar ? 96 : 60;
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
-    if (embedded) return;
-    const onScroll = () => setScrolled(window.scrollY > scrollThreshold);
-    window.addEventListener("scroll", onScroll, { passive: true });
+    if (!live) return;
+    const host = embedded ? scrollParent(sheetRef.current) : null;
+    if (embedded && !host) return;
+    const target: HTMLElement | Window = host ?? window;
+    const onScroll = () => setScrolled((host ? host.scrollTop : window.scrollY) > scrollThreshold);
+    target.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [embedded, scrollThreshold]);
+    return () => target.removeEventListener("scroll", onScroll);
+  }, [live, embedded, scrollThreshold]);
 
   // ── The pinned header photo (owner, 2026-10-15, after link.me) ─────────────
   // The cover/banner photo stays put at the top of the screen while the page
@@ -208,16 +233,18 @@ export default function SwiftLinkProfile({
   // What shows through as it fades is exactly what is behind it: the sheet
   // colour, the Aura blur, the glass wash or the background media — the same
   // surface the content below sits on, so it always dissolves INTO the page.
-  // Not in a preview: there is no page scroll there, and the hero stays put.
-  const pinHero = !embedded && (heroStyle === "cover" || heroBanner);
+  // Not in a static preview: there is no scroll there, and the hero stays put.
+  const pinHero = live && (heroStyle === "cover" || heroBanner);
   // The app never shows the corner badge (it may not sell), so the mini
   // header does not leave room for it there.
   const nativeApp = useIsNativeApp();
   const PIN_FADE = heroBanner ? 110 : 165;
-  const sheetRef = useRef<HTMLDivElement>(null);
   const heroRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!pinHero) return;
+    const host = embedded ? scrollParent(sheetRef.current) : null;
+    if (embedded && !host) return;
+    const target: HTMLElement | Window = host ?? window;
     let frame = 0;
     const apply = () => {
       frame = 0;
@@ -225,21 +252,28 @@ export default function SwiftLinkProfile({
       if (!sheet || !el) return;
       // Distance the page has moved past the TOP OF THE SHEET, not raw
       // scrollY: on desktop the sheet sits 32px down the page, and the photo
-      // must not start fading before it has reached the top and pinned.
-      const travelled = -sheet.getBoundingClientRect().top;
+      // must not start fading before it has reached the top and pinned. In a
+      // phone it is measured from the phone's own top, and divided by the
+      // phone's scale so the fade runs over the same 165px of PAGE.
+      let travelled = -sheet.getBoundingClientRect().top;
+      if (host) {
+        const box = host.getBoundingClientRect();
+        const scale = host.offsetWidth ? box.width / host.offsetWidth : 1;
+        travelled = (box.top - sheet.getBoundingClientRect().top) / (scale || 1);
+      }
       const p = Math.min(1, Math.max(0, travelled / PIN_FADE));
       el.style.opacity = p > 0 ? String(1 - p) : "";
     };
     const onScroll = () => { if (!frame) frame = requestAnimationFrame(apply); };
-    window.addEventListener("scroll", onScroll, { passive: true });
+    target.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll, { passive: true });
     apply();
     return () => {
-      window.removeEventListener("scroll", onScroll);
+      target.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
       if (frame) cancelAnimationFrame(frame);
     };
-  }, [pinHero, PIN_FADE]);
+  }, [pinHero, PIN_FADE, embedded]);
 
   const firstName = name.split(" ")[0] || username;
   const initials = initialsOf(name || username);
@@ -399,12 +433,14 @@ export default function SwiftLinkProfile({
           `clip` (Safari < 16) drops the rule and keeps overflow-hidden: the
           photo scrolls normally there, exactly as before. Unlayered, so it
           wins over the Tailwind utility. */}
-      <style>{`@media (max-width: 767px) { .sc-sl-sheet { zoom: 0.92; } }${embedded ? "" : " .sc-sl-sheet.sc-sl-pin { overflow: clip; }"}${canvasCss}`}</style>
+      <style>{`@media (max-width: 767px) { .sc-sl-sheet { zoom: 0.92; } }${live ? " .sc-sl-sheet.sc-sl-pin { overflow: clip; }" : ""}${canvasCss}`}</style>
       <div
         ref={sheetRef}
-        className={`sc-sl-sheet relative mx-auto w-full max-w-[430px] overflow-hidden ${embedded ? "" : "sc-sl-pin "}${
+        className={`sc-sl-sheet relative mx-auto w-full max-w-[430px] overflow-hidden ${live ? "sc-sl-pin " : ""}${
           embedded
-            ? "rounded-[30px]"
+            // In a phone the page IS the screen: square, like the live page
+            // on a phone.
+            ? scrollHost === "phone" ? "" : "rounded-[30px]"
             : "sc-sl-fillcol grow shrink-0 md:grow-0 min-h-[100dvh] md:min-h-0 md:my-8 md:rounded-[30px] md:shadow-[0_24px_80px_rgba(0,0,0,0.6)]"
         }`}
         style={{ background: sheetBg, fontFamily: pageFont }}
@@ -482,20 +518,21 @@ export default function SwiftLinkProfile({
         )}
 
         {/* Linktree-style corner badge — invite to create your own Swift
-            Links. Real page only: in a preview it's noise, and it would open
-            a signup sheet inside the owner's own editor.
+            Links. Real page (and the marketing phone, which is inert) only:
+            in an editor preview it's noise, and it would open a signup sheet
+            inside the owner's own editor.
             It STAYS in the top-left corner while the page scrolls (owner,
             2026-10-15): a zero-height sticky wrapper, above the mini header
             (z-40 over z-30), at exactly the spot it sits at rest. */}
-        {!embedded && (
+        {live && (
           <div className="sticky top-0 z-40 h-0">
             <SwiftLinksPromoBadge username={username} appUrl={appUrl} />
           </div>
         )}
 
         {/* Sticky mini header — zero-height wrapper so it draws over the hero.
-            Skipped in a preview (no page scroll to reveal it). */}
-        {!embedded && (
+            Skipped in a static preview (no scroll to reveal it). */}
+        {live && (
           <div className="sticky top-0 z-30 h-0">
             <div
               // Square corners: the bar only shows once the page has scrolled

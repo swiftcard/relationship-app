@@ -545,7 +545,7 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { label: "SwiftCard views", value: traffic.card },
-                  { label: "Swift Link views", value: traffic.links },
+                  { label: "Swift Links views", value: traffic.links },
                 ].map((m) => (
                   <div key={m.label} className="bg-gray-800/40 border border-gray-800 rounded-xl px-4 py-3.5 min-w-0">
                     <p className="text-gray-400 text-xs font-medium truncate">{m.label}</p>

@@ -15,7 +15,7 @@ import { isSeededView, SEEDED_VISITOR_PREFIX } from "@/lib/seeded-views";
 const root = process.cwd();
 const read = (p: string) => readFileSync(join(root, p), "utf8");
 
-describe("card views and Swift Link views never mix", () => {
+describe("card views and Swift Links views never mix", () => {
   const dash = read("src/app/dashboard/page.tsx");
 
   it("counts each surface with an EXACT slug match", () => {

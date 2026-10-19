@@ -19,7 +19,7 @@ const COLUMNS: { key: SortKey; label: string; hint: string }[] = [
   { key: "name", label: "Employee", hint: "Team member name" },
   { key: "cardName", label: "Card", hint: "Their card, or how many cards they own" },
   { key: "views", label: "Card views", hint: "Times their card was opened — repeat visits count; reloads within a visit don't" },
-  { key: "swiftlinkViews", label: "Swift Link views", hint: "Visits to their Swift Links page" },
+  { key: "swiftlinkViews", label: "Swift Links views", hint: "Visits to their Swift Links page" },
   { key: "leads", label: "Contacts captured", hint: "People who shared their info, plus contacts they scanned or added" },
   { key: "contactsSaved", label: "Contact downloads", hint: "Visitors who downloaded this card as a contact. Whether they then tapped Add in their phone's contact sheet is not something any app can see." },
   { key: "uniqueVisitors", label: "Unique visitors", hint: "Distinct visitors in the selected range" },

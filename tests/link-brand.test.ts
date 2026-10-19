@@ -218,9 +218,9 @@ describe("the marketing mockups show the card page's real Swift Links design", (
 describe("public card page copy and controls", () => {
   const PAGE = "src/app/[username]/page.tsx";
 
-  it('the Swift Links button says "View my Swift Link page", not "View all"', () => {
+  it('the Swift Links button says "View my Swift Links page", not "View all"', () => {
     const c = code(PAGE);
-    expect(c).toMatch(/View my Swift Link page →/);
+    expect(c).toMatch(/View my Swift Links page →/);
     expect(c, "the vague label is back").not.toMatch(/>\s*View all →\s*</);
   });
 
@@ -228,7 +228,7 @@ describe("public card page copy and controls", () => {
     expect(code(PAGE), "the Swift Links heading is back").not.toMatch(/<SectionHeading>Swift Links<\/SectionHeading>/);
     for (const f of ["src/components/site/DemoSwiftLinks.tsx", "src/components/site/HeroShowcase.tsx"]) {
       const c = code(f);
-      expect(c, `${f} lost the new label`).toMatch(/View my Swift Link page →/);
+      expect(c, `${f} lost the new label`).toMatch(/View my Swift Links page →/);
       expect(c, `${f} still shows the old title`).not.toMatch(/>\s*Swift Links\s*</);
       expect(c, `${f} still abbreviates the label`).not.toMatch(/View page →/);
     }
@@ -238,7 +238,7 @@ describe("public card page copy and controls", () => {
     // Text, arrow and border take the same colour as Save Contact (--sc-accent
     // on the page and the mockups; the persona's accent in HeroShowcase).
     const page = code(PAGE);
-    const btn = page.slice(page.indexOf("href={`/links/${profile.username}`}"), page.indexOf("View my Swift Link page →"));
+    const btn = page.slice(page.indexOf("href={`/links/${profile.username}`}"), page.indexOf("View my Swift Links page →"));
     expect(btn).toMatch(/borderColor: "var\(--sc-accent, #1D4ED8\)", color: "var\(--sc-accent, #1D4ED8\)"/);
     expect(btn, "the button grew back to primary size").toMatch(/text-xs/);
     expect(btn, "the dark filled pill is back").not.toMatch(/bg-slate-900|text-white/);

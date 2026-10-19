@@ -281,7 +281,7 @@ export default function Home() {
         <section id="cards" className="hp-soft relative py-24 sm:py-28 scroll-mt-16">
           <div className="max-w-7xl mx-auto px-5 sm:px-6">
             <div className="max-w-2xl" data-hp-head>
-              <span className="hp-kicker">Swift Cards</span>
+              <span className="hp-kicker">Digital Cards</span>
               <h2 className="rd-h2 text-[clamp(2.1rem,4.4vw,3.4rem)] text-slate-900 mt-4">
                 A card they <span className="hp-fill">actually keep.</span>
               </h2>
@@ -305,7 +305,7 @@ export default function Home() {
           <div className="relative max-w-7xl mx-auto px-5 sm:px-6 grid lg:grid-cols-[1.1fr_0.9fr] gap-14 items-center">
             <div>
               <div data-hp-head>
-                <span className="hp-kicker">SwiftLinks</span>
+                <span className="hp-kicker">Swift Links</span>
                 <h2 className="rd-h2 text-[clamp(2.1rem,4.4vw,3.4rem)] text-slate-900 mt-4">
                   Everything you do. <span className="hp-fill">One link.</span>
                 </h2>

@@ -367,7 +367,7 @@ export default async function DashboardPage({
     );
   }
 
-  // Swift Link views are tracked in card_views under a "<username>__links" key,
+  // Swift Links views are tracked in card_views under a "<username>__links" key,
   // exactly the same way card views are tracked under the plain username.
   const linkUsername = `${analyticsUsername}__links`;
 
@@ -1184,7 +1184,7 @@ export default async function DashboardPage({
               /contacts, notifications in the bell. */}
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5 lg:items-start">
 
-            {/* ── LEFT COLUMN — Traffic: SwiftCard & SwiftLink views ──
+            {/* ── LEFT COLUMN — Traffic: SwiftCard & Swift Links views ──
                 Beside the card panel on a computer since Quick Contacts left the
                 dashboard (owner, 2026-09-29); last on a phone. mb-5 is the phone
                 gap, cancelled inside the grid (its gap-5 spaces it there).
@@ -1263,7 +1263,7 @@ export default async function DashboardPage({
                     <div className="grid grid-cols-2 gap-3">
                       {[
                         { label: "SwiftCard views", value: swiftCardViews ?? 0 },
-                        { label: "Swift Link views", value: swiftLinkViews ?? 0 },
+                        { label: "Swift Links views", value: swiftLinkViews ?? 0 },
                       ].map((m) => (
                         <div key={m.label} className="bg-gray-800/40 border border-gray-800 rounded-xl px-4 py-3.5 min-w-0">
                           <p className="text-gray-400 text-xs font-medium truncate">{m.label}</p>

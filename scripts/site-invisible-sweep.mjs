@@ -72,7 +72,7 @@ for (const path of PAGES) {
       const bad = await sweep(page);
       // homepage: also open all three mini-builders and type, then sweep again
       if (path === "/") {
-        for (const btnText of ["See how your card would look", "See how your Swift Signature would look", "See how your SwiftLink would look"]) {
+        for (const btnText of ["See how your card would look", "See how your Swift Signature would look", "See how your Swift Links page would look"]) {
           const btn = page.locator(`button:has-text("${btnText}")`).first();
           if (await btn.count()) {
             const inModal = [];

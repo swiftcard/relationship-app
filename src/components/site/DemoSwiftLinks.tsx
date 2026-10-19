@@ -16,7 +16,8 @@ import { buildConnectLinks } from "@/lib/social-url";
 // used by all three, is what stops that happening again.
 //
 // The structure below mirrors src/app/[username]/page.tsx's Swift Links
-// section exactly — the dark "View my Swift Link page →" pill where the
+// section exactly — the "View my Swift Links page →" outline button in the
+// card's accent colour where the
 // heading used to be (owner change 2026-10-14), bio, rule, socials rail,
 // rule, action links — and the pieces that ARE the design
 // (SocialLinkIntercept's "rail", CardActionLinks) are the live components,
@@ -76,7 +77,7 @@ export default function DemoSwiftLinks({ compact = true }: { compact?: boolean }
           className={`inline-flex items-center whitespace-nowrap rounded-full border bg-white font-semibold ${compact ? "text-[0.625rem] px-2.5 py-1" : "text-xs px-3.5 py-[7px]"}`}
           style={{ borderColor: "var(--sc-accent, #1D4ED8)", color: "var(--sc-accent, #1D4ED8)" }}
         >
-          View my Swift Link page →
+          View my Swift Links page →
         </span>
       </div>
 

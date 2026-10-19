@@ -243,7 +243,7 @@ for (const [engine, width] of RUNS) {
 
     it("homepage Swift Links builder → Style your page", async () => {
       const { page, errors } = await open(engine, width, "linkMini");
-      await page.click("text=See how your SwiftLink would look");
+      await page.click("text=See how your Swift Links page would look");
       await page.getByPlaceholder("Alex Morgan").fill("Alex Morgan");
       await page.click("button:has-text('Continue')");
       await page.waitForTimeout(300);

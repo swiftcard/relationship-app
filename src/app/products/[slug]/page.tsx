@@ -109,9 +109,9 @@ const PRODUCTS: Record<string, Product> = {
     metaDesc: "Build a digital business card people actually keep. Share by NFC tap, QR code, link or Apple Wallet; they save you in one tap with no app. Free to start.",
   },
   swiftlinks: {
-    eyebrow: "SwiftLinks",
-    title: <>Everything to do. <A>One SwiftLink.</A></>,
-    titlePlain: "SwiftLinks",
+    eyebrow: "Swift Links",
+    title: <>Everything you do. <A>One link.</A></>,
+    titlePlain: "Swift Links",
     metaTitle: "Link in Bio With Analytics & Lead Capture",
     subtitle: "Your bio, your socials, your booking link, your latest drop — one beautiful page that lives in your Instagram, TikTok, or email. Separate from your card, powered by the same profile.",
     // Light like the rest of the site (owner, 2026-09-17: only the header and
@@ -129,10 +129,10 @@ const PRODUCTS: Record<string, Product> = {
       { t: "Capture leads on the page", d: "A built-in connect form turns visitors into saved contacts." },
       { t: "Made for your bio", d: "Drop it in your Instagram or TikTok bio and send traffic that converts." },
     ],
-    metaDesc: "SwiftLinks is a link-in-bio page that reports back: view counts, traffic sources, and a Connect button that saves visitors as contacts. Free to start.",
+    metaDesc: "Swift Links is a link-in-bio page that reports back: view counts, traffic sources, and a Connect button that saves visitors as contacts. Free to start.",
     // Product-correct CTA — still lands on /cards/new (the SwiftLink lives on
     // the same card record; the builder covers it), only the label changes.
-    ctaLabel: "Create your free SwiftLink",
+    ctaLabel: "Create your free Swift Links page",
   },
   "email-signatures": {
     eyebrow: "Swift Signature",
@@ -217,7 +217,7 @@ const PRODUCTS: Record<string, Product> = {
     ),
     wide: true,
     features: [
-      { t: "Live traffic", d: "SwiftCard and Swift Link views by day, week, and month — see momentum build." },
+      { t: "Live traffic", d: "SwiftCard and Swift Links views by day, week and month, so you can see momentum build." },
       { t: "Top locations", d: "Know exactly where your card is getting opened, city by city." },
       // "A real CRM" listed the parts and skipped the thing that changed: the
       // timeline is now two-way. api/twilio/inbound writes replies into

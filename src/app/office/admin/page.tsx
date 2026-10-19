@@ -194,7 +194,7 @@ export default async function OfficeTeamPage() {
           <p className="text-[0.6875rem] font-semibold text-gray-500 uppercase tracking-wider mb-2">All time</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <BigStat label="Card views" value={totals.views} explainer="Times someone opened a teammate's card" />
-            <BigStat label="Swift Link views" value={totals.swiftlinkViews} explainer="Visits to your team's Swift Links pages" />
+            <BigStat label="Swift Links views" value={totals.swiftlinkViews} explainer="Visits to your team's Swift Links pages" />
             <BigStat label="Contacts captured" value={totals.leads} explainer="People who shared their info, plus contacts your team scanned or added" />
             <BigStat label="Contact downloads" value={totals.contactsSaved} explainer="Times someone downloaded a teammate's contact card" />
           </div>

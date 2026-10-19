@@ -170,7 +170,7 @@ function TrafficBox() {
           <div className="grid grid-cols-2 gap-3">
             {[
               { label: "SwiftCard views", value: d.card },
-              { label: "Swift Link views", value: d.link },
+              { label: "Swift Links views", value: d.link },
             ].map((m) => (
               <div key={m.label} className="bg-gray-800/40 border border-gray-800 rounded-xl px-4 py-3.5 min-w-0">
                 <p className="text-gray-400 text-xs font-medium truncate">{m.label}</p>

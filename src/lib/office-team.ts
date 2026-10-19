@@ -9,7 +9,7 @@ import type { MemberStatus } from "@/lib/member-status";
 // Scoped to ONE office; callers must have passed requireOfficeAdmin first.
 //
 // The four numbers at the top are ALL TIME (owner, 2026-10-06) and are the sum
-// of the roster rows under them — card views, Swift Link views, contacts
+// of the roster rows under them — card views, Swift Links views, contacts
 // captured, contact downloads, counted exactly as the Analytics tab and the
 // member's own dashboard count them (see getOfficeAnalytics). The old "this
 // month" tiles used the UTC calendar month and folded Swift Links views into

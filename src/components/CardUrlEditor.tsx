@@ -74,7 +74,7 @@ export default function CardUrlEditor({ cardId, currentSlug }: { cardId: string;
         </p>
         <p className="text-gray-400 text-[0.6875rem] leading-relaxed">
           Inside SwiftCard everything already moved to the new URL — your card page, your{" "}
-          <span className="text-gray-200">SwiftLinks page</span> (/{newSlug}), and all your views, leads, and
+          <span className="text-gray-200">Swift Links page</span> (/{newSlug}), and all your views, leads, and
           analytics. But anything you shared <span className="text-gray-200">outside</span> the app still points at
           your old URL and won&apos;t work, so please update these manually:
         </p>
@@ -112,7 +112,7 @@ export default function CardUrlEditor({ cardId, currentSlug }: { cardId: string;
         <p className="text-gray-500 text-[0.6875rem]">Will be saved as <span className="text-gray-300">swiftcard.me/{normalized}</span></p>
       )}
       <p className="text-amber-400/90 text-[0.6875rem] leading-relaxed">
-        Heads up: everything inside SwiftCard — your card, your SwiftLinks page, and all your views, leads &amp;
+        Heads up: everything inside SwiftCard — your card, your Swift Links page, and all your views, leads &amp;
         analytics — moves to the new URL automatically. But anything already shared with your old URL (QR codes,
         printed cards, Wallet passes, your email signature, links in your social bios) will stop working, so
         you&apos;ll need to re-share those manually. We&apos;ll show you the list right after.

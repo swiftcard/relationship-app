@@ -8,7 +8,7 @@ import SwiftLinkLivePreview from "@/components/SwiftLinkLivePreview";
 
 // ── Regression lock: the live preview must never render invisibly ────────────
 //
-// Aug 2026, found by the owner: "See how your SwiftLink would look" opened,
+// Aug 2026, found by the owner: "See how your Swift Links page would look" opened,
 // took input, updated state — and showed nothing. CardScaler's outer div is
 // w-full + contain:size, so it contributes ZERO intrinsic width by design; the
 // preview's frame had no width class, and inside the mini-builder modal's

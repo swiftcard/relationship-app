@@ -450,7 +450,7 @@ export default async function CardPage({
       {/* ── Save Contact — the page's primary action ── */}
       <div className="w-full max-w-sm rounded-2xl p-5 shadow-sm" style={{ background: "#fff", border: "1px solid #E4DDD4" }}>
         <SectionHeading>Save {firstName}&apos;s contact</SectionHeading>
-        <p className="text-slate-500 text-xs mt-1 mb-4">One tap adds them to your phone contacts — no app needed.</p>
+        <p className="text-slate-500 text-xs mt-1 mb-4">One tap adds them to your phone contacts. No app needed.</p>
         <SaveContactButton
           person={person}
           username={profile.username}
@@ -492,7 +492,7 @@ export default async function CardPage({
               className="inline-flex items-center gap-1 rounded-full border bg-white px-3.5 py-[7px] text-xs font-semibold transition-colors hover:bg-[color-mix(in_srgb,var(--sc-accent,#1D4ED8)_8%,#fff)]"
               style={{ borderColor: "var(--sc-accent, #1D4ED8)", color: "var(--sc-accent, #1D4ED8)" }}
             >
-              View my Swift Link page →
+              View my Swift Links page →
             </a>
           </div>
           {bio && (
