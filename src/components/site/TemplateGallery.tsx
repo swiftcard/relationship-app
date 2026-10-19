@@ -14,7 +14,6 @@ import ShareButton from "@/components/ShareButton";
 import CardMiniBuilder from "./CardMiniBuilder";
 import { cardPageTheme } from "@/lib/card-page-theme";
 import DemoSwiftLinks from "./DemoSwiftLinks";
-import DemoGetCardButton from "./DemoGetCardButton";
 import PhoneFrame, { StatusBar, phoneScreenWidth } from "@/components/PhoneFrame";
 
 // Interactive template gallery for the homepage. It renders the REAL card
@@ -73,7 +72,7 @@ function LinkExperience({ id, Component, data }: { id: string; Component: Tmpl["
             badges were removed in the 2026-08-19 card-page redesign). */}
         <div className={Panel} style={panelStyle}>
           <p className="text-slate-900 font-bold text-[0.8125rem] tracking-tight">Save {FIRST}&apos;s contact</p>
-          <p className="text-slate-500 text-[0.6875rem] mt-0.5 mb-2.5">One tap adds them to your phone contacts — no app needed.</p>
+          <p className="text-slate-500 text-[0.6875rem] mt-0.5 mb-2.5">One tap adds them to your phone contacts. No app needed.</p>
           <button
             onClick={() => setSaved(true)}
             className="w-full rounded-full py-2.5 text-white text-[0.78125rem] font-bold flex items-center justify-center gap-1.5 transition-colors"
@@ -82,7 +81,7 @@ function LinkExperience({ id, Component, data }: { id: string; Component: Tmpl["
             {saved ? (
               <><svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5}><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" /></svg>Saved to Contacts!</>
             ) : (
-              <><svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2}><path d="M19 21v-8H5v8M5 3h11l3 3v3M9 3v4h6" strokeLinecap="round" strokeLinejoin="round" /></svg>Save Contact</>
+              <><svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" strokeLinecap="round" strokeLinejoin="round" /></svg>Save Contact</>
             )}
           </button>
         </div>
@@ -108,22 +107,22 @@ function LinkExperience({ id, Component, data }: { id: string; Component: Tmpl["
               {/* The real form's fields, in the real order: name and PHONE are
                   required, email is optional, and there is a message field. */}
               {["Your name *", "Your phone number *", "Your email (optional)", "Quick message (optional)"].map((ph) => (
-                <div key={ph} className="h-9 rounded-lg bg-white flex items-center px-3 text-[0.75rem] text-slate-500" style={{ border: "1px solid #E4DDD4" }}>{ph}</div>
+                <div key={ph} className="h-9 rounded-xl bg-white flex items-center px-3 text-[0.75rem] text-slate-500" style={{ border: "1px solid #E4DDD4" }}>{ph}</div>
               ))}
               {/* No SMS consent line — the real share form has none (owner,
                   2026-09-20); see LeadCaptureForm. */}
-              <button onClick={() => setShared(true)} className="mt-1 w-full h-10 rounded-lg text-white text-[0.78125rem] font-bold flex items-center justify-center" style={{ background: theme.accent }}>Share My Info</button>
+              <button onClick={() => setShared(true)} className="mt-1 w-full h-10 rounded-full text-white text-[0.78125rem] font-bold flex items-center justify-center" style={{ background: theme.accent }}>Share My Info</button>
             </div>
           )}
         </div>
 
-        {/* Share this card — just the share button, like the live page (the
+        {/* Share this card — just the share button, like a paid card's live
+            page: the "Create your free SwiftCard" button under it is Free
+            only since 2026-10-05, and Alex's card is a paid one (the
             "Show QR Code" control was removed from the card page: a sharer's
             tool sitting in a viewer's flow). */}
         <div className={Panel} style={panelStyle}>
           <ShareButton url={DEMO_URL} text={`Connect with ${FIRST} — save their contact instantly.`} label="Share this card" warm={false} />
-          {/* The live page's "Create your free SwiftCard" button. */}
-          <DemoGetCardButton />
         </div>
       </div>
     </div>

@@ -9,7 +9,6 @@ import type { CardData } from "@/components/card-templates/types";
 import SaveContactButton from "@/components/SaveContactButton";
 import ShareButton from "@/components/ShareButton";
 import DemoSwiftLinks from "./DemoSwiftLinks";
-import DemoGetCardButton from "./DemoGetCardButton";
 import { cardPageTheme } from "@/lib/card-page-theme";
 
 // Email Signature showcase: a wide, realistic email whose signature is the REAL
@@ -94,7 +93,7 @@ function SwiftCardPopup({ onClose }: { onClose: () => void }) {
                 numbered badges were removed in the 2026-08-19 redesign). */}
             <div className={PANEL} style={panelStyle}>
               <p className="text-slate-900 font-bold text-[0.9375rem] tracking-tight">Save {FIRST}&apos;s contact</p>
-              <p className="text-slate-500 text-xs mt-1 mb-4">One tap adds them to your phone contacts — no app needed.</p>
+              <p className="text-slate-500 text-xs mt-1 mb-4">One tap adds them to your phone contacts. No app needed.</p>
               <div style={showOnly}>
                 <SaveContactButton person={PERSON} username="alexmorgan" source="signature_demo" cardOwner="alexmorgan" ownerFirstName={FIRST} suppressTracking />
               </div>
@@ -124,12 +123,12 @@ function SwiftCardPopup({ onClose }: { onClose: () => void }) {
               </div>
             </div>
 
-            {/* Share this card — the share button and the live page's
-                "Create your free SwiftCard" button under it (the "Show QR
-                Code" control was removed from the card page). */}
+            {/* Share this card — just the share button, like a paid card's
+                live page (the "Create your free SwiftCard" button is Free
+                only since 2026-10-05; the "Show QR Code" control was removed
+                from the card page). */}
             <div className={PANEL} style={panelStyle}>
               <ShareButton url={CARD_URL} text={`Connect with ${FIRST} — save their contact instantly.`} label="Share this card" warm={false} />
-              <DemoGetCardButton />
             </div>
           </div>
         </div>

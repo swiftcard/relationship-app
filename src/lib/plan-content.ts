@@ -58,8 +58,9 @@ export const PLAN_FEATURES = {
     // and Swift Links views, link taps. There is no "saves" number.
     "Basic stats — views of your card and Swift Links & link taps",
     // The Swift Links footer and the "Sent with SwiftCard" email line — the
-    // two things Pro removes. The card page's own badge and "Create your free
-    // SwiftCard" button stay on every plan, so this does not promise that.
+    // two things Pro removes. (The card page's "Create your free SwiftCard"
+    // button has also been Free-only since 2026-10-05; the save-moment badge
+    // stays on every plan, so this line does not promise more than that.)
     "A small SwiftCard note at the bottom of your emails and Swift Links page",
   ],
   pro: [
