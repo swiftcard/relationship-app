@@ -42,6 +42,7 @@ import { applyDueSeatReductions } from "@/lib/office-scheduled-seats";
 import { releaseOrphanedOffices } from "@/lib/office-billing-sync";
 import { releaseAbandonedPromoClaims } from "@/lib/promo-claim";
 import { purgeStaleGuestUploads } from "@/lib/guest-uploads";
+import { mergeCustomization } from "@/lib/customization-merge";
 import { pruneLogTables } from "@/lib/log-retention";
 import { mirrorPendingPromosToApple, turnOffUsedUpAppleOffers } from "@/lib/apple-offer-codes";
 import { insertNotification } from "@/lib/notify";
@@ -456,8 +457,10 @@ export async function GET(req: NextRequest) {
       // post-send stamp let two overlapping runs (the scheduled cron plus a
       // manual retry) both pass and both email the same user. Stamping first
       // means the second run sees _proWarnedFor and skips. Behaviour is
-      // otherwise unchanged: this stamp always ran regardless of send outcome.
-      await supabase.from("profiles").update({ customization: { ...cust, _proWarnedFor: expiresAt } }).eq("id", u.id);
+      // A send that fails gives the claim back (audit NM-11), as the welcome
+      // email does, so tomorrow's run tries again. Only this one key is
+      // written: the whole object from a copy erased other writers (B-03).
+      await mergeCustomization(u.id as string, { set: { _proWarnedFor: expiresAt }, remove: [] }, { admin: supabase });
       const to = await ownerMailAddress(u.id as string, (u.email as string) ?? null);
       if (to) {
         const { unsubscribeUrl: unsub, marketingOk } = await getEmailPrefs(supabase, u.id as string);
@@ -484,6 +487,7 @@ export async function GET(req: NextRequest) {
             .catch((e: unknown) => ({ data: null, error: e instanceof Error ? e : new Error(String(e)) }));
           if (sendError || !sent?.id) {
             await reportError("reminders.trial-ending-soon.email", sendError ?? "no id returned", { userId: u.id });
+            await mergeCustomization(u.id as string, { set: {}, remove: ["_proWarnedFor"] }, { admin: supabase });
           } else {
             try {
               await supabase.from("email_logs").insert({ user_id: u.id, email: to, type: "trial_ending_soon", subject: tpl.subject, resend_id: sent.id });

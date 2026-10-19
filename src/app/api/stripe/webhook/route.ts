@@ -214,50 +214,57 @@ async function sendPaymentFailedEmail(opts: { customerId: string; amountCents: n
     .single();
 
   if (!profile) return;
-  // Owner mail goes to the ACCOUNT (auth) email, not profiles.email.
-  const accountEmail = await ownerMailAddress(profile.id as string, (profile.email as string) ?? null);
-  if (!accountEmail) return;
-
-  const firstName = await greetingFirstName(admin, profile.id as string, profile.name as string | null);
   // "Office", never the internal "enterprise" id — this said "your SwiftCard
   // Enterprise plan" to Office owners (the receipts were fixed 2026-09-16).
   // From the failed invoice's own price when we have it (invoicePlanName).
   const planName = opts.invoice
     ? invoicePlanName(opts.invoice, profile.plan as string | null)
     : profile.plan === "enterprise" ? "Office" : "Pro";
-  // Their OWN Pro while on someone else's team: the email must not say the
-  // account "moves to Free" — the seat keeps everything (see the restore in
-  // customer.subscription.deleted).
-  const { data: seat } = await admin.from("office_members").select("office_id").eq("user_id", profile.id).eq("status", "active").limit(1).maybeSingle();
-  const { data: owns } = await admin.from("offices").select("id").eq("owner_id", profile.id).limit(1).maybeSingle();
-  const template = paymentFailedEmail({
-    firstName,
-    planName,
-    amount: `$${(opts.amountCents / 100).toFixed(2)}`,
-    manageUrl: `${APP_URL}/settings/flows?billing=1`,
-    situation: opts.situation,
-    teamMember: !!seat && !owns && planName === "Pro",
-  });
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
-  const { data: sent, error: sendError } = await resend.emails.send({ ...template, to: accountEmail });
-  if (sendError || !sent?.id) {
-    await reportError("billing.email.payment_failed", sendError?.message ?? "no id returned", { userId: profile.id });
-    return;
+  // The email, when there is an address to send it to. Neither a missing
+  // address nor a Resend failure ends this any more (audit NM-04): both used
+  // to return before the bell row and the push, so a failed payment left no
+  // trace in the app or on the phone — the very case the bell row is for.
+  // Owner mail goes to the ACCOUNT (auth) email, not profiles.email.
+  const accountEmail = await ownerMailAddress(profile.id as string, (profile.email as string) ?? null);
+  if (accountEmail) {
+    const firstName = await greetingFirstName(admin, profile.id as string, profile.name as string | null);
+    // Their OWN Pro while on someone else's team: the email must not say the
+    // account "moves to Free" — the seat keeps everything (see the restore in
+    // customer.subscription.deleted).
+    const { data: seat } = await admin.from("office_members").select("office_id").eq("user_id", profile.id).eq("status", "active").limit(1).maybeSingle();
+    const { data: owns } = await admin.from("offices").select("id").eq("owner_id", profile.id).limit(1).maybeSingle();
+    const template = paymentFailedEmail({
+      firstName,
+      planName,
+      amount: `$${(opts.amountCents / 100).toFixed(2)}`,
+      manageUrl: `${APP_URL}/settings/flows?billing=1`,
+      situation: opts.situation,
+      teamMember: !!seat && !owns && planName === "Pro",
+    });
+
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    // A thrown send (network) is a failed send too, not a reason to skip the
+    // bell row below.
+    const { data: sent, error: sendError } = await resend.emails
+      .send({ ...template, to: accountEmail })
+      .catch((e: unknown) => ({ data: null, error: { message: e instanceof Error ? e.message : String(e) } }));
+    if (sendError || !sent?.id) {
+      await reportError("billing.email.payment_failed", sendError?.message ?? "no id returned", { userId: profile.id });
+    } else {
+      await admin.from("email_logs").insert({
+        user_id: profile.id,
+        email: accountEmail,
+        type: "payment_failed",
+        subject: template.subject,
+        resend_id: sent.id,
+      });
+    }
   }
 
-  await admin.from("email_logs").insert({
-    user_id: profile.id,
-    email: accountEmail,
-    type: "payment_failed",
-    subject: template.subject,
-    resend_id: sent.id,
-  });
-
   // Push as well as email. Quiet hours apply to this like everything else —
-  // the email has already gone, Stripe retries a decline over days, and a 3am
-  // banner changes nothing. Never a sales message: it says what happened and
-  // opens billing.
+  // Stripe retries a decline over days, and a 3am banner changes nothing.
+  // Never a sales message: it says what happened and opens billing.
   //
   // A BELL ROW FIRST, and the push only if this call wrote it. Two reasons:
   //   • A failed payment used to leave no trace inside the app at all, and the

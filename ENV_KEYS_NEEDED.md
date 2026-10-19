@@ -27,7 +27,7 @@ Do NOT commit `.env.local` to git.
 | `COMPANY_POSTAL_ADDRESS` | **Deliverability + legal.** The physical postal address printed in every email footer. CAN-SPAM requires a real street address or a registered PO/private mailbox — a city alone ("New York, NY") satisfies neither the law nor the filters that look for a parseable address block. A virtual-mailbox address is fine. Unset = a non-compliant fallback is used. |
 | `UNSUBSCRIBE_MAILTO` | **Deliverability.** Optional second unsubscribe method (e.g. `unsubscribe@swiftcard.me`) added to the `List-Unsubscribe` header alongside the https one-click URL. Outlook/Hotmail only surface the mailto form. **Only set this once the mailbox actually receives mail** — advertising a dead address bounces every opt-out and is worse than omitting it. |
 | `ADMIN_EMAILS` | Comma-separated emails allowed into the **Admin Panel** at `/admin` (plan toggling, analytics, promo codes, broadcast). e.g. `you@gmail.com,partner@company.com`. Your email MUST be here to see `/admin`. |
-| `ADMIN_SECRET` | Long random string. Only protects the automated `/api/admin/promo-codes/send` endpoint. The Admin Panel itself is gated by `ADMIN_EMAILS`, not this. |
+| `ADMIN_SECRET` | **RETIRED — read nowhere.** No file in `src/`, `scripts/` or `.github/` reads it. `/api/admin/promo-codes/send` and `/api/admin/broadcast` are gated by `requireAdmin()` (a signed-in session whose email is in `ADMIN_EMAILS`), not by a shared secret. Safe to delete from Vercel. |
 | `GEMINI_API_KEY` | aistudio.google.com → Get API key. Primary AI provider for follow-up generation (cheaper than Anthropic). Optional fallbacks: `OPENAI_API_KEY` (used first if set), `ANTHROPIC_API_KEY`. |
 | `NEXT_PUBLIC_APP_URL` | Your production URL: `https://swiftcard.me`. Used for card links, email links, AND OAuth redirect URIs — must match the domain registered in your OAuth apps. |
 
@@ -150,7 +150,7 @@ carriers will actually deliver.
 |---|---|
 | `RESEND_API_KEY` | All emails — welcome, receipts, marketing, promo codes |
 | `RESEND_FROM_EMAIL` | Emails may be rejected or go to sandbox only |
-| `ADMIN_SECRET` | Admin broadcast + promo code routes return 403 |
+| `ADMIN_SECRET` | Nothing — RETIRED, read nowhere (admin routes are gated by `ADMIN_EMAILS`) |
 | `GEMINI_API_KEY` (or OPENAI/ANTHROPIC) | AI follow-up generation falls back to generic templates |
 | `NEXT_PUBLIC_APP_URL` | Card links, email links, and OAuth redirects will point at the wrong domain |
 | `OAUTH_SECRET` | Google "Connect" and HubSpot token save both fail (can't encrypt tokens) |
@@ -202,3 +202,125 @@ the feature behind it degrades quietly when unset.
 | `APPLE_PUSH_KEY_ID` / `APPLE_PUSH_PRIVATE_KEY` / `APPLE_PUSH_TOPIC` / `APPLE_PUSH_SANDBOX` | Native iOS push. Unset = push is skipped; in-app bell notifications still work. |
 | `APPLE_SIGN_IN_CLIENT_ID` / `APPLE_SIGN_IN_KEY_ID` / `APPLE_SIGN_IN_PRIVATE_KEY` | Sign in with Apple (also see `docs/ios-review/SHELL-RUNBOOK.md`). |
 | `APP_STORE_ID` / `APP_STORE_COUNTRY` | App Store links in the native shell / marketing surfaces. |
+
+---
+
+> **Set automatically — never set by hand:** `NODE_ENV`, `NEXT_RUNTIME`, `PORT`, `VERCEL_ENV`, `VERCEL_URL`, `VERCEL_BRANCH_URL`, `VERCEL_GIT_COMMIT_SHA`, `NEXT_PUBLIC_VERCEL_ENV` are provided by Vercel/Node at runtime.
+>
+> `NEXT_PUBLIC_*` values are baked into the browser bundle at build time: changing one in Vercel does nothing until the next deploy.
+
+## Scheduled jobs (cron and GitHub-schedule secrets)
+
+Vercel Hobby allows two daily crons (`vercel.json`: `/api/reminders`, `/api/wallet/sweep`). Everything hourly runs from GitHub Actions (`push-catchup.yml`, `trial-notice.yml`, `instagram-bot.yml`, `facebook-bot.yml`) and calls the app with a Bearer secret. Every route refuses an UNSET secret rather than accepting `Bearer undefined`.
+
+| Key | What it does — and what breaks when it's missing |
+|---|---|
+| `CRON_SECRET` | Long random string. Vercel Cron sends it as `Authorization: Bearer …` automatically once it's set in Vercel. Guards `/api/reminders` (daily: follow-up sequences, the 30-day account purge, seat reductions, downgrades, expiry warnings, the trial-notice backstop, Apple offer-code retries) and `/api/wallet/sweep` (daily Wallet pass refresh). Also accepted by every GitHub-scheduled route, and is the fallback HMAC key for email-preference and contact-unsubscribe links when `OAUTH_SECRET` is unset. **Missing = both daily crons return 401 every day**: no follow-ups go out, deleted accounts are never purged, Wallet passes stop catching up. |
+| `PUSH_CATCHUP_SECRET` | Long random string, set to the **same value in Vercel AND in GitHub → Settings → Secrets → Actions**. The hourly GitHub jobs send it to `/api/push/catchup` (8am "while you were asleep" push), `/api/push/recap` (Monday recap + daily team check), `/api/push/activation` (one-time getting-started push), `/api/account/purge-due` (hourly purge of `purgeNow` accounts), `/api/billing/trial-notice` (7-day pre-charge notice) and the Instagram/Facebook bot ticks. **Missing in GitHub** = each workflow logs "PUSH_CATCHUP_SECRET is not set" and sends nothing; **missing in Vercel** = those routes return 401 (unless `CRON_SECRET` matches). Trial customers then get only the daily backstop notice. |
+| `TRIAL_NOTICE_SECRET` | Optional dedicated secret for `/api/billing/trial-notice`. The route also accepts `PUSH_CATCHUP_SECRET` and `CRON_SECRET`, and `trial-notice.yml` actually sends `PUSH_CATCHUP_SECRET`, so leaving this unset changes nothing. Only set it if you rewire that workflow to its own secret. |
+
+## AI model overrides (optional)
+
+Provider order is `OPENAI_API_KEY` → `GEMINI_API_KEY` → `ANTHROPIC_API_KEY` (`src/lib/ai.ts`). These only pick the model; unset = the default shown.
+
+| Key | What it does — and what breaks when it's missing |
+|---|---|
+| `GEMINI_MODEL` | Gemini model for text and vision calls (follow-ups, help/sales chat, card scanner). Default `gemini-2.5-flash`. |
+| `GEMINI_IMAGE_MODEL` | Gemini image model for the design-transfer image edit (`/api/design-transfer`). Default `gemini-2.5-flash-image`. Needs `GEMINI_API_KEY` regardless of the other providers. Without that key the image-edit feature reports unavailable. |
+| `OPENAI_MODEL` | OpenAI model for text and vision when `OPENAI_API_KEY` is set. Default `gpt-4o-mini`. |
+| `ANTHROPIC_MODEL` | Anthropic model when Anthropic is the provider in use. Default `claude-haiku-4-5-20251001`. |
+
+## Push notifications (iOS, Android, web)
+
+| Key | What it does — and what breaks when it's missing |
+|---|---|
+| `APPLE_TEAM_ID` | Your 10-character Apple Developer Team ID (developer.apple.com → Membership). **Shared by four features:** the APNs push JWT (with `APPLE_PUSH_KEY_ID`/`APPLE_PUSH_PRIVATE_KEY`), Apple Wallet passes, Sign in with Apple token revocation on account delete, and the `appID` in `/.well-known/apple-app-site-association`. Missing = iOS push returns `not_configured`, the Add to Wallet button is hidden, Apple revocation is skipped, and the AASA file serves `TEAMID_PLACEHOLDER` (a malformed value also falls back to it). |
+| `FIREBASE_PROJECT_ID` | Android push (FCM). From Firebase console → Project settings → Service accounts → Generate new private key: the JSON's `project_id`. All three `FIREBASE_*` are required. **Missing any one = Android push silently off** (`fcmConfigured()` is false; `/api/health` reports it). |
+| `FIREBASE_CLIENT_EMAIL` | Same service-account JSON: `client_email`. See above. |
+| `FIREBASE_PRIVATE_KEY` | Same service-account JSON: `private_key` (PEM; literal `\n` and wrapping quotes are normalised). See above. |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Web-push public key (generate the pair with `npx web-push generate-vapid-keys`). Missing = the browser "Enable notifications" control reports push as unsupported and no web subscription can be made. |
+| `VAPID_PRIVATE_KEY` | The private half of the same VAPID pair, server-only. Missing = web-push sends are skipped (`/api/health` shows `webPush: false`); in-app bell, iOS and Android push are unaffected. |
+
+## Apple Wallet pass
+
+All five of `APPLE_PASS_TYPE_ID`, `APPLE_TEAM_ID`, `APPLE_PASS_CERT_PEM`, `APPLE_PASS_KEY_PEM`, `APPLE_WWDR_PEM` must be set (`hasWalletConfig()` in `src/lib/wallet-config.ts`). **Missing any one = the "Add to Apple Wallet" button is hidden** in the new-card wizard and the dashboard's share options.
+
+| Key | What it does — and what breaks when it's missing |
+|---|---|
+| `APPLE_PASS_TYPE_ID` | The Pass Type ID (e.g. `pass.me.swiftcard.card`) from developer.apple.com → Identifiers → Pass Type IDs. Also the APNs topic for "your pass changed" pushes and checked by the Wallet web-service routes. Missing = Wallet off and pass-update pushes return `not_configured`. |
+| `APPLE_PASS_CERT_PEM` | The Pass Type ID certificate as PEM text. Apple issues it for about a year; the builder logs a warning at 30 days and an error once expired. **An expired cert turns every Add to Wallet into a 500.** |
+| `APPLE_PASS_KEY_PEM` | The certificate's private key as PEM text. Also the fallback HMAC key for pass authentication tokens when `WALLET_AUTH_SECRET` is unset. |
+| `APPLE_PASS_KEY_PASSWORD` | Passphrase for `APPLE_PASS_KEY_PEM`, only if the key is encrypted. Unset = the key is read as unencrypted; with an encrypted key, pass signing fails. |
+| `APPLE_WWDR_PEM` | Apple's WWDR intermediate certificate as PEM text (apple.com/certificateauthority). |
+| `WALLET_AUTH_SECRET` | Long random string used to derive each pass's authenticationToken. Unset = falls back to `APPLE_PASS_KEY_PEM`, which works until you renew the signing cert: then **every installed pass stops updating until re-added**. Set this before the next renewal. |
+
+## iPhone app: in-app purchase, offer codes and store links
+
+| Key | What it does — and what breaks when it's missing |
+|---|---|
+| `NEXT_PUBLIC_RC_APPLE_API_KEY` | RevenueCat **public** Apple SDK key (RevenueCat → Project → API keys, `appl_…`). Configures StoreKit purchases in the iOS shell. Missing = the paywall sheet still opens but cannot load prices or buy; each attempt reports an `env` IAP failure. Ignored on Android and the web. |
+| `REVENUECAT_SECRET_KEY` | RevenueCat **secret** key (`sk_…`, server-only). `/api/iap/sync` uses it to unlock Pro the moment a purchase finishes, and the webhook uses it to settle transfers/refunds. Missing = sync is a no-op (Pro arrives only when the webhook does, slower but correct) and transfer/refund checks return "unknown". |
+| `REVENUECAT_WEBHOOK_TOKEN` | The literal Authorization value configured on RevenueCat's webhook (sent as `Bearer …` to `/api/iap/revenuecat`). Missing = the webhook returns 503 for everything: **Apple purchases, renewals, expiries and refunds never reach the plan**. |
+| `ASC_KEY_ID` | App Store Connect API key ID (App Store Connect → Users and Access → Integrations → App Store Connect API). With `ASC_ISSUER_ID` + `ASC_PRIVATE_KEY`, mirrors every free-time promo code as an Apple offer code. Missing any of the three = no Apple offer codes are created, and a code typed in the iOS app is sent to swiftcard.me instead (check `apple_offer_error` on the code). |
+| `ASC_ISSUER_ID` | Same App Store Connect API page: Issuer ID. See `ASC_KEY_ID`. |
+| `ASC_PRIVATE_KEY` | The `.p8` private key text for that API key (literal `\n` allowed). See `ASC_KEY_ID`. |
+| `ASC_APP_ID` | Numeric App Store Connect app id the offer codes are created on. Default: `NEXT_PUBLIC_APP_STORE_ID`, then the hardcoded `6798875872`. Leave unset unless the app id changes. |
+| `NEXT_PUBLIC_APP_STORE_URL` | The live App Store listing URL (e.g. `https://apps.apple.com/app/id6798875872`). Missing = **every "Download on the App Store" button, the app popup and the footer badge are hidden**, and new accounts' guided tour does not wait for the popup. |
+| `NEXT_PUBLIC_APP_STORE_ID` | Numeric App Store id (digits only). Feeds the Smart App Banner and the "Rate us" write-review links. Missing = parsed from `NEXT_PUBLIC_APP_STORE_URL`; if neither gives an id, the banner and Rate-us links are hidden. |
+| `NEXT_PUBLIC_PLAY_STORE_URL` | The Google Play listing URL; only `https://play.google.com/store/apps/details?id=…` is accepted. Missing (or any other shape) = every Google Play badge renders nothing. |
+
+## Sign-in and bot protection
+
+| Key | What it does — and what breaks when it's missing |
+|---|---|
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Google Identity Services client ID for the "Sign in with Google" button (console.cloud.google.com → Credentials → OAuth client, Web; add `https://swiftcard.me` under Authorized JavaScript origins). Missing = the Google button shows "Google sign-in isn't configured. Use email, or try again later." |
+| `NEXT_PUBLIC_APPLE_SIGNIN_ENABLED` | Kill switch for the "Sign in with Apple" button. Only the literal `1` shows it (on in Production since 2026-08-07). Set it to `0` and redeploy when the Apple client secret has expired (about every 6 months), because a dead sign-in button is an App Review rejection. Missing = the button is hidden. |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Cloudflare Turnstile site key (Cloudflare → Turnstile) for the email/password sign-up, sign-in and reset forms. Missing = no widget loads and forms send no token. **If Supabase's CAPTCHA switch (Auth → Attack Protection) is ON while this is unset, every email sign-up and password sign-in is refused.** Turn on the Supabase switch only after this key is live. |
+
+## Monitoring, rate limits and visitor location
+
+| Key | What it does — and what breaks when it's missing |
+|---|---|
+| `NEXT_PUBLIC_SENTRY_DSN` | Sentry project DSN. Turns on error and performance reporting for client, server and edge. Missing = Sentry is completely disabled (no errors recorded), and the deploy watchdog has no error rate to roll back on. |
+| `NEXT_PUBLIC_SENTRY_RELEASE` | Release name attached to Sentry events. Default `VERCEL_GIT_COMMIT_SHA`, so leave it unset on Vercel. |
+| `NEXT_PUBLIC_SENTRY_TRACES_SAMPLE_RATE` | Performance-trace sample rate, a number from 0 to 1. Default `0.1` in production and `1` elsewhere; anything out of range is ignored. |
+| `UPSTASH_REDIS_REST_URL` | Upstash Redis REST URL for the shared rate-limit store. Takes precedence over `KV_REST_API_URL` (either naming works). Missing both = rate limits fall back to per-instance memory and reset on every cold start. |
+| `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis REST token; pairs with the URL above (falls back to `KV_REST_API_TOKEN`). |
+| `IPINFO_TOKEN` | ipinfo.io token for the second-opinion IP lookup behind visit city/region and "a visit from X's network". Missing = the free `ipwho.is` endpoint is used instead (lower quota, slightly different network naming). A failed lookup leaves Vercel's edge geo standing alone. |
+
+## Admin Agent Flow and marketing bots (admin only)
+
+**Admin Agent Flow only — the product works without it.** These power `/admin/agent-flow` (the owner's marketing/ops agents running in GitHub Actions) and the social-posting connectors. No customer-facing screen reads any of them. Agent OAuth redirect URI: `https://swiftcard.me/api/admin/connect/<provider>/callback`.
+
+| Key | What it does — and what breaks when it's missing |
+|---|---|
+| `GITHUB_AGENTS_TOKEN` | Admin Agent Flow only — the product works without it. Fine-grained GitHub PAT (actions: write) that lets the admin panel dispatch agent workflows, arm the watchdog loop, ship fixes and send chat orders. Missing = Run buttons and ship-fix return 503 "GITHUB_AGENTS_TOKEN is not set in Vercel", and the watchdog cannot be re-armed from the panel. |
+| `AGENTS_GITHUB_REPO` | Admin Agent Flow only — the product works without it. `owner/repo` the agent workflows live in. Default `swiftcard/relationship-app`; set it if the workflows live in a different repo, or every dispatch hits the wrong repo. |
+| `AGENT_RELAY_SECRET` | Admin Agent Flow only — the product works without it. Bearer secret the agent workflows use to send their digest/alert emails through `/api/agent-email` (recipient is always `agent_system.digest_email`). Minted by `scripts/agent-flow-setup.mjs`; must match the GitHub Actions secret of the same name. Missing = the route is a 404 and agents send no emails. |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Admin Agent Flow only — the product works without it. The owner's Claude Code OAuth token. In Vercel it makes the Agent Flow usage meter live; the agent workflows read it as a GitHub secret to run. Missing in Vercel = the meter shows the last snapshot the runners saved. |
+| `INSTAGRAM_BOT_SECRET` | Admin Agent Flow only — the product works without it. Optional dedicated Bearer secret (16+ chars) for the Instagram/Facebook/Pinterest/LinkedIn bot routes under `/api/agents/*`. Those routes also accept `PUSH_CATCHUP_SECRET`/`CRON_SECRET`, and the workflows send `PUSH_CATCHUP_SECRET`, so unset changes nothing. |
+| `META_APP_ID` | Admin Agent Flow only — the product works without it. Meta (Facebook) app ID from developers.facebook.com, for posting to the SwiftCard Page + Instagram and for the Instagram/Facebook reply bots. Missing (with `META_APP_SECRET`) = the Facebook + Instagram Connect button is unavailable. |
+| `META_APP_SECRET` | Admin Agent Flow only — the product works without it. Same Meta app's secret. Also verifies `x-hub-signature-256` on `/api/meta/webhook`. Missing = no Meta connection, and every webhook POST is rejected 401 (the 10-minute bot pass still runs). |
+| `META_PAGE_ID` | Admin Agent Flow only — the product works without it. Picks which Facebook Page to connect when the account manages several. Unset = the first Page returned. |
+| `META_SCOPES` | Admin Agent Flow only — the product works without it. Overrides the whole Meta OAuth scope list. Unset = the built-in list (pages + Instagram publish, comments, messages, engagement). Set it only if the Meta app lacks one of those scopes, because an unknown scope fails the consent screen. |
+| `META_WEBHOOK_VERIFY_TOKEN` | Admin Agent Flow only — the product works without it. The verify token you type when saving the webhook URL in the Meta app dashboard. Missing = Meta's subscribe handshake gets 403 and the webhook can't be saved; replies wait for the bot's 10-minute pass. |
+| `X_CLIENT_ID` | Admin Agent Flow only — the product works without it. X (Twitter) OAuth 2.0 client ID from developer.x.com, for posting as the SwiftCard X account. Missing (with the secret) = X Connect unavailable. |
+| `X_CLIENT_SECRET` | Admin Agent Flow only — the product works without it. Same X app's client secret. |
+| `YOUTUBE_CLIENT_ID` | Admin Agent Flow only — the product works without it. Google OAuth client for uploading agent videos to YouTube (an Internal-consent project so refresh tokens don't expire after 7 days). Unset = falls back to `GOOGLE_CLIENT_ID`. |
+| `YOUTUBE_CLIENT_SECRET` | Admin Agent Flow only — the product works without it. Same client's secret. Unset = falls back to `GOOGLE_CLIENT_SECRET`. |
+| `LINKEDIN_AGENT_CLIENT_ID` | Admin Agent Flow only — the product works without it. Client ID of the Page-attached "SwiftCard Agent Flow" LinkedIn app (Community Management API), separate from the profile-photo app. Unset = falls back to `LINKEDIN_CLIENT_ID` with member scopes. |
+| `LINKEDIN_AGENT_CLIENT_SECRET` | Admin Agent Flow only — the product works without it. Same app's secret. Unset = falls back to `LINKEDIN_CLIENT_SECRET`. |
+| `LINKEDIN_AGENT_SCOPES` | Admin Agent Flow only — the product works without it. Overrides LinkedIn OAuth scopes. Default `w_organization_social r_organization_admin` when `LINKEDIN_AGENT_CLIENT_ID` is set, else `openid profile w_member_social`. |
+| `LINKEDIN_ACCESS_TOKEN` | Admin Agent Flow only — the product works without it. Legacy fallback: a `w_member_social` token used to post when no LinkedIn account is connected in the panel. Needs `LINKEDIN_AUTHOR_URN`. |
+| `LINKEDIN_AUTHOR_URN` | Admin Agent Flow only — the product works without it. Legacy fallback author (`urn:li:person:…`) paired with `LINKEDIN_ACCESS_TOKEN`. |
+| `LINKEDIN_ALLOW_MEMBER_POSTS` | Admin Agent Flow only — the product works without it. `1` lets the agent post from a personal (member) LinkedIn connection. Unset = posts are held unless the connection is a Company Page (standing rule). |
+| `PINTEREST_APP_ID` | Admin Agent Flow only — the product works without it. Pinterest app ID from developers.pinterest.com, for pinning card designs. Missing (with the secret) = Pinterest Connect unavailable. |
+| `PINTEREST_APP_SECRET` | Admin Agent Flow only — the product works without it. Same Pinterest app's secret. |
+| `REDDIT_CLIENT_ID` | Admin Agent Flow only — the product works without it. Reddit "script" app ID (reddit.com/prefs/apps). All four `REDDIT_*` are needed for the Reddit connector; missing any = Reddit items are not posted. |
+| `REDDIT_CLIENT_SECRET` | Admin Agent Flow only — the product works without it. Same Reddit app's secret. |
+| `REDDIT_USERNAME` | Admin Agent Flow only — the product works without it. Reddit account the script app posts as (password grant). |
+| `REDDIT_PASSWORD` | Admin Agent Flow only — the product works without it. That Reddit account's password. |
+| `HIGGSFIELD_API_KEY_ID` | Admin Agent Flow only — the product works without it. Higgsfield API key ID: the "Send to Higgsfield" connector turns agent video scripts and image briefs into media. Missing (with the secret) = that connector is not ready. |
+| `HIGGSFIELD_API_KEY_SECRET` | Admin Agent Flow only — the product works without it. Higgsfield API key secret; pairs with the ID above. |
+| `HIGGSFIELD_ENDPOINT` | Admin Agent Flow only — the product works without it. Image endpoint override. Default `https://api.higgsfield.ai/higgsfield-ai/soul/standard`. |
+| `HIGGSFIELD_VIDEO_ENDPOINT` | Admin Agent Flow only — the product works without it. Text-to-video endpoint override. Default `https://api.higgsfield.ai/minimax/hailuo-02/standard/text-to-video`. |
