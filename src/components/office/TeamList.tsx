@@ -114,7 +114,11 @@ function Drawer({ person, appUrl, caps, self, onClose }: {
 }) {
   const [qr, setQr] = useState(false);
   const clock = useDisplayClock();
-  const cardUrl = person.username ? `${appUrl}/${person.username}` : null;
+  // Only a card that is ON: View, Copy link and the QR to print all open this
+  // address, and for an offline card it opens nothing — the admin could hand
+  // out a QR to a dead page (audit F-OFFICE-09). The status line already says
+  // the card is off.
+  const cardUrl = person.username && person.liveCards > 0 ? `${appUrl}/${person.username}` : null;
   const hasCard = person.totalCards > 0;
 
   return (

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { downloadRefusal } from "@/lib/download-refusal";
 import { resolveDownloadUserId } from "@/lib/download-auth";
 import { requireOfficeCapability } from "@/lib/office-roles";
 import { getAllOfficeLeads } from "@/lib/office-leads";
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
   // Each call pages through EVERY contact the office owns, so it is held to
   // the personal export's pace (audit SEC-18).
   if (await isRateLimited(`office-leads-export:${userId}`, 10, 10 * 60 * 1000)) {
-    return NextResponse.json({ error: "Too many exports — please wait a few minutes and try again." }, { status: 429 });
+    return downloadRefusal("Too many exports in a few minutes. Please wait a few minutes, then try the export again.", 429);
   }
 
   const leads = await getAllOfficeLeads(ctx.officeId).catch(() => null);

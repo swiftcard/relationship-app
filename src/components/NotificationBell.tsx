@@ -103,11 +103,18 @@ export default function NotificationBell({
     : notifications;
   const unread = shown.filter((n) => !n.read).length;
   const readCount = shown.filter((n) => n.read).length;
+  // The server's TRUE unread count (X-Unread-Total), with how many of the
+  // loaded rows were unread when it was read. The bell only ever holds the 20
+  // newest rows, so the icon must not be set from those alone — that turned a
+  // phone's 67 into 20 on opening the app, and back on the next push (audit
+  // N-03). Rows read here since then still take the number down, one for one.
+  const [serverUnread, setServerUnread] = useState<{ total: number; windowUnread: number } | null>(null);
+  const badge = serverUnread ? Math.max(unread, serverUnread.total - (serverUnread.windowUnread - unread)) : unread;
   // The app icon's red number follows the bell: reading here clears it
   // (lib/app-badge; a no-op on the web and on app builds before 1.0.6).
   useEffect(() => {
-    if (isNative) setAppBadge(unread);
-  }, [isNative, unread]);
+    if (isNative) setAppBadge(badge);
+  }, [isNative, badge]);
   const askId = pickAskCandidate(shown);
   const ask = usePushAsk("bell", askId, open);
 
@@ -124,6 +131,11 @@ export default function NotificationBell({
         const res = await fetch("/api/notifications");
         if (!res.ok) return;
         const fresh: Notification[] = await res.json();
+        const total = Number(res.headers.get("X-Unread-Total"));
+        // Counted the way the server counts it: the app-hidden types are not
+        // in the total either.
+        const windowUnread = fresh.filter((n) => !n.read && !NATIVE_HIDDEN_TYPES.has(n.type)).length;
+        setServerUnread(Number.isFinite(total) && res.headers.has("X-Unread-Total") ? { total, windowUnread } : null);
         setNotifications((prev) => {
           // Server truth wins whenever ANYTHING differs — id set, order, or a
           // read flag. The old guard only replaced state on NEW ids, so a

@@ -215,7 +215,8 @@ describe("the app clears its own icon on every installed build", () => {
   });
 
   it("the bell still drives it, and sign-out still clears it", () => {
-    expect(read("src/components/NotificationBell.tsx")).toMatch(/if \(isNative\) setAppBadge\(unread\);/);
+    // From the true unread count, not the 20 loaded rows (audit N-03).
+    expect(read("src/components/NotificationBell.tsx")).toMatch(/if \(isNative\) setAppBadge\(badge\);/);
     expect(read("src/lib/device-sign-out.ts")).toContain("setAppBadge(0);");
   });
 });

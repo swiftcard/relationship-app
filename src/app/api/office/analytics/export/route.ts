@@ -1,4 +1,5 @@
 import { safeTimeZone } from "@/lib/tz-days";
+import { downloadRefusal } from "@/lib/download-refusal";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDownloadUserId } from "@/lib/download-auth";
 import { isRateLimited } from "@/lib/rate-limit";
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   // Per-user throttle: authenticated but previously uncapped (cost/abuse guard).
   if (await isRateLimited(`office-export:${userId}`, 10, 10 * 60 * 1000)) {
-    return NextResponse.json({ error: "Too many requests — please wait a moment and try again." }, { status: 429 });
+    return downloadRefusal("Too many exports in a few minutes. Please wait a few minutes, then try the export again.", 429);
   }
 
 

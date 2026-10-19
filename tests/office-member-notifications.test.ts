@@ -69,7 +69,7 @@ describe("a team member is never shown notifications meant for someone else", ()
     expect(api).toMatch(/isPaidUser\(user\.id\)/);
     const filtered = api.indexOf("data = hideForReader(data ?? [], reader);");
     expect(filtered).toBeGreaterThan(-1);
-    expect(api.indexOf("return NextResponse.json(redactForPlan(data ?? [], paid));")).toBeGreaterThan(filtered);
+    expect(api.indexOf("const res = NextResponse.json(redactForPlan(data ?? [], paid));")).toBeGreaterThan(filtered);
     const dash = code("src/app/dashboard/page.tsx");
     // The bell — the dashboard's one list since Quick Contacts (and its
     // per-card panel) went on 2026-09-29.

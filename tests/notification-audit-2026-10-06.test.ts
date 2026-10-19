@@ -154,7 +154,8 @@ describe("the iPhone app badge", () => {
   });
 
   it("the bell sets it from its own unread count; sign-out clears it", () => {
-    expect(read("src/components/NotificationBell.tsx")).toMatch(/if \(isNative\) setAppBadge\(unread\);/);
+    // From the true unread count, not the 20 loaded rows (audit N-03).
+    expect(read("src/components/NotificationBell.tsx")).toMatch(/if \(isNative\) setAppBadge\(badge\);/);
     expect(read("src/lib/device-sign-out.ts")).toContain("setAppBadge(0);");
   });
 

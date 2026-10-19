@@ -4,6 +4,7 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { isPaidUser, redactForPlan } from "@/lib/notification-privacy";
 import { hideForReader, notificationReader } from "@/lib/office-account-notifications";
 import { syncPhoneBadgeAfter } from "@/lib/app-badge-sync";
+import { unreadBadgeCount } from "@/lib/push";
 
 export async function GET() {
   const supabase = await createClient();
@@ -58,7 +59,15 @@ export async function GET() {
   ]);
   data = hideForReader(data ?? [], reader);
 
-  return NextResponse.json(redactForPlan(data ?? [], paid));
+  // The TRUE unread count, the one every push puts on the iPhone icon (lib/
+  // push unreadBadgeCount), beside the 20 newest rows. The app used to set the
+  // icon from the rows it was handed — 67 became 20 the moment the app opened,
+  // then 67 again on the next push (audit N-03). A header, so the body every
+  // reader of this route parses is unchanged.
+  const res = NextResponse.json(redactForPlan(data ?? [], paid));
+  const total = await unreadBadgeCount(db, user.id, paid).catch(() => undefined);
+  if (typeof total === "number") res.headers.set("X-Unread-Total", String(total));
+  return res;
 }
 
 export async function PATCH(req: NextRequest) {

@@ -368,7 +368,7 @@ export async function sendPushToUser(userId: string, payload: {
  * push and every badge sync reads it here, so the two can never disagree.
  * A failed count is undefined: send no badge, never a wrong one.
  */
-async function unreadBadgeCount(
+export async function unreadBadgeCount(
   admin: ReturnType<typeof getAdminSupabase>,
   userId: string,
   paid: boolean,
