@@ -119,7 +119,7 @@ export type OrgManaged = {
   ownerInherited?: boolean;
 };
 
-type Props = { card: Card; photoUrl?: string | null; logoUrl?: string | null; isPro?: boolean; trialEligible?: boolean; isPrimary?: boolean; org?: OrgManaged | null; linkedinEnabled?: boolean; /** Just joined a team (?joined=1): saving goes on to the dashboard tour. */ tourAfterSave?: boolean; /** Server-chosen opening tab — the LinkedIn return leg opens "design". */ initialTab?: TabId };
+type Props = { card: Card; photoUrl?: string | null; logoUrl?: string | null; isPro?: boolean; trialEligible?: boolean; isPrimary?: boolean; org?: OrgManaged | null; linkedinEnabled?: boolean; /** Just joined a team (?joined=1): saving goes on to the dashboard tour. */ tourAfterSave?: boolean; /** Server-chosen opening tab — the LinkedIn return leg opens "design". */ initialTab?: TabId; /** The card's version as loaded (lib/card-edit-version): a save made after someone else's asks first. */ editVersion?: string | null };
 
 // Small "who owns this field" tag shown next to org-controlled values.
 function ManagedTag({ owner }: { owner?: boolean }) {
@@ -149,7 +149,7 @@ function linkStyleOf(l: CardLink) {
   return { k: linkKeyOf(l), size: l.size, rowStyle: l.rowStyle, glass: l.glass, media: l.media };
 }
 
-export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, isPro = false, trialEligible = false, isPrimary = false, org = null, linkedinEnabled = false, initialTab, tourAfterSave = false }: Props) {
+export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, isPro = false, trialEligible = false, isPrimary = false, org = null, linkedinEnabled = false, initialTab, tourAfterSave = false, editVersion = null }: Props) {
   const saveUrl = isPrimary ? "/api/profile" : `/api/cards/${card.id}`;
   const logoCardId = isPrimary ? undefined : card.id;
   const router = useRouter();
@@ -566,8 +566,18 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
   // What is on screen right now — the design a normal Save writes.
   const stateDesign: FreeDesign = { template, templateStyleState, linkStyleState };
 
+  // The version this editor is saving over, and whether the last Save found the
+  // card changed somewhere else (audit C02-006).
+  const [baseVersion, setBaseVersion] = useState<string | null>(editVersion);
+  const [changedElsewhere, setChangedElsewhere] = useState(false);
+  // The save that was refused, so "Save mine anyway" repeats exactly it —
+  // including a Free design conversion the person already agreed to.
+  const refusedSave = useRef<Parameters<typeof handleSave>[0]>(undefined);
+
   async function handleSave(opts?: {
     allowFreeConversion?: boolean;
+    /** "Save mine anyway": replace what was saved elsewhere. */
+    force?: boolean;
     /** Save this design instead of what is on state (applyFreeDesign — React
      *  state set in the same click is not readable yet). */
     design?: FreeDesign;
@@ -629,6 +639,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
     setStatus("saving");
     setError("");
     setViewOnly(false);
+    setChangedElsewhere(false);
     try {
       const res = await fetch(saveUrl, {
         method: "PATCH",
@@ -705,6 +716,8 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
             logoShape: logoShape === "circle" ? "circle" : null,
           },
           logo_url: cardLogoUrl,
+          // Only the card route checks it; the legacy primary route (/api/profile) has no version.
+          ...(!isPrimary && baseVersion ? { baseVersion, ...(opts?.force ? { force: true } : {}) } : {}),
         }),
       });
       if (res.ok) {
@@ -717,7 +730,8 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
         setTyped(false);
         // A name/company change may have auto-renamed the card URL — follow the
         // slug the server reports, or ?card= selects a card that no longer exists.
-        const okJson = await res.json().catch(() => ({} as { renamedTo?: string }));
+        const okJson = await res.json().catch(() => ({} as { renamedTo?: string; slug?: string; version?: string | null }));
+        if (okJson.version) setBaseVersion(okJson.version);
         // The card's address NOW — renamed by a name change (renamedTo), or by
         // hand in "Card URL" earlier in this session (slug). card.username is
         // the address the page loaded with, and sending the dashboard there
@@ -735,6 +749,15 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
         // org-managed field was changed) instead of a bare "Error".
         const json = await res.json().catch(() => ({} as { message?: string; error?: string; code?: string }));
         if (json.error === "view_only" || json.code === "CARD_VIEW_ONLY") setViewOnly(true);
+        // Someone saved this card elsewhere since it opened: nothing was
+        // written, and the choice is theirs — see the two buttons below.
+        if (json.code === "CARD_CHANGED_ELSEWHERE") {
+          refusedSave.current = opts;
+          setChangedElsewhere(true);
+          setError(json.message || "This card was changed on another device or tab after you opened it.");
+          setStatus("idle");
+          return;
+        }
         // A fallback sentence, always. Without one, a failure that carried no
         // `message` left `error` empty and the ENTIRE report to the user was the
         // button relabelling itself "Error — try again" — which does not say
@@ -1504,6 +1527,27 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                 {error} <Link href="/upgrade" className="underline font-semibold text-blue-400 hover:text-blue-300">Upgrade to Pro</Link>
               </p>
             </PlanGate>
+          ) : changedElsewhere ? (
+            <div role="alert" className="mt-4 rounded-xl border border-amber-700/40 bg-amber-950/30 px-4 py-3">
+              <p className="text-amber-200 text-sm">{error}</p>
+              <div className="mt-2.5 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="rounded-full border border-gray-600 bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:border-gray-400"
+                >
+                  Reload the latest
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSave({ ...refusedSave.current, force: true })}
+                  className="rounded-full bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-500"
+                >
+                  Save mine anyway
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-gray-400">Reload shows the card as it is now — what you changed here isn&apos;t kept. Save mine anyway replaces it with what&apos;s on this screen.</p>
+            </div>
           ) : (
             <p className="text-red-400 text-sm mt-4">{error}</p>
           )

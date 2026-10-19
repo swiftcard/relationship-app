@@ -13,6 +13,7 @@ import { getOfficeSubUserContext } from "@/lib/office-roles";
 import { getOfficeBrandForUser } from "@/lib/office-brand";
 
 import { isPaidPlan } from "@/lib/plan";
+import { cardEditVersion } from "@/lib/card-edit-version";
 import { buildCardData } from "@/lib/card-data";
 
 export default async function CardEditPage({
@@ -185,6 +186,7 @@ export default async function CardEditPage({
           org={org}
           linkedinEnabled={!!(process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET)}
           tourAfterSave={joined}
+          editVersion={cardEditVersion(card as Record<string, unknown>)}
         />
       </div>
 

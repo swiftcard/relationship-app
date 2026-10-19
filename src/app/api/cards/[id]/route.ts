@@ -10,6 +10,7 @@ import { normalizeSocial } from "@/lib/social-url";
 import { getOfficeSubUserContext } from "@/lib/office-roles";
 import { cardContentChanged, signatureContentChanged } from "@/lib/card-changed";
 import { clampCardWrite } from "@/lib/card-limits";
+import { cardEditVersion, CARD_EDIT_SELECT, CARD_CHANGED_ELSEWHERE } from "@/lib/card-edit-version";
 import { dropCardFromScopes } from "@/lib/crm-scope-server";
 
 const ALLOWED = ["name", "title", "company", "phone", "email", "website", "linkedin", "instagram", "twitter", "tiktok", "template", "customization", "logo_url", "label"];
@@ -89,7 +90,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // an edit leaves the pasted signature stale). A no-op save must never nag.
   const { data: beforeCard } = await admin
     .from("cards")
-    .select("username, name, title, company, phone, email, website, linkedin, instagram, twitter, tiktok, template, logo_url, customization")
+    .select("username, name, title, company, phone, email, website, linkedin, instagram, twitter, tiktok, template, logo_url, label, customization")
     .eq("id", id)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -116,6 +117,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       );
     }
     if (updates.template === "custom") updates.template = "classic-pro";
+  }
+
+  // Saved somewhere else since this editor opened (audit C02-006): a phone and
+  // a laptop, or two tabs, used to overwrite each other in silence. The editor
+  // sends the version it loaded; if the card has moved on, it asks the person
+  // before replacing that work — "Save mine anyway" resends with force. A
+  // client that sends no version (an old app build, the API) saves as before.
+  const baseVersion = typeof body.baseVersion === "string" ? body.baseVersion : null;
+  if (baseVersion && beforeCard && body.force !== true && cardEditVersion(beforeCard as Record<string, unknown>) !== baseVersion) {
+    return NextResponse.json(
+      {
+        code: CARD_CHANGED_ELSEWHERE,
+        error: "changed_elsewhere",
+        message: "This card was changed on another device or tab after you opened it. Saving now would replace those changes.",
+      },
+      { status: 409 },
+    );
   }
 
   // Resolved once, used by the merge below AND the branding section: is the
@@ -415,7 +433,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           // Nothing the signature shows changed (a links edit, an internal
           // flag) — the freshness work above still ran where needed, but the
           // owner gets no "re-copy your signature" nudge for it.
-          return NextResponse.json({ ok: true, ...(renamedTo ? { renamedTo } : {}), slug: renamedTo ?? ((beforeCard as { username?: string } | null)?.username ?? null) });
+          return NextResponse.json({ ok: true, ...(renamedTo ? { renamedTo } : {}), slug: renamedTo ?? ((beforeCard as { username?: string } | null)?.username ?? null), version: await versionNow(admin, id) });
         }
         const { data: pending } = await admin
           .from("notifications")
@@ -444,7 +462,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     /* notification is a nicety; a card save must still succeed */
   }
 
-  return NextResponse.json({ ok: true, ...(renamedTo ? { renamedTo } : {}), slug: renamedTo ?? ((beforeCard as { username?: string } | null)?.username ?? null) });
+  return NextResponse.json({ ok: true, ...(renamedTo ? { renamedTo } : {}), slug: renamedTo ?? ((beforeCard as { username?: string } | null)?.username ?? null), version: await versionNow(admin, id) });
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -528,6 +546,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   // someone else claims the address (isolation audit 2026-09-24).
   revalidateCardPage(...released);
   return NextResponse.json({ ok: true });
+}
+
+/** The card's editor version after a save, so the same editor can save again. */
+async function versionNow(admin: ReturnType<typeof getAdminSupabase>, id: string): Promise<string | null> {
+  const { data } = await admin.from("cards").select(CARD_EDIT_SELECT).eq("id", id).maybeSingle();
+  return data ? cardEditVersion(data as unknown as Record<string, unknown>) : null;
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
