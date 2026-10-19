@@ -12,6 +12,7 @@ import { FREE_STATE_TYPES } from "@/lib/notification-privacy";
 import { hiddenTypesForReader, notificationReader } from "@/lib/office-account-notifications";
 import {
   decidePush, fitBody, fitBodyKeepingPlace, readPushPrefs, pushCardTag, cardTagLine, MAX_TITLE_CHARS, OWN_CAP, UNCAPPED, VIEW_ROLLUP_TAG, SOFT_CAP_CATEGORIES,
+  withDeviceIfItFits,
   type PushCategory, type PushCardRow,
 } from "@/lib/push-policy";
 
@@ -216,6 +217,10 @@ export async function sendPushToUser(userId: string, payload: {
   // lock screen says "A contact re-opened your card", a paid one says "Priya".
   const plainBody = (s: string) =>
     paid ? stripNameMarks(stripLocationMarks(s)) : teaseLocation(genericNames(s));
+  // The device a visit came from: never on Free, and on Pro only when the whole
+  // sentence still fits (lib/push-policy withDeviceIfItFits). Decided before
+  // the trim, so the trim below never has to choose between it and the place.
+  payload = { ...payload, body: withDeviceIfItFits(payload.body, paid, plainBody) };
   payload = {
     ...payload,
     title: fitBody(isUpdate ? `${viewsThisHour} views in the last hour` : plainBody(payload.title), MAX_TITLE_CHARS),

@@ -1,6 +1,6 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { isPaidProfile, PLAN_COLUMNS } from "@/lib/effective-plan";
-import { hasMarkedPlace, redactLegacyPlace, redactPlaces, stripLocationMarks } from "@/lib/location-privacy";
+import { hasMarkedPlace, redactLegacyPlace, redactPlaces, stripLocationMarks, withoutDetail } from "@/lib/location-privacy";
 import { hasMarkedName, redactNames, stripNameMarks } from "@/lib/contact-privacy";
 
 // The one place a notification row is prepared for a browser.
@@ -78,9 +78,13 @@ export function redactForPlan<T extends NotificationRow>(rows: T[], paid: boolea
     }
     // Rows written before the marks existed say the place in plain text, and a
     // Free account would go on reading those forever.
-    const marked = hasMarkedPlace(body) || !canCarryLocation(row.type)
-      ? body
-      : redactLegacyPlace(body);
+    // The device a visit came from is Pro too — and is simply absent on Free,
+    // not blurred (lib/location-privacy DETAIL_MARK). Dropped FIRST, so the
+    // legacy sweep below only ever sees the sentence it was written for.
+    const free = withoutDetail(body);
+    const marked = hasMarkedPlace(free) || !canCarryLocation(row.type)
+      ? free
+      : redactLegacyPlace(free);
     return { ...row, body: redactPlaces(marked) };
   });
 }

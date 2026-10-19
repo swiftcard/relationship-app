@@ -80,6 +80,14 @@ const SITES: Site[] = [
     ],
   },
   {
+    // "Recent visits" under the Traffic chart (owner, 2026-10-18): Free sees
+    // the visits with their details blurred, one upsell line on the web, and in
+    // the shell an inert PRO badge beside a plain sentence.
+    file: "src/components/dashboard/RecentVisits.tsx",
+    web: ["Upgrade to Pro →"],
+    native: ["Pro feature — Detailed analytics are only available on the Pro plan", "Visit details are only available on the Pro plan"],
+  },
+  {
     // The LINK OFF badge moved here with the card rows when My Cards gained a
     // mobile switcher. The copy is unchanged — only the file it lives in.
     file: "src/components/dashboard/MyCardsList.tsx",

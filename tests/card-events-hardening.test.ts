@@ -28,7 +28,14 @@ describe("input hardening", () => {
     // The str() helper is the single funnel: non-strings and oversized values
     // degrade to absent instead of becoming permanent row values.
     expect(route).toMatch(/function str\(v: unknown, max: number\)/);
-    for (const field of ["card_owner_username", "event_type", "visitor_name", "visitor_email", "visitor_phone", "device_info"]) {
+    // device_info is the REQUEST's own User-Agent since 2026-10-18 (visit
+    // details describe the device from it, as location comes from the IP); the
+    // body's copy only for a request with no header. Both through str().
+    expect(route).toContain('const device_info = str(req.headers.get("user-agent"), 250) ?? str(body?.device_info, 250);');
+    // The Client Hints that ride with a view are shape-checked, not trusted.
+    expect(route).toContain("cleanModelHint(body?.device_model)");
+    expect(route).toContain("cleanOsHint(body?.device_os)");
+    for (const field of ["card_owner_username", "event_type", "visitor_name", "visitor_email", "visitor_phone"]) {
       expect(route).toMatch(new RegExp(`const ${field} = (\\(?)str\\(body\\?\\.${field}`));
     }
     // source: through str() first, then only a key SwiftCard itself puts on

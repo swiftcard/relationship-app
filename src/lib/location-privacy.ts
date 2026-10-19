@@ -50,9 +50,31 @@ export function markPlace(name: string): string {
   return `${PLACE_MARK}${name}${PLACE_MARK}`;
 }
 
+/**
+ * U+2061 FUNCTION APPLICATION — wraps the DEVICE fragment of a visit
+ * notification (" on an iPhone 16 Pro via Instagram", lib/visit-device.ts).
+ *
+ * Visit details are Pro, like the place (owner, 2026-10-18), but unlike the
+ * place nothing is blurred: a Free account's copy simply does not have the
+ * fragment (withoutDetail), and neither does a lock screen it would not fit on.
+ * stripLocationMarks removes the marks along with the others, so every surface
+ * that already strips marks shows a paid reader the plain sentence.
+ */
+export const DETAIL_MARK = "⁡";
+
+export function markDetail(fragment: string): string {
+  return fragment ? `${DETAIL_MARK}${fragment}${DETAIL_MARK}` : "";
+}
+
+/** Drop the device fragment entirely: Free, or a push it would not fit in. */
+export function withoutDetail(text: string): string {
+  if (!text.includes(DETAIL_MARK)) return text;
+  return text.split(DETAIL_MARK).filter((_, i) => i % 2 === 0).join("");
+}
+
 /** Plain text, for every surface that is not the app's own notification list. */
 export function stripLocationMarks(text: string): string {
-  return text.split(PHRASE_MARK).join("").split(PLACE_MARK).join("");
+  return text.split(PHRASE_MARK).join("").split(PLACE_MARK).join("").split(DETAIL_MARK).join("");
 }
 
 /**

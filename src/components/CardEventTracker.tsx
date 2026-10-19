@@ -43,6 +43,50 @@ function takeContactToken(): string | null {
   return contactToken;
 }
 
+// ── What the browser says about its own device (Client Hints) ───────────────
+// Chrome on Android stopped putting the phone's model and Android version in
+// its User-Agent ("Android 10; K"), so without this every Android visit reads
+// "Android phone". Chromium still hands them to the page when asked. Bounded
+// by a short timeout so it can never hold the view up; anything else (Safari,
+// Firefox, a refusal) is simply no hint. An iPad in Safari's desktop mode says
+// it is a Mac — a Mac has no touch screen, so that one is named here too.
+// Display-only: lib/visit-device.ts reads them, the server re-validates them.
+async function deviceHints(): Promise<{ device_model?: string; device_os?: string }> {
+  try {
+    if (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1) return { device_model: "iPad" };
+    const uaData = (navigator as Navigator & {
+      userAgentData?: { platform?: string; getHighEntropyValues?: (h: string[]) => Promise<{ model?: string; platformVersion?: string }> };
+    }).userAgentData;
+    if (!uaData?.getHighEntropyValues || uaData.platform !== "Android") return {};
+    const v = await Promise.race([
+      uaData.getHighEntropyValues(["model", "platformVersion"]),
+      new Promise<null>((r) => setTimeout(() => r(null), 400)),
+    ]);
+    return {
+      ...(v?.model ? { device_model: v.model.slice(0, 40) } : {}),
+      ...(v?.platformVersion ? { device_os: v.platformVersion.slice(0, 12) } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
+// ── How long this page was actually on screen ────────────────────────────────
+// Sent when the visitor leaves (app switch, lock, tab closed, navigation) to
+// /api/card-events/dwell, which adds it to the view this page just recorded.
+// A beacon, because it is the one request a page that is going away can still
+// make; keepalive fetch where there is no beacon. Never throws, never awaited.
+function sendDwell(payload: { card_owner_username: string; surface: "card" | "links"; seconds: number }) {
+  try {
+    const json = JSON.stringify({ ...payload, visitor_id: getVisitorId() });
+    const blob = new Blob([json], { type: "application/json" });
+    if (navigator.sendBeacon?.("/api/card-events/dwell", blob)) return;
+    void fetch("/api/card-events/dwell", { method: "POST", headers: { "Content-Type": "application/json" }, body: json, keepalive: true }).catch(() => {});
+  } catch {
+    /* nothing to report */
+  }
+}
+
 export default function CardEventTracker({
   username,
   source,
@@ -57,6 +101,29 @@ export default function CardEventTracker({
   useEffect(() => {
     let cancelled = false;
     const token = takeContactToken();
+
+    // Visible time, from the moment the page is on screen. Only reported once
+    // this page has a view to attach it to (viewKnown), and only when it grew.
+    let visibleMs = 0;
+    let visibleSince: number | null = document.visibilityState === "visible" ? performance.now() : null;
+    let viewKnown = false;
+    let lastSent = 0;
+    const flush = () => {
+      if (visibleSince != null) {
+        visibleMs += performance.now() - visibleSince;
+        visibleSince = null;
+      }
+      const seconds = Math.round(visibleMs / 1000);
+      if (!viewKnown || seconds < 1 || seconds <= lastSent) return;
+      lastSent = seconds;
+      sendDwell({ card_owner_username: username, surface: viewSurface, seconds });
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flush();
+      else if (visibleSince == null) visibleSince = performance.now();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", flush);
 
     const fire = async () => {
       // ── Human gate (owner order 2026-08-26: views "cannot have
@@ -75,6 +142,11 @@ export default function CardEventTracker({
       await whenIdentityReconciled();
       if (cancelled) return;
 
+      // Before the guard claims the slot, like the awaits above: an unmount
+      // during this (at most 400ms) wait must not spend the visit's one view.
+      const hints = await deviceHints();
+      if (cancelled) return;
+
       // Views table for the dashboard chart — keyed by surface so card vs link
       // split. The guard is claimed only AFTER the awaits and the cancel
       // checks: strict-mode's first (immediately-cleaned-up) mount must not
@@ -82,7 +154,12 @@ export default function CardEventTracker({
       // be lost entirely.
       const viewsKey = viewSurface === "links" ? `${username}__links` : username;
       const last = lastFired.get(viewsKey);
-      if (last && Date.now() - last < VIEW_VISIT_WINDOW_MS) return;
+      if (last && Date.now() - last < VIEW_VISIT_WINDOW_MS) {
+        // Already recorded in this visit (a remount, a back-navigation): the
+        // view exists, so this page's time on screen still belongs to it.
+        viewKnown = true;
+        return;
+      }
       lastFired.set(viewsKey, Date.now());
 
       const visitorId = getVisitorId();
@@ -111,8 +188,10 @@ export default function CardEventTracker({
           // Only ever sent from here, AFTER waitForHuman: a link scanner or
           // preview that loads the page never gets this far.
           ...(token ? { contact_token: token } : {}),
+          ...hints,
         }),
       }).catch(() => {});
+      viewKnown = true;
 
       // No second POST to /api/views: the event route records the card_views
       // row itself (lib/record-view.ts) so the chart and the notification are
@@ -120,7 +199,14 @@ export default function CardEventTracker({
     };
 
     void fire();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      // Leaving the page inside the app (another card, the back button) is
+      // leaving it too.
+      flush();
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", flush);
+    };
   }, [username, source, viewSurface]);
 
   return null;

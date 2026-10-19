@@ -25,6 +25,8 @@ import ShareButton from "@/components/ShareButton";
 import AppTopNav from "@/components/AppTopNav";
 import ShareCardCapture from "@/components/ShareCardCapture";
 import TrafficChart from "@/components/TrafficChart";
+import RecentVisits, { type RecentVisitRow } from "@/components/dashboard/RecentVisits";
+import { loadRecentVisits } from "@/lib/recent-visits";
 import TimezoneCookie from "@/components/TimezoneCookie";
 import ThemeToggle from "@/components/ThemeToggle";
 import AppStorePopup from "@/components/AppStorePopup";
@@ -403,6 +405,7 @@ export default async function DashboardPage({
     bellNotifRes,
     ownedOfficeRes,
     canViewOfficeAdminRes,
+    recentVisitsRaw,
   ] = await Promise.all([
     // card_views is written by the PUBLIC view API via the service role and has
     // RLS on with no select policy — reading it with the user's session client
@@ -560,6 +563,12 @@ export default async function DashboardPage({
     // (one extra DB round trip on every dashboard load). Runs alongside; the
     // ownedOffice short-circuit below still wins when it applies.
     canViewOfficeAdmin(user.id, profile.plan),
+    // "Recent visits" under the chart (lib/recent-visits.ts): the same window,
+    // both surfaces, details withheld server-side on Free. Not read for the
+    // Locations tab, which doesn't show it. Never throws.
+    viewsRange === "locations"
+      ? Promise.resolve([])
+      : loadRecentVisits(getAdminSupabase(), { slug: analyticsUsername, sinceIso: viewsCutoff, paid: isPro }),
   ]);
 
   // If a notifications column migration (card_owner, lead_id) hasn't run yet,
@@ -678,6 +687,18 @@ export default async function DashboardPage({
   // same read also gives the per-destination breakdown the Locations-style
   // drill-down will want; 2000 is far beyond any real window today.
   const linkTaps = typeof linkTapRows === "number" ? linkTapRows : 0;
+
+  // Each visit's time on the owner's own clock: the time alone for today, the
+  // date with it for anything earlier in the window.
+  const todayKey = localDayKey(tzNow.toISOString(), ownerTz);
+  const recentVisits: RecentVisitRow[] = recentVisitsRaw.map((v) => {
+    const d = new Date(v.at);
+    const time = new Intl.DateTimeFormat("en-US", { timeZone: ownerTz, hour: "numeric", minute: "2-digit" }).format(d);
+    const day = localDayKey(v.at, ownerTz) === todayKey
+      ? ""
+      : `${new Intl.DateTimeFormat("en-US", { timeZone: ownerTz, month: "short", day: "numeric" }).format(d)}, `;
+    return { ...v, when: `${day}${time}` };
+  });
 
   // Locations view (on-demand): top places your card + links are viewed from,
   // with the SwiftCard vs Swift Links split per location. All-time totals.
@@ -1269,6 +1290,10 @@ export default async function DashboardPage({
                       max={maxBar}
                       tz={ownerTz}
                     />
+
+                    {/* Every visit in the same window, newest first (owner,
+                        2026-10-18). Nothing renders until there is one. */}
+                    <RecentVisits visits={recentVisits} paid={isPro} />
                   </div>
                 )}
                 {/* Link taps (every plan) — the box's one footer stat. Contacts

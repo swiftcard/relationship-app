@@ -3,6 +3,7 @@ import { locationPhrase } from "@/lib/location-display";
 import type { GeoAccuracy } from "@/lib/request-geo";
 import { ordinal } from "@/lib/contact-return-notify";
 import { markName } from "@/lib/contact-privacy";
+import { markDetail } from "@/lib/location-privacy";
 
 // What the owner is told when someone touches their card.
 //
@@ -83,6 +84,15 @@ export function cardEventNotice(input: {
    * (2026-10-06 notification audit: this path printed the locked name.)
    */
   nameLocked?: boolean;
+  /**
+   * The device the visit came from, as lib/visit-device deviceSentence words
+   * it (" on an iPhone 16 Pro via Instagram"). Pro, like the place: it is
+   * wrapped in the DETAIL mark, so a Free account's bell and every Free push
+   * leave it out entirely, and a paid push keeps it only when the whole
+   * sentence fits the lock screen (push-policy withDeviceIfItFits). Absent or
+   * empty, the sentence is exactly what it always was.
+   */
+  device?: string | null;
 }): CardEventNotice | null {
   const { eventType } = input;
   const name = (input.visitorName ?? "").trim();
@@ -104,6 +114,9 @@ export function cardEventNotice(input: {
   // let the push — which cannot blur anything — drop the fragment whole.
   // lib/location-privacy.ts is the whole story.
   const near = locationPhrase(input.location, input.geoAccuracy, { mark: true });
+  // After the place, so the place keeps its spot at the end of a short lock
+  // screen when the device phrase has to be dropped.
+  const on = markDetail((input.device ?? "").trimEnd());
 
   if (eventType === "viewed_card") {
     // Swift Links and the card are different surfaces and an owner shares them
@@ -123,7 +136,7 @@ export function cardEventNotice(input: {
           : isLinks ? "Swift Links viewed" : "Card viewed",
       // "Someone" when we genuinely don't know. A visitor is only named once
       // they have shared their details, so this never guesses at an identity.
-      body: `${who} viewed ${surfaceLabel}${near}.`,
+      body: `${who} viewed ${surfaceLabel}${near}${on}.`,
     };
   }
 
@@ -146,7 +159,7 @@ export function cardEventNotice(input: {
       // owner a stranger is now in that person's address book, which we do not
       // know. A download we DO know, so that is what it says.
       title: "Contact downloaded",
-      body: `${who} downloaded your contact card${from}${near}.`,
+      body: `${who} downloaded your contact card${from}${near}${on}.`,
     };
   }
 

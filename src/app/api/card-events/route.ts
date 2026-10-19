@@ -26,6 +26,7 @@ import { isPaidProfile } from "@/lib/effective-plan";
 import { isLockedLead } from "@/lib/lead-access";
 import { isPaidUser } from "@/lib/notification-privacy";
 import { notifyVisit, visitKey } from "@/lib/visit-notify";
+import { cleanModelHint, cleanOsHint, describeDevice, deviceSentence, openedIn } from "@/lib/visit-device";
 import type { PushCategory } from "@/lib/push-policy";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
@@ -101,7 +102,16 @@ export async function POST(req: NextRequest) {
     // Query strings carry tokens/session ids on referring sites — keep only
     // origin+path, same privacy stance as site-view's host-only referrers.
     const referrer_url = (str(body?.referrer_url, 300) ?? "").split(/[?#]/)[0] || null;
-    const device_info = str(body?.device_info, 250);
+    // THE REQUEST'S OWN User-Agent, not the copy the page put in the body: the
+    // device a visit is described by (lib/visit-device.ts) must come from the
+    // request, like its location does. The body's copy is kept only for a
+    // client that somehow sent no header at all.
+    const device_info = str(req.headers.get("user-agent"), 250) ?? str(body?.device_info, 250);
+    // Client Hints (Chromium only): the model and OS version Chrome on Android
+    // no longer puts in its User-Agent. Display-only, shape-checked, bounded.
+    // Views only — a tap or a save describes the same visit's device already.
+    const device_model = event_type === "viewed_card" ? cleanModelHint(body?.device_model) : null;
+    const device_os = event_type === "viewed_card" ? cleanOsHint(body?.device_os) : null;
     // WHICH link, for clicked_link. Normalised to a bare host on the client
     // (lib/track-link-click.ts) and re-bounded here like every other stored
     // field, because a client value is a client value.
@@ -528,7 +538,14 @@ export async function POST(req: NextRequest) {
       // Also from warm-lead-alerts.sql, and dropped with the contact stamp.
       ...(target_label ? { target_label } : {}),
     };
-    let { error: insertErr } = await admin.from("card_events").insert(row);
+    // The device hints (supabase/visit-details.sql) ride on a copy, so every
+    // fallback below keeps working on the row it always did if they are what
+    // production cannot accept yet.
+    const hints = { ...(device_model ? { device_model } : {}), ...(device_os ? { device_os } : {}) };
+    let { error: insertErr } = await admin.from("card_events").insert({ ...row, ...hints });
+    if (insertErr && (insertErr.code === "42703" || insertErr.code === "PGRST204") && Object.keys(hints).length) {
+      ({ error: insertErr } = await admin.from("card_events").insert(row));
+    }
     if (insertErr && (insertErr.code === "42703" || insertErr.code === "PGRST204") && ("lead_id" in row || "target_label" in row)) {
       // warm-lead-alerts.sql not applied yet: keep everything else on the row
       // and drop only its columns. The newest columns go first.
@@ -678,6 +695,9 @@ export async function POST(req: NextRequest) {
           // A locked contact on Free falls through to here (returning is null
           // above) — and used to be named in full.
           nameLocked: !!ownersOwnContact && isLockedContact(ownersOwnContact) && !isPaidProfile(owner),
+          // " on an iPhone 16 Pro via Instagram" — from this request, never the
+          // visitor's word. Marked as Pro detail: a Free reader never gets it.
+          device: deviceSentence(describeDevice(device_info, { model: device_model, os: device_os }), openedIn(device_info)),
           repeatVisits: isView && !firstEver && !returning && visitor_id
             ? await countRecentVisits(admin, card_owner_username, visitor_id, surface)
             : undefined,

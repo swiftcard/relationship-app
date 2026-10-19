@@ -1,4 +1,4 @@
-import { PHRASE_MARK } from "@/lib/location-privacy";
+import { DETAIL_MARK, PHRASE_MARK, withoutDetail } from "@/lib/location-privacy";
 
 // ── What may become a push notification, and when ───────────────────────────
 //
@@ -506,6 +506,22 @@ export function fitBodyKeepingPlace(marked: string, render: (s: string) => strin
   // A place so long it leaves no room for the sentence: the plain rule.
   if (room < 20) return fitBody(full, MAX_PLACE_BODY_CHARS);
   return `${fitBody(render(before), room)} ${tail}`;
+}
+
+/**
+ * The device a visit came from (" on an iPhone 16 Pro via Instagram") rides on
+ * a paid lock screen only when the WHOLE sentence fits. It sits after the
+ * place, and fitBodyKeepingPlace keeps everything from the place onward — so
+ * an over-long device phrase would shorten "Someone viewed your card" instead.
+ * The bell keeps it either way. Free never has it (lib/location-privacy).
+ * The budget is the one fitBodyKeepingPlace will apply: ninety with a place,
+ * sixty without.
+ */
+export function withDeviceIfItFits(body: string, paid: boolean, render: (s: string) => string): string {
+  if (!body.includes(DETAIL_MARK)) return body;
+  if (!paid) return withoutDetail(body);
+  const budget = body.split(PHRASE_MARK).length === 3 ? MAX_PLACE_BODY_CHARS : MAX_BODY_CHARS;
+  return render(body).replace(/\s+/g, " ").trim().length <= budget ? body : withoutDetail(body);
 }
 
 export function fitBody(body: string, max: number = MAX_BODY_CHARS): string {
