@@ -1,4 +1,5 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
+import { DELETION_GRACE_DAYS } from "@/lib/deletion-grace";
 import { releaseSlugArtifacts, prevSlugsOf } from "@/lib/release-slug";
 import { getStripe } from "@/lib/stripe";
 import { reportError } from "@/lib/report-error";
@@ -20,7 +21,7 @@ import { memberFallbackPlan } from "@/lib/office-brand";
 // `_deletion.purgeNow: true`, and is purged on the next hourly run instead of
 // after 30 days (owner, 2026-09-24).
 
-export const PURGE_GRACE_DAYS = 30; // must match GRACE_DAYS in api/account/reopen
+export const PURGE_GRACE_DAYS = DELETION_GRACE_DAYS; // lib/deletion-grace: the one number
 
 // Pure predicate: is a soft-deleted account past its reopen window and due for
 // permanent deletion? A missing/blank timestamp (legacy soft-delete) counts as

@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
+import { deletionGraceOver } from "@/lib/deletion-grace";
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { revalidateUserCards } from "@/lib/card-page-data";
 
-const GRACE_DAYS = 30;
 
 export async function POST() {
   const supabase = await createClient();
@@ -23,7 +23,7 @@ export async function POST() {
 
   // Enforce the 1-month reopen window.
   const at = deletion?.at ? new Date(deletion.at).getTime() : 0;
-  const expired = !at || Date.now() - at > GRACE_DAYS * 24 * 60 * 60 * 1000;
+  const expired = !at || deletionGraceOver(at);
   if (expired) {
     return NextResponse.json({ error: "expired", message: "This account can no longer be reopened." }, { status: 410 });
   }

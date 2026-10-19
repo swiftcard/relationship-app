@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { DELETION_GRACE_DAYS } from "@/lib/deletion-grace";
 import { createClient } from "@/lib/supabase-server";
 import ReopenAccount from "@/components/ReopenAccount";
 import LeaveDeletedAccount from "@/components/LeaveDeletedAccount";
 
-const GRACE_DAYS = 30;
+const GRACE_DAYS = DELETION_GRACE_DAYS;
 
 function daysLeftToReopen(deletedAt: string) {
   const used = Math.floor((Date.now() - new Date(deletedAt).getTime()) / 86_400_000);

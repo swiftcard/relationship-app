@@ -1,16 +1,25 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import SwiftCardLogo from "@/components/SwiftCardLogo";
 import { isChunkLoadError, recoverFromChunkError } from "@/lib/chunk-reload";
 
 // App-wide error boundary — without this, an uncaught error anywhere renders
 // Next.js's default unstyled error screen instead of anything on-brand.
+const noSubscribe = () => () => {};
+const APP_PATH = /^\/(dashboard|contacts|cards|settings|office|admin|grow|share|upgrade|welcome|profile)(\/|$)/;
+const inAppPath = () => APP_PATH.test(window.location.pathname);
+
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   // A page from before a deploy asking for a chunk that no longer exists.
   // reset() re-renders the same dead import, so "Try again" could never work;
   // only a fresh document can (lib/chunk-reload, audit NS-06).
   const staleDeploy = isChunkLoadError(error);
+  // Where the way out goes (audit F-MKT-03): a crash on a public page is a
+  // visitor, and "Go to my dashboard" sent them to a sign-in wall. App pages
+  // keep the dashboard; everywhere else gets the homepage. Read after mount —
+  // this boundary can render before the URL is known, so false on the server.
+  const inApp = useSyncExternalStore(noSubscribe, inAppPath, () => false);
   useEffect(() => {
     if (staleDeploy && recoverFromChunkError()) return;
     console.error("[app error boundary]", error);
@@ -56,7 +65,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
 
         <h1 className="text-2xl font-bold tracking-tight text-white mb-3">Something went wrong</h1>
         <p className="text-gray-400 text-sm leading-relaxed mb-8">
-          We hit an unexpected error. Try again, or head back to your dashboard — nothing you have saved is affected.
+          We hit an unexpected error. Try again, or head back {inApp ? "to your dashboard" : "to the homepage"} — nothing you have saved is affected.
         </p>
 
         <div className="flex w-full flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
@@ -68,12 +77,12 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
           </button>
           {/* A single button that only retries is a dead end when the thing that
               crashed crashes again. */}
-          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- a plain <a> on purpose: this is the crash boundary, so the client router is part of what may have failed. A full document load is the only navigation guaranteed to work here. */}
+          {/* A plain <a> on purpose: this is the crash boundary, so the client router is part of what may have failed. A full document load is the only navigation guaranteed to work here. */}
           <a
-            href="/dashboard"
+            href={inApp ? "/dashboard" : "/"}
             className="border border-gray-700 bg-gray-900 hover:border-gray-500 text-white font-semibold text-sm px-6 py-3 rounded-full transition-colors"
           >
-            Go to my dashboard
+            {inApp ? "Go to my dashboard" : "Go to the homepage"}
           </a>
         </div>
 

@@ -33,6 +33,15 @@ export class EmptyScanError extends Error {
   constructor(message = "Couldn't find any contact details on that card.") { super(message); this.name = "EmptyScanError"; }
 }
 
+/**
+ * The scanner could not try at all: too fast, a photo too large, the reader
+ * unavailable. Its message says so — "try a clearer photo" can't help any of
+ * them (audit F-SCAN-02).
+ */
+export class ScanServiceError extends Error {
+  constructor(message: string) { super(message); this.name = "ScanServiceError"; }
+}
+
 const SCAN_TIMEOUT_MS = 45_000;
 
 /**
@@ -61,6 +70,14 @@ export async function scanBusinessCard(photo: Blob, opts: { prepared?: boolean }
       const data = await res.json().catch(() => ({} as { message?: string; code?: string }));
       if (data.code === "AI_CONSENT_REQUIRED") throw new AiConsentRequiredError(data.message || undefined);
       throw new ProRequiredError(data.message || undefined);
+    }
+    if (res.status === 429 || res.status === 413 || res.status === 503) {
+      const data = await res.json().catch(() => ({} as { message?: string }));
+      throw new ScanServiceError(
+        res.status === 413 ? "That photo is too large — try a smaller one, or crop to the card."
+          : res.status === 429 ? (data.message || "You're scanning very quickly — give it a minute, then try again.")
+          : (data.message || "The card reader isn't available right now — type the details in, or try again later."),
+      );
     }
     if (!res.ok) throw new Error("scan_failed");
     const card = (await res.json()) as ScannedCard;

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { CONTACT_FIELD_MAX } from "@/lib/contact-limits";
 import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import Link from "next/link";
-import { scanBusinessCard, ProRequiredError, AiConsentRequiredError, EmptyScanError } from "@/lib/scan-card";
+import { scanBusinessCard, ProRequiredError, AiConsentRequiredError, EmptyScanError, ScanServiceError } from "@/lib/scan-card";
 import { PlanGate } from "@/components/PlanGate";
 import CardScanCamera from "@/components/CardScanCamera";
 
@@ -117,6 +117,7 @@ export default function AddContactModal({
       // "blocked": AI is switched off — a setting, so no "Try again".
       if (err instanceof AiConsentRequiredError) { setScanState("blocked"); setScanMsg(err.message); }
       else if (err instanceof ProRequiredError) { setScanState("pro"); setScanMsg(err.message); }
+      else if (err instanceof ScanServiceError) { setScanState("error"); setScanMsg(err.message); }
       else if (err instanceof EmptyScanError) { setScanState("error"); setScanMsg("Couldn't find contact details on that card. Fill the frame with the card and try again."); }
       else if (err instanceof DOMException && err.name === "AbortError") { setScanState("error"); setScanMsg("That took too long — try a clearer photo."); }
       else { setScanState("error"); setScanMsg("Couldn't read that card. Try a clear, well-lit photo."); }
