@@ -241,12 +241,22 @@ describe("the runner records what happened, the same way for every CRM", () => {
     expect(integration("hubspot").sync_error).toBeNull();
   });
 
-  it("a revoked token sets the reconnect banner and queues nothing", async () => {
+  // It used to queue nothing, so a contact captured while revoked was lost
+  // even after the user reconnected (audit I-02). The banner still asks them
+  // to reconnect; the contact waits for it.
+  it("a revoked token sets the reconnect banner and keeps the contact for the reconnect", async () => {
     connect("pipedrive", { metadata: { api_domain: "https://acme.pipedrive.com" } });
     respond = () => json({ error: "unauthorized" }, 401);
     const out = await runCrmSync(pipedriveProvider, lead, USER);
-    expect(out.status).toBe("failed");
+    expect(out).toMatchObject({ status: "failed", retryable: false, queued: true });
     expect(String(integration("pipedrive").sync_error)).toMatch(/reconnect Pipedrive/);
+    expect(table("crm_sync_outbox")).toEqual([expect.objectContaining({ lead_id: "L1", provider: "pipedrive", owner_id: USER })]);
+  });
+
+  it("…but the Settings test of a revoked token queues nothing", async () => {
+    connect("pipedrive", { metadata: { api_domain: "https://acme.pipedrive.com" } });
+    respond = () => json({ error: "unauthorized" }, 401);
+    await runCrmSync(pipedriveProvider, lead, USER, { test: true });
     expect(table("crm_sync_outbox")).toHaveLength(0);
   });
 
@@ -311,6 +321,21 @@ describe("the runner records what happened, the same way for every CRM", () => {
     await runCrmSync(googleProvider, lead, USER);
     expect(calls.some((c) => c.url.includes("oauth2.googleapis.com/token"))).toBe(false);
     expect(integration("google").sync_error).toBeNull();
+    process.env.GOOGLE_CLIENT_SECRET = saved;
+  });
+
+  // Audit I-04: the 401 that follows used to write "refused SwiftCard —
+  // reconnect" onto a connection that works fine where the secret exists.
+  it("…and when the CRM then refuses that token, the contact is queued, not a reconnect banner", async () => {
+    const saved = process.env.GOOGLE_CLIENT_SECRET;
+    delete process.env.GOOGLE_CLIENT_SECRET;
+    connect("google", { refresh_token: "r1", expires_at: Date.now() + 60 * 60 * 1000 });
+    respond = () => json({ error: { code: 401 } }, 401);
+    const out = await runCrmSync(googleProvider, lead, USER);
+    expect(out).toMatchObject({ status: "failed", retryable: true, queued: true });
+    expect(calls.some((c) => c.url.includes("oauth2.googleapis.com/token"))).toBe(false);
+    expect(integration("google").sync_error).toBeNull();
+    expect(table("crm_sync_outbox")).toEqual([expect.objectContaining({ lead_id: "L1", provider: "google" })]);
     process.env.GOOGLE_CLIENT_SECRET = saved;
   });
 
@@ -668,6 +693,25 @@ describe("the daily catch-up", () => {
     const r = await drainCrmOutbox();
     expect(r).toMatchObject({ tried: 1, sent: 1 });
     expect(table("crm_sync_outbox")).toHaveLength(0);
+  });
+
+  it("still refused (401): it keeps its place until they reconnect", async () => {
+    queue();
+    respond = () => json({ error: "unauthorized" }, 401);
+    const r = await drainCrmOutbox();
+    expect(r.waiting).toBe(1);
+    expect(table("crm_sync_outbox")).toHaveLength(1);
+    expect(String(integration("pipedrive").sync_error)).toMatch(/reconnect Pipedrive/);
+  });
+
+  it("reconnecting sends what waited at once, without waiting for its slot — and only for that CRM", async () => {
+    queue({ next_attempt_at: "2999-01-01T00:00:00Z" });
+    table("crm_sync_outbox").push({ id: "q2", lead_id: "L1", provider: "hubspot", user_id: USER, owner_id: USER, mode: "capture", attempts: 0, next_attempt_at: "2999-01-01T00:00:00Z", created_at: new Date().toISOString() });
+    respond = (url) => (url.includes("/search") ? json({ data: { items: [] } }) : json({ data: { id: 5 } }));
+    expect((await drainCrmOutbox()).tried).toBe(0);
+    const r = await drainCrmOutbox({ ownerId: USER, provider: "pipedrive", dueNow: true });
+    expect(r).toMatchObject({ tried: 1, sent: 1 });
+    expect(table("crm_sync_outbox").map((x) => x.provider)).toEqual(["hubspot"]);
   });
 
   it("still down: it waits for tomorrow", async () => {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
+import { catchUpAfterReconnect } from "@/lib/crm-outbox-drain";
 import { isPaidProfile, PLAN_COLUMNS } from "@/lib/effective-plan";
 import { encryptToken } from "@/lib/token-crypto";
 import { sanitizeCardScope } from "@/lib/crm-scope";
@@ -87,5 +88,7 @@ export async function POST(request: NextRequest) {
   }, { onConflict: "user_id,provider" });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // Contacts that waited while it was disconnected go now (audit I-02).
+  catchUpAfterReconnect(user.id, "hubspot");
   return NextResponse.json({ ok: true });
 }

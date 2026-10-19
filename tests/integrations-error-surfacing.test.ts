@@ -237,7 +237,7 @@ describe("integrations are re-checked against the plan at send time", () => {
     expect(at).toBeGreaterThan(-1);
     const openIf = src.lastIndexOf("if (", at);
     expect(openIf).toBeGreaterThan(-1);
-    expect(src.slice(openIf, at)).toMatch(/isPaidPlan\(ownerProfile\.plan\)/);
+    expect(src.slice(openIf, at)).toMatch(/isPaidProfile\(ownerProfile\)/);
   });
 
   it("the CRM syncs survive the response — they aren't floating promises", () => {
@@ -260,7 +260,7 @@ describe("integrations are re-checked against the plan at send time", () => {
     expect(at).toBeGreaterThan(-1);
     const openIf = src.lastIndexOf("if (", at);
     expect(openIf).toBeGreaterThan(-1);
-    expect(src.slice(openIf, at)).toMatch(/isPaidPlan\(ownerProfile\.plan\)/);
+    expect(src.slice(openIf, at)).toMatch(/isPaidProfile\(ownerProfile\)/);
     // And again inside the resolver, for the manual-add path and for an
     // inherited office webhook (whose OWNER must be paid too).
     // Expiry-aware (isPaidProfile) — the raw plan column kept firing Zaps for

@@ -3,7 +3,8 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { deletedAccountResponse } from "@/lib/live-account";
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
-import { PLAN_LIMITS, isPaidPlan } from "@/lib/plan";
+import { PLAN_LIMITS } from "@/lib/plan";
+import { isPaidProfile, PLAN_COLUMNS } from "@/lib/effective-plan";
 import { readUsage, bumpUsage } from "@/lib/usage";
 import { getSourceLabel } from "@/lib/source-labels";
 import { syncLeadToAllCrms, sendLeadToZapier } from "@/lib/crm-sync";
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
   { const gone = await deletedAccountResponse(user.id); if (gone) return gone; }
 
   const admin = getAdminSupabase();
-  const { data: profile } = await admin.from("profiles").select("username, plan, customization").eq("id", user.id).single();
+  const { data: profile } = await admin.from("profiles").select(`username, ${PLAN_COLUMNS}`).eq("id", user.id).single();
   if (!profile) return NextResponse.json({ error: "Profile not found" }, { status: 404 });
 
   const body = await req.json();
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
   // Manual adds count against the same monthly free-lead meter (5/month, on the
   // account so it survives card deletion). A deliberate owner action, so we hard-
   // block at the cap with an upgrade prompt rather than silently locking.
-  const paid = isPaidPlan(profile.plan);
+  const paid = isPaidProfile(profile); // an expired grant is Free here too (audit I-06)
   if (!paid && readUsage(profile.customization).leads >= PLAN_LIMITS.FREE_LEADS_PER_MONTH) {
     return NextResponse.json(
       {

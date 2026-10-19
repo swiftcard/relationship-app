@@ -3,7 +3,8 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { syncLeadToAllCrms, sendLeadToZapier } from "@/lib/crm-sync";
 import { loadCrmLead } from "@/lib/crm-lead";
 import { getSourceLabel, sourcePhrase } from "@/lib/source-labels";
-import { PLAN_LIMITS, LOCKED_LEAD_TAG, isPaidPlan } from "@/lib/plan";
+import { PLAN_LIMITS, LOCKED_LEAD_TAG } from "@/lib/plan";
+import { isPaidProfile, PLAN_COLUMNS } from "@/lib/effective-plan";
 import { readUsage, bumpUsage } from "@/lib/usage";
 import { cardIsOffline, cardWithinPlanLimit, ownerIsDeleted } from "@/lib/card-active";
 import { isRateLimited } from "@/lib/rate-limit";
@@ -172,7 +173,7 @@ export async function POST(req: NextRequest) {
     // for multi-card accounts that is NOT the profile slug, so look the card up
     // first and fall back to the legacy profile-slug match. Without this,
     // notifications/emails silently skipped every non-primary card.
-    const ownerSelect = "id, plan, name, email, phone, company, customization";
+    const ownerSelect = `id, name, email, phone, company, ${PLAN_COLUMNS}`;
     // select("*") so the is_offline kill-switch is actually present on the row —
     // an explicit column list would silently omit it (and would error outright on
     // a pre-migration schema), leaving lead capture open on an offline card.
@@ -284,7 +285,9 @@ export async function POST(req: NextRequest) {
     let locked = false;
     // This lead is the month's LAST free one — see the heads-up below.
     let lastFreeLead = false;
-    if (!isPaidPlan(ownerProfile?.plan) && ownerProfile?.id) {
+    // The plan as it is NOW (audit I-06): an expired free month counts as Free
+    // here exactly as it does for the CRM sends below.
+    if (!isPaidProfile(ownerProfile) && ownerProfile?.id) {
       const usedThisMonth = readUsage(ownerProfile.customization).leads;
       locked = usedThisMonth >= PLAN_LIMITS.FREE_LEADS_PER_MONTH;
       lastFreeLead = usedThisMonth + 1 === PLAN_LIMITS.FREE_LEADS_PER_MONTH;
@@ -370,7 +373,7 @@ export async function POST(req: NextRequest) {
     // already gated its events this way — these paths did not, so the same
     // account could still receive lead syncs while its view/notification events
     // had stopped. Same rule everywhere now.
-    if (ownerProfile?.id && isPaidPlan(ownerProfile.plan)) {
+    if (ownerProfile?.id && isPaidProfile(ownerProfile)) {
       // The context below is what a CRM record can't get anywhere else: where
       // the meeting happened, how the card was tapped, and WHICH card captured
       // it — which in an Office identifies the rep. Providers that have nowhere

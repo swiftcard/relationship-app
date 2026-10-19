@@ -28,6 +28,12 @@ export type OutboxEntry = {
   error: string;
 };
 
+/** A refusal of SwiftCard itself (401/403): queued too, but it waits for the
+ *  user to reconnect — the banner asks them to (audit I-02). */
+export function waitsForReconnect(statusCode: number | null | undefined): boolean {
+  return statusCode === 401 || statusCode === 403;
+}
+
 /** How soon a queued contact may be tried again. The daily job does the trying. */
 const FIRST_RETRY_AFTER_MS = 15 * 60 * 1000;
 

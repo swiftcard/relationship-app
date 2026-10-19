@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { appUrl } from "@/lib/app-url";
 import { getAdminSupabase } from "@/lib/supabase-admin";
+import { catchUpAfterReconnect } from "@/lib/crm-outbox-drain";
 import { encryptToken } from "@/lib/token-crypto";
 import { CRM_CALL_TIMEOUT_MS } from "@/lib/crm-http";
 import { verifyState, stateBoundToBrowser, oauthBindCookieName } from "@/lib/oauth-state";
@@ -129,5 +130,7 @@ export async function GET(request: NextRequest) {
     return DONE("error");
   }
 
+  // Contacts that waited while it was disconnected go now (audit I-02).
+  catchUpAfterReconnect(userId, "google");
   return DONE("connected");
 }

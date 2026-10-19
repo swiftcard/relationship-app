@@ -13,7 +13,7 @@ import {
   type PushResult,
 } from "./crm-connection";
 import { newCrmBudget } from "./crm-http";
-import { enqueueCrmRetry } from "./crm-outbox";
+import { enqueueCrmRetry, waitsForReconnect } from "./crm-outbox";
 import { reportError } from "./report-error";
 
 // ── One contact, one CRM, start to finish ────────────────────────────────────
@@ -90,11 +90,17 @@ export async function runCrmSync(
     // live). One forced refresh, one more try — before anyone is told to
     // reconnect something that still works.
     if (!result.ok && result.status === 401 && provider.refresh) {
+      let refreshDown = false;
       const fresh = await getCrmConnection(key, provider.label, ownerId, lead.capturedByCardId, capturedBy, provider.refresh(), { skipScope: true, forceRefresh: true })
-        .catch(() => null);
+        .catch((e) => { refreshDown = e instanceof RefreshUnavailableError; return null; });
       if (fresh) {
         conn = fresh;
         result = await provider.push(fresh, lead, { ...opts, budget, knownRecord });
+      } else if (refreshDown) {
+        // The token couldn't be renewed HERE — the sign-in server was down, or
+        // this deployment has no client secret (audit I-04). Not the user's
+        // connection: queued, no "reconnect" banner.
+        result = { ok: false, status: null, retryable: true, message: connectionErrorMessage(provider.label, null) };
       }
     }
   } catch (e) {
@@ -122,6 +128,13 @@ export async function runCrmSync(
     return failed(result, queued);
   }
   await setSyncError(key, ownerId, result.message);
+  // Refused SwiftCard itself (401/403): only reconnecting fixes that, and the
+  // banner says so — but the contact keeps its place for when they do, and is
+  // sent the moment they reconnect (audit I-02). It used to be lost.
+  if (waitsForReconnect(result.status) && lead.leadId && !opts.test && !opts.fromOutbox) {
+    const queued = await enqueueCrmRetry({ leadId: lead.leadId, provider: key, capturedBy, ownerId, mode: opts.mode ?? "capture", error: result.message });
+    return failed(result, queued);
+  }
   return failed(result, false);
 }
 

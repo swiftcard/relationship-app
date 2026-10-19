@@ -1,10 +1,11 @@
+import { after } from "next/server";
 import { getAdminSupabase } from "./supabase-admin";
 import { CRM_PROVIDERS, sendLeadToZapier } from "./crm-sync";
 import { runCrmSync } from "./crm-run";
 import { setSyncError, type CrmProviderKey } from "./crm-connection";
 import { loadCrmLead } from "./crm-lead";
 import { isPaidProfile, PLAN_COLUMNS } from "./effective-plan";
-import type { OutboxProvider } from "./crm-outbox";
+import { waitsForReconnect, type OutboxProvider } from "./crm-outbox";
 
 // ── The daily catch-up ───────────────────────────────────────────────────────
 //
@@ -33,7 +34,7 @@ type Row = { id: string; lead_id: string; provider: OutboxProvider; user_id: str
 
 export type DrainResult = { tried: number; sent: number; dropped: number; waiting: number; gaveUp: number };
 
-export async function drainCrmOutbox(opts: { deadlineMs?: number; ownerId?: string } = {}): Promise<DrainResult> {
+export async function drainCrmOutbox(opts: { deadlineMs?: number; ownerId?: string; provider?: OutboxProvider; dueNow?: boolean } = {}): Promise<DrainResult> {
   const result: DrainResult = { tried: 0, sent: 0, dropped: 0, waiting: 0, gaveUp: 0 };
   const deadline = Date.now() + (opts.deadlineMs ?? 120_000);
   const admin = getAdminSupabase();
@@ -41,10 +42,11 @@ export async function drainCrmOutbox(opts: { deadlineMs?: number; ownerId?: stri
   let q = admin
     .from("crm_sync_outbox")
     .select("id, lead_id, provider, user_id, owner_id, mode, attempts, created_at")
-    .lte("next_attempt_at", new Date().toISOString())
     .order("created_at", { ascending: true })
     .limit(BATCH);
+  if (!opts.dueNow) q = q.lte("next_attempt_at", new Date().toISOString());
   if (opts.ownerId) q = q.eq("owner_id", opts.ownerId);
+  if (opts.provider) q = q.eq("provider", opts.provider);
   const { data, error } = await q;
   if (error || !data) return result; // table not migrated yet
 
@@ -85,7 +87,9 @@ export async function drainCrmOutbox(opts: { deadlineMs?: number; ownerId?: stri
       }
       const out = await runCrmSync(provider, loaded.lead, loaded.capturedBy, { mode: row.mode === "update" ? "update" : "capture", fromOutbox: true });
       delivered = out.status === "sent" || out.status === "skipped";
-      retryable = out.status === "failed" && out.retryable;
+      // Still refused: the banner already says reconnect, and the contact
+      // keeps its place until they do (audit I-02).
+      retryable = out.status === "failed" && (out.retryable || waitsForReconnect(out.status_code));
     }
 
     if (delivered) {
@@ -123,4 +127,17 @@ export async function drainCrmOutbox(opts: { deadlineMs?: number; ownerId?: stri
   }
 
   return result;
+}
+
+/**
+ * Right after a CRM is connected again: send the contacts that waited for it
+ * now, not at tomorrow's run (audit I-02). After the response, so the
+ * reconnect itself is never slowed down; tomorrow's run picks up the rest.
+ */
+export function catchUpAfterReconnect(ownerId: string, provider: CrmProviderKey): void {
+  try {
+    after(() => drainCrmOutbox({ ownerId, provider, dueNow: true, deadlineMs: 25_000 }).then(() => {}, () => {}));
+  } catch {
+    /* outside a request (a test, a script): tomorrow's run sends them */
+  }
 }

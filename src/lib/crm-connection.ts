@@ -4,6 +4,7 @@ import { resolveOfficeContext } from "./office-roles";
 import { isCardInScope, parseCardScope } from "./crm-scope";
 import { isPaidProfile, PLAN_COLUMNS } from "./effective-plan";
 import { crmFetch, isRetryableStatus, type CrmBudget } from "./crm-http";
+import { reportError } from "./report-error";
 
 // ── Shared plumbing for every CRM connection ─────────────────────────────────
 //
@@ -426,6 +427,13 @@ export async function getCrmConnection(
     // production connection as broken for trying. Use the token as it is; if
     // it really has expired, the provider's 401 says so on its own.
     if (!refresh.clientId || !refresh.clientSecret) {
+      // A token past its expiry, or one the CRM just refused, can't be used
+      // as it is: that is this deployment's missing config, so it is reported
+      // and the contact queued — never a "reconnect" banner (audit I-04).
+      if (opts.forceRefresh || now >= (data.expires_at as number)) {
+        await reportError(`crm.${provider}.no-client-credentials`, new Error(`${label}: no OAuth client id/secret on this deployment, so the token can't be renewed`)).catch(() => {});
+        throw new RefreshUnavailableError(label);
+      }
       console.warn(`[crm:${provider}] no client credentials here — skipping token refresh`);
       return { token: accessToken, syncError: storedError, metadata };
     }
