@@ -72,7 +72,47 @@ export type VisitEventRow = {
   network_org?: string | null;
 };
 
-export type VisitLead = { id: string; name?: string | null; tags?: unknown };
+export type VisitLead = {
+  id: string;
+  name?: string | null;
+  tags?: unknown;
+  email?: string | null;
+  phone?: string | null;
+  created_at?: string | null;
+};
+
+/**
+ * A browser this owner has EARNED the right to name, from when (feature 3,
+ * owner 2026-10-18: turn anonymous visits into named ones). The same evidence
+ * and the same lead-in the contact's own activity timeline uses
+ * (api/card-events GET): an active contact_devices binding from shortly
+ * before it was made, or — for a contact from before bindings — the browser
+ * they shared from. Never a forwarded link, a superseded binding or one the
+ * owner marked "Wrong person" (the loader leaves those out).
+ */
+export type VisitBinding = { visitor_id: string; lead_id: string; from: string };
+
+/** A share of details on this card, for "Shared their details" in its visit. */
+export type VisitShare = { visitor_id: string; created_at: string; surface: "card" | "links" };
+
+const digits = (v: string | null | undefined) => (v ?? "").replace(/\D/g, "").slice(-10);
+const mail = (v: string | null | undefined) => (v ?? "").trim().toLowerCase();
+
+/**
+ * The person these contacts are, or undefined when they are not one person.
+ * lib/known-contact's rule 2: several contacts on one browser are the SAME
+ * person only when they share an email or a phone (they submitted twice) —
+ * then the newest. Otherwise it is a shared device, and nobody is named.
+ */
+export function onePerson(leads: VisitLead[]): VisitLead | undefined {
+  const unique = [...new Map(leads.map((l) => [l.id, l])).values()];
+  if (unique.length <= 1) return unique[0];
+  const [first, ...rest] = unique;
+  const same = rest.every((l) =>
+    (!!mail(l.email) && mail(l.email) === mail(first.email)) || (!!digits(l.phone) && digits(l.phone).length >= 7 && digits(l.phone) === digits(first.phone)));
+  if (!same) return undefined;
+  return unique.sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))[0];
+}
 
 const surfaceOf = (r: { surface?: string | null }): "card" | "links" => (r.surface === "links" ? "links" : "card");
 const ms = (iso: string) => new Date(iso).getTime();
@@ -88,6 +128,8 @@ export function buildRecentVisits(input: {
   events: VisitEventRow[];
   history: Pick<VisitEventRow, "visitor_id" | "surface" | "created_at">[];
   leads: VisitLead[];
+  bindings?: VisitBinding[];
+  shares?: VisitShare[];
   paid: boolean;
   limit: number;
 }): RecentVisit[] {
@@ -120,6 +162,12 @@ export function buildRecentVisits(input: {
       : [];
 
     const actions: string[] = [];
+    // They handed over their name and number in this very visit — the thing
+    // that turns an anonymous visit into a named one.
+    if (start.visitor_id && (input.shares ?? []).some((sh) =>
+      sh.visitor_id === start.visitor_id && sh.surface === surface && ms(sh.created_at) >= t0 - 60_000 && ms(sh.created_at) < end)) {
+      actions.push("Shared their details");
+    }
     if (start.event_type === "downloaded_vcard" || inVisit.some((e) => e.event_type === "downloaded_vcard")) {
       actions.push("Saved your contact");
     }
@@ -134,8 +182,18 @@ export function buildRecentVisits(input: {
     // WHO. A contact this owner knows, from the stamp on the event — never a
     // forwarded link's opener (the notifications don't name them either).
     // Locked on Free: the Contacts page doesn't list them, so neither does this.
+    // A visit made BEFORE the binding existed (the visit in which they shared,
+    // or the first view of a link the owner sent) carries no stamp: it is named
+    // from the binding, exactly as the contact's timeline credits it to them.
     let who: string | null = "Someone";
-    const lead = start.lead_id && start.lead_confidence !== "forwarded" ? leadById.get(start.lead_id) : undefined;
+    let lead = start.lead_id && start.lead_confidence !== "forwarded" ? leadById.get(start.lead_id) : undefined;
+    if (!start.lead_id && start.visitor_id) {
+      const bound = (input.bindings ?? [])
+        .filter((b) => b.visitor_id === start.visitor_id && ms(b.from) <= t0)
+        .map((b) => leadById.get(b.lead_id))
+        .filter((l): l is VisitLead => !!l);
+      lead = onePerson(bound);
+    }
     if (lead?.name?.trim()) who = isLockedLead(lead) && !paid ? null : lead.name.trim();
     else if (!start.lead_id && start.visitor_name?.trim()) who = start.visitor_name.trim();
 
@@ -194,7 +252,8 @@ const BASE_COLS =
  */
 export async function loadRecentVisits(
   admin: SupabaseClient,
-  opts: { slug: string; sinceIso: string; paid: boolean; limit?: number },
+  /** ownerId: the card owner's user id — contact_devices bindings are theirs. */
+  opts: { slug: string; sinceIso: string; paid: boolean; ownerId?: string | null; limit?: number },
 ): Promise<RecentVisit[]> {
   const limit = opts.limit ?? 25;
   try {
@@ -215,7 +274,13 @@ export async function loadRecentVisits(
 
     const visitorIds = [...new Set(events.map((e) => e.visitor_id).filter((v): v is string => !!v))].slice(0, 200);
     const leadIds = [...new Set(events.map((e) => e.lead_id).filter((v): v is string => !!v))].slice(0, 200);
-    const [historyRes, leadsRes] = await Promise.all([
+    type BindingRow = {
+      visitor_id: string; lead_id: string; bound_via: string; link_device_index: number | null;
+      bound_at: string | null; superseded_at: string | null; wrong_at: string | null;
+    };
+    type ShareRow = { id: string; visitor_id: string | null; created_at: string; source: string | null };
+    const none = <T,>() => Promise.resolve({ data: [] as T[], error: null });
+    const [historyRes, bindingsRes, sharesRes] = await Promise.all([
       visitorIds.length
         ? admin
             .from("card_events")
@@ -224,15 +289,59 @@ export async function loadRecentVisits(
             .eq("event_type", "viewed_card")
             .in("visitor_id", visitorIds)
             .limit(5000)
-        : Promise.resolve({ data: [] as VisitEventRow[] }),
-      leadIds.length
-        ? admin.from("leads").select("id, name, tags").in("id", leadIds)
-        : Promise.resolve({ data: [] as VisitLead[] }),
+        : none<VisitEventRow>(),
+      // Every binding of these browsers, superseded and wrong ones included:
+      // a browser with ANY binding never falls back to the share rule below.
+      visitorIds.length && opts.ownerId
+        ? admin
+            .from("contact_devices")
+            .select("visitor_id, lead_id, bound_via, link_device_index, bound_at, superseded_at, wrong_at")
+            .eq("owner_id", opts.ownerId)
+            .in("visitor_id", visitorIds)
+            .limit(2000)
+        : none<BindingRow>(),
+      // Details shared on THIS card from these browsers.
+      visitorIds.length
+        ? admin
+            .from("leads")
+            .select("id, visitor_id, created_at, source")
+            .eq("card_owner", opts.slug)
+            .in("visitor_id", visitorIds)
+            .limit(2000)
+        : none<ShareRow>(),
     ]);
+    const bindingRows = ((bindingsRes.error ? [] : bindingsRes.data) ?? []) as BindingRow[];
+    const shareRows = ((sharesRes.error ? [] : sharesRes.data) ?? []) as ShareRow[];
+    const LEAD_IN_MS = 2 * 60 * 60 * 1000;
+    const bindings: VisitBinding[] = [];
+    for (const b of bindingRows) {
+      if (b.superseded_at || b.wrong_at || !b.bound_at) continue;
+      if (b.bound_via === "link" && (b.link_device_index ?? 1) > 1) continue; // forwarded
+      // The visit that led to sharing starts before the share; a link is
+      // evidence only from the moment it was opened.
+      const lead = b.bound_via === "link" ? 0 : LEAD_IN_MS;
+      bindings.push({ visitor_id: b.visitor_id, lead_id: b.lead_id, from: new Date(ms(b.bound_at) - lead).toISOString() });
+    }
+    const everBound = new Set(bindingRows.map((b) => b.visitor_id));
+    for (const sh of shareRows) {
+      if (!sh.visitor_id || everBound.has(sh.visitor_id)) continue;
+      bindings.push({ visitor_id: sh.visitor_id, lead_id: sh.id, from: new Date(ms(sh.created_at) - LEAD_IN_MS).toISOString() });
+    }
+
+    const allLeadIds = [...new Set([...leadIds, ...bindings.map((b) => b.lead_id)])].slice(0, 400);
+    const leadsRes = allLeadIds.length
+      ? await admin.from("leads").select("id, name, tags, email, phone, created_at").in("id", allLeadIds)
+      : { data: [] as VisitLead[] };
     return buildRecentVisits({
       events,
       history: (historyRes.data ?? []) as VisitEventRow[],
       leads: (leadsRes.data ?? []) as VisitLead[],
+      bindings,
+      shares: shareRows
+        .filter((sh): sh is ShareRow & { visitor_id: string } => !!sh.visitor_id)
+        // The Swift Links page's form is the only one there; every other form
+        // is on the card.
+        .map((sh) => ({ visitor_id: sh.visitor_id, created_at: sh.created_at, surface: sh.source === "swift_connect" ? "links" as const : "card" as const })),
       paid: opts.paid,
       limit,
     });

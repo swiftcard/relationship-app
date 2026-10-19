@@ -569,7 +569,7 @@ export default async function DashboardPage({
     // Locations tab, which doesn't show it. Never throws.
     viewsRange === "locations"
       ? Promise.resolve([])
-      : loadRecentVisits(getAdminSupabase(), { slug: analyticsUsername, sinceIso: viewsCutoff, paid: isPro }),
+      : loadRecentVisits(getAdminSupabase(), { slug: analyticsUsername, sinceIso: viewsCutoff, paid: isPro, ownerId: user.id }),
   ]);
 
   // If a notifications column migration (card_owner, lead_id) hasn't run yet,
