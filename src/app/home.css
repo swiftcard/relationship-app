@@ -210,9 +210,14 @@
 .hp-kicker.hp-kicker-d { background: linear-gradient(115deg, #6FA0FF, #4DA8F5 60%, #9BD1FF); -webkit-background-clip: text; background-clip: text; }
 
 /* Page hero on light: a soft brand light from the top instead of a dark band. */
-.hp-page-hero { position: relative; overflow: hidden; background: #fff; }
-.hp-page-hero::before { content: ""; position: absolute; inset: -40% -10% auto -10%; height: 90%; pointer-events: none;
-  background: radial-gradient(50% 60% at 50% 30%, rgba(77,168,245,.16), transparent 70%); }
+/* The glow is the section's own background, not a ::before box: a box sized in
+   % of the hero grew with it whenever anything inside settled, and Chrome
+   scores a growing box as a layout shift — /templates measured CLS 0.61 on a
+   phone from the glow alone (audit P-04). Same light, same place: the old box
+   (top -40%, height 90%, width 120%) with its ellipse (50%×60% at 50% 30%)
+   works out to 60%×54% centred at 50% −13% of the section. */
+.hp-page-hero { position: relative; overflow: hidden;
+  background: radial-gradient(60% 54% at 50% -13%, rgba(77,168,245,.16), transparent 70%), #fff; }
 
 /* ── AI Card Designer showcase (/templates, components/site/AiDesignerShowcase) ─
    Two panels with a quiet gradient edge — the same frame the in-app AI buttons

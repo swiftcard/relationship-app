@@ -369,7 +369,12 @@ export default function AiDesignerShowcase() {
       <div className="relative max-w-6xl mx-auto px-5 sm:px-6">
         <div className="max-w-2xl mx-auto text-center" data-hp-head>
           <Eyebrow dark={false}>AI Card Designer</Eyebrow>
-          <h1 id="ai-designer-heading" className="rd-h2 text-[clamp(2.2rem,5vw,3.6rem)] text-slate-900 mt-4">
+          {/* lg:-mx-6: the line is 613px in Bricolage but 677px in its
+              fallback, 5px past this 672px column — so it painted on two lines
+              and snapped to one when the font arrived, moving everything below
+              (audit P-04). 48px more room holds both on one line; centred, the
+              finished headline sits exactly where it did. */}
+          <h1 id="ai-designer-heading" className="rd-h2 text-[clamp(2.2rem,5vw,3.6rem)] text-slate-900 mt-4 lg:-mx-6">
             Your card, <span className="hp-fill">designed by AI.</span>
           </h1>
           <p className="hp-lede mt-4">
