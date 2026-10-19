@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CARD_FIELD_MAX } from "@/lib/card-limits";
 import { useRouter } from "next/navigation";
 import CardScaler from "@/components/CardScaler";
 import InertPreview from "@/components/InertPreview";
@@ -139,6 +140,9 @@ export default function OfficeBranding({ office }: { office: Brand }) {
   const [address, setAddress] = useState<Addr>(office.brand_address ?? {});
   const [lockTemplate, setLockTemplate] = useState(office.brand_locks?.template !== false);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  // What the server actually said (audit F-OFFICE-05): a lapsed plan, an
+  // ended session and a real failure all read "Something went wrong".
+  const [errMsg, setErrMsg] = useState<string | null>(null);
   // WHICH HALF OF THE BRAND. A card and a Swift Links page are two different
   // surfaces with two different vocabularies, and an admin works on one at a
   // time — so they are two tabs over one page rather than one very long form.
@@ -198,6 +202,14 @@ export default function OfficeBranding({ office }: { office: Brand }) {
         }),
       });
       setStatus(res.ok ? "saved" : "error");
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+        setErrMsg(
+          res.status === 401
+            ? "Your session ended — sign in again to save."
+            : data.message || (data.error && data.error.length > 12 ? data.error : null),
+        );
+      } else setErrMsg(null);
       if (res.ok) {
         cardHistory.clear();
         setTimeout(() => setStatus("idle"), 2500);
@@ -301,11 +313,11 @@ export default function OfficeBranding({ office }: { office: Brand }) {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-1.5">Company name</label>
-                <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Coastline Realty" className={inputCls} />
+                <input value={company} maxLength={CARD_FIELD_MAX.company} onChange={(e) => setCompany(e.target.value)} placeholder="Coastline Realty" className={inputCls} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-1.5">Website</label>
-                <input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="coastlinehomes.com" className={inputCls} />
+                <input value={website} maxLength={CARD_FIELD_MAX.website} onChange={(e) => setWebsite(e.target.value)} placeholder="coastlinehomes.com" className={inputCls} />
               </div>
             </div>
 
@@ -314,14 +326,14 @@ export default function OfficeBranding({ office }: { office: Brand }) {
                 <label className="block text-xs font-medium text-gray-400 mb-1.5">
                   Main phone number <span className="text-gray-600 font-normal">(optional)</span>
                 </label>
-                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(555) 123-4567" className={inputCls} />
+                <input type="tel" value={phone} maxLength={CARD_FIELD_MAX.phone} onChange={(e) => setPhone(e.target.value)} placeholder="(555) 123-4567" className={inputCls} />
                 <p className="text-[0.6875rem] text-gray-600 mt-1">Shows as &quot;Office&quot; on every card, next to each person&apos;s own number.</p>
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-1.5">
                   Fax number <span className="text-gray-600 font-normal">(optional)</span>
                 </label>
-                <input type="tel" value={fax} onChange={(e) => setFax(e.target.value)} placeholder="(555) 123-4568" className={inputCls} />
+                <input type="tel" value={fax} maxLength={CARD_FIELD_MAX.fax} onChange={(e) => setFax(e.target.value)} placeholder="(555) 123-4568" className={inputCls} />
               </div>
             </div>
 
@@ -330,11 +342,11 @@ export default function OfficeBranding({ office }: { office: Brand }) {
                 Business address <span className="text-gray-600 font-normal">(optional)</span>
               </label>
               <div className="grid grid-cols-6 gap-2">
-                <input value={address.street ?? ""} onChange={(e) => setAddr("street", e.target.value)} placeholder="Street" aria-label="Street" className={`col-span-4 ${inputCls}`} />
-                <input value={address.unit ?? ""} onChange={(e) => setAddr("unit", e.target.value)} placeholder="Unit" aria-label="Unit" className={`col-span-2 ${inputCls}`} />
-                <input value={address.city ?? ""} onChange={(e) => setAddr("city", e.target.value)} placeholder="City" aria-label="City" className={`col-span-3 ${inputCls}`} />
-                <input value={address.state ?? ""} onChange={(e) => setAddr("state", e.target.value)} placeholder="State" aria-label="State" className={`col-span-1 ${inputCls}`} />
-                <input value={address.zip ?? ""} onChange={(e) => setAddr("zip", e.target.value)} placeholder="ZIP" aria-label="ZIP" className={`col-span-2 ${inputCls}`} />
+                <input value={address.street ?? ""} maxLength={120} onChange={(e) => setAddr("street", e.target.value)} placeholder="Street" aria-label="Street" className={`col-span-4 ${inputCls}`} />
+                <input value={address.unit ?? ""} maxLength={20} onChange={(e) => setAddr("unit", e.target.value)} placeholder="Unit" aria-label="Unit" className={`col-span-2 ${inputCls}`} />
+                <input value={address.city ?? ""} maxLength={60} onChange={(e) => setAddr("city", e.target.value)} placeholder="City" aria-label="City" className={`col-span-3 ${inputCls}`} />
+                <input value={address.state ?? ""} maxLength={20} onChange={(e) => setAddr("state", e.target.value)} placeholder="State" aria-label="State" className={`col-span-1 ${inputCls}`} />
+                <input value={address.zip ?? ""} maxLength={20} onChange={(e) => setAddr("zip", e.target.value)} placeholder="ZIP" aria-label="ZIP" className={`col-span-2 ${inputCls}`} />
               </div>
             </div>
           </div>
@@ -455,7 +467,7 @@ export default function OfficeBranding({ office }: { office: Brand }) {
           </button>
           {status === "saved" && <span className="text-green-400 text-sm font-medium" role="status">Applied to your team&apos;s cards ✓</span>}
           {status === "error" && (
-            <span className="text-red-400 text-sm" role="alert">Something went wrong — please try again.</span>
+            <span className="text-red-400 text-sm" role="alert">{errMsg || "Something went wrong — please try again."}</span>
           )}
         </div>
       </div>

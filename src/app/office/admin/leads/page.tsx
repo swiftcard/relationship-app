@@ -3,7 +3,7 @@ import { requireOfficeAdmin } from "@/lib/office-admin-guard";
 import { getOfficeLeads } from "@/lib/office-leads";
 import { getOfficeContactDetail } from "@/lib/office-contact-detail";
 import { FOLLOW_UP_STATES, type FollowUpState } from "@/lib/lead-followup";
-import { PageHead } from "@/components/office/OfficeUI";
+import { PageHead, Empty } from "@/components/office/OfficeUI";
 import LeadsTable from "./LeadsTable";
 
 export const metadata = { title: "Contacts — Admin — SwiftCard" };
@@ -31,11 +31,24 @@ export default async function OfficeLeadsPage({
   // for people who've left) — includes the slug → person-name mapping so the
   // table never shows a raw card URL.
   const [page, initialContact] = await Promise.all([
-    getOfficeLeads(officeId).catch(() => ({ leads: [], total: 0, hasMore: false })),
+    // A failed load is NOT an empty office (audit F-OFFICE-02): it used to
+    // read "No contacts yet", hide Export, and leave the admin believing the
+    // team had captured nothing. Null here shows the same error the Team and
+    // Analytics tabs show.
+    getOfficeLeads(officeId).catch((e) => { console.error("Office contacts failed to load:", e); return null; }),
     contactId && ownerId
       ? getOfficeContactDetail({ officeId, ownerId, viewerId: userId, contactId }).catch(() => null)
       : Promise.resolve(null),
   ]);
+
+  if (!page) {
+    return (
+      <div>
+        <PageHead title="Contacts" desc="Everyone your team has met — people who shared their info, plus contacts your team scanned or added." />
+        <Empty>Couldn&apos;t load your team&apos;s contacts right now — try refreshing in a moment.</Empty>
+      </div>
+    );
+  }
 
   return (
     <div>
