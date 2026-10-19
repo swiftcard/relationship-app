@@ -136,7 +136,9 @@ describe("offline replays are filed when they happened, with no invented place",
     const s = route();
     expect(s).toMatch(/req\.headers\.get\("x-sc-queued-at"\)/);
     expect(s).toMatch(/Date\.now\(\) - queuedAt <= 7 \* 24 \* 3600 \* 1000/);
-    expect(s).toMatch(/replayAt \? \{ \.\.\.liveGeo, label: null, accuracy: null, source: null \} : liveGeo/);
+    // …and whose network it was (2026-10-18): the network it arrives on now is
+    // not the one it was opened on, any more than the place is.
+    expect(s).toMatch(/replayAt \? \{ \.\.\.liveGeo, label: null, accuracy: null, source: null, workNetwork: null \} : liveGeo/);
     expect(s).toMatch(/created_at: new Date\(replayAt \?\? Date\.now\(\)\)\.toISOString\(\)/);
     expect(s).toMatch(/if \(owner\?\.id && !staleReplay\)/);
     const rv = read("src/lib/record-view.ts");

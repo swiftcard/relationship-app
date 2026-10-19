@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { workNetworkName, type NetworkOwner } from "@/lib/work-network";
 
 // ── Coarse location for one request ──────────────────────────────────────────
 //
@@ -49,6 +50,9 @@ export type GeoGuess = {
   country: string | null;
   /** Network owner ("AS6167 Verizon Business") — for the cellular rule only. */
   org: string | null;
+  /** The same lookup's organisation / operator / domain, kept apart, for
+   *  lib/work-network.ts. Only the second database reports them. */
+  network?: NetworkOwner | null;
 };
 
 /** What the edge said about this request. Pure, synchronous, never throws. */
@@ -125,6 +129,13 @@ export type GeoResult = {
    *  consumer privacy relay. A person is never on the other end of one, so the
    *  view pipeline declines to count it (record-view.ts). */
   isHosting: boolean;
+  /**
+   * The organisation whose own network this is — "Columbia University" — or
+   * null for every internet provider, carrier, cloud and relay
+   * (lib/work-network.ts). Pro-only wherever it is shown. Never stored as
+   * anything but this one name.
+   */
+  workNetwork: string | null;
 };
 
 /**
@@ -163,6 +174,11 @@ export async function resolveGeo(req: NextRequest, ip: string): Promise<GeoResul
     org,
     isRelay,
     isHosting: isCloudHostingOrg(org),
+    workNetwork: workNetworkName(second?.network ?? null, {
+      isRelay,
+      isHosting: isCloudHostingOrg(org),
+      isCellular: !!org && CELLULAR.test(org),
+    }),
   };
 }
 
@@ -337,6 +353,9 @@ async function lookup(ip: string): Promise<GeoGuess | null> {
       regionName: str(j.region),
       country: isoCountry(str(j.country)),
       org: str(j.org),
+      // ipinfo names one organisation ("AS14 Columbia University") and no
+      // separate operator.
+      network: { org: str(j.org), isp: null, domain: null },
     };
   }
   if (j.success === false) return null;
@@ -347,6 +366,7 @@ async function lookup(ip: string): Promise<GeoGuess | null> {
     regionName: str(j.region),
     country: isoCountry(str(j.country_code)),
     org: [str(conn.org), str(conn.isp)].filter(Boolean).join(" ") || null,
+    network: { org: str(conn.org), isp: str(conn.isp), domain: str(conn.domain) },
   };
 }
 

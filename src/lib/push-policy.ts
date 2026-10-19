@@ -516,12 +516,24 @@ export function fitBodyKeepingPlace(marked: string, render: (s: string) => strin
  * The bell keeps it either way. Free never has it (lib/location-privacy).
  * The budget is the one fitBodyKeepingPlace will apply: ninety with a place,
  * sixty without.
+ *
+ * A body can carry two detail fragments — the work network after the who and
+ * the device at the end. They are let go from the END, one at a time: the
+ * device is the first thing a short lock screen loses, the network second.
  */
 export function withDeviceIfItFits(body: string, paid: boolean, render: (s: string) => string): string {
   if (!body.includes(DETAIL_MARK)) return body;
   if (!paid) return withoutDetail(body);
   const budget = body.split(PHRASE_MARK).length === 3 ? MAX_PLACE_BODY_CHARS : MAX_BODY_CHARS;
-  return render(body).replace(/\s+/g, " ").trim().length <= budget ? body : withoutDetail(body);
+  const fits = (s: string) => render(s).replace(/\s+/g, " ").trim().length <= budget;
+  let out = body;
+  while (out.includes(DETAIL_MARK) && !fits(out)) {
+    const parts = out.split(DETAIL_MARK);
+    // Odd indexes are fragments; drop the last one and rejoin, marks kept.
+    const last = parts.length - 2;
+    out = parts.map((p, i) => (i === last ? null : i % 2 === 1 ? `${DETAIL_MARK}${p}${DETAIL_MARK}` : p)).filter((p) => p !== null).join("");
+  }
+  return out;
 }
 
 export function fitBody(body: string, max: number = MAX_BODY_CHARS): string {

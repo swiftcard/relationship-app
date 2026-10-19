@@ -35,6 +35,9 @@ export type RecentVisit = {
   /** The details are withheld (Free): render the blurred line. */
   locked: boolean;
   place: string | null;
+  /** "Columbia University" — the organisation whose own network it was
+   *  (lib/work-network.ts). Never an internet provider. Pro only. */
+  network: string | null;
   device: string | null;
   openedIn: string | null;
   /** "from LinkedIn", "from a QR code". */
@@ -46,7 +49,7 @@ export type RecentVisit = {
   actions: string[];
 };
 
-/** The event columns this needs. The last three arrive with visit-details.sql. */
+/** The event columns this needs. The last four arrive with visit-details.sql. */
 export type VisitEventRow = {
   id: string;
   created_at: string;
@@ -66,6 +69,7 @@ export type VisitEventRow = {
   device_model?: string | null;
   device_os?: string | null;
   duration_s?: number | null;
+  network_org?: string | null;
 };
 
 export type VisitLead = { id: string; name?: string | null; tags?: unknown };
@@ -147,7 +151,7 @@ export function buildRecentVisits(input: {
     if (!paid) {
       visits.push({
         id: start.id, at: start.created_at, surface, who, locked: true,
-        place: null, device: null, openedIn: null, from: null, duration: null, visitNumber, actions: [],
+        place: null, network: null, device: null, openedIn: null, from: null, duration: null, visitNumber, actions: [],
       });
       continue;
     }
@@ -169,6 +173,7 @@ export function buildRecentVisits(input: {
       who,
       locked: false,
       place: start.location?.trim() ? locationLabel(start.location, (start.geo_accuracy ?? null) as GeoAccuracy | null) : null,
+      network: start.network_org?.trim() || null,
       device: device?.label ?? null,
       openedIn: app ? (app.inApp ? app.name.replace(/^an app's/, "An app's") : app.name) : null,
       from,
@@ -202,8 +207,8 @@ export async function loadRecentVisits(
         .gte("created_at", opts.sinceIso)
         .order("created_at", { ascending: false })
         .limit(600);
-    // visit-details.sql adds the last three; until it is applied, read without.
-    let { data, error } = await read(`${BASE_COLS}, device_model, device_os, duration_s`);
+    // visit-details.sql adds the last four; until it is applied, read without.
+    let { data, error } = await read(`${BASE_COLS}, device_model, device_os, duration_s, network_org`);
     if (error && (error.code === "42703" || error.code === "PGRST204")) ({ data, error } = await read(BASE_COLS));
     if (error || !data?.length) return [];
     const events = data as unknown as VisitEventRow[];

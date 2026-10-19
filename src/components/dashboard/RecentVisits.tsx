@@ -30,7 +30,8 @@ function Row({ v }: { v: RecentVisitRow }) {
   const page = v.surface === "links" ? "Swift Links" : "Card";
   const visit = v.visitNumber ? `${ordinal(v.visitNumber)} visit` : null;
   const deviceLine = [v.device, v.openedIn, v.from, v.duration].filter(Boolean).join(" · ");
-  const whatLine = [v.place, visit, ...v.actions].filter(Boolean).join(" · ");
+  const network = v.network ? `On the ${v.network} network` : null;
+  const whatLine = [network, v.place, visit, ...v.actions].filter(Boolean).join(" · ");
   return (
     <li className="bg-gray-800/40 border border-gray-800 rounded-xl px-3.5 py-2.5 min-w-0">
       <div className="flex items-baseline justify-between gap-2 min-w-0">

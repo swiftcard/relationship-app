@@ -4,6 +4,7 @@ import type { GeoAccuracy } from "@/lib/request-geo";
 import { ordinal } from "@/lib/contact-return-notify";
 import { markName } from "@/lib/contact-privacy";
 import { markDetail } from "@/lib/location-privacy";
+import { workNetworkPhrase } from "@/lib/work-network";
 
 // What the owner is told when someone touches their card.
 //
@@ -93,6 +94,14 @@ export function cardEventNotice(input: {
    * empty, the sentence is exactly what it always was.
    */
   device?: string | null;
+  /**
+   * The organisation whose own network the visit came from ("Columbia
+   * University", lib/work-network.ts) — null for every internet provider,
+   * carrier, cloud and relay. Pro, in the same DETAIL mark as the device, so
+   * Free never has it; a lock screen too short for both keeps this and drops
+   * the device (push-policy withDeviceIfItFits drops from the end).
+   */
+  network?: string | null;
 }): CardEventNotice | null {
   const { eventType } = input;
   const name = (input.visitorName ?? "").trim();
@@ -117,6 +126,9 @@ export function cardEventNotice(input: {
   // After the place, so the place keeps its spot at the end of a short lock
   // screen when the device phrase has to be dropped.
   const on = markDetail((input.device ?? "").trimEnd());
+  // "Someone on the Columbia University network viewed…" — beside the who,
+  // because that is what it describes.
+  const onNetwork = markDetail(workNetworkPhrase(input.network));
 
   if (eventType === "viewed_card") {
     // Swift Links and the card are different surfaces and an owner shares them
@@ -136,7 +148,7 @@ export function cardEventNotice(input: {
           : isLinks ? "Swift Links viewed" : "Card viewed",
       // "Someone" when we genuinely don't know. A visitor is only named once
       // they have shared their details, so this never guesses at an identity.
-      body: `${who} viewed ${surfaceLabel}${near}${on}.`,
+      body: `${who}${onNetwork} viewed ${surfaceLabel}${near}${on}.`,
     };
   }
 
@@ -159,7 +171,7 @@ export function cardEventNotice(input: {
       // owner a stranger is now in that person's address book, which we do not
       // know. A download we DO know, so that is what it says.
       title: "Contact downloaded",
-      body: `${who} downloaded your contact card${from}${near}${on}.`,
+      body: `${who}${onNetwork} downloaded your contact card${from}${near}${on}.`,
     };
   }
 

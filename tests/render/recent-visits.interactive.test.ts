@@ -35,6 +35,7 @@ for (let i = 0; i < 7; i++) {
     device_info: i % 2 ? WIN : IG, referrer_url: i % 2 ? "https://lnkd.in/x" : "https://l.instagram.com/",
     location: i === 0 ? "Rancho Santa Margarita, CA" : "Brooklyn, NY", geo_accuracy: "city_approx", duration_s: 95 + i,
     lead_id: i === 0 ? "lead-long" : null, lead_confidence: i === 0 ? "form" : null,
+    network_org: i === 0 ? "Memorial Sloan Kettering Cancer Center" : null,
   });
 }
 const leads = [{ id: "lead-long", name: "Christopher Fairweather-Blenkinsop", tags: [] }];
@@ -132,6 +133,7 @@ describe("Pro: every detail, and it fits at every width", () => {
         }
         const text = await page.locator('[data-testid="recent-visits"]').innerText();
         expect(text).toContain("iPhone 18 Pro Max · iOS 27 · Instagram · 1m 35s");
+        expect(text).toContain("On the Memorial Sloan Kettering Cancer Center network");
         expect(text).toContain("Saved your contact");
         expect(text).toContain("Tapped Book a strategy call");
         expect(text).toContain("Windows PC · Edge · from LinkedIn");
@@ -155,7 +157,7 @@ describe("Free: the visit is there, the details never reach the page", () => {
     const page = await open(false, 390);
     try {
       const raw = await page.locator('[data-testid="recent-visits"]').evaluate((el) => el.textContent ?? "");
-      for (const secret of ["iPhone", "Instagram", "Windows", "Brooklyn", "Rancho", "LinkedIn", "1m 35s", "Book a strategy call"]) {
+      for (const secret of ["Memorial Sloan", "iPhone", "Instagram", "Windows", "Brooklyn", "Rancho", "LinkedIn", "1m 35s", "Book a strategy call"]) {
         expect(raw, `"${secret}" reached a Free account's page`).not.toContain(secret);
       }
       const blurred = await page.locator('[data-testid="recent-visits"] [class*="blur-"]').allTextContents();

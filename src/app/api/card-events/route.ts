@@ -485,7 +485,7 @@ export async function POST(req: NextRequest) {
     const liveGeo = viewGeo ?? (await resolveGeo(req, ip));
     // A replay records no place (see replayAt above); the hosting gate below
     // still judges the network the request actually arrived on.
-    const geo: GeoResult = replayAt ? { ...liveGeo, label: null, accuracy: null, source: null } : liveGeo;
+    const geo: GeoResult = replayAt ? { ...liveGeo, label: null, accuracy: null, source: null, workNetwork: null } : liveGeo;
     const location = geo.label;
 
     // DATACENTER TRAFFIC IS NOT A PERSON — for taps and saves too (2026-10-06).
@@ -538,10 +538,16 @@ export async function POST(req: NextRequest) {
       // Also from warm-lead-alerts.sql, and dropped with the contact stamp.
       ...(target_label ? { target_label } : {}),
     };
-    // The device hints (supabase/visit-details.sql) ride on a copy, so every
+    // The visit details (supabase/visit-details.sql) ride on a copy, so every
     // fallback below keeps working on the row it always did if they are what
-    // production cannot accept yet.
-    const hints = { ...(device_model ? { device_model } : {}), ...(device_os ? { device_os } : {}) };
+    // production cannot accept yet. network_org is the organisation whose OWN
+    // network this was ("Columbia University", lib/work-network.ts) — never an
+    // internet provider's name, never the IP.
+    const hints = {
+      ...(device_model ? { device_model } : {}),
+      ...(device_os ? { device_os } : {}),
+      ...(geo.workNetwork ? { network_org: geo.workNetwork } : {}),
+    };
     let { error: insertErr } = await admin.from("card_events").insert({ ...row, ...hints });
     if (insertErr && (insertErr.code === "42703" || insertErr.code === "PGRST204") && Object.keys(hints).length) {
       ({ error: insertErr } = await admin.from("card_events").insert(row));
@@ -698,6 +704,8 @@ export async function POST(req: NextRequest) {
           // " on an iPhone 16 Pro via Instagram" — from this request, never the
           // visitor's word. Marked as Pro detail: a Free reader never gets it.
           device: deviceSentence(describeDevice(device_info, { model: device_model, os: device_os }), openedIn(device_info)),
+          // "on the Columbia University network" — Pro, like the device.
+          network: geo.workNetwork,
           repeatVisits: isView && !firstEver && !returning && visitor_id
             ? await countRecentVisits(admin, card_owner_username, visitor_id, surface)
             : undefined,
