@@ -129,6 +129,16 @@ const AUDIT = async () => {
     if (img.complete && img.naturalWidth === 0) out.push(["broken-image", `${img.getAttribute("src")?.slice(0, 90)}`]);
   }
 
+  // Focusable inside a hidden picture: aria-hidden takes a subtree out of the
+  // screen reader but NOT out of the Tab order, so a phone mockup's real
+  // tel:/mailto: links received focus a reader was told isn't there (WCAG
+  // 4.1.2, audit F-MKT-06). A decorative mockup must be `inert` too.
+  let hiddenFocus = 0;
+  for (const el of document.querySelectorAll('a[href], button, input, select, textarea, summary, iframe, [tabindex]')) {
+    if (!el.closest('[aria-hidden="true"]') || el.closest("[inert]") || el.tabIndex < 0 || el.disabled) continue;
+    if (++hiddenFocus <= 4) out.push(["focusable-in-aria-hidden", desc(el)]);
+  }
+
   // Dead controls: an anchor that goes nowhere, a button with nothing bound.
   let dead = 0;
   for (const el of all) {

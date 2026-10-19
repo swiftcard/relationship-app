@@ -22,7 +22,11 @@ const panelStyle = { background: "#fff", border: "1px solid #E4DDD4" } as const;
 
 export default function HomeCardPhone({ width = 290 }: { width?: number }) {
   return (
-    <div aria-hidden="true" className="pointer-events-none select-none">
+    // inert, not just aria-hidden: the card inside renders real tel:/mailto:
+    // and social links, and aria-hidden alone left all of them in the Tab
+    // order — focus landed on things a screen reader is told aren't there
+    // (WCAG 4.1.2, audit F-MKT-06). Same as InertPreview in the editors.
+    <div inert aria-hidden="true" className="pointer-events-none select-none">
       <PhoneFrame width={width} glare={false} screenStyle={{ background: theme.pageBackground }}>
         <div className="px-4 pt-2 pb-8 flex flex-col gap-4">
           <div className="rounded-2xl overflow-hidden">
