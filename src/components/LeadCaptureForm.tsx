@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getVisitorId, getVisitorInfo, hasSharedWith, markSharedWith } from "@/lib/visitor";
 import { triggerSignupNudgeWhenVisible } from "@/lib/nudge";
 import { outbox, isQueuedOffline } from "@/lib/offline-outbox";
+import ShareLocationToggle, { type SharedLocation } from "@/components/ShareLocationToggle";
 
 // "queued": no signal, so the info is kept on the visitor's phone and sends by
 // itself once they're back online (lib/offline-outbox.ts). "offline": no
@@ -25,6 +26,8 @@ export default function LeadCaptureForm({
   // no message, no outline and no focus move, on the one form whose whole job
   // is to capture a stranger mid-handshake.
   const [missing, setMissing] = useState<"name" | "phone" | null>(null);
+  // Their exact spot, only if they choose to add it (components/ShareLocationToggle).
+  const [sharedLocation, setSharedLocation] = useState<SharedLocation | null>(null);
   // SMS opt-in. MUST default to false and MUST NOT gate submission — Twilio
   // A2P review requires the box be unchecked by default and optional.
 
@@ -66,6 +69,7 @@ export default function LeadCaptureForm({
           card_owner: cardOwner,
           source,
           visitor_id: getVisitorId(),
+          ...(sharedLocation ? { shared_location: sharedLocation } : {}),
         }),
       }, { timeoutMs: 20_000 });
     } catch (err) {
@@ -209,6 +213,7 @@ export default function LeadCaptureForm({
           className="w-full bg-white border text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors shadow-sm border-gray-200 resize-none"
         />
       </div>
+      <ShareLocationToggle value={sharedLocation} onChange={setSharedLocation} />
       {(status === "error" || status === "offline") && (
         <p role="alert" className="text-red-500 text-xs text-center">
           {status === "offline"

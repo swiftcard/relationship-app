@@ -1,0 +1,24 @@
+-- ── A contact's exact location, when THEY chose to share it ──────────────────
+-- APPLIED TO PRODUCTION 2026-10-18 (Supabase MCP, project grxmovpmlgmjncnyiyrt).
+-- Idempotent (IF NOT EXISTS throughout), safe to re-run.
+--
+-- Owner, 2026-10-18 (feature 4 of 4): the only exact location a card owner
+-- can ever have is one the visitor hands over. The three share-your-info forms
+-- carry an optional, off-by-default "Add my current location"
+-- (components/ShareLocationToggle); tapping it is what makes the phone ask, and
+-- a "no" still sends the form. These columns hold what was shared, on that one
+-- contact only:
+--
+--   shared_lat / shared_lng   rounded to 6 places (~10 cm — finer than any
+--                             phone actually knows; the accuracy says how sure)
+--   shared_accuracy_m         the phone's own radius for it, in metres
+--   shared_location_at        when it was shared
+--
+-- Read only on Pro: the Contacts page withholds the coordinates from a Free
+-- account on the server (app/contacts/page.tsx), exactly like `location`.
+-- api/leads degrades without these columns — a lead is never lost to them.
+
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS shared_lat double precision;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS shared_lng double precision;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS shared_accuracy_m integer;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS shared_location_at timestamptz;

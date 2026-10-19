@@ -18,6 +18,7 @@ import { outbox, isQueuedOffline } from "@/lib/offline-outbox";
 // first open instead; phones never resolve it.
 const MiniQR = dynamic(() => import("@/components/card-templates/MiniQR").then((m) => m.MiniQR), { ssr: false });
 import MadeWithSwiftCard from "@/components/MadeWithSwiftCard";
+import ShareLocationToggle, { type SharedLocation } from "@/components/ShareLocationToggle";
 import { SCAN_SAVED_EVENT } from "@/lib/scan-saved-event";
 
 interface Person {
@@ -186,6 +187,9 @@ export default function SaveContactButton({
   // Which required field the error is about — the outline and
   // aria-describedby key off this, not off the sentence's first words.
   const [shareMissing, setShareMissing] = useState<"name" | "phone" | null>(null);
+  // Their exact spot, only if they tap "Add my current location" and their
+  // phone allows it (components/ShareLocationToggle).
+  const [sharedLocation, setSharedLocation] = useState<SharedLocation | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const phoneRef = useRef<HTMLInputElement>(null);
@@ -434,6 +438,7 @@ export default function SaveContactButton({
           // have nothing to join to.
           visitor_id: getVisitorId(),
           source: "save_contact_conversion",
+          ...(sharedLocation ? { shared_location: sharedLocation } : {}),
         }),
       }, { timeoutMs: 20_000 });
       if (!res.ok) throw new Error("lead capture failed");
@@ -663,6 +668,7 @@ export default function SaveContactButton({
                     onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                     className="w-full bg-white text-gray-900 placeholder-gray-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-400 transition-colors border border-gray-200"
                   />
+                  <ShareLocationToggle value={sharedLocation} onChange={setSharedLocation} />
                   {shareErr && (
                     <p id="sc-shareback-err" role="alert" className="text-red-500 text-xs px-1">{shareErr}</p>
                   )}

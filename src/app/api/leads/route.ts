@@ -27,6 +27,7 @@ import { isOwnerRequest } from "@/lib/self-traffic";
 import { markName } from "@/lib/contact-privacy";
 import { activeEvent } from "@/lib/event-tag";
 import { sameContactFill } from "@/lib/same-contact";
+import { parseSharedLocation } from "@/lib/shared-location";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
@@ -61,7 +62,21 @@ async function isKnownBrowserOf(
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, email, phone, company, message, card_owner, tags, source, visitor_id: client_visitor_id } = await req.json();
+    const { name, email, phone, company, message, card_owner, tags, source, visitor_id: client_visitor_id, shared_location } = await req.json();
+    // The visitor's exact spot — ONLY when they tapped "Add my current
+    // location" and their phone allowed it (components/ShareLocationToggle).
+    // Anything that is not a believable point is dropped, never stored.
+    const sharedPoint = parseSharedLocation(shared_location);
+    // Its columns (supabase/lead-shared-location.sql), kept apart from the row
+    // so a lead is never lost to them (see the insert below).
+    const sharedCols = sharedPoint
+      ? {
+          shared_lat: sharedPoint.lat,
+          shared_lng: sharedPoint.lng,
+          shared_accuracy_m: sharedPoint.accuracy,
+          shared_location_at: new Date().toISOString(),
+        }
+      : null;
 
     // This is a PUBLIC endpoint — require real strings, not just truthy values
     // (a JSON payload of {name: [], phone: {}} would otherwise pass and crash
@@ -266,6 +281,13 @@ export async function POST(req: NextRequest) {
           if (loaded) await syncLeadToAllCrms(loaded.lead, loaded.capturedBy, { mode: "update", attachNote: "message" in fill });
         });
       }
+      // Where they are NOW, when the same person shares again and adds it —
+      // the same rule as everything else here: only from a browser already
+      // theirs, so a stranger who knows the number cannot plant a location on
+      // someone else's contact. Best-effort; the share already succeeded.
+      if (sameBrowser && sharedCols) {
+        await admin.from("leads").update(sharedCols).eq("id", known.id);
+      }
       // Refreshes the binding of a browser that is already theirs. A NEW
       // browser is never bound from a typed phone number: that is the device
       // identity a stranger could otherwise take over.
@@ -329,7 +351,13 @@ export async function POST(req: NextRequest) {
         // meeting people today, so this contact is saved as met there.
         ...(eventTag ? { where_met: eventTag.label } : {}),
     };
-    let { data: insertedLead, error } = await admin.from("leads").insert(leadRow).select("id").single();
+    // The shared location rides on a copy: if production cannot take its
+    // columns, the lead is saved without them — a lead is never lost to a
+    // location.
+    let { data: insertedLead, error } = await admin.from("leads").insert({ ...leadRow, ...(sharedCols ?? {}) }).select("id").single();
+    if (error && (error.code === "42703" || error.code === "PGRST204") && sharedPoint) {
+      ({ data: insertedLead, error } = await admin.from("leads").insert(leadRow).select("id").single());
+    }
     if (error && (error.code === "42703" || error.code === "PGRST204")) {
       // geo_accuracy not migrated yet (supabase/analytics-accuracy.sql). A LEAD
       // IS THE PRODUCT — losing one to a column that doesn't exist yet would be
@@ -454,7 +482,9 @@ export async function POST(req: NextRequest) {
       const title = `New contact: ${shown}`;
       const body = locked
         ? `${shown} shared their info — open to unlock.`
-        : `${name} shared their info with you${sourceStr}.`;
+        // "…and their exact location" says THAT they shared one, never where:
+        // the place itself is on the contact, and Pro-only there.
+        : `${name} shared their info${sharedPoint ? " and their exact location" : ""} with you${sourceStr}.`;
       // THE SAME PERSON THE VIEW TRACKER SAW. /api/card-events keys a visit on
       // resolveVisitIdentity — the httpOnly sc_vid cookie first, the page's own
       // id second. This route keyed it on the raw body id alone, so whenever

@@ -92,8 +92,11 @@ export type VisitLead = {
  */
 export type VisitBinding = { visitor_id: string; lead_id: string; from: string };
 
-/** A share of details on this card, for "Shared their details" in its visit. */
-export type VisitShare = { visitor_id: string; created_at: string; surface: "card" | "links" };
+/**
+ * A share of details on this card, for "Shared their details" in its visit.
+ * `location`: they also chose to add their exact location (feature 4).
+ */
+export type VisitShare = { visitor_id: string; created_at: string; surface: "card" | "links"; location?: boolean };
 
 const digits = (v: string | null | undefined) => (v ?? "").replace(/\D/g, "").slice(-10);
 const mail = (v: string | null | undefined) => (v ?? "").trim().toLowerCase();
@@ -164,9 +167,12 @@ export function buildRecentVisits(input: {
     const actions: string[] = [];
     // They handed over their name and number in this very visit — the thing
     // that turns an anonymous visit into a named one.
-    if (start.visitor_id && (input.shares ?? []).some((sh) =>
-      sh.visitor_id === start.visitor_id && sh.surface === surface && ms(sh.created_at) >= t0 - 60_000 && ms(sh.created_at) < end)) {
-      actions.push("Shared their details");
+    const sharedHere = start.visitor_id
+      ? (input.shares ?? []).filter((sh) =>
+          sh.visitor_id === start.visitor_id && sh.surface === surface && ms(sh.created_at) >= t0 - 60_000 && ms(sh.created_at) < end)
+      : [];
+    if (sharedHere.length) {
+      actions.push(sharedHere.some((sh) => sh.location) ? "Shared their details and location" : "Shared their details");
     }
     if (start.event_type === "downloaded_vcard" || inVisit.some((e) => e.event_type === "downloaded_vcard")) {
       actions.push("Saved your contact");
@@ -278,7 +284,7 @@ export async function loadRecentVisits(
       visitor_id: string; lead_id: string; bound_via: string; link_device_index: number | null;
       bound_at: string | null; superseded_at: string | null; wrong_at: string | null;
     };
-    type ShareRow = { id: string; visitor_id: string | null; created_at: string; source: string | null };
+    type ShareRow = { id: string; visitor_id: string | null; created_at: string; source: string | null; shared_location_at?: string | null };
     const none = <T,>() => Promise.resolve({ data: [] as T[], error: null });
     const [historyRes, bindingsRes, sharesRes] = await Promise.all([
       visitorIds.length
@@ -300,14 +306,15 @@ export async function loadRecentVisits(
             .in("visitor_id", visitorIds)
             .limit(2000)
         : none<BindingRow>(),
-      // Details shared on THIS card from these browsers.
+      // Details shared on THIS card from these browsers — with the time they
+      // added their exact location, when they did (lead-shared-location.sql;
+      // read without it until that is applied).
       visitorIds.length
-        ? admin
-            .from("leads")
-            .select("id, visitor_id, created_at, source")
-            .eq("card_owner", opts.slug)
-            .in("visitor_id", visitorIds)
-            .limit(2000)
+        ? (async () => {
+            const q = (cols: string) => admin.from("leads").select(cols).eq("card_owner", opts.slug).in("visitor_id", visitorIds).limit(2000);
+            const r = await q("id, visitor_id, created_at, source, shared_location_at");
+            return r.error && (r.error.code === "42703" || r.error.code === "PGRST204") ? q("id, visitor_id, created_at, source") : r;
+          })()
         : none<ShareRow>(),
     ]);
     const bindingRows = ((bindingsRes.error ? [] : bindingsRes.data) ?? []) as BindingRow[];
@@ -341,7 +348,17 @@ export async function loadRecentVisits(
         .filter((sh): sh is ShareRow & { visitor_id: string } => !!sh.visitor_id)
         // The Swift Links page's form is the only one there; every other form
         // is on the card.
-        .map((sh) => ({ visitor_id: sh.visitor_id, created_at: sh.created_at, surface: sh.source === "swift_connect" ? "links" as const : "card" as const })),
+        .flatMap((sh) => {
+          const surface = sh.source === "swift_connect" ? "links" as const : "card" as const;
+          const at = sh.shared_location_at ?? null;
+          // A location sent WITH the first share is part of it; one added by a
+          // later share from the same person is that later visit's.
+          const withFirst = !!at && Math.abs(ms(at) - ms(sh.created_at)) < 60_000;
+          return [
+            { visitor_id: sh.visitor_id, created_at: sh.created_at, surface, location: withFirst },
+            ...(at && !withFirst ? [{ visitor_id: sh.visitor_id, created_at: at, surface, location: true }] : []),
+          ];
+        }),
       paid: opts.paid,
       limit,
     });

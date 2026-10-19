@@ -154,10 +154,14 @@ export default async function ContactsPage({
   };
   const [leadsRes, showOfficeAdmin, officeSubUser] = await Promise.all([
     (async () => {
+      // The location a contact CHOSE to share (supabase/lead-shared-location.sql)
+      // first; each fallback drops only the newest columns.
+      const SHARED_COLS = "shared_lat, shared_lng, shared_accuracy_m, shared_location_at";
+      const missing = (e: { code?: string } | null) => !!e && (e.code === "42703" || e.code === "PGRST204");
+      const withShared = await loadLeads(`${LEAD_COLS}, geo_accuracy, ${SHARED_COLS}`);
+      if (!missing(withShared.error)) return withShared;
       const withGeo = await loadLeads(`${LEAD_COLS}, geo_accuracy`);
-      if (withGeo.error && (withGeo.error.code === "42703" || withGeo.error.code === "PGRST204")) {
-        return loadLeads(LEAD_COLS);
-      }
+      if (missing(withGeo.error)) return loadLeads(LEAD_COLS);
       return withGeo;
     })(),
     canViewOfficeAdmin(authedUserId, profile.plan),
@@ -181,7 +185,13 @@ export default async function ContactsPage({
     ? rawLeads
     : (rawLeads ?? [])
         .filter((l) => !(Array.isArray(l.tags) && l.tags.includes(LOCKED_LEAD_TAG)))
-        .map((l) => (l.location ? { ...l, location: redactPlaceLabel(l.location as string), geo_accuracy: null } : l));
+        .map((l) => (l.location ? { ...l, location: redactPlaceLabel(l.location as string), geo_accuracy: null } : l))
+        // The exact spot a contact shared is Pro, like the place above: the
+        // coordinates never leave the server for a Free account. Only the fact
+        // that one was shared (its time) goes, so the panel can draw the blur.
+        .map((l) => (l.shared_lat != null || l.shared_lng != null
+          ? { ...l, shared_lat: null, shared_lng: null, shared_accuracy_m: null }
+          : l));
 
   // How many real contacts we're withholding. The dashboard has always counted
   // these and said so; this page filtered them out in silence — so a Free user at
