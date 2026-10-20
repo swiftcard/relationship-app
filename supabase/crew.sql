@@ -1,5 +1,7 @@
 -- ── Crew: the agent system (2026-10-20) ──────────────────────────────────────
--- NOT APPLIED. The owner runs this by hand in the Supabase SQL editor.
+-- APPLIED TO PRODUCTION 2026-10-20 (owner-approved, via the Supabase MCP; verified:
+-- 17 tables with RLS on, settings row, crew_claim_dm executable by service_role
+-- only, crew-media bucket).
 --
 -- WHAT: every table the new agent system ("Crew", admin tab "Agents") uses.
 -- Plan: docs/plans/agent-system.md. Namespace crew_* so nothing collides with
