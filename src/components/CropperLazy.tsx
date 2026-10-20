@@ -7,7 +7,8 @@
 // A real, draggable/resizable crop rectangle (corner + edge handles), not just
 // pan-and-zoom: the user can reshape the selection itself, then move it, then
 // resize it again — the standard desktop/mobile "crop tool" interaction.
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useId } from "react";
+import { createPortal } from "react-dom";
 import ReactCrop, { centerCrop, makeAspectCrop, convertToPixelCrop, cropToCanvas, type Crop, type PixelCrop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 
@@ -28,6 +29,7 @@ type Props = {
 
 export default function CropModal({ src, title, aspect, circular, aspectOptions, onAspectChange, busy, error, onApply, onCancel }: Props) {
   const imgRef = useRef<HTMLImageElement | null>(null);
+  const titleId = useId();
   const [crop, setCrop] = useState<Crop>();
   const [completedCrop, setCompletedCrop] = useState<PixelCrop | null>(null);
 
@@ -63,22 +65,34 @@ export default function CropModal({ src, title, aspect, circular, aspectOptions,
     cropToCanvas(img, canvas, completedCrop).then(() => onApply(canvas));
   }
 
+  // Capture phase, and the key stops here: Enter and Esc belong to the crop
+  // while it is open. The homepage builder closes itself on Esc (a document
+  // listener), so Esc used to cancel the crop AND throw away the builder.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Enter") {
         e.preventDefault();
+        e.stopPropagation();
         handleApply();
       } else if (e.key === "Escape") {
         e.preventDefault();
+        e.stopPropagation();
         onCancel();
       }
     }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   });
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black flex flex-col" style={{ touchAction: "none" }}>
+  // Portaled to <body>, above every layer the site uses (owner, 2026-10-19:
+  // in the homepage builders the live preview covered half the photo being
+  // cropped, and the builder's own "Continue" button showed through). Rendered
+  // in place, this sat INSIDE whatever opened it: the builder modal (z-95, its
+  // own stacking context), the editor's pinned preview, so a fixed z-50 could
+  // never rise above them. At <body> it covers the whole screen, and the only
+  // ways out are "Apply" and "Cancel".
+  return createPortal(
+    <div className="fixed inset-0 z-[10050] bg-black flex flex-col" style={{ touchAction: "none" }} role="dialog" aria-modal="true" aria-labelledby={titleId}>
       {/* Top bar */}
       <div className="flex items-center justify-between px-5 shrink-0" style={{ paddingTop: "env(safe-area-inset-top, 16px)", paddingBottom: 12 }}>
         {/* Inline white, not .text-white: the light theme turns that class
@@ -87,7 +101,7 @@ export default function CropModal({ src, title, aspect, circular, aspectOptions,
         <button type="button" onClick={onCancel} className="font-medium text-sm py-2 px-1" style={{ color: "#fff" }}>
           Cancel
         </button>
-        <p className="font-semibold text-sm" style={{ color: "#fff" }}>{title}</p>
+        <p id={titleId} className="font-semibold text-sm" style={{ color: "#fff" }}>{title}</p>
         <button
           type="button"
           onClick={handleApply}
@@ -156,6 +170,7 @@ export default function CropModal({ src, title, aspect, circular, aspectOptions,
         <p className="text-center text-gray-600 text-xs">Drag the corners or edges to crop · drag inside to move</p>
         <p className="text-center text-gray-700 text-[0.6875rem] mt-1">Press Enter to apply · Esc to cancel</p>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
