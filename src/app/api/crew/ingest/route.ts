@@ -5,9 +5,10 @@ import { SupabaseStore } from "@/lib/crew/store-supabase";
 // ── Results from the monitors that already run in GitHub Actions ────────────
 // uptime.yml posts health.json, nightly-qa.yml posts nightly/summary.json.
 // Stored as-is (size-capped); the Watchdog agents read them on their next run.
+// crew-fix.yml posts back the pull request it opened for an approved card.
 export const dynamic = "force-dynamic";
 
-const SOURCES = new Set(["health", "nightly"]);
+const SOURCES = new Set(["health", "nightly", "fix"]);
 const MAX_BYTES = 400_000;
 
 export async function POST(req: NextRequest) {
@@ -25,6 +26,15 @@ export async function POST(req: NextRequest) {
   }
   const store = new SupabaseStore();
   if (!(await store.ready())) return NextResponse.json({ ok: false, skipped: "crew not set up" });
+  if (source === "fix") {
+    const f = json as { approval_id?: string; pr_url?: string | null; run_url?: string };
+    const a = f.approval_id ? await store.getApproval(f.approval_id) : null;
+    if (!a || a.kind !== "code_fix") return NextResponse.json({ error: "no such fix" }, { status: 404 });
+    const prUrl = typeof f.pr_url === "string" && /^https:\/\/github\.com\/swiftcard\/relationship-app\/pull\/\d+$/.test(f.pr_url) ? f.pr_url : null;
+    const runUrl = typeof f.run_url === "string" && f.run_url.startsWith("https://github.com/") ? f.run_url : null;
+    await store.updateApproval(a.id, { meta: { ...a.meta, result: { ...((a.meta?.result as object) ?? {}), pr_url: prUrl, run_url: runUrl } } });
+    return NextResponse.json({ ok: true });
+  }
   await store.kvSet(`ingest:${source}`, { at: new Date().toISOString(), run: req.nextUrl.searchParams.get("run"), data: json });
   return NextResponse.json({ ok: true });
 }

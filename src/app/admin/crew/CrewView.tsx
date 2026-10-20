@@ -154,6 +154,8 @@ const KIND_LABEL: Record<string, string> = {
   ask: "Question",
 };
 
+const POSTED_KINDS: Approval["kind"][] = ["reply", "comment", "dm", "connect_note", "post"];
+
 function agentName(d: Dashboard, id: string) {
   return d.agents.find((a) => a.def.id === id)?.def.name ?? id;
 }
@@ -161,14 +163,18 @@ function agentName(d: Dashboard, id: string) {
 function Inbox({ d }: { d: Dashboard }) {
   if (!d.inbox.length && !d.approved.length) {
     return (
-      <div className={card}>
-        <p className="text-white font-semibold">Nothing to decide</p>
-        <p className="text-gray-400 text-sm mt-1">When an agent drafts something, it shows up here. Switch agents on in the Teams tab.</p>
+      <div className="space-y-4">
+        <div className={card}>
+          <p className="text-white font-semibold">Nothing to decide</p>
+          <p className="text-gray-400 text-sm mt-1">When an agent drafts something, it shows up here. Switch agents on in the Teams tab.</p>
+        </div>
+        <RecentFixes d={d} />
       </div>
     );
   }
   return (
     <div className="space-y-4">
+      <RecentFixes d={d} />
       {d.approved.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-white font-semibold text-sm">Approved, waiting for you to post</h2>
@@ -186,6 +192,31 @@ function Inbox({ d }: { d: Dashboard }) {
         </section>
       )}
     </div>
+  );
+}
+
+function RecentFixes({ d }: { d: Dashboard }) {
+  const fixes = d.recentDone.filter((a) => a.kind === "code_fix" && a.status === "done");
+  if (!fixes.length) return null;
+  return (
+    <section className={`${card} space-y-2`}>
+      <h2 className="text-white font-semibold text-sm">Fixes you approved</h2>
+      {fixes.map((a) => {
+        const r = (a.meta?.result ?? {}) as { pr_url?: string | null; run_url?: string | null };
+        return (
+          <p key={a.id} className="text-sm text-gray-300 break-words">
+            {a.title.replace(/^Fix:\s*/, "")}:{" "}
+            {r.pr_url ? (
+              <a href={r.pr_url} target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:underline">review the pull request</a>
+            ) : r.run_url ? (
+              <a href={r.run_url} target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:underline">no change was made, see why</a>
+            ) : (
+              <span className="text-gray-500">being written</span>
+            )}
+          </p>
+        );
+      })}
+    </section>
   );
 }
 
@@ -254,14 +285,14 @@ function ApprovalCard({ a, d }: { a: Approval; d: Dashboard }) {
             <form method="post" action={action}>
               <input type="hidden" name="tab" value="inbox" />
               <button name="action" value="posted" className={`${btn} bg-gray-800 text-white hover:bg-gray-700`}>
-                I posted it
+                {POSTED_KINDS.includes(a.kind) ? "I posted it" : "Mark done"}
               </button>
             </form>
             <form method="post" action={action}>
               <input type="hidden" name="tab" value="inbox" />
               <input type="hidden" name="reason" value="Changed my mind" />
               <button name="action" value="reject" className={`${btn} text-gray-400 hover:text-white`}>
-                Didn&apos;t post it
+                {POSTED_KINDS.includes(a.kind) ? "Didn\u2019t post it" : "Drop it"}
               </button>
             </form>
           </div>

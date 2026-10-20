@@ -1,6 +1,7 @@
 import type { CrewStore } from "../store";
 import type { Approval, ApprovalKind } from "../types";
 import { publishBlogPost } from "./blog-post";
+import { dispatchCodeFix } from "./code-fix";
 
 // ── The outward actions, behind the Approve button ──────────────────────────
 // Imported ONLY by src/lib/crew/decide.ts (pinned by tests/crew-approval-gate).
@@ -10,13 +11,15 @@ import { publishBlogPost } from "./blog-post";
 
 export type ExecResult = { ok: boolean; message: string; result?: Record<string, unknown> };
 
-export const EXECUTED_KINDS: ApprovalKind[] = ["blog_post"];
+export const EXECUTED_KINDS: ApprovalKind[] = ["blog_post", "code_fix"];
 
-export async function executeApproval(store: CrewStore, a: Approval): Promise<ExecResult> {
+export async function executeApproval(_store: CrewStore, a: Approval): Promise<ExecResult> {
   if (a.status !== "approved") return { ok: false, message: "Not approved." };
   switch (a.kind) {
     case "blog_post":
       return publishBlogPost(a);
+    case "code_fix":
+      return dispatchCodeFix(a);
     default:
       return { ok: false, message: `Nothing runs automatically for ${a.kind}.` };
   }

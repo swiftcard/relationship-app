@@ -75,6 +75,19 @@ jobs:
             echo "failed=$(node -e "console.log(require('./health.json').failedCount)")"
           } >> "$GITHUB_OUTPUT"
 
+      # Hands the same result to the Agents tab (src/lib/crew): the speed and
+      # uptime agent keeps one finding per failing check. Best effort: it can
+      # never fail this probe, and it's a no-op until CREW_TICK_SECRET exists.
+      - name: Share the result with the Agents tab
+        if: always()
+        continue-on-error: true
+        env:
+          CREW_TICK_SECRET: ${{ secrets.CREW_TICK_SECRET }}
+        run: |
+          if [ -z "$CREW_TICK_SECRET" ] || [ ! -f health.json ]; then exit 0; fi
+          curl -sS --max-time 20 -X POST -H "Authorization: Bearer $CREW_TICK_SECRET" -H "Content-Type: application/json" \
+            --data @health.json "https://swiftcard.me/api/crew/ingest?source=health&run=${{ github.run_id }}" || true
+
       - name: Open, update or close the incident
         uses: actions/github-script@v7
         with:

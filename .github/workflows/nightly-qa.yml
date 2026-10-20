@@ -110,6 +110,19 @@ jobs:
           name: nightly-qa-${{ github.run_id }}
           path: nightly
           retention-days: 14
+      # Hands the same verdict to the Agents tab (src/lib/crew), whose Watchdog
+      # agents turn each new failure into a plain-words Fix card. Best effort:
+      # it can never fail or slow the QA run, and it's a no-op until
+      # CREW_TICK_SECRET exists.
+      - name: Share the result with the Agents tab
+        if: always()
+        continue-on-error: true
+        env:
+          CREW_TICK_SECRET: ${{ secrets.CREW_TICK_SECRET }}
+        run: |
+          if [ -z "$CREW_TICK_SECRET" ] || [ ! -f nightly/summary.json ]; then exit 0; fi
+          curl -sS --max-time 30 -X POST -H "Authorization: Bearer $CREW_TICK_SECRET" -H "Content-Type: application/json" \
+            --data @nightly/summary.json "https://swiftcard.me/api/crew/ingest?source=nightly&run=${{ github.run_id }}" || true
       - name: Open, update or close the incident
         uses: actions/github-script@v7
         with:
