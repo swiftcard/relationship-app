@@ -126,15 +126,14 @@ export function accentGlow(accentSet: string | undefined, accent: string): strin
  * phones stop reading. The colour is DARKENED along its own hue until it clears
  * the QR's background by 130 (out of 255) — a teal accent gives a deep-teal
  * code rather than being thrown away — and only if darkening cannot get there
- * does it fall back to `fallback`, which is also what a colour it can't read
- * (a name, rgb()) gets, since its contrast can't be checked.
+ * does it fall back to `fallback`.
  */
 export function qrInk(accent: string, qrBg: string, fallback: string): string {
-  const bg = hex6(qrBg);
-  const fg = hex6(accent);
-  if (!bg || !fg) return fallback;
-  const bgY = brightness(bg);
-  const n = parseInt(fg.slice(1), 16);
+  const bgM = qrBg.match(/^#?([0-9a-f]{6})$/i);
+  const m = accent.match(/^#?([0-9a-f]{6})$/i);
+  if (!bgM || !m) return fallback;
+  const bgY = brightness(`#${bgM[1]}`);
+  const n = parseInt(m[1], 16);
   let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
   for (let i = 0; i < 14; i++) {
     if (Math.abs((r * 299 + g * 587 + b * 114) / 1000 - bgY) >= 130) break;
@@ -142,14 +141,6 @@ export function qrInk(accent: string, qrBg: string, fallback: string): string {
   }
   const out = "#" + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("");
   return Math.abs(brightness(out) - bgY) >= 125 ? out : fallback;
-}
-
-/** "#rrggbb" for a #rrggbb or #rgb colour (the accent field takes either); null otherwise. */
-function hex6(color: string): string | null {
-  const m = color.trim().match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i);
-  if (!m) return null;
-  const h = m[1].length === 3 ? m[1].replace(/./g, (c) => c + c) : m[1];
-  return `#${h.toLowerCase()}`;
 }
 
 // Treat only non-empty strings as a real override. `null`, `undefined`, and

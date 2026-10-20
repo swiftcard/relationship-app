@@ -294,11 +294,9 @@ export default function ShareMyInfoButton({ firstName, phone, email, cardOwner, 
     if (detectNativeApp()) {
       if ((await shareNatively({ url })) !== "unavailable") return;
     }
-    // A phone opens its share sheet; a computer copies (lib/save-image
-    // prefersShareSheet), because on a computer this option is labelled "Copy
-    // my card link" and a Mac or Windows share panel must never appear under a
-    // label that promises a copy. (The dashboard's Share link opens the
-    // computer's share panel; its label promises a share.)
+    // A phone opens its share sheet; a computer copies — the same rule as the
+    // dashboard's Share link (lib/save-image prefersShareSheet), so a Mac or
+    // Windows share panel never appears under a label that promises a copy.
     if (prefersShareSheet() && typeof navigator !== "undefined" && navigator.share) {
       // Bare URL only — iMessage and most messengers render the rich card
       // preview only when the message is just the link.

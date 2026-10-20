@@ -572,12 +572,12 @@ export default function ContactsClient({
           ? "Reset, but we couldn't re-enable texting for this contact — submit again before relying on it."
           : "Reset, but we couldn't un-pause email for this contact — submit again before relying on it.");
     }
-    // And that is all: with its messages gone the row closes by itself. Reset
-    // used to end by opening setup, and an open setup draws the switch ON
-    // (switchOn = isDrafting || …), so turning a channel off and pressing Reset
-    // showed it switched back on and expanded (owner, 2026-10-20: "it should
-    // just close it … and the toggle should still be off"). Nothing was
-    // re-armed server-side; the screen said it was.
+    // Close, don't open setup. Reset used to end by re-opening setup, and an open
+    // setup draws the switch ON (switchOn = isDrafting || …) — so turning a
+    // channel off and pressing Reset showed it switched back on and expanded
+    // (owner, 2026-10-20: "it should just close it … and the toggle should
+    // still be off"). Nothing was re-armed server-side; the screen said it was.
+    if (draftCh === ch) cancelDraft();
   }
 
 

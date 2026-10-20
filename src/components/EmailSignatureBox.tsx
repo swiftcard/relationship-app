@@ -136,10 +136,11 @@ function sigTag(sig: string): string {
  * copies). It changes when the template draws the card differently — new
  * spacing, sizes, a layout fix — not only when the card's info changes, which
  * is all the content hash can see. "r1" = the capture itself: bump it when the
- * capture changes how it draws (r1 = fonts at their real size, 2026-10-07).
+ * capture changes how it draws (r1 = fonts at their real size, 2026-10-07;
+ * r2 = no line wraps in the picture that doesn't wrap on the card, 2026-10-20).
  */
 function drawnSigOf(el: HTMLElement): string {
-  return `r1|${sigTag(el.innerHTML.replace(/\ssrc="[^"]*"/g, ""))}`;
+  return `r2|${sigTag(el.innerHTML.replace(/\ssrc="[^"]*"/g, ""))}`;
 }
 
 // Name and company are owner- (or office-) typed and go into HTML the user

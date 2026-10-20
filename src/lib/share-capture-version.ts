@@ -30,7 +30,10 @@
 // 10 = every font at the card's real size: html-to-image had been rounding
 // each one down, so the details came out 4–8% small (lib/capture-exact,
 // 2026-10-07). Older pictures keep serving until the device retakes them.
-export const SHARE_CAPTURE_VERSION = 10;
+// 11 = no row wraps in the picture that doesn't wrap on the card: rows fill
+// their box exactly, and drawn a hair wider the email broke onto a second
+// line over the row below (lib/capture-exact, 2026-10-20).
+export const SHARE_CAPTURE_VERSION = 11;
 // The moment the pixel-verified capture (v8, 5633d26a) went live: its Vercel
 // deploy turned READY at 18:35:50Z. It was first set to 20:00Z, a guess in
 // the FUTURE, so a verified re-capture taken at 19:27Z was ignored and the
@@ -59,4 +62,7 @@ export const RETAKE_CAPTURES_AFTER: Readonly<Record<string, number>> = {
 // hot-linked from every email the person ever sent, so the route refuses
 // anything older: a stale tab's unverified capture replaced the good one
 // everywhere at once (audit C02-002, C02-010).
-export const SIGNATURE_CAPTURE_VERSION = 1;
+// 2 = a line the card shows unwrapped stays unwrapped in the picture: rows
+// that fill their box exactly wrapped when drawn a hair wider ("MOBILE" over
+// the email, lib/capture-exact, 2026-10-20).
+export const SIGNATURE_CAPTURE_VERSION = 2;

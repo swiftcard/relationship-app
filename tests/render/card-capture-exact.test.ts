@@ -70,6 +70,59 @@ beforeAll(async () => {
       await shoot(); // WebKit paints the first foreignObject before its fonts/images
       return shoot();
     };
+    // How many lines each piece of text takes, on the card and in the picture.
+    // The picture's layout is the SVG html-to-image builds: caught as it is
+    // handed to the <img> the library rasterizes through, then laid out again
+    // in a shadow root (whose styles can't reach the page). wider = the
+    // picture's text drawn a fraction of a pixel wider than the page's, as the
+    // owner's browser drew it (2026-10-20). Only text without tracking of its
+    // own, so a heading's letter-spacing isn't replaced.
+    (window as any).lines = async (wider: boolean) => {
+      const el = document.getElementById("card")!;
+      const S = 2;
+      const opts: any = { width: el.offsetWidth * S, height: el.offsetHeight * S, pixelRatio: 1, cacheBust: false,
+        style: { transform: "scale(" + S + ")", transformOrigin: "top left" } };
+      if (wider) opts.fontEmbedCSS = "[style*='letter-spacing: normal'] { letter-spacing: 0.05px !important; }";
+
+      const src = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, "src")!;
+      let svg = "";
+      Object.defineProperty(HTMLImageElement.prototype, "src", {
+        configurable: true,
+        get() { return src.get!.call(this); },
+        set(v: string) { if (String(v).startsWith("data:image/svg+xml")) svg = String(v); src.set!.call(this, v); },
+      });
+      try { await toPngExact(el, opts); } finally { Object.defineProperty(HTMLImageElement.prototype, "src", src); }
+      if (!svg) throw new Error("never saw the picture's SVG");
+      const doc = new DOMParser().parseFromString(decodeURIComponent(svg.slice(svg.indexOf(",") + 1)), "image/svg+xml");
+
+      const host = document.createElement("div");
+      host.style.cssText = "position:absolute;left:0;top:2000px;width:" + el.offsetWidth + "px";
+      document.body.appendChild(host);
+      try {
+        const shadow = host.attachShadow({ mode: "open" });
+        for (const n of Array.from(doc.querySelector("foreignObject")!.childNodes)) shadow.appendChild(document.importNode(n, true));
+        const isText = (e: Element) => e.namespaceURI === "http://www.w3.org/1999/xhtml" && e.tagName !== "STYLE"
+          && e.childNodes.length > 0 && Array.from(e.childNodes).every((n) => n.nodeType === Node.TEXT_NODE) && !!e.textContent?.trim();
+        const linesOf = (e: Element) => {
+          const r = document.createRange();
+          r.selectNodeContents(e);
+          return new Set(Array.from(r.getClientRects()).filter((b) => b.width > 0).map((b) => Math.round(b.top))).size;
+        };
+        // A phone's label wraps as a flex item, not as text: count which line
+        // it starts on, in heights of its number.
+        const labelLine = (e: Element) => {
+          const num = e.previousElementSibling!.getBoundingClientRect();
+          return Math.round((e.getBoundingClientRect().top - num.top) / Math.max(1, num.height));
+        };
+        const read = (root: ParentNode) => [
+          ...Array.from(root.querySelectorAll("*")).filter(isText).map((e) => e.textContent!.trim() + " ×" + linesOf(e)),
+          ...Array.from(root.querySelectorAll("a[href^='tel:'] span > span + span")).map((e) => "label on line " + labelLine(e)),
+        ];
+        return { card: read(el), picture: read(shadow) };
+      } finally {
+        host.remove();
+      }
+    };
     // Share of pixels that differ visibly between the screenshot and a capture.
     (window as any).diff = async (a: string, b: string) => {
       const load = (src: string) => new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
@@ -120,7 +173,7 @@ for (const [engine, type] of ENGINES) {
             await document.fonts.ready;
           });
           const shot = "data:image/png;base64," + (await page.locator("#card").screenshot()).toString("base64");
-          type W = { capture: (exact: boolean) => Promise<string>; diff: (a: string, b: string) => Promise<{ share: number; sizes: number[] }> };
+          type W = { capture: (exact: boolean) => Promise<string>; lines: (wider: boolean) => Promise<{ card: string[]; picture: string[] }>; diff: (a: string, b: string) => Promise<{ share: number; sizes: number[] }> };
           const exact = await page.evaluate((s) => (window as unknown as W).capture(true).then((c) => (window as unknown as W).diff(s, c)), shot);
           const stock = await page.evaluate((s) => (window as unknown as W).capture(false).then((c) => (window as unknown as W).diff(s, c)), shot);
           expect(exact.sizes[0], "the picture is not the card's size").toBe(exact.sizes[2]);
@@ -134,6 +187,14 @@ for (const [engine, type] of ENGINES) {
           // Proof this test can see the bug it guards. If it ever fails, the
           // library has stopped shrinking fonts and lib/capture-exact can go.
           expect(stock.share, "stock html-to-image now matches the card").toBeGreaterThan(exact.share * 1.8);
+          // Rows fill their boxes exactly, and every box is copied at its
+          // width: text drawn a hair wider used to wrap — "MOBILE" over the
+          // email, "…capital.co / m" (owner, 2026-10-20, Photo First). A line
+          // that is one line on the card stays one line in the picture.
+          for (const wider of [false, true]) {
+            const { card, picture } = await page.evaluate((x) => (window as unknown as W).lines(x), wider);
+            expect(picture, wider ? "a line wrapped in the picture when its text came out a hair wider" : "the picture's lines aren't the card's").toEqual(card);
+          }
         } finally {
           await browser.close();
         }
