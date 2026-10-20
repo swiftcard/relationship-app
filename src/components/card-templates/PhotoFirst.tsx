@@ -4,7 +4,7 @@
 // Includes: Profile photo (full-height), name overlay, company, phone, email, website, QR
 // Best for: Real estate, beauty, fitness, coaches, personal brand, healthcare
 
-import { accentShade, panelBackground } from "@/lib/template-style";
+import { accentShade, panelBackground, qrInk } from "@/lib/template-style";
 import React from "react";
 import { MiniQR as QR } from "./MiniQR";
 import type { CardData } from "./types";
@@ -223,7 +223,7 @@ export default function PhotoFirst({ data }: { data: CardData }) {
           <ContactRows
             data={data}
             palette={{ accent: ACCENT, ...rowPal }}
-            qr={{ size: qrSize(f), node: <QR size={qrSize(f)} bg={infoPalette.qrBg} fg={darkInfo ? "#1e1b4b" : ACCENT} url={data.cardUrl} /> }}
+            qr={{ size: qrSize(f), node: <QR size={qrSize(f)} bg={infoPalette.qrBg} fg={style.accentColor ? qrInk(ACCENT, infoPalette.qrBg, "#1e1b4b") : darkInfo ? "#1e1b4b" : ACCENT} url={data.cardUrl} /> }}
           />
         </div>
       </div>

@@ -519,8 +519,8 @@ export default function ContactsClient({
   }
 
   // Reset a channel: wipe its automation entirely (the other channel keeps
-  // running) and open setup so a fresh one can be submitted. The new flow is
-  // anchored at submit time, so it restarts with its next message from then.
+  // running) and close the row. Setting up a fresh one is the switch's job; the
+  // new flow is anchored at submit time, so it restarts from then.
   async function resetChannel(ch: "email" | "sms") {
     if (!selected) return;
     const remaining = ((selected.follow_up_sequence ?? []) as { channel?: string }[]).filter(
@@ -572,7 +572,12 @@ export default function ContactsClient({
           ? "Reset, but we couldn't re-enable texting for this contact — submit again before relying on it."
           : "Reset, but we couldn't un-pause email for this contact — submit again before relying on it.");
     }
-    startDraft(ch);
+    // Close, don't open setup. Reset used to end by re-opening setup, and an open
+    // setup draws the switch ON (switchOn = isDrafting || …) — so turning a
+    // channel off and pressing Reset showed it switched back on and expanded
+    // (owner, 2026-10-20: "it should just close it … and the toggle should
+    // still be off"). Nothing was re-armed server-side; the screen said it was.
+    if (draftCh === ch) cancelDraft();
   }
 
 
@@ -1802,7 +1807,7 @@ export default function ContactsClient({
                               <button
                                 onClick={() => resetChannel(ch)}
                                 className="text-[0.6875rem] font-semibold text-gray-300 hover:text-white border border-gray-700 hover:border-gray-500 px-2.5 py-1 rounded-full transition-colors shrink-0"
-                                title={`Clear this ${word} automation and set up a new one`}
+                                title={`Clear this ${word} automation`}
                               >
                                 Reset ↺
                               </button>

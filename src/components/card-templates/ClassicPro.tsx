@@ -3,7 +3,7 @@
 // Includes: Logo, name, title, phone, email, website, social row, QR
 // Best for: Finance, consulting, legal, corporate, healthcare
 
-import { accentShade, isDarkBg, panelBackground } from "@/lib/template-style";
+import { accentShade, isDarkBg, panelBackground, qrInk } from "@/lib/template-style";
 import { MiniQR as QR } from "./MiniQR";
 import type { CardData } from "./types";
 import { cardAspect, ContactRows, fitFactor, fitCompanyFluid, splitLogoRow, logoRowStyle, companyCell, fitTitleFluid, titleBox, fitName, heroGrow, logoStyle, logoCircleStyle, cardLogoShape, qrSize, templateStyle, CARD_BASE_FONT, infoPaletteFrom, IcoLinkedIn, IcoInsta, IcoX, IcoTikTok, nameClass, textWidthFactor, cardFontClass } from "./shared";
@@ -163,7 +163,7 @@ export default function ClassicPro({ data }: { data: CardData }) {
               size: qrSize(f),
               // The QR keeps a light plate on a dark panel: a scanner needs the
               // contrast, and inverting it is the one thing that stops it scanning.
-              node: <QR size={qrSize(f)} bg="#f0f5ff" fg={NAVY} url={data.cardUrl} />,
+              node: <QR size={qrSize(f)} bg="#f0f5ff" fg={style.accentColor ? qrInk(BLUE, "#f0f5ff", NAVY) : NAVY} url={data.cardUrl} />,
             }}
           />
         </div>

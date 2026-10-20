@@ -58,6 +58,14 @@ describe("resetting an automation keeps the channel's on/off state", () => {
     expect(resetFn()).toMatch(/t !== "flow-paused"/);
   });
 
+  it("closes the row instead of opening setup", () => {
+    // Owner, 2026-10-20: switch off, press Reset, and the row sprang open with
+    // its switch drawn ON — Reset ended in startDraft(ch), and an open setup
+    // draws the switch on (switchOn = isDrafting || …). Reset just closes.
+    expect(resetFn()).not.toMatch(/startDraft\(/);
+    expect(ui()).toMatch(/const switchOn = isDrafting \|\| \(running && !chPaused\);/);
+  });
+
   it("does not claim to have re-enabled a channel it left off", () => {
     // The old failure copy said "we couldn't re-enable texting" even when the
     // channel was meant to stay off.

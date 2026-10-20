@@ -3,7 +3,7 @@
 // Includes: Name, title, phone, email, website, QR — stripped back, refined
 // Best for: Luxury real estate, wealth management, executives, high-end services, attorneys
 
-import { accentShade, panelBackground } from "@/lib/template-style";
+import { accentShade, panelBackground, qrInk } from "@/lib/template-style";
 import React from "react";
 import { MiniQR as QR } from "./MiniQR";
 import type { CardData } from "./types";
@@ -168,7 +168,7 @@ export default function LuxuryMinimal({ data }: { data: CardData }) {
         <ContactRows
           data={data}
           palette={{ accent: GOLD, ...infoPal, phoneWeight: 600 }}
-          qr={{ size: qrSize(f), node: <QR size={qrSize(f)} bg="#f5f0e8" fg={GOLD} url={data.cardUrl} /> }}
+          qr={{ size: qrSize(f), node: <QR size={qrSize(f)} bg="#f5f0e8" fg={style.accentColor ? qrInk(GOLD, "#f5f0e8", TEXT) : GOLD} url={data.cardUrl} /> }}
         />
       </div>
     </div>

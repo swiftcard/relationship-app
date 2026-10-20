@@ -6,7 +6,7 @@
 // Best for: firms that lead with a brand mark rather than a face — agencies,
 // practices, contractors, funds, anyone whose logo is the recognisable thing.
 
-import { panelBackground } from "@/lib/template-style";
+import { panelBackground, qrInk } from "@/lib/template-style";
 import React from "react";
 import { MiniQR as QR } from "./MiniQR";
 import type { CardData } from "./types";
@@ -85,31 +85,6 @@ function readableAccent(accent: string | undefined, bg: string, dark: boolean): 
   return y !== null && gap(y) >= 55 ? out : fallback;
 }
 
-/**
- * The accent, made safe to print a QR code in.
- *
- * A QR is the only thing on the card with a job beyond looking right, so this
- * is deliberately stricter than readableAccent: scanners need a wide luminance
- * gap between the dark modules and the quiet zone, and a pale accent on a pale
- * square is a code that phones stop reading. The colour is DARKENED along its
- * own hue until it clears the QR's background by 130 (out of 255) — so a teal
- * accent gives a deep-teal code rather than being thrown away — and only if
- * darkening cannot get there does it fall back to ink.
- */
-function qrInk(accent: string, qrBg: string): string {
-  const bgY = yiq(qrBg);
-  const parts = rgb(accent);
-  if (bgY === null || !parts) return INK;
-  let [r, g, b] = parts;
-  for (let i = 0; i < 14; i++) {
-    if (Math.abs((r * 299 + g * 587 + b * 114) / 1000 - bgY) >= 130) break;
-    r *= 0.82; g *= 0.82; b *= 0.82;
-  }
-  const out = `#${hex2(r)}${hex2(g)}${hex2(b)}`;
-  const y = yiq(out);
-  return y !== null && Math.abs(y - bgY) >= 125 ? out : INK;
-}
-
 export default function LogoFirst({ data }: { data: CardData }) {
   const style = templateStyle(data);
   const bg = panelBackground(style, NAVY);
@@ -139,7 +114,7 @@ export default function LogoFirst({ data }: { data: CardData }) {
   // the card with a job beyond looking right, and a pale pattern on a pale
   // square is a code that phones stop reading. Past what darkening can fix it
   // falls back to ink rather than shipping something unscannable.
-  const qrFg = qrInk(accent, qrBg);
+  const qrFg = qrInk(accent, qrBg, INK);
 
   const initials =
     data.initials ??

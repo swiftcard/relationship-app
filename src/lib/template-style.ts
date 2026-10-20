@@ -115,6 +115,34 @@ export function accentGlow(accentSet: string | undefined, accent: string): strin
   return accentSet && /^#[0-9a-f]{6}$/i.test(accent) ? withAlpha(accent, 0.12) : "rgba(59,130,246,0.12)";
 }
 
+/**
+ * The accent, made safe to print a QR code in — so the "Accent / icons" picker
+ * colours the code too, on every template (it reached only Logo First's; the
+ * others pinned theirs to a template constant, owner report 2026-10-20).
+ *
+ * A QR is the only thing on the card with a job beyond looking right, so this
+ * is deliberately strict: scanners need a wide luminance gap between the dark
+ * modules and the quiet zone, and a pale accent on a pale square is a code
+ * phones stop reading. The colour is DARKENED along its own hue until it clears
+ * the QR's background by 130 (out of 255) — a teal accent gives a deep-teal
+ * code rather than being thrown away — and only if darkening cannot get there
+ * does it fall back to `fallback`.
+ */
+export function qrInk(accent: string, qrBg: string, fallback: string): string {
+  const bgM = qrBg.match(/^#?([0-9a-f]{6})$/i);
+  const m = accent.match(/^#?([0-9a-f]{6})$/i);
+  if (!bgM || !m) return fallback;
+  const bgY = brightness(`#${bgM[1]}`);
+  const n = parseInt(m[1], 16);
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  for (let i = 0; i < 14; i++) {
+    if (Math.abs((r * 299 + g * 587 + b * 114) / 1000 - bgY) >= 130) break;
+    r *= 0.82; g *= 0.82; b *= 0.82;
+  }
+  const out = "#" + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("");
+  return Math.abs(brightness(out) - bgY) >= 125 ? out : fallback;
+}
+
 // Treat only non-empty strings as a real override. `null`, `undefined`, and
 // `""` (a value the editor may send when a field is cleared) all resolve to
 // undefined → the template default.

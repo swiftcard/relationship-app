@@ -3,7 +3,7 @@
 // Includes: Company logo/monogram, name, phone (prominent), email, website, QR
 // Best for: Restaurants, retail, contractors, salons, home services, local shops
 
-import { accentShade, isDarkBg, panelBackground } from "@/lib/template-style";
+import { accentShade, isDarkBg, panelBackground, qrInk } from "@/lib/template-style";
 import React from "react";
 import { MiniQR as QR } from "./MiniQR";
 import type { CardData } from "./types";
@@ -164,7 +164,7 @@ export default function LocalBusiness({ data }: { data: CardData }) {
 
         {/* Right: QR — always on the card; gives up a little room when dense */}
         <div className="flex flex-col items-end justify-end gap-1 pl-4 shrink-0">
-          <QR size={qrSize(f)} bg="#fff8e6" fg={AMBER} url={data.cardUrl} />
+          <QR size={qrSize(f)} bg="#fff8e6" fg={style.accentColor ? qrInk(AMBER, "#fff8e6", AMBER_DEFAULT) : AMBER} url={data.cardUrl} />
         </div>
       </div>
 
