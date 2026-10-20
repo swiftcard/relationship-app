@@ -444,3 +444,5 @@ Default ON (supabase/crew-economy.sql, applied). Settings → Economy mode / Sec
 - Global daily cap $2 (was $8).
 Recommended first agents: Office outreach, Reddit replies, LinkedIn comments, Instagram comments, plus the free Watchdog. Expected ≈ $1/day.
 Turning economy off restores the original spec exactly (Sonnet workers, Opus managers/tie-breaks, AI triage).
+- 2026-10-20: CREW_ANTHROPIC_API_KEY set (Vercel + GitHub). CI's macOS `render` job repeatedly got no runner (0 steps, cancelled) while `verify` passed; 3cf020eb was force-promoted with the owner's OK (`vercel promote`). Moving `render` to ubuntu was NOT done: ci.yml documents that Linux lacks the app's font and gives false layout failures. Likely cause: Actions macOS minutes/spending limit — owner to check org billing.
+- 2026-10-20: switched ON (owner-approved): system-test, the free Watchdog (watch-bugs, -speed, -security, -app, -ui, -flows, -probe) and watchdog-manager. First live run: all ok, $0.008 total (the practice draft); 8 Fix cards + 1 practice draft in the inbox.
