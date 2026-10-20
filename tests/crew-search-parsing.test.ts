@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { textOf } from "@/lib/crew/llm/anthropic";
-import { onDomain, searchItems, searchPlatform } from "@/lib/crew/sources/web-discovery";
+import { blockedDomain, onDomain, searchItems, searchPlatform } from "@/lib/crew/sources/web-discovery";
 import { fakeAgent, setup } from "./crew-helpers";
 
 // Found live on 2026-10-20: web-search answers interleave narration with tool
@@ -49,5 +49,19 @@ describe("web search agents", () => {
   it("Reddit never goes through web search (Reddit blocks it); without API keys only pasted posts", () => {
     expect(readFileSync("src/lib/crew/sources/web-discovery.ts", "utf8")).not.toMatch(/reddit:\s*\[/);
     for (const f of ["src/lib/crew/agents/replies.ts", "src/lib/crew/agents/contact.ts"]) expect(readFileSync(f, "utf8")).not.toMatch(/searchPlatform\(ctx, "reddit"/);
+  });
+
+  it("a site that blocks the search tool means no results, not a failed run", async () => {
+    const msg = `400 {"type":"error","error":{"type":"invalid_request_error","message":"The following domains are not accessible to our user agent: ['threads.net']."}}`;
+    expect(blockedDomain(new Error(msg))).toBe(true);
+    expect(blockedDomain(new Error("overloaded"))).toBe(false);
+    const { ctx } = await setup({
+      def: fakeAgent(),
+      script: () => {
+        throw new Error(msg);
+      },
+    });
+    expect(await searchPlatform(ctx, "threads", ["cards"], 5)).toEqual([]);
+    expect(readFileSync("src/lib/crew/sources/web-discovery.ts", "utf8")).not.toMatch(/"threads\.net"/);
   });
 });

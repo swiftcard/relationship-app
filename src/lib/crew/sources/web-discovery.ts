@@ -10,7 +10,9 @@ import type { Platform } from "../types";
 export type FoundPost = { platform: Platform; url: string; author: string | null; title: string; text: string; community: string | null };
 
 const DOMAINS: Partial<Record<Platform, string[]>> = {
-  threads: ["threads.net", "threads.com"],
+  // Anthropic's search refuses threads.net (seen live 2026-10-20); Threads
+  // now lives on threads.com.
+  threads: ["threads.com"],
   quora: ["quora.com"],
   indiehackers: ["indiehackers.com"],
   linkedin: ["linkedin.com"],
@@ -69,8 +71,21 @@ export async function searchPlatform(ctx: AgentContext, platform: Platform, topi
     fields: ["url", "author", "title", "text", "community"],
     domains,
     want: n,
+  }).catch((e) => {
+    // A site that blocks Anthropic's crawler (Reddit does) fails the whole
+    // request. The agent then works from pasted posts instead of erroring.
+    if (blockedDomain(e)) {
+      ctx.log(`web search can't read ${domains.join(", ")}; only pasted posts this run`);
+      return [];
+    }
+    throw e;
   });
   return items
     .filter((x) => onDomain(x.url, domains))
     .map((x) => ({ platform, url: x.url, author: x.author || null, title: x.title.slice(0, 200), text: x.text.slice(0, 600), community: x.community || null }));
+}
+
+/** "The following domains are not accessible to our user agent" (HTTP 400). */
+export function blockedDomain(e: unknown): boolean {
+  return /not accessible to our user agent/i.test(e instanceof Error ? e.message : String(e));
 }
