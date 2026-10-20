@@ -6,24 +6,19 @@ import { grantMonthWarning, planChangeWarning, takeOfflineWarning } from "@/lib/
 // ── Audit round 3 (2026-10-15): admin safety ────────────────────────────────
 //
 // SEC-06     The site admin (export every user, email all of them, change any
-//            plan, merge code to production) was password-only. The session
-//            must now be at Supabase's aal2: password AND an authenticator code.
+//            plan, merge code to production) was gated by the admin email. An
+//            authenticator-app second step was added, then removed at the
+//            owner's request (2026-10-19): the gate is the admin email again.
 // F-ADMIN-01 The Users list plan dropdown changed plans on the first click and
 //            ignored every refusal.
 // F-ADMIN-02 The user page's plan buttons, "Grant 1 month of Pro" and "Take
 //            offline" did the same.
 
-let session: { user: { id: string; email: string } | null; aal: "aal1" | "aal2" | null; aalThrows?: boolean } = { user: null, aal: null };
+let session: { user: { id: string; email: string } | null } = { user: null };
 vi.mock("@/lib/supabase-server", () => ({
   createClient: async () => ({
     auth: {
       getUser: async () => ({ data: { user: session.user } }),
-      mfa: {
-        getAuthenticatorAssuranceLevel: async () => {
-          if (session.aalThrows) throw new Error("network");
-          return { data: session.aal ? { currentLevel: session.aal, nextLevel: "aal2" } : null, error: null };
-        },
-      },
     },
   }),
 }));
@@ -31,35 +26,31 @@ vi.mock("@/lib/supabase-server", () => ({
 process.env.ADMIN_EMAILS = "owner@swiftcard.me";
 
 beforeEach(() => {
-  session = { user: null, aal: null };
+  session = { user: null };
 });
 
-describe("SEC-06: the admin gate needs the second step", () => {
-  it("signed out, not an admin, password only, and both steps", async () => {
+describe("SEC-06: the admin gate is the admin email, with no second step", () => {
+  it("signed out, not an admin, and the admin", async () => {
     const { adminAccess, requireAdmin } = await import("@/lib/admin");
     expect((await adminAccess()).state).toBe("signed_out");
 
-    session = { user: { id: "u", email: "someone@else.com" }, aal: "aal2" };
+    session = { user: { id: "u", email: "someone@else.com" } };
     expect((await adminAccess()).state).toBe("not_admin");
     expect(await requireAdmin()).toBeNull();
 
-    session = { user: { id: "a", email: "Owner@SwiftCard.me" }, aal: "aal1" };
-    expect(await adminAccess()).toEqual({ state: "needs_second_step", email: "Owner@SwiftCard.me" });
-    expect(await requireAdmin()).toBeNull();
-
-    session = { user: { id: "a", email: "owner@swiftcard.me" }, aal: "aal2" };
+    session = { user: { id: "a", email: "Owner@SwiftCard.me" } };
+    expect((await adminAccess()).state).toBe("ok");
     expect((await requireAdmin())?.id).toBe("a");
   });
 
-  it("fails closed when the level can't be read", async () => {
-    const { requireAdmin } = await import("@/lib/admin");
-    session = { user: { id: "a", email: "owner@swiftcard.me" }, aal: "aal2", aalThrows: true };
-    expect(await requireAdmin()).toBeNull();
+  it("asks the admin for no authenticator code anywhere", () => {
+    expect(readFileSync("src/lib/admin.ts", "utf8")).not.toMatch(/mfa|aal2/);
+    const layout = readFileSync("src/app/admin/layout.tsx", "utf8");
+    expect(layout).not.toMatch(/TwoStep|second_step/);
   });
 
-  // Every admin API route goes through requireAdmin, so none can be reached
-  // with the password alone. Two used to check the email themselves and
-  // would have skipped the second step.
+  // Every admin API route goes through requireAdmin, so there is one gate to
+  // keep right. Two used to check the email themselves.
   const routes: string[] = [];
   const walk = (dir: string) => {
     for (const name of readdirSync(dir)) {
@@ -79,14 +70,6 @@ describe("SEC-06: the admin gate needs the second step", () => {
       expect(body, `${handlers[i][1]} handler`).toMatch(/requireAdmin\(\)/);
     }
     expect(src).not.toMatch(/isAdminEmail\(user\.email\)/);
-  });
-
-  it("the /admin layout shows the second step before any admin page", () => {
-    const layout = readFileSync("src/app/admin/layout.tsx", "utf8");
-    const gate = layout.indexOf('access.state === "needs_second_step"');
-    expect(gate).toBeGreaterThan(-1);
-    expect(layout.indexOf("<AdminTwoStep", gate)).toBeGreaterThan(gate);
-    expect(layout.indexOf("{children}")).toBeGreaterThan(layout.indexOf("<AdminTwoStep"));
   });
 });
 

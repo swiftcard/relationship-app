@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { adminAccess } from "@/lib/admin";
 import AdminNav from "./AdminNav";
-import AdminTwoStep from "./AdminTwoStep";
 
 // Every /admin page inherits this shell: server-side admin gate + one
 // consistent nav so each section is a proper page (no more crammed tabs).
@@ -10,15 +9,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const access = await adminAccess();
   if (access.state === "signed_out") redirect("/login");
   if (access.state === "not_admin") redirect("/dashboard");
-  // Signed in with the password only: the second step comes first, and no
-  // admin page renders until it's done (audit SEC-06, lib/admin).
-  if (access.state === "needs_second_step") {
-    return (
-      <div className="sc-app min-h-screen bg-gray-950 text-white flex items-center justify-center px-5 py-10">
-        <AdminTwoStep email={access.email} />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
