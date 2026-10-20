@@ -8,7 +8,7 @@ import LuxuryMinimal from "@/components/card-templates/LuxuryMinimal";
 import ModernBold from "@/components/card-templates/ModernBold";
 import PhotoFirst from "@/components/card-templates/PhotoFirst";
 import LogoFirst from "@/components/card-templates/LogoFirst";
-import { brightness } from "@/lib/template-style";
+import { brightness, qrInk } from "@/lib/template-style";
 
 // ── The "Accent / icons" picker colours the QR, on every template ────────────
 //
@@ -76,5 +76,17 @@ describe("no accent picked, no change", () => {
     expect(qrOf(LuxuryMinimal, {}).fg).toBe("#b08d57");
     expect(qrOf(PhotoFirst, {}).fg).toBe("#6d28d9");
     expect(qrOf(PhotoFirst, { bgColor: "#111827" }).fg).toBe("#1e1b4b");
+  });
+});
+
+describe("qrInk reads every colour the accent field can hold", () => {
+  it("a short #rgb is the same colour as its #rrggbb", () => {
+    expect(qrInk("#f00", "#ffffff", "#000000")).toBe(qrInk("#ff0000", "#ffffff", "#000000"));
+    expect(qrInk("#FD4", "#f0f5ff", "#000000")).toBe(qrInk("#ffdd44", "#f0f5ff", "#000000"));
+  });
+
+  it("a colour it can't measure gets the template's own ink, never an unchecked code", () => {
+    expect(qrInk("red", "#ffffff", "#0e1b35")).toBe("#0e1b35");
+    expect(qrInk("rgb(255, 0, 0)", "#ffffff", "#0e1b35")).toBe("#0e1b35");
   });
 });

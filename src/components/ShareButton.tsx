@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { detectNativeApp } from "@/lib/platform";
 import { shareNatively } from "@/lib/native-share";
 import { warmSharePreview } from "@/lib/share-preview";
-import { prefersShareSheet } from "@/lib/save-image";
 import { triggerSignupNudge } from "@/lib/nudge";
 
 type Props = {
@@ -75,15 +74,13 @@ export default function ShareButton({
       }
       if (result !== "unavailable") return;
     }
-    // A PHONE opens its share sheet; a COMPUTER puts the link on the clipboard
-    // (owner, 2026-10-07). Computers used to get whatever the browser had — a
-    // Mac or Windows share panel in some, and in others a "Share on WhatsApp /
-    // Copy link / Cancel" menu — so the same button did three different things
-    // on three laptops. On a computer the link is pasted into an email, a
-    // LinkedIn message or a bio, so copying it is the one thing that always
-    // fits. prefersShareSheet is the same phone-or-computer rule the picture
-    // downloads use (lib/save-image).
-    if (prefersShareSheet() && typeof navigator !== "undefined" && navigator.share) {
+    // Every device opens its OWN share sheet: a phone's, and on a computer the
+    // Mac or Windows share panel (owner, 2026-10-20: "When I press Share link
+    // on the computer, a share sheet doesn't pop up, which it should"). This
+    // reverses 2026-10-07, when computers copied the link instead. A browser
+    // with no share sheet at all (Firefox, Chrome on Linux) copies the link and
+    // says "Link copied!", so a click never does nothing.
+    if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
       try {
         // Share ONLY the link. iMessage (and most messengers) render the rich
         // card preview only when the message is the bare URL — sharing extra
@@ -92,8 +89,15 @@ export default function ShareButton({
         shared();
         triggerSignupNudge("share_card");
         return;
-      } catch {
-        return; // user cancelled — nothing completed, nothing to nudge about
+      } catch (e) {
+        // AbortError: they closed the sheet. InvalidStateError: a second click
+        // while the sheet is still open. Both are answers, not failures.
+        const name = (e as { name?: string } | null)?.name;
+        if (name === "AbortError" || name === "InvalidStateError") {
+          return; // user cancelled — nothing completed, nothing to nudge about
+        }
+        // Anything else means the sheet never opened (a Windows share panel
+        // that refuses, a policy-blocked browser): copy instead.
       }
     }
     await copyLink();
@@ -117,8 +121,8 @@ export default function ShareButton({
 
   if (status === "copied") {
     return (
-      // Ghost (the dashboard's Share link, which on a computer lands here on
-      // every click) takes theme classes, not inline #d1d5db: in the app's
+      // Ghost (the dashboard's Share link, which lands here wherever the
+      // browser has no share sheet) takes theme classes, not inline #d1d5db: in the app's
       // light theme that inline grey sat on cream and read as disabled
       // (2026-09-23 free-account review) — the classes remap to readable ones.
       <button
