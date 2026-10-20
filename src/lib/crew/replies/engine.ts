@@ -132,6 +132,10 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
     if (await inboxFull(ctx)) break;
     const c = batch[s.i];
     const person = o.person?.(c) ?? null;
+    if ((o.kind === "dm" || o.kind === "connect_note") && !person) {
+      ctx.stat("skipped_no_person");
+      continue;
+    }
     if ((o.kind === "dm" || o.kind === "connect_note") && person) {
       const pid = await personFor(ctx.store, person.platform, person.handle, person.name);
       if (!pid || (await everContacted(ctx.store, pid))) {
