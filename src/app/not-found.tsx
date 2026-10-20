@@ -72,7 +72,7 @@ export default function NotFound() {
         </div>
 
         <p className="mt-8 text-xs text-slate-500">
-          Card links look like <span className="font-mono text-slate-700">swiftcard.me/FirstLast-Company</span> — check the spelling.
+          Card links look like <span className="font-mono text-slate-700">swiftcard.me/FirstLast-Company</span>. Check the spelling and try again.
         </p>
       </div>
     </main>

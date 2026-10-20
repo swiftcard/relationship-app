@@ -63,7 +63,7 @@ beforeAll(async () => {
         step, setStep,
         steps: [{
           title: "Name your Swift Links page",
-          subtitle: "Your link is built from your name and business — this is the page that lives in your bio.",
+          subtitle: "Your link is built from your name and business. This is the page that lives in your bio.",
           content: h(LinkRow),
         }],
         // Faithful to the real previews, which are all w-[260px] max-w-full /

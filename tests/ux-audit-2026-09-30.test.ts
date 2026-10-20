@@ -150,7 +150,7 @@ describe("recipient: Save Contact", () => {
   it("says Preparing… while the file is built, and says so when it fails", () => {
     expect(src).toMatch(/disabled=\{downloading\}/);
     expect(src).toMatch(/Preparing…/);
-    expect(src).toMatch(/\} catch \{\s*setSaveErr\("Couldn't prepare the contact — please try again\."\);/);
+    expect(src).toMatch(/\} catch \{\s*setSaveErr\("Couldn't prepare the contact\. Please try again\."\);/);
     expect(src).toMatch(/\{saveErr && \(\s*<p role="alert"/);
   });
 

@@ -27,7 +27,7 @@ const PRODUCTS: Item[] = [
 const SOLUTIONS: Item[] = [
   { label: "Dashboard & Analytics", href: "/products/analytics", desc: "See who's viewing and reaching out" },
   { label: "Teams & Offices", href: "/products/teams", desc: "One brand across everyone" },
-  { label: "Ways to share", href: "/products/wallet", desc: "Wallet, QR, and the share sheet" },
+  { label: "Ways to Share", href: "/products/wallet", desc: "Wallet, QR, and the share sheet" },
   { label: "Apple Watch", href: "/products/watch", desc: "Share from your wrist" },
   { label: "Integrations", href: "/products/integrations", desc: "Salesforce, GoHighLevel, Pipedrive & more" },
 ];
@@ -39,7 +39,7 @@ const RESOURCES: Item[] = [
   // 2026-10-14): pages with no internal links barely rank.
   { label: "Blog", href: "/blog", desc: "Guides and honest comparisons" },
   { label: "Compare", href: "/compare", desc: "SwiftCard vs Linktree, Popl, Blinq & more" },
-  { label: "FAQ", href: "/faq", desc: "Android, pricing, NFC, follow-up — answered" },
+  { label: "FAQ", href: "/faq", desc: "Answers on Android, pricing, NFC and follow-up" },
   { label: "Contact Us", href: "/contact", desc: "Talk to the team" },
   { label: "Privacy", href: "/privacy", desc: "How we protect your data" },
 ];

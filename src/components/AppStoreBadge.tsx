@@ -235,7 +235,7 @@ export function GetTheAppCard({ className = "" }: { className?: string }) {
       <div className={`rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-4 text-center ${className}`}>
         <p className="text-sm font-semibold text-gray-100">{PLAY_STORE_URL ? "Get the SwiftCard app" : "Get SwiftCard on iPhone"}</p>
         <p className="mx-auto mt-1.5 max-w-xs text-xs leading-relaxed text-gray-400">
-          Share your card with a tap, keep it in Apple Wallet, and see who viewed it — right from your phone.
+          Share your card with a tap, keep it in Apple Wallet, and see when it&apos;s viewed, all from your phone.
         </p>
         <div className="mt-3.5 flex flex-wrap justify-center gap-2.5">
           {/* The header's badges, like every other row. Their colours are

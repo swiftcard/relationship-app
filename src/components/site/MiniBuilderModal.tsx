@@ -190,7 +190,7 @@ export default function MiniBuilderModal({
               </div>
               {isLast && (
                 <p className="text-white/35 text-[0.71875rem] mt-3 leading-relaxed">
-                  We&apos;ll carry over everything you entered — you&apos;ll just add the finishing touches.
+                  We&apos;ll carry over everything you entered. You&apos;ll just add the finishing touches.
                 </p>
               )}
 

@@ -247,7 +247,7 @@ export default function ShareWaysPhones({ light = false }: { light?: boolean }) 
     <div
       tabIndex={0}
       role="group"
-      aria-label="Ways to share your card — scroll sideways for more"
+      aria-label="Ways to share your card. Scroll sideways for more."
       className="max-w-full flex gap-6 justify-start sm:justify-center overflow-x-auto snap-x snap-mandatory sm:snap-none rd-scrollbar-none pb-2 px-2"
     >
       <Phone label="Apple Wallet" labelClass={labelClass}><WalletScreen /></Phone>

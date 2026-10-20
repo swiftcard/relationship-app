@@ -271,10 +271,10 @@ function CardSharePanel() {
 // left the product on 2026-08-11. Each contact shows where it came from
 // instead (lib/source-labels), as the real detail view does.
 const DEMO_CONTACTS = [
-  { id: "c1", name: "Sarah Chen", company: "Acme Realty", phone: true, email: true, source: "QR code scan", unread: true, last: "Loved the listing on Cole St — can we set up a viewing this weekend?" },
-  { id: "c2", name: "Marcus Webb", company: "Northgate Co.", phone: true, email: true, source: "Swift Signature", unread: false, last: "Interested in the downtown condos — what's coming up?" },
+  { id: "c1", name: "Sarah Chen", company: "Acme Realty", phone: true, email: true, source: "QR code scan", unread: true, last: "Loved the listing on Cole St. Can we set up a viewing this weekend?" },
+  { id: "c2", name: "Marcus Webb", company: "Northgate Co.", phone: true, email: true, source: "Swift Signature", unread: false, last: "I'm interested in the downtown condos. What's coming up?" },
   { id: "c3", name: "Elena Diaz", company: "Brightpath Studio", phone: false, email: true, source: "Instagram bio", unread: false, last: "Thanks for following up! Let's talk next week." },
-  { id: "c4", name: "Tom Farrell", company: "Farrell Development", phone: true, email: false, source: "NFC tap", unread: false, last: "Following up on the office space downtown — is it still available?" },
+  { id: "c4", name: "Tom Farrell", company: "Farrell Development", phone: true, email: false, source: "NFC tap", unread: false, last: "Following up on the office space downtown. Is it still available?" },
 ];
 
 function ContactsPageView() {
@@ -380,7 +380,7 @@ function LinksPageView() {
             <div className="mb-4">
               <h3 className="text-base font-semibold text-white">Your link-in-bio page</h3>
               <p className="text-gray-400 text-sm mt-1 leading-relaxed">
-                A separate link from your card — your bio, socials, and links in one place. Drop it in your Instagram, TikTok, or any social bio.
+                A separate link from your card that puts your bio, socials, and links in one place. Drop it in your Instagram, TikTok, or any social bio.
               </p>
             </div>
             <div className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5">
@@ -423,7 +423,7 @@ function LinksPageView() {
             <div className="mb-4">
               <h3 className="text-base font-semibold text-white">Your card in every email</h3>
               <p className="text-gray-400 text-sm mt-1 leading-relaxed">
-                Copy your Swift Signature and paste it into your email — a clickable link to your card at the bottom of every message you send.
+                Copy your Swift Signature and paste it into your email. You get a clickable link to your card at the bottom of every message you send.
               </p>
             </div>
             <div className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5">

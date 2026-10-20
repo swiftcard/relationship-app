@@ -31,7 +31,7 @@ export default function CreateDemo({ person, href, as: Heading = "h3" }: { perso
         </p>
       </div>
       <div className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5">
-        <p className="text-gray-500 text-xs mb-3">{href ? "How it looks — click anywhere on it to try your link:" : "How it looks — every part of it opens your SwiftCard:"}</p>
+        <p className="text-gray-500 text-xs mb-3">{href ? "Here's how it looks. Click anywhere on it to try your link." : "Here's how it looks. Every part of it opens your SwiftCard."}</p>
         <div className="rounded-xl border border-gray-700/60 bg-white p-4 overflow-hidden">
           {/* A plain, everyday signature — the kind people already have. */}
           <table cellPadding={0} cellSpacing={0} style={{ fontFamily: "Arial, Helvetica, sans-serif", fontSize: 13, color: "#222222", borderCollapse: "collapse" }}>

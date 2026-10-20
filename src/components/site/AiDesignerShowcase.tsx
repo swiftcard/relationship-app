@@ -355,7 +355,7 @@ export function AiDesignerTeaser() {
 // ── The flow ────────────────────────────────────────────────────────────────
 
 const STEPS = [
-  { t: "Details or inspiration", d: "Headshot, logo, colors, style — or a card to copy exactly.", icon: "M4 5h16v14H4zM4 15l4-4 3 3 4-5 5 6M16 8h.01" },
+  { t: "Details or inspiration", d: "Headshot, logo, colors and style, or a card to copy exactly.", icon: "M4 5h16v14H4zM4 15l4-4 3 3 4-5 5 6M16 8h.01" },
   { t: "AI designs it", d: "A polished card in seconds.", icon: "M12 3l1.8 4.6L18.5 9l-4.7 1.6L12 15l-1.8-4.4L5.5 9l4.7-1.4zM5 17l.9 2.1L8 20l-2.1.9L5 23l-.9-2.1L2 20l2.1-.9z" },
   { t: "Customize", d: "Move, resize, restyle anything.", icon: "M4 20h4l10.5-10.5a2.1 2.1 0 00-3-3L5 17v3zM13 7l3 3" },
   { t: "Publish", d: "Live at your link, ready to share.", icon: "M12 16V4m0 0l-4 4m4-4l4 4M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4" },
@@ -408,7 +408,7 @@ export default function AiDesignerShowcase() {
         </ol>
 
         <div className="mt-12 flex justify-center" data-reveal="fade">
-          <Link href="/cards/new" className="rd-btn rd-btn-primary rd-btn-lg">Get Started</Link>
+          <Link href="/cards/new" className="rd-btn rd-btn-primary rd-btn-lg">Get started</Link>
         </div>
       </div>
     </section>

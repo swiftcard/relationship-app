@@ -41,7 +41,7 @@ beforeAll(async () => {
       const [added, setAdded] = useState<any[]>([]);
       (window as any).__state = { socials, draft, added };
       return h("div", { className: "space-y-5" },
-        h(FormSection, { id: "socials", title: "Social profiles", note: "Type your username — or paste your profile link." },
+        h(FormSection, { id: "socials", title: "Social profiles", note: "Type your username, or paste your profile link." },
           h("div", { className: "space-y-3.5" },
             ...SOCIAL_INPUTS.map((spec) => {
               const managed = managedInstagram && spec.key === "instagram";

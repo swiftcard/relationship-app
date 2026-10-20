@@ -221,7 +221,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
   const postCheckout = searchParams.get("postcheckout");
   // First card → the guided tour starts on the dashboard (the empty-state
   // dashboard deliberately does not run it — nothing to point at yet).
-  const doneHref = (postCheckout || isFirstCard || tourOnDone) ? "/dashboard?tour=1" : "/dashboard";
+  const doneBase = (postCheckout || isFirstCard || tourOnDone) ? "/dashboard?tour=1" : "/dashboard";
   // A plan-specific CTA (Get Pro / Get Office) routes here with ?plan=… so the
   // visitor still builds their card first, but AFTER account creation goes
   // straight to payment for that plan — no plan chooser again (unified flow).
@@ -357,6 +357,12 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
   // a collision, so it can differ from our locally-derived `username`. Used for
   // the "card is live" URL so we never show a slug that isn't the real one.
   const [createdUsername, setCreatedUsername] = useState<string | null>(null);
+  // Finish ON the card just made (owner, 2026-10-19): a second or third card
+  // used to land on whichever card was open before, so its new-card Wallet
+  // prompt (WalletPrompt) appeared on a card the owner wasn't looking at.
+  const doneHref = createdUsername
+    ? `${doneBase}${doneBase.includes("?") ? "&" : "?"}card=${encodeURIComponent(createdUsername)}`
+    : doneBase;
 
   // Step 3 — media + design
   const [logoUrl, setLogoUrl] = useState<string | null>(orgLogo);
@@ -1262,7 +1268,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
       });
     } catch {
       creatingRef.current = false; // allow retry
-      setError("Couldn't reach the server — check your connection and try again.");
+      setError("Couldn't reach the server. Check your connection and try again.");
       setStatus("error");
       return;
     }
@@ -1375,7 +1381,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
           {cardTemplateEl}
         </CardScaler>
       </InertPreview>
-      <p className="text-gray-600 text-[0.6875rem] mt-2 leading-snug">Your card so far — it updates as you fill things in.</p>
+      <p className="text-gray-600 text-[0.6875rem] mt-2 leading-snug">Your card so far. It updates as you fill things in.</p>
     </>
   );
 
@@ -1418,7 +1424,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
     <>
       <div className="flex items-center justify-between gap-2 mb-2">
         <p className="text-[0.6875rem] font-semibold text-gray-400 uppercase tracking-wide">
-          Your Swift Links page — this is how it will look
+          How your Swift Links page will look
         </p>
         {step === 4 && <UndoDesignButton history={linkHistory} variant="pill" className="shrink-0" />}
       </div>
@@ -1593,7 +1599,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
               <h1 className="text-[1.75rem] font-bold tracking-tight text-white">New card</h1>
               {/* The required rule lives here now, in the heading — it was a
                   separate blue banner, one more box to read before any field. */}
-              <p className="text-gray-400 text-sm mt-1">{org ? "Start with the basics — only your name is required." : "Start with the basics — only your name and a card nickname are required."}</p>
+              <p className="text-gray-400 text-sm mt-1">{org ? "Start with the basics. Only your name is required." : "Start with the basics. Only your name and a card nickname are required."}</p>
               {/* Say so when we bring a draft back, otherwise a pre-filled form
                   after a reload reads as a glitch rather than a save. */}
               {restored && (
@@ -1632,7 +1638,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                   <ManagedTag />
                 </div>
                 <p className="text-gray-500 text-xs mb-3">
-                  Your organization already prepared these details — they&apos;ll be on your card automatically.
+                  Your organization already prepared these details. They&apos;ll be on your card automatically.
                 </p>
                 <dl className="space-y-1.5">
                   {orgLogo && (
@@ -1667,7 +1673,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                 it silently not being there. */}
             {org && !(orgCompany || orgWebsite || orgPhone || orgFax || orgAddress || orgLogo) && (
               <p className="rounded-2xl border border-purple-500/20 bg-purple-500/[0.04] px-4 py-3 text-gray-400 text-xs leading-relaxed">
-                Your organization adds the company details — name, logo, website and office contact — to every team card. You just add your own.
+                Your organization adds the company details (name, logo, website and office contact) to every team card. You just add your own.
               </p>
             )}
 
@@ -1746,7 +1752,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                           office number to a company-branded card. */}
                       {org ? (
                         <span
-                          title="Your organization sets the office number — numbers you add are your mobile."
+                          title="Your organization sets the office number. Numbers you add are your mobile."
                           className="bg-gray-900 border border-gray-700 text-gray-400 rounded-xl px-3 py-3 text-sm shrink-0"
                         >
                           Mobile
@@ -1805,7 +1811,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                 </p>
                 {phones.filter((p) => p.showOnCard && p.number.trim()).length > MAX_CARD_PHONES && (
                   <p className="text-amber-300 text-xs mt-1">
-                    Only {MAX_CARD_PHONES} numbers fit on your card — the first {MAX_CARD_PHONES} marked On card are shown. The rest stay saved.
+                    Only {MAX_CARD_PHONES} numbers fit on your card. The first {MAX_CARD_PHONES} marked &quot;On card&quot; are shown. The rest stay saved.
                   </p>
                 )}
                 {org && orgPhone && (
@@ -1849,7 +1855,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
               <FormSection id="location" title="Location" note="Optional.">
                 <MoreOptions
                   label="Address & fax"
-                  hint={locationFilled ? "Set — shown on your card" : "Add an address or fax to the card"}
+                  hint={locationFilled ? "Added · shows on your card" : "Add an address or fax to the card"}
                   defaultOpen={locationStartOpen}
                 >
                   <AddressInput value={address} onChange={setAddress} />
@@ -1866,7 +1872,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
             {/* Last: it never appears on the card — it only names the card on
                 the dashboard, so it is the least important thing to fill in. */}
             {!org && (
-              <FormSection id="nickname" title="Card nickname" required labelFor="wizard-nickname" note="Only you see this — it names the card on your dashboard.">
+              <FormSection id="nickname" title="Card nickname" required labelFor="wizard-nickname" note="Only you see this. It names the card on your dashboard.">
                 <input
                   id="wizard-nickname"
                   ref={nicknameInputRef}
@@ -1903,7 +1909,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
           <div className="space-y-5 sc-step-in">
             <div className="mb-1">
               <h1 className="text-[1.75rem] font-bold tracking-tight text-white">Socials</h1>
-              <p className="text-gray-400 text-sm mt-1">What goes on your Swift Links page — the page people open from your card. Only the bio is required.</p>
+              <p className="text-gray-400 text-sm mt-1">What goes on your Swift Links page, the page people open from your card. Only the bio is required.</p>
             </div>
 
             {/* Three boxed groups — Bio, Social profiles, Additional links —
@@ -1923,7 +1929,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
               trailing={bioManaged ? <ManagedTag /> : undefined}
               note={bioManaged
                 ? "Your company writes one bio for the whole team."
-                : "Who you help and what you do — the first thing people read. AI follow-ups use it too."}
+                : "Who you help and what you do. It's the first thing people read, and AI follow-ups use it too."}
             >
               <div>
                 <textarea
@@ -1938,7 +1944,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                   aria-invalid={bioMissing || undefined}
                   aria-describedby={bioMissing ? "wizard-bio-error" : undefined}
                   rows={3}
-                  placeholder="e.g. Austin realtor helping first-time buyers find their dream home — 10+ years, 200+ closings. Let's talk!"
+                  placeholder="e.g. Austin realtor helping first-time buyers find their dream home. 10+ years, 200+ closings. Let's talk!"
                   className={`sc-field w-full px-4 py-3 text-white placeholder-gray-600 focus:outline-none transition-colors resize-none ${bioManaged ? "opacity-70 cursor-default" : ""}${bioMissing ? " ring-2 ring-red-500/70 border-red-500" : ""}`}
                 />
                 {bioMissing && <p id="wizard-bio-error" role="alert" className="text-red-400 text-xs mt-1">Add a bio to continue.</p>}
@@ -1948,7 +1954,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
             {/* Social profiles (website lives on step 1 — it's card information).
                 Each box shows the start of its link, so "what do I type?" is
                 answered before anything is typed. */}
-            <FormSection id="socials" title="Social profiles" note="Type your username — or paste your profile link.">
+            <FormSection id="socials" title="Social profiles" note="Type your username, or paste your profile link.">
               <div className="space-y-3.5">
                 {SOCIALS.map((spec) => {
                   // Instagram is the ONE social an office can set; the server
@@ -2028,7 +2034,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                   nativeCopy="Pro feature — Free includes 2 links. More links are only available on the Pro plan"
                 >
                   <p className="text-[0.6875rem] text-gray-500 bg-gray-900 border border-gray-800 rounded-xl px-3 py-2.5 leading-relaxed">
-                    Free includes {PLAN_LIMITS.FREE_MAX_LINKS} additional links. <Link href="/upgrade" className="text-blue-400 font-semibold hover:text-blue-300 underline">Upgrade to Pro</Link> to access unlimited additional links.
+                    Free includes {PLAN_LIMITS.FREE_MAX_LINKS} extra links. <Link href="/upgrade" className="text-blue-400 font-semibold hover:text-blue-300 underline">Upgrade to Pro</Link> for unlimited links.
                   </p>
                 </PlanGate>
               ) : (
@@ -2131,7 +2137,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
             )}
             <div className="mb-1">
               <h1 className="text-[1.75rem] font-bold tracking-tight text-white">Card design</h1>
-              <p className="text-gray-400 text-sm mt-1">{org ? (designLocked ? "Add your headshot — your organization sets the logo and the design." : "Add your headshot, then pick a design. Your organization sets the logo.") : "Add your logo and headshot, then pick a design."}</p>
+              <p className="text-gray-400 text-sm mt-1">{org ? (designLocked ? "Add your headshot. Your organization sets the logo and the design." : "Add your headshot, then pick a design. Your organization sets the logo.") : "Add your logo and headshot, then pick a design."}</p>
             </div>
 
             {/* Photos — open while something is missing (always, for a new
@@ -2171,7 +2177,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                     <p className="text-gray-500 text-xs">
                       {orgLogo
                         ? "Your organization's logo is used on every connected card."
-                        : "Your organization manages the company logo — it appears here once your admin sets it on the Branding page."}
+                        : "Your organization manages the company logo. It appears here once your admin sets it on the Branding page."}
                     </p>
                   </div>
                 </div>
@@ -2510,7 +2516,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
               <p className="text-gray-400 text-sm mt-1.5">
                 {pendingFreeConfirm
                   ? "One thing to know about the card you just designed."
-                  : "Pick a plan for this card. Free to start — upgrade anytime."}
+                  : "Pick a plan for this card. Start free and upgrade anytime."}
               </p>
             </div>
             {referralGift && (

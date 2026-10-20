@@ -24,7 +24,7 @@ import "@/app/home.css";
 // the marketing site (see marketing-site-static).
 
 export const metadata: Metadata = {
-  title: "Press & Media Kit — SwiftCard",
+  title: "Press & Media Kit | SwiftCard",
   alternates: { canonical: "/press" },
   description:
     "Press information about SwiftCard, the digital business card that shares everything: company facts, product overview, logo and screenshots, and how to reach us.",
@@ -33,16 +33,16 @@ export const metadata: Metadata = {
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
 const SCREENSHOTS: { file: string; caption: string }[] = [
-  { file: "01-public-card.jpg", caption: "A SwiftCard as the person you meet sees it — save the contact in one tap." },
+  { file: "01-public-card.jpg", caption: "A SwiftCard as the person you meet sees it, ready to save in one tap." },
   { file: "10-ways-to-share.jpg", caption: "Share by NFC tap, QR code, Apple Wallet, text or link." },
   { file: "03-contacts.jpg", caption: "Every person who shares back lands in your contacts, with notes and follow-up." },
   { file: "06-dashboard.jpg", caption: "Views, contacts and where your card is being opened." },
-  { file: "08-swift-links.jpg", caption: "Swift Links — the link-in-bio page that comes with every card." },
+  { file: "08-swift-links.jpg", caption: "Swift Links, the link-in-bio page that comes with every card." },
 ];
 
 const FACTS: { k: string; v: React.ReactNode }[] = [
-  { k: "Product", v: "SwiftCard — a digital business card, link-in-bio page and lead follow-up in one app" },
-  { k: "Company", v: "Swift Card Inc, New York, NY" },
+  { k: "Product", v: "SwiftCard: a digital business card, link-in-bio page and lead follow-up in one app" },
+  { k: "Company", v: "Swift Card Inc., New York, NY" },
   { k: "Founded", v: "2026, by a college student in New York" },
   { k: "Launched", v: "Web: summer 2026 · iOS App Store: September 2, 2026" },
   { k: "Platforms", v: "iPhone, Apple Watch, Apple Wallet, and any web browser (recipients need no app)" },
@@ -73,7 +73,7 @@ export default function PressPage() {
       <section className="hp-page-hero border-b border-slate-200/70">
         <div className="relative max-w-3xl mx-auto px-5 sm:px-6 pt-28 sm:pt-36 pb-10 sm:pb-12 w-full" data-hp-head>
           <h1 className="rd-display text-[clamp(2.1rem,4.4vw,3rem)] text-slate-900 [text-wrap:balance]">Press &amp; media kit</h1>
-          <p className="text-slate-500 text-[0.9375rem] mt-3">Facts, story, logo and screenshots — everything you need to write about SwiftCard.</p>
+          <p className="text-slate-500 text-[0.9375rem] mt-3">Facts, story, logo and screenshots: everything you need to write about SwiftCard.</p>
         </div>
       </section>
 
@@ -88,7 +88,7 @@ export default function PressPage() {
         <P>
           A SwiftCard lives at your own link. Share it in person with an NFC tap or a QR code, drop it
           in a text or an email signature, or keep it in Apple Wallet and on your Apple Watch. The
-          person you meet saves your contact in one tap and can share theirs back — no app needed on
+          person you meet saves your contact in one tap and can share theirs back, with no app needed on
           their side. Every new contact lands in your dashboard, and SwiftCard can send the follow-up
           email and text for you, so the people you meet actually stay in touch.
         </P>
@@ -108,7 +108,7 @@ export default function PressPage() {
               <dt className="text-slate-500 text-[0.8125rem] font-semibold sm:w-44 shrink-0">Pricing</dt>
               <dd className="text-slate-800 text-[0.9375rem]">
                 Free plan. Pro is {monthly}/month or {annual}/year with a {TRIAL_DAYS}-day free trial. Office plans for teams.
-                Subscriptions bought on iPhone are billed and cancelled through Apple.
+                Subscriptions bought on iPhone are billed and canceled through Apple.
               </dd>
             </div>
           </NativeHidden>
@@ -122,7 +122,7 @@ export default function PressPage() {
         <H2>The story</H2>
         <P>
           SwiftCard started in a classroom. Its founder, a college student in New York, kept meeting
-          people — at events, interviews, club fairs — and losing them a week later: a paper card in a
+          people at events, interviews, and club fairs, and losing them a week later: a paper card in a
           pocket, a LinkedIn request never sent, a number typed wrong. Existing digital-card apps
           either stopped at the share or asked for a hardware purchase and an annual contract before
           you could try them.
@@ -142,12 +142,12 @@ export default function PressPage() {
         <H2>What makes it different</H2>
         <ul className="mb-3">
           {[
-            ["Follow-up is built in", "Switch on an email or text follow-up for any contact and it sends on schedule — no third-party automation tool."],
+            ["Follow-up is built in", "Switch on an email or text follow-up for any contact and it sends on schedule. No third-party automation tool needed."],
             ["It tells you when someone looks", "Alerts when someone opens your card, and a dashboard that shows views, contacts and where the card is being opened."],
             ["Your link is your name", "Cards live at swiftcard.me/FirstLast-Company, not a tracking redirect, so the link looks like you."],
-            ["AI Card Designer", "Snap any business card — yours or one you admire — and the AI rebuilds that design with your details."],
+            ["AI Card Designer", "Snap any business card (yours or one you admire), and the AI rebuilds that design with your details."],
             ["No hardware required", "QR, link, Apple Wallet and Apple Watch sharing are free; NFC works with any blank tag."],
-            ["Honest billing", "Transparent monthly and annual plans, a free trial, and Apple handles cancellation on iPhone."],
+            ["Honest billing", "Transparent monthly and annual plans and a free trial. On iPhone, Apple handles cancellation."],
           ].map(([t, d]) => (
             <li key={t} className="text-slate-600 text-[0.96875rem] leading-[1.75] mb-2 ml-5 list-disc marker:text-slate-400">
               <strong className="text-slate-900">{t}.</strong> {d}
@@ -185,14 +185,14 @@ export default function PressPage() {
         </ul>
         <p className="text-slate-600 text-[0.96875rem] leading-[1.75]">
           <a href="/press/swiftcard-press-kit.zip" download className="text-brand underline">Download the press kit (.zip)</a>
-          {" "}— logo and all screenshots in one file.
+          {" "}with the logo and all screenshots in one file.
         </p>
 
         {/* Boilerplate */}
         <H2>Boilerplate</H2>
         <P>
           SwiftCard is a digital business card, link-in-bio page and lead follow-up tool operated by
-          Swift Card Inc in New York. Share your card by tap, QR code, Apple Wallet or link; the people
+          Swift Card Inc. in New York. Share your card by tap, QR code, Apple Wallet or link; the people
           you meet save it in one tap and can share their details back, and SwiftCard handles the
           follow-up. Available free at swiftcard.me and on the iOS App Store.
         </P>
@@ -220,7 +220,7 @@ export default function PressPage() {
         <P>
           For interviews, review access, partnership or speaking requests, email{" "}
           <a href="mailto:hello@swiftcard.me" className="text-brand underline">hello@swiftcard.me</a>.
-          We reply to press within one business day.
+          We reply to press within 24 hours.
         </P>
       </div>
 

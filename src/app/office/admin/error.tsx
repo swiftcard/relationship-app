@@ -30,7 +30,7 @@ export default function OfficeAdminError({ error, reset }: { error: Error & { di
   return (
     <div role="alert" className="rounded-2xl border border-gray-800 bg-gray-900/60 px-5 py-8 text-center">
       <p className="text-white font-semibold mb-1">Couldn&apos;t load this page</p>
-      <p className="text-gray-400 text-sm mb-5">Something went wrong reading your team&apos;s data. Nothing has changed — try again in a moment.</p>
+      <p className="text-gray-400 text-sm mb-5">Something went wrong reading your team&apos;s data. Nothing has changed. Try again in a moment.</p>
       <button
         type="button"
         onClick={() => (staleDeploy ? location.reload() : reset())}

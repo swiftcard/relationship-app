@@ -45,7 +45,7 @@ export default function AppStorePopup({ trigger }: { trigger: boolean }) {
         </div>
         <h2 id="appstore-popup-title" className="text-white font-bold text-lg mb-1.5">Your account is ready!</h2>
         <p className="text-gray-400 text-sm mb-6 leading-relaxed">
-          Get the SwiftCard app to build cards, capture leads, and send follow-ups on the go — with instant notifications the moment someone connects.
+          Get the SwiftCard app to build cards, capture leads, and send follow-ups on the go, with instant notifications the moment someone connects.
         </p>
 
         {/* The shared badge — the header's look, white words on dark glass,

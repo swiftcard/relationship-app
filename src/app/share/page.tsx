@@ -206,7 +206,7 @@ export default async function SharePage({
               <div data-tour="swift-links" className="mb-4">
                 <h2 className="text-base font-semibold text-white">Your link-in-bio page</h2>
                 <p className="text-gray-500 text-sm mt-1 leading-relaxed">
-                  A separate link from your card — your bio, socials, and links in one place. Drop it in your Instagram, TikTok, or any social bio.
+                  A separate link from your card that puts your bio, socials, and links in one place. Drop it in your Instagram, TikTok, or any social bio.
                 </p>
               </div>
               <div className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5">
@@ -266,7 +266,7 @@ export default async function SharePage({
               <div data-tour="email-signature" className="mb-4">
                 <h2 className="text-base font-semibold text-white">Your card in every email</h2>
                 <p className="text-gray-500 text-sm mt-1 leading-relaxed">
-                  Copy your Swift Signature and paste it into your email — a clickable link to your card at the bottom of every message you send.
+                  Copy your Swift Signature and paste it into your email. You get a clickable link to your card at the bottom of every message you send.
                 </p>
               </div>
               <EmailSignatureBox

@@ -45,7 +45,7 @@ export default async function BlogIndexPage() {
         <div className="relative" data-hp-head>
           <div className="mb-4"><Eyebrow dark={false}>Blog</Eyebrow></div>
           <h1 className="rd-display text-[clamp(2.1rem,4.4vw,3rem)] text-slate-900 mb-4 [text-wrap:balance]">The SwiftCard blog</h1>
-          <p className="hp-lede max-w-xl mx-auto">Digital business cards, lead capture, and following up — written plainly, compared honestly.</p>
+          <p className="hp-lede max-w-xl mx-auto">Digital business cards, lead capture, and following up, written plainly and compared honestly.</p>
         </div>
       </section>
       <div className="hp-soft flex-1">

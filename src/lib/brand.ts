@@ -39,7 +39,7 @@ export const BRAND_PROFILES: string[] = [APP_STORE_LISTING_URL, PLAY_STORE_URL, 
 const ALTERNATE_NAMES = ["Swift Card", "swiftcard.me", "swift card app", "SwiftCard app"];
 
 const DESCRIPTION =
-  "SwiftCard is a digital business card that shares itself — build your card once and share it by tap, QR code, Apple Wallet, or link, with built-in lead capture and automatic follow-up.";
+  "SwiftCard is a digital business card that shares itself. Build your card once and share it by tap, QR code, Apple Wallet, or link, with built-in lead capture and automatic follow-up.";
 
 export const ORGANIZATION_JSONLD = {
   "@context": "https://schema.org",
@@ -49,7 +49,7 @@ export const ORGANIZATION_JSONLD = {
   "@id": `${APP_URL}/#organization`,
   name: "SwiftCard",
   alternateName: ALTERNATE_NAMES,
-  legalName: "Swift Card Inc",
+  legalName: "Swift Card Inc.",
   url: APP_URL,
   logo: `${APP_URL}/brand-icon.png`,
   description: DESCRIPTION,

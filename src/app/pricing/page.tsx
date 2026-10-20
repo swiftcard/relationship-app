@@ -125,7 +125,7 @@ export default function PricingPage() {
       // rather than leaving the person on a pricing page they no longer need.
       if (res.ok && data.granted) {
         const planName = data.granted.plan === "enterprise" ? "Office" : "Pro";
-        setPromo((p) => ({ ...p, status: "valid", message: `${planName} is on for ${data.granted.days} days — opening your dashboard…`, appliedCode: "", discountLabel: "", row: undefined }));
+        setPromo((p) => ({ ...p, status: "valid", message: `${planName} is on for ${data.granted.days} days. Opening your dashboard…`, appliedCode: "", discountLabel: "", row: undefined }));
         setTimeout(() => { window.location.href = "/dashboard"; }, 1200);
         return;
       }
@@ -187,7 +187,7 @@ export default function PricingPage() {
                 Simple, honest <span className="hp-fill">pricing.</span>
               </h1>
               <p className="hp-lede mt-5 max-w-lg mx-auto">
-                Free forever to start. Upgrade when your network grows — no contracts, cancel anytime.
+                Free forever to start. Upgrade when your network grows. No contracts, cancel anytime.
               </p>
             </div>
 

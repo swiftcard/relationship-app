@@ -85,7 +85,7 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
   const { cardOrLegacy, awaitingPlan } = await resolve(username);
   if (!cardOrLegacy || awaitingPlan) return { title: "Swift Links", itunes: null, other: { [PUBLIC_PAGE_META]: "links" } };
   const name = cardOrLegacy.name || username;
-  const description = `Connect with ${name} — all their links in one place.`;
+  const description = `Connect with ${name}. All their links, in one place.`;
   // The SAME content-versioned image URL the card page uses. The bare
   // /opengraph-image URL is edge-cached for a day, so a Links unfurl kept the
   // old card after an edit — or the previous owner's card after the address
@@ -93,7 +93,7 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
   const meta = await resolveCardMeta(username);
   const ogImage = meta ? shareImageUrl(APP_URL, username, meta) : `${APP_URL}/${username}/opengraph-image`;
   return {
-    title: `${name} — Swift Links`,
+    title: `${name} | Swift Links`,
     description,
     // Recipient surface — no Smart App Banner, same reasoning as the card page.
     itunes: null,
@@ -108,13 +108,13 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
     // Texted /links/ URLs unfurl with the same picture-of-the-card preview the
     // card link gets (iMessage/WhatsApp/SMS), reusing the card's OG image.
     openGraph: {
-      title: `${name} — Swift Links`,
+      title: `${name} | Swift Links`,
       description,
       url: `${APP_URL}/links/${username}`,
       siteName: "SwiftCard",
       images: [{ url: ogImage, width: 1200, height: 686 }],
     },
-    twitter: { card: "summary_large_image", title: `${name} — Swift Links`, description },
+    twitter: { card: "summary_large_image", title: `${name} | Swift Links`, description },
   };
 }
 

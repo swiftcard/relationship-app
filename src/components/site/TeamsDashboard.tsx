@@ -218,7 +218,7 @@ function TeamTab() {
       </div>
       <PageHead
         title="Your team"
-        desc="Everyone with a company card — their cards, views and contacts in one place."
+        desc="Everyone with a company card: their cards, views and contacts in one place."
         action={
           <div className="flex items-center gap-3">
             <span className="text-xs text-gray-500 whitespace-nowrap hidden @xl:block">
@@ -390,7 +390,7 @@ type SortKey = "name" | "card" | "views" | "unique" | "scans" | "leads" | "conta
 const COLUMNS: { key: SortKey | "last"; label: string; hint: string }[] = [
   { key: "name", label: "Employee", hint: "Team member name" },
   { key: "card", label: "Card", hint: "Their card, or how many cards they own" },
-  { key: "views", label: "Card views", hint: "Times their card was opened — repeat visits count; reloads within a visit don't" },
+  { key: "views", label: "Card views", hint: "Times their card was opened (repeat visits count, reloads within a visit don't)" },
   { key: "swiftlink", label: "Swift Links views", hint: "Visits to their Swift Links page" },
   { key: "leads", label: "Contacts captured", hint: "People who shared their info, plus contacts they scanned or added" },
   { key: "contacts", label: "Contact downloads", hint: "Visitors who downloaded this card as a contact" },
@@ -540,7 +540,7 @@ function LeadsTab() {
 
   return (
     <div>
-      <PageHead title="Contacts" desc={`Everyone your team has met — people who shared their info, plus contacts your team scanned or added — ${total.toLocaleString()} so far.`} />
+      <PageHead title="Contacts" desc={`Everyone your team has met: people who shared their info, plus contacts your team scanned or added (${total.toLocaleString()} so far).`} />
       <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
         <p className="text-[0.6875rem] text-gray-500">
           {`Showing ${rows.length} of ${total.toLocaleString()} contacts`}
@@ -569,7 +569,7 @@ function LeadsTab() {
       {visible.length === 0 ? (
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-10 text-center">
           <p className="text-gray-400 text-sm">
-            {hasMore ? "Nothing on this page matches those filters. Load more below, or export everything." : "Nothing matches those filters."}
+            {hasMore ? 'Nothing on this page matches those filters. Tap "Load more" below, or export everything.' : "Nothing matches those filters."}
           </p>
         </div>
       ) : (
@@ -611,13 +611,13 @@ function LeadsTab() {
           onClick={() => hasMore && setRows((rs) => [...rs, ...MORE_LEADS])}
           className="w-full @xl:w-auto px-5 py-2.5 rounded-full text-xs font-semibold border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 transition-colors"
         >
-          {`Load more — ${(total - rows.length).toLocaleString()} to go`}
+          {`Load more (${(total - rows.length).toLocaleString()} to go)`}
         </button>
       </div>
 
       <p className="text-[0.6875rem] text-gray-600 mt-3">
-        Follow-up is whatever the contact&apos;s own email and text automations are doing — your
-        teammate sets those on the contact, and this follows along.
+        &quot;Follow-up&quot; shows each contact&apos;s email and text automations. Your teammate
+        sets those on the contact, and this column stays in step with them.
       </p>
     </div>
   );
@@ -660,14 +660,14 @@ function BrandingTab() {
   const [tab, setTab] = useState<"card" | "links">("card");
   return (
     <div>
-      <PageHead title="Branding" desc="Set this once — every card on your team automatically uses it. Your own cards stay yours to design." />
+      <PageHead title="Branding" desc="Set this once and every card on your team uses it automatically. Your own cards stay yours to design." />
       <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl px-4 py-3 mb-5">
         <p className="text-sm text-purple-200 font-medium">This page sets the look for every card and Swift Links page</p>
         <p className="text-xs text-purple-200/70 mt-1 leading-relaxed">
           Logo, company details, template, colors and fonts set here apply to your team&apos;s
           cards. Change them once, and every teammate&apos;s card updates with them. Use
           the <strong>Links</strong> tab to do the same for their Swift Links pages.
-          Your own cards are yours — they stay exactly as you designed them.
+          Your own cards are yours. They stay exactly as you designed them.
         </p>
       </div>
       <div role="tablist" aria-label="What to brand" className="inline-flex items-center gap-1 p-1 mb-4 rounded-full bg-gray-900 border border-gray-800">
@@ -824,14 +824,14 @@ function CardBranding() {
             <InertPreview><CardScaler><Preview data={previewData} /></CardScaler></InertPreview>
           </div>
           <p className="text-[0.6875rem] text-gray-600 mt-2.5 leading-snug">
-            An example teammate. Their own details and socials stay theirs — the
+            An example teammate. Their own details and socials stay theirs. The
             company look and details are what you set here.
           </p>
         </div>
       </aside>
 
       <div className="@3xl:col-start-1 min-w-0 flex flex-col gap-4">
-        <Section n={2} title="Card appearance" desc="The design your whole team inherits — template, colors and fonts.">
+        <Section n={2} title="Card appearance" desc="The design your whole team inherits: template, colors and fonts.">
           <TemplatePicker template={template} onSelect={setTemplate} data={previewData} customUnlocked={false} upsell={false} />
           <div className="mt-4">
             <TemplateStyleControls
@@ -866,7 +866,7 @@ function CardBranding() {
               ))}
             </ul>
             <p className="text-[0.6875rem] text-gray-500 mt-3 leading-snug">
-              Their Swift Links page — bio, Instagram and pinned link buttons — is set on
+              Their Swift Links page (bio, Instagram and pinned link buttons) is set on
               the <strong className="text-gray-400">Links</strong> tab.
             </p>
           </div>
@@ -929,11 +929,11 @@ function LinksBranding() {
                 value={bio}
                 onChange={(e) => setBio(e.target.value.slice(0, 500))}
                 rows={3}
-                placeholder="One or two lines about the company — appears under everyone's name."
+                placeholder="One or two lines about the company, shown under everyone's name."
                 className={`${inputCls} px-3.5 resize-none`}
               />
               <p className="text-[0.625rem] text-gray-600 mt-1">
-                {bio ? "Everyone's page shows this. Their own bio is kept and returns if you clear this." : "Empty — each teammate writes their own."}
+                {bio ? "Everyone's page shows this. Their own bio is kept and comes back if you clear it." : "Empty, so each teammate writes their own."}
               </p>
             </div>
 
@@ -947,14 +947,14 @@ function LinksBranding() {
                 onBlur={() => setInstagram((v) => normalizeSocial(v, "instagram"))}
               />
               <p className="text-[0.625rem] text-gray-600 mt-1">
-                Shows on everyone&apos;s page. Their own Instagram comes back if you clear this — other socials stay theirs.
+                Shows on everyone&apos;s page. If you clear it, their own Instagram comes back. Other socials stay theirs.
               </p>
             </div>
 
             <div>
               <p className="block text-xs font-medium text-gray-400 mb-1">Company Additional Links</p>
               <p className="text-[0.625rem] text-gray-600 mb-2.5">
-                These appear at the top of every teammate&apos;s page and they can&apos;t change them — but they can
+                These appear at the top of every teammate&apos;s page and they can&apos;t change them, but they can
                 still add their own underneath.
               </p>
               {links.length > 0 && (
@@ -1004,7 +1004,7 @@ function LinksBranding() {
           </div>
         </LinksSection>
 
-        <LinksSection n={2} title="Links appearance" desc="The design your whole team inherits — the same controls your teammates see under Social design.">
+        <LinksSection n={2} title="Links appearance" desc={'The design your whole team inherits, with the same controls your teammates see under "Social design".'}>
           <SwiftLinkStyleControls value={style} onChange={(p) => setStyle((prev) => ({ ...prev, ...p }))} links={links} onLinksChange={(next) => setLinks(next.filter((l): l is HeaderRow => l.kind === "header"))} canUpload={false} />
         </LinksSection>
 
@@ -1029,7 +1029,7 @@ function LinksBranding() {
                   </li>
                 ))}
                 {controlled.length === 0 && (
-                  <li className="text-[0.6875rem] text-gray-600">Nothing yet — fill anything in above and it lands here.</li>
+                  <li className="text-[0.6875rem] text-gray-600">Nothing yet. Fill anything in above and it lands here.</li>
                 )}
               </ul>
             </div>
@@ -1039,7 +1039,7 @@ function LinksBranding() {
             <span>
               Keep every Swift Links page matching
               <span className="block text-[0.6875rem] text-gray-600 mt-0.5">
-                Your teammates keep their own bio, socials and links — only the look becomes yours.
+                Your teammates keep their own bio, socials and links. Only the look becomes yours.
                 Leave it off to let each person design their own page.
               </span>
             </span>
@@ -1071,7 +1071,7 @@ function LinksBranding() {
           />
         </div>
         <p className="text-[0.6875rem] text-gray-600 mt-2.5 leading-snug">
-          A teammate&apos;s page under this branding. Their name, photo and their own links are theirs.
+          A teammate&apos;s page under this branding. Their name, photo and own links stay theirs.
         </p>
       </aside>
     </div>

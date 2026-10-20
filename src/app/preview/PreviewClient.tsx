@@ -416,7 +416,7 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
           <div className="mb-6">
             {/* text-white as its own class: the light remap recolours .text-white
                 INSIDE .sc-app, and an inherited colour would stay white. */}
-            <h1 className="text-2xl font-bold text-white">This is your dashboard — try it out</h1>
+            <h1 className="text-2xl font-bold text-white">This is your dashboard. Try it out.</h1>
             <p className="text-gray-300 text-sm mt-1.5">The real app, loaded with sample data. Nothing to install.</p>
           </div>
         )}
@@ -428,8 +428,8 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
           <div className="grid sm:grid-cols-3 gap-2.5">
             {([
               { n: "1", t: "See your SwiftCard", d: "The real card people get when you share.", act: () => openDemo("card") },
-              { n: "2", t: "Open Swift Links", d: "Your link-in-bio page — it lives under the Links tab.", act: () => openDemo("links") },
-              { n: "3", t: "Preview Swift Signature", d: "Your card in every email — also under Links.", act: () => openDemo("signature") },
+              { n: "2", t: "Open Swift Links", d: 'Your link-in-bio page. It lives under the "Links" tab.', act: () => openDemo("links") },
+              { n: "3", t: "Preview Swift Signature", d: 'Your card in every email, also under "Links".', act: () => openDemo("signature") },
             ] as const).map((s) => (
               <button key={s.n} type="button" onClick={s.act}
                 className="text-left rounded-xl bg-gray-900/50 border border-gray-800 hover:border-blue-700/60 px-3 py-2.5 transition-colors">
@@ -441,7 +441,7 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
               </button>
             ))}
           </div>
-          <p className="text-blue-300/70 text-[0.6875rem] mt-3">Tip: switch cards up top — every number updates.</p>
+          <p className="text-blue-300/70 text-[0.6875rem] mt-3">Tip: switch cards up top and every number updates.</p>
         </div>
 
         {/* My Cards */}
@@ -609,7 +609,7 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
                   <div className="mb-4">
                     <h3 className="text-base font-semibold text-white">Your link-in-bio page</h3>
                     <p className="text-gray-300 text-sm mt-1 leading-relaxed">
-                      A separate link from your card — your bio, socials, and links in one place. Drop it in your Instagram, TikTok, or any social bio.
+                      A separate link from your card that puts your bio, socials, and links in one place. Drop it in your Instagram, TikTok, or any social bio.
                     </p>
                   </div>
                   <Box>
@@ -652,7 +652,7 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
                   <div className="mb-4">
                     <h3 className="text-base font-semibold text-white">Your card in every email</h3>
                     <p className="text-gray-300 text-sm mt-1 leading-relaxed">
-                      Copy your Swift Signature and paste it into your email — a clickable link to your card at the bottom of every message you send.
+                      Copy your Swift Signature and paste it into your email. You get a clickable link to your card at the bottom of every message you send.
                     </p>
                   </div>
                   {/* The same signature, in place — as EmailSignatureBox now
@@ -744,7 +744,7 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
         )}
 
         <div className="mt-10 text-center">
-          <p className="text-gray-400 text-sm mb-4">This is exactly what you get — set up your own in under 30 seconds.</p>
+          <p className="text-gray-400 text-sm mb-4">This is exactly what you get. Set up your own in about 60 seconds.</p>
           <Link href="/join?src=preview" className="inline-block bg-blue-600 hover:bg-blue-500 text-white font-bold px-9 py-4 rounded-full transition-colors text-base">Create Your Card for Free →</Link>
         </div>
       </div>
@@ -777,17 +777,17 @@ export default function PreviewClient({ embedded = false }: { embedded?: boolean
 
       {/* Full-page live previews */}
       {modal === "card" && (
-        <FullScreen title={`${card.label} — your live SwiftCard`} href={`/${card.handle}`} onClose={() => setModal(null)}>
+        <FullScreen title={`${card.label}: your live SwiftCard`} href={`/${card.handle}`} onClose={() => setModal(null)}>
           <IframePhone src={`/${card.handle}?embed=1`} />
         </FullScreen>
       )}
       {modal === "links" && (
-        <FullScreen title="Swift Links — your live link-in-bio page" href={`/links/${card.handle}`} onClose={() => setModal(null)}>
+        <FullScreen title="Swift Links: your live link-in-bio page" href={`/links/${card.handle}`} onClose={() => setModal(null)}>
           <IframePhone src={`/links/${card.handle}?embed=1`} />
         </FullScreen>
       )}
       {modal === "signature" && (
-        <FullScreen title="Swift Signature — your card in every email" onClose={() => setModal(null)}>
+        <FullScreen title="Swift Signature: your card in every email" onClose={() => setModal(null)}>
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 w-full max-w-md">
             {signatureDemo}
           </div>

@@ -27,7 +27,7 @@ export default async function OfficeBrandingPage() {
         // card. So an owner set a logo, company and colours, was told their own
         // card was included, and found it unchanged with no explanation
         // anywhere in the product.
-        desc="Set this once — every card on your team automatically uses it. Your own cards stay yours to design."
+        desc="Set this once and every card on your team uses it automatically. Your own cards stay yours to design."
       />
 
       {/* This page IS the brand source — logo, company, website, template and
@@ -48,7 +48,7 @@ export default async function OfficeBrandingPage() {
           Logo, company details, template, colors and fonts set here apply to your team&apos;s
           cards. Change them once, and every teammate&apos;s card updates with them. Use
           the <strong>Links</strong> tab to do the same for their Swift Links pages.
-          Your own cards are yours — they stay exactly as you designed them.
+          Your own cards are yours. They stay exactly as you designed them.
         </p>
       </div>
 

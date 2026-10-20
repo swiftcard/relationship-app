@@ -122,7 +122,7 @@ function LinkExperience({ id, Component, data }: { id: string; Component: Tmpl["
             "Show QR Code" control was removed from the card page: a sharer's
             tool sitting in a viewer's flow). */}
         <div className={Panel} style={panelStyle}>
-          <ShareButton url={DEMO_URL} text={`Connect with ${FIRST} — save their contact instantly.`} label="Share this card" warm={false} />
+          <ShareButton url={DEMO_URL} text={`Connect with ${FIRST} and save their contact instantly.`} label="Share this card" warm={false} />
         </div>
       </div>
     </div>
@@ -155,7 +155,7 @@ export default function TemplateGallery({ linkedinEnabled = false }: { linkedinE
         <p className="rd-eyebrow text-slate-600 mb-5" data-reveal="fade">
           {/* "hover" is meaningless on a phone — same sentence, the verb the
               device actually supports (owner mobile pass, 2026-09-17). */}
-          Six designer templates — <span className="sm:hidden">tap</span><span className="hidden sm:inline">hover</span> any to see it live
+          Six designer templates: <span className="sm:hidden">tap</span><span className="hidden sm:inline">hover</span> any to see it live
         </p>
         <div className="grid grid-cols-2 gap-x-5 gap-y-7">
           {TEMPLATES.map((t, i) => {

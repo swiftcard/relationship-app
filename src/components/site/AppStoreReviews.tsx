@@ -68,7 +68,7 @@ export default async function AppStoreReviews() {
               <Stars rating={r.rating} />
               {r.title && <p className="text-slate-900 font-semibold text-[0.9375rem] mt-3">{r.title}</p>}
               <p className="text-slate-600 text-[0.875rem] leading-relaxed mt-2 flex-1 whitespace-pre-line line-clamp-6">{r.body}</p>
-              <p className="text-slate-500 text-[0.78125rem] mt-4 font-medium">— {r.author}</p>
+              <p className="text-slate-500 text-[0.78125rem] mt-4 font-medium">{r.author}</p>
             </div>
           ))}
         </div>

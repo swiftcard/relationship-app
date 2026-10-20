@@ -46,7 +46,7 @@ export default function CardUrlEditor({ cardId, currentSlug }: { cardId: string;
       setNewSlug(String(data?.slug || normalized));
       setStatus("done");
     } catch {
-      setError("Network error — please try again.");
+      setError("Network error. Please try again.");
       setStatus("idle");
     }
   }
@@ -73,8 +73,8 @@ export default function CardUrlEditor({ cardId, currentSlug }: { cardId: string;
           Your URL is now swiftcard.me/{newSlug}
         </p>
         <p className="text-gray-400 text-[0.6875rem] leading-relaxed">
-          Inside SwiftCard everything already moved to the new URL — your card page, your{" "}
-          <span className="text-gray-200">Swift Links page</span> (/{newSlug}), and all your views, leads, and
+          Inside SwiftCard, everything already moved to the new URL: your card page, your{" "}
+          <span className="text-gray-200">Swift Links page</span> (/links/{newSlug}), and all your views, leads, and
           analytics. But anything you shared <span className="text-gray-200">outside</span> the app still points at
           your old URL and won&apos;t work, so please update these manually:
         </p>
@@ -82,7 +82,7 @@ export default function CardUrlEditor({ cardId, currentSlug }: { cardId: string;
           <li>Re-download and re-print your <span className="text-gray-200">QR code</span> (the old one is dead).</li>
           <li>Re-add your card to <span className="text-gray-200">Apple Wallet</span> so the pass links to the new URL.</li>
           <li>Re-copy your <span className="text-gray-200">email signature</span> into your email client.</li>
-          <li>Re-share your link anywhere you posted it — social bios, texts, DMs, your website.</li>
+          <li>Re-share your link anywhere you posted it: social bios, texts, DMs, your website.</li>
         </ul>
         <button
           type="button"
@@ -112,8 +112,8 @@ export default function CardUrlEditor({ cardId, currentSlug }: { cardId: string;
         <p className="text-gray-500 text-[0.6875rem]">Will be saved as <span className="text-gray-300">swiftcard.me/{normalized}</span></p>
       )}
       <p className="text-amber-400/90 text-[0.6875rem] leading-relaxed">
-        Heads up: everything inside SwiftCard — your card, your Swift Links page, and all your views, leads &amp;
-        analytics — moves to the new URL automatically. But anything already shared with your old URL (QR codes,
+        Heads up: everything inside SwiftCard (your card, your Swift Links page, and all your views, leads &amp;
+        analytics) moves to the new URL automatically. But anything already shared with your old URL (QR codes,
         printed cards, Wallet passes, your email signature, links in your social bios) will stop working, so
         you&apos;ll need to re-share those manually. We&apos;ll show you the list right after.
       </p>

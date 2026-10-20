@@ -94,16 +94,16 @@ type NudgeCopy = { title: string; sub: string; cta: string };
 // One button for every card invite (owner, 2026-09-23): "See how yours looks —
 // free", the same words as the Swift Links sheet. It opens the builder, where
 // they see their own card take shape before they sign up for anything.
-export const CARD_CTA = "See how yours looks — free";
+export const CARD_CTA = "See how yours looks for free";
 
 export const NUDGE_COPY: Record<string, NudgeCopy> = {
-  default:      { title: "Look this good when you network", sub: "Your own tap-to-share card — stunning, smart, live in 60 seconds.", cta: CARD_CTA },
-  save_contact: { title: "Next time, be the one they save", sub: "One tap and you're in their phone — card, links, everything.", cta: CARD_CTA },
-  share_info:   { title: "Never type your info again", sub: "One tap shares who you are — your card, your links, your brand.", cta: CARD_CTA },
-  vcard:        { title: "Saved in one tap. That could be you", sub: "Your own SwiftCard — in their phone before the handshake ends.", cta: CARD_CTA },
-  link_button:  { title: "One link for everything you are", sub: "Your links + a smart business card in one beautiful page.", cta: CARD_CTA },
-  badge:        { title: "Look this good when you network", sub: "Your own tap-to-share card — stunning, smart, live in 60 seconds.", cta: CARD_CTA },
-  follow_up:    { title: "Look this good when you network", sub: "Your own tap-to-share card — stunning, smart, live in 60 seconds.", cta: CARD_CTA },
+  default:      { title: "Look this good when you network", sub: "Your own tap-to-share card. Stunning, smart, and live in 60 seconds.", cta: CARD_CTA },
+  save_contact: { title: "Next time, be the one they save", sub: "One tap and you're in their phone: card, links, everything.", cta: CARD_CTA },
+  share_info:   { title: "Never type your info again", sub: "One tap shares who you are: your card, your links, your brand.", cta: CARD_CTA },
+  vcard:        { title: "Saved in one tap. That could be you", sub: "Your own SwiftCard, in their phone before the handshake ends.", cta: CARD_CTA },
+  link_button:  { title: "One link for everything you are", sub: "Your links and a smart business card on one beautiful page.", cta: CARD_CTA },
+  badge:        { title: "Look this good when you network", sub: "Your own tap-to-share card. Stunning, smart, and live in 60 seconds.", cta: CARD_CTA },
+  follow_up:    { title: "Look this good when you network", sub: "Your own tap-to-share card. Stunning, smart, and live in 60 seconds.", cta: CARD_CTA },
 };
 
 export function nudgeCopy(source: string | null | undefined): NudgeCopy {

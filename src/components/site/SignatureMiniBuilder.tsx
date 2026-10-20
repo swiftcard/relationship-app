@@ -104,7 +104,7 @@ export default function SignatureMiniBuilder({ linkedinEnabled = false }: { link
   const steps: MiniStep[] = [
     {
       title: "Who's signing off?",
-      subtitle: "Your Swift Signature is your card under your name — start with the basics.",
+      subtitle: "Your Swift Signature is your card under your name. Start with the basics.",
       canAdvance: sketch.name.trim().length > 0,
       content: (
         <>
@@ -149,7 +149,7 @@ export default function SignatureMiniBuilder({ linkedinEnabled = false }: { link
     // collected in the real wizard's Socials step after "Make it live".
     {
       title: "Design your signature",
-      subtitle: "Pick a template, then work down the numbered steps — it updates live.",
+      subtitle: "Pick a template, then work down the numbered steps. It updates live.",
       previewFirst: true,
       content: (
         <div className="space-y-4">

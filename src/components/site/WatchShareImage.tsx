@@ -36,7 +36,7 @@ export default function WatchShareImage() {
     <div
       className="relative w-[180px] sm:w-[208px] select-none"
       role="img"
-      aria-label="An Apple Watch showing Alex Morgan's SwiftCard QR code, captioned Scan to connect"
+      aria-label={`An Apple Watch showing Alex Morgan's SwiftCard QR code, captioned "Scan to connect"`}
     >
       {/* band, upper */}
       <div

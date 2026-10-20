@@ -18,7 +18,7 @@ const SEAT = formatUsd(PLAN_PRICES.OFFICE_MONTHLY_PER_SEAT_CENTS);
 const MIN_SEATS = PLAN_LIMITS.OFFICE_MIN_SEATS;
 
 export const metadata: Metadata = {
-  title: "SwiftCard vs Linktree, Popl & Blinq — Digital Business Card Comparison",
+  title: "SwiftCard vs Linktree, Popl & Blinq | Digital Business Card Comparison",
   alternates: { canonical: "/compare" },
   description:
     "How SwiftCard compares to Linktree, Popl, and Blinq on price, lead capture, and follow-up automation. See the real differences before you switch.",
@@ -41,7 +41,7 @@ const ROWS: Row[] = [
   { label: "Built-in lead CRM (notes, history, follow-ups)", swiftcard: "✓", linktree: "✗", popl: "Via 3rd-party integrations", blinq: "Via 3rd-party integrations" },
   { label: "Automated follow-up sequences (email + text)", swiftcard: "✓", linktree: "✗", popl: "✗", blinq: "✗" },
   { label: "NFC tap-to-share", swiftcard: "✓", linktree: "✗", popl: "✓", blinq: "✓" },
-  { label: "Custom card designer", swiftcard: "✓ (Pro)", linktree: "N/A — link-in-bio, not a card", popl: "Limited", blinq: "✓" },
+  { label: "Custom card designer", swiftcard: "✓ (Pro)", linktree: "N/A (link-in-bio, not a card)", popl: "Limited", blinq: "✓" },
   { label: "Team/office pricing", pricing: true, swiftcard: `${SEAT}/seat/mo · min ${MIN_SEATS} seats`, linktree: "N/A", popl: "$5/user/mo · min 5 seats", blinq: "$4.99/user/mo · min 5 seats" },
 ];
 
@@ -88,10 +88,10 @@ export default function ComparePage() {
           <div className="mb-4"><Eyebrow dark={false}>Comparison</Eyebrow></div>
           <h1 className="rd-display text-[clamp(2.1rem,4.4vw,3rem)] text-slate-900 mb-4 [text-wrap:balance]">SwiftCard vs Linktree, Popl &amp; Blinq</h1>
           <p className="hp-lede max-w-xl mx-auto mb-2">
-            Looking for a Linktree alternative, or weighing Popl against Blinq? Here&apos;s how SwiftCard actually compares — real numbers, no spin.
+            Looking for a Linktree alternative, or weighing Popl against Blinq? Here&apos;s how SwiftCard actually compares, with real numbers and no spin.
           </p>
           <p className="text-slate-500 text-xs max-w-xl mx-auto">
-            Competitor pricing/features sourced from their public pricing pages and subject to change — confirm current details directly with them.
+            Competitor pricing and features come from their public pricing pages and may change, so confirm current details with them directly.
           </p>
         </div>
       </section>
@@ -140,16 +140,16 @@ export default function ComparePage() {
 
         <div className="mt-8 max-w-2xl mx-auto text-center">
           <p className="text-slate-600 text-sm leading-relaxed mb-2">
-            <strong className="text-slate-900">Linktree</strong>{" "}is built for link-in-bio, not lead capture — it doesn&apos;t have a contacts CRM
+            <strong className="text-slate-900">Linktree</strong>{" "}is built for link-in-bio pages, not lead capture. It doesn&apos;t have a contacts CRM
             or follow-up automation because that&apos;s not what it&apos;s for.
           </p>
           <p className="text-slate-600 text-sm leading-relaxed mb-2">
             <strong className="text-slate-900">Popl</strong> and <strong className="text-slate-900">Blinq</strong> both do NFC sharing and CRM
-            <em> integrations</em>{" "}well, but neither has SwiftCard&apos;s built-in automated email + text follow-up sequences out of the box —
-            you&apos;d need to wire that up yourself through Zapier or a separate tool.
+            <em> integrations</em>{" "}well, but neither comes with automated email and text follow-up sequences built in the way SwiftCard does.
+            You&apos;d need to wire that up yourself through Zapier or a separate tool.
           </p>
           <p className="text-slate-600 text-sm leading-relaxed">
-            SwiftCard bundles the card, the CRM, and the follow-up automation into one plan — no separate tools to connect.
+            SwiftCard bundles the card, the CRM, and the follow-up automation into one plan, so there are no separate tools to connect.
           </p>
         </div>
 

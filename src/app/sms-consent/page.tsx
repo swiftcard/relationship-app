@@ -6,7 +6,7 @@ import HomeHeadingReveal from "@/components/site/HomeHeadingReveal";
 import "@/app/home.css";
 
 export const metadata: Metadata = {
-  title: "SMS Consent Overview — SwiftCard",
+  title: "SMS Consent Overview | SwiftCard",
   description:
     "How people opt in to receive text messages on SwiftCard: where the consent disclosure appears, the exact wording shown, and how opt-out works.",
 };
@@ -43,7 +43,7 @@ export default function SmsConsentPage() {
 
         <P>
           This page shows exactly how SwiftCard collects consent to send text messages. SwiftCard is a
-          digital business card platform operated by <strong>Swift Card Inc</strong> (see our{" "}
+          digital business card platform operated by <strong>Swift Card Inc.</strong> (see our{" "}
           <Link href="/company" className="text-brand underline">Company page</Link>). The full program terms
           are in our <Link href="/sms-terms" className="text-brand underline">SMS &amp; Messaging Terms</Link>{" "}
           and <Link href="/privacy" className="text-brand underline">Privacy Policy</Link>.
@@ -52,7 +52,7 @@ export default function SmsConsentPage() {
         <H2>Who sends the messages, and who they go to</H2>
         <P>
           Every SwiftCard user has a public card page (for example,
-          swiftcard.me/their-name). People they meet share their contact details with them — in person,
+          swiftcard.me/their-name). People they meet share their contact details with them: in person,
           at an event, or through the &quot;Share your info&quot; form on that card page. Sharing contact
           details is not a subscription to text messages, and SwiftCard does not treat it as one: a
           contact captured that way is never sent an automated text.
@@ -61,7 +61,7 @@ export default function SmsConsentPage() {
         <H2>How consent is obtained</H2>
         <P>
           Consent is given to the SwiftCard user, by the person they met, in the conversation where
-          they exchanged details — the same permission any professional asks for before texting
+          they exchanged details. It is the same permission any professional asks for before texting
           someone. SwiftCard does not text anyone on its own behalf and never markets to these contacts.
         </P>
         <ul className="mb-3">
@@ -77,12 +77,12 @@ export default function SmsConsentPage() {
           </LI>
           <LI>
             Only that confirmation allows a text. It is recorded server-side as an{" "}
-            <strong>sms-ok</strong> flag that can only be set from the user&apos;s own signed-in account —
-            no public page, and nothing a visitor&apos;s browser sends, can set it.
+            <strong>sms-ok</strong> flag that can only be set from the user&apos;s own signed-in account.
+            No public page, and nothing a visitor&apos;s browser sends, can set it.
           </LI>
           <LI>
-            Contacts without that flag — everyone captured by the share form, the business-card scanner,
-            manual entry or an import — are <strong>never</strong> sent an automated text. The user can
+            Contacts without that flag (everyone captured by the share form, the business-card scanner,
+            manual entry or an import) are <strong>never</strong> sent an automated text. The user can
             still reply by email.
           </LI>
           <LI>
@@ -102,7 +102,7 @@ export default function SmsConsentPage() {
 
         <H2>See it for yourself</H2>
         <P>
-          The share form — which collects contact details and nothing else — is on a public page, with no
+          The share form, which collects contact details and nothing else, is on a public page, with no
           login and no demo environment:
         </P>
 
@@ -117,14 +117,14 @@ export default function SmsConsentPage() {
           </a>
           <p className="text-slate-600 text-[0.9375rem] leading-relaxed mt-3">
             Scroll to <strong>&quot;Share your info&quot;</strong>. It asks for a name, phone and email so
-            those details reach the card&apos;s owner — it does not sign anyone up for text messages, and
+            those details reach the card&apos;s owner. It does not sign anyone up for text messages, and
             nothing submitted there can start one.
           </p>
         </div>
 
         <H2>The number messages come from</H2>
         <P>
-          Every SwiftCard text — replies, card links, and follow-ups alike — is sent from one shared
+          Every SwiftCard text (replies, card links, and follow-ups alike) is sent from one shared
           number: <strong>(917) 905-7335</strong>. The SwiftCard user who is writing to you is named in the
           message itself.
         </P>
@@ -132,7 +132,7 @@ export default function SmsConsentPage() {
         <H2>Opting out</H2>
         <P>
           Replying <strong>STOP</strong> to any SwiftCard text suppresses that number across the entire
-          platform — no SwiftCard user can text it through SwiftCard afterwards. Replying{" "}
+          platform, so no SwiftCard user can text it through SwiftCard afterwards. Replying{" "}
           <strong>HELP</strong> returns program information and support contact details. Questions:{" "}
           <a href="mailto:hello@swiftcard.me" className="text-brand underline">hello@swiftcard.me</a>.
         </P>

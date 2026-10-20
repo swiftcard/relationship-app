@@ -8,7 +8,7 @@ import NativeHidden from "@/components/NativeHidden";
 import NativeOnly from "@/components/NativeOnly";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — SwiftCard",
+  title: "Terms of Service | SwiftCard",
   description: "The terms that govern your use of SwiftCard.",
 };
 
@@ -54,14 +54,14 @@ export default function TermsPage() {
 
         <H2>Company information</H2>
         <P>
-          SwiftCard is a digital business card and link-in-bio platform operated by <strong>Swift Card Inc</strong>,
+          SwiftCard is a digital business card and link-in-bio platform operated by <strong>Swift Card Inc.</strong>,
           a corporation. More details are on our{" "}
           <Link href="/company" className="text-brand underline">Company page</Link>.
         </P>
         <dl className="mt-4 mb-3 rounded-2xl border border-slate-200/80 bg-[#F5F7FB] divide-y divide-slate-200/80">
           <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4 px-4 py-3">
             <dt className="text-slate-500 text-[0.8125rem] font-semibold sm:w-44 shrink-0">Operating entity</dt>
-            <dd className="text-slate-800 text-[0.9375rem]">Swift Card Inc</dd>
+            <dd className="text-slate-800 text-[0.9375rem]">Swift Card Inc.</dd>
           </div>
           <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4 px-4 py-3">
             <dt className="text-slate-500 text-[0.8125rem] font-semibold sm:w-44 shrink-0">Brand</dt>
@@ -94,13 +94,13 @@ export default function TermsPage() {
         <H2>Your account</H2>
         <ul className="mb-3">
           <LI>You&apos;re responsible for keeping your login secure and for everything that happens under your account.</LI>
-          <LI>Provide accurate information and keep it current — especially your email, which we use for account and billing notices.</LI>
+          <LI>Provide accurate information and keep it current, especially your email, which we use for account and billing notices.</LI>
           <LI>Tell us promptly if you suspect unauthorized access.</LI>
         </ul>
 
         <H2>Your content and your card</H2>
         <P>
-          You own the content you put on your card and Swift Links page — your name, details, photos, logo, links,
+          You own the content you put on your card and Swift Links page: your name, details, photos, logo, links,
           and anything else you add. You give us the limited permission we need to host, display, and deliver that
           content as part of running the Service (for example, showing your card to anyone who opens its link, which
           is public by design). You&apos;re responsible for making sure you have the rights to everything you upload and
@@ -115,12 +115,12 @@ export default function TermsPage() {
         <ul className="mb-3">
           <LI>You&apos;ll only collect and use it for legitimate business follow-up, in line with applicable privacy and anti-spam laws (including, where they apply to you, GDPR, CCPA/CPRA, CAN-SPAM, and TCPA).</LI>
           <LI>You have a lawful basis to contact the people you message, and you&apos;ll honor opt-outs. Automated follow-up emails you set up are sent on your behalf, and you&apos;re the sender responsible for them.</LI>
-          <LI><strong>Text messages are different.</strong> Swift Card Inc is the sender of every automated text message sent through SwiftCard. We send them from our own registered number, using our own message templates, only to a contact whose permission you have confirmed to us when you set the follow-up up, and only about the exchange that person started. You may write the wording of a follow-up you schedule, but we send it, every message identifies SwiftCard, and you never receive the recipient&apos;s mobile number to message yourself. Text messaging is governed by our <Link href="/sms-terms" className="text-brand underline">SMS &amp; Messaging Terms</Link>.</LI>
+          <LI><strong>Text messages are different.</strong> Swift Card Inc. is the sender of every automated text message sent through SwiftCard. We send them from our own registered number, using our own message templates, only to a contact whose permission you have confirmed to us when you set the follow-up up, and only about the exchange that person started. You may write the wording of a follow-up you schedule, but we send it, every message identifies SwiftCard, and you never receive the recipient&apos;s mobile number to message yourself. Text messaging is governed by our <Link href="/sms-terms" className="text-brand underline">SMS &amp; Messaging Terms</Link>.</LI>
           <LI>You won&apos;t upload contact data you obtained unlawfully, or use SwiftCard to send unsolicited bulk messages.</LI>
         </ul>
         <P>
           For the contact records you collect, you are the data controller and SwiftCard acts as your processor.
-          Mobile numbers and SMS consent are the exception: because Swift Card Inc is the sender of every automated
+          Mobile numbers and SMS consent are the exception: because Swift Card Inc. is the sender of every automated
           text, we are the controller of the mobile number and the consent record for that purpose, and we do not
           share either with you, with other users, or with any third party or affiliate for marketing or promotional
           purposes. See our{" "}
@@ -134,7 +134,7 @@ export default function TermsPage() {
             here and in sync with /sms-terms — a link is not a disclosure. */}
         <H2>SMS &amp; text messaging program</H2>
         <P>
-          <strong>Program description.</strong>{" "}Swift Card Inc (SwiftCard) sends transactional text messages to
+          <strong>Program description.</strong>{" "}Swift Card Inc. (SwiftCard) sends transactional text messages to
           people who gave a SwiftCard user permission to text them after an exchange, which that user confirms to
           us before anything is sent. Messages
           contain the contact details of the SwiftCard user you just met, and the follow-ups about that exchange
@@ -142,7 +142,7 @@ export default function TermsPage() {
         </P>
         <ul className="mb-3">
           <LI><strong>How you opt in.</strong> By giving the SwiftCard user you met permission to text you, in the exchange where you swapped details. They confirm that permission to us before any message can be sent, and it is the only thing that allows one. Consent is never a condition of sharing your details or of any purchase.</LI>
-          <LI><strong>Message frequency.</strong> Message frequency varies — typically 1–5 messages per exchange you opt into.</LI>
+          <LI><strong>Message frequency.</strong> Message frequency varies, typically 1–5 messages per exchange you opt into.</LI>
           <LI><strong>Cost.</strong> Message and data rates may apply. SwiftCard does not charge you for these messages; your mobile carrier&apos;s standard rates apply.</LI>
           <LI><strong>Opting out.</strong> Reply <strong>STOP</strong> to any message to stop all further messages. You will receive a single confirmation and then no further texts.</LI>
           <LI><strong>Help.</strong> Reply <strong>HELP</strong> for assistance, or contact us at <a href="mailto:hello@swiftcard.me" className="text-brand underline">hello@swiftcard.me</a> or via our <Link href="/contact" className="text-brand underline">contact page</Link>.</LI>
@@ -173,7 +173,7 @@ export default function TermsPage() {
             <NativeOnly>subscription sheet in the app</NativeOnly>.</LI>
           <LI>Paid plans are billed in advance on a recurring basis (monthly or annually) through our payment processor, Stripe, until you cancel. By subscribing you authorize those recurring charges.</LI>
           <LI>You can cancel anytime from your billing settings; cancellation stops future renewals and takes effect at the end of the current billing period. Except where required by law, payments already made are non-refundable.</LI>
-          <LI>If a payment fails, we&apos;ll give you a short grace period to update it; if it stays unresolved, your account moves to the Free plan. Your existing cards and contacts aren&apos;t deleted — some paid features simply lock until you upgrade again.</LI>
+          <LI>If a payment fails, we&apos;ll give you a short grace period to update it; if it stays unresolved, your account moves to the Free plan. Your existing cards and contacts aren&apos;t deleted; some paid features simply lock until you upgrade again.</LI>
           <LI>We may change prices or plan features. We&apos;ll give reasonable notice of material changes before they affect your next renewal.</LI>
         </ul>
 
@@ -182,7 +182,7 @@ export default function TermsPage() {
           When you subscribe to Pro for the first time, your subscription starts with a free trial (currently 14 days).
           You provide a payment method at checkout, and <strong>when the trial ends your subscription begins and your
           payment method is charged automatically</strong>{" "}at the price shown, unless you cancel before the trial ends.
-          You can cancel anytime from Settings or the billing portal — cancel during the trial and you won&apos;t be
+          You can cancel anytime from Settings or the billing portal. Cancel during the trial and you won&apos;t be
           charged. One trial per customer. Promotional free months work similarly: when they end, the account returns
           to the Free plan unless a paid subscription is active. Referral and promotional rewards have no cash value
           and may be changed or withdrawn if abused.
@@ -190,7 +190,7 @@ export default function TermsPage() {
 
         <H2>Third-party services</H2>
         <P>
-          SwiftCard works with third parties to deliver the Service — including Stripe (payments), Supabase (hosting
+          SwiftCard works with third parties to deliver the Service, including Stripe (payments), Supabase (hosting
           and authentication), Resend (email), Twilio (text messaging), and optional integrations you connect such as
           Salesforce, GoHighLevel, Pipedrive, HubSpot, Google Contacts, and Zapier. Your use of those integrations is also subject to their terms, and
           we&apos;re not responsible for third-party services we don&apos;t control.
@@ -206,8 +206,8 @@ export default function TermsPage() {
 
         <H2>Our intellectual property</H2>
         <P>
-          The Service itself — the software, design, templates, logos, and everything that makes SwiftCard work — is
-          owned by Swift Card Inc and its licensors, and is protected by copyright, trademark, and other laws.
+          The Service itself (the software, design, templates, logos, and everything that makes SwiftCard work) is
+          owned by Swift Card Inc. and its licensors, and is protected by copyright, trademark, and other laws.
           These terms give you a limited, revocable, non-exclusive, non-transferable right to use the Service; they
           don&apos;t give you any ownership of it. If you send us ideas or feedback, we may use them freely, without
           any obligation or payment to you.
@@ -216,10 +216,10 @@ export default function TermsPage() {
         <H2>Disclaimers</H2>
         <P>
           The Service is provided <strong>&quot;as is&quot; and &quot;as available.&quot;</strong>{" "}To the fullest
-          extent permitted by law, we disclaim all warranties, express or implied — including implied warranties of
+          extent permitted by law, we disclaim all warranties, express or implied, including implied warranties of
           merchantability, fitness for a particular purpose, and non-infringement. We don&apos;t warrant that the
           Service will be uninterrupted, error-free, or secure, that defects will be corrected, or that the Service
-          will produce any particular business result. SwiftCard is a networking tool — we make no promise that you
+          will produce any particular business result. SwiftCard is a networking tool, and we make no promise that you
           will gain leads, contacts, or revenue from using it. Content on other users&apos; cards belongs to those
           users; we don&apos;t verify it and aren&apos;t responsible for it.
         </P>
@@ -240,16 +240,16 @@ export default function TermsPage() {
 
         <H2>Indemnification</H2>
         <P>
-          You agree to defend, indemnify, and hold harmless Swift Card Inc, SwiftCard, and their officers,
+          You agree to defend, indemnify, and hold harmless Swift Card Inc., SwiftCard, and their officers,
           employees, and agents from any claims, damages, liabilities, and expenses (including reasonable
           attorneys&apos; fees) arising out of: your content; the contacts you collect and the messages you send
           through the Service; your use of the Service in violation of these terms or of applicable law (including
           privacy and anti-spam laws); or your infringement of anyone else&apos;s rights.
         </P>
 
-        <H2>Dispute resolution — arbitration &amp; class-action waiver</H2>
+        <H2>Dispute resolution: arbitration &amp; class-action waiver</H2>
         <P>
-          <strong>Please read this section carefully — it affects your legal rights.</strong> If you have a dispute
+          <strong>Please read this section carefully. It affects your legal rights.</strong> If you have a dispute
           with us, contact us first through the{" "}
           <Link href="/contact" className="text-brand underline">Contact page</Link>; most issues can be resolved
           informally, and we&apos;ll try in good faith for 30 days before either side starts formal proceedings.

@@ -44,13 +44,13 @@ export default function AwaitingPlan({ planName, fallbackHref }: {
         <p className="text-gray-400 text-sm mt-2 leading-relaxed">
           {/* Not "Your payment went through": most Pro checkouts start a free
               trial and charge $0.00 today. */}
-          Checkout is complete. This usually takes a few seconds — please keep this page open.
+          Checkout is complete. This usually takes a few seconds, so please keep this page open.
         </p>
         {slow && (
           <p className="text-gray-500 text-xs mt-5 leading-relaxed">
             Still confirming with our payment provider. You can safely{" "}
             <button type="button" onClick={() => window.location.reload()} className="text-blue-400 underline">refresh</button>
-            {" "}— you won&apos;t be charged twice. If it still hasn&apos;t finished,{" "}
+            . You won&apos;t be charged twice. If it still hasn&apos;t finished,{" "}
             <Link href="/contact" className="text-blue-400 underline">contact us</Link> and we&apos;ll sort it out.
           </p>
         )}

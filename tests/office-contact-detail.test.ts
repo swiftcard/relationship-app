@@ -302,6 +302,6 @@ describe("teammates are told before they join", () => {
   it("every invitee, not only those bringing a card", () => {
     const page = read("src/app/join/[token]/page.tsx");
     expect(page).toContain("While you&apos;re on the team, its admin can see the contacts you make and the messages and activity");
-    expect(page).toContain("with them — your private notes stay yours.");
+    expect(page).toContain("with them. Your private notes stay yours.");
   });
 });

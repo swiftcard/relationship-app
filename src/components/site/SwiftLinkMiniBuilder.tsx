@@ -110,7 +110,7 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
     // 1 — name, business & profile photo
     {
       title: "Name your Swift Links page",
-      subtitle: "Your link is built from your name and business — this is the page that lives in your bio.",
+      subtitle: "Your link is built from your name and business. This is the page that lives in your bio.",
       canAdvance: sketch.name.trim().length > 0,
       content: (
         <>
@@ -145,7 +145,7 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
             value={sketch.bio}
             onChange={(e) => patch({ bio: e.target.value })}
             required
-            hint="Who you help and what you do — the first thing people read. AI follow-ups use it too."
+            hint="Who you help and what you do. It's the first thing people read, and AI follow-ups use it too."
             autoFocus
           />
           <SocialFields socials={sketch.socials} onChange={patchSocial} />
@@ -161,7 +161,7 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
     // 3 — style your page (the Swift Links page's own design keys)
     {
       title: "Style your page",
-      subtitle: "Pick a Look — solid, gradient, or your own photo — then style your social icons and font. Updates live.",
+      subtitle: "Pick a Look (solid, gradient, or your own photo), then style your social icons and font. It updates live.",
       previewFirst: true,
       // links + onLinksChange turn on the real "Link buttons" section — the
       // same per-link Featured / Grid / Compact picker and Standard / Solid /

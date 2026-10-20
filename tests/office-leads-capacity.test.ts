@@ -180,12 +180,12 @@ describe("the table says what is on screen and what is not", () => {
   const page = read("src/app/office/admin/leads/page.tsx");
 
   it("the header shows the EXACT total, not the loaded count", () => {
-    expect(page).toMatch(/page\.total \? ` — \$\{page\.total\.toLocaleString\(\)\} so far`/);
+    expect(page).toMatch(/page\.total \? ` \(\$\{page\.total\.toLocaleString\(\)\} so far\)`/);
     expect(table).toMatch(/Showing \$\{rows\.length\.toLocaleString\(\)\} of \$\{knownTotal\.toLocaleString\(\)\} contacts/);
   });
 
   it("offers Load more with how many remain", () => {
-    expect(table).toMatch(/Load more — \$\{Math\.max\(0, knownTotal - rows\.length\)\.toLocaleString\(\)\} to go/);
+    expect(table).toMatch(/Load more \(\$\{Math\.max\(0, knownTotal - rows\.length\)\.toLocaleString\(\)\} to go\)/);
   });
 
   it("advances the offset by what the SERVER returned, not by rows kept", () => {

@@ -139,7 +139,7 @@ function SwatchRow({
       <label className="flex items-center gap-1 text-[0.625rem] text-gray-600 ml-0.5 cursor-pointer">
         custom{customLocked && <ProTag />}
         <input
-          aria-label="Accent colour"
+          aria-label="Accent color"
           type="color"
           value={isHex(value) ? value : fallbackHex}
           onChange={(e) => onPick(e.target.value)}
@@ -238,7 +238,7 @@ function LookSwatch({
       <span className="relative mt-2 block h-[14px] w-full rounded-full" style={{ background: look.photoMatch ? PHOTO_MATCH_ACCENT : look.accent }} />
       <span className="relative mt-2 flex items-center gap-1.5 min-h-[11px]">
         {look.aura && <span className="text-[0.5625rem] leading-none" style={{ color: look.text, opacity: 0.55 }}>your photo, blurred</span>}
-        {look.photoMatch && <span className="text-[0.5625rem] leading-none" style={{ color: look.text, opacity: 0.7 }}>colours from your photo</span>}
+        {look.photoMatch && <span className="text-[0.5625rem] leading-none" style={{ color: look.text, opacity: 0.7 }}>colors from your photo</span>}
         {proLocked && <ProTag />}
       </span>
     </button>
@@ -855,7 +855,7 @@ export function SwiftLinkStyleControls({
             would make every Look "not work" until the user found and reset it. */}
         <LookPicker value={value.linkLook} onPick={(v) => onChange({ linkLook: v, linkBgColor: undefined, linkTextColor: undefined, linkButtonColor: undefined, linkAccentColor: undefined })} locked={locked} />
         {locked && (
-          <p className="text-[0.625rem] text-gray-500 mt-2 leading-snug">Photo match, Paper and Onyx are free — the rest come with Pro.</p>
+          <p className="text-[0.625rem] text-gray-500 mt-2 leading-snug">Photo match, Paper and Onyx are free. The rest come with Pro.</p>
         )}
         </>
       ),

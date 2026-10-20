@@ -128,7 +128,7 @@ function SwiftCardPopup({ onClose }: { onClose: () => void }) {
                 only since 2026-10-05; the "Show QR Code" control was removed
                 from the card page). */}
             <div className={PANEL} style={panelStyle}>
-              <ShareButton url={CARD_URL} text={`Connect with ${FIRST} — save their contact instantly.`} label="Share this card" warm={false} />
+              <ShareButton url={CARD_URL} text={`Connect with ${FIRST} and save their contact instantly.`} label="Share this card" warm={false} />
             </div>
           </div>
         </div>
@@ -144,11 +144,11 @@ export default function SignatureDemo() {
     <div>
       {/* Works everywhere */}
       <div className="flex flex-wrap items-center justify-center gap-2.5 mb-5" data-reveal="fade">
-        <span className="text-slate-500 text-[0.9375rem] font-medium">Works on all platforms —</span>
+        <span className="text-slate-500 text-[0.9375rem] font-medium">Works on all platforms:</span>
         {["Gmail", "Outlook", "Yahoo", "Hotmail", "Apple Mail"].map((p) => (
           <span key={p} className="rd-pill rd-pill-l text-[0.8125rem]">{p}</span>
         ))}
-        <span className="text-slate-500 text-[0.9375rem] font-medium">all of it.</span>
+        <span className="text-slate-500 text-[0.9375rem] font-medium">and more.</span>
       </div>
 
       {/* Click hint — on top of the email box */}
@@ -170,7 +170,7 @@ export default function SignatureDemo() {
           </div>
           <div className="pt-5 text-[0.90625rem] leading-relaxed space-y-3">
             <p>Hi Sarah,</p>
-            <p>Really enjoyed chatting earlier. My details are in my signature below — feel free to reach out anytime.</p>
+            <p>Really enjoyed chatting earlier. My details are in my signature below. Feel free to reach out anytime.</p>
             <p>Best,</p>
           </div>
 

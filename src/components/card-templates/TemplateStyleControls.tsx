@@ -234,7 +234,7 @@ function FinishPicker({
           plainly instead of silently rewriting a colour the owner chose. */}
       {current.lightens && (
         <p className="text-[0.6875rem] text-amber-400/90 leading-snug">
-          {current.name} lightens the panel — if your name is white, a darker name colour will read better.
+          {current.name} lightens the panel. If your name is white, a darker name color will read better.
         </p>
       )}
     </div>
@@ -311,7 +311,7 @@ function PanelMediaControl({
         if (!posterUp) {
           // Without a still, the card would be blank everywhere it cannot play.
           // Refusing is kinder than shipping a card that is broken in export.
-          setError("Couldn't read a still from that video — try a different file, or use a photo.");
+          setError("Couldn't read a still from that video. Try a different file, or use a photo.");
           return;
         }
         // One patch: a url written without its type (or poster) would render as
@@ -352,7 +352,7 @@ function PanelMediaControl({
               aria-hidden
             />
             <p className="text-[0.6875rem] text-gray-400 min-w-0 flex-1 leading-snug">
-              {isVideo ? "Video — plays on your card page; the first frame shows everywhere else." : "Photo behind your panel."}
+              {isVideo ? "The video plays on your card page. The first frame shows everywhere else." : "Photo behind your panel."}
             </p>
             <button type="button" onClick={() => fileRef.current?.click()} disabled={busy} className="text-[0.6875rem] font-semibold text-blue-400 hover:text-blue-300 disabled:opacity-50 shrink-0">
               {busy ? "Uploading…" : "Replace"}
@@ -536,7 +536,7 @@ export default function TemplateStyleControls({
             ]}
           />
           <p className="text-[0.6875rem] text-gray-500 mt-1.5 leading-snug">
-            {logo.shape === "circle" ? "Your full logo inside a clean circle — nothing gets cut off." : "Adapts to your logo — square, wide, or banner."}
+            {logo.shape === "circle" ? "Your full logo inside a clean circle. Nothing gets cut off." : "Adapts to your logo: square, wide, or banner."}
           </p>
         </div>
       ),
@@ -566,7 +566,7 @@ export default function TemplateStyleControls({
     {
       key: "media",
       label: "Photo or video",
-      help: `Optional — goes behind your ${meta.bg.label.toLowerCase()}.`,
+      help: `Optional. It goes behind your ${meta.bg.label.toLowerCase()}.`,
       trailing: proTags ? <ProTag /> : undefined,
       body: canUpload
         ? <PanelMediaControl value={value} onChange={onChange} />
@@ -597,7 +597,7 @@ export default function TemplateStyleControls({
     {
       key: "finish",
       label: "Finish",
-      help: `The material over your ${meta.bg.label.toLowerCase()}. Strongest on deeper colours.`,
+      help: `The material over your ${meta.bg.label.toLowerCase()}. Strongest on deeper colors.`,
       body: <FinishPicker value={value} bgFallback={meta.bg.fallback} onChange={onChange} proTags={proTags} />,
     },
   ];

@@ -152,7 +152,7 @@ export default function ConnectButton({
                   <div>
                     <p className="text-slate-900 font-bold text-base leading-snug">Reach out to {ownerFirstName}</p>
                     <p className="text-slate-500 text-sm mt-1">
-                      {knownInfo ? "Just type your message — we've got your details." : "Send your details and a quick message."}
+                      {knownInfo ? "Just type your message. We already have your details." : "Send your details and a quick message."}
                     </p>
                   </div>
                   <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 text-2xl leading-none ml-3" aria-label="Close">×</button>

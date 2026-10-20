@@ -123,8 +123,8 @@ export default async function JoinPage({
   // the invitee would never see.
   const brandSetUp = !!(brand?.logoUrl || brand?.template || brand?.design);
   const intro = brandSetUp
-    ? "Your company logo and design are already set up. You just add your name, photo and contact info — it takes about 2 minutes."
-    : "Your team covers your card. You just add your name, photo and contact info — it takes about 2 minutes.";
+    ? "Your company logo and design are already set up. You just add your name, photo and contact info. It takes about 2 minutes."
+    : "Your team covers your card. You just add your name, photo and contact info. It takes about 2 minutes.";
 
   const header = (
     <div className="text-center mb-8">
@@ -229,7 +229,7 @@ export default async function JoinPage({
           </div>
           <div className="flex items-center justify-between gap-3">
             <span className="text-gray-500 text-xs">Cost to you</span>
-            <span className="text-xs font-bold text-green-400">Free — {officeName ?? "your team"} covers it</span>
+            <span className="text-xs font-bold text-green-400">Free ({officeName ?? "your team"} covers it)</span>
           </div>
         </div>
 
@@ -247,7 +247,7 @@ export default async function JoinPage({
             </>
           )}
           While you&apos;re on the team, its admin can see the contacts you make and the messages and activity
-          with them — your private notes stay yours.
+          with them. Your private notes stay yours.
         </p>
 
         <JoinButton token={token} />

@@ -21,7 +21,7 @@ import { detectNativeApp, detectNativePlatform } from "@/lib/platform";
 const PERKS = [
   "Unlimited cards and new contacts",
   "Follow-ups by text, with every message written by AI",
-  "Scan a paper business card — AI types it in for you",
+  "Scan a paper business card and AI types it in for you",
   "Custom card design, premium finishes, your own colors",
   "See who viewed your card and which cities they're in",
   "No SwiftCard note at the bottom of your emails or Swift Links",
@@ -384,7 +384,7 @@ function PaywallSheet({ onClose, onPurchased, period }: { onClose: () => void; o
               Go Pro
             </p>
             <p className="mt-1 text-[0.8125rem] text-white/85">
-              Everything, unlimited — cards, contacts, AI drafts, the scanner and the custom designer.
+              Everything, unlimited: cards, contacts, AI drafts, the scanner and the custom designer.
             </p>
           </div>
         </div>

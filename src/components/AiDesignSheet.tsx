@@ -68,8 +68,8 @@ export default function AiDesignSheet({
             </p>
             <p className="text-[0.75rem] text-gray-400 mt-0.5">
               {teamBrand
-                ? "Choose the look — AI designs the team's card, and every teammate's fills it with their own details."
-                : "Choose the look — AI designs a card for you. You can move, resize and restyle anything after."}
+                ? "Choose the look. AI designs the team's card, and each teammate's card fills in with their own details."
+                : "Choose the look. AI designs a card for you. You can move, resize and restyle anything after."}
             </p>
           </div>
           <button type="button" onClick={onClose} disabled={busy} aria-label="Close" className="text-gray-500 hover:text-white text-lg leading-none disabled:opacity-40">✕</button>
@@ -79,7 +79,7 @@ export default function AiDesignSheet({
           {/* 1 — Colours */}
           <section>
             <div className="flex items-baseline justify-between gap-2 mb-2">
-              <p className={head}>1 · Your colours</p>
+              <p className={head}>1 · Your colors</p>
               <p className="text-[0.6875rem] text-gray-500">{colors.length ? `${colors.length} of ${MAX_COLORS}` : "Pick 1–2, or none and AI chooses"}</p>
             </div>
             <div className="grid grid-cols-8 gap-2">
@@ -106,8 +106,8 @@ export default function AiDesignSheet({
             </div>
             <div className="flex items-center gap-2 mt-2.5 flex-wrap">
               <label className="flex items-center gap-2 text-[0.75rem] text-gray-400">
-                <input type="color" value={custom} onChange={(e) => setCustom(e.target.value)} aria-label="Pick any colour" className="sc-tap-sq w-8 h-8 rounded bg-transparent border border-gray-700" />
-                Any colour
+                <input type="color" value={custom} onChange={(e) => setCustom(e.target.value)} aria-label="Pick any color" className="sc-tap-sq w-8 h-8 rounded bg-transparent border border-gray-700" />
+                Any color
               </label>
               <button type="button" onClick={() => toggleColor(custom)} className="sc-tap text-[0.75rem] font-semibold px-3 py-1.5 rounded-lg border bg-gray-800 border-gray-600 text-gray-100 hover:border-gray-400">
                 {colors.includes(custom.toLowerCase()) ? "Remove it" : "Use it"}

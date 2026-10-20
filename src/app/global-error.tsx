@@ -12,7 +12,7 @@ export default function RootError({ reset }: { error: Error & { digest?: string 
           <img src="/brand-icon-192.png" alt="SwiftCard" width={44} height={44} style={{ borderRadius: 10, display: "block", margin: "0 auto 32px" }} />
           <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em", margin: "0 0 12px" }}>Something went wrong</h1>
           <p style={{ fontSize: 15, lineHeight: 1.6, color: "#57534E", margin: "0 0 28px" }}>
-            SwiftCard hit an unexpected error. Reloading usually fixes it — nothing you have saved is affected.
+            SwiftCard hit an unexpected error. Reloading usually fixes it. Nothing you have saved is affected.
           </p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
             <button onClick={() => reset()} style={{ background: "#1D4ED8", color: "#fff", border: 0, borderRadius: 999, padding: "13px 26px", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>

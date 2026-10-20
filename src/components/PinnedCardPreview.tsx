@@ -289,7 +289,7 @@ export function LinkPageViewport({ children, onExpand, undo }: { children: React
         onClick={onExpand}
         // Scrolls by touch; the page inside is inert, so a tap opens full size.
         className="sc-link-viewport relative self-center w-[min(150px,40vw)] max-h-[min(262px,36vh)] overflow-y-auto overscroll-contain rounded-[22px] cursor-zoom-in [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        aria-label="Your Swift Links page — scroll to see all of it"
+        aria-label="Your Swift Links page. Scroll to see all of it."
         style={fade ? { maskImage: fade, WebkitMaskImage: fade } : undefined}
       >
         {children}

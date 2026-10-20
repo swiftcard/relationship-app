@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
   // replayed. Generous: a person fiddling with switches must never be blocked,
   // and the unsubscribe path is far below this ceiling.
   if (await isRateLimited(`email-prefs:${userId}`, 40, 60 * 60 * 1000)) {
-    return NextResponse.json({ error: "Too many changes — try again shortly." }, { status: 429 });
+    return NextResponse.json({ error: "Too many changes. Try again shortly." }, { status: 429 });
   }
 
   const admin = getAdminSupabase();
@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
       // Goes through the shared writer so the audit row and BOTH suppression
       // flags are handled in one place.
       const ok = await recordOptOut({ userId, source: "footer" });
-      if (!ok) return NextResponse.json({ error: "Couldn't save that — please try again." }, { status: 503 });
+      if (!ok) return NextResponse.json({ error: "Couldn't save that. Please try again." }, { status: 503 });
       const after = await readPreferences(userId);
       return NextResponse.json({ ok: true, preferences: after ? shape(after) : null });
     }
@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { error } = await admin.from("email_preferences").upsert(patch, { onConflict: "user_id" });
-  if (error) return NextResponse.json({ error: "Couldn't save that — please try again." }, { status: 503 });
+  if (error) return NextResponse.json({ error: "Couldn't save that. Please try again." }, { status: 503 });
 
   const after = await readPreferences(userId);
   return NextResponse.json({

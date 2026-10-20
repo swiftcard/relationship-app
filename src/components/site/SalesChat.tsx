@@ -17,7 +17,7 @@ type Msg = { role: "user" | "assistant"; content: string };
 const GREETING: Msg = {
   role: "assistant",
   content:
-    "Hi! I can answer anything about SwiftCard — what it is, pricing, and how it works. What would you like to know?",
+    "Hi! I can answer questions about SwiftCard: what it is, what it costs, and how it works. What would you like to know?",
 };
 
 const SUGGESTIONS = [
@@ -88,9 +88,9 @@ export default function SalesChat() {
         body: JSON.stringify({ messages: next.slice(1) }), // skip static greeting
       });
       const data = await res.json();
-      setMessages((prev) => [...prev, { role: "assistant", content: data.reply || "Sorry, I couldn't answer that — try swiftcard.me/contact." }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: data.reply || "Sorry, I couldn't answer that. Try swiftcard.me/contact." }]);
     } catch {
-      setMessages((prev) => [...prev, { role: "assistant", content: "Sorry — something went wrong. Try again in a moment." }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: "Sorry, something went wrong. Try again in a moment." }]);
     } finally {
       setLoading(false);
     }

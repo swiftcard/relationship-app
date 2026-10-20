@@ -22,30 +22,30 @@ const SRC = "view_tracking_page"; // registered SIGNUP_SOURCE — keeps this pag
 export const metadata: Metadata = {
   title: "A Business Card That Tracks Who Viewed It | SwiftCard",
   description:
-    "SwiftCard tells you when your business card is viewed — instant notifications, traffic sources, repeat visits, and viewer locations. Free to start.",
+    "SwiftCard tells you when your business card is viewed, with instant notifications, traffic sources, repeat visits, and viewer locations. Free to start.",
   alternates: { canonical: `${APP_URL}/business-card-view-tracking` },
   openGraph: {
     title: "A business card that tracks who viewed it",
-    description: "Instant view notifications, traffic sources, repeat visits, and viewer locations — built into your digital business card.",
+    description: "Instant view notifications, traffic sources, repeat visits, and viewer locations, built into your digital business card.",
     url: `${APP_URL}/business-card-view-tracking`,
     siteName: "SwiftCard",
   },
 };
 
 const FEATURES = [
-  { t: "Know the moment it's viewed", d: "A real person opens your card and your phone tells you — so you can follow up while the conversation is still warm, not next Tuesday." },
-  { t: "See where views come from", d: "QR scan, NFC tap, shared link, or your Swift Links page — every view carries its source, so you learn which channel actually works for you." },
+  { t: "Know the moment it's viewed", d: "When a real person opens your card, your phone tells you, so you can follow up while the conversation is still warm instead of next Tuesday." },
+  { t: "See where views come from", d: "QR scan, NFC tap, shared link, or your Swift Links page: every view carries its source, so you learn which channel actually works for you." },
   { t: "Card views vs. link views, separately", d: "Your dashboard's traffic graph splits SwiftCard views from Swift Links views, so you always know which page is doing the work." },
   { t: "Repeat visits count", d: "Someone coming back to your card is the strongest buying signal there is. SwiftCard shows unique visitors and repeat views side by side." },
-  { t: "Viewer locations", d: "See the cities and countries your views come from — useful the day after a conference, or when a card is shared beyond your own network. Included with Pro." },
-  { t: "From viewed to captured", d: "Tracking tells you someone looked; the share-back form turns them into a contact — name, phone, and email straight into your built-in CRM." },
+  { t: "Viewer locations", d: "See the cities and countries your views come from. It's useful the day after a conference, or when your card gets shared beyond your own network. Included with Pro." },
+  { t: "From viewed to captured", d: "Tracking tells you someone looked, and the share-back form turns them into a contact by sending their name, phone, and email straight into your built-in CRM." },
 ];
 
 const FAQ = [
-  { q: "Does SwiftCard notify me when someone views my card?", a: "Yes — you get a notification when your card or your Swift Links page is viewed, and repeat visits within a session aren't double-counted, so the numbers stay honest." },
-  { q: "Can I see exactly who viewed my business card?", a: "You see when a view happened, where it came from (QR, NFC, link, or your links page), the viewer's general location, and whether they'd visited before. Names appear when the visitor chooses to share their info back through your card's form — that's what turns a view into a contact." },
+  { q: "Does SwiftCard notify me when someone views my card?", a: "Yes. You get a notification when your card or your Swift Links page is viewed, and repeat visits within a session aren't double-counted, so the numbers stay honest." },
+  { q: "Can I see exactly who viewed my business card?", a: "You see when a view happened, where it came from (QR, NFC, link, or your links page), the viewer's general location, and whether they'd visited before. Names appear when the visitor chooses to share their info back through your card's form. That's what turns a view into a contact." },
   { q: "Does view tracking work with paper business cards?", a: "It works with anything that carries your link: a QR code on a printed card, an NFC tag, an email signature, or a plain URL. Each carries its own source, so you can tell them apart." },
-  { q: "Is the tracking accurate, or does it count bots?", a: "SwiftCard filters non-human traffic — crawler and datacenter visits don't count as views, and quick repeat opens are folded into one visit." },
+  { q: "Is the tracking accurate, or does it count bots?", a: "SwiftCard filters out non-human traffic. Crawler and datacenter visits don't count as views, and quick repeat opens are folded into one visit." },
   { q: "Is it free?", a: "Creating your card, sharing it, and view notifications are free. Pro adds detailed analytics like viewer locations and full history." },
 ];
 
@@ -71,7 +71,7 @@ export default function ViewTrackingPage() {
         <div className="mb-4"><Eyebrow dark={false}>View tracking</Eyebrow></div>
         <h1 className="rd-display text-[clamp(2.1rem,4.4vw,3rem)] text-slate-900 mb-4 max-w-2xl mx-auto [text-wrap:balance]">A business card that tells you who&apos;s looking</h1>
         <p className="hp-lede max-w-xl mx-auto">
-          Paper cards disappear into pockets. A SwiftCard reports back — every view, its source, and whether they came back for a second look.
+          Paper cards disappear into pockets. A SwiftCard reports back on every view, where it came from, and whether the person came back for a second look.
         </p>
         <div className="mt-7">
           <Link href={`/cards/new?src=${SRC}`} className="rd-btn rd-btn-primary rd-btn-lg">

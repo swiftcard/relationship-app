@@ -250,7 +250,7 @@ export function OfficeSeatPicker({ seats, onSeats, lockedSeats }: { seats: numbe
           className="w-20 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 bg-white border border-slate-200 focus:outline-none" />
         <span className="text-xs text-slate-500">users</span>
       </div>
-      <p className="text-slate-500 text-[0.6875rem] mt-2">No cap on team size — add more seats anytime from your account as you grow.</p>
+      <p className="text-slate-500 text-[0.6875rem] mt-2">No cap on team size. Add more seats anytime from your account as you grow.</p>
     </div>
   );
 }

@@ -38,10 +38,10 @@ const tabs = read("src/components/LinksPageTabs.tsx");
 // changes the wording, this test starts failing until the mocks are updated too.
 const SWIFT_LINKS_TITLE = "Your link-in-bio page";
 const SWIFT_LINKS_BLURB =
-  "A separate link from your card — your bio, socials, and links in one place. Drop it in your Instagram, TikTok, or any social bio.";
+  "A separate link from your card that puts your bio, socials, and links in one place. Drop it in your Instagram, TikTok, or any social bio.";
 const SIGNATURE_TITLE = "Your card in every email";
 const SIGNATURE_BLURB =
-  "Copy your Swift Signature and paste it into your email — a clickable link to your card at the bottom of every message you send.";
+  "Copy your Swift Signature and paste it into your email. You get a clickable link to your card at the bottom of every message you send.";
 
 describe("the Links page replicas match the real Links page", () => {
   it("the strings under test really are the real page's strings", () => {

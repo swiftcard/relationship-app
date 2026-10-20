@@ -28,7 +28,7 @@ describe("a Swift Links page has ONE invite", () => {
 
   it("the sheet's words and markup live in one file only, so they cannot drift", () => {
     expect(sheet).toContain("Create your own Swift Links");
-    expect(sheet).toContain("See how yours looks — free");
+    expect(sheet).toContain("See how yours looks for free");
     expect(sheet).toContain("Explore more about SwiftCard");
     for (const other of [badge, host]) {
       expect(other).not.toContain("Create your own Swift Links</h2>");
@@ -52,8 +52,8 @@ describe("a Swift Links page has ONE invite", () => {
 });
 
 describe("the SwiftCard invite", () => {
-  it("every card invite's button says 'See how yours looks — free'", () => {
-    expect(CARD_CTA).toBe("See how yours looks — free");
+  it("every card invite's button says 'See how yours looks for free'", () => {
+    expect(CARD_CTA).toBe("See how yours looks for free");
     for (const [key, copy] of Object.entries(NUDGE_COPY)) expect(copy.cta, key).toBe(CARD_CTA);
   });
 

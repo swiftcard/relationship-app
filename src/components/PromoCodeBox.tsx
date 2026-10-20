@@ -90,7 +90,7 @@ export function usePromoCode({
       return false;
     } catch {
       if (seq !== seqRef.current) return false;
-      setState({ status: "refused", code, message: "Couldn't check that code — check your connection and try again." });
+      setState({ status: "refused", code, message: "Couldn't check that code. Check your connection and try again." });
       return false;
     }
   }, [plan, interval]);
@@ -179,7 +179,7 @@ export default function PromoCodeBox({
         <>
           <div className="flex items-start justify-between gap-3 rounded-xl border border-green-500/30 bg-green-500/10 px-3.5 py-2.5 text-left">
             <div className="min-w-0">
-              <p className="text-green-300 text-xs font-semibold">✓ {state.code} — {state.label}</p>
+              <p className="text-green-300 text-xs font-semibold">✓ {state.code}: {state.label}</p>
               {detail && <p className="text-emerald-200 text-[0.6875rem] mt-0.5">{/^[A-Z]/.test(detail) ? detail : `Off ${detail}.`}</p>}
               {state.seats ? <p className="text-emerald-200 text-[0.6875rem] mt-0.5">For {seatsLabel(state.seats)}.</p> : null}
             </div>
@@ -188,7 +188,7 @@ export default function PromoCodeBox({
           {/* A Pro code is used from the Pro card's own button (PlanCards
               NativePro) — one action, not a second button down here. */}
           {website && (website.proCardAbove
-            ? <p className="mt-2 text-[0.6875rem] text-gray-400">Added to the Pro plan — tap its button to use it.</p>
+            ? <p className="mt-2 text-[0.6875rem] text-gray-400">Added to the Pro plan. Tap its button to use it.</p>
             : <WebsiteHandOff code={state.code} label="Use it on swiftcard.me →" website={website} />)}
         </>
       ) : state.status === "refused" ? (

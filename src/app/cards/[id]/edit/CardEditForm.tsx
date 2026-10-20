@@ -775,14 +775,14 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
       // Network failure — don't leave the button stuck on "Saving…". Same
       // wording the card builder uses for the same failure, so the two screens
       // describe one problem the same way.
-      setError("Couldn't reach the server — check your connection and try again.");
+      setError("Couldn't reach the server. Check your connection and try again.");
       setStatus("error");
       setTimeout(() => setStatus("idle"), 2500);
     }
   }
 
   const saveLabel =
-    status === "saving" ? "Saving…" : status === "saved" ? "Saved!" : status === "error" ? "Error — try again" : "Save changes";
+    status === "saving" ? "Saving…" : status === "saved" ? "Saved!" : status === "error" ? "Not saved. Try again" : "Save changes";
 
   // ── Previews ───────────────────────────────────────────────────────────────
   //
@@ -914,7 +914,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                 </div>
                 <p className="text-gray-500 text-xs mb-3">
                   {org.ownerInherited
-                    ? "These are set on your office's Branding page and appear on every card on your team — yours included."
+                    ? "These are set on your office's Branding page and appear on every card on your team, including yours."
                     : "Your organization keeps these details up to date on every connected card."}
                 </p>
                 <dl className="space-y-1.5">
@@ -950,7 +950,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                 instead of those fields silently not being there. */}
             {org && !(orgCompany || orgWebsite || orgPhone || orgFax || orgAddress || orgLogo) && (
               <p className="rounded-2xl border border-purple-500/20 bg-purple-500/[0.04] px-4 py-3 text-gray-400 text-xs leading-relaxed">
-                Your organization manages the company details — name, logo, website and office contact — on every team card. You edit your own details below.
+                Your organization manages the company details (name, logo, website and office contact) on every team card. You edit your own details below.
               </p>
             )}
 
@@ -1006,7 +1006,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                           number added here is a personal mobile. */}
                       {org ? (
                         <span
-                          title="Your organization sets the office number — numbers you add are your mobile."
+                          title="Your organization sets the office number. Numbers you add are your mobile."
                           className="bg-gray-900 border border-gray-700 text-gray-400 rounded-xl px-3 py-3 text-sm shrink-0"
                         >
                           Mobile
@@ -1052,7 +1052,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                 </p>
                 {phones.filter((p) => p.showOnCard && p.number.trim()).length > MAX_CARD_PHONES && (
                   <p className="text-amber-300 text-xs mt-1">
-                    Only {MAX_CARD_PHONES} numbers fit on your card — the first {MAX_CARD_PHONES} marked On card are shown. The rest stay saved.
+                    Only {MAX_CARD_PHONES} numbers fit on your card. The first {MAX_CARD_PHONES} marked &quot;On card&quot; are shown. The rest stay saved.
                   </p>
                 )}
                 {org && orgPhone && (
@@ -1101,7 +1101,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                 the dashboard. Not for the primary card (it saves through
                 /api/profile, which has no label) or an office member. */}
             {!isPrimary && !org && (
-              <FormSection id="nickname" title="Card nickname" required labelFor="card-nickname" note="Only you see this — it names the card on your dashboard.">
+              <FormSection id="nickname" title="Card nickname" required labelFor="card-nickname" note="Only you see this. It names the card on your dashboard.">
                 <input
                   id="card-nickname"
                   ref={nicknameInputRef}
@@ -1183,7 +1183,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
               {org && !orgLogo && (
                 <p className="text-[0.6875rem] text-gray-500">
                   {org.ownerInherited
-                    ? "Your company logo is set on your office's Branding page — add it there and it appears on every card."
+                    ? "Your company logo is set on your office's Branding page. Add it there and it appears on every card."
                     : "Your company logo is managed by your organization."}
                 </p>
               )}
@@ -1265,7 +1265,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
         {tab === "sharing" && (
           <div className="space-y-5 sc-step-in">
             <p className="text-gray-400 text-xs leading-relaxed">
-              These go on your <strong className="text-gray-200">Swift Links</strong> page — the page people open from your card.
+              These go on your <strong className="text-gray-200">Swift Links</strong> page, the page people open from your card.
             </p>
 
             {/* Three boxed groups — Bio, Social profiles, Additional links —
@@ -1285,7 +1285,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
               trailing={bioManaged ? <ManagedTag owner={org?.ownerInherited} /> : undefined}
               note={bioManaged
                 ? "Your company writes one bio for the whole team. Yours is saved and comes back if they stop."
-                : "Who you help and what you do — the first thing people read. AI follow-ups use it too."}
+                : "Who you help and what you do. It's the first thing people read, and AI follow-ups use it too."}
             >
               <div>
                 <textarea
@@ -1300,7 +1300,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                   required={!bioManaged}
                   aria-invalid={bioMissing || undefined}
                   rows={3}
-                  placeholder="e.g. Austin realtor helping first-time buyers find their dream home — 10+ years, 200+ closings. Let's talk!"
+                  placeholder="e.g. Austin realtor helping first-time buyers find their dream home. 10+ years, 200+ closings. Let's talk!"
                   className={`${inputCls} resize-none ${bioManaged ? "opacity-70 cursor-default" : ""}${bioMissing ? " ring-2 ring-red-500/70 border-red-500" : ""}`}
                 />
                 {bioMissing && <p className="text-red-400 text-xs mt-1">Add a bio to save your card.</p>}
@@ -1310,7 +1310,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
             {/* Social profiles (website lives on the Card info tab — it's card
                 information). Each box shows the start of its link, so "what do
                 I type?" is answered before anything is typed. */}
-            <FormSection id="socials" title="Social profiles" note="Type your username — or paste your profile link.">
+            <FormSection id="socials" title="Social profiles" note="Type your username, or paste your profile link.">
               <div className="space-y-3.5">
                 {SOCIALS.map((spec) => {
                   // Instagram is the ONE social an office can set. Every other
@@ -1410,7 +1410,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                   nativeCopy="Pro feature — Free includes 2 links. More links are only available on the Pro plan"
                 >
                   <p className="text-[0.6875rem] text-gray-500 bg-gray-900 border border-gray-800 rounded-xl px-3 py-2.5 leading-relaxed">
-                    Free includes {PLAN_LIMITS.FREE_MAX_LINKS} additional links. <Link href="/upgrade" className="text-blue-400 font-semibold hover:text-blue-300">Upgrade to Pro</Link> to access unlimited additional links.
+                    Free includes {PLAN_LIMITS.FREE_MAX_LINKS} extra links. <Link href="/upgrade" className="text-blue-400 font-semibold hover:text-blue-300">Upgrade to Pro</Link> for unlimited links.
                   </p>
                 </PlanGate>
               ) : (
@@ -1546,7 +1546,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                   Save mine anyway
                 </button>
               </div>
-              <p className="mt-2 text-xs text-gray-400">Reload shows the card as it is now — what you changed here isn&apos;t kept. Save mine anyway replaces it with what&apos;s on this screen.</p>
+              <p className="mt-2 text-xs text-gray-400">&quot;Reload the latest&quot; shows the card as it is now, without your changes. &quot;Save mine anyway&quot; replaces it with what&apos;s on this screen.</p>
             </div>
           ) : (
             <p className="text-red-400 text-sm mt-4">{error}</p>
@@ -1617,7 +1617,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
           <>
             <div className="flex items-center justify-between gap-2 mb-2">
               <p className="text-[0.6875rem] font-semibold text-gray-400 uppercase tracking-wide">
-                Your Swift Links page — this is how it will look
+                How your Swift Links page will look
               </p>
               {tab === "linkdesign" && <UndoDesignButton history={linkHistory} variant="pill" className="shrink-0" />}
             </div>

@@ -44,7 +44,7 @@ export default async function OfficeLeadsPage({
   if (!page) {
     return (
       <div>
-        <PageHead title="Contacts" desc="Everyone your team has met — people who shared their info, plus contacts your team scanned or added." />
+        <PageHead title="Contacts" desc="Everyone your team has met: people who shared their info, plus contacts your team scanned or added." />
         <Empty>Couldn&apos;t load your team&apos;s contacts right now — try refreshing in a moment.</Empty>
       </div>
     );
@@ -58,7 +58,7 @@ export default async function OfficeLeadsPage({
         // permanently once the office passed the old cap — and the Team tab's
         // per-person counts were uncapped, so the two tabs disagreed with no
         // way to reconcile them.
-        desc={`Everyone your team has met — people who shared their info, plus contacts your team scanned or added${page.total ? ` — ${page.total.toLocaleString()} so far` : ""}.`}
+        desc={`Everyone your team has met: people who shared their info, plus contacts your team scanned or added${page.total ? ` (${page.total.toLocaleString()} so far)` : ""}.`}
       />
       <div data-tour="admin-leads-table">
         <LeadsTable

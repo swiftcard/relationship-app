@@ -53,7 +53,7 @@ function loadTurnstile(): Promise<Turnstile | null> {
 }
 
 export const HUMAN_CHECK_FAILED =
-  "We couldn't confirm you're a person. Wait a moment and try again — if it keeps happening, turn off content blockers for swiftcard.me.";
+  "We couldn't confirm you're a person. Wait a moment and try again. If it keeps happening, turn off content blockers for swiftcard.me.";
 
 /** Supabase's refusal when the token is missing, used or rejected. */
 export function isHumanCheckError(err: { message?: string; code?: string } | null | undefined): boolean {

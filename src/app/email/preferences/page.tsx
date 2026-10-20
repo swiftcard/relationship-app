@@ -9,7 +9,7 @@ import PreferenceCenter from "@/components/email/PreferenceCenter";
 // NO LOGIN — the token identifies the account. Server-rendered with the current
 // settings already filled in, so the switches are never wrong for a moment and
 // nobody saves a state they were not shown.
-export const metadata = { title: "Email preferences — SwiftCard" };
+export const metadata = { title: "Email preferences | SwiftCard" };
 export const dynamic = "force-dynamic";
 
 const SHELL = "min-h-screen flex items-center justify-center p-6";
@@ -34,7 +34,7 @@ export default async function EmailPreferencesPage({
           <p className="text-sm" style={{ color: "#64748b" }}>
             Preference links stop working after 90 days. Open a recent SwiftCard email and use the
             link in its footer, or the unsubscribe control your email app shows at the top of the
-            message — either one works without signing in.
+            message. Either one works without signing in.
           </p>
           <p className="mt-5 text-sm" style={{ color: "#64748b" }}>
             Stuck? <Link href="/contact" className="underline" style={{ color: "#0f172a" }}>Contact us</Link>{" "}and we&apos;ll

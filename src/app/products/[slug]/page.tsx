@@ -93,7 +93,7 @@ const PRODUCTS: Record<string, Product> = {
     title: <>A card so good, people <A>want</A> to keep it.</>,
     titlePlain: "Digital Cards",
     metaTitle: "Digital Business Card: Share by Tap, QR or Link",
-    subtitle: "Designer templates, your colors, your photo, your logo — a scannable QR and a Save Contact button built in. Share it with a tap, a QR, or a link, and land straight in their phone.",
+    subtitle: "Designer templates with your colors, your photo, and your logo, plus a scannable QR and a \"Save Contact\" button built in. Share it with a tap, a QR, or a link, and land straight in their phone.",
     demo: (
       <div className="w-full rounded-[28px] hp-soft border border-[rgba(11,16,34,0.08)] p-5 sm:p-7 shadow-[0_40px_80px_-50px_rgba(29,63,184,0.35)]">
         <TemplateGallery />
@@ -101,10 +101,10 @@ const PRODUCTS: Record<string, Product> = {
     ),
     wide: true,
     features: [
-      { t: "Six designer templates", d: "Photo-first, logo-first, classic, bold, minimal — all fully customizable to your brand in seconds." },
+      { t: "Six designer templates", d: "Photo-first, logo-first, classic, bold, or minimal. Each one is fully customizable to your brand in seconds." },
       { t: "Tap, QR, or link", d: "Works on every phone with no app. A tap on your NFC card, a scannable QR, or a simple shareable link." },
       { t: "Save Contact, built in", d: "Your name, number, email and photo drop straight into their contacts as a vCard." },
-      { t: "Unlimited cards on Pro", d: "A card for each side of you — work, personal, speaking — each with its own analytics." },
+      { t: "Unlimited cards on Pro", d: "A card for each side of you (work, personal, speaking), each with its own analytics." },
     ],
     metaDesc: "Build a digital business card people actually keep. Share by NFC tap, QR code, link or Apple Wallet; they save you in one tap with no app. Free to start.",
   },
@@ -113,7 +113,7 @@ const PRODUCTS: Record<string, Product> = {
     title: <>Everything you do. <A>One link.</A></>,
     titlePlain: "Swift Links",
     metaTitle: "Link in Bio With Analytics & Lead Capture",
-    subtitle: "Your bio, your socials, your booking link, your latest drop — one beautiful page that lives in your Instagram, TikTok, or email. Separate from your card, powered by the same profile.",
+    subtitle: "Your bio, your socials, your booking link, and your latest drop, all on one beautiful page that lives in your Instagram, TikTok, or email. It's separate from your card and powered by the same profile.",
     // Light like the rest of the site (owner, 2026-09-17: only the header and
     // footer stay dark — SwiftLinksPhone's caption is slate now). No side
     // padding below sm: the phone caps itself at calc(100vw - 40px).
@@ -123,9 +123,9 @@ const PRODUCTS: Record<string, Product> = {
       </div>
     ),
     features: [
-      { t: "Looks — themes in one tap", d: "Clean lights, deep darks, rich gradients, or Aura — your own photo as the page's atmosphere." },
+      { t: "Looks: themes in one tap", d: "Light and dark looks, rich gradients, or Aura, which turns your own photo into the page's backdrop." },
       { t: "Links, video tiles & headers", d: "Buttons, rich video tiles, and section headers that organize a long page into chapters. Reorder anytime." },
-      { t: "Styled social icons", d: "Circle, squircle, or square chips — in each platform's brand color, your Look's accent, or quiet mono." },
+      { t: "Styled social icons", d: "Circle, squircle, or square chips in each platform's brand color, your Look's accent, or quiet mono." },
       { t: "Capture leads on the page", d: "A built-in connect form turns visitors into saved contacts." },
       { t: "Made for your bio", d: "Drop it in your Instagram or TikTok bio and send traffic that converts." },
     ],
@@ -139,7 +139,7 @@ const PRODUCTS: Record<string, Product> = {
     title: <>Every email you send, <A>advertising you.</A></>,
     titlePlain: "Swift Signature",
     metaTitle: "Digital Business Card Email Signature",
-    subtitle: "Drop your live SwiftCard into your email signature once with Swift Signature. Now every message ends with a clickable card — recipients open it, save your contact, and reach out in a single tap.",
+    subtitle: "Drop your live SwiftCard into your email signature once with Swift Signature. Now every message ends with a clickable card. Recipients open it, save your contact, and reach out in a single tap.",
     ctaLabel: "Create your free Swift Signature",
     demo: (
       <div className="w-full rounded-[28px] hp-soft border border-[rgba(11,16,34,0.08)] p-5 sm:p-8 shadow-[0_40px_80px_-50px_rgba(29,63,184,0.35)]">
@@ -148,8 +148,8 @@ const PRODUCTS: Record<string, Product> = {
     ),
     wide: true,
     features: [
-      { t: "Copy once, paste anywhere", d: "Works in Gmail, Outlook, Apple Mail — any client that supports HTML signatures." },
-      { t: "Easy to keep current", d: "Change your title or number and SwiftCard tells you — copy it again and every email from then on has the new card." },
+      { t: "Copy once, paste anywhere", d: "Works in Gmail, Outlook, Apple Mail, and any other client that supports HTML signatures." },
+      { t: "Easy to keep current", d: "Change your title or number and SwiftCard tells you. Copy it again, and every email from then on has the new card." },
       { t: "Clickable, not decorative", d: "One tap opens your card, saves your contact, or reaches you directly." },
       { t: "A tiny billboard", d: "Every reply becomes a professional advertisement for you and your brand." },
     ],
@@ -160,7 +160,7 @@ const PRODUCTS: Record<string, Product> = {
     title: <>Turn every scan into a <A>relationship.</A></>,
     titlePlain: "Lead Capture",
     metaTitle: "Business Card Lead Capture & Auto Follow-Up",
-    subtitle: "When someone opens your card, they can share their info right back — straight into your contacts, with where and when you met. Then you follow up by email or text, and they can text you back. No more lost napkins or half-typed numbers.",
+    subtitle: "When someone opens your card, they can share their info right back, straight into your contacts, with where and when you met. Then you follow up by email or text, and they can text you back. No more lost napkins or half-typed numbers.",
     demo: (
       <div className="rounded-[28px] bg-white border border-slate-200 px-4 py-6 sm:p-10">
         <LeadCapturePhone />
@@ -177,13 +177,13 @@ const PRODUCTS: Record<string, Product> = {
     // Sequences (8c2ca298): EMAIL steps send on every plan; reminders/route.ts
     // holds back only TEXT steps for Free — hence "texts on Pro".
     features: [
-      { t: "Two-way exchange", d: "They save you, you capture them — the whole handshake in one tap." },
+      { t: "Two-way exchange", d: "They save you and you capture them: the whole handshake in one tap." },
       { t: "Context that sticks", d: "Every lead is tagged with the card, time, and location they came from." },
       { t: "Texts that actually arrive", d: "SwiftCard is a carrier-registered sender, so your follow-up lands in their messages instead of being filtered out on the way." },
-      { t: "Only the people who agreed", d: "A text goes out only to a contact you've switched texts on for — confirming they agreed to hear from you. STOP is honored instantly." },
+      { t: "Only the people who agreed", d: "A text goes out only to a contact you've switched texts on for, confirming they agreed to hear from you. STOP is honored instantly." },
       { t: "They text back, you see it", d: "Replies land in that contact's conversation, next to the views and the notes. One thread, not a second inbox." },
-      { t: "One tap to reach them", d: "Call, text or email any contact straight from your Contacts list — their thread, notes, and history right beside you." },
-      { t: "Sequences that run themselves", d: "Switch on an email follow-up for a contact and it sends on your schedule — never outside 8am–9pm their time. Texts and AI-written messages on Pro." },
+      { t: "One tap to reach them", d: "Call, text, or email any contact straight from your Contacts list, with their thread, notes, and history right beside you." },
+      { t: "Sequences that run themselves", d: "Switch on an email follow-up for a contact and it sends on your schedule, never outside 8am–9pm their time. Texts and AI-written messages come with Pro." },
       { t: "Straight to your CRM", d: "Contacts flow into your dashboard and sync to Salesforce, GoHighLevel, Pipedrive, HubSpot or Google Contacts." },
     ],
     metaDesc: "A digital business card with lead capture: visitors share their name, phone and email back, and SwiftCard sends the follow-up for you. Free to start.",
@@ -193,7 +193,7 @@ const PRODUCTS: Record<string, Product> = {
     title: <>See who&apos;s looking. <A>Never lose a lead.</A></>,
     titlePlain: "Dashboard & Analytics",
     metaTitle: "See Who Viewed Your Business Card: Analytics",
-    subtitle: "Real-time views, contacts, and locations. Every contact who taps your card lands in one searchable place — with full history, their replies, and automated follow-ups. Try the dashboard right here.",
+    subtitle: "Real-time views, contacts, and locations. Every contact who taps your card lands in one searchable place, with their full history, their replies, and automated follow-ups. Try the dashboard right here.",
     // DashboardDemo is a faithful replica of the desktop dashboard: a browser
     // frame around a two-column board that needs ~720px to hold together. Sent
     // in raw it was CLIPPED on a phone — the right-hand card panel sat 212px
@@ -222,8 +222,8 @@ const PRODUCTS: Record<string, Product> = {
       // "A real CRM" listed the parts and skipped the thing that changed: the
       // timeline is now two-way. api/twilio/inbound writes replies into
       // lead_messages, so a text back appears in the same thread as the views.
-      { t: "One thread per person", d: "Notes, read/unread, every view — and the emails and texts you've exchanged, in the order they happened." },
-      { t: "Follow-up on autopilot", d: "Light, medium, or aggressive email follow-ups for any contact you choose — plus texts and AI-written messages on Pro." },
+      { t: "One thread per person", d: "Notes, read/unread status, every view, and the emails and texts you've exchanged, in the order they happened." },
+      { t: "Follow-up on autopilot", d: "Light, medium, or aggressive email follow-ups for any contact you choose, plus texts and AI-written messages on Pro." },
     ],
     metaDesc: "Know the moment your card is viewed, where the view came from (QR, NFC, link or bio page), repeat visits and viewer cities, in one place. Free to start.",
   },
@@ -232,14 +232,14 @@ const PRODUCTS: Record<string, Product> = {
     title: <>One brand. <A>Everyone on it.</A></>,
     titlePlain: "Teams & Offices",
     metaTitle: "Digital Business Cards for Teams & Offices",
-    subtitle: "Roll out cards across your whole team with consistent branding, shared templates, and one place to manage seats. Every rep looks sharp — and every lead is accounted for.",
+    subtitle: "Roll out cards across your whole team with consistent branding, shared templates, and one place to manage seats. Every rep looks sharp, and every lead is accounted for.",
     demo: <TeamsDashboard />,
     wide: true,
     features: [
-      { t: "Uniform branding", d: "Lock the logo, colors, and template so every card is unmistakably on-brand." },
+      { t: "Uniform branding", d: "Lock the logo, colors, and template so every card is unmistakably on brand." },
       { t: "A card per member", d: "Everyone gets their own card and analytics under one shared office." },
       { t: "Seats & roles", d: "Add or remove people in seconds. One bill, full admin control." },
-      { t: "Invite by email", d: "Teammates join with Google or an emailed link — no password to set up, and their card is ready to share." },
+      { t: "Invite by email", d: "Teammates join with Google or an emailed link. There's no password to set up, and their card is ready to share." },
     ],
     metaDesc: "Issue digital business cards to your whole team, keep every lead in one CRM, and sync to the tools you use. Shared templates, seats and team analytics.",
   },
@@ -252,19 +252,19 @@ const PRODUCTS: Record<string, Product> = {
     // pass carries the QR itself, so a third phone said nothing the first
     // didn't. Copy now matches: Wallet (QR included) and the share sheet, in
     // that order. Downloading the QR is still real and still mentioned.
-    subtitle: "However you meet someone, there's a way to hand them your card in a second — your Apple Wallet pass, with the QR right on it, or the share sheet. No app, no signal, no fumbling. You can also download your card's QR code to display at events, add it as a home-screen widget, or use it in any other sharing format that fits the moment.",
+    subtitle: "However you meet someone, there's a way to hand them your card in a second: your Apple Wallet pass, with the QR right on it, or the share sheet. No app, no signal, no fumbling. You can also download your card's QR code to display at events, add it as a home-screen widget, or use it in any other sharing format that fits the moment.",
     demo: <ShareWaysPhones light />,
     wide: true,
-    ctaLabel: "Get Started",
+    ctaLabel: "Get started",
     features: [
       { t: "One tap to add", d: "Save your card to Wallet and reach it from your lock screen instantly." },
-      { t: "Works offline", d: "No signal needed — your QR is right there whenever you need it." },
+      { t: "Works offline", d: "No signal needed. Your QR is right there whenever you need it." },
       // Not marketing licence: wallet.ts registers a webServiceURL +
       // authenticationToken, api/wallet/v1/* implements the full PassKit device
       // registration spec, and touchWalletPass pushes on change — hot-hooked to
       // the card editor with a daily sweep behind it. The pass genuinely
       // re-downloads itself; the old "updates too" undersold a real mechanism.
-      { t: "Updates itself", d: "Change your title or your number and the pass in your Wallet redraws itself — Apple fetches the new one. Nothing to re-add, nothing left stale." },
+      { t: "Updates itself", d: "Change your title or your number and the pass in your Wallet redraws itself, because Apple fetches the new one. Nothing to re-add, nothing left stale." },
       { t: "Right where they look", d: "Sitting next to the cards people already pull out every day." },
     ],
     metaDesc: "Keep your digital business card in Apple Wallet and share from the lock screen. One tap and they have your contact and links, no app needed. Free to start.",
@@ -275,10 +275,10 @@ const PRODUCTS: Record<string, Product> = {
     title: <>Make your Apple Watch into a <A>scannable business card</A> you take with you everywhere.</>,
     titlePlain: "Apple Watch",
     metaTitle: "Apple Watch Business Card: Share From Your Wrist",
-    subtitle: "Raise your wrist, show your code, and share your details hands-free — no phone required. Your card goes wherever you go.",
+    subtitle: "Raise your wrist, show your code, and share your details hands-free, with no phone required. Your card goes wherever you go.",
     demo: <WatchShareImage />,
     features: [
-      { t: "Hands-free sharing", d: "Show your card from your wrist — perfect for events, gyms, and on the move." },
+      { t: "Hands-free sharing", d: "Show your card from your wrist at events, at the gym, and on the move." },
       { t: "Always with you", d: "No reaching for your phone. Your details are one glance away." },
       { t: "Scannable code", d: "A crisp QR your Watch displays so anyone can open your full card." },
       { t: "Powered by your card", d: "Everything stays in sync with the card and profile you already have." },
@@ -290,7 +290,7 @@ const PRODUCTS: Record<string, Product> = {
     title: <>Your leads flow into <A>the tools you already use.</A></>,
     titlePlain: "Integrations",
     metaTitle: "Digital Business Card CRM Integrations",
-    subtitle: "The moment someone shares their info, SwiftCard pushes that contact straight into your CRM and the apps your team runs on — in real time. No CSV shuffling, no copy-paste, no lead sitting in a dashboard nobody opens.",
+    subtitle: "The moment someone shares their info, SwiftCard pushes that contact straight into your CRM and the apps your team runs on, in real time. No CSV shuffling, no copy-paste, no lead sitting in a dashboard nobody opens.",
     demo: (
       <div className="w-[340px] max-w-full flex flex-col items-center">
         {/* the lead that just came in */}
@@ -440,17 +440,17 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               <div className="max-w-2xl" data-hp-head>
                 <div><Eyebrow dark={false}>What you get</Eyebrow></div>
                 <h2 className="rd-h2 text-slate-900 text-[clamp(1.9rem,3.6vw,2.6rem)] mt-3">One office account. Total control, zero busywork.</h2>
-                <p className="text-slate-600 text-[1.05rem] mt-4 leading-relaxed">You set the brand once — every card your team creates inherits it automatically. From there, it&rsquo;s a single dashboard to see how the whole team is doing, not a spreadsheet of who has what.</p>
+                <p className="text-slate-600 text-[1.05rem] mt-4 leading-relaxed">You set the brand once, and every card your team creates inherits it automatically. From there, it&rsquo;s a single dashboard to see how the whole team is doing, not a spreadsheet of who has what.</p>
               </div>
 
               <div className="mt-12 grid md:grid-cols-3 gap-4">
                 {[
-                  { t: "Brand it once", d: "Set your logo, colors, and a locked template. Every card anyone on your team creates — today or a year from now — is on-brand automatically. No one can go rogue with their own look." },
-                  { t: "Everyone gets their own card", d: "Each teammate gets a personal card with their name, title, and photo — their own Swift Links, their own Swift Signature, their own contacts. Same brand, their identity." },
-                  { t: "Admin sees everyone at a glance", d: "One dashboard shows every member's card, activity, and lead count. Spot who's actively sharing their card and who needs a nudge — without asking around." },
+                  { t: "Brand it once", d: "Set your logo, colors, and a locked template. Every card anyone on your team creates, today or a year from now, is on brand automatically. No one can go rogue with their own look." },
+                  { t: "Everyone gets their own card", d: "Each teammate gets a personal card with their name, title, and photo, plus their own Swift Links, their own Swift Signature, and their own contacts. Same brand, their identity." },
+                  { t: "Admin sees everyone at a glance", d: "One dashboard shows every member's card, activity, and lead count. Spot who's actively sharing their card and who needs a nudge, without asking around." },
                   { t: "Add people in seconds", d: "Invite a teammate by email and their card is ready before the meeting ends. No IT ticket, no design request, no waiting on a template." },
                   { t: "Unlimited seats, always", d: "There's no cap on team size and no separate contract to add someone. Add or remove seats anytime from inside the account as your team grows or changes." },
-                  { t: "Contacts stay with the team", d: "Every contact your team collects lands in one list you can export — and it stays with the office when someone leaves." },
+                  { t: "Contacts stay with the team", d: "Every contact your team collects lands in one list you can export, and it stays with the office when someone leaves." },
                 ].map((s, i) => (
                   <div key={s.t} className="hp-card" data-reveal style={{ transitionDelay: `${i * 70}ms` }}>
                     <span className="hp-feat-ico"><Ico d={CHECK_D} /></span>
@@ -466,9 +466,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               </div>
               <div className="mt-8 grid sm:grid-cols-2 gap-4">
                 {[
-                  { t: "Real estate teams & brokerages", d: "Every agent's card matches the brokerage brand, but leads from open houses and showings land with the right agent — not a shared inbox." },
+                  { t: "Real estate teams & brokerages", d: "Every agent's card matches the brokerage brand, but leads from open houses and showings land with the right agent, not in a shared inbox." },
                   { t: "Sales & account teams", d: "Reps hand out on-brand cards at every meeting and conference. Leads flow straight to their own dashboard, and you can see who's actually working the room." },
-                  { t: "Agencies & studios", d: "New hires and freelancers get a card the moment they join — same polish as everyone else — and it's revoked the moment they leave." },
+                  { t: "Agencies & studios", d: "New hires and freelancers get a card the moment they join, with the same polish as everyone else, and it's revoked the moment they leave." },
                   { t: "Multi-location businesses", d: "One brand across every office. Each location's staff gets their own card and contacts, while you keep a single view across all of them." },
                 ].map((s, i) => (
                   <div key={s.t} className="hp-card" data-reveal style={{ transitionDelay: `${i * 70}ms` }}>
@@ -493,14 +493,14 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             <div className="relative max-w-5xl mx-auto px-5 sm:px-6">
               <div className="max-w-2xl" data-hp-head>
                 <div><Eyebrow dark={false}>How it works</Eyebrow></div>
-                <h2 className="rd-h2 text-slate-900 text-[clamp(1.9rem,3.6vw,2.6rem)] mt-3">From a handshake to your CRM — hands-off.</h2>
-                <p className="text-slate-600 text-[1.05rem] mt-4 leading-relaxed">You never touch a spreadsheet. The second a lead comes in, SwiftCard captures the full context and routes it everywhere it needs to go — while you&rsquo;re still shaking hands.</p>
+                <h2 className="rd-h2 text-slate-900 text-[clamp(1.9rem,3.6vw,2.6rem)] mt-3">From a handshake to your CRM, hands-off.</h2>
+                <p className="text-slate-600 text-[1.05rem] mt-4 leading-relaxed">You never touch a spreadsheet. The second a lead comes in, SwiftCard captures the full context and routes it everywhere it needs to go while you&rsquo;re still shaking hands.</p>
               </div>
               <div className="mt-12 grid md:grid-cols-3 gap-4">
                 {[
-                  { n: "1", t: "They share their info", d: "A tap on Save Contact or a quick form on your card — no app to download, no typing your details out for them." },
-                  { n: "2", t: "SwiftCard captures the context", d: "Name, email, phone, plus which card they scanned, when, and where you met — all attached to the lead automatically." },
-                  { n: "3", t: "It lands in your stack", d: "Synced to Salesforce, GoHighLevel, Pipedrive, HubSpot or Google Contacts, piped to 6,000+ apps through Zapier, or exported as CSV — in real time, no manual step." },
+                  { n: "1", t: "They share their info", d: "A tap on \"Save Contact\" or a quick form on your card. There's no app to download, and no typing your details out for them." },
+                  { n: "2", t: "SwiftCard captures the context", d: "Name, email, and phone, plus which card they scanned, when, and where you met, all attached to the lead automatically." },
+                  { n: "3", t: "It lands in your stack", d: "Synced to Salesforce, GoHighLevel, Pipedrive, HubSpot or Google Contacts, piped to 6,000+ apps through Zapier, or exported as CSV, in real time with no manual step." },
                 ].map((s, i) => (
                   <div key={s.n} className="hp-card" data-reveal style={{ transitionDelay: `${i * 80}ms` }}>
                     <span className="hp-step-num">{s.n}</span>
@@ -510,7 +510,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                 ))}
               </div>
               <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 text-slate-600 text-[0.875rem]" data-reveal>
-                <span className="inline-flex items-center gap-2"><CheckDot />Real-time — no nightly sync</span>
+                <span className="inline-flex items-center gap-2"><CheckDot />Real-time, no nightly sync</span>
                 <span className="inline-flex items-center gap-2"><CheckDot />No code required</span>
                 <span className="inline-flex items-center gap-2"><CheckDot />Your data stays yours</span>
               </div>

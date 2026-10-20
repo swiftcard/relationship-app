@@ -65,13 +65,13 @@ export default function JoinSignIn({
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
-        setError(json.error ?? "Couldn't send the link — please try again.");
+        setError(json.error ?? "Couldn't send the link. Please try again.");
         setStatus("error");
         return;
       }
       setStatus("sent");
     } catch {
-      setError("Couldn't send the link — please try again.");
+      setError("Couldn't send the link. Please try again.");
       setStatus("error");
     }
   }
@@ -89,7 +89,7 @@ export default function JoinSignIn({
           We sent a {hasAccount ? "sign-in " : ""}link to <span className="text-gray-300 font-medium">{inviteEmail}</span>.
           {hasAccount
             ? " Open it on any device and you'll land right back on your invite to accept."
-            : " Open it on any device to create your account — you'll land right back on your invite to accept."}
+            : " Open it on any device to create your account, and you'll land right back on your invite to accept."}
         </p>
         <button type="button" onClick={sendLink} className="text-blue-400 hover:text-blue-300 text-xs mt-3 transition-colors">
           Didn&apos;t get it? Send again
@@ -111,7 +111,7 @@ export default function JoinSignIn({
           {hasAccount ? (
             <>You already have a SwiftCard account with <span className="text-gray-300 font-medium">{inviteEmail}</span>. Sign in with it to accept.</>
           ) : (
-            <>Create your account with <span className="text-gray-300 font-medium">{inviteEmail}</span> — the email your team invited.</>
+            <>Create your account with <span className="text-gray-300 font-medium">{inviteEmail}</span>, the email your team invited.</>
           )}
         </p>
         <Link
@@ -131,9 +131,9 @@ export default function JoinSignIn({
     <div className="space-y-3">
       <p className="text-center text-gray-500 text-xs leading-relaxed">
         {hasAccount ? (
-          <>You already have a SwiftCard account with <span className="text-gray-300 font-medium">{inviteEmail}</span>. Sign in with it to accept — no password needed.</>
+          <>You already have a SwiftCard account with <span className="text-gray-300 font-medium">{inviteEmail}</span>. Sign in with it to accept. No password needed.</>
         ) : (
-          <>Create your account with <span className="text-gray-300 font-medium">{inviteEmail}</span> — the email your team invited. No password needed.</>
+          <>Create your account with <span className="text-gray-300 font-medium">{inviteEmail}</span>, the email your team invited. No password needed.</>
         )}
       </p>
 
@@ -157,8 +157,8 @@ export default function JoinSignIn({
       </button>
       <p className="text-center text-gray-600 text-[0.6875rem]">
         {hasAccount
-          ? "One tap in that email signs you in — no password to remember."
-          : "One tap in that email creates your account — no password to create or remember."}
+          ? "One tap in that email signs you in, with no password to remember."
+          : "One tap in that email creates your account, with no password to create or remember."}
       </p>
     </div>
   );

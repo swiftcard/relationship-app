@@ -49,7 +49,7 @@ export default function SiteFooterMini({ extra = [] }: { extra?: Extra[] }) {
             --color-ink-muted is 5.51:1 there and is the one muted tier these
             pages use, so the footer reads as part of the page. */}
         <p className="text-ink-muted text-xs text-center">
-          © {new Date().getFullYear()} SwiftCard · Operated by Swift Card Inc · New York, NY
+          © {new Date().getFullYear()} SwiftCard · Operated by Swift Card Inc. · New York, NY
         </p>
       </div>
     </footer>

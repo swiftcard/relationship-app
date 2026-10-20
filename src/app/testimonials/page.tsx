@@ -21,7 +21,7 @@ import "@/app/home.css";
 // review counts, or usage statistics here.
 
 export const metadata: Metadata = {
-  title: "Why SwiftCard — SwiftCard",
+  title: "Why SwiftCard",
   alternates: { canonical: "/testimonials" },
   description:
     "Why professionals are switching to digital business cards: share in one tap, capture every lead, and follow up automatically. Free to start.",
@@ -38,7 +38,7 @@ const USE_CASES: { role: string; title: string; body: string }[] = [
   {
     role: "Real estate",
     title: "Every open-house visitor, captured",
-    body: "Show your QR at the door. Each scan opens your card, and anyone who shares their info lands in your dashboard — with automatic follow-up so no lead goes cold.",
+    body: "Show your QR at the door. Each scan opens your card, and anyone who shares their info lands in your dashboard, with automatic follow-up so no lead goes cold.",
   },
   {
     role: "Sales teams",
@@ -48,28 +48,28 @@ const USE_CASES: { role: string; title: string; body: string }[] = [
   {
     role: "Recruiters",
     title: "Stay top of mind after one meeting",
-    body: "Pick a follow-up cadence for each new contact. SwiftCard sends the emails and texts for you — each one signed with your live card.",
+    body: "Pick a follow-up cadence for each new contact. SwiftCard sends the emails and texts for you, each one signed with your live card.",
   },
   {
     role: "Creators & freelancers",
-    title: "Portfolio, booking, socials — one link",
+    title: "Portfolio, booking, and socials in one link",
     body: "Your Swift Links page holds your bio, links, and socials in one place. Drop it in your Instagram or TikTok bio and let clients reach you from anywhere.",
   },
   {
     role: "Consultants",
     title: "Share from your phone, wallet, or watch",
-    body: "Your card lives in Apple Wallet and on your wrist. Tap, scan, or text it — the other person needs no app to receive it.",
+    body: "Your card lives in Apple Wallet and on your wrist. Tap, scan, or text it. The other person doesn't need an app to receive it.",
   },
   {
     role: "Anyone who networks",
     title: "See what's working",
-    body: "Views, locations, and sources for your card and links — networking becomes something you can measure instead of guess at.",
+    body: "Views, locations, and sources for your card and links turn networking into something you can measure instead of guessing at.",
   },
 ];
 
 // Every fact here must stay literally true.
 const FACTS = [
-  { v: "Free", l: "to start — no credit card" },
+  { v: "Free", l: "to start, no credit card" },
   { v: "1 tap", l: "to share your card" },
   { v: "No app", l: "needed to receive it" },
   { v: "Cancel", l: "anytime, no lock-in" },
@@ -133,7 +133,7 @@ export default function WhySwiftCardPage() {
 
         {/* CTA */}
         <MarketingCta>
-          <h2 className="rd-display text-white text-[clamp(2.2rem,5vw,4rem)]">Try it yourself — it&apos;s free to start.</h2>
+          <h2 className="rd-display text-white text-[clamp(2.2rem,5vw,4rem)]">Try it yourself. It&apos;s free to start.</h2>
           <p className="text-white/85 text-[1.15rem] mt-5 max-w-[480px]">Your free SwiftCard is 60 seconds away. Judge it on what it does.</p>
           <div className="mt-9 flex flex-wrap items-center gap-3">
             <Link href="/cards/new" className="hp-btn-white">Create your free card</Link>

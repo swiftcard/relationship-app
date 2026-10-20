@@ -196,7 +196,7 @@ export default function OfficeLinksBranding({ office, active = true }: {
   );
   const previewCaption = (
     <p className="text-[0.6875rem] text-gray-600 mt-2.5 leading-snug">
-      A teammate&apos;s page under this branding. Their name, photo and their own links are theirs.
+      A teammate&apos;s page under this branding. Their name, photo and own links stay theirs.
     </p>
   );
 
@@ -220,13 +220,13 @@ export default function OfficeLinksBranding({ office, active = true }: {
                 value={bio}
                 onChange={(e) => setBio(e.target.value.slice(0, 500))}
                 rows={3}
-                placeholder="One or two lines about the company — appears under everyone's name."
+                placeholder="One or two lines about the company, shown under everyone's name."
                 className={`${inputCls} resize-none`}
               />
               <p className="text-[0.625rem] text-gray-600 mt-1">
                 {bio
-                  ? "Everyone's page shows this. Their own bio is kept and returns if you clear this."
-                  : "Empty — each teammate writes their own."}
+                  ? "Everyone's page shows this. Their own bio is kept and comes back if you clear it."
+                  : "Empty, so each teammate writes their own."}
               </p>
             </div>
 
@@ -243,14 +243,14 @@ export default function OfficeLinksBranding({ office, active = true }: {
                 onBlur={() => setInstagram((v) => normalizeSocial(v, "instagram"))}
               />
               <p className="text-[0.625rem] text-gray-600 mt-1">
-                Shows on everyone&apos;s page. Their own Instagram comes back if you clear this — other socials stay theirs.
+                Shows on everyone&apos;s page. If you clear it, their own Instagram comes back. Other socials stay theirs.
               </p>
             </div>
 
             <div>
               <p className="block text-xs font-medium text-gray-400 mb-1">Company Additional Links</p>
               <p className="text-[0.625rem] text-gray-600 mb-2.5">
-                These appear at the top of every teammate&apos;s page and they can&apos;t change them — but they can
+                These appear at the top of every teammate&apos;s page and they can&apos;t change them, but they can
                 still add their own underneath.
               </p>
               {links.length > 0 && (
@@ -335,7 +335,7 @@ export default function OfficeLinksBranding({ office, active = true }: {
         <Section
           n={2}
           title="Links appearance"
-          desc="The design your whole team inherits — the same controls your teammates see under Social design."
+          desc={'The design your whole team inherits, with the same controls your teammates see under "Social design".'}
         >
           {/* The same panel as Social design, including step 7 "Link buttons"
               for the company links (Featured / Grid / Compact, photo or video). */}
@@ -373,7 +373,7 @@ export default function OfficeLinksBranding({ office, active = true }: {
                   </li>
                 ))}
                 {!bio && !instagram && !links.length && !lockLinkDesign && (
-                  <li className="text-[0.6875rem] text-gray-600">Nothing yet — fill anything in above and it lands here.</li>
+                  <li className="text-[0.6875rem] text-gray-600">Nothing yet. Fill anything in above and it lands here.</li>
                 )}
               </ul>
             </div>
@@ -389,7 +389,7 @@ export default function OfficeLinksBranding({ office, active = true }: {
             <span>
               Keep every Swift Links page matching
               <span className="block text-[0.6875rem] text-gray-600 mt-0.5">
-                Your teammates keep their own bio, socials and links — only the look becomes yours.
+                Your teammates keep their own bio, socials and links. Only the look becomes yours.
                 Leave it off to let each person design their own page.
               </span>
             </span>

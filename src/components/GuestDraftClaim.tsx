@@ -171,7 +171,7 @@ export default function GuestDraftClaim() {
           {/* The whole point of this screen: say plainly that the work is still
               here. Someone who has just watched a save fail assumes the worst. */}
           <p className="text-gray-400 text-sm mt-2 leading-relaxed">
-            Nothing is lost — your card is still saved on this device. Check your connection and try again.
+            Nothing is lost. Your card is still saved on this device. Check your connection and try again.
           </p>
           <button
             type="button"

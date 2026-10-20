@@ -133,7 +133,7 @@ export default function LeadCaptureForm({
     return (
       <div className="text-center py-2">
         <p className="text-slate-900 font-semibold text-sm">✓ You&apos;ve already shared your info</p>
-        <p className="text-slate-500 text-xs mt-1">They have your details — no need to send them again.</p>
+        <p className="text-slate-500 text-xs mt-1">They have your details. No need to send them again.</p>
       </div>
     );
   }
@@ -212,7 +212,7 @@ export default function LeadCaptureForm({
       {(status === "error" || status === "offline") && (
         <p role="alert" className="text-red-500 text-xs text-center">
           {status === "offline"
-            ? "Couldn't send — check your connection and try again."
+            ? "Couldn't send. Check your connection and try again."
             : "Something went wrong. Please try again."}
         </p>
       )}

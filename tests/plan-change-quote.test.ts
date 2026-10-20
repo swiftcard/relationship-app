@@ -29,7 +29,7 @@ describe("the quote is what Stripe will charge", () => {
   it("a trial that carries on quotes nothing today and says until when", () => {
     expect(preview).toMatch(/dueTodayCents: trialing && !endsTrial\s*\?\s*0/);
     expect(preview).toContain("trialContinuesUntil:");
-    expect(page).toContain("Your free trial carries on — nothing is charged today.");
+    expect(page).toContain("Your free trial carries on. Nothing is charged today.");
   });
 
   it("the page no longer promises 'you keep your billing date' when it moves", () => {
@@ -80,7 +80,7 @@ describe("an App Store Pro subscriber is never billed twice by the website", () 
   });
   it("Office is allowed only after the page has said to cancel the Apple subscription", () => {
     expect(route).toMatch(/if \(appleBacked && isOffice && body\.acknowledgeApple !== true\)/);
-    expect(page).toContain("I understand — continue to Office");
+    expect(page).toContain("I understand, continue to Office");
     expect(page).toContain("acknowledgeApple: true");
   });
 });

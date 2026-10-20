@@ -35,7 +35,7 @@ export default function EmailPreferencesForm({ initialMarketing, initialReceipts
       // Was: silently keep the toggles and stop showing "Saving…". The user
       // saw a flicker and assumed it saved — on the screen that decides
       // whether we may email them, which is the worst place to guess.
-      setError("Couldn't save your preferences — please try again.");
+      setError("Couldn't save your preferences. Please try again.");
     }
     setSaving(false);
   }

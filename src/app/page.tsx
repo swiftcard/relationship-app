@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   title: "SwiftCard: The digital business card that shares everything",
   // Under 155 characters — the previous 164-char line was cut mid-word in results.
   description:
-    "One tap and you're in their phone. Digital business card, link in bio, email signature, Apple Wallet, analytics and automatic follow-up. Free to start.",
+    "One tap and you're in their phone. Digital business card, link-in-bio page, email signature, Apple Wallet, analytics and automatic follow-up. Free to start.",
   alternates: { canonical: "/" },
 };
 
@@ -61,7 +61,7 @@ const Check = ({ className = "w-3 h-3" }: { className?: string }) => (
   <svg viewBox="0 0 20 20" className={className} fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.5 7.5a1 1 0 01-1.4 0L3.3 9.7a1 1 0 011.4-1.4L8.5 12l6.8-6.7a1 1 0 011.4 0z" clipRule="evenodd" /></svg>
 );
 
-const RIBBON = ["Share by link", "QR code", "NFC card", "Apple Wallet", "AI card designer", "Link in Bio", "Email signature", "Lead capture", "Email & text follow-up", "CRM sync", "Live analytics"];
+const RIBBON = ["Share by link", "QR code", "NFC card", "Apple Wallet", "AI card designer", "Link-in-bio page", "Email signature", "Lead capture", "Email & text follow-up", "CRM sync", "Live analytics"];
 
 export default function Home() {
   // LinkedIn photo-import is offered in the homepage builders' "Suggest my
@@ -116,7 +116,7 @@ export default function Home() {
                 The business card that <HeroShareWord />
               </h1>
               <p className="mt-6 text-[var(--hp-ink)] text-[clamp(1.05rem,1.6vw,1.25rem)] leading-snug max-w-[540px]" data-reveal>
-                Saves you in one tap, and does the follow-ups for you.
+                People save you in one tap, and SwiftCard does the follow-ups for you.
               </p>
 
               <ul className="mt-7 grid sm:grid-cols-2 gap-x-6 gap-y-3.5 max-w-[580px]" data-reveal>
@@ -127,7 +127,7 @@ export default function Home() {
                   // campaign approved 2026-08-13). Automation is Pro, as
                   // "automatic follow-up" always was.
                   { t: "Auto email & text follow-ups", d: "M4 6h16v12H4zM4 7l8 6 8-6" },
-                  { t: "Link in Bio + Email Signature", d: "M12 3l2.4 5.6L20 9.3l-4.3 3.9 1.2 5.8L12 16l-4.9 3 1.2-5.8L4 9.3l5.6-.7z" },
+                  { t: "Link-in-bio + email signature", d: "M12 3l2.4 5.6L20 9.3l-4.3 3.9 1.2 5.8L12 16l-4.9 3 1.2-5.8L4 9.3l5.6-.7z" },
                 ].map((f) => (
                   <li key={f.t} className="hp-feat">
                     <span className="hp-feat-ico"><Ico d={f.d} /></span>
@@ -216,15 +216,15 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ═══════════════ GRADIENT RIBBON ═══════════════ */}
-        <div className="hp-ribbon relative overflow-hidden py-4 text-white" aria-label="Everything SwiftCard shares">
+        {/* ═══════════════ FEATURE RIBBON ═══════════════ */}
+        <div className="hp-ribbon relative overflow-hidden py-2.5" aria-label="Everything SwiftCard shares">
           <div className="hp-ribbon-track">
             {[0, 1].map((copy) => (
               <ul key={copy} className="flex shrink-0 items-center" aria-hidden={copy === 1 ? true : undefined}>
                 {RIBBON.map((t) => (
-                  <li key={t} className="flex items-center gap-6 pr-6 text-[0.95rem] sm:text-[1.05rem] font-semibold whitespace-nowrap">
+                  <li key={t} className="flex items-center gap-5 pr-5 text-[0.875rem] sm:text-[0.9375rem] font-medium whitespace-nowrap">
                     {t}
-                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-white/70" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z" /></svg>
+                    <svg viewBox="0 0 24 24" className="w-3 h-3 text-[#4DA8F5]/70" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z" /></svg>
                   </li>
                 ))}
               </ul>
@@ -256,8 +256,8 @@ export default function Home() {
             <div className="mt-10 md:mt-8 grid md:grid-cols-3 gap-5">
               {[
                 { n: 1, t: "Share your card", d: "They scan your QR code or open your link. No app to download.", scene: "share" as const },
-                { n: 2, t: "They save you", d: "One tap on Save Contact puts your photo, number and email in their phone.", scene: "save" as const },
-                { n: 3, t: "You get the lead", d: "When they share their info back, you're notified — switch on a follow-up and the emails go out for you.", scene: "lead" as const },
+                { n: 2, t: "They save you", d: "One tap on \"Save Contact\" puts your photo, number and email in their phone.", scene: "save" as const },
+                { n: 3, t: "You get the lead", d: "When they share their info back, you're notified. Switch on a follow-up and the emails go out for you.", scene: "lead" as const },
               ].map((s, i) => (
                 <div key={s.n} className="hp-step" data-reveal style={{ transitionDelay: `${i * 90}ms` }}>
                   {/* The stage has a fixed height (home.css), so the scene can
@@ -286,7 +286,7 @@ export default function Home() {
                 A card they <span className="hp-fill">actually keep.</span>
               </h2>
               <p className="hp-lede mt-4">
-                Designer templates, your photo, your logo, a QR code and a Save Contact button built in. Ready in 60 seconds.
+                Designer templates, your photo, your logo, a QR code and a &quot;Save Contact&quot; button built in. Ready in 60 seconds.
               </p>
             </div>
             <div className="mt-14" data-reveal>
@@ -315,7 +315,7 @@ export default function Home() {
               </div>
               <ul className="mt-7 space-y-3" data-reveal>
                 {[
-                  "One-tap looks: clean lights, rich gradients or your own photo",
+                  "One-tap looks: light, dark, rich gradients or your own photo",
                   "Video tiles, section headers and styled social icons",
                   "Capture leads right from your page",
                 ].map((t) => (
@@ -461,7 +461,7 @@ export default function Home() {
               {[
                 // Owner, 2026-09-17: branding now reaches Swift Links pages too
                 // (Branding → Links: company bio, Instagram, pinned links, look).
-                { t: "Uniform branding", d: "Lock logo, colors, fonts and template so every card is on-brand, and set the bio, Instagram and pinned links on every Swift Links page.", icon: "M4 7.5A2.5 2.5 0 016.5 5h11A2.5 2.5 0 0120 7.5v9a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 014 16.5v-9zM8 10h8M8 14h5" },
+                { t: "Uniform branding", d: "Lock logo, colors, fonts and template so every card is on brand, and set the bio, Instagram and pinned links on every Swift Links page.", icon: "M4 7.5A2.5 2.5 0 016.5 5h11A2.5 2.5 0 0120 7.5v9a2.5 2.5 0 01-2.5 2.5h-11A2.5 2.5 0 014 16.5v-9zM8 10h8M8 14h5" },
                 { t: "Lead capture, built in", d: "Every card and page captures contacts straight to your CRM.", icon: "M12 12a4 4 0 100-8 4 4 0 000 8zM4 20a8 8 0 0116 0M18 8h4M20 6v4" },
                 { t: "Seats & roles", d: "Add or remove people in seconds. One bill, full control.", icon: "M9 11a3 3 0 100-6 3 3 0 000 6zM3 19a6 6 0 0112 0M17 10a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM15.5 13.5A5 5 0 0121 18" },
               ].map((f, i) => (

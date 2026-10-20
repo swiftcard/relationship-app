@@ -60,9 +60,9 @@ export type LookFamily = "solid" | "gradient" | "glass";
 
 /** The Look picker's three rows, in the same order as Social design's. */
 export const CARD_LOOK_FAMILIES: { id: LookFamily; name: string; blurb: string }[] = [
-  { id: "solid", name: "Solid", blurb: "One clean colour." },
-  { id: "gradient", name: "Gradient", blurb: "Colour that shifts across the card." },
-  { id: "glass", name: "Glass", blurb: "Frosted glass over colour." },
+  { id: "solid", name: "Solid", blurb: "One clean color." },
+  { id: "gradient", name: "Gradient", blurb: "Color that shifts across the card." },
+  { id: "glass", name: "Glass", blurb: "Frosted glass over color." },
 ];
 
 export function looksInFamily(meta: TemplateMeta, family: LookFamily): Look[] {
@@ -165,7 +165,7 @@ const SERIF = "Georgia, 'Times New Roman', serif";
 export const META: Record<string, TemplateMeta> = {
   "classic-pro": {
     name: "Classic Pro",
-    blurb: "A two-panel executive card — a colored branding panel on the left, clean white info on the right.",
+    blurb: "A two-panel executive card: a colored branding panel on the left, clean white info on the right.",
     // Each Look dresses the WHOLE card: the branding panel and the name, title
     // and company on it, the info panel and the details on it, and the accent —
     // the icons and the bar along the bottom — in one family of colour.
@@ -204,7 +204,7 @@ export const META: Record<string, TemplateMeta> = {
     bg: {
       label: "Branding panel",
       hint: "Behind your logo and name.",
-      help: "The colored left panel behind your logo and name. The info panel beside it has its own colour below.",
+      help: "The colored left panel behind your logo and name. The info panel beside it has its own color below.",
       presets: ["#0e1b35", "#070d1c", "#111827", "#1c1612", "#052e2b", "#3f1d2e", "linear-gradient(160deg, #0e1b35 0%, #2563eb 100%)"],
       fallback: "#0e1b35",
     },
@@ -236,7 +236,7 @@ export const META: Record<string, TemplateMeta> = {
     info: {
       label: "Details color",
       hint: "Your phone, email and address.",
-      help: "Your phone, email, and address on the white info panel — a dark ink reads best.",
+      help: "Your phone, email, and address on the white info panel. Dark ink reads best.",
       presets: ["#0e1b35", "#111827", "#334155", "#1c1612"],
       fallback: "#0e1b35",
     },
@@ -287,7 +287,7 @@ export const META: Record<string, TemplateMeta> = {
     bg: {
       label: "Card background",
       hint: "The whole card. Built for deep tones.",
-      help: "The entire card surface. Modern Bold is built for deep, dark tones — lighter colors will wash out the accents.",
+      help: "The entire card surface. Modern Bold is built for deep, dark tones. Lighter colors wash out the accents.",
       presets: ["#070d1c", "#0a0a0a", "#111827", "#0e1b35", "linear-gradient(135deg, #111827 0%, #6d28d9 100%)", "linear-gradient(135deg, #0e1b35 0%, #2563eb 100%)"],
       fallback: "#070d1c",
     },
@@ -299,7 +299,7 @@ export const META: Record<string, TemplateMeta> = {
     },
     title: {
       label: "Title color",
-      help: "Your job title, under your name. It follows your accent until you pick a colour here.",
+      help: "Your job title, under your name. It follows your accent until you pick a color here.",
       presets: ["#3b82f6", "#60a5fa", "#a78bfa", "#22d3ee", "#fbbf24", "#ffffff"],
       fallback: "#3b82f6",
     },
@@ -312,7 +312,7 @@ export const META: Record<string, TemplateMeta> = {
     info: {
       label: "Details color",
       hint: "Your phone, email and address.",
-      help: "Your contact details sit on the dark card — keep them light so they stay legible.",
+      help: "Your contact details sit on the dark card. Keep them light so they stay legible.",
       presets: ["#f1f5f9", "#ffffff", "#cbd5e1", "#94a3b8"],
       fallback: "#f1f5f9",
     },
@@ -376,20 +376,20 @@ export const META: Record<string, TemplateMeta> = {
     },
     title: {
       label: "Title color",
-      help: "Your job title, under your name. Gold like your accent until you pick a colour here.",
+      help: "Your job title, under your name. Gold like your accent until you pick a color here.",
       presets: ["#b08d57", "#8c6c34", "#1c1612", "#3f2d1a", "#0e1b35", "#d4af7a"],
       fallback: "#b08d57",
     },
     company: {
       label: "Company color",
-      help: "Your company name at the top of the card. Gold like your accent until you pick a colour here.",
+      help: "Your company name at the top of the card. Gold like your accent until you pick a color here.",
       presets: ["#b08d57", "#8c6c34", "#1c1612", "#3f2d1a", "#0e1b35", "#d4af7a"],
       fallback: "#b08d57",
     },
     info: {
       label: "Details color",
       hint: "Your phone, email and address.",
-      help: "Your contact details — deep ink on ivory, or a soft light or gold on the charcoal look.",
+      help: "Your contact details: deep ink on ivory, or a soft light shade or gold on the charcoal look.",
       presets: ["#1c1612", "#3f2d1a", "#8c6c34", "#d4af7a", "#e7dcc8"],
       fallback: "#1c1612",
     },
@@ -441,7 +441,7 @@ export const META: Record<string, TemplateMeta> = {
     bg: {
       label: "Header stripe",
       hint: "The banner across the top.",
-      help: "The colored banner across the top. The body below it has its own colour, next.",
+      help: "The colored banner across the top. The body below it has its own color, next.",
       presets: ["linear-gradient(100deg, #b45309 0%, #d97706 60%, #f59e0b 100%)", "#b45309", "#166534", "#0f766e", "#0e1b35", "#be123c"],
       fallback: "#b45309",
     },
@@ -454,13 +454,13 @@ export const META: Record<string, TemplateMeta> = {
     },
     text: {
       label: "Name color",
-      help: "Your name sits on the header stripe — a light shade reads best on the color.",
+      help: "Your name sits on the header stripe. A light shade reads best on the color.",
       presets: ["#ffffff", "#fffbf0", "#fde68a"],
       fallback: "#ffffff",
     },
     title: {
       label: "Title color",
-      help: "Your job title, under your name on the header stripe — a light shade reads best on the color.",
+      help: "Your job title, under your name on the header stripe. A light shade reads best on the color.",
       presets: ["#fef3c7", "#ffffff", "#fde68a", "#1c1612"],
       fallback: "#fef3c7",
     },
@@ -473,7 +473,7 @@ export const META: Record<string, TemplateMeta> = {
     info: {
       label: "Details color",
       hint: "Your phone, email and address.",
-      help: "Your contact details on the warm cream body — a rich brown or near-black reads best.",
+      help: "Your contact details on the warm cream body. A rich brown or near-black reads best.",
       presets: ["#7c2d12", "#78350f", "#92400e", "#1c1612"],
       fallback: "#7c2d12",
     },
@@ -526,7 +526,7 @@ export const META: Record<string, TemplateMeta> = {
     bg: {
       label: "Info panel background",
       hint: "Behind your contact details.",
-      help: "The panel behind your contact details on the right. A dark shade flips the text to light automatically; the photo panel on the left has its own colour below.",
+      help: "The panel behind your contact details on the right. A dark shade flips the text to light automatically; the photo panel on the left has its own color below.",
       presets: ["#ffffff", "linear-gradient(145deg, #4f46e5 0%, #7c3aed 60%, #6d28d9 100%)", "#4f46e5", "linear-gradient(145deg, #be123c 0%, #f43f5e 100%)", "#064e3b", "#0a0a0a"],
       fallback: "#ffffff",
     },
@@ -541,7 +541,7 @@ export const META: Record<string, TemplateMeta> = {
     },
     text: {
       label: "Name color",
-      help: "Your name overlaid on the photo — keep it light so it stands out over the image.",
+      help: "Your name, set over the photo. Keep it light so it stands out over the image.",
       presets: ["#ffffff", "#f8fafc", "#d4af7a"],
       fallback: "#ffffff",
     },
@@ -626,7 +626,7 @@ export const META: Record<string, TemplateMeta> = {
     },
     title: {
       label: "Title color",
-      help: "Your job title, under your name. It follows your accent until you pick a colour here.",
+      help: "Your job title, under your name. It follows your accent until you pick a color here.",
       presets: ["#ffffff", "#c9d4e8", "#b08d57", "#d4af7a", "#60a5fa", "#141b26"],
       fallback: "#ffffff",
     },
@@ -648,8 +648,8 @@ export const META: Record<string, TemplateMeta> = {
       // 2026-09-16: one control, one label everywhere). What it paints on THIS
       // template — the title and the QR too — belongs in the hint, not the label.
       label: "Accent / icons",
-      hint: "Icons beside your details, your QR code, and the buttons on your card page. Your title too, until you give it its own colour.",
-      help: "Draws the contact icons and the QR code, and your job title while Title color is on Default. A shade too close to your background is brightened or darkened until it reads — you keep the colour you picked, at a version of it that can be seen. The QR is darkened further, because a pale code is one phones stop scanning.",
+      hint: "Icons beside your details, your QR code, and the buttons on your card page. Your title too, until you give it its own color.",
+      help: "Draws the contact icons and the QR code, and your job title while \"Title color\" is on \"Default\". A shade too close to your background is brightened or darkened until it reads. You keep the color you picked, in a shade that can be seen. The QR is darkened further, because a pale code is one phones stop scanning.",
       presets: ["#ffffff", "#c9d4e8", "#b08d57", "#d4af7a", "#60a5fa", "#0f766e", "#be123c", "#141b26"],
       fallback: "#ffffff",
     },
@@ -672,7 +672,7 @@ export const FALLBACK_META: TemplateMeta = {
   },
   text: {
     label: "Name color",
-    help: "The color of your name / headline text.",
+    help: "The color of your name (headline text).",
     presets: ["#ffffff", "#f8fafc", "#1c1612", "#0e1b35"],
     fallback: "#ffffff",
   },

@@ -31,7 +31,7 @@ import "@/app/home.css";
 // (lib/app-store); a badge whose store is unset renders nothing, as always.
 
 export const metadata: Metadata = {
-  title: "Download SwiftCard — iPhone, iPad and Android",
+  title: "Download SwiftCard for iPhone, iPad and Android",
   description:
     "Get the SwiftCard app on the App Store or Google Play. Share your digital business card with a tap, keep it in your wallet, and see who viewed it.",
   alternates: { canonical: "/download" },
@@ -40,9 +40,9 @@ export const metadata: Metadata = {
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
 const POINTS: { title: string; desc: string }[] = [
-  { title: "Share with a tap", desc: "NFC, QR code or a link — the person you meet saves your contact in one tap, no app needed on their side." },
+  { title: "Share with a tap", desc: "Share by NFC, QR code or link. The person you meet saves your contact in one tap, with no app needed on their side." },
   { title: "Always in your pocket", desc: "Your card lives in Apple Wallet and on Apple Watch, and works without signal." },
-  { title: "Know who looked", desc: "A notification when your card is viewed, and every new contact lands in your dashboard." },
+  { title: "Know who looked", desc: "You get a notification when your card is viewed, and every new contact lands in your dashboard." },
 ];
 
 export default function DownloadPage() {
@@ -65,7 +65,7 @@ export default function DownloadPage() {
           <p className="hp-lede mt-4 max-w-[560px] mx-auto">
             {anyStore
               ? "Free on iPhone, iPad and Android. Everything you can do on the website, with the share sheet, your wallet and notifications built in."
-              : "The SwiftCard app is on its way. Until then, everything works in the browser on any phone — your card, your links and your contacts."}
+              : "The SwiftCard app is on its way. Until then, everything works in the browser on any phone: your card, your links and your contacts."}
           </p>
 
           {anyStore && (
@@ -83,7 +83,7 @@ export default function DownloadPage() {
               <div>
                 <p className="text-slate-900 text-[1rem] font-semibold">On a computer? Scan with your phone.</p>
                 <p className="text-slate-600 text-[0.9375rem] leading-relaxed mt-1">
-                  Point your camera at the code and it opens the right store for your phone — App Store on iPhone, Google Play on Android.
+                  Point your camera at the code and it opens the right store for your phone: the App Store on iPhone, Google Play on Android.
                 </p>
               </div>
             </div>

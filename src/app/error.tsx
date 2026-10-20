@@ -65,7 +65,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
 
         <h1 className="text-2xl font-bold tracking-tight text-white mb-3">Something went wrong</h1>
         <p className="text-gray-400 text-sm leading-relaxed mb-8">
-          We hit an unexpected error. Try again, or head back {inApp ? "to your dashboard" : "to the homepage"} — nothing you have saved is affected.
+          We hit an unexpected error. Try again, or head back {inApp ? "to your dashboard" : "to the homepage"}. Nothing you have saved is affected.
         </p>
 
         <div className="flex w-full flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">

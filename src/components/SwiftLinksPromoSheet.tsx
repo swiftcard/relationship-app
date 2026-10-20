@@ -134,7 +134,7 @@ export default function SwiftLinksPromoSheet({
             Create your own Swift Links
           </h2>
           <p className="text-slate-500 text-[0.84375rem] leading-snug mt-2 max-w-[300px] mx-auto">
-            Comes with a SwiftCard and Swift Signature — used by many business
+            Comes with a SwiftCard and Swift Signature. Used by many business
             professionals. One link to share everything about you.
           </p>
 
@@ -148,7 +148,7 @@ export default function SwiftLinksPromoSheet({
             style={{ boxShadow: "0 12px 28px -6px rgba(37,99,235,0.55)" }}
           >
             <span className="sc-lbp-shine pointer-events-none absolute inset-0" />
-            See how yours looks — free
+            See how yours looks for free
             <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 shrink-0" aria-hidden="true"><path fillRule="evenodd" d="M3 10a.75.75 0 01.75-.75h10.638L10.23 5.29a.75.75 0 111.04-1.08l5.5 5.25a.75.75 0 010 1.08l-5.5 5.25a.75.75 0 11-1.04-1.08l4.158-3.96H3.75A.75.75 0 013 10z" clipRule="evenodd" /></svg>
           </a>
           <p className="text-slate-400 text-[0.71875rem] mt-2">No credit card · Live in 60 seconds</p>

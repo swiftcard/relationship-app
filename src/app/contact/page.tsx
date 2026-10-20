@@ -18,7 +18,7 @@ const TOPICS = ["General question", "Help with my account", "Teams & Offices", "
 const INFO: { title: string; desc: string; icon: React.ReactNode }[] = [
   {
     title: "Replies within 24 hours",
-    desc: "A real person reads every message — you'll hear back within one business day.",
+    desc: "A real person reads every message, and you'll hear back within 24 hours.",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="url(#ct-ico)" strokeWidth={1.8} className="w-5 h-5" aria-hidden="true">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -132,7 +132,7 @@ export default function ContactPage() {
                   Talk to a <span className="hp-fill">real person.</span>
                 </h1>
                 <p className="hp-lede !text-[1.1rem] mt-5 max-w-[480px]">
-                  Questions about SwiftCard, help with your account, rolling out cards to a team, or a partnership idea — send it over and we&apos;ll take it from there.
+                  Questions about SwiftCard, help with your account, rolling out cards to a team, or a partnership idea? Send it over and we&apos;ll take it from there.
                 </p>
               </div>
 
@@ -161,7 +161,7 @@ export default function ContactPage() {
                     </svg>
                   </div>
                   <h2 className="text-slate-900 font-bold text-2xl mb-2">Message sent!</h2>
-                  <p className="text-slate-500 text-[0.90625rem] mb-7">Thanks for reaching out — we&apos;ll get back to you within 24 hours.</p>
+                  <p className="text-slate-500 text-[0.90625rem] mb-7">Thanks for reaching out. We&apos;ll get back to you within 24 hours.</p>
                   <button
                     onClick={() => { setStatus("idle"); setForm({ name: "", email: "", topic: TOPICS[0], message: "" }); }}
                     className="rd-btn rd-btn-ghost-l"
@@ -246,7 +246,7 @@ export default function ContactPage() {
                   <button type="submit" disabled={status === "loading"} className="rd-btn rd-btn-primary rd-btn-lg w-full disabled:opacity-60">
                     {status === "loading" ? "Sending…" : "Send message"}
                   </button>
-                  <p className="text-slate-500 text-[0.75rem] text-center">We only use your email to reply — nothing else.</p>
+                  <p className="text-slate-500 text-[0.75rem] text-center">We use your email only to reply to you.</p>
                 </form>
               )}
             </div>

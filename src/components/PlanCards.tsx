@@ -372,7 +372,7 @@ function NativePro({
         <p className={PRO_FINE_PRINT_CLASS} role={code.website.failed ? "alert" : undefined}>
           {code.website.failed
             ? "Couldn't open your browser. Go to swiftcard.me, sign in with this account and enter the code there."
-            : `${promo.label} with ${promo.code}. Opens swiftcard.me in your browser with the code filled in — sign in there with this account.`}
+            : `${promo.label} with ${promo.code}. Opens swiftcard.me in your browser with the code filled in. Sign in there with this account.`}
         </p>
       </ProPlanCard>
     );
@@ -497,7 +497,7 @@ function AppleOfferCodeButton({ code, label, className, onPurchased }: { code: s
       </button>
       {(state === "waiting" || state === "notyet") && (
         <p className="mt-2 text-center text-xs text-white/85" role={state === "notyet" ? "status" : undefined}>
-          {state === "notyet" ? "Pro isn't on yet — finish redeeming on Apple's page, then " : "Redeemed it with Apple? "}
+          {state === "notyet" ? "Pro isn't on yet. Finish redeeming on Apple's page, then tap " : "Redeemed it with Apple? "}
           <button type="button" onClick={() => { void finish(); }} className="font-semibold underline">Continue</button>
         </p>
       )}
@@ -551,7 +551,7 @@ function NativeOffice({ disabled, onLeft, offTab }: { disabled: boolean; onLeft?
       <p className={OFFICE_FINE_PRINT_CLASS}>
         {failed
           ? "Couldn't open your browser. Go to swiftcard.me and sign in to set up Office."
-          : "Opens swiftcard.me in your browser. Sign in with this account to set up your team — your card is saved either way."}
+          : "Opens swiftcard.me in your browser. Sign in with this account to set up your team. Your card is saved either way."}
       </p>
     </OfficePlanCard>
   );

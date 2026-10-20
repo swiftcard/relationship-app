@@ -39,7 +39,7 @@ export default async function AccountDeletedPage() {
         <>
           <h1 className="text-2xl font-bold text-white mb-2">Your account is scheduled for deletion</h1>
           <p className="text-gray-400 text-sm mb-8 max-w-sm leading-relaxed">
-            You have <span className="text-white font-semibold">{daysLeft} day{daysLeft === 1 ? "" : "s"}</span> left to reopen it — your cards and contacts are still here. After that, your account and all its data are permanently deleted.
+            You have <span className="text-white font-semibold">{daysLeft} day{daysLeft === 1 ? "" : "s"}</span> left to reopen it. Your cards and contacts are still here. After that, your account and all its data are permanently deleted.
           </p>
           <ReopenAccount />
           <LeaveDeletedAccount className="text-sm text-gray-500 hover:text-gray-300 transition-colors mt-6" />
@@ -55,7 +55,7 @@ export default async function AccountDeletedPage() {
               does still work; they simply had no way to reach it. */}
           <h1 className="text-2xl font-bold text-white mb-2">Your account is scheduled for deletion</h1>
           <p className="text-gray-400 text-sm mb-8 max-w-sm leading-relaxed">
-            You have <span className="text-white font-semibold">{GRACE_DAYS} days</span> from when you deleted it to change your mind — your cards and contacts are still here until then. Sign back in and we&apos;ll offer to reopen it.
+            You have <span className="text-white font-semibold">{GRACE_DAYS} days</span> from when you deleted it to change your mind. Your cards and contacts are still here until then. Sign back in and we&apos;ll offer to reopen it.
           </p>
           <Link
             href="/login?next=/account-deleted"
@@ -69,7 +69,7 @@ export default async function AccountDeletedPage() {
         <>
           <h1 className="text-2xl font-bold text-white mb-2">Your account has been deleted</h1>
           <p className="text-gray-400 text-sm mb-8 max-w-sm leading-relaxed">
-            We&apos;re sorry to see you go. Your cards and contacts have been removed. For your security, this email can&apos;t be used to create a new account while the deleted account is held — once it&apos;s permanently purged, the email is freed up again.
+            We&apos;re sorry to see you go. Your cards and contacts have been removed. For your security, this email can&apos;t be used to create a new account while the deleted account is held. Once it&apos;s permanently purged, the email is freed up again.
           </p>
           <LeaveDeletedAccount className="text-sm font-semibold text-blue-400 hover:text-blue-300 transition-colors" />
         </>

@@ -24,7 +24,7 @@ describe("the invite page", () => {
 
   it("tells them to use the invited email", () => {
     expect(s).toContain("Create your account with <span");
-    expect(s).toContain("— the email your team invited.");
+    expect(s).toContain(", the email your team invited.");
     expect(s).toContain('"Email me a link to create my account"');
   });
 

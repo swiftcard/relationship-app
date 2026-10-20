@@ -241,7 +241,7 @@ export default function LeadsTable({
               : hasMore
               // Filters only see what is loaded, so "nothing matches" would be
               // a lie while there are still pages to fetch.
-              ? "Nothing on this page matches those filters. Load more below, or export everything."
+              ? 'Nothing on this page matches those filters. Tap "Load more" below, or export everything.'
               : "Nothing matches those filters."}
           </p>
         </div>
@@ -305,7 +305,7 @@ export default function LeadsTable({
           >
             {loadingMore
               ? "Loading…"
-              : `Load more — ${Math.max(0, knownTotal - rows.length).toLocaleString()} to go`}
+              : `Load more (${Math.max(0, knownTotal - rows.length).toLocaleString()} to go)`}
           </button>
           {loadError && (
             <p className="text-[0.6875rem] text-red-400">
@@ -317,8 +317,8 @@ export default function LeadsTable({
 
       {knownTotal > 0 && (
         <p className="text-[0.6875rem] text-gray-600 mt-3">
-          Follow-up is whatever the contact&apos;s own email and text automations are doing — your
-          teammate sets those on the contact, and this follows along. Click a contact to see when and
+          &quot;Follow-up&quot; shows each contact&apos;s email and text automations. Your teammate
+          sets those on the contact, and this column stays in step with them. Click a contact to see when and
           how they were added and their history.
         </p>
       )}

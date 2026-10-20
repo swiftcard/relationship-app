@@ -6,7 +6,7 @@ import HomeHeadingReveal from "@/components/site/HomeHeadingReveal";
 import "@/app/home.css";
 
 export const metadata: Metadata = {
-  title: "Company — SwiftCard",
+  title: "Company | SwiftCard",
   alternates: { canonical: "/company" },
   description:
     "SwiftCard is a digital business card and link-in-bio platform operated by Swift Card Inc. Company information, leadership, and legal policies.",
@@ -43,8 +43,8 @@ export default function CompanyPage() {
 
         <P>
           SwiftCard is a digital business card and link-in-bio platform operated by{" "}
-          <strong>Swift Card Inc</strong>. Build your card once and share it by tap, QR code, Apple
-          Wallet, or link — with built-in lead capture, a link-in-bio page, and automatic follow-up,
+          <strong>Swift Card Inc.</strong> Build your card once and share it by tap, QR code, Apple
+          Wallet, or link, with built-in lead capture, a link-in-bio page, and automatic follow-up,
           so the people you meet actually stay in touch.
         </P>
         {/* Company facts — mirrors the Terms "Company information" block */}
@@ -55,7 +55,7 @@ export default function CompanyPage() {
           </div>
           <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4 px-4 py-3">
             <dt className="text-slate-500 text-[0.8125rem] font-semibold sm:w-44 shrink-0">Legal name</dt>
-            <dd className="text-slate-800 text-[0.9375rem]">Swift Card Inc</dd>
+            <dd className="text-slate-800 text-[0.9375rem]">Swift Card Inc.</dd>
           </div>
           <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4 px-4 py-3">
             <dt className="text-slate-500 text-[0.8125rem] font-semibold sm:w-44 shrink-0">Entity type</dt>
@@ -84,23 +84,23 @@ export default function CompanyPage() {
           A SwiftCard is a digital business card that lives at your own link. Share it in person with
           a tap or QR code, drop it in a text or email signature, or add it to Apple Wallet. When
           someone you meet shares their info back, SwiftCard saves them to your contact list and can
-          send the follow-up for you — so no connection slips through the cracks. Teams run uniform,
+          send the follow-up for you, so no connection slips through the cracks. Teams run uniform,
           company-branded cards for every employee from one office dashboard.
         </P>
 
         <H2>Policies &amp; legal</H2>
         <ul className="mb-3">
           <li className="text-slate-600 text-[0.96875rem] leading-[1.75] mb-2 ml-5 list-disc marker:text-slate-400">
-            <Link href="/privacy" className="text-brand underline">Privacy Policy</Link> — what we collect, how we use it, and your rights.
+            <Link href="/privacy" className="text-brand underline">Privacy Policy</Link>: what we collect, how we use it, and your rights.
           </li>
           <li className="text-slate-600 text-[0.96875rem] leading-[1.75] mb-2 ml-5 list-disc marker:text-slate-400">
-            <Link href="/terms" className="text-brand underline">Terms of Service</Link> — the agreement covering your use of SwiftCard.
+            <Link href="/terms" className="text-brand underline">Terms of Service</Link>: the agreement covering your use of SwiftCard.
           </li>
           <li className="text-slate-600 text-[0.96875rem] leading-[1.75] mb-2 ml-5 list-disc marker:text-slate-400">
-            <Link href="/sms-terms" className="text-brand underline">SMS &amp; Messaging Terms</Link> — how text messaging works on SwiftCard, consent, and opt-out.
+            <Link href="/sms-terms" className="text-brand underline">SMS &amp; Messaging Terms</Link>: how text messaging works on SwiftCard, consent, and opt-out.
           </li>
           <li className="text-slate-600 text-[0.96875rem] leading-[1.75] mb-2 ml-5 list-disc marker:text-slate-400">
-            <Link href="/sms-consent" className="text-brand underline">SMS Consent Overview</Link> — how people opt in to receive texts, shown step by step.
+            <Link href="/sms-consent" className="text-brand underline">SMS Consent Overview</Link>: how people opt in to receive texts, shown step by step.
           </li>
         </ul>
 

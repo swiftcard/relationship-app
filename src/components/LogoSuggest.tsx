@@ -107,7 +107,7 @@ export default function LogoSuggest({ company, email, domain, website, onConfirm
       {state.kind === "results" && (
         <div className="mt-1.5 rounded-xl border border-gray-700/60 bg-gray-800/40 p-2.5">
           <p className="text-[0.6875rem] text-gray-400 mb-2">
-            Pick your company — we&apos;ll use its official logo (you can still upload your own):
+            Pick your company and we&apos;ll use its official logo (you can still upload your own):
           </p>
           <div className="space-y-1">
             {state.candidates.map((c) => (
@@ -151,14 +151,14 @@ export default function LogoSuggest({ company, email, domain, website, onConfirm
 function emptyMessage(status: LogoSuggestStatus): string {
   switch (status) {
     case "personal_domain":
-      return "That looks like a personal email — enter a company name to find its logo.";
+      return "That looks like a personal email. Enter a company name to find its logo.";
     case "invalid_input":
       return "Enter your company name, work email or website first, then try again.";
     case "rate_limited":
-      return "Too many lookups right now — try again in a moment.";
+      return "Too many lookups right now. Try again in a moment.";
     case "no_match":
-      return "No official logo found — upload your own above.";
+      return "No official logo found. Upload your own above.";
     default:
-      return "Couldn't reach the logo service — upload your own above.";
+      return "Couldn't reach the logo service. Upload your own above.";
   }
 }

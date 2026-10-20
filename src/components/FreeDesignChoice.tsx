@@ -92,7 +92,7 @@ export default function FreeDesignChoice({
             disabled={busy}
             className="mt-4 w-full py-3.5 rounded-full text-sm font-bold bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white transition-colors"
           >
-            {busy ? "Saving…" : trialEligible ? `Keep my card exactly like this — ${TRIAL_DAYS} days free →` : "Keep my card exactly like this — get Pro →"}
+            {busy ? "Saving…" : trialEligible ? `Keep my card exactly like this (${TRIAL_DAYS} days free) →` : "Keep my card exactly like this with Pro →"}
           </button>
           {/* The same disclosure the plan cards carry. A trial that takes a card
               and renews has to say so at every point it is offered, not only on
@@ -112,7 +112,7 @@ export default function FreeDesignChoice({
         <>
           <IapSubscribeButton
             className="!mt-4 !w-full !py-3.5 !text-sm !font-bold"
-            label={offersTrial ? `Keep my card exactly like this — ${TRIAL_DAYS} days free` : "Keep my card exactly like this — get Pro"}
+            label={offersTrial ? `Keep my card exactly like this (${TRIAL_DAYS} days free)` : "Keep my card exactly like this with Pro"}
             sublabel={offersTrial ? "then billed by Apple" : "Billed by Apple"}
             onPurchased={onIapPurchased}
           />

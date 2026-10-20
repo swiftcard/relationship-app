@@ -118,7 +118,7 @@ export default function GoogleSignInButton({ redirectTo, className, oneTap = fal
       if (inFlight.current) return; // never run the exchange twice
       if (!resp?.credential) {
         setPhase("error");
-        setErrorMsg("Google didn't return a sign-in token — please try again.");
+        setErrorMsg("Google didn't return a sign-in token. Please try again.");
         return;
       }
       inFlight.current = true;
@@ -153,7 +153,7 @@ export default function GoogleSignInButton({ redirectTo, className, oneTap = fal
       } catch {
         inFlight.current = false;
         setPhase("error");
-        setErrorMsg("Network error signing in with Google — please try again.");
+        setErrorMsg("Network error signing in with Google. Please try again.");
       }
     }
 
@@ -243,7 +243,7 @@ export default function GoogleSignInButton({ redirectTo, className, oneTap = fal
 
       {phase === "in_app" && (
         <p className="text-gray-500 text-xs text-center">
-          Google sign-in doesn&apos;t work inside this app&apos;s browser. Use your email below — it takes a few seconds.
+          Google sign-in doesn&apos;t work inside this app&apos;s browser. Use your email below. It takes a few seconds.
         </p>
       )}
 

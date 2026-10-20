@@ -390,7 +390,7 @@ export default function SaveContactButton({
       triggerSignupNudgeWhenVisible("vcard", 900);
     }
     } catch {
-      setSaveErr("Couldn't prepare the contact — please try again.");
+      setSaveErr("Couldn't prepare the contact. Please try again.");
     } finally {
       setDownloading(false);
     }
@@ -411,7 +411,7 @@ export default function SaveContactButton({
       return;
     }
     if (!cardOwner) {
-      setShareErr("Couldn't send just now — please try again.");
+      setShareErr("Couldn't send just now. Please try again.");
       return;
     }
     setShareMissing(null);
@@ -448,7 +448,7 @@ export default function SaveContactButton({
         // to "idle" on its own just un-pressed the button, which reads as the app
         // ignoring them rather than as something to try again.
         setStatus("idle");
-        setShareErr("Couldn't send that — check your connection and try again.");
+        setShareErr("Couldn't send that. Check your connection and try again.");
         return;
       }
     }
@@ -547,7 +547,7 @@ export default function SaveContactButton({
               legible text on the page, carrying the one instruction a
               first-time recipient needs). */}
           <p className="text-center text-xs" style={{ color: "#64748b" }}>
-            Save — then tap &ldquo;Create New Contact&rdquo;
+            Save, then tap &quot;Create New Contact&quot;
           </p>
           <MadeWithSwiftCard
             src="save_contact_cta"
@@ -713,10 +713,10 @@ export default function SaveContactButton({
                 preference). The backdrop still closes it, and Done carries the
                 same closeQr handler, so nothing about the exit flow changes. */}
             <div className="mb-4">
-              <p id="sc-scanqr-title" className="text-slate-900 font-bold text-base leading-snug">Scan to save {ownerFirstName ?? "this"} contact</p>
+              <p id="sc-scanqr-title" className="text-slate-900 font-bold text-base leading-snug">Scan to save {ownerFirstName ? `${ownerFirstName}'s` : "this"} contact</p>
               <p className="text-slate-500 text-sm mt-1">
-                Point your phone camera at the code — the contact opens already filled in.
-                Tap <span className="text-slate-700 font-medium">Create New Contact</span> to save it,
+                Point your phone camera at the code. The contact opens already filled in.
+                Tap <span className="text-slate-700 font-medium">&quot;Create New Contact&quot;</span> to save it,
                 and the card stays open behind it.
               </p>
             </div>

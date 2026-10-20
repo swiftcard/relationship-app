@@ -9,7 +9,7 @@ import { appCss, launchBrowser } from "./harness";
 //
 // Owner, 2026-09-23: on a Swift Links page, whatever the visitor presses must
 // open "the exact same pop-up" as the corner badge; the SwiftCard invite's
-// button says "See how yours looks — free" and shows a realistic card. "This
+// button says "See how yours looks for free" and shows a realistic card. "This
 // is how we're going to be getting a lot of new clients" — so this drives the
 // REAL components in Chromium with the app's compiled Tailwind at a small
 // phone, a normal phone and a desktop, and measures what a visitor sees.
@@ -123,7 +123,7 @@ const WIDTHS = [320, 390, 1280];
 
 describe("the SwiftCard invite on a card page", () => {
   for (const width of WIDTHS) {
-    it(`at ${width}px: says "See how yours looks — free", shows a real card, and fits`, async () => {
+    it(`at ${width}px: says "See how yours looks for free", shows a real card, and fits`, async () => {
       const page = await mount("card", width);
       await page.waitForTimeout(300);
       await fire(page, "vcard");
@@ -141,7 +141,7 @@ describe("the SwiftCard invite on a card page", () => {
         const links = Array.from(document.querySelectorAll('[aria-label="Create your own SwiftCard"] a')) as HTMLElement[];
         return links.filter((l) => !l.closest("[inert]")).map((l) => l.getAttribute("href"));
       })).toEqual(["/cards/new?src=vcard"]);
-      expect((await cta.innerText()).trim()).toBe("See how yours looks — free");
+      expect((await cta.innerText()).trim()).toBe("See how yours looks for free");
       expect(await cta.getAttribute("href")).toBe("/cards/new?src=vcard");
       const example = await page.evaluate(() => {
         const t = document.querySelector('[aria-label="Create your own SwiftCard"]')!.textContent ?? "";
@@ -175,7 +175,7 @@ describe("a Swift Links page: every invite IS the corner badge's sheet", () => {
       await dlg.waitFor();
       await page.waitForTimeout(700);
       const fromMoment = (await dlg.innerText()).replace(/\s+/g, " ").trim();
-      expect(fromMoment).toContain("See how yours looks — free");
+      expect(fromMoment).toContain("See how yours looks for free");
       expect(await dlg.locator("a").first().getAttribute("href")).toBe("/cards/new?src=link_button");
       // No SwiftCard invite on a Swift Links page.
       expect(await page.locator('[aria-label="Create your own SwiftCard"]').count()).toBe(0);

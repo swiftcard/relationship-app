@@ -76,21 +76,21 @@ const GROUPS: Group[] = [
       },
       {
         q: "Does the person I meet need the SwiftCard app?",
-        a: "No. Your card opens in their phone's browser, on iPhone or Android. They tap Save Contact and you are in their phone. If they fill in the share-back form, their name, phone and email land in your contacts.",
+        a: "No. Your card opens in their phone's browser, on iPhone or Android. They tap \"Save Contact\" and you are in their phone. If they fill in the share-back form, their name, phone and email land in your contacts.",
       },
       {
         q: "Is SwiftCard free?",
-        a: `Yes, there is a free plan with no time limit. It includes ${PLAN_LIMITS.FREE_CARD_LIMIT} digital business card, all the card designs, QR, link and NFC sharing, Apple Wallet, your Swift Links page with ${PLAN_LIMITS.FREE_MAX_LINKS} extra links, the Swift Signature email signature, a contacts list with notes, automatic follow-up emails you can switch on for any contact, and basic stats. Free saves up to ${PLAN_LIMITS.FREE_LEADS_PER_MONTH} new contacts a month.`,
+        a: `Yes, there is a free plan with no time limit. It includes ${PLAN_LIMITS.FREE_CARD_LIMIT} digital business card, all the card designs, QR, link and NFC sharing, Apple Wallet, your Swift Links page with ${PLAN_LIMITS.FREE_MAX_LINKS} extra links, the Swift Signature email signature, a contacts list with notes, automatic follow-up emails you can switch on for any contact, and basic stats. On Free, you can save up to ${PLAN_LIMITS.FREE_LEADS_PER_MONTH} new contacts a month.`,
         pricing: true,
       },
       {
         q: "How much does SwiftCard Pro cost?",
-        a: `Pro is ${PRO_MONTHLY} a month or ${PRO_ANNUAL} a year, with a ${TRIAL_DAYS}-day free trial and no contract. Pro removes the limits: unlimited cards and contacts, follow-up by text message as well as email, AI-written follow-ups, the AI card designer, the paper business card scanner, custom designs and colours, viewer locations and full view history. Subscriptions bought on iPhone are billed and cancelled through Apple.`,
+        a: `Pro is ${PRO_MONTHLY} a month or ${PRO_ANNUAL} a year, with a ${TRIAL_DAYS}-day free trial and no contract. Pro removes the limits: unlimited cards and contacts, follow-up by text message as well as email, AI-written follow-ups, the AI card designer, the paper business card scanner, custom designs and colors, viewer locations and full view history. Subscriptions bought on iPhone are billed and canceled through Apple.`,
         pricing: true,
       },
       {
         q: "Can I cancel at any time?",
-        a: "Yes. There are no contracts. On the web, go to Settings, then Plan and billing, then Manage subscription and payment, and choose Switch to Free. If you subscribed on iPhone, cancel through your Apple subscriptions. Either way you keep Pro until the end of the period you have paid for, and nothing is deleted.",
+        a: "Yes. There are no contracts. On the web, go to Settings → Plan and billing, tap \"Manage subscription & payment\", and choose \"Switch to Free\". If you subscribed on iPhone, cancel through your Apple subscriptions. Either way you keep Pro until the end of the period you have paid for, and nothing is deleted.",
         pricing: true,
       },
     ],
@@ -129,7 +129,7 @@ const GROUPS: Group[] = [
       },
       {
         q: "Does SwiftCard follow up automatically?",
-        a: "Yes. Switch follow-up on for a contact and SwiftCard sends the email for you on schedule. On Pro, follow-ups also go by text message, AI writes the message for each contact, and replies come back into the same thread. Texts are sent from a registered sender and honour STOP.",
+        a: "Yes. Switch follow-up on for a contact and SwiftCard sends the email for you on schedule. On Pro, follow-ups also go by text message, AI writes the message for each contact, and replies come back into the same thread. Texts are sent from a registered sender and honor STOP.",
       },
       {
         q: "Will I know when someone views my card?",
@@ -137,7 +137,7 @@ const GROUPS: Group[] = [
       },
       {
         q: "Which CRMs does SwiftCard integrate with?",
-        a: `New contacts can flow automatically into ${integrationNames()}. Connect them once in Settings, under Notifications and preferences, in the section called Send contacts to your CRM. Integrations are a Pro feature.`,
+        a: `New contacts can flow automatically into ${integrationNames()}. Connect them once in Settings → Notifications and preferences, in the "Send contacts to your CRM" section. Integrations are a Pro feature.`,
         pricing: true,
       },
     ],
@@ -147,7 +147,7 @@ const GROUPS: Group[] = [
     items: [
       {
         q: "Can I design my own card?",
-        a: "Every plan includes the designer templates with your photo, logo and colours. Pro adds the AI card designer: give it your headshot, logo and colours, or a photo of the paper card you already have, and it rebuilds the design with your details. Pro also unlocks premium finishes and photo or video backgrounds.",
+        a: "Every plan includes the designer templates with your photo, logo and colors. Pro adds the AI card designer: give it your headshot, logo and colors, or a photo of the paper card you already have, and it rebuilds the design with your details. Pro also unlocks premium finishes and photo or video backgrounds.",
       },
       {
         q: "Does SwiftCard have a link-in-bio page?",
@@ -217,7 +217,7 @@ export default function FaqPage() {
               Create your free card →
             </Link>
             <p className="text-slate-500 text-[0.875rem] mt-5">
-              Something not answered here? <Link href="/contact" className="text-brand underline underline-offset-2">Ask a real person</Link> — replies within 24 hours.
+              Something not answered here? <Link href="/contact" className="text-brand underline underline-offset-2">Ask a real person</Link>. We reply within 24 hours.
             </p>
           </div>
         </div>

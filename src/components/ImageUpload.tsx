@@ -143,7 +143,7 @@ export default function ImageUpload({ field, currentUrl, label, hint, shape = "s
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setErrorMsg(json.error ?? "Upload failed — try again.");
+        setErrorMsg(json.error ?? "Upload failed. Try again.");
         setUploadStatus("error");
         return;
       }
@@ -154,7 +154,7 @@ export default function ImageUpload({ field, currentUrl, label, hint, shape = "s
       setUploadStatus("idle");
       onUploaded(json.url);
     } catch {
-      setErrorMsg("Upload failed — check your connection and try again.");
+      setErrorMsg("Upload failed. Check your connection and try again.");
       setUploadStatus("error");
     }
   }
@@ -175,7 +175,7 @@ export default function ImageUpload({ field, currentUrl, label, hint, shape = "s
       setErrorMsg("");
       setUploadStatus("idle");
     } catch {
-      setErrorMsg("Couldn't open that photo to adjust — upload it again instead.");
+      setErrorMsg("Couldn't open that photo to adjust it. Upload it again instead.");
       setUploadStatus("error");
     }
   }

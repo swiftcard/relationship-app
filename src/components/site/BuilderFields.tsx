@@ -64,7 +64,7 @@ export function SocialFields({
     <div className="space-y-3">
       <div>
         <span className="block text-white/55 text-[0.75rem] font-medium">Social profiles</span>
-        <p className="text-white/70 text-[0.6875rem] leading-snug mt-0.5">Type your username — or paste your profile link.</p>
+        <p className="text-white/70 text-[0.6875rem] leading-snug mt-0.5">Type your username, or paste your profile link.</p>
       </div>
       {list.map((s) => (
         <SocialHandleField
@@ -156,7 +156,7 @@ export function LinkButtons({
 
       {atLinkCap ? (
         <p className="text-[0.6875rem] text-white/50 bg-[#15171F] border border-white/10 rounded-xl px-3 py-2.5 leading-relaxed">
-          Free includes {PLAN_LIMITS.FREE_MAX_LINKS} additional links. Pro unlocks unlimited additional links — you&apos;ll choose your plan before your page goes live.
+          Free includes {PLAN_LIMITS.FREE_MAX_LINKS} extra links. Pro unlocks unlimited extra links. You&apos;ll choose your plan before your page goes live.
         </p>
       ) : (
         // The same form as the real builder (AddLinkForm): tappable ideas that

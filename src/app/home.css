@@ -113,10 +113,17 @@
 .hp-feat-ico { flex-shrink: 0; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center;
   background: #fff; box-shadow: 0 1px 2px rgba(11,16,34,.06), inset 0 0 0 1px rgba(37,99,235,.16); }
 
-/* ── Gradient ribbon under the hero ──────────────────────────────────────── */
-.hp-ribbon { background: var(--rd-aurora); background-size: 200% 100%; animation: rd-aurora-pan 12s ease-in-out infinite; }
+/* ── Feature ribbon under the hero ───────────────────────────────────────── */
+/* A quiet band (owner, 2026-10-19: the full-strength gradient strip "looks
+   very aggressive … too overwhelming", but keep it). A light blue tint with
+   hairlines above and below, brand-blue text, and ends that fade into the
+   page, so it reads as a caption to the hero rather than a banner. */
+.hp-ribbon { background: linear-gradient(115deg, #EEF3FF 0%, #E8F0FF 50%, #EBF5FF 100%);
+  border-block: 1px solid rgba(37,99,235,.12); color: #1D3FB8;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%); }
 /* The ticker never pauses: no hover/focus/touch state may touch play-state. */
-.hp-ribbon-track { display: flex; width: max-content; animation: marquee 38s linear infinite; animation-play-state: running !important;
+.hp-ribbon-track { display: flex; width: max-content; animation: marquee 48s linear infinite; animation-play-state: running !important;
   will-change: transform; backface-visibility: hidden; }
 
 /* ── How it works ────────────────────────────────────────────────────────── */

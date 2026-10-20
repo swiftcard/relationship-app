@@ -134,7 +134,7 @@ describe("Swift Links promo badge (real browser)", () => {
     expect(text).toContain("Create your own Swift Links");
     expect(text).toContain("Comes with a SwiftCard and Swift Signature");
     expect(text).toContain("One link to share everything about you");
-    expect(text).toContain("See how yours looks — free");
+    expect(text).toContain("See how yours looks for free");
     expect(text).toContain("Explore more about SwiftCard");
 
     // CTA → the card/links creation flow; explore → the marketing site.

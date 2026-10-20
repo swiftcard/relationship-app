@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import UnsubscribeContent from "./UnsubscribeContent";
 
-export const metadata = { title: "Unsubscribe — SwiftCard" };
+export const metadata = { title: "Unsubscribe | SwiftCard" };
 
 export default function UnsubscribePage() {
   return (

@@ -72,7 +72,7 @@ describe("the office Leads table", () => {
       const text = await page.innerText("body");
       expect(text).toContain("Showing 8 of 1,240 contacts");
       expect(text).toContain("Export all as CSV");
-      expect(text).toContain("Load more — 1,232 to go");
+      expect(text).toContain("Load more (1,232 to go)");
     } finally { await page.close(); }
   });
 

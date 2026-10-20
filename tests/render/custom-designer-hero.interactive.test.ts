@@ -258,7 +258,7 @@ describe("AI design", () => {
     await sheet.waitFor();
     const t = await sheet.innerText();
     // Section heads are set in capitals by CSS, so compare without case.
-    for (const s of ["Your colours", "Theme", "On your card", "Headshot", "Logo"]) expect(t.toLowerCase()).toContain(s.toLowerCase());
+    for (const s of ["Your colors", "Theme", "On your card", "Headshot", "Logo"]) expect(t.toLowerCase()).toContain(s.toLowerCase());
     // No photo and no logo on this card: those switches are off and explain why.
     expect(t).toContain("Add a photo in your details first");
     expect(await sheet.getByRole("switch", { name: "Headshot on the card" }).isDisabled()).toBe(true);

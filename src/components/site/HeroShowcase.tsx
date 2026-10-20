@@ -94,7 +94,7 @@ const PERSONAS: Persona[] = [
     key: "realtor", job: "Realtor", Template: PhotoFirst, handle: "mayasellshomes",
     subtitle: "Realtor® · Harbor & Vine Realty", accent: "#6D28D9",
     bio: "Helping Bay Area families find home for 12 years. 200+ closings and counting.",
-    subject: "Re: 12 Harbor Lane — Saturday showing",
+    subject: "Re: 12 Harbor Lane, Saturday showing",
     message: "Saturday at 11 works. I'll meet you out front, and I'll bring the disclosures and the HOA packet.",
     data: p({
       name: "Maya Castillo", title: "Realtor®", company: "Harbor & Vine Realty",
@@ -133,7 +133,7 @@ const PERSONAS: Persona[] = [
   {
     key: "insurance", job: "Insurance agent", Template: ClassicPro, handle: "danawhitfield",
     subtitle: "Insurance Advisor · Beacon Mutual", accent: "#2F6F8F",
-    bio: "Coverage that actually fits your life — home, auto, and everything in between.",
+    bio: "Coverage that actually fits your life: home, auto, and everything in between.",
     subject: "Re: Your coverage review",
     message: "Bundling home and auto lowers your premium and your deductible. Want to go over it Thursday?",
     data: p({
@@ -218,7 +218,7 @@ const VERTICAL_PERSONAS: Persona[] = [
   {
     key: "loan-officer", job: "Loan officer", Template: ClassicPro, handle: "marcuswebbloans",
     subtitle: "Senior Loan Officer · Summit Home Loans", accent: "#0F766E",
-    bio: "From pre-approval to clear-to-close — I keep buyers, agents, and files moving.",
+    bio: "From pre-approval to clear-to-close, I keep buyers, agents, and files moving.",
     subject: "Re: Your pre-approval letter",
     message: "Great news, you're pre-approved! The letter is attached, so send it along with your offer.",
     data: p({
@@ -237,7 +237,7 @@ const VERTICAL_PERSONAS: Persona[] = [
   {
     key: "photographer", job: "Photographer", Template: PhotoFirst, handle: "lenabrooksphoto",
     subtitle: "Wedding & Portrait Photographer", accent: "#BE123C",
-    bio: "Weddings, portraits, and brand shoots — natural light, real moments.",
+    bio: "Weddings, portraits, and brand shoots. Natural light, real moments.",
     subject: "Re: Your gallery is ready",
     message: "Your gallery is live! Every favorite downloads in full resolution, with no watermark.",
     data: p({

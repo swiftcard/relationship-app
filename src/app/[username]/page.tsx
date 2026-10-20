@@ -541,7 +541,7 @@ export default async function CardPage({
             <SectionHeading>Your contact info has already been shared</SectionHeading>
           </div>
           <p className="text-slate-500 text-xs mt-1.5 ml-9">
-            {firstName} already has your details — just save {firstName}&apos;s contact above and you&apos;re all set.
+            {firstName} already has your details. Just save {firstName}&apos;s contact above and you&apos;re all set.
           </p>
         </div>
       ) : (
@@ -558,7 +558,7 @@ export default async function CardPage({
         <ShareButton
           url={publicCardUrl}
           title={`${profile.name}'s digital card`}
-          text={`Connect with ${firstName} — save their contact instantly.`}
+          text={`Connect with ${firstName} and save their contact instantly.`}
           label="Share this card"
         />
         {/* "Show QR Code" removed (owner request). It asked the person already

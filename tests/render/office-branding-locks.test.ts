@@ -106,7 +106,7 @@ describe("the Branding page", () => {
       // Asserted with its spaces intact: JSX drops the whitespace around a
       // newline beside an element, which silently welds "the" to "Links".
       expect(t.replace(/\s+/g, " ")).toContain(
-        "Their Swift Links page — bio, Instagram and pinned link buttons — is set on the Links tab.",
+        "Their Swift Links page (bio, Instagram and pinned link buttons) is set on the Links tab.",
       );
     } finally { await page.close(); }
   });

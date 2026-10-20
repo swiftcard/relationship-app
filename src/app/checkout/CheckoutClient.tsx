@@ -293,13 +293,13 @@ export default function CheckoutClient({ trialEligible = true, officeCoversPro =
         </h1>
         <p className="text-gray-500 text-sm mb-5">
           {preview
-            ? `You're on ${preview.currentPlan === "office" ? "Office" : "Pro"}${preview.endsTrial ? " (free trial)" : ""}. We'll change your existing subscription — never a second one${preview.billingDateResets ? ", and your billing date moves to today." : ", and you keep your billing date."}`
+            ? `You're on ${preview.currentPlan === "office" ? "Office" : "Pro"}${preview.endsTrial ? " (free trial)" : ""}. We'll change your existing subscription (you never get a second one)${preview.billingDateResets ? ", and your billing date moves to today." : ", and you keep your billing date."}`
             : "Confirm the details below, then continue to secure payment."}
         </p>
 
         {canceled && (
           <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5">
-            <p className="text-amber-300 text-xs font-semibold">Checkout canceled — your selection is saved.</p>
+            <p className="text-amber-300 text-xs font-semibold">Checkout canceled. Your selection is saved.</p>
             <p className="text-amber-200/80 text-[0.6875rem] mt-0.5">Pick up right where you left off whenever you&apos;re ready.</p>
           </div>
         )}
@@ -341,11 +341,11 @@ export default function CheckoutClient({ trialEligible = true, officeCoversPro =
         {preview && (
           <p className="text-gray-500 text-[0.6875rem] mt-3 leading-relaxed">
             {preview.trialContinuesUntil
-              ? `Your free trial carries on — nothing is charged today. Then ${formatUsd(subtotalCents)}/${per} from ${new Date(preview.trialContinuesUntil).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}, unless you cancel before then.`
+              ? `Your free trial carries on. Nothing is charged today. Then ${formatUsd(subtotalCents)}/${per} from ${new Date(preview.trialContinuesUntil).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}, unless you cancel before then.`
               : preview.endsTrial
                 ? `Office has no free trial, so your Pro trial ends now and Office starts today: charged today to the card on file, then ${formatUsd(subtotalCents)}/${per}.`
                 : preview.upgrading
-                  ? `Charged today to the card on file. You're credited for the unused time on ${preview.currentPlan === "office" ? "Office" : "Pro"}, so you only pay the difference — then ${formatUsd(subtotalCents)}/${per} ${preview.billingDateResets ? "from today" : "from your next billing date"}.`
+                  ? `Charged today to the card on file. You're credited for the unused time on ${preview.currentPlan === "office" ? "Office" : "Pro"}, so you only pay the difference. Then ${formatUsd(subtotalCents)}/${per} ${preview.billingDateResets ? "from today" : "from your next billing date"}.`
                   : `Applied as a credit against your next invoice rather than refunded, then ${formatUsd(subtotalCents)}/${per} from your next billing date.`}
           </p>
         )}
@@ -362,15 +362,15 @@ export default function CheckoutClient({ trialEligible = true, officeCoversPro =
                 server it would be the server's time zone, and a different day
                 for an evening reader would be a hydration mismatch. */}
             {giftUntil
-              ? `Your free Pro carries on — nothing is charged today. Then ${formatUsd(subtotalCents)}/${per} ${previewLoading ? "when it ends" : `from ${new Date(giftUntil).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`}, unless you cancel before then. Card required.`
+              ? `Your free Pro carries on. Nothing is charged today. Then ${formatUsd(subtotalCents)}/${per} ${previewLoading ? "when it ends" : `from ${new Date(giftUntil).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`}, unless you cancel before then. Card required.`
               : trial
-                ? `First-time subscribers start with a ${TRIAL_DAYS}-day free trial. Card required — billing begins automatically after the trial unless you cancel.`
+                ? `First-time subscribers start with a ${TRIAL_DAYS}-day free trial. Card required. Billing begins automatically after the trial unless you cancel.`
                 : "Billing starts today and renews automatically until you cancel."}
           </p>
         )}
         {plan === "office" && (
           <p className="text-gray-500 text-[0.6875rem] mt-3 leading-relaxed">
-            Your own card counts as seat 1 — {preview ? "invite the rest of your team from the Admin page." : "after payment, invite the rest of your team from the Admin tab on your dashboard."}
+            Your own card counts as seat 1. {preview ? "Invite the rest of your team from the Admin page." : "After payment, invite the rest of your team from the Admin tab on your dashboard."}
           </p>
         )}
 
@@ -390,7 +390,7 @@ export default function CheckoutClient({ trialEligible = true, officeCoversPro =
               disabled={busy}
               className="mt-2.5 w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-bold py-2 rounded-full"
             >
-              I understand — continue to Office
+              I understand, continue to Office
             </button>
           </div>
         )}
@@ -406,7 +406,7 @@ export default function CheckoutClient({ trialEligible = true, officeCoversPro =
               ? (busy
                   ? "Updating your plan…"
                   : preview.upgrading
-                    ? `Upgrade to ${planName} — pay ${formatUsd(preview.dueTodayCents)} today →`
+                    ? `Upgrade to ${planName} for ${formatUsd(preview.dueTodayCents)} today →`
                     : `Switch to ${planName} →`)
               : (busy ? "Redirecting to secure checkout…" : "Continue to secure payment →")}
         </button>

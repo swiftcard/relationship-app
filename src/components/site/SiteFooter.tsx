@@ -94,7 +94,7 @@ export default function SiteFooter({ light = false }: { light?: boolean }) {
               <span className={`${light ? "text-slate-900" : "text-white"} font-bold text-[1.125rem] tracking-tight`}>SwiftCard</span>
             </HomeLink>
             <p className={`${light ? "text-slate-500" : "text-white/55"} text-[0.875rem] leading-relaxed max-w-[240px]`}>
-              The digital business card that shares itself. One tap, and you&apos;re in their phone — card, links, and everything you do.
+              The digital business card that shares itself. One tap and you&apos;re in their phone, with your card, your links, and everything you do.
             </p>
             <div className="mt-5 flex flex-wrap items-center gap-2.5">
               <Link href="/cards/new" className="rd-btn rd-btn-primary text-[0.8125rem] px-4 py-2">Get started free</Link>

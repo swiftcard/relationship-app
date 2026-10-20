@@ -246,12 +246,12 @@ describe("what only the app does", () => {
       await page.getByRole("button", { name: "Have a promo code?" }).click();
       await page.getByLabel("Promo code").fill("save30");
       await page.getByRole("button", { name: "Apply" }).click();
-      await page.getByText("✓ SAVE30 — 30% off").waitFor({ timeout: 5_000 });
+      await page.getByText("✓ SAVE30: 30% off").waitFor({ timeout: 5_000 });
       const body = await page.evaluate(() => document.body.innerText);
       // The website's chooser says "below"; in the app the plan is picked on the site.
       expect(body).toContain("This code is for Pro, billed monthly.");
       expect(body).not.toContain("Choose that plan below");
-      expect(body).toContain("Added to the Pro plan — tap its button to use it.");
+      expect(body).toContain("Added to the Pro plan. Tap its button to use it.");
       // One action, on the Pro card — the plain Apple button is gone.
       expect(await page.getByRole("button", { name: "Use it on swiftcard.me →" }).count()).toBe(0);
       expect(await page.getByRole("button", { name: /^Try Pro free for \d+ days →$/ }).count()).toBe(0);
@@ -274,7 +274,7 @@ describe("what only the app does", () => {
       await page.getByRole("button", { name: "Have a promo code?" }).click();
       await page.getByLabel("Promo code").fill("demisha");
       await page.getByRole("button", { name: "Apply" }).click();
-      await page.getByText("✓ DEMISHA — Two months free").waitFor({ timeout: 5_000 });
+      await page.getByText("✓ DEMISHA: Two months free").waitFor({ timeout: 5_000 });
       const s = await snapshot(page);
       // The website's Pro block, with the code's free period and StoreKit's price.
       expect(s.proText).toMatch(/Free\s+for your first two months/);

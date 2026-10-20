@@ -165,7 +165,7 @@ export async function POST(req: NextRequest) {
         {
           error: "apple_subscriber",
           appleSubscriber: true,
-          message: "You pay for Pro through the App Store. Office includes everything in Pro, so once your team is set up, turn off auto-renew for SwiftCard Pro in your iPhone's Settings → your name → Subscriptions — otherwise Apple keeps billing you for Pro as well.",
+          message: "You pay for Pro through the App Store. Office includes everything in Pro, so once your team is set up, turn off auto-renew for SwiftCard Pro in your iPhone's Settings → your name → Subscriptions. Otherwise Apple keeps billing you for Pro as well.",
         },
         { status: 409 },
       );
@@ -284,7 +284,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json(
             {
               error: "already_subscribed",
-              message: "Your subscription is already going through — one moment while we set it up.",
+              message: "Your subscription is already going through. One moment while we set it up.",
               redirect: `/checkout/success?plan=${(s.metadata?.seats ? "office" : "pro")}&session_id=${s.id}`,
             },
             { status: 409 },

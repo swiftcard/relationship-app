@@ -129,12 +129,12 @@ export default function LoginForm({
         // Not only Google comes back through here: an email-confirmation or
         // sign-in LINK opened in a different browser or device fails the same
         // way, and "Google sign-in didn't complete" told them nothing useful.
-        msg = "That sign-in didn't complete. If you opened an email link on a different device or browser, sign in here instead — use the device where you built your card to keep it.";
+        msg = "That sign-in didn't complete. If you opened an email link on a different device or browser, sign in here instead. To keep your card, use the device where you built it.";
       } else if (err === "no_account") {
         // They tried to SIGN IN with Google but have no SwiftCard account yet —
         // flip to Create-account and tell them so, instead of leaving them
         // confused on the sign-in tab (Task 4).
-        msg = "You don't have an account yet — create one to get started.";
+        msg = "You don't have an account yet. Create one to get started.";
         toSignup = true;
       }
     } catch { /* ignore */ }
@@ -225,7 +225,7 @@ export default function LoginForm({
         options: { redirectTo: `${APP_URL}/auth/callback${qs ? `?${qs}` : ""}` },
       });
       if (error) {
-        setErrorMsg(error.message.includes("not enabled") ? "Apple sign-in isn't available right now — please try again." : error.message);
+        setErrorMsg(error.message.includes("not enabled") ? "Apple sign-in isn't available right now. Please try again." : error.message);
         setStatus("error");
       }
       return;
@@ -236,11 +236,11 @@ export default function LoginForm({
       const { startNativeOAuth } = await import("@/lib/native-auth");
       const err = await startNativeOAuth(supabase, "apple", redirectTo, mode);
       if (err) {
-        setErrorMsg(err.includes("not enabled") ? "Apple sign-in isn't available right now — please try again." : err);
+        setErrorMsg(err.includes("not enabled") ? "Apple sign-in isn't available right now. Please try again." : err);
         setStatus("error");
       }
     } catch {
-      setErrorMsg("Apple sign-in isn't available right now — please try again.");
+      setErrorMsg("Apple sign-in isn't available right now. Please try again.");
       setStatus("error");
     }
   }
@@ -278,11 +278,11 @@ export default function LoginForm({
           // the invited address already has an account, so this is the
           // password — including an account first made by an emailed link or
           // Google, which never had one. No "Create an account" beside it.
-          setErrorMsg("That password isn't right. If you've never set one, tap Forgot password.");
+          setErrorMsg('That password isn\'t right. If you\'ve never set one, tap "Forgot password?"');
         } else if (error.message === "Invalid login credentials") {
           // Could be a wrong password OR no account — Supabase won't say which.
           // Guide them to Create-account without a false "no account" claim.
-          setErrorMsg("We couldn't sign you in. If you don't have an account yet, create one — it's free.");
+          setErrorMsg("We couldn't sign you in. If you don't have an account yet, create one. It's free.");
           setSigninFailed(true);
         } else if (error.name === "AuthRetryableFetchError" || /failed to fetch|network|load failed/i.test(error.message)) {
           setErrorMsg(CANT_REACH);
@@ -396,7 +396,7 @@ export default function LoginForm({
       // already locked out; answering with a red error for a box nobody asked
       // them to fill is the wrong tone AND the wrong instruction. Focusing it
       // puts the cursor where the next action is and says what to do.
-      setErrorMsg("Enter your email above and tap Forgot password again.");
+      setErrorMsg('Enter your email above and tap "Forgot password?" again.');
       setStatus("idle");
       emailRef.current?.focus();
       return;

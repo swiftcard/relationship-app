@@ -411,7 +411,7 @@ export default function ProfileForm({ profile, linkedinEnabled = false }: { prof
           nativeCopy="Pro feature — Free includes 2 links. More links are only available on the Pro plan"
         >
           <p className="text-[0.6875rem] text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 leading-relaxed">
-            Free includes {PLAN_LIMITS.FREE_MAX_LINKS} additional links. <Link href="/upgrade" className="text-[#1D4ED8] font-semibold hover:underline">Upgrade to Pro</Link> to access unlimited additional links.
+            Free includes {PLAN_LIMITS.FREE_MAX_LINKS} extra links. <Link href="/upgrade" className="text-[#1D4ED8] font-semibold hover:underline">Upgrade to Pro</Link> for unlimited links.
           </p>
         </PlanGate>
       ) : (

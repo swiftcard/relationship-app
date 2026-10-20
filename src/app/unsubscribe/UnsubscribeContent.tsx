@@ -29,7 +29,7 @@ export default function UnsubscribeContent() {
         </h1>
         <p className="text-sm mb-6" style={{ color: "#64748b" }}>
           {isContact
-            ? "We've stopped sending SwiftCard email to this address — invitations and follow-ups included."
+            ? "We've stopped sending SwiftCard email to this address, including invitations and follow-ups."
             : "You won't receive any more marketing emails from SwiftCard. Transactional emails (receipts, security notices) are unaffected."}
         </p>
         {/* Account-holder CTAs only — a lead or invitee has no account to sign into. */}
@@ -76,7 +76,7 @@ export default function UnsubscribeContent() {
         </h1>
         <p className="text-sm mb-6" style={{ color: "#64748b" }}>
           {error === "failed"
-            ? "Something went wrong on our end and you have NOT been unsubscribed yet. Please try the link again in a moment — if it keeps failing, email hello@swiftcard.me and we'll remove you manually."
+            ? "Something went wrong on our end and you have NOT been unsubscribed yet. Please try the link again in a moment. If it keeps failing, email hello@swiftcard.me and we'll remove you manually."
             : "This link may have already been used or is no longer valid. You can manage your email preferences from your account settings."}
         </p>
         <Link

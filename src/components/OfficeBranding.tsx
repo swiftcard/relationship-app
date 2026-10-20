@@ -372,7 +372,7 @@ export default function OfficeBranding({ office }: { office: Brand }) {
                 Bio is NOT named here — it never renders on a card at all (no
                 template reads it); it is a Swift Links field, and the Links
                 tab is where an office takes it. */}
-            An example teammate. Their own details and socials stay theirs — the
+            An example teammate. Their own details and socials stay theirs. The
             company look and details are what you set here.
           </p>
         </div>
@@ -380,7 +380,7 @@ export default function OfficeBranding({ office }: { office: Brand }) {
 
       <div className="lg:col-start-1 min-w-0 flex flex-col gap-4">
         {/* 2 ── Card appearance ─────────────────────────────────────────── */}
-        <Section n={2} title="Card appearance" desc="The design your whole team inherits — template, colors and fonts.">
+        <Section n={2} title="Card appearance" desc="The design your whole team inherits: template, colors and fonts.">
           {/* The same template gallery as Card design — every template drawn
               with the company's details, and the Custom design row OPEN: an
               admin here is on the Office plan (owner, 2026-09-18). */}
@@ -436,7 +436,7 @@ export default function OfficeBranding({ office }: { office: Brand }) {
                 what keeps "Their social profiles" honest: an office that pins
                 Instagram on the Links tab takes that one social from them. */}
             <p className="text-[0.6875rem] text-gray-500 mt-3 leading-snug">
-              Their Swift Links page — bio, Instagram and pinned link buttons — is set on
+              Their Swift Links page (bio, Instagram and pinned link buttons) is set on
               the <strong className="text-gray-400">Links</strong> tab.
             </p>
           </div>

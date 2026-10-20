@@ -33,7 +33,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
 const SITE_TITLE = "SwiftCard: The digital business card that shares everything";
 const SITE_DESC =
-  "Build your SwiftCard once and share it by tap, QR code, Apple Wallet, or link — with built-in lead capture and automatic follow-up.";
+  "Build your SwiftCard once and share it by tap, QR code, Apple Wallet, or link, with built-in lead capture and automatic follow-up.";
 
 export const metadata: Metadata = {
   // Required so file-based opengraph-image URLs resolve to ABSOLUTE links on the

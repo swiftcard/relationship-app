@@ -84,7 +84,7 @@ async function openLinkedInConnect(href: string, opts: { guest: boolean; returnT
 /** What to tell the user when a one-shot import came back without a photo. */
 function oneShotFailure(status: string | null): string | null {
   if (status === "nophoto") return "Your LinkedIn profile doesn't have a photo to import. Upload one instead.";
-  if (status === "error") return "LinkedIn didn't finish connecting — try again, or upload a photo instead.";
+  if (status === "error") return "LinkedIn didn't finish connecting. Try again, or upload a photo instead.";
   return null;
 }
 
@@ -165,7 +165,7 @@ export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, return
   // popup is blocked).
   async function finishLinkedInReturn(status: string | null) {
     if (status === "error") {
-      setState({ kind: "error", message: "LinkedIn connection didn't finish — try again." });
+      setState({ kind: "error", message: "LinkedIn didn't finish connecting. Try again." });
       return;
     }
     if (status !== "connected") return;
@@ -313,7 +313,7 @@ export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, return
     // The one-shot hop leaves this page. Never with the card unsaved: a failed
     // save stops here, with the upload button right above as the way forward.
     if (oneShot && beforeLeave && !beforeLeave()) {
-      setState({ kind: "error", message: "Couldn't save your card on this device to open LinkedIn — upload your photo above instead." });
+      setState({ kind: "error", message: "Couldn't save your card on this device before opening LinkedIn. Upload your photo above instead." });
       return;
     }
     void openLinkedInConnect(connectHref, { guest: oneShot, returnTo, nonce: oneShot ? undefined : startConnect() });
@@ -362,14 +362,14 @@ export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, return
         setState({
           kind: "error",
           message: guest
-            ? "We couldn't find a photo for that email — upload one above instead."
-            : "We couldn't find a photo on your accounts — upload one above instead.",
+            ? "We couldn't find a photo for that email. Upload one above instead."
+            : "We couldn't find a photo on your accounts. Upload one above instead.",
         });
         return;
       }
       setState({ kind: "results", candidates, linkedin });
     } catch {
-      setState({ kind: "error", message: "Couldn't look for photos right now — try again, or upload one instead." });
+      setState({ kind: "error", message: "Couldn't look for photos right now. Try again, or upload one instead." });
     }
   }
 
@@ -389,7 +389,7 @@ export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, return
           });
       const data = await res.json().catch(() => ({} as { url?: string; small?: boolean }));
       if (!res.ok || !data.url) {
-        setState({ kind: "error", message: "Couldn't import that photo — try another, or upload it manually." });
+        setState({ kind: "error", message: "Couldn't import that photo. Try another, or upload it manually." });
         return;
       }
       onConfirm(data.url);
@@ -400,7 +400,7 @@ export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, return
       setSmallNote(data.small === true);
       setState({ kind: "idle" });
     } catch {
-      setState({ kind: "error", message: "Couldn't import that photo — try another, or upload it manually." });
+      setState({ kind: "error", message: "Couldn't import that photo. Try another, or upload it manually." });
     }
   }
 
@@ -438,12 +438,12 @@ export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, return
 
       {applied && state.kind === "idle" && (
         <p className="text-[0.6875rem] text-emerald-400 mt-1">
-          Headshot added — it&apos;s saved when you save your card. Not right? Upload your own above.
+          Headshot added. It&apos;s saved when you save your card. Not right? Upload your own above.
         </p>
       )}
       {applied && smallNote && state.kind === "idle" && (
         <p className="text-[0.6875rem] text-amber-400 mt-1">
-          LinkedIn only shares a small version of your photo, so we sharpened it — a photo from your phone will look crisper. Tap Adjust above to reframe it.
+          LinkedIn only shares a small version of your photo, so we sharpened it. A photo from your phone will look crisper. Tap &quot;Adjust&quot; above to reframe it.
         </p>
       )}
 
@@ -468,7 +468,7 @@ export default function ProfilePhotoSuggest({ linkedinEnabled, onConfirm, return
           {state.candidates.length > 0 ? (
             <>
               <p className="text-[0.6875rem] text-gray-400 mb-2.5">
-                {state.candidates.length === 1 ? "We found this photo — it's only used if you choose it:" : "We found these photos — pick one, or upload your own above:"}
+                {state.candidates.length === 1 ? "We found this photo. It's only used if you choose it:" : "We found these photos. Pick one, or upload your own above:"}
               </p>
               <div className="flex flex-wrap gap-3 mb-1.5">
                 {state.candidates.map((c) => (

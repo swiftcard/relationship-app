@@ -68,13 +68,13 @@ export default function PreferenceCenter({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.error || "Something went wrong — please try again.");
+        setError(data.error || "Something went wrong. Please try again.");
         return null;
       }
       if (data.preferences) setPrefs(data.preferences as Prefs);
       return data;
     } catch {
-      setError("Couldn't reach SwiftCard — please try again.");
+      setError("Couldn't reach SwiftCard. Please try again.");
       return null;
     } finally {
       setBusy(null);
@@ -117,7 +117,7 @@ export default function PreferenceCenter({
             </div>
           </div>
         )}
-        {reasonGiven && <p className="mt-6 text-sm" style={{ color: MUTED }}>Thank you — that helps.</p>}
+        {reasonGiven && <p className="mt-6 text-sm" style={{ color: MUTED }}>Thank you. That helps.</p>}
         {error && <p role="alert" className="mt-4 text-sm" style={{ color: "#B91C1C" }}>{error}</p>}
       </div>
     );

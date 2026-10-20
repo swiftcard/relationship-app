@@ -135,7 +135,7 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
   const steps: MiniStep[] = [
     {
       title: "Who's on the card?",
-      subtitle: "Just the basics — you can change any of it later.",
+      subtitle: "Just the basics. You can change any of it later.",
       canAdvance: sketch.name.trim().length > 0,
       content: (
         <>
@@ -184,7 +184,7 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
     },
     {
       title: "Make it yours",
-      subtitle: "Pick a template, then work down the numbered steps — the same design controls as the real editor.",
+      subtitle: "Pick a template, then work down the numbered steps. They're the same design controls as the real editor.",
       previewFirst: true,
       content: (
         <div className="space-y-4">
@@ -268,7 +268,7 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
         onLaunch={launch}
         launching={launching}
         launchLabel="Make it live →"
-        previewCaption="This is your real card — recipients open it as a full page in their browser."
+        previewCaption="This is your real card. Recipients open it as a full page in their browser."
         preview={cardPreview}
         // Phone: Undo on the pinned card's top-left corner, as on Card design.
         pinnedPreview={previewUndo ? (
