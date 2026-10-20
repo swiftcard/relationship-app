@@ -151,6 +151,8 @@ describe("Resend tracking is forced off", () => {
 
 describe("no send goes out HTML-only", () => {
   it("the agent relay attaches a text part", () => {
-    expect(read("src/app/api/agent-email/route.ts")).toMatch(/text: htmlToText\(/);
+    // The relay and the Crew reports share one sender (lib/owner-digest).
+    expect(read("src/app/api/agent-email/route.ts")).toMatch(/sendOwnerDigest\(/);
+    expect(read("src/lib/owner-digest.ts")).toMatch(/text: htmlToText\(/);
   });
 });

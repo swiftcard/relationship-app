@@ -165,7 +165,9 @@ describe("every send site declares its identity", () => {
   });
 
   it("internal alerts land ON hello@ but never come FROM it", () => {
-    for (const p of ["src/app/api/agent-email/route.ts", "src/app/api/contact/route.ts"]) {
+    // The agent relay sends through lib/owner-digest (shared with the Crew reports).
+    expect(read("src/app/api/agent-email/route.ts")).toMatch(/sendOwnerDigest\(/);
+    for (const p of ["src/lib/owner-digest.ts", "src/app/api/contact/route.ts"]) {
       const src = read(p);
       expect(src, `${p} does not send from support@`).toMatch(/senderAddress\("support"/);
       expect(src, `${p} lost its hello@ destination`).toMatch(/INBOX_ADDRESS/);

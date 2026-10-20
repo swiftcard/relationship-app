@@ -319,3 +319,26 @@ All three must be set (`hasGoogleWalletConfig()` in `src/lib/google-wallet-confi
 | `LINKEDIN_AGENT_SCOPES` | Admin agent tooling only — the product works without it. Overrides LinkedIn OAuth scopes. Default `w_organization_social r_organization_admin` when `LINKEDIN_AGENT_CLIENT_ID` is set, else `openid profile w_member_social`. |
 | `PINTEREST_APP_ID` | Admin agent tooling only — the product works without it. Pinterest app ID from developers.pinterest.com, for pinning card designs. Missing (with the secret) = Pinterest Connect unavailable. |
 | `PINTEREST_APP_SECRET` | Admin agent tooling only — the product works without it. Same Pinterest app's secret. |
+
+## Agents (Crew) — admin only
+
+**Admin agent tooling only — the product works without it.** The agent system behind the Agents tab (`/admin/crew`, plan in `docs/plans/agent-system.md`). Every agent starts switched off, and one whose keys are missing shows "Needs: …" and cannot be switched on. Crew deliberately uses its **own** key names: `src/lib/ai.ts` picks the product's AI provider by which of `OPENAI_API_KEY` / `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` exists, and that choice is shown in the App Store consent notice, so the agents must not share those names. Run `supabase/crew.sql` once before anything else.
+
+| Key | What it does — and what breaks when it's missing |
+|---|---|
+| `CREW_ANTHROPIC_API_KEY` | Admin agent tooling only. Anthropic API key every agent's Claude calls use (Sonnet 5.5 workers, Opus 5.5 managers, optional Fable 5.1 head). Also add it as a GitHub Actions secret of the same name for the fix-PR workflow. Missing = every agent shows "Needs: CREW_ANTHROPIC_API_KEY". |
+| `CREW_OPENAI_API_KEY` | Admin agent tooling only. OpenAI API key for the second opinion on drafts (ChatGPT via the Responses API, never a ChatGPT login). Missing = a second Claude "skeptic" pass is used instead and cards say "ChatGPT not connected". |
+| `CREW_OPENAI_MODEL` | Admin agent tooling only. Which OpenAI model gives the second opinion (pick the current one at platform.openai.com/docs/models). Required with the key. |
+| `CREW_OPENAI_PRICE` | Admin agent tooling only. Optional "input,output" $ per million tokens for that model, so the usage meter is exact. Unset = a conservative default that over-counts. |
+| `CREW_TICK_SECRET` | Admin agent tooling only. Long random string. Same value in Vercel and as a GitHub Actions secret: `crew-tick.yml` (every 15 min) and the monitor ingest steps send it as a Bearer token. Missing = `/api/crew/tick` and `/api/crew/ingest` are 404 and no agent ever runs on schedule. |
+| `CREW_DISABLED` | Admin agent tooling only. `1` stops every agent at once with no database needed (the hard kill switch). |
+| `CREW_FAKE_LLM` | Development only. `1` swaps in deterministic fake models for local dry runs. Ignored in production. |
+| `CREW_GITHUB_TOKEN` | Admin agent tooling only. Fine-grained GitHub token for this repo only (Actions, Contents, Pull requests: read/write). Lets an approved Watchdog fix open a pull request; it never merges. Missing = fixes stay as a written plan on the card. |
+| `CREW_STRIPE_READ_KEY` | Admin agent tooling only. Stripe **restricted, read-only** key for the payments pair (failed charges, trials that didn't convert, plan drift). Missing = those two agents stay off. |
+| `REDDIT_CLIENT_ID` | Admin agent tooling only. Reddit app client id (app-only OAuth, read only) for the Reddit replies, DM and lead agents. Missing = Reddit agents fall back to web search. |
+| `REDDIT_CLIENT_SECRET` | Admin agent tooling only. Same Reddit app's secret. |
+| `REDDIT_USER_AGENT` | Admin agent tooling only. Reddit requires a descriptive user agent, e.g. `web:me.swiftcard.crew:v1 (by /u/yourname)`. |
+| `GOOGLE_SHEETS_SA_JSON` | Admin agent tooling only. A Google Cloud service-account key (the whole JSON) for the lead sheets. Share each sheet with the key's `client_email`. Missing = leads stay in the Agents tab (with CSV download) and nothing is written to Sheets. |
+| `CREW_LEADS_SHEET_ID` | Admin agent tooling only. Id of the cold-lead sheet (from its URL). |
+| `CREW_OFFICE_SHEET_ID` | Admin agent tooling only. Id of the Office-prospects call sheet. |
+| `VERCEL_TOKEN` | Admin agent tooling only. Optional; lets the security agent read traffic data. Also used by the deploy watchdog workflow (as a GitHub secret). |
