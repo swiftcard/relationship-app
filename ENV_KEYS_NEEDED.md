@@ -290,19 +290,16 @@ All five of `APPLE_PASS_TYPE_ID`, `APPLE_TEAM_ID`, `APPLE_PASS_CERT_PEM`, `APPLE
 
 ## Admin agent tooling and marketing bots (admin only)
 
-**Admin agent tooling only — the product works without it.** These power the owner's monitoring agents running in GitHub Actions (the `/admin/agent-flow` console was retired 2026-10-19) and the social-posting connectors. No customer-facing screen reads any of them. Agent OAuth redirect URI: `https://swiftcard.me/api/admin/connect/<provider>/callback`.
+**Admin agent tooling only — the product works without it.** These power the owner-only platform connections (`/api/admin/connect/<provider>`) and the Pinterest pin route; the old agent system was removed 2026-10-19. No customer-facing screen reads any of them. Agent OAuth redirect URI: `https://swiftcard.me/api/admin/connect/<provider>/callback`.
 
 | Key | What it does — and what breaks when it's missing |
 |---|---|
-| `GITHUB_AGENTS_TOKEN` | Admin agent tooling only — the product works without it. Fine-grained GitHub PAT (actions: write) used by `src/lib/agent-watchdog.ts` to re-arm the watchdog loop. Nothing in the app calls it since the Agent Flow console was retired; the watchdog workflow re-arms itself. |
-| `AGENTS_GITHUB_REPO` | Admin agent tooling only — the product works without it. `owner/repo` the agent workflows live in. Default `swiftcard/relationship-app`; set it if the workflows live in a different repo, or every dispatch hits the wrong repo. |
 | `AGENT_RELAY_SECRET` | Admin agent tooling only — the product works without it. Bearer secret the agent workflows use to send their digest/alert emails through `/api/agent-email` (recipient is always `agent_system.digest_email`). Minted by `scripts/agent-flow-setup.mjs`; must match the GitHub Actions secret of the same name. Missing = the route is a 404 and agents send no emails. |
-| `INSTAGRAM_BOT_SECRET` | Admin agent tooling only — the product works without it. Optional dedicated Bearer secret (16+ chars) for the Instagram/Facebook/Pinterest/LinkedIn bot routes under `/api/agents/*`. Those routes also accept `PUSH_CATCHUP_SECRET`/`CRON_SECRET`, and the workflows send `PUSH_CATCHUP_SECRET`, so unset changes nothing. |
+| `INSTAGRAM_BOT_SECRET` | Admin agent tooling only — the product works without it. Optional dedicated Bearer secret (16+ chars) for the Pinterest pin route under `/api/agents/pinterest/pin` (also accepts `PUSH_CATCHUP_SECRET` and `CRON_SECRET`). |
 | `META_APP_ID` | Admin agent tooling only — the product works without it. Meta (Facebook) app ID from developers.facebook.com, for posting to the SwiftCard Page + Instagram and for the Instagram/Facebook reply bots. Missing (with `META_APP_SECRET`) = the Facebook + Instagram Connect button is unavailable. |
 | `META_APP_SECRET` | Admin agent tooling only — the product works without it. Same Meta app's secret. Also verifies `x-hub-signature-256` on `/api/meta/webhook`. Missing = no Meta connection, and every webhook POST is rejected 401 (the 10-minute bot pass still runs). |
 | `META_PAGE_ID` | Admin agent tooling only — the product works without it. Picks which Facebook Page to connect when the account manages several. Unset = the first Page returned. |
 | `META_SCOPES` | Admin agent tooling only — the product works without it. Overrides the whole Meta OAuth scope list. Unset = the built-in list (pages + Instagram publish, comments, messages, engagement). Set it only if the Meta app lacks one of those scopes, because an unknown scope fails the consent screen. |
-| `META_WEBHOOK_VERIFY_TOKEN` | Admin agent tooling only — the product works without it. The verify token you type when saving the webhook URL in the Meta app dashboard. Missing = Meta's subscribe handshake gets 403 and the webhook can't be saved; replies wait for the bot's 10-minute pass. |
 | `X_CLIENT_ID` | Admin agent tooling only — the product works without it. X (Twitter) OAuth 2.0 client ID from developer.x.com, for posting as the SwiftCard X account. Missing (with the secret) = X Connect unavailable. |
 | `X_CLIENT_SECRET` | Admin agent tooling only — the product works without it. Same X app's client secret. |
 | `YOUTUBE_CLIENT_ID` | Admin agent tooling only — the product works without it. Google OAuth client for uploading agent videos to YouTube (an Internal-consent project so refresh tokens don't expire after 7 days). Unset = falls back to `GOOGLE_CLIENT_ID`. |
@@ -312,11 +309,3 @@ All five of `APPLE_PASS_TYPE_ID`, `APPLE_TEAM_ID`, `APPLE_PASS_CERT_PEM`, `APPLE
 | `LINKEDIN_AGENT_SCOPES` | Admin agent tooling only — the product works without it. Overrides LinkedIn OAuth scopes. Default `w_organization_social r_organization_admin` when `LINKEDIN_AGENT_CLIENT_ID` is set, else `openid profile w_member_social`. |
 | `PINTEREST_APP_ID` | Admin agent tooling only — the product works without it. Pinterest app ID from developers.pinterest.com, for pinning card designs. Missing (with the secret) = Pinterest Connect unavailable. |
 | `PINTEREST_APP_SECRET` | Admin agent tooling only — the product works without it. Same Pinterest app's secret. |
-| `REDDIT_CLIENT_ID` | Admin agent tooling only — the product works without it. Reddit "script" app ID (reddit.com/prefs/apps). All four `REDDIT_*` are needed for the Reddit connector; missing any = Reddit items are not posted. |
-| `REDDIT_CLIENT_SECRET` | Admin agent tooling only — the product works without it. Same Reddit app's secret. |
-| `REDDIT_USERNAME` | Admin agent tooling only — the product works without it. Reddit account the script app posts as (password grant). |
-| `REDDIT_PASSWORD` | Admin agent tooling only — the product works without it. That Reddit account's password. |
-| `HIGGSFIELD_API_KEY_ID` | Admin agent tooling only — the product works without it. Higgsfield API key ID: the "Send to Higgsfield" connector turns agent video scripts and image briefs into media. Missing (with the secret) = that connector is not ready. |
-| `HIGGSFIELD_API_KEY_SECRET` | Admin agent tooling only — the product works without it. Higgsfield API key secret; pairs with the ID above. |
-| `HIGGSFIELD_ENDPOINT` | Admin agent tooling only — the product works without it. Image endpoint override. Default `https://api.higgsfield.ai/higgsfield-ai/soul/standard`. |
-| `HIGGSFIELD_VIDEO_ENDPOINT` | Admin agent tooling only — the product works without it. Text-to-video endpoint override. Default `https://api.higgsfield.ai/minimax/hailuo-02/standard/text-to-video`. |

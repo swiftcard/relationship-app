@@ -65,8 +65,7 @@ export async function reportError(
 
   // A storm of one bug (a bad deploy under launch traffic) must not become
   // thousands of database writes and chat posts. Rows are capped per
-  // fingerprint, not collapsed to one: Bo's detector (marketing-agents/lib/
-  // detectors.mjs) needs 3+ rows in 15 min to call it an incident. The chat
+  // fingerprint, not collapsed to one, so a storm still leaves evidence. The chat
   // alert says it once per 10 min. A limiter failure falls through to
   // reporting — losing an alert is worse than sending a duplicate.
   const fingerprint = fingerprintOf(context, err.message);
@@ -74,8 +73,8 @@ export async function reportError(
   const rowCapped = await isRateLimited(`report-error:row:${fingerprint}`, 20, STORM_WINDOW).catch(() => false);
 
   // (b) Durable row — so something can READ this back. The console line above
-  // is ephemeral and needs a Vercel token to reach; this is what lets Bo watch
-  // for crashes with the Supabase key the agents already hold. Fire-and-forget
+  // is ephemeral and needs a Vercel token to reach; this is what lets anything watch
+  // for crashes with the Supabase key. Fire-and-forget
   // and fully swallowed: if the table is missing (migration not yet applied) or
   // Supabase is down, the path that failed must not fail twice.
   if (!rowCapped) {

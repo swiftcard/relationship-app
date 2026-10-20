@@ -43,10 +43,8 @@ const SCOPES: Record<AgentProvider, string> = {
   x: "tweet.read tweet.write users.read offline.access",
   // pages_manage_posts publishes to the Page; instagram_content_publish to the
   // linked IG Business account; the rest are what the two need to list + read.
-  // The Instagram bot (lib/instagram-bot.ts) adds four: read + answer comments
-  // on our posts, read + answer messages sent to us, and subscribe the Page to
-  // webhooks. The Facebook bot (lib/facebook-bot.ts) adds two more: read what
-  // people comment on the Page's posts, and reply under them. META_SCOPES
+  // The (removed) Instagram and Facebook comment bots added the comment, message
+  // and webhook scopes below. META_SCOPES
   // overrides the whole list if the Meta app is ever
   // missing one of them (an unknown scope fails the consent screen outright).
   meta: process.env.META_SCOPES

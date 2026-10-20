@@ -172,12 +172,6 @@ describe("every send site declares its identity", () => {
     }
     expect(INBOX_ADDRESS).toBe("hello@swiftcard.me");
   });
-
-  it("the agent runner outside Next stays in sync", () => {
-    // marketing-agents/ is plain .mjs and cannot import the TS config, so this
-    // pins the one literal that would otherwise drift back to hello@.
-    expect(read("marketing-agents/lib/agentkit.mjs")).toMatch(/SwiftCard Agents <support@swiftcard\.me>/);
-  });
 });
 
 describe("the sandbox sender is gone", () => {

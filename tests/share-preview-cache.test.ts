@@ -169,14 +169,6 @@ describe("the preview is warmed on every share path", () => {
     expect(ogImageFromHtml(html)).toBe("https://swiftcard.me/x/opengraph-image?v=1&y=2");
     expect(ogImageFromHtml("<html></html>")).toBeNull();
   });
-
-  it("Finn probes the preview like a messenger, continuously", () => {
-    const d = readFileSync(join(root, "marketing-agents/lib/detectors.mjs"), "utf8");
-    expect(d).toMatch(/export async function sharePreviewCheck\(\)/);
-    expect(d).toMatch(/findings\.push\(\.\.\.await sharePreviewCheck\(\)\);/);
-    for (const key of ["flow:share-preview:no-tag", "flow:share-preview:image-down", "flow:share-preview:degraded", "flow:share-preview:slow"])
-      expect(d).toContain(key);
-  });
 });
 
 // ── 2026-10-06: "sometimes it misses my name, sometimes my logo" ─────────────
