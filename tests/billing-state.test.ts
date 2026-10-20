@@ -26,7 +26,8 @@ describe("the grace sweep can't cancel a paying customer", () => {
   it("leaves a healthy subscription alone and clears the stale flag", () => {
     const c = code(CRON);
     expect(c).toMatch(/sub\.status === "active" \|\| sub\.status === "trialing"/);
-    expect(c).toMatch(/delete healthy\._paymentFailedAt/);
+    // Merged by key, never the run's stale copy written back (audit NM-14).
+    expect(c).toMatch(/sub\.status === "trialing"\) \{[\s\S]{0,600}?mergeCustomization\(u\.id, \{ set: \{\}, remove: \["_paymentFailedAt"\] \}[\s\S]{0,80}?continue;/);
   });
 
   it("only a failed RENEWAL arms the fuse", () => {

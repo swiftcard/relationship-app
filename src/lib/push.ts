@@ -379,17 +379,30 @@ export async function sendPushToUser(userId: string, payload: {
         })
       );
     }
+  } else if (webSubs.length) {
+    // Browser subscriptions and no VAPID keys to sign with: every one of them
+    // is undeliverable. This used to skip them without a word, and a person
+    // with only browser subscriptions was logged as an ordinary
+    // "no_deliverable_endpoint" (audit NM-12). It is a misconfiguration.
+    failures.push("web vapid-keys-missing");
   }
 
-  if (!sends.length) { await log("no_deliverable_endpoint"); return; }
-  const results = await Promise.allSettled(sends);
-  const delivered = results.filter((r) => r.status === "fulfilled" && r.value === true).length;
   // A push nobody received is invisible by nature — the owner just stops hearing
   // from the product. Put Apple's / the browser's own reason where the uptime
   // and nightly checks already look (error_events), once per failed send.
-  if (failures.length) {
+  const reportFailures = async () => {
+    if (!failures.length) return;
     await reportServerError("push.delivery", new Error(`push not delivered (${payload.category}): ${[...new Set(failures)].join(" | ")}`), { userId }).catch(() => {});
+  };
+
+  if (!sends.length) {
+    await reportFailures();
+    await log(failures.length ? "failed" : "no_deliverable_endpoint");
+    return;
   }
+  const results = await Promise.allSettled(sends);
+  const delivered = results.filter((r) => r.status === "fulfilled" && r.value === true).length;
+  await reportFailures();
   // "rollup" is its own outcome and NOT "sent", deliberately: `sent` is what
   // opens and closes the one-alert-an-hour window and what the daily cap counts,
   // and a silent update must do neither — otherwise a busy afternoon would slide
