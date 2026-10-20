@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 // match the code. Update LAST_UPDATED whenever the policy meaningfully changes
 // (CalOPPA requires an effective date).
 
-const LAST_UPDATED = "October 18, 2026";
+const LAST_UPDATED = "October 19, 2026";
 
 function H2({ children }: { children: React.ReactNode }) {
   return <h2 className="text-[1.25rem] font-bold tracking-[-0.01em] text-slate-900 mt-12 mb-3">{children}</h2>;
@@ -94,7 +94,7 @@ export default function PrivacyPage() {
 
         <H2>Information collected automatically</H2>
         <ul className="mb-3">
-          <LI><strong>View analytics:</strong> when someone opens a card or Swift Links page, we record the view with an approximate location (city/country derived from IP address by our hosting provider), the source (QR code, link, etc.), the site or app the link was opened from, basic device info as the visitor&apos;s browser reports it (for example the type of phone or computer, its operating system and browser), and how long the page stayed on screen. When the visitor&apos;s internet connection is registered to an organization&apos;s own network (for example a company, university, hospital or government office) rather than to an internet or mobile provider, we also record that organization&apos;s name. The card owner sees these details for each visit. We do not store visitors&apos; IP addresses with these views, and none of these details identify a visitor by name.</LI>
+          <LI><strong>View analytics:</strong> when someone opens a card or Swift Links page, we record the view with an approximate location (city/country worked out from the visitor&apos;s IP address by our hosting provider and an IP-location service, described below), the source (QR code, link, etc.), the site or app the link was opened from, basic device info as the visitor&apos;s browser reports it (for example the type of phone or computer, its operating system and browser), and how long the page stayed on screen. When the visitor&apos;s internet connection is registered to an organization&apos;s own network (for example a company, university, hospital or government office) rather than to an internet or mobile provider, we also record that organization&apos;s name. The card owner sees these details for each visit. We do not store visitors&apos; IP addresses with these views, and none of these details identify a visitor by name.</LI>
           <LI><strong>A visitor cookie:</strong> opening a card or Swift Links page sets a first-party cookie (used only by SwiftCard, lasting up to two years) so that one visit is counted once. On its own it identifies no one.</LI>
           <LI><strong>Return visits by people who shared their details:</strong> if you share your details through someone&apos;s card, or open a personal link a SwiftCard user sent you, we connect that browser&apos;s visitor cookie to the details you gave that person. When you open their card again, they can see that it was you, when, how often, and which of their links you tapped, and they may get a notification about it. We only connect a visit to you for the card owner you shared your details with or who sent you the link, never for anyone else. People who have never shared their details stay anonymous. (One exception you control: if you are signed in to your own SwiftCard account when you open someone&apos;s card, they see the name on your card.)</LI>
           <LI><strong>Product analytics:</strong> we record which parts of the app get used (for example: a card was started, a plan was chosen, an upgrade button was clicked) so we can improve it. These records are kept in our own systems, are not tied to your name or email, and are deleted after 90 days. We may also use PostHog for the same purpose. Product improvement only, never third-party advertising.</LI>
@@ -185,6 +185,12 @@ export default function PrivacyPage() {
             does not use it to train its models.
           </LI>
         </ul>
+        <P>
+          To place a visit or a shared contact on the map, we also send the visitor&apos;s IP address, and nothing else,
+          to an IP-location service (ipinfo.io, or ipwho.is when ipinfo.io is not set up), which returns an approximate
+          city and the name of the network. No name, card or contact detail goes with it, and we do not store the IP
+          address with the visit.
+        </P>
         <P>
           If you connect an integration yourself (Salesforce, GoHighLevel, Pipedrive, HubSpot, Google Contacts or Zapier), we send new contacts to that
           service because you asked us to. Disconnect anytime in Settings → Notifications and preferences. SwiftCard&apos;s use of
