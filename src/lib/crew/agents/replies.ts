@@ -93,7 +93,7 @@ export const redditReplies: AgentDef = {
   dailyUsd: 0.6,
   purpose: "Finds Reddit threads where SwiftCard would help, or people complaining about a competitor, and drafts a reply for you to post.",
   async run(ctx) {
-    return runEngagement(ctx, {
+    const r = await runEngagement(ctx, {
       platform: "reddit",
       kind: "reply",
       action: "reply",
@@ -104,11 +104,9 @@ export const redditReplies: AgentDef = {
       person: (c) => (c.author ? { platform: "reddit", handle: `u/${c.author}` } : null),
       async find() {
         const pasted = fromInputs(await ctx.store.takeInputs(["reddit"], 5, ctx.def.id), "reddit");
-        if (!redditConfigured()) {
-          ctx.log("Reddit API keys missing: using web search instead.");
-          const web = await searchPlatform(ctx, "reddit", TOPICS, 12);
-          return [...pasted, ...web.map((w) => ({ ...w, promoAllowed: false }))];
-        }
+        // Reddit blocks Anthropic's web search (seen live 2026-10-20), so
+        // without the Reddit API keys only pasted posts can be answered.
+        if (!redditConfigured()) return pasted;
         const subs = ctx.config<string[]>("subreddits", DEFAULT_SUBREDDITS);
         const queries = ctx.config<string[]>("queries", DEFAULT_QUERIES);
         const out: Candidate[] = [...pasted];
@@ -121,6 +119,7 @@ export const redditReplies: AgentDef = {
         return out;
       },
     });
+    return redditConfigured() ? r : { summary: `${r.summary} Searching Reddit needs the Reddit app keys (Reddit blocks AI web search); until then it only answers posts you paste in.` };
   },
 };
 

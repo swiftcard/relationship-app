@@ -1,12 +1,11 @@
 import type { AgentDef } from "../agent-def";
 import type { AgentContext } from "../context";
-import { parseJson } from "../context";
 import { mailtos, pageTitle, phonesIn, readSite, textOf } from "../leads/fetch-page";
 import { cleanEmails, leadsToday, recordLeads } from "../leads/record";
 import { emailsIn } from "../ledger";
 import { redditConfigured, searchSubreddits } from "../sources/reddit";
 import { syncLeadsToSheet } from "../sources/sheets";
-import { searchPlatform } from "../sources/web-discovery";
+import { searchItems, searchPlatform } from "../sources/web-discovery";
 import type { Lead, Platform } from "../types";
 
 // ── Team 3: Email lead scraping (list building only) ────────────────────────
@@ -58,17 +57,16 @@ export function queryAt(n: number): { type: string; city: string } {
 type Biz = { name: string; website: string; city?: string; state?: string };
 
 async function findBusinesses(ctx: AgentContext, type: string, city: string): Promise<Biz[]> {
-  const res = await ctx.llm.ask("discover", {
-    effort: "low",
-    maxTokens: 3000,
-    webSearch: { maxUses: 3 },
-    system: "You find local businesses' official websites from web search results. Only report businesses and URLs that appear in the results.",
-    prompt: `Find up to 15 ${type} in ${city} (not law firms). Reply with ONLY a JSON array (no prose): [{"name": string, "website": the business's own homepage URL (not a directory, not social media), "city": string, "state": two-letter code}].`,
+  const items = await searchItems<{ name: string; website: string; city: string; state: string }>(ctx, {
+    system: "You find local businesses' official websites from web search results.",
+    prompt: `Find ${type} in ${city} (not law firms). For each: name, website = the business's own website as shown in the results (never a directory, review site or social media; skip the business if its own site isn't in the results), city, state (two-letter code).`,
+    fields: ["name", "website", "city", "state"],
+    maxUses: 5,
+    want: 15,
   });
-  const arr = parseJson<Biz[]>(res.text.slice(Math.max(0, res.text.indexOf("[")), res.text.lastIndexOf("]") + 1)) ?? [];
-  return (Array.isArray(arr) ? arr : [])
-    .filter((b) => b && typeof b.website === "string" && /^https?:\/\//.test(b.website) && !/(yelp|facebook|instagram|linkedin|zillow|realtor\.com|yellowpages|bbb\.org|google|mapquest|angi|thumbtack|houzz|nextdoor)\./i.test(b.website))
-    .slice(0, 15);
+  return items
+    .filter((b) => /^https?:\/\//.test(b.website) && !/(yelp|facebook|instagram|linkedin|zillow|realtor\.com|yellowpages|bbb\.org|google|mapquest|angi|thumbtack|houzz|nextdoor)\./i.test(b.website))
+    .map((b) => ({ name: b.name, website: b.website, city: b.city || undefined, state: b.state || undefined }));
 }
 
 async function pool<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Promise<R[]> {

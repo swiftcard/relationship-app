@@ -21,8 +21,19 @@ function usageOf(u: Anthropic.Messages.Usage | Anthropic.Beta.Messages.BetaUsage
   };
 }
 
-function textOf(content: { type: string; text?: string }[]): string {
+/**
+ * The model's answer. With server tools (web search runs code to filter
+ * results) the reply interleaves narration ("results are dicts… retry") with
+ * tool calls; only the text after the LAST tool block is the answer. Citations
+ * split that answer into several text blocks, so those are joined.
+ */
+export function textOf(content: { type: string; text?: string }[]): string {
+  let start = 0;
+  content.forEach((b, i) => {
+    if (b.type !== "text" && b.type !== "thinking" && b.type !== "redacted_thinking") start = i + 1;
+  });
   return content
+    .slice(start)
     .filter((b) => b.type === "text")
     .map((b) => b.text ?? "")
     .join("")

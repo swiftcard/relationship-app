@@ -15,35 +15,62 @@ const DOMAINS: Partial<Record<Platform, string[]>> = {
   indiehackers: ["indiehackers.com"],
   linkedin: ["linkedin.com"],
   instagram: ["instagram.com"],
-  reddit: ["reddit.com"],
 };
 
-const SCHEMA_HINT = `Reply with ONLY a JSON array (no prose, no code fence) of up to {N} objects: {"url": string, "author": string or null, "title": string, "text": string (the post's own words from the search result, max 400 chars), "community": string or null}. Only include real posts you found in the search results, from the last 30 days if dates are shown. Never invent a URL.`;
+/** Live-tested 2026-10-20: asking for free-form JSON with web search came back
+ *  in pieces around the search steps (or as "[]"). A required JSON shape
+ *  (structured output) always arrives as one valid block, so every web-search
+ *  agent goes through here. */
+export async function searchItems<T extends Record<string, string>>(
+  ctx: AgentContext,
+  o: { system: string; prompt: string; fields: (keyof T & string)[]; domains?: string[]; maxUses?: number; want?: number },
+): Promise<T[]> {
+  const want = o.want ?? 10;
+  const out = await ctx.llm.askJson<{ items: T[] }>("discover", {
+    // Medium, not low: at low effort the search gave up after one failed
+    // filtering step and answered with nothing.
+    effort: "medium",
+    maxTokens: 6000,
+    // The search step re-runs queries inside its own filtering code, which
+    // uses up searches; 3 often ran out with only a few results (seen live).
+    webSearch: { maxUses: o.maxUses ?? 6, ...(o.domains ? { allowedDomains: o.domains } : {}) },
+    system: `${o.system} Only report what the search results actually show; never invent a URL. Use an empty string for anything the results don't show.`,
+    prompt: `${o.prompt}\nFind as many as you can, up to ${want}; if a search finds few, try up to two different searches before answering.`,
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["items"],
+      properties: {
+        items: {
+          type: "array",
+          items: { type: "object", additionalProperties: false, required: o.fields, properties: Object.fromEntries(o.fields.map((f) => [f, { type: "string" }])) },
+        },
+      },
+    },
+  });
+  return (out?.items ?? []).slice(0, want);
+}
+
+export function onDomain(url: string, domains: string[]): boolean {
+  try {
+    const h = new URL(url).hostname;
+    return domains.some((d) => h === d || h.endsWith(`.${d}`));
+  } catch {
+    return false;
+  }
+}
 
 export async function searchPlatform(ctx: AgentContext, platform: Platform, topics: string[], n = 12): Promise<FoundPost[]> {
   const domains = DOMAINS[platform];
   if (!domains) return [];
-  const res = await ctx.llm.ask("discover", {
-    effort: "low",
-    maxTokens: 4000,
-    webSearch: { maxUses: 4, allowedDomains: domains },
-    system: "You find recent public posts for a small company's staff to read and answer by hand. You only report what the search results actually show.",
-    prompt: `Search ${domains[0]} for recent public posts where someone asks about or complains about any of these topics:\n${topics.map((t) => `- ${t}`).join("\n")}\n\n${SCHEMA_HINT.replace("{N}", String(n))}`,
+  const items = await searchItems<{ url: string; author: string; title: string; text: string; community: string }>(ctx, {
+    system: "You find recent public posts for a small company's staff to read and answer by hand.",
+    prompt: `Search ${domains[0]} for recent public posts or profiles about any of these topics:\n${topics.map((t) => `- ${t}`).join("\n")}\nFor each: url, author (name or handle), title, text (the post's own words from the result, under 400 characters), community (group or subreddit, or empty).`,
+    fields: ["url", "author", "title", "text", "community"],
+    domains,
+    want: n,
   });
-  const arr = parseArray(res.text);
-  return arr
-    .filter((x) => typeof x.url === "string" && domains.some((d) => new URL(x.url).hostname.endsWith(d)))
-    .map((x) => ({ platform, url: x.url, author: typeof x.author === "string" ? x.author : null, title: String(x.title ?? "").slice(0, 200), text: String(x.text ?? "").slice(0, 600), community: typeof x.community === "string" ? x.community : null }));
-}
-
-function parseArray(text: string): { url: string; author?: unknown; title?: unknown; text?: unknown; community?: unknown }[] {
-  const s = text.indexOf("[");
-  const e = text.lastIndexOf("]");
-  if (s === -1 || e <= s) return [];
-  try {
-    const v = JSON.parse(text.slice(s, e + 1));
-    return Array.isArray(v) ? v.filter((x) => x && typeof x === "object") : [];
-  } catch {
-    return [];
-  }
+  return items
+    .filter((x) => onDomain(x.url, domains))
+    .map((x) => ({ platform, url: x.url, author: x.author || null, title: x.title.slice(0, 200), text: x.text.slice(0, 600), community: x.community || null }));
 }

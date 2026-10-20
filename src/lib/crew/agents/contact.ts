@@ -73,7 +73,8 @@ export const redditDms: AgentDef = {
       person: (c) => (c.author ? { platform: "reddit", handle: `u/${c.author}` } : null),
       async find() {
         const out: Candidate[] = pasted(await ctx.store.takeInputs(["reddit"], 3, ctx.def.id), "reddit");
-        if (!redditConfigured()) return [...out, ...(await searchPlatform(ctx, "reddit", ["asking for a link in bio tool or digital business card app", "complaining about Linktree, HiHello, Blinq, Popl or Link.me price"], 10)).map((w) => ({ ...w, promoAllowed: true }))];
+        // Reddit blocks Anthropic's web search: without the API keys, pasted posts only.
+        if (!redditConfigured()) return out;
         for (const q of REDDIT_DM_QUERIES) {
           for (const p of await searchSubreddits(ctx.config<string[]>("subreddits", DEFAULT_SUBREDDITS), q, 10)) {
             out.push({ platform: "reddit", url: p.url, author: p.author, title: p.title, text: p.text, community: p.subreddit, promoAllowed: true });

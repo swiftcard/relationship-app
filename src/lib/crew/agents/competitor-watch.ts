@@ -22,7 +22,20 @@ export const COMPETITOR_DOMAINS: Record<Competitor, string[]> = {
 
 type Found = { facts: { fact: string; value: string; source_url: string }[]; new_features: string[] };
 
-const SCHEMA_HINT = `Reply with ONLY a JSON object (no prose, no code fence):
+const FOUND_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["facts", "new_features"],
+  properties: {
+    facts: {
+      type: "array",
+      items: { type: "object", additionalProperties: false, required: ["fact", "value", "source_url"], properties: { fact: { type: "string" }, value: { type: "string" }, source_url: { type: "string" } } },
+    },
+    new_features: { type: "array", items: { type: "string" } },
+  },
+};
+
+const SCHEMA_HINT = `Return:
 {"facts": [{"fact": snake_case key such as "free_plan", "paid_plan_monthly_price", "paid_plan_annual_price", "team_plan_price", "trial", "nfc_card_price", "link_in_bio", "contact_capture", "crm_sync"], "value": short plain text exactly as their site states it, "source_url": the page you read it on}],
  "new_features": [short plain sentences about anything announced in the last 30 days]}
 Only use what their own pages say. If you can't find a fact, leave it out. Never estimate a price.`;
@@ -51,14 +64,16 @@ export const competitorWatch: AgentDef = {
     let checked = 0;
     for (const c of COMPETITORS) {
       const domains = COMPETITOR_DOMAINS[c];
-      const res = await ctx.llm.ask("research", {
-        effort: "low",
-        maxTokens: 3000,
+      // A required JSON shape: free-form JSON with web search arrived in
+      // pieces around the search steps when tested live (2026-10-20).
+      const found = await ctx.llm.askJson<Found>("research", {
+        effort: "medium",
+        maxTokens: 4000,
         webSearch: { maxUses: 3, allowedDomains: domains },
         system: "You check a competitor's public pricing and feature pages for a small company. Report only what their own site says, with the page URL.",
         prompt: `Competitor: ${COMPETITOR_NAME[c]} (${domains.join(", ")}). Find their current plans and prices, and any feature announced in the last 30 days.\n\n${SCHEMA_HINT}`,
+        schema: FOUND_SCHEMA,
       });
-      const found = parseFound(res.text);
       if (!found) {
         lines.push(`- ${COMPETITOR_NAME[c]}: could not read their site this time.`);
         continue;
@@ -100,17 +115,5 @@ function safeHost(u: string): string {
     return new URL(u).hostname;
   } catch {
     return "";
-  }
-}
-
-function parseFound(text: string): Found | null {
-  const s = text.indexOf("{");
-  const e = text.lastIndexOf("}");
-  if (s === -1 || e <= s) return null;
-  try {
-    const v = JSON.parse(text.slice(s, e + 1)) as Partial<Found>;
-    return { facts: Array.isArray(v.facts) ? v.facts.filter((f) => f && typeof f === "object") : [], new_features: Array.isArray(v.new_features) ? v.new_features.map(String) : [] };
-  } catch {
-    return null;
   }
 }

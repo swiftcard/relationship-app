@@ -1,6 +1,5 @@
 import type { AgentDef } from "../agent-def";
 import type { AgentContext } from "../context";
-import { parseJson } from "../context";
 import { propose } from "../approvals";
 import { debate } from "../debate";
 import { productFacts } from "../facts";
@@ -9,6 +8,7 @@ import { pageTitle, phonesIn, readSite, textOf } from "../leads/fetch-page";
 import { cleanEmails, recordLeads } from "../leads/record";
 import { nyDayStart } from "../schedule";
 import { syncLeadsToSheet } from "../sources/sheets";
+import { searchItems } from "../sources/web-discovery";
 import type { Lead } from "../types";
 import { HUMAN_VOICE } from "../voice";
 
@@ -84,16 +84,14 @@ export function officeLeads(site: Site, found: People | undefined): Lead[] {
 }
 
 async function findOffices(ctx: AgentContext, type: string, area: string): Promise<{ name: string; website: string }[]> {
-  const res = await ctx.llm.ask("discover", {
-    effort: "low",
-    maxTokens: 3000,
-    webSearch: { maxUses: 3 },
-    system: "You find businesses' official websites from web search results. Only report what the results show.",
-    prompt: `Find up to 12 ${type} in ${area}, New York City, that have a team of agents or staff (not law firms). Reply with ONLY a JSON array: [{"name": string, "website": the business's own homepage URL (not a directory or social media)}].`,
+  const items = await searchItems<{ name: string; website: string }>(ctx, {
+    system: "You find businesses' official websites from web search results.",
+    prompt: `Find ${type} in ${area}, New York City, that have a team of agents or staff (not law firms). For each: name, and website = the URL from the results where this team is presented: its own website if shown, otherwise its team or agent page on its brokerage's site (for example compass.com/agents/..., elliman.com/team/...). Never a directory, listing site or social media. Skip any team with no URL in the results.`,
+    fields: ["name", "website"],
+    maxUses: 6,
+    want: 12,
   });
-  const s = res.text.indexOf("[");
-  const arr = s === -1 ? null : parseJson<{ name: string; website: string }[]>(res.text.slice(s, res.text.lastIndexOf("]") + 1));
-  return (Array.isArray(arr) ? arr : []).filter((b) => typeof b?.website === "string" && /^https?:\/\//.test(b.website) && !/(yelp|facebook|instagram|linkedin|zillow|streeteasy|realtor\.com|google)\./i.test(b.website));
+  return items.filter((b) => /^https?:\/\//.test(b.website) && !/(yelp|facebook|instagram|linkedin|zillow|streeteasy|realtor\.com|google)\./i.test(b.website));
 }
 
 export const officeOutreach: AgentDef = {
