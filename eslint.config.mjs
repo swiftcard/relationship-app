@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Xcode / Gradle output (gitignored): vendored third-party JS that a local
+    // iOS or Android build leaves behind, which failed the pre-push lint.
+    "ios/build/**",
+    "android/**/build/**",
   ]),
 ]);
 
