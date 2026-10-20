@@ -1,4 +1,5 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
+import { reportError } from "@/lib/report-error";
 import { isOfficePlan } from "@/lib/plan";
 
 // ── Office "team inbox" notifications ────────────────────────────────────────
@@ -63,22 +64,34 @@ export async function officeIsLive(officeId: string): Promise<boolean> {
 // Emit one important team-inbox notification. Best-effort: a failure here must
 // never break the action that triggered it (join, decline, …). Service-role.
 // Only for a LIVE team (officeIsLive): a lapsed team's inbox can't be opened.
+//
+// TRUE only when the row was written. For several team alerts this row IS the
+// once-only ledger (a milestone, a first lead, members with no card, an
+// expired invite): the next hourly check looks for it. The insert's {error}
+// used to go unread and the push went out regardless, so a failed write meant
+// the same push every hour (audit NM-10).
 export async function notifyOffice(
   officeId: string,
   n: { type: OfficeNotificationType; title: string; body?: string | null; meta?: Record<string, unknown> },
-): Promise<void> {
-  if (!officeId) return;
-  if (!(await officeIsLive(officeId))) return;
+): Promise<boolean> {
+  if (!officeId) return false;
+  if (!(await officeIsLive(officeId))) return false;
   try {
-    await getAdminSupabase().from("office_notifications").insert({
+    const { error } = await getAdminSupabase().from("office_notifications").insert({
       office_id: officeId,
       type: n.type,
       title: n.title,
       body: n.body ?? null,
       meta: n.meta ?? null,
     });
+    if (error) {
+      await reportError("office-notify.insert", new Error(error.message), { officeId, type: n.type }).catch(() => {});
+      return false;
+    }
+    return true;
   } catch {
     /* best-effort — never block the triggering action on a notification write */
+    return false;
   }
 }
 

@@ -145,7 +145,7 @@ export async function DELETE(req: Request) {
     // older schemas — must never block the critical plan revert above).
     await supabase.from("profiles").update({ plan_expires_at: null }).eq("id", member.user_id);
     // Tell them. Every AUTOMATED way off a team says so in the bell
-    // (office_seat_trimmed, office_subscription_ended, office_plan_downgraded);
+    // (all written as office_plan_downgraded since audit NM-06);
     // an admin pressing Remove was the one path that said nothing — the
     // person's card, QR, NFC tag and wallet pass went dark in silence (2026-09-23
     // audit). Same type and words as the teardown cascade, bell only.

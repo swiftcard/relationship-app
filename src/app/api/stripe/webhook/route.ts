@@ -1181,9 +1181,12 @@ export async function POST(req: NextRequest) {
               // Removed because the office's seat count shrank — tell them
               // why their access just changed (billing audit: members
               // previously got no notification of any kind).
+              // One type for every automated "access ended" (audit NM-06): a
+              // seat trim and then the subscription ending used to write two
+              // identical-looking rows, because the 10-minute dedupe keys on type.
               await insertNotification({
                 user_id: m.user_id,
-                type: "office_seat_trimmed",
+                type: "office_plan_downgraded",
                 title: "Your Office access ended",
                 body: officeAccessEndedMessage(fallback),
               }).catch(() => {});
@@ -1341,7 +1344,7 @@ export async function POST(req: NextRequest) {
               // got no notification of any kind).
               await insertNotification({
                 user_id: m.user_id,
-                type: "office_subscription_ended",
+                type: "office_plan_downgraded", // one type for the same news (NM-06)
                 title: "Your Office access ended",
                 body: officeAccessEndedMessage(fallback),
               }).catch(() => {});

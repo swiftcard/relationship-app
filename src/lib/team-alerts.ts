@@ -118,8 +118,11 @@ export function teamPushTag(type: OfficeNotificationType, meta?: Record<string, 
  */
 export async function alertTeam(officeId: string, alert: TeamAlert): Promise<void> {
   if (!officeId) return;
-  await notifyOffice(officeId, { type: alert.type, title: alert.title, body: alert.body, meta: alert.meta });
-  if (!alert.push) return;
+  // No row, no push: the row is what stops the next hourly check repeating
+  // this alert, so a push without one would ring every hour (audit NM-10).
+  // The next check retries both together.
+  const written = await notifyOffice(officeId, { type: alert.type, title: alert.title, body: alert.body, meta: alert.meta });
+  if (!alert.push || !written) return;
   try {
     const admin = getAdminSupabase();
     const [{ data: office }, recipients] = await Promise.all([

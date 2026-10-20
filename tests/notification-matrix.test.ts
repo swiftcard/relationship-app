@@ -46,6 +46,13 @@ const ROWS: Row[] = [
   { id: "subReminder", type: "personal_sub_reminder", title: "You still have a personal Pro subscription", body: "Cancel it in Plan and billing." },
   { id: "joined", type: "office_joined", title: "You joined Harbor Realty", body: "Your card is part of the team now." },
   { id: "brand", type: "office_brand_updated", title: "Team branding updated", body: "Your card picked up the new look." },
+  // Types no test named until audit NM-08; now every sweep below runs on them.
+  { id: "engaged", type: "contact_engaged", title: `${DANA} tapped your LinkedIn link`, body: `${DANA} re-opened your card and tapped your LinkedIn link.`, lead_id: "L3" },
+  { id: "sigStale", type: "signature_stale", title: "Update your email signature", body: "You changed your card — re-copy your Swift Signature so the version in your email matches." },
+  { id: "accessEnded", type: "office_plan_downgraded", title: "Your Office access ended", body: "Your team's Office plan changed, so your account moved to a Free plan. The company branding came off your card, and your card and contacts are yours — manage them in Settings → Cards and sharing. Reach out to your team admin if this was unexpected." },
+  { id: "accessBack", type: "office_restored", title: "Your Office access is back", body: "Your team's plan is active again, so your company card and your team's tools are back to normal." },
+  { id: "offline", type: "card_taken_offline", title: "Your team admin took your card offline", body: "Your card link, QR code and NFC taps show nothing for now. Ask your team admin if you need it turned back on." },
+  { id: "online", type: "card_brought_online", title: "Your card is back online", body: "Your team admin turned your card back on — your link, QR code and NFC taps work again." },
 ];
 
 type Persona = { name: string; paid: boolean; reader: NotificationReader };
@@ -103,10 +110,12 @@ describe("the notification matrix", () => {
         if (p.paid) {
           expect(byId(bell, "locked").lead_id).toBe("L2");
           expect(byId(bell, "back").lead_id).toBe("L3");
+          expect(byId(bell, "engaged").lead_id).toBe("L3");
         } else {
           // The blur would be one tap from undone.
           expect(byId(bell, "locked").lead_id).toBeUndefined();
           expect(byId(bell, "back").lead_id).toBeUndefined();
+          expect(byId(bell, "engaged").lead_id).toBeUndefined();
         }
       });
 
