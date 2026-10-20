@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ImageUpload from "@/components/ImageUpload";
 import ProfilePhotoSuggest from "@/components/ProfilePhotoSuggest";
@@ -22,6 +22,8 @@ import { useDesignHistory, useUndoShortcut, changedKeys, linkLooksOf, restoreLin
 // with everything prefilled, so the visitor walks through card creation +
 // account setup from the beginning.
 
+/** "Name your SwiftLink" — where the profile photo and its LinkedIn button are. */
+const PHOTO_STEP = 0;
 
 export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { linkedinEnabled?: boolean }) {
   const router = useRouter();
@@ -30,7 +32,8 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
   const [launching, setLaunching] = useState(false);
   const [fullPreview, setFullPreview] = useState(false);
   const closeFullPreview = useCallback(() => setFullPreview(false), []);
-  const { sketch, patch, patchLinkStyle, patchSocial, handOff, reset, linkedInReturn } = useProductSketch("swiftlink", open);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const { sketch, patch, patchLinkStyle, patchSocial, handOff, reset, linkedInReturn, photoAdjustKey, holdForHop } = useProductSketch("swiftlink", open);
 
   // Undo on "Style your page" — the same one Social design has
   // (lib/use-design-history). Recorded only while that step is showing: what
@@ -44,11 +47,14 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
   );
   useUndoShortcut(open && step === DESIGN_STEP, history);
   // Back from the guest LinkedIn photo import (see readGuestLinkedInReturn):
-  // re-open on the first step WITHOUT reset, so the stashed sketch and the
-  // photo just connected for are both there.
+  // re-open WITHOUT reset on the step the Connect button lives on (the profile
+  // photo is on the first step here), with the photo opened in the crop tool.
+  // The page behind is brought to this section, not left at the top.
   useEffect(() => {
+    if (!linkedInReturn) return;
+    triggerRef.current?.scrollIntoView({ block: "center" });
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time re-open after the LinkedIn hop
-    if (linkedInReturn) { setStep(0); setOpen(true); }
+    setStep(PHOTO_STEP); setOpen(true);
   }, [linkedInReturn]);
 
 
@@ -122,8 +128,8 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
           </div>
           <div className="pt-1">
             <span className="block text-slate-500 text-[0.75rem] font-medium mb-1.5">Profile photo</span>
-            <ImageUpload guest field="photo" shape="circle" currentUrl={sketch.headshot} label="" onUploaded={(u) => patch({ headshot: u || null })} />
-            <ProfilePhotoSuggest guest email={sketch.email} linkedinEnabled={linkedinEnabled} returnTo="/?builder=swiftlink" onConfirm={(u) => patch({ headshot: u })} />
+            <ImageUpload guest field="photo" shape="circle" currentUrl={sketch.headshot} label="" adjustKey={photoAdjustKey} onUploaded={(u) => patch({ headshot: u || null })} />
+            <ProfilePhotoSuggest guest email={sketch.email} linkedinEnabled={linkedinEnabled} returnTo="/?builder=swiftlink" beforeLeave={holdForHop} onConfirm={(u) => patch({ headshot: u })} />
             {/* Only used to look your headshot up — never shown on the page. */}
             <Field label="Email (only used to find your headshot)" type="email" placeholder="alex@morganco.com" value={sketch.email} onChange={(e) => patch({ email: e.target.value })} />
           </div>
@@ -193,6 +199,7 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => { reset(); history.clear(); setStep(0); setOpen(true); }}
         className="rd-btn rd-btn-aurora rd-btn-lg mt-2"

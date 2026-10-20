@@ -38,7 +38,7 @@ import SocialHandleField from "@/components/SocialHandleField";
 import AddLinkForm from "@/components/AddLinkForm";
 import FormSection from "@/components/ui/FormSection";
 import { cardSlug, prettyCardSlug } from "@/lib/slug";
-import { useGuestDraft, draftHasWork, draftStore, accountDraftKey, GUEST_DRAFT_KEY, type GuestDraft } from "@/lib/guest-draft";
+import { useGuestDraft, draftHasWork, draftStore, accountDraftKey, officeHopDraftKey, GUEST_DRAFT_KEY, type GuestDraft } from "@/lib/guest-draft";
 import { resetMarketingSketch } from "@/lib/guest-reset";
 import { consumePrefill, hasSketchContent, PREFILL_STYLE_KEYS, PREFILL_LINK_STYLE_KEYS, PREFILL_CARD_MEDIA_KEYS, PREFILL_LINK_MEDIA_KEYS, type CardPrefill } from "@/lib/prefill";
 // Shared with the edit form + server so a social typed here connects to the
@@ -92,6 +92,14 @@ const inputCls =
 // <button> on steps 2–4, and a button would otherwise show the plain arrow
 // cursor while the link shows a hand. Same control, same place — it has to feel
 // the same on every step.
+
+/** This page load is LinkedIn handing the headshot import back. */
+function backFromLinkedIn(): boolean {
+  if (typeof window === "undefined") return false;
+  const sp = new URLSearchParams(window.location.search);
+  return sp.has("li_photo") || sp.get("integration") === "linkedin";
+}
+
 // Is this page load the SAME builder visit carrying on, rather than a fresh
 // entry from a button? Those resume an unfinished card without asking:
 //   • ?claim=1 — back from the account gate (login / sign-up) for this draft
@@ -248,9 +256,20 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
   // away (2026-09-22 signup review). Never for an Office member — their company
   // half comes from the organization, and restoring over it would undo that.
   const canDraft = guest || (!!draftOwner && !org);
+  // An Office member's card is still written as they build — under a key that
+  // only the LinkedIn photo hop reads back (officeHopDraftKey). That gives them
+  // the same one-tab round trip as everyone else; they were the last ones on
+  // the consent POPUP, which a phone opens as a second tab that LinkedIn's
+  // sign-in cuts off from this page (lib/linkedin-popup).
+  const officeHop = !guest && !!draftOwner && !!org;
+  const keepsDraft = canDraft || officeHop;
   const drafts = useMemo(
-    () => draftStore(guest || !draftOwner ? GUEST_DRAFT_KEY : accountDraftKey(draftOwner)),
-    [guest, draftOwner],
+    () => draftStore(
+      guest || !draftOwner ? GUEST_DRAFT_KEY
+        : officeHop ? officeHopDraftKey(draftOwner)
+        : accountDraftKey(draftOwner),
+    ),
+    [guest, draftOwner, officeHop],
   );
   // A mini-builder sketch that arrived while that question was open.
   const heldPrefillRef = useRef<CardPrefill | null>(null);
@@ -957,21 +976,49 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
   // applied at the END of the restore so a resumed draft's older photo can't
   // overwrite the one the user just connected for.
   const liPhotoRef = useRef<string | null>(null);
+  // Bumped with each LinkedIn photo applied: the headshot tile opens it in the
+  // crop tool (ImageUpload adjustKey), so it is fitted before it is kept.
+  const [photoAdjustKey, setPhotoAdjustKey] = useState(0);
   const applyLiPhoto = () => {
     if (liPhotoRef.current) {
       setHeadshotUrl(liPhotoRef.current);
+      setPhotoAdjustKey((k) => k + 1);
       liPhotoRef.current = null;
     }
   };
 
+  // The office's own values win over anything restored — the held card was
+  // written from this same form seconds ago, so they should already match, but
+  // the company half is never the member's to change.
+  function keepOrgFields() {
+    if (orgCompany) setCompany(orgCompany);
+    if (orgWebsite) setWebsite(orgWebsite);
+    if (orgFax) setFax(orgFax);
+    if (orgAddress) setAddress({ ...EMPTY_ADDRESS, ...orgAddress });
+    if (orgLogo) setLogoUrl(orgLogo);
+  }
+
   useEffect(() => {
-    if (!canDraft) { hydratedRef.current = true; applyLiPhoto(); return; }
+    if (!keepsDraft) { hydratedRef.current = true; applyLiPhoto(); return; }
     let live = true;
     // Async so the setState calls aren't synchronous inside the effect body;
     // the autosave effect below runs first and no-ops on !hydratedRef.
     (async () => {
       const draft = drafts.load();
       if (!live) return;
+
+      // An Office member's held card exists only for the LinkedIn hop: put it
+      // back when LinkedIn has just returned them, drop it on any other visit.
+      if (officeHop) {
+        drafts.clear();
+        if (draft && draftHasWork(draft) && backFromLinkedIn()) {
+          restoreDraft(draft);
+          keepOrgFields();
+        }
+        hydratedRef.current = true;
+        applyLiPhoto();
+        return;
+      }
 
       if (draft && draftHasWork(draft)) {
         // A reload, the browser Back button, the login return and the LinkedIn
@@ -997,7 +1044,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
     // validPresetTemplate is read as a snapshot of the URL this page opened
     // with; it can't change without a navigation that remounts the wizard.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [guest, canDraft, drafts]);
+  }, [guest, keepsDraft, drafts]);
 
   // ── "Continue your card" / "Start a new card" ─────────────────────────────
   // Owner rule 2026-09-16: every "Get started free"-style button on the site
@@ -1127,7 +1174,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
   }, []);
 
   useEffect(() => {
-    if (!canDraft) return;
+    if (!keepsDraft) return;
     // Never write before the restore has run, or the empty first render wipes
     // the very draft we're about to load.
     if (!hydratedRef.current) return;
@@ -1167,7 +1214,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
         ...(headshotUrl ? { photo: headshotUrl } : {}),
       },
     });
-  }, [guest, canDraft, drafts, step, username, cardLabel, name, company, title, primaryPhone, email, website,
+  }, [guest, keepsDraft, drafts, step, username, cardLabel, name, company, title, primaryPhone, email, website,
       socials, template, bio, links, address, cleanPhones, fax, templateStyleState,
       linkStyleState, customLayout, logoUrl, headshotUrl, showCardLinkBtn, logoShape]);
 
@@ -2203,22 +2250,22 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                   shape="circle"
                   defer
                   guest={guest}
+                  adjustKey={photoAdjustKey}
                   onUploaded={(url) => setHeadshotUrl(url || null)}
                 />
                 {/* Gravatar/web lookup works from the typed email pre-account;
-                    a guest's Connect LinkedIn runs the one-shot guest OAuth
-                    photo import and returns here via ?li_photo= (see the effect
-                    above) — their draft stays local the whole time. A signed-in
-                    builder with its own draft (canDraft) takes that same round
-                    trip: the draft is written first, and the hop is refused if
-                    it can't be. Only an Office member (no draft) still uses the
-                    popup that keeps this page alive. */}
+                    Connect LinkedIn runs the one-shot photo import for EVERY
+                    builder — guest, Free, Pro, Office owner and Office member —
+                    and returns here via ?li_photo= (see the effect above), on
+                    the step they left, with the photo open in the crop tool.
+                    The card is written first (an Office member's under the
+                    hop-only key), and the hop is refused if it can't be. */}
                 <ProfilePhotoSuggest
                   linkedinEnabled={linkedinEnabled}
                   returnTo={photoReturnTo}
                   guest={guest}
                   email={email}
-                  photoReturn={canDraft}
+                  photoReturn={keepsDraft}
                   beforeLeave={() => drafts.flush()}
                   onConfirm={(url) => setHeadshotUrl(url)}
                 />

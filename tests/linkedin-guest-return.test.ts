@@ -60,8 +60,11 @@ describe("every homepage builder is wired the same way", () => {
     expect(src).toContain(`useProductSketch("${product}", open)`);
     expect(src).toContain(`returnTo="/?builder=${product}"`);
     expect(src).toContain("linkedInReturn");
-    // Re-open keeps the stashed sketch: no reset() on this path.
-    expect(src).toMatch(/if \(linkedInReturn\) \{ setStep\(0\); setOpen\(true\); \}/);
+    // Re-open keeps the stashed sketch: no reset() on this path — and it opens
+    // on the photo step, where the Connect button was (2026-10-19).
+    const reopen = src.slice(src.indexOf("if (!linkedInReturn) return;"), src.indexOf("}, [linkedInReturn]);"));
+    expect(reopen).toMatch(/setStep\(PHOTO_STEP\); setOpen\(true\);/);
+    expect(reopen).not.toMatch(/reset\(\)/);
   });
 
   it("a builder's guest=1 connect always comes back as a photo, even for a signed-in visitor", () => {

@@ -25,6 +25,11 @@ type Props = {
       as the preview and rides along in the guest draft's `images` map until the
       draft is claimed and the real upload happens under the new account. */
   guest?: boolean;
+  /** Bumped by the page when it has just applied a photo from OUTSIDE this
+      tile (the LinkedIn import coming back). Each new value scrolls the tile
+      into view and opens the crop tool on `currentUrl`, so the visitor fits it
+      and taps Apply — Cancel keeps the photo as it came. */
+  adjustKey?: number;
   onUploaded: (url: string) => void;
 };
 
@@ -70,8 +75,9 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   });
 }
 
-export default function ImageUpload({ field, currentUrl, label, hint, shape = "square", cardId, defer, large, guest, onUploaded }: Props) {
+export default function ImageUpload({ field, currentUrl, label, hint, shape = "square", cardId, defer, large, guest, adjustKey, onUploaded }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState<string | null>(currentUrl);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
@@ -164,10 +170,10 @@ export default function ImageUpload({ field, currentUrl, label, hint, shape = "s
   // only way to reframe one was to find the file and upload it again. The
   // image is pulled as a blob first: react-image-crop draws it on a canvas,
   // which a cross-origin <img> would taint (our storage answers CORS).
-  async function adjustCurrent() {
-    if (!preview || uploadStatus === "uploading") return;
+  async function adjustCurrent(url: string | null = preview) {
+    if (!url || uploadStatus === "uploading") return;
     try {
-      const res = await fetch(preview, { mode: "cors" });
+      const res = await fetch(url, { mode: "cors" });
       if (!res.ok) throw new Error("fetch");
       const blob = await res.blob();
       if (rawSrc) URL.revokeObjectURL(rawSrc);
@@ -179,6 +185,22 @@ export default function ImageUpload({ field, currentUrl, label, hint, shape = "s
       setUploadStatus("error");
     }
   }
+
+  // The page just applied a photo from outside (LinkedIn) — open it in the crop
+  // tool. Two frames late so it lands after any scroll-to-top the page does on
+  // the same render (the card wizard resets scroll when its step changes, and a
+  // return restores the step), then the photo is centred under the cropper.
+  useEffect(() => {
+    if (!adjustKey || !currentUrl) return;
+    const url = currentUrl;
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      void adjustCurrent(url);
+      inner = requestAnimationFrame(() => rootRef.current?.scrollIntoView({ block: "center" }));
+    });
+    return () => { cancelAnimationFrame(outer); cancelAnimationFrame(inner); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per adjustKey; currentUrl is read as this render's value
+  }, [adjustKey]);
 
   async function handleRemove() {
     // Persisted images (account photo/logo, or a saved card logo) are cleared
@@ -223,7 +245,7 @@ export default function ImageUpload({ field, currentUrl, label, hint, shape = "s
       )}
 
       {/* Normal upload widget */}
-      <div>
+      <div ref={rootRef}>
         <label className="text-xs text-gray-500 block mb-1">{label}</label>
         {hint && <p className="text-[0.6875rem] text-gray-500 mb-2 leading-snug">{hint}</p>}
         <div className="flex items-center gap-4">
@@ -270,7 +292,7 @@ export default function ImageUpload({ field, currentUrl, label, hint, shape = "s
               {preview && uploadStatus !== "uploading" && (
                 <button
                   type="button"
-                  onClick={adjustCurrent}
+                  onClick={() => adjustCurrent()}
                   className="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors"
                 >
                   Adjust

@@ -159,6 +159,16 @@ export function accountDraftKey(userId: string): string {
   return `swiftcard_card_draft:${userId}`;
 }
 
+/**
+ * An Office member's card, held ONLY across the LinkedIn photo hop. Members
+ * keep no unfinished-card draft (their company half belongs to the office), so
+ * this is written the moment they leave for LinkedIn, read back once when
+ * LinkedIn returns them, and thrown away on any other visit.
+ */
+export function officeHopDraftKey(userId: string): string {
+  return `swiftcard_card_hop:${userId}`;
+}
+
 const guestStore = draftStore(GUEST_DRAFT_KEY);
 
 export function loadDraft(): GuestDraft | null {

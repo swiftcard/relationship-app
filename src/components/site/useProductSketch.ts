@@ -188,9 +188,13 @@ function fromPrefill(p: CardPrefill): Sketch {
 // 2026-09-22: "LinkedIn profile pictures do not connect properly").
 //
 // Each builder now returns to /?builder=<product>. This reads that back: the
-// matching builder re-opens with the sketch it stashed before the hop, and the
-// photo is applied on top. Only our own storage host is accepted — the param
-// is never trusted blind (same rule as the wizard's reader).
+// matching builder re-opens ON ITS PHOTO STEP with the sketch it stashed before
+// the hop, the photo is applied on top and opened in the crop tool. Only our
+// own storage host is accepted — the param is never trusted blind (same rule
+// as the wizard's reader). The card builder sits in the lazily-built template
+// gallery, which builds itself at once for a ?builder=card return (HomeLazy) —
+// otherwise nothing read this until the visitor scrolled down to it, and they
+// were left at the top of the homepage with no photo (2026-10-19).
 export function readGuestLinkedInReturn(
   search: string,
   product: CardPrefill["product"],
@@ -207,6 +211,9 @@ export function useProductSketch(product: CardPrefill["product"], open: boolean)
   const [sketch, setSketch] = useState<Sketch>(EMPTY_SKETCH);
   const [linkedInReturn, setLinkedInReturn] = useState(false);
   const [returnedPhoto, setReturnedPhoto] = useState<string | null>(null);
+  // Bumped when that photo lands on the sketch: the builder hands it to the
+  // headshot tile (ImageUpload adjustKey), which opens it in the crop tool.
+  const [photoAdjustKey, setPhotoAdjustKey] = useState(0);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -252,7 +259,10 @@ export function useProductSketch(product: CardPrefill["product"], open: boolean)
       const base = prev === EMPTY_SKETCH && carried ? fromPrefill(carried) : prev;
       return photo ? { ...base, headshot: photo } : base;
     });
-    if (photo) setReturnedPhoto(null);
+    if (photo) {
+      setReturnedPhoto(null);
+      setPhotoAdjustKey((k) => k + 1);
+    }
   }, [open, returnedPhoto]);
 
   // Keep the shared sketch current as they type, so ANY other entry point
@@ -280,5 +290,12 @@ export function useProductSketch(product: CardPrefill["product"], open: boolean)
     resetMarketingSketch();
   }, []);
 
-  return { sketch, patch, patchStyle, patchLinkStyle, patchSocial, handOff, reset, linkedInReturn };
+  // Right before the LinkedIn hop (ProfilePhotoSuggest beforeLeave): write the
+  // sketch now and say whether it landed. The autosave above swallows a failed
+  // write — harmless while the page stays, but across the hop it is the whole
+  // card (uploaded photos ride as data: URLs and can fill storage). false
+  // keeps the visitor here instead of sending them off to lose it.
+  const holdForHop = useCallback(() => stashSketch(toPrefill(sketch, product)), [sketch, product]);
+
+  return { sketch, patch, patchStyle, patchLinkStyle, patchSocial, handOff, reset, linkedInReturn, photoAdjustKey, holdForHop };
 }

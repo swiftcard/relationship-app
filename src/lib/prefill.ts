@@ -122,11 +122,14 @@ export const PREFILL_LINK_MEDIA_KEYS = ["linkHeroImage", "linkHeroMediaType", "l
 
 const KEY = "swiftcard_prefill";
 
-export function writePrefill(data: CardPrefill): void {
+/** false = the sketch did NOT reach storage (blocked, or full of photos). */
+export function writePrefill(data: CardPrefill): boolean {
   try {
     localStorage.setItem(KEY, JSON.stringify(data));
+    return true;
   } catch {
     /* storage blocked — the builder just starts blank, no harm */
+    return false;
   }
 }
 
@@ -158,11 +161,11 @@ export function hasSketchContent(data: CardPrefill): boolean {
 // touched a builder still gets a blank wizard. Deliberately omits `step`, so
 // these generic entry points land on step 1 (the first info page); an explicit
 // "Make it live" calls writePrefill with its own step.
-export function stashSketch(data: CardPrefill): void {
-  if (!hasSketchContent(data)) return;
+export function stashSketch(data: CardPrefill): boolean {
+  if (!hasSketchContent(data)) return true; // nothing to keep
   const { step: _step, ...withoutStep } = data;
   void _step;
-  writePrefill(withoutStep);
+  return writePrefill(withoutStep);
 }
 
 // Drop the stashed sketch outright. Used when the visitor abandons a mini

@@ -59,10 +59,11 @@ async function openLinkedInConnect(href: string, opts: { guest: boolean; returnT
     return;
   }
 
-  // Web. A guest keeps the old full-page hop: their photo comes back as
-  // ?li_photo= for the mini-builder to apply to its own draft, and that draft
-  // lives in localStorage, so navigating costs them nothing. A signed-in user
-  // is the one with unsaved editor state to protect.
+  // Web. Every card BUILDER (homepage builders, /cards/new for every account
+  // type) takes the full-page one-shot hop: the photo comes back as ?li_photo=
+  // and the builder's own saved progress carries everything else. Only the
+  // editors of an existing card or profile, which keep no such copy of unsaved
+  // edits, still run the account connect in a popup.
   if (!opts.guest) {
     try {
       const popup = window.open(
@@ -124,7 +125,9 @@ type Props = {
    *  some point (owner, 2026-09-29: "it fully glitched and just didn't work"). */
   photoReturn?: boolean;
   /** Persist the page's progress before the hop. Returning false (the save
-   *  failed — storage full or blocked) cancels it: leaving would lose the card. */
+   *  failed — storage full or blocked) cancels it: leaving would lose the card.
+   *  The page puts the returning photo in its headshot tile with
+   *  ImageUpload's adjustKey, which opens it in the crop tool. */
   beforeLeave?: () => boolean;
 };
 

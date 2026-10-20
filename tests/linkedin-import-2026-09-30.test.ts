@@ -50,8 +50,8 @@ describe("the LinkedIn photo: largest rendition first, enhanced when only the th
 
   it("any applied photo can be reframed with Adjust (imports never passed through the crop tool)", () => {
     const src = read("src/components/ImageUpload.tsx");
-    expect(src).toMatch(/async function adjustCurrent\(\)/);
-    expect(src).toMatch(/fetch\(preview, \{ mode: "cors" \}\)/);
+    expect(src).toMatch(/async function adjustCurrent\(url: string \| null = preview\)/);
+    expect(src).toMatch(/fetch\(url, \{ mode: "cors" \}\)/);
     expect(src).toMatch(/>\s*Adjust\s*<\/button>/);
   });
 });

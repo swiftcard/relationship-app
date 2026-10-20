@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import CardScaler from "@/components/CardScaler";
 import InertPreview from "@/components/InertPreview";
@@ -39,19 +39,26 @@ const TEMPLATES = [
   { id: "logo-first", label: "Logo", Component: LogoFirst },
 ];
 
+/** "Add your photo & logo" — where the headshot and its LinkedIn button are. */
+const PHOTO_STEP = 2;
+
 
 export default function SignatureMiniBuilder({ linkedinEnabled = false }: { linkedinEnabled?: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [launching, setLaunching] = useState(false);
-  const { sketch, patch, patchStyle, handOff, reset, linkedInReturn } = useProductSketch("signature", open);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const { sketch, patch, patchStyle, handOff, reset, linkedInReturn, photoAdjustKey, holdForHop } = useProductSketch("signature", open);
   // Back from the guest LinkedIn photo import (see readGuestLinkedInReturn):
-  // re-open on the first step WITHOUT reset, so the stashed sketch and the
-  // photo just connected for are both there.
+  // re-open WITHOUT reset on the step the Connect button lives on, with the
+  // photo opened in the crop tool. The page behind is brought to this section,
+  // not left at the top.
   useEffect(() => {
+    if (!linkedInReturn) return;
+    triggerRef.current?.scrollIntoView({ block: "center" });
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time re-open after the LinkedIn hop
-    if (linkedInReturn) { setStep(0); setOpen(true); }
+    setStep(PHOTO_STEP); setOpen(true);
   }, [linkedInReturn]);
 
 
@@ -131,8 +138,8 @@ export default function SignatureMiniBuilder({ linkedinEnabled = false }: { link
       content: (
         <div className="space-y-5">
           <div>
-            <ImageUpload guest field="photo" shape="circle" currentUrl={sketch.headshot} label="Headshot" onUploaded={(u) => patch({ headshot: u || null })} />
-            <ProfilePhotoSuggest guest email={sketch.email} linkedinEnabled={linkedinEnabled} returnTo="/?builder=signature" onConfirm={(u) => patch({ headshot: u })} />
+            <ImageUpload guest field="photo" shape="circle" currentUrl={sketch.headshot} label="Headshot" adjustKey={photoAdjustKey} onUploaded={(u) => patch({ headshot: u || null })} />
+            <ProfilePhotoSuggest guest email={sketch.email} linkedinEnabled={linkedinEnabled} returnTo="/?builder=signature" beforeLeave={holdForHop} onConfirm={(u) => patch({ headshot: u })} />
           </div>
           <div>
             <ImageUpload guest field="logo" shape="square" currentUrl={sketch.logo} label="Company logo" onUploaded={(u) => patch({ logo: u || null })} />
@@ -181,6 +188,7 @@ export default function SignatureMiniBuilder({ linkedinEnabled = false }: { link
     <>
       <div className="flex justify-center mt-8" data-reveal="fade">
         <button
+          ref={triggerRef}
           type="button"
           onClick={() => { reset(); setStep(0); setOpen(true); }}
           className="rd-btn rd-btn-primary rd-btn-lg"

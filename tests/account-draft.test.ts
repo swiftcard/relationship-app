@@ -67,13 +67,17 @@ describe("the builder uses it", () => {
 
   it("signed-in builders get their own account's draft; never an Office member", () => {
     expect(w).toMatch(/const canDraft = guest \|\| \(!!draftOwner && !org\);/);
-    expect(w).toMatch(/draftStore\(guest \|\| !draftOwner \? GUEST_DRAFT_KEY : accountDraftKey\(draftOwner\)\)/);
+    // An Office member's card is held under a separate key that only the
+    // LinkedIn photo hop reads back — never offered as an unfinished card.
+    expect(w).toMatch(/guest \|\| !draftOwner \? GUEST_DRAFT_KEY\s*: officeHop \? officeHopDraftKey\(draftOwner\)\s*: accountDraftKey\(draftOwner\)/);
     expect(page).toMatch(/draftOwner=\{authedAdd && user \? user\.id : null\}/);
   });
 
   it("restore, autosave and the resume question all follow canDraft, not guest", () => {
-    expect(w).toMatch(/if \(!canDraft\) \{ hydratedRef\.current = true; applyLiPhoto\(\); return; \}/);
-    expect(w).toMatch(/if \(!canDraft\) return;/);
+    // keepsDraft = canDraft, plus the Office member's hop-only copy.
+    expect(w).toMatch(/const keepsDraft = canDraft \|\| officeHop;/);
+    expect(w).toMatch(/if \(!keepsDraft\) \{ hydratedRef\.current = true; applyLiPhoto\(\); return; \}/);
+    expect(w).toMatch(/if \(!keepsDraft\) return;/);
     expect(w).toMatch(/if \(canDraft && !resumesSilently\(\) && draftHasWork\(drafts\.load\(\)\)\)/);
     const noComments = w.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
     expect(noComments).not.toMatch(/\b(saveDraft|loadDraft|clearDraft)\(/);

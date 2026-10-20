@@ -50,9 +50,14 @@ export default function Deferred({
   minHeight,
   className,
   style,
+  now,
 }: {
   children: ReactNode;
   when?: When;
+  /** Checked once in the browser: true builds the block straight away, however
+   *  far down the page it is — for a visit that has come back TO it (the card
+   *  builder after LinkedIn), which must not wait for a scroll. */
+  now?: () => boolean;
   /** Mount only while this media query matches, e.g. "(min-width: 1280px)". */
   media?: string;
   /** How far ahead of the viewport a "visible" block starts building. */
@@ -69,6 +74,11 @@ export default function Deferred({
     if (show) return;
     const el = ref.current;
     if (!el) return;
+    if (now?.()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time browser-only check; the server (and hydration) render must stay empty
+      setShow(true);
+      return;
+    }
     let cleanup: (() => void) | undefined;
     const arm = () => {
       if (when === "idle") {
@@ -107,6 +117,7 @@ export default function Deferred({
       mql.removeEventListener("change", check);
       cleanup?.();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `now` is a one-time check on arrival, not a dependency to re-arm on
   }, [show, when, media, rootMargin]);
 
   return (

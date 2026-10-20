@@ -10,6 +10,9 @@ export const runtime = "nodejs";
 // This deployment's own address — never production from a preview (lib/app-url, audit E-02).
 const APP_URL = appUrl();
 
+/** Where-to-return cookies: 30 min, past the signed state's 15 (see below). */
+const LI_COOKIE_MAX_AGE = 30 * 60;
+
 // GET /api/integrations/linkedin/connect → redirect the user into LinkedIn's
 // official OAuth consent screen. Profile-photo import is a card-building
 // convenience, so it's available to any signed-in user (not Pro-gated).
@@ -64,16 +67,26 @@ export async function GET(request: Request) {
   // Ties the callback to THIS browser (lib/oauth-state, stateBoundToBrowser).
   res.cookies.set(oauthBindCookieName("linkedin"), oauthBindCookieValue(state), OAUTH_BIND_COOKIE_OPTIONS);
   // The redirect_uri registered with LinkedIn is fixed, so the return path
-  // rides in a short-lived cookie the callback reads back.
+  // rides in a short-lived cookie the callback reads back. It outlives the
+  // signed state (15 min): it used to last 10, so someone slow at LinkedIn's
+  // sign-in (a forgotten password, a 2FA code) came back to Settings — or, as a
+  // guest, to the login page — instead of the builder they left. Now even an
+  // attempt that ran out of time returns to that builder, saying so.
+  // Each attempt sets both cookies or clears them, so an abandoned attempt's
+  // leftovers can never steer this one somewhere else.
   if (next) {
-    res.cookies.set("li_return_to", next, { httpOnly: true, sameSite: "lax", maxAge: 600, path: "/" });
+    res.cookies.set("li_return_to", next, { httpOnly: true, sameSite: "lax", maxAge: LI_COOKIE_MAX_AGE, path: "/" });
+  } else {
+    res.cookies.set("li_return_to", "", { maxAge: 0, path: "/" });
   }
   // `?native=1` — started from the iOS shell, which runs this in an in-app
   // browser because linkedin.com cannot load in the app's own webview. The
   // callback reads this to finish at a swiftcard:// URL that re-opens the app,
   // instead of an https one that would strand the user on the website.
   if (url.searchParams.get("native") === "1") {
-    res.cookies.set("li_native", "1", { httpOnly: true, sameSite: "lax", maxAge: 600, path: "/" });
+    res.cookies.set("li_native", "1", { httpOnly: true, sameSite: "lax", maxAge: LI_COOKIE_MAX_AGE, path: "/" });
+  } else {
+    res.cookies.set("li_native", "", { maxAge: 0, path: "/" });
   }
   return res;
 }

@@ -25,7 +25,7 @@ const wizard = read("src/app/cards/new/NewCardWizard.tsx");
 
 describe("the card wizard uses the one-shot photo import", () => {
   it("opts in whenever it keeps a draft, and flushes the draft before leaving", () => {
-    expect(wizard).toMatch(/photoReturn=\{canDraft\}/);
+    expect(wizard).toMatch(/photoReturn=\{keepsDraft\}/);
     expect(wizard).toMatch(/beforeLeave=\{\(\) => drafts\.flush\(\)\}/);
   });
 
@@ -54,7 +54,7 @@ describe("the card wizard uses the one-shot photo import", () => {
     // reader below had set the ref, and in production (no StrictMode double
     // run) the photo was silently dropped. The reader must apply it itself once
     // hydration is done.
-    const restoreAt = wizard.indexOf("if (!canDraft) { hydratedRef.current = true; applyLiPhoto(); return; }");
+    const restoreAt = wizard.indexOf("if (!keepsDraft) { hydratedRef.current = true; applyLiPhoto(); return; }");
     const readerAt = wizard.indexOf('const photo = url.searchParams.get("li_photo");');
     expect(restoreAt).toBeGreaterThan(0);
     expect(readerAt, "the reader effect moved — re-check the order argument").toBeGreaterThan(restoreAt);

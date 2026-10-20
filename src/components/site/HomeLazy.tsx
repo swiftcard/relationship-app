@@ -40,9 +40,15 @@ export function LazyHeroShowcase() {
   );
 }
 
+/** LinkedIn is handing a photo back to the card builder, which lives in the gallery. */
+const cardBuilderReturn = () => new URLSearchParams(window.location.search).get("builder") === "card";
+
 export function LazyTemplateGallery({ linkedinEnabled }: { linkedinEnabled: boolean }) {
+  // Built at once on a ?builder=card return: deferred, the card builder never
+  // mounted to read it, and the visitor came back from LinkedIn to the top of
+  // the homepage with the builder shut and no photo.
   return (
-    <Deferred minHeight={640}>
+    <Deferred minHeight={640} now={cardBuilderReturn}>
       <TemplateGallery linkedinEnabled={linkedinEnabled} />
     </Deferred>
   );

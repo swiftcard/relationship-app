@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import CardScaler from "@/components/CardScaler";
 import InertPreview from "@/components/InertPreview";
@@ -44,6 +44,9 @@ const TEMPLATES = [
   { id: "logo-first", label: "Logo", Component: LogoFirst },
 ];
 
+/** "Add your photo & logo" — where the headshot and its LinkedIn button are. */
+const PHOTO_STEP = 2;
+
 // The card face previews the REAL link. prettyCardSlug is the same helper the
 // wizard's own "Card URL" hint uses — "Alex Morgan" + "Morgan & Co." becomes
 // AlexMorgan-MorganCo, not the old alex-morgan-morgan-co. Routes are
@@ -54,13 +57,18 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
   const [launching, setLaunching] = useState(false);
-  const { sketch, patch, patchStyle, handOff, reset, linkedInReturn } = useProductSketch("card", open);
+  const tileRef = useRef<HTMLButtonElement>(null);
+  const { sketch, patch, patchStyle, handOff, reset, linkedInReturn, photoAdjustKey, holdForHop } = useProductSketch("card", open);
   // Back from the guest LinkedIn photo import (see readGuestLinkedInReturn):
-  // re-open on the first step WITHOUT reset, so the stashed sketch and the
-  // photo just connected for are both there.
+  // re-open WITHOUT reset on the step the Connect button lives on, so the
+  // visitor is exactly where they left — the stashed sketch is there and the
+  // photo opens in the crop tool. The page behind is brought to this tile, so
+  // closing the builder doesn't strand them at the top of the homepage.
   useEffect(() => {
+    if (!linkedInReturn) return;
+    tileRef.current?.scrollIntoView({ block: "center" });
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time re-open after the LinkedIn hop
-    if (linkedInReturn) { setStep(0); setOpen(true); }
+    setStep(PHOTO_STEP); setOpen(true);
   }, [linkedInReturn]);
 
 
@@ -168,10 +176,10 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
       content: (
         <div className="space-y-5">
           <div>
-            <ImageUpload guest field="photo" shape="circle" currentUrl={sketch.headshot} label="Headshot" onUploaded={(u) => patch({ headshot: u || null })} />
+            <ImageUpload guest field="photo" shape="circle" currentUrl={sketch.headshot} label="Headshot" adjustKey={photoAdjustKey} onUploaded={(u) => patch({ headshot: u || null })} />
             {/* Looks your headshot up from the email you entered. Shows what it
                 found and applies nothing until you pick it. */}
-            <ProfilePhotoSuggest guest email={sketch.email} linkedinEnabled={linkedinEnabled} returnTo="/?builder=card" onConfirm={(u) => patch({ headshot: u })} />
+            <ProfilePhotoSuggest guest email={sketch.email} linkedinEnabled={linkedinEnabled} returnTo="/?builder=card" beforeLeave={holdForHop} onConfirm={(u) => patch({ headshot: u })} />
           </div>
           <div>
             <ImageUpload guest field="logo" shape="square" currentUrl={sketch.logo} label="Company logo" onUploaded={(u) => patch({ logo: u || null })} />
@@ -226,6 +234,7 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
           the size of a template card, on phone and computer alike (owner,
           2026-10-01: "the same exact size" as the cards above it). */}
       <button
+        ref={tileRef}
         type="button"
         onClick={() => { reset(); history.clear(); setStep(0); setOpen(true); }}
         className="text-left outline-none group"
