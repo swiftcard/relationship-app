@@ -130,6 +130,8 @@ export interface CrewStore {
   addInput(i: { platform: Platform; kind: CrewInput["kind"]; url: string | null; text: string }): Promise<string>;
   takeInputs(platforms: Platform[], limit: number, agentId: string): Promise<CrewInput[]>;
   countNewInputs(platforms: Platform[]): Promise<number>;
+  /** Read-only look at pasted inputs (any status), oldest first. */
+  listInputsSince(platforms: Platform[], sinceIso: string, limit: number): Promise<CrewInput[]>;
 
   getRateLimit(platform: Platform, action: string): Promise<{ ceiling: number; warmup_start: string } | null>;
   setRateLimit(platform: Platform, action: string, ceiling: number, warmupStart?: string): Promise<void>;

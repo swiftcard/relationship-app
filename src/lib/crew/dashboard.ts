@@ -3,7 +3,7 @@ import { ENV_HELP, crewHardDisabled, missingEnv } from "./env";
 import { AGENTS } from "./registry";
 import { describeSchedule, nyDayStart } from "./schedule";
 import type { CrewStore, ReportRow, RunRow, UsageTotals } from "./store";
-import type { AgentState, Approval, EnvKey, Finding, Settings } from "./types";
+import type { AgentState, Approval, EnvKey, Finding, Lead, Settings } from "./types";
 
 // Everything the Agents tab shows, loaded in one place (server only).
 
@@ -29,6 +29,7 @@ export type Dashboard = {
   week: UsageTotals;
   reports: ReportRow[];
   findings: Finding[];
+  leads: { todayBySource: Record<string, number>; officeToday: Record<string, number>; recent: (Lead & { id: string; created_at: string })[]; office: (Lead & { id: string; created_at: string })[] };
   envNeeded: { key: EnvKey; help: string; agents: string[] }[];
 };
 
@@ -37,7 +38,7 @@ export async function loadDashboard(store: CrewStore, now = new Date()): Promise
   if (!(await store.ready())) return { ready: false, envNeeded };
   const dayStart = nyDayStart(now).toISOString();
   const weekStart = new Date(now.getTime() - 7 * 86400_000).toISOString();
-  const [settings, states, inbox, approved, recentDone, today, week, reports, findings, runs] = await Promise.all([
+  const [settings, states, inbox, approved, recentDone, today, week, reports, findings, runs, todayBySource, officeToday, recent, office] = await Promise.all([
     store.getSettings(),
     store.listAgentStates(),
     store.listApprovals({ status: ["pending"], limit: 60 }),
@@ -48,6 +49,10 @@ export async function loadDashboard(store: CrewStore, now = new Date()): Promise
     store.listReports(14),
     store.listFindings(["open", "proposed"], 30),
     store.recentRuns(null, 300),
+    store.countLeadsSince(dayStart, "cold"),
+    store.countLeadsSince(dayStart, "office"),
+    store.listLeads("cold", 40),
+    store.listLeads("office", 60),
   ]);
   const byId = new Map(states.map((s) => [s.id, s]));
   const agents: AgentRow[] = AGENTS.map((def) => {
@@ -62,7 +67,7 @@ export async function loadDashboard(store: CrewStore, now = new Date()): Promise
       lastRun: runs.find((r) => r.agent_id === def.id) ?? null,
     };
   });
-  return { ready: true, hardDisabled: crewHardDisabled(), settings, agents, inbox, approved, recentDone, today, week, reports, findings, envNeeded };
+  return { ready: true, hardDisabled: crewHardDisabled(), settings, agents, inbox, approved, recentDone, today, week, reports, findings, leads: { todayBySource, officeToday, recent, office }, envNeeded };
 }
 
 function neededEnv(defs: AgentDef[]): Dashboard["envNeeded"] {

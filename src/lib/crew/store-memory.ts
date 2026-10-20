@@ -261,6 +261,9 @@ export class MemoryStore implements CrewStore {
   async countNewInputs(platforms: Platform[]) {
     return this.inputs.filter((i) => i.status === "new" && platforms.includes(i.platform)).length;
   }
+  async listInputsSince(platforms: Platform[], sinceIso: string, limit: number) {
+    return this.inputs.filter((i) => platforms.includes(i.platform) && i.created_at > sinceIso).slice(0, limit).map((i) => ({ ...i }));
+  }
 
   async getRateLimit(platform: Platform, action: string) {
     return this.limits.get(`${platform}:${action}`) ?? null;

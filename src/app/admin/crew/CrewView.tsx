@@ -16,6 +16,7 @@ const TABS = [
   { id: "teams", label: "Teams" },
   { id: "usage", label: "Usage" },
   { id: "reports", label: "Reports" },
+  { id: "leads", label: "Leads" },
   { id: "paste", label: "Paste a post" },
   { id: "settings", label: "Settings" },
 ] as const;
@@ -59,6 +60,7 @@ export default function CrewView({ data, tab: tabParam, msg }: CrewViewProps) {
           {tab === "teams" && <Teams d={data} />}
           {tab === "usage" && <Usage d={data} />}
           {tab === "reports" && <Reports d={data} />}
+          {tab === "leads" && <Leads d={data} />}
           {tab === "paste" && <Paste />}
           {tab === "settings" && <SettingsForm d={data} />}
         </>
@@ -428,6 +430,61 @@ function Reports({ d }: { d: Dashboard }) {
           <p className="text-gray-500 text-xs mb-2">{r.day} · {agentName(d, r.agent_id)}</p>
           <pre className="text-gray-200 text-sm whitespace-pre-wrap break-words font-sans">{r.body}</pre>
         </article>
+      ))}
+    </div>
+  );
+}
+
+function Leads({ d }: { d: Dashboard }) {
+  const sum = (o: Record<string, number>) => Object.values(o).reduce((a, b) => a + b, 0);
+  const lists = [
+    { id: "office", title: "Office prospects (to call)", today: d.leads.officeToday, rows: d.leads.office },
+    { id: "cold", title: "Cold email list", today: d.leads.todayBySource, rows: d.leads.recent },
+  ];
+  return (
+    <div className="space-y-4">
+      <div className={`${card} space-y-2`}>
+        <p className="text-white font-semibold text-sm">Before anyone sends a cold email</p>
+        <p className="text-gray-400 text-sm">No agent sends email. Nothing should be sent to this list until all of these are true:</p>
+        <ul className="text-gray-300 text-sm space-y-1 list-disc pl-5">
+          <li>A separate sending domain and email provider (never swiftcard.me or our product email).</li>
+          <li>An unsubscribe link in every email, honored within 10 days, added to the suppression list.</li>
+          <li>Our physical mailing address in every email.</li>
+          <li>Honest From name and subject lines.</li>
+          <li>People in Europe, the UK, Canada and Brazil left out (they are flagged and kept out of the sheet).</li>
+        </ul>
+      </div>
+      {lists.map((l) => (
+        <section key={l.id} className={`${card} space-y-3`}>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-white font-semibold">{l.title}</h2>
+            <a href={`/api/admin/crew/leads?list=${l.id}`} className="text-blue-300 text-sm hover:underline">Download CSV</a>
+          </div>
+          <p className="text-gray-400 text-sm">
+            {sum(l.today)} found today{Object.keys(l.today).length ? ` (${Object.entries(l.today).map(([k, v]) => `${k} ${v}`).join(", ")})` : ""}.
+          </p>
+          {l.rows.length === 0 ? (
+            <p className="text-gray-500 text-sm">None yet.</p>
+          ) : (
+            <ul className="divide-y divide-gray-800">
+              {l.rows.slice(0, 30).map((r) => (
+                <li key={r.id} className="py-2 text-sm">
+                  <p className="text-gray-200 break-words">
+                    {r.name ? `${r.name} · ` : ""}
+                    {r.company ?? ""} {r.title ? `(${r.title})` : ""}
+                  </p>
+                  <p className="text-gray-400 text-xs break-all">
+                    {[r.email, r.phone, [r.city, r.region].filter(Boolean).join(", ")].filter(Boolean).join(" · ")}
+                    {r.region_restricted ? " · flagged region" : ""}
+                  </p>
+                  <a href={r.source_url.startsWith("http") ? r.source_url : undefined} target="_blank" rel="noopener noreferrer" className="text-gray-600 text-xs break-all">
+                    {r.source_platform} · {r.source_url.slice(0, 80)}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       ))}
     </div>
   );

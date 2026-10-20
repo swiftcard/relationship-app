@@ -285,6 +285,10 @@ export class SupabaseStore implements CrewStore {
     }
     return taken;
   }
+  async listInputsSince(platforms: Platform[], sinceIso: string, limit: number) {
+    return (must(await this.db.from("crew_inputs").select("*").in("platform", platforms).gt("created_at", sinceIso).order("created_at").limit(limit), "inputs since") ??
+      []) as CrewInput[];
+  }
   async countNewInputs(platforms: Platform[]) {
     const { count } = await this.db.from("crew_inputs").select("id", { count: "exact", head: true }).eq("status", "new").in("platform", platforms);
     return count ?? 0;

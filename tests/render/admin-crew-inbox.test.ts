@@ -50,6 +50,12 @@ async function renderView(browser: Browser, width: number, tab: string) {
     week: totals,
     reports: [],
     findings: [],
+    leads: {
+      todayBySource: { web: 41, reddit: 2 },
+      officeToday: { web: 12 },
+      recent: Array.from({ length: 4 }, (_, i) => ({ id: `l${i}`, created_at: now, list: "cold", name: null, email: `info${i}@a-very-long-realty-company-name-for-testing.com`, phone: "+17045550100", company: "Queen City Realty Group of Charlotte and the Surrounding Areas", business_type: "real estate offices", city: "Charlotte", region: "NC", country: "US", region_restricted: i === 3, source_platform: "web", source_url: "https://www.queencityrealtygroup.example.com/contact-us/our-agents-and-staff" })),
+      office: [],
+    },
     envNeeded: [{ key: "CREW_OPENAI_API_KEY", help: "OpenAI API key for the second opinion (platform.openai.com → API keys).", agents: ["Test agent"] }],
   };
   const css = await appCss();
@@ -71,7 +77,7 @@ describe("the Agents tab", () => {
   beforeAll(async () => { browser = await launchBrowser(); }, 120_000);
   afterAll(async () => { await browser?.close(); });
 
-  for (const tab of ["inbox", "teams", "usage", "settings", "paste"]) {
+  for (const tab of ["inbox", "teams", "usage", "settings", "paste", "leads", "reports"]) {
     for (const width of [390, 1280]) {
       it(`${tab} fits at ${width}px: nothing spills sideways`, async () => {
         const page = await renderView(browser, width, tab);
