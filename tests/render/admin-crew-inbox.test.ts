@@ -43,7 +43,11 @@ async function renderView(browser: Browser, width: number, tab: string) {
       cap: def.dailyUsd,
       lastRun: { id: "r", agent_id: def.id, started_at: now, finished_at: now, status: "ok", summary: "Put one practice draft in the inbox.", stats: {}, error: null },
     })),
-    inbox: [approval({ id: "a1" }), approval({ id: "a2", kind: "dm", body: "short dm", meta: {} })],
+    inbox: [
+      approval({ id: "a1" }),
+      approval({ id: "a2", kind: "dm", body: "short dm", meta: {} }),
+      approval({ id: "a4", kind: "post", platform: "instagram", body: "1. Card ...", debate: null, meta: { step: 1, options: [1, 2, 3].map((n) => ({ n, name: `A rather long option name number ${n} for the picker`, image: null })) } }),
+    ],
     approved: [approval({ id: "a3", status: "approved" })],
     recentDone: [],
     today: totals,
@@ -113,7 +117,7 @@ describe("the Agents tab", () => {
             return { label: b.innerText.trim(), h: r.height, w: r.width, covered: !(top === b || b.contains(top)) };
           });
         });
-        expect(res.filter((r) => r.label === "Approve")).toHaveLength(2);
+        expect(res.filter((r) => r.label === "Approve")).toHaveLength(3);
         expect(res.some((r) => r.label === "I posted it")).toBe(true);
         for (const r of res) {
           expect(r.h, `${r.label} is shorter than a tap target`).toBeGreaterThanOrEqual(40);

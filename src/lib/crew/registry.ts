@@ -5,8 +5,10 @@ import { competitorWatch } from "./agents/competitor-watch";
 import { CONTACT } from "./agents/contact";
 import { scanCostWatch } from "./agents/deferred";
 import { LEADS } from "./agents/leads";
+import { MARKETING_BASIC } from "./agents/marketing";
 import { OFFICE } from "./agents/office";
 import { REPLIES } from "./agents/replies";
+import { socialManager } from "./agents/social";
 import { testAgent } from "./agents/test-agent";
 import { watchBugs } from "./agents/watch-bugs";
 import { watchApp, watchFlows, watchProbe, watchSpeed, watchUi } from "./agents/watch-ingested";
@@ -20,7 +22,7 @@ import type { TeamId } from "./types";
 
 const WATCHDOG: AgentDef[] = [watchBugs, watchSpeed, watchSecurity, watchApp, watchUi, watchFlows, watchProbe, watchPayments, watchRevenue, scanCostWatch];
 
-export const AGENTS: AgentDef[] = withManagers([...WATCHDOG, ...REPLIES, ...CONTACT, ...LEADS, ...OFFICE, competitorWatch, testAgent, headAgent]);
+export const AGENTS: AgentDef[] = withManagers([...WATCHDOG, ...REPLIES, ...CONTACT, ...LEADS, ...OFFICE, ...MARKETING_BASIC, socialManager, competitorWatch, testAgent, headAgent]);
 
 export const TEAMS: TeamId[] = ["watchdog", "replies", "contact", "leads", "office", "marketing", "system"];
 

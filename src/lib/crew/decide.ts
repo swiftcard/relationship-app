@@ -1,4 +1,4 @@
-import { TEXT_KINDS } from "./approvals";
+import { DISCLOSE_KINDS, TEXT_KINDS } from "./approvals";
 import { applyDisclosure } from "./disclosure";
 import { executeApproval, EXECUTED_KINDS } from "./execute";
 import type { CrewStore } from "./store";
@@ -13,7 +13,7 @@ import { stripEmDashes } from "./voice";
 // DM's claim into a recorded contact.
 
 export type Decision =
-  | { action: "approve"; body?: string; by: string }
+  | { action: "approve"; body?: string; choice?: string; by: string }
   | { action: "reject"; reason: string; by: string }
   | { action: "posted"; by: string }
   | { action: "edit"; body: string; by: string };
@@ -29,7 +29,10 @@ export async function decide(store: CrewStore, id: string, d: Decision, now = ne
   const a = await store.getApproval(id);
   if (!a) return { ok: false, message: "Not found." };
   const settings = await store.getSettings();
-  const clean = (b: string) => (TEXT_KINDS.includes(a.kind) ? stripEmDashes(applyDisclosure(b, { on: settings.disclosure_on, disclosure: settings.disclosure })) : b);
+  const clean = (b: string) => {
+    const d = DISCLOSE_KINDS.includes(a.kind) ? applyDisclosure(b, { on: settings.disclosure_on, disclosure: settings.disclosure }) : b;
+    return TEXT_KINDS.includes(a.kind) ? stripEmDashes(d) : d;
+  };
 
   if (d.action === "edit") {
     if (a.status !== "pending") return { ok: false, message: "Only waiting items can be edited." };
@@ -47,7 +50,7 @@ export async function decide(store: CrewStore, id: string, d: Decision, now = ne
   if (d.action === "approve") {
     if (a.status !== "pending") return { ok: false, message: "Already decided." };
     const body = d.body !== undefined ? clean(d.body) : a.body;
-    await store.updateApproval(id, { status: "approved", body, decided_at: now.toISOString() });
+    await store.updateApproval(id, { status: "approved", body, decided_at: now.toISOString(), ...(d.choice ? { meta: { ...a.meta, choice: d.choice.slice(0, 20) } } : {}) });
     if (EXECUTED_KINDS.includes(a.kind)) {
       const r = await executeApproval(store, { ...a, body, status: "approved" });
       await store.updateApproval(id, r.ok ? { status: "done", done_at: now.toISOString(), meta: { ...a.meta, result: r.result } } : { meta: { ...a.meta, error: r.message } });

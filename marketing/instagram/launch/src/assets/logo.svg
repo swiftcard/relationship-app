@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  BIMI brand indicator for swiftcard.me.
+
+  Must stay SVG Tiny Portable/Secure (SVG 1.2 Tiny "tiny-ps"): version and
+  baseProfile attributes present, <title> as the first child, a square viewBox,
+  and NO script, animation, filter, external reference, raster <image> or <a>.
+  Anything else and Gmail rejects the record silently.
+
+  This renders inside a small circle in the inbox, so the mark is the WHOLE
+  blue tile — never the bolt on its own — and detail is kept deliberately
+  coarse: at 32px the card outline reads as texture, not as lines.
+
+  Not live until a Verified Mark Certificate exists and
+  default._bimi.swiftcard.me is published. Hosting it costs nothing and makes
+  that a one-line DNS change later.
+-->
+<svg version="1.2" baseProfile="tiny-ps" xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 512 512" width="512" height="512">
+  <title>SwiftCard</title>
+
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0.55" y2="1">
+      <stop offset="0" stop-color="#4A6FD0"/>
+      <stop offset="0.55" stop-color="#2D4796"/>
+      <stop offset="1" stop-color="#16224B"/>
+    </linearGradient>
+  </defs>
+
+  <!-- The tile itself is the logo. Full bleed so a circular crop stays solid. -->
+  <rect x="0" y="0" width="512" height="512" rx="112" ry="112" fill="url(#tile)"/>
+
+  <!-- The card: an outline, weighted to survive downscaling to 32px. -->
+  <rect x="72" y="132" width="368" height="248" rx="34" ry="34"
+        fill="none" stroke="#C9D4EE" stroke-opacity="0.72" stroke-width="13"/>
+
+  <!-- Three detail lines, left edge of the card. -->
+  <rect x="112" y="186" width="78" height="15" rx="7.5" ry="7.5" fill="#C9D4EE" fill-opacity="0.72"/>
+  <rect x="112" y="228" width="60" height="15" rx="7.5" ry="7.5" fill="#C9D4EE" fill-opacity="0.72"/>
+  <rect x="112" y="270" width="60" height="15" rx="7.5" ry="7.5" fill="#C9D4EE" fill-opacity="0.72"/>
+
+  <!-- The bolt, centred and dominant — the one shape readable at avatar size. -->
+  <path d="M292 60 L176 274 L246 274 L214 452 L336 232 L264 232 Z" fill="#FFFFFF"/>
+</svg>

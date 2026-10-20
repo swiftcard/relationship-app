@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const by = admin.email ?? admin.id;
   const store = new SupabaseStore();
   let r: { ok: boolean; message: string };
-  if (action === "approve") r = await decide(store, id, { action: "approve", body: form.has("body") ? field(form, "body") : undefined, by });
+  if (action === "approve") r = await decide(store, id, { action: "approve", body: form.has("body") ? field(form, "body") : undefined, choice: field(form, "choice") || undefined, by });
   else if (action === "reject") r = await decide(store, id, { action: "reject", reason: field(form, "reason") || "no reason given", by });
   else if (action === "posted") r = await decide(store, id, { action: "posted", by });
   else if (action === "edit") r = await decide(store, id, { action: "edit", body: field(form, "body"), by });

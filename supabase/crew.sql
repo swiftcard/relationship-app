@@ -286,3 +286,10 @@ alter table crew_kv                enable row level security;
 alter table crew_leads             enable row level security;
 alter table crew_suppression       enable row level security;
 alter table crew_competitor_facts  enable row level security;
+
+-- Public bucket for the social media manager's rendered pictures
+-- (.github/workflows/crew-render.yml uploads with the service role). Public
+-- READ only, so the owner can open and download them; nobody else can write.
+insert into storage.buckets (id, name, public)
+values ('crew-media', 'crew-media', true)
+on conflict (id) do nothing;

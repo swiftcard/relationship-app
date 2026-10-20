@@ -224,8 +224,10 @@ function RecentFixes({ d }: { d: Dashboard }) {
 
 function ApprovalCard({ a, d }: { a: Approval; d: Dashboard }) {
   const action = `/api/admin/crew/approvals/${a.id}`;
-  const editable = a.status === "pending" && a.kind !== "code_fix" && a.kind !== "ask";
+  const editable = a.status === "pending" && a.kind !== "code_fix" && a.kind !== "ask" && !Array.isArray(a.meta?.options);
   const tierWhy = typeof a.meta?.tier_why === "string" ? a.meta.tier_why : null;
+  const options = Array.isArray(a.meta?.options) ? (a.meta.options as { n: number; name: string; image: string | null }[]) : null;
+  const images = Array.isArray(a.meta?.images) ? (a.meta.images as { key: string; url: string }[]) : null;
   const prUrl = typeof (a.meta?.result as { pr_url?: string } | undefined)?.pr_url === "string" ? (a.meta.result as { pr_url: string }).pr_url : null;
   return (
     <article className={`${card} space-y-3`} data-approval={a.id}>
@@ -252,10 +254,47 @@ function ApprovalCard({ a, d }: { a: Approval; d: Dashboard }) {
         </a>
       )}
 
+      {options && options.some((o) => o.image) && (
+        <div className="grid grid-cols-3 gap-2">
+          {options.map((o) => (
+            <a key={o.n} href={o.image ?? undefined} target="_blank" rel="noopener noreferrer" className="block min-w-0">
+              {o.image && (
+                // eslint-disable-next-line @next/next/no-img-element -- storage URLs, shown as-is
+                <img src={o.image} alt={`Option ${o.n}: ${o.name}`} className="w-full rounded-lg border border-gray-800" loading="lazy" />
+              )}
+              <span className="block text-xs text-gray-400 mt-1 truncate">{o.n}. {o.name}</span>
+            </a>
+          ))}
+        </div>
+      )}
+      {images && images.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {images.map((im) => (
+            <a key={im.key} href={im.url} target="_blank" rel="noopener noreferrer" download className="shrink-0">
+              {/* eslint-disable-next-line @next/next/no-img-element -- storage URLs, shown as-is */}
+              <img src={im.url} alt={im.key} className="h-28 rounded-md border border-gray-800" loading="lazy" />
+              <span className="block text-[0.6875rem] text-gray-500 mt-0.5">{im.key}</span>
+            </a>
+          ))}
+        </div>
+      )}
+
       {a.status === "pending" ? (
         <>
           <form method="post" action={action} className="space-y-2">
             <input type="hidden" name="tab" value="inbox" />
+            {options && (
+              <label className="block text-sm text-gray-300 space-y-1">
+                <span>Which one?</span>
+                <select name="choice" defaultValue="1" className={`${input} sm:w-64`}>
+                  {options.map((o) => (
+                    <option key={o.n} value={String(o.n)}>
+                      {o.n}. {o.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {editable ? (
               <textarea name="body" defaultValue={a.body} rows={Math.min(14, Math.max(4, Math.ceil(a.body.length / 70)))} className={input} aria-label="Draft" />
             ) : (

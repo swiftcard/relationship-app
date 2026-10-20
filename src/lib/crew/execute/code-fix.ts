@@ -8,7 +8,9 @@ import type { ExecResult } from "./index";
 // owner merges, and the normal CI + Vercel Deployment Checks gate applies.
 // The PR link comes back through /api/crew/ingest?source=fix.
 
-export const REPO = "swiftcard/relationship-app";
+import { REPO } from "../sources/github";
+
+export { REPO };
 export const FIX_WORKFLOW = "crew-fix.yml";
 const MAX_BRIEF = 6000;
 

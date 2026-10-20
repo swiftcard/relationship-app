@@ -1,0 +1,34 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700&display=block" rel="stylesheet">
+<style>
+  /* A stand-in for the profile screen at real phone size (390pt wide), to judge
+     the pinned covers as thumbnails. Instagram's profile grid shows 3:4 tiles. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { width: 390px; background: #fff; font-family: "Geist", -apple-system, sans-serif; color: #000; }
+  .head { display: flex; align-items: center; gap: 22px; padding: 18px 16px 10px; }
+  .avatar { width: 84px; height: 84px; border-radius: 50%; overflow: hidden; flex: none; }
+  .avatar img { width: 100%; height: 100%; }
+  .stats { display: flex; gap: 22px; font-size: 13px; text-align: center; }
+  .stats b { display: block; font-size: 16px; }
+  .bio { padding: 0 16px 14px; font-size: 13.5px; line-height: 1.35; }
+  .bio b { font-weight: 600; }
+  .bio a { color: #00376B; font-weight: 600; text-decoration: none; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
+  .tile { aspect-ratio: 3 / 4; overflow: hidden; position: relative; background: #eee; }
+  .tile img { width: 100%; height: 100%; object-fit: cover; object-position: center; }
+  .pin { position: absolute; top: 6px; right: 6px; width: 16px; height: 16px; }
+</style></head>
+<body>
+  <div class="head">
+    <div class="avatar"><img src="assets/logo.svg"></div>
+    <div><div style="font-weight:700;font-size:17px;margin-bottom:8px">SwiftCard</div>
+      <div class="stats"><div><b>3</b>posts</div><div><b>0</b>followers</div><div><b>0</b>following</div></div></div>
+  </div>
+  <div class="bio">Everything you are. One card. One link.<br><a>swiftcard.me/go/ig_bio</a></div>
+  <div class="grid">
+    <div class="tile"><img src="../post-1-one-card/01-cover.png"><svg class="pin" viewBox="0 0 24 24" fill="#fff"><path d="M15 3l6 6-3 1-4 4 1 5-2 2-4-4-5 5-1-1 5-5-4-4 2-2 5 1 4-4z"/></svg></div>
+    <div class="tile"><img src="../post-2-one-tap/01-cover.png"><svg class="pin" viewBox="0 0 24 24" fill="#fff"><path d="M15 3l6 6-3 1-4 4 1 5-2 2-4-4-5 5-1-1 5-5-4-4 2-2 5 1 4-4z"/></svg></div>
+    <div class="tile"><img src="../post-3-one-link/01-cover.png"><svg class="pin" viewBox="0 0 24 24" fill="#fff"><path d="M15 3l6 6-3 1-4 4 1 5-2 2-4-4-5 5-1-1 5-5-4-4 2-2 5 1 4-4z"/></svg></div>
+  </div>
+</body></html>

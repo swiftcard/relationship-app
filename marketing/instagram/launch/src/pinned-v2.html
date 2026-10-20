@@ -1,0 +1,134 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SwiftCard pinned posts v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Geist:wght@400;500;600;700&display=block" rel="stylesheet">
+<style>
+  /* The light trio. Same persona (Daniel Whitfield, Northwind Partners), same
+     lockup, same headline block, same phone, same footer on all three — one
+     visual system across the pinned row. Brand tokens from globals.css. */
+  :root {
+    --ink: #0B1022;
+    --ink-2: #3B4357;
+    --muted: #6B7390;
+    --blue: #2563EB;
+    --aurora: linear-gradient(110deg, #1D4ED8 0%, #2563EB 45%, #4DA8F5 100%);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #333; font-family: "Geist", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+
+  section {
+    width: 1080px; height: 1350px; position: relative; overflow: hidden; margin: 0 0 40px;
+    color: var(--ink);
+    background:
+      radial-gradient(ellipse 46% 40% at 76% 62%, rgba(37, 99, 235, 0.20), transparent 70%),
+      radial-gradient(ellipse 40% 30% at 90% 100%, rgba(77, 168, 245, 0.16), transparent 70%),
+      linear-gradient(180deg, #FFFFFF 0%, #F5F8FE 100%);
+  }
+  section > * { position: absolute; z-index: 1; }
+
+  .display { font-family: "Bricolage Grotesque", sans-serif; font-variation-settings: "opsz" 96; font-weight: 800; letter-spacing: -0.045em; line-height: 0.88; }
+  .aur { background: var(--aurora); -webkit-background-clip: text; background-clip: text; color: transparent; padding-right: 0.08em; }
+
+  /* Brand lockup: the WHOLE blue tile is the logo (never the bolt alone). */
+  .lockup { display: flex; align-items: center; gap: 18px; }
+  .lockup img { width: 68px; height: 68px; border-radius: 16px; box-shadow: 0 10px 24px -8px rgba(22, 34, 75, 0.45); }
+  .lockup span { font-family: "Bricolage Grotesque", sans-serif; font-weight: 800; font-size: 40px; letter-spacing: -0.02em; }
+
+  .sub { font-size: 40px; line-height: 1.22; color: var(--ink-2); font-weight: 500; letter-spacing: -0.015em; }
+  .frame-logo { left: 80px; top: 150px; }
+  .frame-head { left: 76px; top: 318px; font-size: 214px; }
+  .frame-sub  { left: 80px; top: 1098px; width: 440px; }
+  .foot { left: 80px; top: 1262px; font-size: 30px; color: var(--muted); font-weight: 500; letter-spacing: 0.005em; }
+  .foot b { color: var(--ink); font-weight: 600; }
+
+  /* iPhone. Titanium rail, glass edge, Dynamic Island; the screen is a real
+     page capture. The body runs off the bottom of the canvas on purpose. */
+  .phone { background: linear-gradient(160deg, #4b505b 0%, #1c1f26 30%, #2a2e36 70%, #4b505b 100%); border-radius: 76px; padding: 13px;
+           box-shadow: 0 0 0 1.5px rgba(255,255,255,0.35) inset, 0 60px 110px -30px rgba(11, 16, 34, 0.55), 0 30px 60px -20px rgba(37, 99, 235, 0.35); }
+  .screen { border-radius: 64px; overflow: hidden; position: relative; background: #fbf7f1; }
+  .screen img.shot { display: block; width: 100%; }
+  .sbar { position: absolute; left: 0; right: 0; top: 0; height: 58px; display: flex; align-items: center; justify-content: space-between; padding: 8px 44px 0 50px; font: 600 21px "Geist", sans-serif; color: #111; z-index: 3; }
+  .sbar.light { color: #fff; }
+  .sbar .icons { display: flex; gap: 8px; align-items: center; }
+  .island { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); width: 33%; height: 36px; background: #000; border-radius: 40px; z-index: 4; }
+
+  /* The tap: a fingertip and one ripple, on the Save Contact button. */
+  .tap { width: 0; height: 0; }
+  .tap i { position: absolute; border-radius: 50%; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  .tap .r1 { width: 112px; height: 112px; border: 2px solid rgba(255, 255, 255, 0.45); }
+  .tap .dot { width: 54px; height: 54px; background: rgba(255,255,255,0.35); border: 3px solid rgba(255,255,255,0.95); box-shadow: 0 6px 16px rgba(11, 16, 34, 0.28); }
+
+  /* The card, lifted off the page with SwiftCard-blue light under it. */
+  .card { display: block; border-radius: 24px; box-shadow: 0 70px 100px -40px rgba(11, 16, 34, 0.45), 0 30px 70px -30px rgba(37, 99, 235, 0.45), 0 0 0 1px rgba(11, 16, 34, 0.06); }
+
+  /* Debug: the 1080x1080 profile-grid crop. Hidden in exports. */
+  body.safe .safebox { display: block; }
+  .safebox { display: none; left: 0; right: 0; top: 135px; height: 1080px; outline: 3px dashed #ff3b6b; z-index: 99; }
+</style>
+</head>
+<body>
+
+<!-- Pinned order, left to right: ONE CARD · ONE LINK · ONE TAP (the bio:
+     "Everything you are. 1 Card. 1 Link. 1 Tap."). One person throughout:
+     Daniel Whitfield, Director of Sales, Northwind Partners. -->
+
+<!-- ======================= ONE CARD ======================= -->
+<section data-out="pinned-v2/one-card.png">
+  <div class="lockup frame-logo"><img src="assets/logo.svg"><span>SwiftCard</span></div>
+  <h1 class="display frame-head">One<br><span class="aur">Card.</span></h1>
+  <p class="sub frame-sub">Everything you are,<br>on one card.</p>
+  <div class="foot"><b>swiftcard.me</b> &nbsp;·&nbsp; Free to start</div>
+  <div class="safebox"></div>
+  <img class="card" src="assets/dw-card.png" style="left:336px;top:712px;width:684px;transform:rotate(3deg)">
+</section>
+
+<!-- ======================= ONE LINK ======================= -->
+<section data-out="pinned-v2/one-link.png">
+  <div class="lockup frame-logo"><img src="assets/logo.svg"><span>SwiftCard</span></div>
+  <h1 class="display frame-head">One<br><span class="aur">Link.</span></h1>
+  <p class="sub frame-sub">Everything you share,<br>in one link.</p>
+  <div class="foot"><b>swiftcard.me</b> &nbsp;·&nbsp; Free to start</div>
+  <div class="safebox"></div>
+  <div class="phone" style="left:556px;top:292px;width:476px">
+    <div class="screen" style="background:#0B1220">
+      <div class="island"></div>
+      <div class="sbar light"><span>9:41</span><span class="icons">
+        <svg width="22" height="14" viewBox="0 0 20 13"><rect x="0" y="9" width="3.5" height="4" rx="1" fill="#fff"/><rect x="5.5" y="6" width="3.5" height="7" rx="1" fill="#fff"/><rect x="11" y="3" width="3.5" height="10" rx="1" fill="#fff"/><rect x="16.5" y="0" width="3.5" height="13" rx="1" fill="#fff"/></svg>
+        <svg width="30" height="14" viewBox="0 0 28 13"><rect x="0.5" y="0.5" width="24" height="12" rx="3.5" stroke="#fff" fill="none" opacity="0.5"/><rect x="2.5" y="2.5" width="20" height="8" rx="2" fill="#fff"/><rect x="25.5" y="4" width="2" height="5" rx="1" fill="#fff" opacity="0.5"/></svg>
+      </span></div>
+      <!-- Scrolled a touch, as a visitor would, so the links are in view. -->
+      <img class="shot" src="assets/dw-links.png" style="margin-top:-70px">
+    </div>
+  </div>
+</section>
+
+<!-- ======================= ONE TAP ======================= -->
+<section data-out="pinned-v2/one-tap.png">
+  <div class="lockup frame-logo"><img src="assets/logo.svg"><span>SwiftCard</span></div>
+  <h1 class="display frame-head">One<br><span class="aur">Tap.</span></h1>
+  <p class="sub frame-sub">From introduction<br>to saved contact.</p>
+  <div class="foot"><b>swiftcard.me</b> &nbsp;·&nbsp; Free to start</div>
+  <div class="safebox"></div>
+  <div class="phone" style="left:556px;top:292px;width:476px">
+    <div class="screen" style="background:linear-gradient(180deg, rgba(37,99,235,0.14) 0%, rgba(250,247,242,0) 46%), #FAF7F2">
+      <div class="island"></div>
+      <div class="sbar"><span>9:41</span><span class="icons">
+        <svg width="22" height="14" viewBox="0 0 20 13"><rect x="0" y="9" width="3.5" height="4" rx="1" fill="#111"/><rect x="5.5" y="6" width="3.5" height="7" rx="1" fill="#111"/><rect x="11" y="3" width="3.5" height="10" rx="1" fill="#111"/><rect x="16.5" y="0" width="3.5" height="13" rx="1" fill="#111"/></svg>
+        <svg width="30" height="14" viewBox="0 0 28 13"><rect x="0.5" y="0.5" width="24" height="12" rx="3.5" stroke="#111" fill="none" opacity="0.5"/><rect x="2.5" y="2.5" width="20" height="8" rx="2" fill="#111"/><rect x="25.5" y="4" width="2" height="5" rx="1" fill="#111" opacity="0.5"/></svg>
+      </span></div>
+      <img class="shot" src="assets/dw-page.png" style="margin-top:58px">
+    </div>
+  </div>
+  <!-- The tap, on the right end of the real Save Contact button. -->
+  <div class="tap" style="left:930px;top:716px"><i class="r1"></i><i class="dot"></i></div>
+</section>
+
+<script>
+  if (location.hash === "#safe") document.body.classList.add("safe");
+</script>
+</body>
+</html>

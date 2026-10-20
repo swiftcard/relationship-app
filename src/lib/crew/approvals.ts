@@ -14,6 +14,9 @@ import { stripEmDashes } from "./voice";
 //   • one reply per thread (unique index on platform + url)
 
 export const TEXT_KINDS: ApprovalKind[] = ["reply", "comment", "dm", "connect_note", "post"];
+/** Drafts written as "a person who uses SwiftCard" carry the disclosure; posts
+ *  from SwiftCard's own accounts are plainly from SwiftCard already. */
+export const DISCLOSE_KINDS: ApprovalKind[] = ["reply", "comment", "dm", "connect_note"];
 export const DM_KINDS: ApprovalKind[] = ["dm", "connect_note"];
 
 export type Proposal = {
@@ -43,8 +46,9 @@ export async function propose(ctx: AgentContext, p: Proposal): Promise<ProposeRe
   }
 
   let body = p.body;
-  if (TEXT_KINDS.includes(p.kind)) {
-    body = stripEmDashes(applyDisclosure(body, { on: ctx.settings.disclosure_on, disclosure: ctx.settings.disclosure }));
+  if (TEXT_KINDS.includes(p.kind)) body = stripEmDashes(body);
+  if (DISCLOSE_KINDS.includes(p.kind)) {
+    body = applyDisclosure(body, { on: ctx.settings.disclosure_on, disclosure: ctx.settings.disclosure });
     if (!hasRequiredDisclosure(body, { on: ctx.settings.disclosure_on, disclosure: ctx.settings.disclosure })) {
       return { ok: false, reason: "missing disclosure" };
     }
