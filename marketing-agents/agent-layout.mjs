@@ -107,7 +107,7 @@ await safeMain("layout", async (run) => {
   });
   if (critical.length) {
     await email(`🔴 Layout: ${critical[0].title}${critical.length > 1 ? ` (+${critical.length - 1} more)` : ""}`,
-      `<h3>A page is visibly broken</h3><ul>${critical.map((c) => `<li><b>${c.title}</b><br>${c.detail}</li>`).join("")}</ul><p>Details in Agent Flow → Rex's team → Pix.</p>`);
+      `<h3>A page is visibly broken</h3><ul>${critical.map((c) => `<li><b>${c.title}</b><br>${c.detail}</li>`).join("")}</ul><p>Details are in the agent_queue_items table.</p>`);
   }
   try { if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `findings=${list.length}\nitem_id=${item?.id ?? ""}\n`); } catch { /* not in Actions */ }
   await run.finish("success", `${list.length} visual problem(s) across ${pages.length} pages. $0.00 (no LLM).`);

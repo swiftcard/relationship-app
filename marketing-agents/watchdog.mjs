@@ -28,7 +28,6 @@ import { DETECTORS, blindnessFindings } from "./lib/detectors.mjs";
 import { SERVICING_INTERVAL_MIN, FIXER_ELIGIBLE, FINDING_ITEM_TYPE } from "./lib/detectors-servicing.mjs";
 import { isDue } from "./lib/schedule.mjs";
 import { pollMediaPool } from "./lib/media-pool.mjs";
-import { radarTick, RADAR_AGENTS } from "./lib/radar.mjs";
 
 const config = JSON.parse(readFileSync(new URL("./config.json", import.meta.url), "utf8"));
 const TICK_SEC = Number(process.env.WATCHDOG_TICK_SEC || 60);
@@ -56,7 +55,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const stamp = () => new Date().toISOString().slice(11, 19);
 
 /** Wake an agent's LLM workflow to investigate a finding it just detected
- *  (trigger "watchdog"), or to answer conversations the Radar found ("radar"). */
+ *  (trigger "watchdog"). */
 async function dispatchAgent(agentId, reason, trigger = "watchdog") {
   const wf = config.agents[agentId]?.workflow;
   if (!wf) return false;
@@ -129,10 +128,8 @@ async function tick() {
   // Active takes effect within one tick, not at some next scheduled boundary.
   const sys = (await sb("GET", "agent_system", { params: "limit=1" }))[0];
   if (!sys) { console.log("agent_system row missing — standing down."); return "stop"; }
-  // Housekeeping runs even with the office closed: the chat answers while
-  // paused (a direct run skips the gates), so a stuck turn still needs its
-  // retry, and a dead run still needs closing. The hourly backstop is enough.
-  await sweepChatOrders().catch((e) => console.log(`${stamp()} chat sweep error: ${String(e?.message ?? e).slice(0, 160)}`));
+  // Housekeeping runs even with the office closed: a dead run still needs
+  // closing. The hourly backstop is enough.
   await sweepStaleRuns().catch((e) => console.log(`${stamp()} stale-run sweep error: ${String(e?.message ?? e).slice(0, 160)}`));
   if (sys.paused) { console.log(`${stamp()} office closed (Pause All) — watchdogs standing down.`); return "stop"; }
   if (sys.auto_pause_at && new Date(sys.auto_pause_at).getTime() <= Date.now()) {
@@ -143,16 +140,7 @@ async function tick() {
     params: `agent_id=in.(${WATCHDOGS.join(",")})&select=agent_id,enabled,paused`,
   });
   const onDuty = (rows ?? []).filter((r) => r.enabled && !r.paused).map((r) => r.agent_id);
-  // The Radar (lib/radar.mjs) ticks inside this loop too, so the loop stays
-  // up while a listening agent (Zoe, Wes, Ava, Ivy, Piper) is awake even
-  // when every watchdog is unticked — on 2026-09-30 the office opened with
-  // no watchdog Active and the loop stood down before the Radar ever ran.
-  const listeners = await sb("GET", "agent_settings", {
-    params: `agent_id=in.(${RADAR_AGENTS.join(",")})&enabled=is.true&paused=is.false&select=agent_id`,
-  }).catch(() => []);
-  const listening = (listeners ?? []).length > 0;
-  if (!onDuty.length && !listening) { console.log(`${stamp()} no watchdog is Active and no listening agent is awake — standing down.`); return "stop"; }
-  if (!onDuty.length) console.log(`${stamp()} no watchdog is Active — staying up for the Radar only.`);
+  if (!onDuty.length) { console.log(`${stamp()} no watchdog is Active — standing down.`); return "stop"; }
 
   for (const agentId of onDuty) {
     if (!probeDue(agentId)) continue;
@@ -218,12 +206,6 @@ async function tick() {
     console.log(`${stamp()} media pool: ${media.ready} ready, ${media.failed} failed, ${media.stillPending} pending`);
   }
 
-  // The Radar (owner order 2026-09-30): scan Reddit, Telegram, Hacker News,
-  // the news feeds and the rest for conversations about us, our topic and
-  // our competitors — code only, on its own interval inside this loop — and
-  // wake the agent whose thread it is. Like the detectors: nothing is spent
-  // listening; the model runs only when there is something real to answer.
-  await radarTick({ dispatch: dispatchAgent }).catch((e) => console.log(`${stamp()} radar error: ${String(e?.message ?? e).slice(0, 200)}`));
   return "continue";
 }
 
@@ -275,14 +257,6 @@ async function dispatchScheduled() {
 }
 
 /**
- * The company chat's safety net. The chat API wakes each @-mentioned agent
- * the moment the owner sends; if that dispatch failed (GitHub hiccup, token
- * missing at the time) the order sits 'waiting'. Every tick, anything waiting
- * more than 3 minutes is re-dispatched, and a turn stuck 'working' for 25
- * minutes (a dead run) is retried the same way. After an hour it is marked
- * failed and the room is told, so a silence is never mistaken for an answer.
- */
-/**
  * A run row is written "running" at start and "success/failed" by the runner
  * at the end. A worker that GitHub cancels or times out never writes the end,
  * so the row stays "running" forever — the tab shows the agent as working,
@@ -300,40 +274,6 @@ async function sweepStaleRuns() {
       error: "The run never finished — the worker was cancelled or timed out before it could report back. Closed by the watchdog.",
     } });
     console.log(`${stamp()} closed stale run ${r.id} (${r.agent_id}, started ${r.started_at})`);
-  }
-}
-
-const CHAT_WORKFLOW = "agent-chat.yml";
-async function sweepChatOrders() {
-  const now = Date.now();
-  const rows = await sb("GET", "agent_chat_orders", {
-    params: `status=in.(waiting,working)&select=id,message_id,responder,status,created_at,updated_at&order=created_at.asc&limit=40`,
-  }).catch(() => null);
-  if (!rows?.length) return;
-  const retryAfterMs = { waiting: 3 * 60_000, working: 25 * 60_000 };
-  const byResponder = new Map();
-  for (const o of rows) {
-    const ageMs = now - new Date(o.created_at).getTime();
-    const idleMs = now - new Date(o.updated_at ?? o.created_at).getTime();
-    if (ageMs > 60 * 60_000) {
-      await sb("PATCH", "agent_chat_orders", { params: `id=eq.${o.id}`, body: { status: "failed", error: "no turn started within an hour", updated_at: new Date().toISOString() } }).catch(() => {});
-      await sb("POST", "agent_chat", { body: { from_id: "atlas", kind: "system", body: `⚠ ${o.responder} never answered — the turn could not be started within an hour. Send the message again or check GITHUB_AGENTS_TOKEN.`, reply_to: o.message_id } }).catch(() => {});
-      continue;
-    }
-    if (idleMs < retryAfterMs[o.status]) continue;
-    if (!byResponder.has(o.responder)) byResponder.set(o.responder, []);
-    byResponder.get(o.responder).push(o.id);
-  }
-  for (const [responder, ids] of byResponder) {
-    if (!process.env.GH_TOKEN) { console.log(`  ! GH_TOKEN missing — cannot re-wake ${responder}'s chat turn`); return; }
-    const res = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/${CHAT_WORKFLOW}/dispatches`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${process.env.GH_TOKEN}`, Accept: "application/vnd.github+json" },
-      body: JSON.stringify({ ref: "main", inputs: { agent: responder, trigger: "chat" } }),
-    }).catch(() => null);
-    console.log(`${stamp()} chat: re-woke ${responder} for ${ids.length} order(s) → ${res?.status ?? "network"}`);
-    // Stamp the attempt so the next tick does not fire again immediately.
-    await sb("PATCH", "agent_chat_orders", { params: `id=in.(${ids.join(",")})`, body: { updated_at: new Date().toISOString() } }).catch(() => {});
   }
 }
 

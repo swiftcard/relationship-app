@@ -141,18 +141,17 @@ describe("it can only answer people who wrote to the Page first", () => {
     expect(exported.find(([n]) => n === "fbSendMessage")![1]).toContain("psid");
     expect(c).not.toMatch(/username|\/likes|\/groups|friends|\/feed/i);
   });
-  it("only the bot and the owner's Approve button can send", () => {
+  it("only the bot can send", () => {
     const importers = walk("src").filter((f) => f !== SEND && /from "@\/lib\/facebook-send"/.test(read(f)));
-    expect(importers.sort()).toEqual(["src/lib/agent-execute.ts", "src/lib/facebook-bot.ts"]);
+    expect(importers.sort()).toEqual(["src/lib/facebook-bot.ts"]);
   });
   it("the bot's own reads of the Page are GETs — its only writes go through the send module", () => {
     const c = code("src/lib/facebook-bot.ts");
     expect(c).not.toMatch(/method:\s*"(POST|DELETE|PUT)"/);
     expect(c).not.toMatch(/\/groups|\/feed\b/);
   });
-  it("the scheduled route refuses a missing secret, and the admin route refuses a non-admin", () => {
+  it("the scheduled route refuses a missing secret", () => {
     expect(code("src/app/api/agents/facebook/tick/route.ts")).toMatch(/if \(!botAuthorized\(req\)\) return NextResponse\.json\(\{ error: "Unauthorized" \}, \{ status: 401 \}\)/);
-    expect(code("src/app/api/admin/agents/facebook/route.ts").match(/if \(!\(await requireAdmin\(\)\)\) return NextResponse\.json\(\{ error: "Forbidden" \}, \{ status: 403 \}\)/g)).toHaveLength(2);
   });
 });
 
@@ -199,23 +198,9 @@ describe("every Facebook signup is countable", () => {
     expect(isCampaignSource("fb_page")).toBe(true);
     expect(getSignupSourceLabel(c)).toMatch(/^Facebook/);
   });
-  it("the admin route ranks posts by signups under those codes", () => {
-    const route = code("src/app/api/admin/agents/facebook/route.ts");
-    expect(route).toMatch(/\.like\("signup_source", "fb\\\\_%"\)/);
-    expect(route).toMatch(/\.sort\(\(a, b\) => b\.signups - a\.signups/);
-  });
 });
 
 describe("the owner's surface and the schedule", () => {
-  it("Approve sends the three Facebook kinds; without a connection they are Approve & Copy", () => {
-    const exec = code("src/lib/agent-execute.ts");
-    expect(exec).toMatch(/FB_ENGAGE_KINDS = new Set\(\["fb_dm", "fb_reply", "fb_message"\]\)/);
-    expect(exec).toMatch(/ready: \(c\) => !!c\.meta\?\.meta\.page_id,\s*matches: \(it\) => FB_ENGAGE_KINDS\.has\(it\.item_type\)/);
-    const ui = code("src/app/admin/agent-flow/AgentFlowClient.tsx");
-    expect(ui).toMatch(/id: "facebook_engage"/);
-    for (const k of ["fb_dm", "fb_reply", "fb_message"]) expect(ui).toMatch(new RegExp(`COPY_KINDS = new Set\\(\\[[^\\]]*"${k}"`));
-    expect(read("src/app/admin/agent-flow/AgentFlowClient.tsx")).toContain("<FacebookBotCard />");
-  });
   it("runs every 10 minutes from GitHub (Vercel Hobby has no spare cron)", () => {
     const wf = read(".github/workflows/facebook-bot.yml");
     expect(wf).toContain('cron: "5-59/10 * * * *"');
@@ -228,10 +213,5 @@ describe("the owner's surface and the schedule", () => {
     expect(sql).toMatch(/alter table agent_fb_events enable row level security/);
     expect(sql).toMatch(/alter table agent_fb_posts\s+enable row level security/);
     expect(sql).not.toMatch(/create policy/i);
-  });
-  it("Milo ends every Facebook post with the keyword call to action, and leaves groups alone", () => {
-    const brief = read("marketing-agents/agents/social.md");
-    expect(brief).toContain("Comment CARD and we'll send you one.");
-    expect(brief).toMatch(/Facebook GROUPS are not yours and not the bot's/);
   });
 });

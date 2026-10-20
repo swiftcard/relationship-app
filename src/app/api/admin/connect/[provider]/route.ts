@@ -8,7 +8,7 @@ import { signState, oauthBindCookieValue } from "@/lib/oauth-state";
 export const runtime = "nodejs";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
-const SETTINGS = `${APP_URL}/admin/agent-flow?view=settings`;
+const SETTINGS = `${APP_URL}/admin?connect=1`;
 
 // GET /api/admin/connect/<provider> → the platform's consent screen.
 // Owner only: the admin gate is the same one every /api/admin route uses.

@@ -3,12 +3,12 @@ import { from as senderAddress, INBOX_ADDRESS } from "@/lib/email-senders";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { htmlToText } from "@/lib/email-text";
 
-// ── Email relay for the Agent Flow agents ────────────────────────────────────
+// ── Email relay for the agents ───────────────────────────────────────────────
 // GitHub Actions can't read the app's RESEND_API_KEY (it's a Vercel-sensitive
 // var), so agents send their digest/cap/critical emails THROUGH the app.
 // Abuse-proof by construction:
-//   • Bearer AGENT_RELAY_SECRET (minted by scripts/agent-flow-setup.mjs; the
-//     route is a 404 until that secret exists in the environment).
+//   • Bearer AGENT_RELAY_SECRET (the route is a 404 until that secret
+//     exists in the environment).
 //   • The recipient is ALWAYS agent_system.digest_email from the DB — the
 //     caller cannot choose who it mails, so the relay can't spam anyone.
 //   • Subjects are prefixed so nothing sent here can impersonate product mail.
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
       // from outside — the same From their card shares depend on.
       from: senderAddress("support", "SwiftCard Agents"),
       to: [to],
-      subject: `[Agent Flow] ${body.subject.slice(0, 180)}`,
+      subject: `[Agents] ${body.subject.slice(0, 180)}`,
       html: body.html.slice(0, 100_000),
       // Internal mail, but it shares hello@swiftcard.me's reputation with
       // every card a user shares: HTML-only is a spam signal, so it gets the

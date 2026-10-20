@@ -18,7 +18,7 @@ import { igPrivateReply, igReplyToComment, igSendMessage, isAccessError, type Se
 //
 // THE RULES (pinned in tests/agent-instagram.test.ts):
 //   • OFF by default. Until the owner turns it on, nothing is sent: each reply
-//     is filed in the Agent Flow queue for a one-tap Approve instead.
+//     is filed in agent_queue_items instead (no approval screen since Agent Flow was retired).
 //   • It only answers people who wrote to us first. Sends live in
 //     lib/instagram-send.ts, which cannot address anyone else.
 //   • One card link per person per post. A daily cap. Never twice for the same
@@ -497,7 +497,7 @@ export type HashtagPost = { external_id: string; url: string | null; title: stri
 
 export async function readHashtagPosts(perPass = 6): Promise<{ posts: HashtagPost[]; error: string | null }> {
   const conn = (await loadConnections()).meta;
-  if (!conn?.meta.ig_user_id) return { posts: [], error: "Instagram is not connected — connect Meta in Agent Flow → Settings." };
+  if (!conn?.meta.ig_user_id) return { posts: [], error: "Instagram is not connected — connect Meta through /api/admin/connect/meta." };
   const { settings, state, ready } = await loadIg();
   if (!ready) return { posts: [], error: "Run supabase/agent-instagram.sql first." };
   const token = conn.access_token;

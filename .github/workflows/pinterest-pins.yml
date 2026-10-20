@@ -10,9 +10,9 @@ name: Pinterest pins
 # never duplicates.
 #
 # A GitHub job because it needs a browser (Playwright) — Vercel has none.
+# Schedule removed 2026-10-19 with the Agent Flow retirement: nothing posts
+# unless someone dispatches this by hand.
 on:
-  schedule:
-    - cron: "0 15 * * 1,4"
   workflow_dispatch:
     inputs:
       per_run:

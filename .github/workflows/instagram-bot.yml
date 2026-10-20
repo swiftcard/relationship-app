@@ -4,7 +4,7 @@ name: Instagram bot
 #
 # Every 10 minutes: ask production to read the new comments on SwiftCard's
 # Instagram posts and the new messages, and act on each — send the card link,
-# answer a question, or file it in the Agent Flow queue (src/lib/instagram-bot.ts
+# answer a question, or file it in the agent_queue_items table (src/lib/instagram-bot.ts
 # has the rules). Meta's webhook does the same thing instantly once the Meta app
 # is approved; this pass is what works before that, and the safety net after.
 #

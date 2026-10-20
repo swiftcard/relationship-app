@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   const conn = (await loadConnections()).pinterest;
   if (!conn) return NextResponse.json({ ok: false, reason: "not_connected" });
   const token = await freshAccessToken(conn);
-  if (!token) return NextResponse.json({ ok: false, reason: "token_expired — reconnect Pinterest in Agent Flow → Settings" });
+  if (!token) return NextResponse.json({ ok: false, reason: "token_expired — reconnect Pinterest through /api/admin/connect/pinterest" });
 
   const db = getAdminSupabase();
   const code = pinCode(slug);

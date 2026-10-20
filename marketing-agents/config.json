@@ -1,57 +1,8 @@
 {
-  "_comment": "Central agent config. enable/caps/schedules ALSO live in the agent_settings table (editable from the Agent Flow tab without a deploy) \u2014 the DB wins at runtime; these are the seed values and the target lists the prompts consume.",
+  "_comment": "Central agent config. enable/caps/schedules ALSO live in the agent_settings table (editable from the Agent Flow tab without a deploy) — the DB wins at runtime; these are the seed values and the target lists the prompts consume.",
   "digest_email": "hello@swiftcard.me",
   "monthly_usage_cap_usd": 25,
   "agents": {
-    "outreach": {
-      "name": "Outreach Scout",
-      "mode": "draft_only",
-      "workflow": "agent-outreach.yml",
-      "output_cap": 12,
-      "default_schedule": "every@8h"
-    },
-    "prospects": {
-      "name": "Link-in-bio Prospecting",
-      "mode": "draft_only",
-      "workflow": "agent-prospects.yml",
-      "output_cap": 40,
-      "default_schedule": "daily@07:30"
-    },
-    "seo": {
-      "name": "SEO",
-      "mode": "autonomous",
-      "workflow": "agent-seo.yml",
-      "output_cap": 5,
-      "default_schedule": "every@8h"
-    },
-    "blog": {
-      "name": "Blog Writer",
-      "mode": "autonomous",
-      "workflow": "agent-blog.yml",
-      "output_cap": 2,
-      "default_schedule": "daily@09:30"
-    },
-    "social": {
-      "name": "Social Content",
-      "mode": "draft_only",
-      "workflow": "agent-social.yml",
-      "output_cap": 5,
-      "default_schedule": "every@8h"
-    },
-    "mentions": {
-      "name": "Reddit Conversations",
-      "mode": "draft_only",
-      "workflow": "agent-mentions.yml",
-      "output_cap": 10,
-      "default_schedule": "every@8h"
-    },
-    "influencer": {
-      "name": "Influencer Scout",
-      "mode": "draft_only",
-      "workflow": "agent-influencer.yml",
-      "output_cap": 10,
-      "default_schedule": "daily@12:00"
-    },
     "bugwatch": {
       "name": "Bug Watch",
       "mode": "autonomous_drafts",
@@ -79,181 +30,6 @@
       "workflow": "agent-flowcheck.yml",
       "output_cap": 3,
       "continuous": true
-    },
-    "manager": {
-      "name": "Manager / Digest",
-      "mode": "reporter",
-      "workflow": "agent-manager.yml",
-      "output_cap": 1,
-      "default_schedule": "daily@12:00,17:00"
-    },
-    "ads": {
-      "name": "Paid Ads",
-      "mode": "autonomous_drafts",
-      "workflow": "agent-ads.yml",
-      "output_cap": 4,
-      "default_schedule": "daily@10:00"
-    },
-    "video": {
-      "name": "Video & Creative",
-      "mode": "draft_only",
-      "workflow": "agent-video.yml",
-      "output_cap": 6,
-      "default_schedule": "daily@08:00"
-    },
-    "email": {
-      "name": "Email & Newsletter",
-      "mode": "draft_only",
-      "workflow": "agent-email.yml",
-      "output_cap": 2,
-      "default_schedule": "daily@08:30"
-    },
-    "cro": {
-      "name": "Conversion & Website",
-      "mode": "draft_only",
-      "workflow": "agent-cro.yml",
-      "output_cap": 2,
-      "default_schedule": "daily@11:00"
-    },
-    "competitors": {
-      "name": "Competitor Watch",
-      "mode": "autonomous_drafts",
-      "workflow": "agent-competitors.yml",
-      "output_cap": 6,
-      "default_schedule": "every@6h"
-    },
-    "industry": {
-      "name": "Industry Outreach",
-      "mode": "draft_only",
-      "workflow": "agent-industry.yml",
-      "output_cap": 12,
-      "default_schedule": "daily@07:00"
-    },
-    "forums": {
-      "name": "Forums & Communities",
-      "mode": "draft_only",
-      "workflow": "agent-forums.yml",
-      "output_cap": 8,
-      "default_schedule": "every@8h"
-    },
-    "partners": {
-      "name": "Partnerships",
-      "mode": "draft_only",
-      "workflow": "agent-partners.yml",
-      "output_cap": 6,
-      "default_schedule": "daily@09:00"
-    },
-    "listings": {
-      "name": "Directories & Listings",
-      "mode": "draft_only",
-      "workflow": "agent-listings.yml",
-      "output_cap": 6,
-      "default_schedule": "daily@13:00"
-    },
-    "reviews": {
-      "name": "Reviews & Reputation",
-      "mode": "draft_only",
-      "workflow": "agent-reviews.yml",
-      "output_cap": 6,
-      "default_schedule": "every@8h"
-    },
-    "support": {
-      "name": "Help Content",
-      "mode": "draft_only",
-      "workflow": "agent-support.yml",
-      "output_cap": 4,
-      "default_schedule": "daily@14:00"
-    },
-    "retention": {
-      "name": "Retention & Onboarding",
-      "mode": "draft_only",
-      "workflow": "agent-retention.yml",
-      "output_cap": 2,
-      "default_schedule": "daily@15:00"
-    },
-    "analyst": {
-      "name": "Growth Analyst",
-      "mode": "draft_only",
-      "workflow": "agent-analyst.yml",
-      "output_cap": 3,
-      "default_schedule": "weekly@mon@08:00"
-    },
-    "trends": {
-      "name": "Trends & Calendar",
-      "mode": "draft_only",
-      "workflow": "agent-trends.yml",
-      "output_cap": 4,
-      "default_schedule": "daily@06:30"
-    },
-    "aso": {
-      "name": "App Store Optimization",
-      "mode": "draft_only",
-      "workflow": "agent-aso.yml",
-      "output_cap": 3,
-      "default_schedule": "weekly@tue@09:00"
-    },
-    "geo": {
-      "name": "AI Search (GEO)",
-      "mode": "draft_only",
-      "workflow": "agent-geo.yml",
-      "output_cap": 3,
-      "default_schedule": "weekly@wed@09:00"
-    },
-    "launch": {
-      "name": "Launch & Release Notes",
-      "mode": "draft_only",
-      "workflow": "agent-launch.yml",
-      "output_cap": 3,
-      "default_schedule": "weekly@thu@10:00"
-    },
-    "referral": {
-      "name": "Referral & Virality",
-      "mode": "draft_only",
-      "workflow": "agent-referral.yml",
-      "output_cap": 3,
-      "default_schedule": "weekly@tue@11:00"
-    },
-    "pr": {
-      "name": "PR & Podcasts",
-      "mode": "draft_only",
-      "workflow": "agent-pr.yml",
-      "output_cap": 6,
-      "default_schedule": "daily@09:30"
-    },
-    "local": {
-      "name": "Local & Community",
-      "mode": "draft_only",
-      "workflow": "agent-local.yml",
-      "output_cap": 6,
-      "default_schedule": "daily@10:30"
-    },
-    "onboarding": {
-      "name": "Onboarding & Activation",
-      "mode": "draft_only",
-      "workflow": "agent-onboarding.yml",
-      "output_cap": 3,
-      "default_schedule": "daily@08:30"
-    },
-    "upsell": {
-      "name": "Free \u2192 Pro Upsell",
-      "mode": "draft_only",
-      "workflow": "agent-upsell.yml",
-      "output_cap": 3,
-      "default_schedule": "daily@11:00"
-    },
-    "churn": {
-      "name": "Churn & Win-back",
-      "mode": "draft_only",
-      "workflow": "agent-churn.yml",
-      "output_cap": 3,
-      "default_schedule": "weekly@mon@09:30"
-    },
-    "proof": {
-      "name": "Social Proof & Case Studies",
-      "mode": "draft_only",
-      "workflow": "agent-proof.yml",
-      "output_cap": 4,
-      "default_schedule": "weekly@wed@10:00"
     },
     "cards": {
       "name": "Card Health",
@@ -465,7 +241,7 @@
     ]
   },
   "radar": {
-    "_comment": "The Radar (2026-09-30): code-only listening across Reddit, Telegram, Hacker News, news feeds, competitor App Store reviews and YouTube. Owner overrides live in agent_system.radar (Settings \u2192 Radar); these are the defaults. Reading is all it does \u2014 posting stays with the owner.",
+    "_comment": "The Radar (2026-09-30): code-only listening across Reddit, Telegram, Hacker News, news feeds, competitor App Store reviews and YouTube. Owner overrides live in agent_system.radar (Settings → Radar); these are the defaults. Reading is all it does — posting stays with the owner.",
     "interval_min": 15,
     "wake_cooldown_min": 120,
     "wake_score": 50,
@@ -608,15 +384,15 @@
     "telegram_channels": [],
     "feeds": [
       {
-        "label": "Google News \u00b7 digital business card",
+        "label": "Google News · digital business card",
         "url": "https://news.google.com/rss/search?q=%22digital+business+card%22&hl=en-US&gl=US&ceid=US:en"
       },
       {
-        "label": "Google News \u00b7 NFC business card",
+        "label": "Google News · NFC business card",
         "url": "https://news.google.com/rss/search?q=%22nfc+business+card%22&hl=en-US&gl=US&ceid=US:en"
       },
       {
-        "label": "Bing News \u00b7 digital business card",
+        "label": "Bing News · digital business card",
         "url": "https://www.bing.com/news/search?q=%22digital+business+card%22&format=rss"
       }
     ],

@@ -7,7 +7,7 @@ import { stateBoundToBrowser, verifyState } from "@/lib/oauth-state";
 export const runtime = "nodejs";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
-const SETTINGS = `${APP_URL}/admin/agent-flow?view=settings`;
+const SETTINGS = `${APP_URL}/admin?connect=1`;
 
 // GET /api/admin/connect/<provider>/callback?code=…&state=…
 // Three gates before a token is stored: the admin session (same browser), the

@@ -64,8 +64,6 @@ describe("F-ADMIN-05: a dropped connection never leaves an admin screen stuck", 
   });
 
   it("Disconnect only says so when the row is really gone", () => {
-    const flow = read("src/app/admin/agent-flow/AgentFlowClient.tsx");
-    expect(flow).toContain("if (!res?.ok) { say(\"Couldn't disconnect — it's still connected. Try again.\"); return; }");
     expect(read("src/lib/agent-connections.ts")).toContain("if (error) throw new Error(`agent_connections delete failed: ${error.message}`);");
     expect(read("src/app/api/admin/connect/[provider]/route.ts")).toMatch(/catch \{\n\s+return NextResponse\.json\(\{ error: "Couldn't disconnect — try again\." \}, \{ status: 500 \}\);/);
   });

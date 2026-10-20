@@ -1,6 +1,6 @@
 name: "Agent scheduler (inert until a schedule is set)"
 # The ONLY clock in the system, and it dispatches NOTHING by default: it reads
-# agent_settings.schedule from the DB (set from the Agent Flow tab; NULL for
+# agent_settings.schedule from the DB (set in the DB; NULL for
 # every agent out of the box) and triggers agents whose cron matches this
 # half-hour. With no schedules set — the default — every run is a no-op.
 on:

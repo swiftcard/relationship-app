@@ -173,7 +173,7 @@ await safeMain("flowcheck", async (run) => {
 
   if (critical.length) {
     await email(`🔴 USER JOURNEY BROKEN: ${critical[0]}${critical.length > 1 ? ` (+${critical.length - 1} more)` : ""}`,
-      `<h3>A money-path flow is broken right now</h3><ul>${critical.map((c) => `<li>${c}</li>`).join("")}</ul><p>Details in Agent Flow → Finn · Flow Check. These are contract failures a user hits directly — no error page, just a dead end.</p>`);
+      `<h3>A money-path flow is broken right now</h3><ul>${critical.map((c) => `<li>${c}</li>`).join("")}</ul><p>Details are in the agent_queue_items table. These are contract failures a user hits directly — no error page, just a dead end.</p>`);
   }
   // Closed loop, same as SEO/perf: findings dispatch the Fixer via step outputs.
   try {

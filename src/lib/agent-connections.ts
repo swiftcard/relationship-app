@@ -1,7 +1,7 @@
-// ── Agent Flow: the owner's connected platform accounts ─────────────────────
+// ── The owner's connected platform accounts ─────────────────────
 //
-// Agent Flow → Settings → Connections presses Connect, the platform's own
-// consent screen runs, and the resulting tokens land here — encrypted with
+// /api/admin/connect/<p> sends the owner to the platform's own
+// consent screen, and the resulting tokens land here — encrypted with
 // OAUTH_SECRET exactly like the CRM integrations (lib/token-crypto). Before
 // this, every connector was armed by pasting tokens into Vercel env vars,
 // which a non-coder cannot do and which silently expire (LinkedIn's 60-day

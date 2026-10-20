@@ -66,7 +66,7 @@ await safeMain(agentId, async (run) => {
 
   if (critical.length) {
     await email(`🔴 ${name}: ${critical[0].title}${critical.length > 1 ? ` (+${critical.length - 1} more)` : ""}`,
-      `<h3>${name} found something critical</h3><ul>${critical.map((c) => `<li><b>${c.title}</b><br>${c.detail}</li>`).join("")}</ul><p>Details in Agent Flow → Rex's team → ${name}.</p>`);
+      `<h3>${name} found something critical</h3><ul>${critical.map((c) => `<li><b>${c.title}</b><br>${c.detail}</li>`).join("")}</ul><p>Details are in the agent_queue_items table.</p>`);
   }
   try {
     if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `findings=${findings.length}\nitem_id=${item?.id ?? ""}\n`);

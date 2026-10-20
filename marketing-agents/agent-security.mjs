@@ -82,7 +82,7 @@ await safeMain("security", async (run) => {
 
   if (critical.length) {
     await email(`🔴 SECURITY: ${critical.join(" · ")}`,
-      `<h3>Critical security findings</h3><ul>${critical.map((c) => `<li>${c}</li>`).join("")}</ul><p>Details in the Agent Flow tab → Security Watch items. These do not wait for the digest.</p>`);
+      `<h3>Critical security findings</h3><ul>${critical.map((c) => `<li>${c}</li>`).join("")}</ul><p>Details are in the agent_queue_items table. These do not wait for the digest.</p>`);
   }
   await run.finish("success", `${run.outputCount} finding(s) queued${critical.length ? `; ${critical.length} CRITICAL emailed immediately` : ""}. $0.00 (no LLM).`);
 });

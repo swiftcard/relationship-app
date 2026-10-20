@@ -1,5 +1,5 @@
 name: "Agent: security"
-# Manually triggered from the Agent Flow tab. Writes only to agent_* tables
+# Manually triggered (workflow_dispatch). Writes only to agent_* tables
 # (and, for blog in auto mode, the agent_blog_posts table). No git, no gh, no
 # deploys, no platform APIs.
 on:

@@ -1,6 +1,6 @@
 // ── Minimal markdown → HTML for blog posts ───────────────────────────────────
-// Input is ADMIN-APPROVED content only (posts pass through the Agent Flow
-// review queue before publish), so this renderer favors simplicity: it escapes
+// Input is ADMIN-APPROVED content only (posts are reviewed before they are
+// published), so this renderer favors simplicity: it escapes
 // everything first, then re-introduces a fixed whitelist of constructs.
 // No raw HTML passes through — <script> in a post renders as text.
 

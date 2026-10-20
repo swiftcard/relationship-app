@@ -8,13 +8,6 @@ const read = (p: string) => readFileSync(p, "utf8");
 // third-party platforms. These tests make that promise a build failure to
 // break, not a code-review hope.
 describe("agent flow: draft-only agents are structurally unable to post", () => {
-  const runner = read("marketing-agents/run-agent.mjs");
-
-  it("the LLM runner allows research tools only — no Bash, no git, no gh", () => {
-    expect(runner).toMatch(/"--allowedTools", "WebSearch,WebFetch"/);
-    expect(runner).not.toMatch(/allowedTools[^\n]*Bash/);
-  });
-
   it("no agent code path contains a posting/DM API", () => {
     const forbidden = /api\.twitter\.com|graph\.facebook\.com|graph\.instagram\.com|api\.linkedin\.com|oauth\.reddit\.com|reddit\.com\/api\/submit|\/comments\/submit|chat\.postMessage/i;
     for (const f of readdirSync("marketing-agents").filter((f) => f.endsWith(".mjs")))
@@ -53,9 +46,9 @@ describe("agent flow: draft-only agents are structurally unable to post", () => 
   });
 
   it("the loop closes: clean reports self-file, findings dispatch the Fixer", () => {
-    for (const a of ["marketing-agents/agent-seo.mjs", "marketing-agents/agent-perf.mjs", "marketing-agents/agent-flowcheck.mjs"])
+    for (const a of ["marketing-agents/agent-perf.mjs", "marketing-agents/agent-flowcheck.mjs"])
       expect(read(a), `${a} must self-file clean reports`).toMatch(/status: findings\.length \? "pending" : "acknowledged"/);
-    for (const w of [".github/workflows/agent-seo.yml", ".github/workflows/agent-perf.yml", ".github/workflows/agent-flowcheck.yml"])
+    for (const w of [".github/workflows/agent-perf.yml", ".github/workflows/agent-flowcheck.yml"])
       expect(read(w), `${w} must hand findings to the Fixer`).toMatch(/agent-fixer\.yml -f item_id/);
     expect(read("marketing-agents/lib/agentkit.mjs")).toMatch(/return \{ result: "added", id:/);
   });
@@ -178,29 +171,9 @@ describe("agent flow: the org chart and comms log stay coherent", () => {
     const kit = read("marketing-agents/lib/agentkit.mjs");
     expect(kit).toMatch(/export async function standDownIfUsageExhausted/);
     expect(kit).toMatch(/skipped_usage/);
-    // Only the two LLM runners consult it — no-LLM watchers never should.
-    expect(read("marketing-agents/run-agent.mjs")).toMatch(/standDownIfUsageExhausted\(run\)/);
-    expect(read("marketing-agents/agent-blog.mjs")).toMatch(/standDownIfUsageExhausted\(run\)/);
-    for (const f of ["agent-seo.mjs", "agent-perf.mjs", "agent-security.mjs", "agent-manager.mjs"])
+    // No-LLM watchers never consult it.
+    for (const f of ["agent-perf.mjs", "agent-security.mjs"])
       expect(read(`marketing-agents/${f}`), `${f} needs no usage gate (no LLM)`).not.toMatch(/standDownIfUsageExhausted/);
-  });
-
-  it("team switches pause exactly the lead's reports and the scheduler honors it", () => {
-    const route = read("src/app/api/admin/agents/control/route.ts");
-    expect(route).toMatch(/op === "pause_team" \|\| op === "resume_team"/);
-    expect(route).toMatch(/kind === "lead"/);
-    expect(read("marketing-agents/scheduler.mjs")).toMatch(/paused=is\.false/);
-  });
-
-  it("the Claude-plan usage meter is admin-gated and best-effort", () => {
-    const route = read("src/app/api/admin/agents/usage/route.ts");
-    expect(route).toMatch(/requireAdmin/);
-    expect(route).toMatch(/api\.anthropic\.com\/api\/oauth\/usage/);
-    const kit = read("marketing-agents/lib/agentkit.mjs");
-    const snap = kit.slice(kit.indexOf("export async function snapshotClaudeUsage"), kit.indexOf("export async function safeMain"));
-    expect(snap).toMatch(/catch/); // a usage hiccup must never fail a run
-    expect(snap).toMatch(/agent_system/);
-    expect(snap).not.toMatch(/agent_queue_items|agent_runs/);
   });
 
   it("run lifecycle emits real events: dispatch, ack, report-back, escalation", () => {
@@ -213,8 +186,6 @@ describe("agent flow: the org chart and comms log stay coherent", () => {
 });
 
 describe("agent flow: person-facing copy is guarded against sounding like AI", () => {
-  const runner = read("marketing-agents/run-agent.mjs");
-
   it("the human-voice doctrine exists and ends with the self-check", () => {
     const doc = read("marketing-agents/HUMAN_VOICE.md");
     expect(doc).toMatch(/Never write these/);
@@ -222,73 +193,17 @@ describe("agent flow: person-facing copy is guarded against sounding like AI", (
     expect(doc).toMatch(/Could this exact text go to anyone else/);
   });
 
-  it("the runner injects it for every person-facing agent", () => {
-    // Addy writes ad copy that real people read, so he carries the doctrine and
-    // the tell-filter too (added 2026-09-03 with the paid-ads agent).
-    // 2026-09-08: every agent whose words reach a real person carries it.
-    // Second wave (2026-09-08): Piper (press), Lou (local), Ollie/Uma/Cass (lifecycle copy), Pat (testimonial asks).
-    expect(runner).toMatch(/PERSON_FACING = new Set\(\["outreach", "prospects", "mentions", "influencer", "social", "ads", "email", "industry", "forums", "partners", "listings", "reviews", "retention", "video", "pr", "local", "onboarding", "upsell", "churn", "proof"\]\)/);
-    expect(runner).toMatch(/HUMAN_VOICE\.md/);
-  });
-
   it("drafts with AI tells are DISCARDED, never queued", () => {
     // The filter is a hard gate the model cannot argue with — sentinel tells.
-    // The list lives in the shared brain since 2026-09-08; the runner applies it.
+    // The list lives in the shared brain.
     const brain = read("marketing-agents/lib/brain.mjs");
     for (const tell of ["finds you well", "came across your", "game.?changer", "delve"])
       expect(brain, `filter lost the "${tell}" tell`).toContain(tell);
-    expect(runner).toMatch(/robotic\+\+/);
-    expect(runner).toMatch(/DISCARDED for AI-sounding language/);
   });
 
-  it("each person-facing agent carries the mandatory final pass", () => {
-    for (const a of ["outreach", "prospects", "mentions", "influencer", "social", "email", "industry", "forums", "partners", "listings", "reviews", "retention", "pr", "local", "onboarding", "upsell", "churn", "proof"])
-      expect(read(`marketing-agents/agents/${a}.md`), `${a}.md missing its final pass`).toMatch(/HUMAN_VOICE/);
-  });
 });
 
 describe("agent flow: approve-to-execute stays owner-gated", () => {
-  const exec = read("src/lib/agent-execute.ts");
-  const itemsRoute = read("src/app/api/admin/agents/items/route.ts");
-
-  it("posting hosts live ONLY in agent-execute.ts, nowhere else in src or agents", () => {
-    // One path per platform, specific enough not to match ordinary code.
-    const hosts = /ugcPosts|\/rest\/posts|api\.higgsfield\.ai|oauth\.reddit\.com|\/2\/tweets|media_publish|\}\/feed`|\}\/photos`|upload\/youtube/;
-    expect(exec).toMatch(hosts);
-    const walk = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-      e.isDirectory() ? walk(`${dir}/${e.name}`) : /\.(ts|tsx|mjs)$/.test(e.name) ? [`${dir}/${e.name}`] : []);
-    for (const f of [...walk("src"), ...walk("marketing-agents")]) {
-      if (f === "src/lib/agent-execute.ts") continue;
-      // The Radar READS Reddit through oauth.reddit.com (search + new
-      // listings, app-only token). Its own pin (tests/agent-radar) proves it
-      // never touches a comment/submit endpoint and writes agent_radar_* only.
-      if (f === "marketing-agents/lib/radar.mjs") { expect(read(f)).not.toMatch(/api\/comment|api\/submit|ugcPosts|\/2\/tweets|media_publish/); continue; }
-      expect(read(f), `${f} contains a posting host — only agent-execute.ts may`).not.toMatch(hosts);
-    }
-  });
-
-  it("executeItem is called only from the admin items route, only on the owner's Approve of a pending item", () => {
-    const walk = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-      e.isDirectory() ? walk(`${dir}/${e.name}`) : /\.(ts|tsx)$/.test(e.name) ? [`${dir}/${e.name}`] : []);
-    for (const f of walk("src")) {
-      if (f.endsWith("agent-execute.ts") || f === "src/app/api/admin/agents/items/route.ts") continue;
-      expect(read(f), `${f} must not import executeItem`).not.toMatch(/executeItem/);
-    }
-    expect(itemsRoute).toMatch(/action === "approved" && item\.status === "pending"/);
-    expect(itemsRoute).toMatch(/requireAdmin/);
-  });
-
-  it("every connector is env-gated and the client mirror lists the same connectors", () => {
-    const client = read("src/app/admin/agent-flow/AgentFlowClient.tsx");
-    for (const id of ["linkedin", "x", "facebook", "instagram", "youtube", "higgsfield", "reddit"]) {
-      expect(exec).toContain(`id: "${id}"`);
-      expect(client).toContain(`id: "${id}"`);
-    }
-    // ready() must consult env or a stored connection, never a hardcoded true.
-    expect(exec).not.toMatch(/ready: \(\) => true/);
-    expect(exec).not.toMatch(/ready: \([a-z]*\) => true/);
-  });
-
   it("the owner's Connect flow is admin-gated and the callback checks state + browser binding", () => {
     const start = read("src/app/api/admin/connect/[provider]/route.ts");
     const cb = read("src/app/api/admin/connect/[provider]/callback/route.ts");
@@ -296,15 +211,10 @@ describe("agent flow: approve-to-execute stays owner-gated", () => {
     expect(cb).toMatch(/requireAdmin/);
     expect(cb).toMatch(/verifyState\(state\) !== user\.id/);
     expect(cb).toMatch(/stateBoundToBrowser/);
-    // Tokens are encrypted at rest and the client only ever sees a summary.
+    // Tokens are encrypted at rest.
     expect(read("src/lib/agent-connections.ts")).toMatch(/encryptToken\(c\.access_token\)/);
-    expect(read("src/app/admin/agent-flow/AgentFlowClient.tsx")).not.toMatch(/access_token/);
   });
 
-  it("LinkedIn posts as the Page, never as a person by default (standing rule 2026-09-09)", () => {
-    expect(exec).toMatch(/org_urn \|\| process\.env\.LINKEDIN_ALLOW_MEMBER_POSTS === "1"/);
-    expect(exec).toMatch(/rest\/posts/);
-  });
 });
 
 describe("agent flow: blog publishes only reviewed content", () => {
@@ -333,52 +243,6 @@ describe("agent flow: blog publishes only reviewed content", () => {
   });
 });
 
-// ── Start opens, Wake runs (owner order 2026-09-02) ──────────────────────────
-// Start All = the office is OPEN and every team is at rest — deterministically,
-// whatever state came before. NOTHING dispatches on Start. Waking a team is the
-// go signal: its enabled agents dispatch immediately (office open only), then
-// keep their rhythms. The runner refuses paused agents regardless, so a stray
-// dispatch can never run a resting team.
-describe("start opens, wake runs", () => {
-  const route = read("src/app/api/admin/agents/control/route.ts");
-  const client = read("src/app/admin/agent-flow/AgentFlowClient.tsx");
-
-  it("start_all rests every worker team (manager + the watch excepted) and dispatches no worker", () => {
-    const block = route.slice(route.indexOf('op === "start_all"'), route.indexOf('if (!process.env.GITHUB_AGENTS_TOKEN)'));
-    expect(block).toMatch(/paused: true/);
-    // The rest-on-open exception list is manager + every continuous watchdog:
-    // opening the office is the watch's go signal (owner order 2026-09-03).
-    expect(block).toMatch(/\["manager", \.\.\.CONTINUOUS_AGENTS\]/);
-    expect(block).toMatch(/not\("agent_id", "in"/);
-    expect(block).toMatch(/armWatchdogLoop\("start_all"\)/);
-    // Still no one-shot fan-out of worker agents (owner order 2026-09-02).
-    expect(block).not.toMatch(/\bdispatch\(agents\[/);
-  });
-
-  it("start_all works without the dispatch PAT — it sits BEFORE the token guard", () => {
-    expect(route.indexOf('op === "start_all"')).toBeLessThan(route.indexOf("GITHUB_AGENTS_TOKEN is not set"));
-  });
-
-  it("waking a team dispatches its enabled agents immediately — only while open", () => {
-    const block = route.slice(route.indexOf('op === "pause_team"'), route.indexOf('op === "pause" ||'));
-    expect(block).toMatch(/team_wake/);
-    expect(block).toMatch(/openNow && process\.env\.GITHUB_AGENTS_TOKEN/);
-    expect(block).toMatch(/enabled\.has\(id\)/);
-  });
-
-  it("the banner distinguishes OPEN (all resting) from RUNNING (some awake)", () => {
-    expect(client).toMatch(/allTeamsResting \? \(/);
-    expect(client).toMatch(/OPEN — all teams resting/);
-    expect(client).toMatch(/RUNNING — awake teams work their own rhythms/);
-  });
-
-  it("the tour and toasts tell the same story — no 'Start runs everyone' copy survives", () => {
-    expect(client).toMatch(/Press Start to OPEN the office/);
-    expect(client).not.toMatch(/Every agent runs now/);
-    expect(client).not.toMatch(/press Start and every agent works/);
-  });
-});
-
 // ── Every agent always has a rhythm (owner order 2026-09-02) ─────────────────
 // "Manual only" is not a state: an awake, Active agent works its schedule, and
 // an empty schedule means the default_schedule from config.json. The scheduler
@@ -403,20 +267,6 @@ describe("default rhythms — no schedule-less agents", () => {
     expect(sched).not.toMatch(/schedule=not\.is\.null/);
   });
 
-  it("the UI's DEFAULT_SCHEDULES map matches config exactly — no drift", () => {
-    const client = read("src/app/admin/agent-flow/AgentFlowClient.tsx");
-    for (const [id, a] of Object.entries(cfg.agents)) {
-      if (!a.default_schedule) continue;
-      expect(client, `client default for ${id}`).toContain(`${id}: "${a.default_schedule}"`);
-    }
-    expect(client).not.toMatch(/off — only when run by hand/);
-    expect(client).not.toMatch(/"Manual only"/);
-  });
-
-  it("ticking Active ON starts the agent immediately (office open, team awake)", () => {
-    const client = read("src/app/admin/agent-flow/AgentFlowClient.tsx");
-    expect(client).toMatch(/if \(on && open && !s\.paused\) control\("run", id\);/);
-  });
 });
 
 // ── Email policy (owner order 2026-09-02): reports + 🔴 criticals ONLY ───────
@@ -429,7 +279,7 @@ describe("agent emails: digest and criticals only", () => {
   // email, critical only.
   // scorecard.mjs is the Sunday growth sheet the owner asked for on
   // 2026-09-28 — a report, like the digest, not an alarm.
-  const MAY_EMAIL = ["agent-manager.mjs", "agent-perf.mjs", "agent-security.mjs", "agent-flowcheck.mjs", "agent-watch.mjs", "agent-layout.mjs", "scorecard.mjs"];
+  const MAY_EMAIL = ["agent-perf.mjs", "agent-security.mjs", "agent-flowcheck.mjs", "agent-watch.mjs", "agent-layout.mjs", "scorecard.mjs"];
   it("exactly these files may email, and agentkit itself sends none", () => {
     expect(read("marketing-agents/lib/agentkit.mjs")).not.toMatch(/await email\(/);
     for (const f of MAY_EMAIL)
@@ -439,35 +289,11 @@ describe("agent emails: digest and criticals only", () => {
   });
 
   it("the non-digest emails fire only on CRITICAL findings", () => {
-    for (const f of MAY_EMAIL.filter((f) => f !== "agent-manager.mjs" && f !== "scorecard.mjs")) {
+    for (const f of MAY_EMAIL.filter((f) => f !== "scorecard.mjs")) {
       const src = read(`marketing-agents/${f}`);
       const at = src.indexOf("await email(");
       expect(src.slice(Math.max(0, at - 400), at), `${f} email must be critical-gated`).toMatch(/critical/i);
     }
-  });
-});
-
-describe("agent flow: Approve & Ship fix merges only the Fixer's tested work", () => {
-  const route = read("src/app/api/admin/agents/ship-fix/route.ts");
-
-  it("is admin-gated and merges nothing outside agent-fix/* → main in our repo", () => {
-    expect(route).toMatch(/requireAdmin/);
-    expect(route).toMatch(/head\.ref\.startsWith\("agent-fix\/"\)/);
-    expect(route).toMatch(/base\.ref !== "main"/);
-    expect(route).toMatch(/m\[1\] !== REPO/);
-  });
-
-  it("never ships red or unfinished tests", () => {
-    expect(route).toMatch(/status !== "completed"/);
-    expect(route).toMatch(/"success", "neutral", "skipped"/);
-    expect(route).toMatch(/red tests never ships/);
-  });
-
-  it("the PR must come from a real queue item's payload, not caller input", () => {
-    // The caller sends only item_id; the PR URL is read from the DB row the
-    // Fixer stamped — an attacker-supplied URL has no path in.
-    expect(route).toMatch(/payload as Record<string, unknown> \| null\)\?\.pr_url/);
-    expect(route).not.toMatch(/body\.pr_url|pr_url.*req\.json/);
   });
 });
 
@@ -479,8 +305,6 @@ describe("agent flow: Approve & Ship fix merges only the Fixer's tested work", (
 // cadence.
 describe("continuous watchdogs have no schedule", () => {
   const config = JSON.parse(read("marketing-agents/config.json"));
-  const route = read("src/app/api/admin/agents/control/route.ts");
-  const client = read("src/app/admin/agent-flow/AgentFlowClient.tsx");
   // 2026-09-08: Rex's servicing watch joined the loop — same rule, no cadence.
   const WATCH = ["flowcheck", "bugwatch", "security", "perf", "cards", "links", "payments", "deliverability", "renewals", "deps", "data", "appstore", "layout"];
 
@@ -491,7 +315,7 @@ describe("continuous watchdogs have no schedule", () => {
     }
   });
 
-  it("no other agent is marked continuous — Maya's team and Atlas keep their rhythms", () => {
+  it("no other agent is marked continuous — scheduled agents keep their rhythms", () => {
     for (const [id, a] of Object.entries(config.agents as Record<string, { continuous?: boolean }>))
       if (!WATCH.includes(id)) expect(a.continuous, `${id} must not be continuous`).toBeFalsy();
   });
@@ -529,30 +353,6 @@ describe("continuous watchdogs have no schedule", () => {
     expect(w).toMatch(/if \(open\.has\(key\)\) continue;/);
   });
 
-  it("the board says 'Watching · live' and offers no rhythm picker for them", () => {
-    expect(client).toMatch(/CONTINUOUS\.has\(id\).*Watching · live/s);
-    expect(client).toMatch(/if \(CONTINUOUS\.has\(agentId\)\) return null;/);
-    expect(client).toMatch(/on watch continuously/);
-  });
-
-  it("the UI's watchdog set matches config.json exactly", () => {
-    const inClient = client.match(/const CONTINUOUS = new Set\(\[([^\]]+)\]\)/)?.[1] ?? "";
-    const ids = [...inClient.matchAll(/"([a-z]+)"/g)].map((m) => m[1]);
-    expect(ids.sort()).toEqual([...WATCH].sort());
-  });
-
-  it("the watch is armed the moment the owner turns it on", () => {
-    const settings = read("src/app/api/admin/agents/settings/route.ts");
-    expect(settings).toMatch(/enabled === true && isContinuous/);
-    // …and a cadence aimed at a watchdog is ignored rather than stored.
-    expect(settings).toMatch(/!isContinuous\(body\.agent_id\)\) patch\.schedule/);
-    expect(route).toMatch(/armWatchdogLoop\("unbench"\)/);
-    expect(route).toMatch(/armWatchdogLoop\("team_wake"\)/);
-  });
-
-  it("waking a team never one-shot-dispatches a watchdog", () => {
-    expect(route).toMatch(/if \(isContinuous\(id\)\) continue;/);
-  });
 });
 
 // ── A blind watchdog must say so ─────────────────────────────────────────────
@@ -585,11 +385,6 @@ describe("watchdogs report their own blindness", () => {
   });
 
   it("a used-up Claude window stands the agent down instead of failing it red", () => {
-    const r = read("marketing-agents/run-agent.mjs");
-    // The CLI call must be guarded, and a limit reply must not throw.
-    expect(r).toMatch(/catch \(e\)/);
-    expect(r).toMatch(/hit your \(\?:session\|usage\) limit/);
-    expect(r).toMatch(/standDownForUsage\(run, limit\)/);
     const kit = read("marketing-agents/lib/agentkit.mjs");
     expect(kit).toMatch(/export async function standDownForUsage/);
     // Recorded as capacity, never as a breakage.
@@ -597,21 +392,9 @@ describe("watchdogs report their own blindness", () => {
   });
 });
 
-// ── Atlas files exactly two reports a day ────────────────────────────────────
-// Owner order 2026-09-03: midday at 12:00 ET and end-of-day at 17:00 ET, to
-// hello@swiftcard.me, and NO other times. He previously had a single 17:30
-// digest riding the GitHub cron that fires every 2.5-5h — so the report could
-// be skipped outright. These pin both the times and the catch-up dispatch that
-// makes them actually arrive.
-describe("Atlas: midday + end-of-day reports, reliably", () => {
-  const cfg = JSON.parse(read("marketing-agents/config.json"));
-  const client = read("src/app/admin/agent-flow/AgentFlowClient.tsx");
-
-  it("his cadence is exactly 12:00 and 17:00 ET — no third time, no 17:30", () => {
-    expect(cfg.agents.manager.default_schedule).toBe("daily@12:00,17:00");
-    expect(client).toContain('manager: "daily@12:00,17:00"');
-  });
-
+// ── Multi-slot daily times (e.g. "noon and 5pm") and catch-up dispatch: late
+// runs, never skips. Shared by the watchdog loop and the old cron.
+describe("schedule: multi-slot times and catch-up dispatch, reliably", () => {
   it("the schedule parser yields precisely those two slots", async () => {
     const s = await import("../marketing-agents/lib/schedule.mjs");
     expect(s.dueTimesToday("daily@12:00,17:00")).toEqual([720, 1020]);
@@ -651,94 +434,12 @@ describe("Atlas: midday + end-of-day reports, reliably", () => {
     expect(sched).not.toMatch(/Math\.abs\(Number/);
   });
 
-  it("each report says which one it is, and still emails the owner", () => {
-    const m = read("marketing-agents/agent-manager.mjs");
-    expect(m).toMatch(/Midday/);
-    expect(m).toMatch(/End of day/);
-    expect(m).toMatch(/await email\(`\$\{slot\} report/);
-    // Exactly one email per run — the digest — unchanged from the email policy.
-    expect((m.match(/await email\(/g) ?? []).length).toBe(1);
-  });
 });
 
-// ── Maya's team: specific outputs, specific destinations ────────────────────
-// Owner order 2026-09-03: every agent needs a concrete thing it makes and a
-// concrete place that thing goes, and Milo + Addy must share creative rather
-// than each commissioning their own.
-describe("Jake writes SEO pages that actually publish", () => {
-  it("has writing instructions, and they target the blog publish pipeline", () => {
-    const md = read("marketing-agents/agents/seo.md");
-    // item_type blog_post + payload.slug is what the approve handler publishes.
-    expect(md).toMatch(/item_type "blog_post"/);
-    expect(md).toMatch(/payload/);
-    expect(md).toMatch(/content_md/);
-    // He must not duplicate Nora or the hand-built comparison pages.
-    expect(md).toMatch(/do not duplicate|already covered|no existing page/i);
-  });
-
-  it("the audit stays LLM-free — writing is a SEPARATE step", () => {
-    // Pinned elsewhere: agent-seo.mjs must have no usage gate. The audit is
-    // deterministic and free, so it must keep working when the plan window is
-    // used up; only the writer stands down.
-    expect(read("marketing-agents/agent-seo.mjs")).not.toMatch(/standDownIfUsageExhausted|execFileSync/);
-    const wf = read(".github/workflows/agent-seo.yml");
-    expect(wf).toMatch(/run-agent\.mjs seo/);
-    expect(wf).toMatch(/continue-on-error: true/);
-    // Audit runs before the writer, so a stood-down writer never costs the audit.
-    expect(wf.indexOf("agent-seo.mjs")).toBeLessThan(wf.indexOf("run-agent.mjs seo"));
-  });
-
-  it("he is handed the live slug list so he cannot write a duplicate page", () => {
-    const runner = read("marketing-agents/run-agent.mjs");
-    expect(runner).toMatch(/existingPagesBlock/);
-    expect(runner).toMatch(/agent_blog_posts/);
-  });
-
-  it("the publish path for a blog_post payload is unchanged and still owner-gated", () => {
-    const route = read("src/app/api/admin/agents/items/route.ts");
-    expect(route).toMatch(/action === "published" && item\.item_type === "blog_post"/);
-    expect(route).toMatch(/agent_blog_posts/);
-  });
-});
-
-describe("Addy plans paid ads and can never spend", () => {
-  const cfg = JSON.parse(read("marketing-agents/config.json"));
-  const org = JSON.parse(read("marketing-agents/org.json"));
-
-  it("exists on Maya's team with his own workflow", () => {
-    expect(org.parties.addy.reports_to).toBe("maya");
-    expect(org.parties.addy.agent_id).toBe("ads");
-    expect(cfg.agents.ads.workflow).toBe("agent-ads.yml");
-    expect(existsSync(".github/workflows/agent-ads.yml")).toBe(true);
-  });
-
-  it("his instructions forbid spending in the strongest terms", () => {
-    const md = read("marketing-agents/agents/ads.md");
-    expect(md).toMatch(/NEVER SPENDS|cannot launch|do not run them/i);
-    expect(md).toMatch(/PAUSED/);
-    // He must not invent proof, same rule as every other person-facing agent.
-    expect(md).toMatch(/16 CFR Part 465|NEVER invent a statistic/i);
-  });
-
-  it("his runner is structurally incapable of reaching Meta", () => {
-    // Same draft-only guarantee as every LLM agent: research tools only, and
-    // the only write is our own queue. Approving is what touches Meta, later.
-    const runner = read("marketing-agents/run-agent.mjs");
-    expect(runner).toMatch(/"--allowedTools", "WebSearch,WebFetch"/);
-    const wf = read(".github/workflows/agent-ads.yml");
-    expect(wf).not.toMatch(/git push|gh pr merge/);
-    expect(wf).toMatch(/contents: read/);
-    expect(wf).toMatch(/NEVER spends|CANNOT SPEND/i);
-  });
-});
-
-describe("Milo and Addy share one rendered creative pool", () => {
+describe("the shared creative pool", () => {
   it("generation results are captured into media_assets, not dropped", () => {
     // The old connector stored a job id and nothing ever polled it, so the
     // finished media URL was never recorded and no one could reuse it.
-    const exec = read("src/lib/agent-execute.ts");
-    expect(exec).toMatch(/media_assets/);
-    expect(exec).toMatch(/image_brief/); // images, not only video
     const pool = read("marketing-agents/lib/media-pool.mjs");
     expect(pool).toMatch(/export async function pollMediaPool/);
     expect(pool).toMatch(/export async function readyAssets/);
@@ -747,14 +448,6 @@ describe("Milo and Addy share one rendered creative pool", () => {
   it("the always-on loop polls the pool — the only reliable clock we have", () => {
     const w = read("marketing-agents/watchdog.mjs");
     expect(w).toMatch(/pollMediaPool/);
-  });
-
-  it("both agents are handed the same ready pool", () => {
-    const runner = read("marketing-agents/run-agent.mjs");
-    expect(runner).toMatch(/creativePoolBlock/);
-    expect(runner).toMatch(/id !== "ads" && id !== "social"/);
-    expect(read("marketing-agents/agents/ads.md")).toMatch(/READY CREATIVE POOL/);
-    expect(read("marketing-agents/agents/social.md")).toMatch(/shared creative pool|READY CREATIVE POOL/i);
   });
 
   it("a stuck generation job cannot be polled forever", () => {
@@ -768,24 +461,6 @@ describe("Milo and Addy share one rendered creative pool", () => {
 // nine servicing watchdogs added the night before were not on it. Two separate
 // regressions are pinned here so neither can come back quietly.
 describe("watchdog findings are approvable, and reported once", () => {
-  const client = read("src/app/admin/agent-flow/AgentFlowClient.tsx");
-  const servicing = read("marketing-agents/lib/detectors-servicing.mjs");
-
-  it("every finding item_type the watchdogs file can be acknowledged in the UI", () => {
-    const block = servicing.match(/export const FINDING_ITEM_TYPE = \{([\s\S]*?)\}/)?.[1] ?? "";
-    const types = [...block.matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
-    expect(types.length, "FINDING_ITEM_TYPE should not be empty").toBeGreaterThan(10);
-    // Mirrors isAcknowledgeable() in the client.
-    for (const t of types)
-      expect(t === "digest" || t.endsWith("_finding") || t.endsWith("_report"), `${t} would render with only a Reject button`).toBe(true);
-  });
-
-  it("the acknowledge button is not gated on a hardcoded list of item types", () => {
-    expect(client).toMatch(/isAcknowledgeable\(it\.item_type\)/);
-    expect(client, "a hardcoded item_type list is exactly the bug that hid Cara's Approve button")
-      .not.toMatch(/it\.item_type === "security_finding" \|\| it\.item_type === "seo_report"/);
-  });
-
   it("the loop wakes a watchdog once per cycle, not once per finding", () => {
     const loop = read("marketing-agents/watchdog.mjs");
     // The dispatch must live OUTSIDE the per-finding loop, guarded by a count.

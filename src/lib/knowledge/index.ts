@@ -47,7 +47,6 @@ export const UNDOCUMENTED_ROUTES: Record<string, string> = {
   "/admin/users": "Staff console — internal user list.",
   "/admin/users/[id]": "Staff console — internal user detail.",
   "/admin/website": "Staff console — internal site content tooling.",
-  "/admin/agent-flow": "Staff console — the marketing-agent review queue and run controls. Never a customer surface.",
   "/pin/[slug]": "The 1000×1500 picture behind each SwiftCard Pinterest pin (a real card design with a headline), photographed by scripts/pinterest-pins.mjs. noindex, linked from nowhere, not a customer surface.",
   "/profile": "Legacy settings page, superseded by /settings/flows and linked from nowhere. Pointing customers here would show them a second, stale copy of their settings.",
   "/profile/card": "Legacy primary-card editor, unlinked and superseded by the per-card editor.",

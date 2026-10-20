@@ -201,9 +201,9 @@ describe("it cannot write to anyone who did not write to us first", () => {
     expect(exported.find(([n]) => n === "igSendMessage")![1]).toContain("igsid");
     expect(c).not.toMatch(/username|\/follow|\/likes|business_discovery/i);
   });
-  it("only the bot and the owner's Approve button can send", () => {
+  it("only the bot can send", () => {
     const importers = walk("src").filter((f) => f !== SEND && /from "@\/lib\/instagram-send"/.test(read(f)));
-    expect(importers.sort()).toEqual(["src/lib/agent-execute.ts", "src/lib/instagram-bot.ts"]);
+    expect(importers.sort()).toEqual(["src/lib/instagram-bot.ts"]);
   });
   it("the bot's own reads of Instagram are GETs — its only writes go through the send module", () => {
     const c = code("src/lib/instagram-bot.ts");
@@ -279,7 +279,6 @@ describe("every Instagram signup is countable", () => {
     expect(buildDm(mergeIgSettings({}), "ig_p_abc")).toContain("https://swiftcard.me/go/ig_p_abc");
     // A message saved without {link} would send a greeting with nothing to tap.
     expect(mergeIgSettings({ message: "hi there" }).message).toBe(IG_DEFAULTS.message);
-    expect(code("src/app/api/admin/agents/instagram/route.ts")).toMatch(/!body\.settings\.message\.includes\("\{link\}"\)/);
   });
   it("/go/<code> lands in the builder with the source, and on the profession's template", () => {
     expect(campaignDestination("ig_bio")).toBe("/cards/new?src=ig_bio");
@@ -328,14 +327,6 @@ describe("Instagram's own browser must not strand a signup", () => {
 });
 
 describe("the owner's surface and the schedule", () => {
-  it("Approve sends the three Instagram kinds; without a connection they are Approve & Copy", () => {
-    const exec = code("src/lib/agent-execute.ts");
-    expect(exec).toMatch(/IG_ENGAGE_KINDS = new Set\(\["ig_dm", "ig_reply", "ig_message"\]\)/);
-    const ui = code("src/app/admin/agent-flow/AgentFlowClient.tsx");
-    expect(ui).toMatch(/id: "instagram_engage"/);
-    for (const k of ["ig_dm", "ig_reply", "ig_message", "ig_comment"]) expect(ui).toMatch(new RegExp(`COPY_KINDS = new Set\\(\\[[^\\]]*"${k}"`));
-    expect(read("src/app/admin/agent-flow/AgentFlowClient.tsx")).toContain("<InstagramBotCard />");
-  });
   it("runs every 10 minutes from GitHub (Vercel Hobby has no spare cron)", () => {
     const wf = read(".github/workflows/instagram-bot.yml");
     expect(wf).toContain('cron: "*/10 * * * *"');
@@ -348,13 +339,6 @@ describe("the owner's surface and the schedule", () => {
     expect(sql).toMatch(/alter table agent_ig_events enable row level security/);
     expect(sql).toMatch(/alter table agent_ig_posts\s+enable row level security/);
     expect(sql).not.toMatch(/create policy/i);
-  });
-  it("the Radar routes Instagram hashtag posts to Ava as prospects, and her brief knows what to do", () => {
-    const radar = read("marketing-agents/lib/radar.mjs");
-    expect(radar).toMatch(/instagram_hashtag: "instagram"/);
-    expect(radar).toMatch(/intent === "prospect"\) return "outreach"/);
-    expect(read("marketing-agents/agents/outreach.md")).toContain("`ig_comment`");
-    expect(read("marketing-agents/agents/social.md")).toContain("Comment CARD and I'll send you one.");
   });
 });
 
@@ -376,35 +360,17 @@ describe("TikTok: prepared by agents, posted by hand, counted by signups", () =>
     expect(isSocialInAppBrowser("Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/128.0 Mobile Safari/537.36 trill_360000 BytedanceWebview/d8a21c6")).toBe(true);
   });
   it("there is still no TikTok posting code — the owner posts it", () => {
-    const exec = code("src/lib/agent-execute.ts");
-    expect(exec).not.toMatch(/tiktokapis|open\.tiktok|tiktok\.com/i);
     expect(read("src/lib/agent-connections.ts")).not.toMatch(/"tiktok"/);
   });
-  it("the queue hands over the video file, so a hand-posted item is postable", () => {
-    const route = code("src/app/api/admin/agents/items/route.ts");
-    expect(route).toMatch(/assets: await assetsFor\(admin, data \?\? \[\]\)/);
-    expect(route).toMatch(/a\.status === "ready" && a\.url/);
-    const ui = read("src/app/admin/agent-flow/AgentFlowClient.tsx");
-    expect(ui).toContain("<AssetFiles payload={it.payload} assets={assets} />");
-    expect(ui).toContain("Download the video");
-  });
   it("Milo writes the TikTok version of what converted, with the bio-link call to action", () => {
-    const brief = read("marketing-agents/agents/social.md");
-    expect(brief).toContain("NOT on TikTok yet");
-    expect(brief).toContain("Free card: link in bio.");
-    expect(brief).toMatch(/Do NOT write\s+"Comment CARD" on TikTok/);
     const insights = read("marketing-agents/lib/insights.mjs");
     expect(insights).toContain("NOT on TikTok yet");
     expect(insights).toMatch(/social: instagramBlock, ads: instagramBlock/);
   });
-  it("the Sunday scorecard and the Tracked links card report TikTok by signups", () => {
+  it("the Sunday scorecard reports TikTok by signups", () => {
     const sc = read("marketing-agents/scorecard.mjs");
     expect(sc).toMatch(/\["tt", "TikTok"\]/);
     for (const row of ["· link taps`", "· signups`", "· Pro trials`"]) expect(sc).toContain(row);
-    const links = code("src/app/api/admin/agents/links/route.ts");
-    expect(links).toMatch(/if \(!\(await requireAdmin\(\)\)\)/);
-    expect(links).toContain("swiftcard-test.invalid");
-    expect(read("src/app/admin/agent-flow/AgentFlowClient.tsx")).toContain("<TrackedLinksCard />");
   });
 });
 
@@ -423,18 +389,8 @@ describe("LinkedIn: new-hire announcements → Ava → the owner's tap", () => {
     expect(radar).toContain("when:7d");
     const cfg = JSON.parse(read("marketing-agents/config.json"));
     expect(Array.isArray(cfg.radar.hire_queries) && cfg.radar.hire_queries.length).toBeTruthy();
-    expect(read("src/app/api/admin/agents/radar/route.ts")).toContain('"hire_queries"');
-    expect(read("src/app/admin/agent-flow/AgentFlowClient.tsx")).toContain('["hire_queries", ');
   });
-  it("Ava's and Milo's LinkedIn rules carry the tracked links and the Page-only rule", () => {
-    const ava = read("marketing-agents/agents/outreach.md");
-    expect(ava).toContain("`li_prospect`");
-    expect(ava).toContain("swiftcard.me/go/li_dm");
-    expect(ava).toMatch(/under 300 characters/);
-    expect(ava).toMatch(/Never a link in a public\s+comment/);
-    const milo = read("marketing-agents/agents/social.md");
-    expect(milo).toContain("swiftcard.me/go/li_post");
-    expect(milo).toMatch(/never a\s+person/);
+  it("LinkedIn tracked links are valid signup sources", () => {
     for (const s of ["li_dm", "li_post", "li_page", "rd_realtors"]) expect(isSignupSource(s), s).toBe(true);
     expect(getSignupSourceLabel("li_post")).toBe("LinkedIn — post");
   });
@@ -487,14 +443,8 @@ describe("Pinterest: every pin is a real design, posted once, linking back", () 
     const oauth = read("src/lib/agent-connect-oauth.ts");
     expect(oauth).toContain("https://www.pinterest.com/oauth/");
     expect(oauth).toContain("https://api.pinterest.com/v5/oauth/token");
-    expect(read("src/app/admin/agent-flow/AgentFlowClient.tsx")).toContain('id: "pinterest"');
   });
-  it("YouTube: titles are the search, and the description carries the tracked link", () => {
-    const milo = read("marketing-agents/agents/social.md");
-    expect(milo).toMatch(/Best digital business card for\s+realtors/);
-    expect(milo).toContain("swiftcard.me/go/yt_<slug>");
-    expect(milo).toMatch(/lands PRIVATE/);
-    expect(read("marketing-agents/agents/video.md")).toContain("YouTube how-tos");
+  it("YouTube tracked links are valid signup sources", () => {
     expect(isSignupSource("yt_linq_alternative")).toBe(true);
   });
 });

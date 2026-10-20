@@ -1,7 +1,7 @@
 // ── Which product and industry pages a blog post should point at ────────────
 //
-// Posts are written by the Blog Writer agent and published from the Agent Flow
-// queue; none of the first four linked to a single /for or /products page (SEO
+// Posts were written by the Blog Writer agent and published from the (retired)
+// Agent Flow queue; none of the first four linked to a single /for or /products page (SEO
 // audit, 2026-10-14), so the pages that are supposed to rank for what the
 // post ranks for got nothing from it. The page adds a "Related" row from this
 // list: the post's own words (slug, title, keyword) pick the pages, and every

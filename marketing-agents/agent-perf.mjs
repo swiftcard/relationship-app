@@ -93,7 +93,7 @@ await safeMain("perf", async (run) => {
 
   if (critical.length) {
     await email(`🔴 SITE HEALTH: ${critical[0]}${critical.length > 1 ? ` (+${critical.length - 1} more)` : ""}`,
-      `<h3>Critical route problem</h3><ul>${critical.map((c) => `<li>${c}</li>`).join("")}</ul><p>Details in Agent Flow → Performance Watch. uptime.yml and the deploy watchdog are the other lines of defense; if a deploy caused this, the watchdog may already be rolling back.</p>`);
+      `<h3>Critical route problem</h3><ul>${critical.map((c) => `<li>${c}</li>`).join("")}</ul><p>Details are in the agent_queue_items table. uptime.yml and the deploy watchdog are the other lines of defense; if a deploy caused this, the watchdog may already be rolling back.</p>`);
   }
   // Closed loop: a clean report files itself (zero owner clicks on quiet
   // days); a report WITH findings stays pending and hands itself to the Fixer

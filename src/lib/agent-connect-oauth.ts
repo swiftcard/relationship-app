@@ -1,6 +1,6 @@
-// ── Agent Flow connect: the OAuth leg for each platform ─────────────────────
+// ── Platform connect: the OAuth leg for each platform ─────────────────────
 //
-// Owner-only. The admin presses Connect on Agent Flow → Settings, lands on the
+// Owner-only. The admin opens /api/admin/connect/<p>, lands on the
 // platform's consent screen, and comes back to /api/admin/connect/<p>/callback
 // with a code. This module knows, per platform, where to send them, how to
 // swap the code for tokens, and how to name the account that will be posting.

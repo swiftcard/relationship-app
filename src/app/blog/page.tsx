@@ -8,8 +8,8 @@ import HomeHeadingReveal from "@/components/site/HomeHeadingReveal";
 import "@/app/home.css";
 
 // ── The SwiftCard blog ───────────────────────────────────────────────────────
-// Posts are written by the Blog Writer agent, reviewed in the Agent Flow tab,
-// and published from there into agent_blog_posts. This page reads ONLY
+// Posts live in agent_blog_posts (written and reviewed before the Agent Flow
+// tab was retired, 2026-10-19). This page reads ONLY
 // status='published' rows via the server admin client — there is no user
 // write path to this table (RLS on, no policies).
 export const revalidate = 300;

@@ -16,7 +16,7 @@ import {
 // The decisions are lib/instagram-bot.ts's processComment / processMessage,
 // run with the FACEBOOK channel — so the rules cannot drift apart:
 //   • OFF by default. Until the owner turns it on, each reply waits in the
-//     Agent Flow queue for a one-tap Approve.
+//     agent_queue_items table (no approval screen since Agent Flow was retired).
 //   • It only answers people who wrote to the Page first. Sends live in
 //     lib/facebook-send.ts, which cannot address anyone else.
 //   • One card link per person per post, a daily cap, never twice for the same

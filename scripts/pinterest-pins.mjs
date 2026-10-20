@@ -32,7 +32,7 @@ const api = async (method, body) => {
 const state = await api("GET");
 if (state.status !== 200) fail(`site → ${state.status}: ${JSON.stringify(state.json).slice(0, 200)}`);
 if (!state.json.ready) fail(state.json.message ?? "ledger table missing");
-if (!state.json.connected) { console.log("Pinterest is not connected yet — connect it in Agent Flow → Settings. Nothing to do."); process.exit(0); }
+if (!state.json.connected) { console.log("Pinterest is not connected yet — connect it through /api/admin/connect/pinterest. Nothing to do."); process.exit(0); }
 const pending = (state.json.pending ?? []).slice(0, PER_RUN);
 if (!pending.length) { console.log("Every pin idea is already posted."); process.exit(0); }
 console.log(`${state.json.pending.length} idea(s) left; rendering ${pending.length}.`);
