@@ -171,6 +171,8 @@ begin
 end;
 $$;
 revoke all on function crew_claim_dm(uuid, uuid) from public, anon, authenticated;
+-- Revoking from PUBLIC also removes the service role's inherited EXECUTE.
+grant execute on function crew_claim_dm(uuid, uuid) to service_role;
 
 -- ── Findings, reports, inputs, limits, leads ────────────────────────────────
 create table if not exists crew_findings (

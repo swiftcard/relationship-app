@@ -87,3 +87,11 @@ describe("the clock", () => {
     expect(read("src/lib/crew/tick.ts")).toContain("export const TICK_BUDGET_MS = 240_000;");
   });
 });
+
+describe("migration", () => {
+  it("the DM-ledger function stays callable by the service role after revoking PUBLIC", () => {
+    const sql = readFileSync("supabase/crew.sql", "utf8");
+    expect(sql).toContain("revoke all on function crew_claim_dm(uuid, uuid) from public, anon, authenticated;");
+    expect(sql).toContain("grant execute on function crew_claim_dm(uuid, uuid) to service_role;");
+  });
+});
