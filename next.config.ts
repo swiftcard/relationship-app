@@ -143,6 +143,9 @@ export default withSentryConfig(nextConfig, {
   // they are never publicly served — readable traces for us, not for everyone.
   widenClientFileUpload: true,
 
-  // Tree-shake the SDK's own debug logger out of the client bundle.
-  disableLogger: true,
+  // Tree-shake the SDK's own debug logger out of the client bundle (webpack
+  // builds; `disableLogger` was the deprecated spelling the build warned about).
+  // Turbopack ignores this; what keeps the browser SDK small there is the
+  // named re-export in src/lib/sentry-client-sdk.ts (audit P-02).
+  webpack: { treeshake: { removeDebugLogging: true } },
 });

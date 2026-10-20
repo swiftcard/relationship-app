@@ -62,7 +62,7 @@ if (sentryEnabled) {
   void (async () => {
     try {
       const [Sentry, { baseSentryOptions }] = await Promise.all([
-        import("@sentry/nextjs"),
+        import("@/lib/sentry-client-sdk"),
         import("@/lib/sentry-options"),
       ]);
 
