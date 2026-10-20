@@ -219,6 +219,7 @@ describe("wired the way the rules assume", () => {
   });
 
   it("a returning contact held by quiet hours is in the 8am catch-up", () => {
-    expect(catchup).toMatch(/contact_returned: "contact_return"/);
+    expect(catchup).toContain("heldCategory(r)");
+    expect(read("src/lib/catchup-category.ts")).toMatch(/contact_returned: "contact_return"/);
   });
 });

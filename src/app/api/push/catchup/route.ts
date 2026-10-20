@@ -7,6 +7,7 @@ import {
   localHour, quietWindowStart, readPushPrefs, QUIET_END_HOUR, QUIET_WINDOW_MS, DEFAULT_TIMEZONE, type PushCategory,
 } from "@/lib/push-policy";
 import { contactMayPush } from "@/lib/contact-return-notify";
+import { heldCategory, CONTACT_RULE_CATEGORIES } from "@/lib/catchup-category";
 import { hasMarkedName } from "@/lib/contact-privacy";
 import { teamAlertRecipients, teamPushContext, teamPushThread } from "@/lib/team-alerts";
 import { officeNotificationPath } from "@/lib/office-notification-links";
@@ -47,22 +48,9 @@ type Row = Record<string, unknown>;
 const CATCHUP_OUTCOME = "catchup";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
-// Which bell rows could have been held by quiet hours — i.e. the ones whose
-// producer asked for a push. A milestone is deliberately absent: it is bell-only
-// news that never had a push to hold (lib/push-policy.ts), and a "50 views"
-// banner at 8am would be the product cheering at someone, not their news.
-const CATEGORY_FOR_TYPE: Record<string, PushCategory> = {
-  card_viewed: "card_view",
-  contact_saved: "contact_saved",
-  // A known contact coming back (lib/contact-return-notify.ts). The row's
-  // title carries their name in a mark; sendPushToUser makes it "A contact"
-  // on a Free lock screen, exactly as the live push does.
-  contact_returned: "contact_return",
-  contact_engaged: "contact_return",
-  new_lead: "new_lead",
-  lead_reply: "lead_reply",
-  payment_failed: "billing_problem",
-};
+// Which bell rows could have been held by quiet hours, i.e. the ones whose
+// producer asked for a push: lib/catchup-category.ts. A visit's row is upgraded
+// in place, so the type alone is not the answer (audit NM-01, NM-03).
 
 /** Biggest news first. Same order as the visit ledger's ranks, plus billing. */
 const RANK: Record<PushCategory, number> = {
@@ -256,11 +244,11 @@ export async function GET(req: NextRequest) {
 
       type Held = { row: Row; category: PushCategory; team?: TeamRow };
       let held: Held[] = (rows ?? [])
-        .map((r) => ({ row: r as Row, category: CATEGORY_FOR_TYPE[r.type as string] }))
+        .map((r) => ({ row: r as Row, category: heldCategory(r) }))
         .filter((x): x is Held =>
           // A category switched OFF is a decision the person made; the morning
           // must not be a way around it.
-          Boolean(x.category) && prefs[x.category] !== false);
+          x.category !== undefined && prefs[x.category] !== false);
 
       // Their team's held news, under the Team alerts switch.
       if (prefs.team_alert !== false) {
@@ -281,7 +269,9 @@ export async function GET(req: NextRequest) {
       // morning would announce exactly the contact they silenced. Same rules,
       // re-applied. A read failure keeps the old behaviour rather than
       // dropping the whole night.
-      const contactRows = held.filter((x) => x.category === "contact_return" && x.row.lead_id);
+      // A download by a returning contact obeys the same rule (audit NM-02).
+      const silenceable = (x: Held) => CONTACT_RULE_CATEGORIES.includes(x.category) && !!x.row.lead_id;
+      const contactRows = held.filter(silenceable);
       if (contactRows.length) {
         try {
           const ids = [...new Set(contactRows.map((x) => String(x.row.lead_id)))];
@@ -293,7 +283,7 @@ export async function GET(req: NextRequest) {
             if (!contactMayPush({ status: l.status as string | null })) return false;
             return true;
           };
-          held = held.filter((x) => x.category !== "contact_return" || !x.row.lead_id || allowed(String(x.row.lead_id)));
+          held = held.filter((x) => !silenceable(x) || allowed(String(x.row.lead_id)));
         } catch { /* keep every held row */ }
       }
 

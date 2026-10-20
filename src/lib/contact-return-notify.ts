@@ -25,6 +25,10 @@ export const CLOSED_STATUSES = new Set(["not_interested", "dissolved"]);
  * catch-up (api/push/catchup), which re-reads the bell row and would otherwise
  * announce a closed contact anyway.
  */
+/** The forwarded-link row's title. It shares contact_returned with the real
+ *  return, so the morning catch-up tells the bell-only one apart by this. */
+export const FORWARDED_OPEN_TITLE = "Your link was opened on another device";
+
 export function contactMayPush(contact: { status?: string | null }): boolean {
   return !CLOSED_STATUSES.has(contact.status ?? "");
 }
@@ -94,7 +98,7 @@ export function contactReturnNotice(input: {
     if (eventType !== "viewed_card") return null;
     return {
       type: "contact_returned",
-      title: "Your link was opened on another device",
+      title: FORWARDED_OPEN_TITLE,
       body: `Your link to ${fullMarked} was opened on another device.`,
     };
   }
