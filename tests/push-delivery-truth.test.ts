@@ -201,7 +201,7 @@ describe("one event, one notification", () => {
     expect(src).toMatch(/type: "payment_failed",/);
     expect(src).toMatch(/if \(wrote === "duplicate"\) return;\s*\n\s*await sendPushToUser\(profile\.id as string, \{\s*\n\s*category: "billing_problem"/);
     // The 8am catch-up is built from bell rows of exactly this type.
-    expect(read("src/app/api/push/catchup/route.ts")).toMatch(/payment_failed/);
+    expect(read("src/lib/catchup-category.ts")).toMatch(/payment_failed/);
   });
 
   it("the morning catch-up is not eaten by yesterday's cap after spending its once-a-day mark", () => {

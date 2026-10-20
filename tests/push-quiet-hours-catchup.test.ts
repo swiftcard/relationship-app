@@ -274,9 +274,10 @@ describe("one notification, whatever kind of night it was", () => {
     });
   });
 
-  it("ignores bell-only news — a milestone is not something that was held", async () => {
+  // A milestone row is a view that crossed N (it pushed, then was retitled), so
+  // it IS caught up as that view (audit NM-03, tests/audit-round-38-catchup-rows).
+  it("ignores bell-only news — a stale-signature reminder is not something that was held", async () => {
     notifications = [
-      { type: "milestone_50", title: "50 views — on fire!", body: "Check Locations on your dashboard.", card_owner: "dana-card", created_at: "2026-09-11T03:00:00.000Z" },
       { type: "signature_stale", title: "Your signature is out of date", body: "Update it.", card_owner: null, created_at: "2026-09-11T03:10:00.000Z" },
     ];
     const res = await run();
