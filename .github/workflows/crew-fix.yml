@@ -112,10 +112,11 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: crew-patch-${{ inputs.approval_id }}
+      # No `cache: npm` here: this job runs code an AI wrote from untrusted
+      # input, so it must not be able to write to the cache other jobs read.
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
-          cache: npm
       - name: Check the fix (no secrets in this job)
         id: checks
         run: |

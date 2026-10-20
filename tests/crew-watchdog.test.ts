@@ -173,6 +173,8 @@ describe("workflows", () => {
     expect(write).not.toContain("CREW_GITHUB_TOKEN");
     // verify runs repo code, so it holds no secret at all.
     expect(verify).not.toMatch(/secrets\./);
+    // ...and can't poison the npm cache the other jobs read.
+    expect(verify).not.toMatch(/^\s+cache:|actions\/cache/m);
     expect(verify).toContain("persist-credentials: false");
     // pr holds the token but runs no repo code.
     expect(pr).toContain("CREW_GITHUB_TOKEN");
