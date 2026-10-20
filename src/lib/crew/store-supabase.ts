@@ -32,6 +32,9 @@ export class SupabaseStore implements CrewStore {
       team_caps: (data.team_caps ?? {}) as Settings["team_caps"],
       disclosure_on: !!data.disclosure_on,
       disclosure: String(data.disclosure ?? DEFAULT_SETTINGS.disclosure),
+      // Columns from supabase/crew-economy.sql; the defaults hold until it runs.
+      economy: data.economy ?? DEFAULT_SETTINGS.economy,
+      second_opinion: data.second_opinion ?? DEFAULT_SETTINGS.second_opinion,
     };
   }
   async updateSettings(patch: Partial<Settings>) {

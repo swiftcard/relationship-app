@@ -11,7 +11,7 @@ import type { Tier } from "@/lib/crew/types";
 // Switch one agent on or off, run it now, change its daily $ or its model.
 export const maxDuration = 300;
 
-const TIERS: Tier[] = ["sonnet", "opus", "fable"];
+const TIERS: Tier[] = ["haiku", "sonnet", "opus", "fable"];
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   if (!(await requireAdmin())) return NextResponse.json({ error: "Forbidden" }, { status: 403 });

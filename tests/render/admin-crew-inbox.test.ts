@@ -33,7 +33,7 @@ async function renderView(browser: Browser, width: number, tab: string) {
   const data = {
     ready: true as const,
     hardDisabled: false,
-    settings: { kill_all: false, daily_usd_cap: 8, team_caps: {}, disclosure_on: true, disclosure: "(I work on SwiftCard, so I'm biased.)" },
+    settings: { kill_all: false, daily_usd_cap: 2, team_caps: {}, disclosure_on: true, disclosure: "(I work on SwiftCard, so I'm biased.)", economy: true, second_opinion: false },
     agents: AGENTS.map((def, i) => ({
       def,
       state: { id: def.id, enabled: i === 0, model_override: null, daily_usd_cap: null, config: {}, last_run_at: now, next_run_at: null, lease_until: null, status_note: i === 1 ? "Needs: CREW_ANTHROPIC_API_KEY" : null },

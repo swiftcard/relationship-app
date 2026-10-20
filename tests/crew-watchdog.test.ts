@@ -8,7 +8,7 @@ import { closeMissing, normalizeFailure, redact, reportFindings } from "@/lib/cr
 import { healthFindings, nightlyFindings, type NightlySummary } from "@/lib/crew/watch/ingested";
 import { isSpike } from "@/lib/crew/sources/site-checks";
 import { AGENTS } from "@/lib/crew/registry";
-import { setup, fakeAgent } from "./crew-helpers";
+import { FULL, setup, fakeAgent } from "./crew-helpers";
 
 // Phase 1, the Watchdog: one finding per distinct problem, a model only for
 // new ones, a Fix card that opens a PULL REQUEST (never a merge).
@@ -25,7 +25,7 @@ const raw = (fp: string) => ({ fingerprint: fp, kind: "bug" as const, source: "e
 
 describe("findings", () => {
   it("only new problems reach the model, and each becomes one Fix card", async () => {
-    const { ctx, claude, store } = await setup({ def: fakeAgent({ id: "watch-x", team: "watchdog", approvalKind: "code_fix" }), script: triageScript });
+    const { ctx, claude, store } = await setup({ def: fakeAgent({ id: "watch-x", team: "watchdog", approvalKind: "code_fix" }), script: triageScript, settings: FULL });
     const first = await reportFindings(ctx, [raw("a"), raw("b")]);
     expect(first).toEqual({ fresh: 2, proposed: 2 });
     expect(claude.calls).toHaveLength(1); // one call for the whole batch
@@ -40,7 +40,7 @@ describe("findings", () => {
   });
 
   it("a problem that went away and came back is new again", async () => {
-    const { ctx, claude } = await setup({ def: fakeAgent({ id: "watch-x", team: "watchdog", approvalKind: "code_fix", maxPending: 10 }), script: triageScript });
+    const { ctx, claude } = await setup({ def: fakeAgent({ id: "watch-x", team: "watchdog", approvalKind: "code_fix", maxPending: 10 }), script: triageScript, settings: FULL });
     await reportFindings(ctx, [raw("a")]);
     expect(await closeMissing(ctx, "error_events", new Set())).toBe(1);
     const back = await reportFindings(ctx, [raw("a")]);
@@ -110,7 +110,7 @@ describe("sources", () => {
 
 describe("ingested agents", () => {
   it("the UI watcher reads the latest nightly once", async () => {
-    const { ctx, store, claude } = await setup({ def: watchUi, script: triageScript });
+    const { ctx, store, claude } = await setup({ def: watchUi, script: triageScript, settings: FULL });
     await store.kvSet("ingest:nightly", { at: "2026-10-20T09:00:00Z", run: "1", data: { healthy: false, failedCount: 1, at: "x", sections: [{ name: "Every screen, both widths, all plans", failures: ["/settings@390: button covered"] }] } });
     expect((await watchUi.run(ctx)).summary).toMatch(/1 problems/);
     expect(store.approvals).toHaveLength(1);

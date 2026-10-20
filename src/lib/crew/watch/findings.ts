@@ -55,6 +55,20 @@ For each problem you get, return:
 - fix_brief: for the engineer (an AI coding agent working in the repo): the likely cause, which files or routes to look at, how to reproduce, and how to prove the fix (a test that fails before and passes after). Never guess file paths as fact; say "probably". Never include personal data.
 Use the key you were given for each item.`;
 
+/** The card's sentence when no model explains it (economy mode). */
+export function plainFallback(raw: RawFinding): string {
+  const what: Record<RawFinding["kind"], string> = {
+    bug: "The site hit an error.",
+    speed: "A page was slower than our speed limit.",
+    security: "A security check failed.",
+    ui: "A screen check found a problem.",
+    flow: "A test run of the site found a problem.",
+    payment: "A payment check found a problem.",
+    app: "A check of the app found a problem.",
+  };
+  return `${what[raw.kind]} Details are below.`;
+}
+
 export function fingerprintOf(...parts: string[]): string {
   return createHash("sha256").update(parts.join("\u0000")).digest("hex").slice(0, 24);
 }
@@ -124,7 +138,12 @@ export async function reportFindings(
 
   const batch = fresh.slice(0, opts?.maxTriage ?? 8);
   let triage: Triage[] = [];
-  try {
+  // Economy mode (and no Claude key) is the free Watchdog: every problem still
+  // becomes a card with the raw details; only the plain-words explanation is
+  // skipped. The fix engineer reads the raw details either way.
+  const useModel = !ctx.settings.economy && ctx.llm.hasClaude;
+  if (!useModel) ctx.stat("no_llm_needed");
+  if (useModel) try {
     const out = await ctx.llm.askJson<{ items: Triage[] }>("triage", {
       effort: "low",
       maxTokens: 4000,
@@ -145,7 +164,7 @@ export async function reportFindings(
     const title = t?.title || f.raw.title;
     const asking = opts?.approvalKind === "ask";
     const tail = opts?.tail ?? (asking ? "Tap Approve when you have looked at it." : "Tap Approve and an AI engineer opens a fix for you to review. Nothing changes until you merge it.");
-    const summary = `${t?.summary || "A check found a problem."} Seen ${f.row.count} time${f.row.count === 1 ? "" : "s"}. ${tail}`;
+    const summary = `${t?.summary || plainFallback(f.raw)} Seen ${f.row.count} time${f.row.count === 1 ? "" : "s"}. ${tail}`;
     const brief = [
       `Finding: ${redact(f.raw.title)}`,
       `Source: ${f.raw.source}`,

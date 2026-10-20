@@ -44,6 +44,11 @@ export class Llm {
     return !!this.o.providers.critic;
   }
 
+  /** False when no Claude key is set: callers that can work without a model check this first. */
+  get hasClaude() {
+    return !!this.o.providers.claude;
+  }
+
   private async guard(estUsd: number) {
     const totals = await this.o.store.usageTotals(nyDayStart(this.o.now()).toISOString());
     const c = checkBudget({
@@ -75,9 +80,9 @@ export class Llm {
     });
   }
 
-  private request(o: AskOptions): LlmRequest {
+  private request(o: AskOptions, purpose = ""): LlmRequest {
     return {
-      model: MODEL_ID[o.tier ?? this.o.defaultTier],
+      model: MODEL_ID[routeTier({ asked: o.tier, agentTier: this.o.defaultTier, purpose, economy: this.o.settings.economy, webSearch: !!o.webSearch })],
       system: o.system,
       prompt: o.prompt,
       maxTokens: o.maxTokens ?? 4000,
@@ -90,7 +95,7 @@ export class Llm {
   async ask(purpose: string, o: AskOptions): Promise<LlmResponse> {
     const claude = this.o.providers.claude;
     if (!claude) throw new BudgetStop("Needs CREW_ANTHROPIC_API_KEY.");
-    const req = this.request(o);
+    const req = this.request(o, purpose);
     await this.guard(estimateUsd(req.system.length + req.prompt.length, req.maxTokens, priceFor("anthropic", req.model), req.webSearch?.maxUses ?? 0));
     const res = await claude.create(req);
     await this.record("anthropic", req.model, purpose, res.usage);
@@ -120,7 +125,7 @@ export class Llm {
   async submitBatch(purpose: string, items: { id: string; o: AskOptions }[]): Promise<string> {
     const claude = this.o.providers.claude;
     if (!claude) throw new BudgetStop("Needs CREW_ANTHROPIC_API_KEY.");
-    const reqs = items.map((i) => ({ id: i.id, req: this.request(i.o) }));
+    const reqs = items.map((i) => ({ id: i.id, req: this.request(i.o, purpose) }));
     const est = reqs.reduce((n, r) => n + estimateUsd(r.req.system.length + r.req.prompt.length, r.req.maxTokens, priceFor("anthropic", r.req.model)) / 2, 0);
     await this.guard(est);
     const batchId = await claude.submitBatch(reqs);
@@ -150,6 +155,23 @@ export class Llm {
     await this.o.store.kvSet(key, still);
     return done;
   }
+}
+
+/** Sorting, scoring and pulling fields out of text: Haiku does these well. */
+export const CHEAP_PURPOSES = ["score", "triage", "extract", "classify", "partners"];
+
+/**
+ * Which model a call uses:
+ *  - a tier the caller asked for wins (in economy, an Opus tie-break becomes Sonnet);
+ *  - in economy, sorting/scoring/extracting purposes use Haiku;
+ *  - otherwise the agent's own tier (after escalation);
+ *  - web search always runs on Sonnet or better: Haiku 5.5 has no dynamic-filtering search tool.
+ */
+export function routeTier(o: { asked?: Tier; agentTier: Tier; purpose: string; economy: boolean; webSearch: boolean }): Tier {
+  let t: Tier = o.asked ?? (o.economy && CHEAP_PURPOSES.includes(o.purpose) ? "haiku" : o.agentTier);
+  if (o.economy && o.asked === "opus" && o.purpose === "tiebreak") t = "sonnet";
+  if (o.webSearch && t === "haiku") t = "sonnet";
+  return t;
 }
 
 export function parseJson<T>(text: string): T | null {
@@ -200,7 +222,8 @@ export async function buildContext(o: {
   const state = o.state ?? (await o.store.getAgentState(o.def.id));
   const settings = o.settings ?? (await o.store.getSettings());
   const decisions = o.def.approvalKind && o.def.role === "worker" ? await o.store.recentDecisions(o.def.id, o.def.approvalKind, 5) : [];
-  const picked = pickTier(o.def.tier, state.model_override, decisions);
+  const base = settings.economy && o.def.economyTier ? o.def.economyTier : o.def.tier;
+  const picked = pickTier(base, state.model_override, decisions);
   const stats: Record<string, number> = {};
   const notes: string[] = [];
   let config = { ...state.config };

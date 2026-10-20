@@ -3,7 +3,7 @@
 
 export type TeamId = "system" | "watchdog" | "replies" | "contact" | "leads" | "office" | "marketing";
 export type Role = "worker" | "manager" | "head";
-export type Tier = "sonnet" | "opus" | "fable";
+export type Tier = "haiku" | "sonnet" | "opus" | "fable";
 
 export type ApprovalKind =
   | "reply"
@@ -81,6 +81,11 @@ export type Settings = {
   team_caps: Partial<Record<TeamId, { usd?: number }>>;
   disclosure_on: boolean;
   disclosure: string;
+  /** Cheapest setup that still works: Haiku for sorting and short comments,
+   *  Watchdog and manager reports with no AI, Sonnet tie-breaks. */
+  economy: boolean;
+  /** ChatGPT (or a Claude skeptic) checks each outward draft before the inbox. */
+  second_opinion: boolean;
 };
 
 export type AgentState = {

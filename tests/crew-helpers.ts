@@ -2,6 +2,7 @@ import type { AgentDef } from "@/lib/crew/agent-def";
 import { buildContext } from "@/lib/crew/context";
 import { FakeClaude, FakeCritic, type FakeScript } from "@/lib/crew/llm/fake";
 import { MemoryStore } from "@/lib/crew/store-memory";
+import type { Settings } from "@/lib/crew/types";
 
 // Shared fixtures for the crew-* tests: an in-memory store, fake models and a
 // minimal agent, so the whole loop runs with no database and no network.
@@ -24,8 +25,12 @@ export function fakeAgent(over: Partial<AgentDef> = {}): AgentDef {
   };
 }
 
-export async function setup(o: { def?: AgentDef; script?: FakeScript; verdicts?: ("agree" | "revise")[]; enabled?: boolean } = {}) {
+/** The original, full-power setup: AI triage, Opus tie-breaks, the ChatGPT second opinion. */
+export const FULL: Partial<Settings> = { economy: false, second_opinion: true };
+
+export async function setup(o: { def?: AgentDef; script?: FakeScript; verdicts?: ("agree" | "revise")[]; enabled?: boolean; settings?: Partial<Settings> } = {}) {
   const store = new MemoryStore();
+  if (o.settings) await store.updateSettings(o.settings);
   const def = o.def ?? fakeAgent();
   await store.patchAgentState(def.id, { enabled: o.enabled ?? true });
   const claude = new FakeClaude(o.script);

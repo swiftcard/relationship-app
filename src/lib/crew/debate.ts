@@ -10,8 +10,10 @@ import type { ApprovalKind, DebateRecord, DebateTurn } from "./types";
 //   rounds   on "revise" the worker rewrites and ChatGPT checks again (max 2)
 //   tie-break still split after the last round → the team manager (Opus)
 //            picks or merges, and that is final
-// Skipped for anything that is not outward-facing or is trivial. A token cap
-// stops a long argument; a budget stop falls back to a single opinion.
+// Skipped for anything that is not outward-facing or is trivial, and entirely
+// when Settings → "Second opinion" is off. A token cap stops a long argument;
+// a budget stop falls back to a single opinion. In economy mode the tie-break
+// runs on Sonnet instead of Opus (see routeTier).
 
 export const OUTWARD_KINDS: ApprovalKind[] = ["reply", "comment", "dm", "connect_note", "post", "blog_post", "code_fix"];
 
@@ -65,6 +67,11 @@ export async function debate(
   const turns: DebateTurn[] = [{ who: "worker", model: workerModel, text: o.draft }];
   if (isTrivial(o.kind, o.draft, o.score)) {
     return { final: o.draft, record: { skipped: true, reason: "trivial", rounds: 0, outcome: "single", line: "Quick item, so no second opinion.", turns, critic: "" } };
+  }
+  // Settings → "Second opinion". Off by default to keep costs down: you are the
+  // second opinion, since every draft waits for your Approve anyway.
+  if (!ctx.settings.second_opinion) {
+    return { final: o.draft, record: { skipped: true, reason: "off", rounds: 0, outcome: "single", line: "Second opinion is off (Settings), so you're the reviewer.", turns, critic: "" } };
   }
 
   const maxRounds = o.maxRounds ?? 2;

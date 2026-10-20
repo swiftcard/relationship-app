@@ -355,7 +355,7 @@ function Teams({ d }: { d: Dashboard }) {
           </div>
           <div className="divide-y divide-gray-800">
             {g.rows.map((r) => (
-              <AgentLine key={r.def.id} r={r} />
+              <AgentLine key={r.def.id} r={r} economy={d.settings.economy} />
             ))}
           </div>
         </section>
@@ -364,7 +364,8 @@ function Teams({ d }: { d: Dashboard }) {
   );
 }
 
-function AgentLine({ r }: { r: AgentRow }) {
+function AgentLine({ r, economy }: { r: AgentRow; economy: boolean }) {
+  const tier = r.state.model_override ?? (economy && r.def.economyTier ? r.def.economyTier : r.def.tier);
   const action = `/api/admin/crew/agents/${r.def.id}`;
   const blocked = r.def.locked ?? (r.missing.length ? `Needs: ${r.missing.join(", ")}` : null);
   return (
@@ -372,7 +373,7 @@ function AgentLine({ r }: { r: AgentRow }) {
       <div className="flex flex-wrap items-center gap-1.5">
         <p className="text-white text-sm font-medium mr-1">{r.def.name}</p>
         <Badge tone={r.state.enabled ? "green" : "gray"}>{r.state.enabled ? "On" : "Off"}</Badge>
-        <Badge>{TIER_LABEL[r.state.model_override ?? r.def.tier]}</Badge>
+        <Badge>{economy && r.def.freeInEconomy && !r.state.model_override ? "No AI (free)" : TIER_LABEL[tier]}</Badge>
         <Badge>{r.schedule}</Badge>
       </div>
       <p className="text-gray-400 text-xs">{r.def.purpose}</p>
@@ -591,6 +592,20 @@ function SettingsForm({ d }: { d: Dashboard }) {
             ))}
           </div>
         </fieldset>
+        <label className="flex items-start gap-2 text-sm text-gray-300">
+          <input type="checkbox" name="economy" defaultChecked={d.settings.economy} className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>
+            <span className="text-white">Economy mode</span> (recommended while you&apos;re starting out). The cheapest model (Haiku) sorts posts and writes short
+            comments, the Watchdog and the daily reports use no AI at all, and Sonnet still writes DMs, replies and blog posts.
+          </span>
+        </label>
+        <label className="flex items-start gap-2 text-sm text-gray-300">
+          <input type="checkbox" name="second_opinion" defaultChecked={d.settings.second_opinion} className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>
+            <span className="text-white">Second opinion</span>. ChatGPT checks each draft before it reaches your inbox. Roughly doubles the cost of a draft;
+            leave it off while you approve everything yourself.
+          </span>
+        </label>
         <label className="flex items-center gap-2 text-sm text-gray-300">
           <input type="checkbox" name="disclosure_on" defaultChecked={d.settings.disclosure_on} className="h-4 w-4" />
           Add a disclosure line to anything that mentions SwiftCard (recommended; the FTC and most platforms require it)

@@ -23,6 +23,8 @@ export async function POST(req: NextRequest) {
   const cap = Number(field(form, "daily_usd_cap"));
   if (Number.isFinite(cap) && cap >= 0 && cap <= 500) patch.daily_usd_cap = Math.round(cap * 100) / 100;
   patch.disclosure_on = field(form, "disclosure_on") === "on";
+  patch.economy = field(form, "economy") === "on";
+  patch.second_opinion = field(form, "second_opinion") === "on";
   const disclosure = field(form, "disclosure");
   if (disclosure) patch.disclosure = disclosure.slice(0, 200);
   const caps: Settings["team_caps"] = {};

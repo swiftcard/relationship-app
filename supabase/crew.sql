@@ -22,7 +22,7 @@
 create table if not exists crew_settings (
   id              int primary key default 1 check (id = 1),
   kill_all        boolean not null default false,
-  daily_usd_cap   numeric(10,2) not null default 8.00,
+  daily_usd_cap   numeric(10,2) not null default 2.00,     -- was 8.00; see crew-economy.sql
   team_caps       jsonb not null default '{}'::jsonb,     -- { "replies": {"usd": 3}, ... }
   disclosure_on   boolean not null default true,
   disclosure      text not null default '(I work on SwiftCard, so I''m biased.)',

@@ -43,18 +43,24 @@ export function checkBudget(i: {
   return { ok: true };
 }
 
+/** One step up when drafts keep getting rejected. */
+const NEXT_TIER: Partial<Record<Tier, Tier>> = { haiku: "sonnet", sonnet: "opus" };
+const NAME: Record<Tier, string> = { haiku: "Haiku", sonnet: "Sonnet", opus: "Opus", fable: "Fable" };
+
 /**
  * Cheapest model that is getting approved. Rule: 3 or more rejections in the
- * last 5 decisions → use Opus; 3 approvals in a row → back to the base model.
- * `decisions` is newest first. A manual override always wins.
+ * last 5 decisions → one step up (Haiku → Sonnet, Sonnet → Opus); 3 approvals
+ * in a row → back to the base model. `decisions` is newest first. A manual
+ * override always wins.
  */
 export function pickTier(base: Tier, override: Tier | null, decisions: ApprovalStatus[]): { tier: Tier; why: string | null } {
   if (override) return { tier: override, why: override === base ? null : "Set by hand in the Agents tab." };
-  if (base !== "sonnet") return { tier: base, why: null };
+  const up = NEXT_TIER[base];
+  if (!up) return { tier: base, why: null };
   const last3 = decisions.slice(0, 3);
   if (last3.length === 3 && last3.every((s) => s !== "rejected")) return { tier: base, why: null };
   const rejected = decisions.slice(0, 5).filter((s) => s === "rejected").length;
-  if (rejected >= 3) return { tier: "opus", why: `Upgraded to Opus because ${rejected} of the last ${Math.min(5, decisions.length)} drafts were rejected.` };
+  if (rejected >= 3) return { tier: up, why: `Upgraded to ${NAME[up]} because ${rejected} of the last ${Math.min(5, decisions.length)} drafts were rejected.` };
   return { tier: base, why: null };
 }
 

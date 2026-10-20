@@ -13,6 +13,10 @@ export type AgentDef = {
   team: TeamId;
   role: Role;
   tier: Tier;
+  /** The model in economy mode (Settings → Economy), when cheaper than `tier`. */
+  economyTier?: Tier;
+  /** Runs with no AI at all in economy mode (the Watchdog and the managers). */
+  freeInEconomy?: boolean;
   schedule: Schedule;
   /** Default daily $ cap; the tab can lower or raise it per agent. */
   dailyUsd: number;

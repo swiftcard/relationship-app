@@ -42,7 +42,9 @@ export const watchBugs: AgentDef = {
   tier: "sonnet",
   schedule: { kind: "every", minutes: 15 },
   dailyUsd: 1,
-  needs: ["CREW_ANTHROPIC_API_KEY"],
+  // No key needed: in economy mode (or with no Claude key) it runs with no AI.
+  needs: [],
+  freeInEconomy: true,
   maxPending: 6,
   purpose: "Every 15 minutes, looks for new crashes on the site. New ones become a Fix card in plain words.",
   approvalKind: "code_fix",

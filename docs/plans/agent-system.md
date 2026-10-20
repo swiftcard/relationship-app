@@ -433,3 +433,14 @@ Optional lever, off by default because the spec says workers run Sonnet: a Haiku
 - 2026-10-20: Phase 6 built: marketing-blog (Mondays, topic queue of competitor/feature keywords, publishes to agent_blog_posts only on Approve), marketing-seo (code checks of sitemap marketing pages, 1 Fix a day), marketing-geo (assumption: AI answer engines; asks buyer questions with web search, tracks mention rate, proposes /llms.txt and Organization schema), marketing-social (one idea a day; step 1 pick of 3 options, step 2 every slide at 4:5/9:16/2:3/1:1 + a caption per platform; nothing auto-published), crew-render.yml + scripts/crew-render-social.mjs (launch-post visual system, real Daniel Whitfield captures, pictures in Supabase storage bucket crew-media added to crew.sql). Committed marketing/instagram/launch sources + captions + the 3 dw-*.png captures used by the renderer.
 - 2026-10-20: supabase/crew.sql applied to production (owner-approved). CREW_TICK_SECRET set in Vercel (production, sensitive) and as a GitHub Actions secret.
 - 2026-10-20: first live tick via crew-tick.yml: {ok:true, ready:true, ran:[]} (no agents enabled yet).
+
+## Economy mode (2026-10-20, owner request: "mindful of costs, focus on sales")
+
+Default ON (supabase/crew-economy.sql, applied). Settings → Economy mode / Second opinion.
+- Haiku 5.5 (`claude-haiku-5-5`, $0.10/$0.50 per MTok) for sorting/scoring, triage, extraction (routeTier in context.ts) and as the economy model for Instagram/LinkedIn comments (AgentDef.economyTier). Haiku has no server-side refusal fallback, so its calls go without `fallbacks`; web search always runs on Sonnet (Haiku has no dynamic-filtering search tool). Rejected Haiku drafts escalate to Sonnet (3 of 5), then back.
+- Free (no AI): every Watchdog agent (raw finding + plain sentence on the card; the fix engineer reads the raw details) and every manager report (templateReport from the counts). These need no Anthropic key (AgentDef.freeInEconomy).
+- Tie-breaks on Sonnet instead of Opus; GEO asks 1 question a day instead of 3.
+- Second opinion (ChatGPT debate) OFF by default; the owner is the reviewer.
+- Global daily cap $2 (was $8).
+Recommended first agents: Office outreach, Reddit replies, LinkedIn comments, Instagram comments, plus the free Watchdog. Expected ≈ $1/day.
+Turning economy off restores the original spec exactly (Sonnet workers, Opus managers/tie-breaks, AI triage).

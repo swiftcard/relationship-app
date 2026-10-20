@@ -3,10 +3,11 @@ import type { Usage } from "../types";
 import type { ClaudeProvider, LlmRequest, LlmResponse } from "./types";
 
 // ── Claude via the official SDK ─────────────────────────────────────────────
-// Current-model rules (Sonnet 5.5 / Opus 5.5 / Fable 5.1): adaptive thinking
-// only (budget_tokens is a 400), no forced tool_choice, no prefill. Effort
-// goes in output_config. Refusals fall back server-side ("default" routing);
-// the Batches API rejects `fallbacks`, so batch requests go without it.
+// Current-model rules (Haiku 5.5 / Sonnet 5.5 / Opus 5.5 / Fable 5.1):
+// adaptive thinking only (budget_tokens is a 400), no forced tool_choice, no
+// prefill. Effort goes in output_config. Refusals fall back server-side
+// ("default" routing) on Sonnet, Opus and Fable; Haiku 5.5 has no server-side
+// fallback, and the Batches API rejects `fallbacks`, so those go without it.
 
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
@@ -54,6 +55,13 @@ function params(req: LlmRequest) {
   };
 }
 
+/** Server-side refusal fallback exists for Sonnet 5.5, Opus 5.5 and Fable 5.1, not Haiku 5.5. */
+export function supportsFallback(model: string): boolean {
+  return !model.startsWith("claude-haiku-");
+}
+
+export { params as requestParams };
+
 export class AnthropicProvider implements ClaudeProvider {
   private client: Anthropic;
   constructor(apiKey: string) {
@@ -61,7 +69,9 @@ export class AnthropicProvider implements ClaudeProvider {
   }
 
   async create(req: LlmRequest): Promise<LlmResponse> {
-    const msg = await this.client.beta.messages.create({ ...params(req), betas: [FALLBACK_BETA], fallbacks: "default" });
+    const msg = supportsFallback(req.model)
+      ? await this.client.beta.messages.create({ ...params(req), betas: [FALLBACK_BETA], fallbacks: "default" })
+      : await this.client.messages.create(params(req));
     return {
       text: textOf(msg.content as { type: string; text?: string }[]),
       usage: usageOf(msg.usage),

@@ -25,7 +25,7 @@ async function fromNightly(ctx: AgentContext, sections: RegExp[], kind: Finding[
   return { summary: raws.length ? `${raws.length} problems in the last nightly run; ${r.fresh} new, ${r.proposed} fix cards.` : "The last nightly run was clean." };
 }
 
-const base = { team: "watchdog" as const, role: "worker" as const, tier: "sonnet" as const, needs: ["CREW_ANTHROPIC_API_KEY" as const], maxPending: 5, approvalKind: "code_fix" as const };
+const base = { team: "watchdog" as const, role: "worker" as const, tier: "sonnet" as const, needs: [], freeInEconomy: true, maxPending: 5, approvalKind: "code_fix" as const };
 
 export const watchUi: AgentDef = {
   ...base,

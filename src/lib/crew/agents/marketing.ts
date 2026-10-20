@@ -209,8 +209,10 @@ export const geoAgent: AgentDef = {
   purpose: "Asks AI search the questions our buyers ask and tracks how often SwiftCard is named. Proposes site changes (like an llms.txt file) that help AI answers find us.",
   async run(ctx) {
     const i = ctx.config<number>("q", 0);
-    const qs = [0, 1, 2].map((k) => GEO_QUESTIONS[(i + k) % GEO_QUESTIONS.length]);
-    await ctx.saveConfig({ q: i + 3 });
+    // Economy mode asks one question a day instead of three.
+    const n = ctx.settings.economy ? 1 : 3;
+    const qs = Array.from({ length: n }, (_, k) => GEO_QUESTIONS[(i + k) % GEO_QUESTIONS.length]);
+    await ctx.saveConfig({ q: i + n });
     const history = ctx.config<{ day: string; q: string; mentioned: boolean }[]>("history", []);
     for (const q of qs) {
       const res = await ctx.llm.ask("answer", { effort: "low", maxTokens: 1500, webSearch: { maxUses: 2 }, system: "Answer like an AI search engine would, briefly, naming specific products.", prompt: q });

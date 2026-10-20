@@ -20,10 +20,12 @@ import type {
 
 export const DEFAULT_SETTINGS: Settings = {
   kill_all: false,
-  daily_usd_cap: 8,
+  daily_usd_cap: 2,
   team_caps: {},
   disclosure_on: true,
   disclosure: "(I work on SwiftCard, so I'm biased.)",
+  economy: true,
+  second_opinion: false,
 };
 
 export type UsageRow = {

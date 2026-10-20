@@ -16,6 +16,7 @@ describe("tick", () => {
   it("runs the test agent end to end", async () => {
     vi.stubEnv("CREW_ANTHROPIC_API_KEY", "test");
     const store = new MemoryStore();
+    await store.updateSettings({ economy: false, second_opinion: true });
     await store.patchAgentState(testAgent.id, { enabled: true });
     const claude = new FakeClaude(() => "Two apps is overkill for that. A card with a built-in link page covers both, and SwiftCard does that.");
     const report = await runTick({ store, providers: { claude, critic: new FakeCritic(["agree"]) }, agents: [testAgent] });

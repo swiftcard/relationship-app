@@ -12,7 +12,7 @@ export function paymentFindings(issues: PaymentIssue[], source: string): RawFind
   return issues.map((i) => ({ fingerprint: `${source}:${fingerprintOf(i.key)}`, kind: "payment" as const, source, title: i.title, detail: { ...i.detail, kind: i.kind } }));
 }
 
-const base = { team: "watchdog" as const, role: "worker" as const, tier: "sonnet" as const, needs: ["CREW_ANTHROPIC_API_KEY" as const, "CREW_STRIPE_READ_KEY" as const], maxPending: 6, approvalKind: "ask" as const };
+const base = { team: "watchdog" as const, role: "worker" as const, tier: "sonnet" as const, needs: ["CREW_STRIPE_READ_KEY" as const], freeInEconomy: true, maxPending: 6, approvalKind: "ask" as const };
 const TAIL = "The Stripe link is in the card. Tap Approve once it's handled.";
 
 export const watchPayments: AgentDef = {

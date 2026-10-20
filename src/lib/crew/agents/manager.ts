@@ -1,12 +1,13 @@
 import type { AgentDef } from "../agent-def";
 import { missingEnv } from "../env";
-import { reportHtml, teamStats, writeReport } from "../reports";
+import { reportHtml, teamStats, templateReport, writeReport } from "../reports";
 import { sendOwnerDigest } from "@/lib/owner-digest";
 import type { TeamId } from "../types";
 
-// ── One manager per team (Opus 5.5) ─────────────────────────────────────────
+// ── One manager per team (Opus 5.5; free in economy mode) ──────────────────
 // Every morning it reads what its team did (counted in code), writes the
-// report in plain words, saves it to the Agents tab and emails it.
+// report in plain words, saves it to the Agents tab and emails it. In economy
+// mode the report is the plain template built from the same counts, no AI.
 
 export const TEAM_NAME: Record<TeamId, string> = {
   system: "System",
@@ -27,7 +28,10 @@ export function managerAgent(team: TeamId, o?: { hour?: number; minute?: number 
     tier: "opus",
     schedule: { kind: "daily", hour: o?.hour ?? 7, minute: o?.minute ?? 0 },
     dailyUsd: 0.5,
-    needs: ["CREW_ANTHROPIC_API_KEY"],
+    // Economy mode (or no Claude key) writes the report from the counted facts
+    // with no AI, so a manager costs nothing.
+    needs: [],
+    freeInEconomy: true,
     maxPending: 3,
     purpose: `Writes the ${TEAM_NAME[team]} team's daily report in plain words and emails it to you.`,
     async run(ctx) {
@@ -36,7 +40,8 @@ export function managerAgent(team: TeamId, o?: { hour?: number; minute?: number 
       if (stats.runs.total === 0 && stats.inbox.new_items === 0 && stats.inbox.waiting_now === 0) {
         return { summary: "Nothing happened on this team yesterday, so no report.", status: "skipped" };
       }
-      const body = await writeReport(ctx, stats, TEAM_NAME[team]);
+      const body = ctx.settings.economy || !ctx.llm.hasClaude ? templateReport(stats, TEAM_NAME[team]) : await writeReport(ctx, stats, TEAM_NAME[team]);
+      if (ctx.settings.economy || !ctx.llm.hasClaude) ctx.stat("no_llm_needed");
       const id = await ctx.store.saveReport({ agent_id: ctx.def.id, team, day: stats.day, body, stats: stats as unknown as Record<string, unknown> });
       const sent = await sendOwnerDigest(`${TEAM_NAME[team]} daily report`, reportHtml(body));
       if (sent.ok) await ctx.store.markReportEmailed(id);

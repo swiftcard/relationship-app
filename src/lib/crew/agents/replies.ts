@@ -180,6 +180,7 @@ export const facebookReplies: AgentDef = {
 
 export const instagramComments: AgentDef = {
   ...base,
+  economyTier: "haiku",
   id: "replies-instagram",
   name: "Instagram comments",
   approvalKind: "comment",
@@ -226,6 +227,7 @@ async function followList(ctx: AgentContext): Promise<string | null> {
 
 export const linkedinComments: AgentDef = {
   ...base,
+  economyTier: "haiku",
   id: "replies-linkedin",
   name: "LinkedIn comments",
   approvalKind: "comment",
