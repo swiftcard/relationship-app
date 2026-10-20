@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { safeNextPath } from "@/lib/safe-next";
 import { detectNativeApp, detectNativePlatform } from "@/lib/platform";
 import { nativePushPrefix } from "@/lib/push-device";
-import { LINKEDIN_MESSAGE } from "@/lib/linkedin-popup";
+import { hasPendingLinkedInPhoto, LINKEDIN_RETURN_EVENT } from "@/lib/linkedin-photo-return";
 import { PUBLIC_PAGE_META } from "@/lib/universal-links";
 import { ACTIVE_CARD_EVENT } from "@/lib/active-card";
 import { isChunkLoadError, recoverFromChunkError } from "@/lib/chunk-reload";
@@ -261,12 +261,19 @@ export default function NativeAppBridge() {
             } catch { /* nothing open — fine */ }
 
             // swiftcard://linkedin-callback?status=…&next=… — the LinkedIn
-            // headshot import's return leg. It has no code to exchange (the
-            // callback route already did the token work server-side); all that
-            // is left is to put the WEBVIEW back where the user started, which
-            // is what makes the imported photo appear in the editor they came
-            // from. Checked before the auth branch because both are swiftcard:
-            // URLs and completeNativeOAuth would reject this one.
+            // headshot import's return leg. Checked before the auth branch
+            // because both are swiftcard: URLs and completeNativeOAuth would
+            // reject this one. Nothing to navigate: the page that started it is
+            // still under the sheet and picks the photo up by its ticket
+            // (lib/linkedin-photo-return), so nothing typed is lost. A reload
+            // here used to throw away every unsaved edit ("losing all
+            // progress" — owner, 2026-09-22). Settings' own LinkedIn connect
+            // (status=connected, no ticket) still goes back to Settings below.
+            const liStatus = url.startsWith("swiftcard://linkedin-callback") ? new URL(url).searchParams.get("status") : null;
+            if (liStatus && liStatus !== "connected" && (liStatus === "photo" || liStatus === "nophoto" || hasPendingLinkedInPhoto())) {
+              window.dispatchEvent(new Event(LINKEDIN_RETURN_EVENT));
+              return;
+            }
             // Integration OAuth return legs. Each finishes server-side (tokens
             // are already stored); all that is left is to put the WEBVIEW back
             // on Settings so the UI reflects the connection the user just made.
@@ -285,22 +292,6 @@ export default function NativeAppBridge() {
               const next =
                 safeNextPath(nextRaw) ?? "/settings/flows";
               const status = q.get("status") ?? "error";
-              // LinkedIn headshot, signed in, and the webview is still on the
-              // editor that started it: finish IN PLACE, the way the web popup
-              // does, instead of reloading the page. The reload threw away
-              // every unsaved edit on the card ("losing all progress" — owner,
-              // 2026-09-22); ProfilePhotoSuggest's message listener imports the
-              // photo into the live form. A guest's photo (status=photo) rides
-              // in `next` as ?li_photo= and is read on mount, so that one
-              // still navigates — the guest draft autosaves, nothing is lost.
-              if (
-                provider === "linkedin" &&
-                status !== "photo" &&
-                new URL(next, window.location.origin).pathname === window.location.pathname
-              ) {
-                window.postMessage({ source: LINKEDIN_MESSAGE, status }, window.location.origin);
-                return;
-              }
               const sep = next.includes("?") ? "&" : "?";
               window.location.href =
                 `${next}${sep}integration=${provider}&status=${encodeURIComponent(status)}`;
@@ -391,6 +382,18 @@ export default function NativeAppBridge() {
         const handle = await App.addListener("appUrlOpen", onAppUrl);
         if (cancelled) { handle.remove(); return; }
         removeListener = () => handle.remove();
+        // The LinkedIn sheet closed WITHOUT its swiftcard:// link (iOS can ask
+        // before following it, or not follow it; the user just taps Done). The
+        // photo was saved all the same, so the page asks for it by its ticket.
+        try {
+          const { Browser } = await import("@capacitor/browser");
+          const sheet = await Browser.addListener("browserFinished", () => {
+            window.dispatchEvent(new Event(LINKEDIN_RETURN_EVENT));
+          });
+          if (cancelled) { sheet.remove(); return; }
+          const prevUrl = removeListener;
+          removeListener = () => { prevUrl?.(); sheet.remove(); };
+        } catch { /* plugin missing (older shell) — appUrlOpen still covers it */ }
         const pending = takePendingAppUrl();
         if (pending) void onAppUrl({ url: pending });
       } catch { /* plugin unavailable (older shell build) — nothing to listen for */ }

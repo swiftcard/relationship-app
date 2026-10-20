@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import ImageUpload from "@/components/ImageUpload";
 import ProfilePhotoSuggest from "@/components/ProfilePhotoSuggest";
+import { useLinkedInPhotoPickup } from "@/lib/linkedin-photo-return";
 import LogoSuggest from "@/components/LogoSuggest";
 import ClassicPro from "@/components/card-templates/ClassicPro";
 import ModernBold from "@/components/card-templates/ModernBold";
@@ -100,6 +101,13 @@ type Profile = {
 export default function ProfileForm({ profile, linkedinEnabled = false }: { profile: Profile; linkedinEnabled?: boolean }) {
   const isPro = isPaidPlan(profile.plan);
   const [photoUrl, setPhotoUrl] = useState<string | null>(profile.photo_url);
+  // A LinkedIn photo arriving (lib/linkedin-photo-return) goes in the photo
+  // tile and opens in the crop tool (adjustKey); the form is never reloaded.
+  const [photoAdjustKey, setPhotoAdjustKey] = useState(0);
+  useLinkedInPhotoPickup("profile", (url) => {
+    setPhotoUrl(url);
+    setPhotoAdjustKey((k) => k + 1);
+  }, { fromUrl: true });
   const [logoUrl, setLogoUrl] = useState<string | null>(profile.logo_url);
   const [template, setTemplate] = useState(profile.template ?? "classic-pro");
   const [customization, setCustomization] = useState<CardCustomization>(profile.customization ?? {});
@@ -227,12 +235,14 @@ export default function ProfileForm({ profile, linkedinEnabled = false }: { prof
             currentUrl={photoUrl}
             label="Profile photo (shown on Photo card template)"
             shape="circle"
+            adjustKey={photoAdjustKey}
             onUploaded={(url) => setPhotoUrl(url)}
           />
           {/* Suggest my headshot — same preview-first flow as the card editors. */}
           <ProfilePhotoSuggest
             linkedinEnabled={linkedinEnabled}
             returnTo="/profile"
+            scope="profile"
             onConfirm={(url) => setPhotoUrl(url)}
           />
         </div>

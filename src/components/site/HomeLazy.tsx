@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Deferred from "@/components/Deferred";
+import { pendingLinkedInPhoto } from "@/lib/linkedin-photo-return";
 import WideDemo from "@/components/site/WideDemo";
 
 // ── The homepage's heavy replicas: code AND markup arrive only when needed ──
@@ -40,8 +41,10 @@ export function LazyHeroShowcase() {
   );
 }
 
-/** LinkedIn is handing a photo back to the card builder, which lives in the gallery. */
-const cardBuilderReturn = () => new URLSearchParams(window.location.search).get("builder") === "card";
+/** LinkedIn is handing a photo back to the card builder, which lives in the
+ *  gallery — by the URL, or by a ticket it is still waiting on. */
+const cardBuilderReturn = () =>
+  new URLSearchParams(window.location.search).get("builder") === "card" || !!pendingLinkedInPhoto("builder:card");
 
 export function LazyTemplateGallery({ linkedinEnabled }: { linkedinEnabled: boolean }) {
   // Built at once on a ?builder=card return: deferred, the card builder never

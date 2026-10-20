@@ -50,7 +50,7 @@ describe("the homepage builders come back on their photo step, with the crop ope
     });
     it(`${product}: the headshot tile gets the crop signal, and the hop is refused if the sketch can't be saved`, () => {
       expect(src).toMatch(/field="photo"[^\n]*adjustKey=\{photoAdjustKey\}/);
-      expect(src).toMatch(new RegExp(`returnTo="/\\?builder=${product}" beforeLeave=\\{holdForHop\\}`));
+      expect(src).toMatch(new RegExp(`returnTo="/\\?builder=${product}" scope="builder:${product}" beforeLeave=\\{holdForHop\\}`));
     });
   }
 

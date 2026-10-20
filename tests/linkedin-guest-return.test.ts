@@ -88,10 +88,10 @@ describe("every homepage builder is wired the same way", () => {
     const cb = read("src/app/api/integrations/linkedin/callback/route.ts");
     const guestBranch = cb.slice(cb.indexOf("if (userId === GUEST_STATE)"));
     expect(guestBranch).toContain("swiftcard://linkedin-callback?status=photo&next=");
-    expect(guestBranch).toMatch(/const res = isNative\s*\?/);
+    expect(guestBranch).toMatch(/const res = isNative\s*\?\s*nativeReturnPage\(/);
     expect(guestBranch).toContain('url.searchParams.set("li_photo", publicUrl)');
-    // Both cookies cleared on this exit too, like every other.
-    expect(guestBranch).toContain('res.cookies.set("li_native", "", { maxAge: 0, path: "/" })');
+    // Every cookie cleared on this exit too, like every other.
+    expect(guestBranch).toContain("return clearCookies(res);");
   });
 
   it("the wizard's own ?li_photo= reader is untouched", () => {
@@ -104,34 +104,25 @@ describe("every homepage builder is wired the same way", () => {
 // ── Signed in, inside the iOS shell ──────────────────────────────────────────
 //
 // Owner, 2026-09-22: "whenever I try to connect LinkedIn it just glitches out
-// to the website losing all progress." Two causes, both in the shell:
-//
-//  1. The in-app sheet has none of the app's cookies, so the connect route saw
-//     no session and sent the user to the WEBSITE's sign-in page. The CRM
-//     connects had already solved this with a signed handoff token (?h=); the
-//     headshot import never got it.
-//  2. The return leg reloaded the editor to deliver the status, which threw
-//     away every unsaved edit. It now finishes in place, like the web popup.
+// to the website losing all progress." The sheet has none of the app's
+// cookies, and the return leg reloaded the editor. Now every account takes the
+// one-shot import (guest=1 — no session to carry), and the return finishes in
+// place: the page under the sheet picks the photo up by its ticket.
 describe("signed-in LinkedIn connect from the iOS shell", () => {
-  it("carries the session into the sheet as the handoff token", () => {
+  it("needs no session in the sheet: the one-shot import for everyone", () => {
     const src = read("src/components/ProfilePhotoSuggest.tsx");
-    const nativeBranch = src.slice(src.indexOf("if (detectNativeApp())"), src.indexOf("// Web."));
-    expect(nativeBranch).toContain('fetch("/api/integrations/handoff", { method: "POST" })');
-    expect(nativeBranch).toContain("&h=${encodeURIComponent(h)}");
-    // Guests have no session to carry — guest=1 already does the job.
-    expect(nativeBranch).toMatch(/if \(!opts\.guest\)/);
+    const nativeBranch = src.slice(src.indexOf("if (detectNativeApp())"), src.indexOf("if (!opts.sameTab)"));
+    expect(nativeBranch).toContain("${opts.hopHref}&native=1");
+    expect(nativeBranch).not.toContain("/api/integrations/handoff");
+    expect(src).toContain('const connectBase = "/api/integrations/linkedin/connect?guest=1";');
   });
 
-  it("finishes in place on the editor that started it, never reloading it", () => {
+  it("finishes in place on the page that started it, never reloading it", () => {
     const bridge = read("src/components/NativeAppBridge.tsx");
-    const branch = bridge.slice(bridge.indexOf("swiftcard://linkedin-callback"), bridge.indexOf('url.startsWith("swiftcard:")'));
-    expect(branch).toContain("window.postMessage({ source: LINKEDIN_MESSAGE, status }, window.location.origin)");
-    // Only when the webview is already on that page, and never for a guest's
-    // photo, which travels in the URL and is read on mount.
-    expect(branch).toMatch(/provider === "linkedin" &&\s*status !== "photo" &&\s*new URL\(next, window\.location\.origin\)\.pathname === window\.location\.pathname/);
-    // The listener that receives it accepts exactly this shape.
-    const suggest = read("src/components/ProfilePhotoSuggest.tsx");
-    expect(suggest).toContain("data.source !== LINKEDIN_MESSAGE");
-    expect(suggest).toContain("e.origin !== window.location.origin");
+    const branch = bridge.slice(bridge.indexOf("swiftcard://linkedin-callback"), bridge.indexOf("// Integration OAuth return legs."));
+    expect(branch).toContain("window.dispatchEvent(new Event(LINKEDIN_RETURN_EVENT))");
+    expect(branch).not.toMatch(/location\.(href|replace|assign)/);
+    // Settings' own account connect (status=connected) still goes back to Settings.
+    expect(branch).toMatch(/liStatus !== "connected"/);
   });
 });

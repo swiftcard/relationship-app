@@ -129,7 +129,7 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
           <div className="pt-1">
             <span className="block text-slate-500 text-[0.75rem] font-medium mb-1.5">Profile photo</span>
             <ImageUpload guest field="photo" shape="circle" currentUrl={sketch.headshot} label="" adjustKey={photoAdjustKey} onUploaded={(u) => patch({ headshot: u || null })} />
-            <ProfilePhotoSuggest guest email={sketch.email} linkedinEnabled={linkedinEnabled} returnTo="/?builder=swiftlink" beforeLeave={holdForHop} onConfirm={(u) => patch({ headshot: u })} />
+            <ProfilePhotoSuggest guest email={sketch.email} linkedinEnabled={linkedinEnabled} returnTo="/?builder=swiftlink" scope="builder:swiftlink" beforeLeave={holdForHop} onConfirm={(u) => patch({ headshot: u })} />
             {/* Only used to look your headshot up — never shown on the page. */}
             <Field label="Email (only used to find your headshot)" type="email" placeholder="alex@morganco.com" value={sketch.email} onChange={(e) => patch({ email: e.target.value })} />
           </div>

@@ -50,6 +50,7 @@ import { track } from "@/lib/events";
 import { PLAN_LIMITS, isPaidPlan, PRO_CUSTOMIZATION_KEYS, LINK_STYLE_KEYS, LINK_STRUCTURAL_KEYS, convertCustomizationToFreeClosest, describeFreeDesignChanges, proLinkFeaturesInUse } from "@/lib/plan";
 import { SwiftLinkStyleControls, type SwiftLinkStyle } from "@/components/SwiftLinkDesign";
 import { MoreOptions, Switch } from "@/components/ui/DesignControls";
+import { pendingLinkedInPhoto, settleLinkedInPhoto, useLinkedInPhotoPickup } from "@/lib/linkedin-photo-return";
 import SwiftLinkLivePreview from "@/components/SwiftLinkLivePreview";
 import PlanCards from "@/components/PlanCards";
 import FreeDesignChoice from "@/components/FreeDesignChoice";
@@ -93,11 +94,15 @@ const inputCls =
 // cursor while the link shows a hand. Same control, same place — it has to feel
 // the same on every step.
 
-/** This page load is LinkedIn handing the headshot import back. */
+/** The wizard's LinkedIn photo scope (lib/linkedin-photo-return). */
+const LI_SCOPE = "wizard";
+
+/** This page load is LinkedIn handing the headshot import back — by the URL,
+ *  or with a photo still on its way under this builder's ticket. */
 function backFromLinkedIn(): boolean {
   if (typeof window === "undefined") return false;
   const sp = new URLSearchParams(window.location.search);
-  return sp.has("li_photo") || sp.get("integration") === "linkedin";
+  return sp.has("li_photo") || sp.get("integration") === "linkedin" || !!pendingLinkedInPhoto(LI_SCOPE);
 }
 
 // Is this page load the SAME builder visit carrying on, rather than a fresh
@@ -111,7 +116,7 @@ function backFromLinkedIn(): boolean {
 function resumesSilently(): boolean {
   if (typeof window === "undefined") return false;
   const sp = new URLSearchParams(window.location.search);
-  if (sp.get("claim") === "1" || sp.has("li_photo") || sp.has("integration")) return true;
+  if (sp.get("claim") === "1" || sp.has("li_photo") || sp.has("integration") || backFromLinkedIn()) return true;
   try {
     const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
     return !!nav && (nav.type === "reload" || nav.type === "back_forward") && new URL(nav.name).pathname === "/cards/new";
@@ -260,7 +265,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
   // only the LinkedIn photo hop reads back (officeHopDraftKey). That gives them
   // the same one-tab round trip as everyone else; they were the last ones on
   // the consent POPUP, which a phone opens as a second tab that LinkedIn's
-  // sign-in cuts off from this page (lib/linkedin-popup).
+  // sign-in cuts off from this page (lib/linkedin-photo-return).
   const officeHop = !guest && !!draftOwner && !!org;
   const keepsDraft = canDraft || officeHop;
   const drafts = useMemo(
@@ -979,10 +984,16 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
   // Bumped with each LinkedIn photo applied: the headshot tile opens it in the
   // crop tool (ImageUpload adjustKey), so it is fitted before it is kept.
   const [photoAdjustKey, setPhotoAdjustKey] = useState(0);
+  // Always on step 2 with "Logo & headshot" open: the photo is put where it
+  // can be seen. It used to go onto whatever step the draft came back on, and
+  // with no draft found that was step 1 — no photo, no crop, nothing said
+  // (found on live, 2026-10-20). The section opens itself while the headshot
+  // is missing (photosStartOpen), which it is until this lands.
   const applyLiPhoto = () => {
     if (liPhotoRef.current) {
       setHeadshotUrl(liPhotoRef.current);
       setPhotoAdjustKey((k) => k + 1);
+      setStep(2);
       liPhotoRef.current = null;
     }
   };
@@ -1166,12 +1177,23 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
     if (supa && photo.startsWith(`${supa}/storage/v1/object/public/`)) {
       liPhotoRef.current = photo;
       if (hydratedRef.current) applyLiPhoto();
+      // The URL brought it: the ticket's pickup below must not apply it twice.
+      settleLinkedInPhoto(LI_SCOPE);
     }
     url.searchParams.delete("li_photo");
     url.searchParams.delete("integration");
     url.searchParams.delete("status");
     window.history.replaceState({}, "", url.toString());
   }, []);
+
+  // The same photo by its ticket (lib/linkedin-photo-return), however the page
+  // got control back: the app's sheet closing with no swiftcard:// link, the
+  // URL return losing its parameters, a return to this tab. Applied exactly as
+  // the URL's is — after the restore, on step 2, in the crop tool.
+  useLinkedInPhotoPickup(LI_SCOPE, (photo) => {
+    liPhotoRef.current = photo;
+    if (hydratedRef.current) applyLiPhoto();
+  }, { onStatus: () => { if (hydratedRef.current) setStep(2); } });
 
   useEffect(() => {
     if (!keepsDraft) return;
@@ -2263,6 +2285,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                 <ProfilePhotoSuggest
                   linkedinEnabled={linkedinEnabled}
                   returnTo={photoReturnTo}
+                  scope={LI_SCOPE}
                   guest={guest}
                   email={email}
                   photoReturn={keepsDraft}

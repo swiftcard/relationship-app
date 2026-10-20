@@ -21,6 +21,7 @@ import ProRequiredDialog from "@/components/ProRequiredDialog";
 import ImageUpload from "@/components/ImageUpload";
 import LogoSuggest from "@/components/LogoSuggest";
 import ProfilePhotoSuggest from "@/components/ProfilePhotoSuggest";
+import { useLinkedInPhotoPickup } from "@/lib/linkedin-photo-return";
 import CardScaler from "@/components/CardScaler";
 import { DEFAULT_PRESET, buildPreset } from "@/lib/custom-layout";
 import InertPreview from "@/components/InertPreview";
@@ -290,6 +291,15 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
   // "circle" renders the whole mark inside a circular plate (never cropped).
   const [logoShape, setLogoShape] = useState<"auto" | "circle">(card.customization?.logoShape === "circle" ? "circle" : "auto");
   const [photoState, setPhotoState] = useState<string | null>(photoUrl ?? null);
+  // A LinkedIn photo arriving (lib/linkedin-photo-return): it is put in the
+  // headshot on the design tab and opened in the crop tool (adjustKey). The
+  // editor never reloads for it, so nothing unsaved is lost.
+  const [photoAdjustKey, setPhotoAdjustKey] = useState(0);
+  useLinkedInPhotoPickup(`card:${card.id}`, (url) => {
+    setTab("design");
+    setPhotoState(url);
+    setPhotoAdjustKey((k) => k + 1);
+  }, { fromUrl: true });
   // Card design → Photos opens by itself only while something is still missing.
   // Read ONCE at mount (see MoreOptions): a live value would fold the section
   // shut under the owner the moment an upload finished. An office member's logo
@@ -1196,11 +1206,13 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                   hint="Recommended. This will also be used for your Swift Links page."
                   shape="circle"
                   defer
+                  adjustKey={photoAdjustKey}
                   onUploaded={(url) => setPhotoState(url || null)}
                 />
                 <ProfilePhotoSuggest
                   linkedinEnabled={linkedinEnabled}
                   returnTo={`/cards/${card.id}/edit`}
+                  scope={`card:${card.id}`}
                   onConfirm={(url) => setPhotoState(url)}
                 />
               </div>

@@ -53,7 +53,7 @@ export const UNDOCUMENTED_ROUTES: Record<string, string> = {
   "/profile/card": "Legacy primary-card editor, unlinked and superseded by the per-card editor.",
   "/card/[username]": "Redirect only since 2026-08-19 — card pages moved to the root (swiftcard.me/<username>, the documented /[username] route); this keeps every printed QR, NFC tag and old link working.",
   "/office": "Redirect only — it forwards to /office/admin, which is documented.",
-  "/linkedin-connected": "Machine-only relay for the LinkedIn photo hop: the consent window lands here, hands the result to the card editor that opened it, and closes. Nobody navigates here on purpose and there is nothing on it to describe — the flow itself is documented under the headshot in cards.ts.",
+  "/linkedin-connected": "Machine-only relay for the LinkedIn photo hop: the editors' LinkedIn window lands here and closes (the editor picks the photo up itself), or says to go back to the SwiftCard tab. Nobody navigates here on purpose and there is nothing on it to describe — the flow itself is documented under the headshot in cards.ts.",
   "/office/admin/invite": "Redirect only — inviting is a button on the Team tab, not a page.",
   "/office/admin/team": "Redirect only — folded into the Team tab.",
   "/office/admin/cards": "Redirect only — folded into the Team tab.",

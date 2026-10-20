@@ -58,14 +58,16 @@ beforeAll(async () => {
     import SignatureMiniBuilder from "@/components/site/SignatureMiniBuilder";
     import { LazyTemplateGallery } from "@/components/site/HomeLazy";
     import NewCardWizard from "@/app/cards/new/NewCardWizard";
+    import CardEditForm from "@/app/cards/[id]/edit/CardEditForm";
+    import ProfileForm from "@/components/ProfileForm";
     const SCREENS: any = {
       card: CardMiniBuilder, swiftlink: SwiftLinkMiniBuilder, signature: SignatureMiniBuilder,
-      gallery: LazyTemplateGallery, wizard: NewCardWizard,
+      gallery: LazyTemplateGallery, wizard: NewCardWizard, editor: CardEditForm, profile: ProfileForm,
     };
     (window as any).mount = (screen: string, props: any) => {
       // The homepage's builders sit far down a long page; the spacer puts them
       // there, so "brought back to the top" is something this can see.
-      const tall = screen !== "wizard";
+      const tall = !["wizard", "editor", "profile"].includes(screen);
       createRoot(document.getElementById("root")!).render(
         h("main", { className: "sc-app" }, tall ? h("div", { style: { height: 3000 } }) : null, h(SCREENS[screen], props)),
       );
@@ -120,7 +122,11 @@ afterAll(async () => {
 
 // ── The rig ─────────────────────────────────────────────────────────────────
 
-type Rig = { page: Page; api: string[]; connects: URL[]; popups: number; errors: string[]; logs: string[] };
+type Rig = {
+  page: Page; api: string[]; connects: URL[]; popups: number; errors: string[]; logs: string[];
+  /** What GET /api/integrations/linkedin/photo answers — the callback's work, by ticket. */
+  li: { answer: Record<string, unknown>; asked: string[] };
+};
 
 async function rig(engine: string, width: number): Promise<Rig> {
   const ctx = await browsers[engine].newContext({
@@ -128,7 +134,7 @@ async function rig(engine: string, width: number): Promise<Rig> {
     ...(engine === "Chromium" && width < 600 ? { hasTouch: true, isMobile: true } : {}),
   });
   const page = await ctx.newPage();
-  const r: Rig = { page, api: [], connects: [], popups: 0, errors: [], logs: [] };
+  const r: Rig = { page, api: [], connects: [], popups: 0, errors: [], logs: [], li: { answer: { pending: true }, asked: [] } };
   page.on("pageerror", (e) => r.errors.push(e.message.split("\n")[0]));
   page.on("console", (m) => r.logs.push(`[${m.type()}] ${m.text()}`));
   page.on("requestfailed", (q) => r.logs.push(`[requestfailed] ${q.url().slice(0, 120)} ${q.failure()?.errorText ?? ""}`));
@@ -142,6 +148,10 @@ async function rig(engine: string, width: number): Promise<Rig> {
     if (url.pathname === "/api/integrations/linkedin/connect") {
       r.connects.push(url);
       return route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>LinkedIn</title>LinkedIn sign-in" });
+    }
+    if (url.pathname === "/api/integrations/linkedin/photo") {
+      r.li.asked.push(url.searchParams.get("t") ?? "");
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(r.li.answer) });
     }
     if (url.origin === ORIGIN && url.pathname.startsWith("/api/")) {
       r.api.push(`${req.method()} ${url.pathname}`);
@@ -161,7 +171,7 @@ async function rig(engine: string, width: number): Promise<Rig> {
     }
     return route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
   });
-  return { ...r, page };
+  return r;
 }
 
 async function open(r: Rig, path: string, screen: string, props: Record<string, unknown>, seed?: Record<string, unknown>) {
@@ -354,6 +364,135 @@ describe.each(ENGINES)("the card wizard — %s %ipx", (engine, width) => {
     const held = await stored(r.page, "swiftcard_card_hop:u-member");
     expect(held?.payload?.name ?? "").toBe("");
     expect(held?.step ?? 1).toBe(1);
+    await r.page.context().close();
+  });
+});
+
+// ── The ticket: the photo comes back however the page gets control back ────
+//
+// Owner, 2026-10-20: Connect LinkedIn → sign in → Allow → back on the same page
+// with no photo and no crop, although the photo had been stored. Every screen
+// now picks its photo up by the ticket its Connect tap made
+// (lib/linkedin-photo-return). Here GET /api/integrations/linkedin/photo stands
+// in for what the callback stored under that ticket.
+
+const TICKET = "3f2b8c1e-9a4d-4e7b-8c2a-1d5e6f7a8b9c";
+const waiting = (scope: string) => ({ sc_li_ticket: { t: TICKET, scope, at: Date.now() } });
+const ticketOf = (page: Page) => page.evaluate(() => JSON.parse(localStorage.getItem("sc_li_ticket") || "null"));
+
+const CARD = {
+  id: "c1", username: "dana-ellis", name: "Dana Ellis", title: "Principal Broker", company: "Northbeam Group",
+  email: "dana@northbeam.com", phone: "(415) 555-0192", website: "northbeam.com",
+  linkedin: "", instagram: "", twitter: "", tiktok: "", template: "classic-pro",
+  customization: {} as Record<string, unknown>,
+};
+const PROFILE = {
+  username: "dana-ellis", name: "Dana Ellis", title: "Principal Broker", company: "Northbeam Group",
+  email: "dana@northbeam.com", phone: null, website: null, linkedin: null, instagram: null, twitter: null, tiktok: null,
+  photo_url: null, logo_url: null, template: "classic-pro", plan: "free", customization: {},
+};
+
+describe.each(ENGINES)("the LinkedIn ticket — %s %ipx", (engine, width) => {
+  it("the wizard with NO saved progress: the photo still lands on step 2, in the crop tool", async () => {
+    const r = await rig(engine, width);
+    // The failing case found on live: nothing saved on this device, so the
+    // wizard opened on step 1 and the photo went onto a step nobody could see.
+    await open(r, `/cards/new?li_photo=${encodeURIComponent(LI_PHOTO)}&integration=linkedin&status=photo`, "wizard", { guest: true, isPro: false, linkedinEnabled: true });
+    await applyCrop(r.page, r.logs);
+    expect(await r.page.locator("#wizard-name").count()).toBe(0);
+    expect(await r.page.getByText("Logo & headshot").first().isVisible()).toBe(true);
+    expect(await r.page.locator('img[alt="Upload your headshot"]').first().isVisible()).toBe(true);
+    await expect.poll(async () => (await stored(r.page, "swiftcard_guest_draft"))?.images?.photo?.slice(0, 15), { timeout: 5000 }).toBe("data:image/jpeg");
+    expect(r.errors).toEqual([]);
+    await r.page.context().close();
+  });
+
+  it("the wizard in the app: the sheet closed with no swiftcard:// link, the ticket still brings the photo", async () => {
+    const r = await rig(engine, width);
+    await open(r, "/cards/new", "wizard", { guest: true, isPro: false, linkedinEnabled: true },
+      { swiftcard_guest_draft: draft("Dana Ellis", "Acme"), ...waiting("wizard") });
+    // Still at LinkedIn: asked, nothing yet, nothing shown.
+    await expect.poll(() => r.li.asked.length).toBeGreaterThan(0);
+    expect(r.li.asked[0]).toBe(TICKET);
+    expect(await cropper(r.page).count()).toBe(0);
+    // LinkedIn finishes; the user taps Done (NativeAppBridge: browserFinished).
+    r.li.answer = { url: LI_PHOTO };
+    await r.page.evaluate(() => window.dispatchEvent(new Event("swiftcard:linkedin-return")));
+    await applyCrop(r.page, r.logs);
+    const kept = await stored(r.page, "swiftcard_guest_draft");
+    expect(kept?.payload?.name).toBe("Dana Ellis");
+    expect(kept?.step).toBe(2);
+    expect(await ticketOf(r.page)).toBeNull();
+    expect(r.errors).toEqual([]);
+    await r.page.context().close();
+  });
+
+  it("Profile: LinkedIn opens in its own window, the photo is picked up on return, unsaved edits kept", async () => {
+    const r = await rig(engine, width);
+    await open(r, "/profile", "profile", { profile: PROFILE, linkedinEnabled: true });
+    const bio = r.page.getByPlaceholder("A short bio", { exact: false });
+    await bio.fill("Unsaved bio text");
+    await r.page.evaluate(() => { (window as unknown as { stillHere: boolean }).stillHere = true; });
+    await r.page.getByRole("button", { name: "Suggest my profile picture" }).first().click();
+    await r.page.getByRole("link", { name: "Connect LinkedIn", exact: true }).click();
+    await expect.poll(() => r.connects.length, { timeout: 8000 }).toBe(1);
+    await expect.poll(() => r.popups, { timeout: 8000 }).toBe(1);
+    const c = r.connects[0];
+    expect(c.searchParams.get("guest")).toBe("1");
+    expect(c.searchParams.get("next")).toBe("/linkedin-connected?to=%2Fprofile");
+    expect(c.searchParams.get("t")).toBe((await ticketOf(r.page))?.t);
+    expect((await ticketOf(r.page))?.scope).toBe("profile");
+    // The window closes; this tab gets focus back.
+    r.li.answer = { url: LI_PHOTO };
+    await r.page.bringToFront();
+    await r.page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await applyCrop(r.page, r.logs);
+    expect(await bio.inputValue()).toBe("Unsaved bio text");
+    expect(await r.page.evaluate(() => (window as unknown as { stillHere?: boolean }).stillHere)).toBe(true);
+    expect(r.errors).toEqual([]);
+    await r.page.context().close();
+  });
+
+  it("Card editor: same — own window, photo picked up and cropped, the unsaved name kept", async () => {
+    const r = await rig(engine, width);
+    await open(r, "/cards/c1/edit", "editor", { card: CARD, isPro: true, linkedinEnabled: true });
+    await r.page.locator("#card-name").fill("Dana Q. Ellis");
+    await r.page.getByRole("button", { name: "Card design", exact: true }).click();
+    await r.page.getByRole("button", { name: "Suggest my profile picture" }).first().click();
+    await r.page.getByRole("link", { name: "Connect LinkedIn", exact: true }).click();
+    await expect.poll(() => r.connects.length, { timeout: 8000 }).toBe(1);
+    await expect.poll(() => r.popups, { timeout: 8000 }).toBe(1);
+    expect(r.connects[0].searchParams.get("next")).toBe("/linkedin-connected?to=%2Fcards%2Fc1%2Fedit");
+    expect((await ticketOf(r.page))?.scope).toBe("card:c1");
+    // Back on the card info tab when the photo arrives: it brings them to it.
+    await r.page.bringToFront();
+    await r.page.getByRole("button", { name: "Card info", exact: true }).click();
+    r.li.answer = { url: LI_PHOTO };
+    await r.page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await applyCrop(r.page, r.logs);
+    await r.page.getByRole("button", { name: "Card info", exact: true }).click();
+    expect(await r.page.locator("#card-name").inputValue()).toBe("Dana Q. Ellis");
+    expect(r.errors).toEqual([]);
+    await r.page.context().close();
+  });
+
+  it("a profile with no LinkedIn photo is SAID, not silent", async () => {
+    const r = await rig(engine, width);
+    r.li.answer = { status: "nophoto" };
+    await open(r, "/profile", "profile", { profile: PROFILE, linkedinEnabled: true }, waiting("profile"));
+    await expect.poll(() => r.page.getByText("doesn't have a photo to import", { exact: false }).isVisible()).toBe(true);
+    expect(await cropper(r.page).count()).toBe(0);
+    expect(await ticketOf(r.page)).toBeNull();
+    await r.page.context().close();
+  });
+
+  it("a homepage builder with its URL return lost: reopened on the photo step by the ticket", async () => {
+    const r = await rig(engine, width);
+    r.li.answer = { url: LI_PHOTO };
+    await open(r, "/", "swiftlink", { linkedinEnabled: true }, waiting("builder:swiftlink"));
+    expect(await r.page.getByText("Name your Swift Links page").first().isVisible()).toBe(true);
+    await applyCrop(r.page, r.logs);
+    expect(r.errors).toEqual([]);
     await r.page.context().close();
   });
 });

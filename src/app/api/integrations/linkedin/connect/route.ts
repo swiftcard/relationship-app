@@ -4,6 +4,7 @@ import { safeNextPath } from "@/lib/safe-next";
 import { resolveConnectUserId } from "@/lib/connect-user";
 import { signState, oauthBindCookieName, oauthBindCookieValue, OAUTH_BIND_COOKIE_OPTIONS } from "@/lib/oauth-state";
 import { GUEST_STATE, isLinkedInEnabled, LINKEDIN_AUTH_URL, LINKEDIN_REDIRECT_URI, LINKEDIN_SCOPES } from "@/lib/sync-linkedin";
+import { isLinkedInTicket, LINKEDIN_TICKET_COOKIE } from "@/lib/linkedin-ticket";
 
 export const runtime = "nodejs";
 
@@ -78,6 +79,15 @@ export async function GET(request: Request) {
     res.cookies.set("li_return_to", next, { httpOnly: true, sameSite: "lax", maxAge: LI_COOKIE_MAX_AGE, path: "/" });
   } else {
     res.cookies.set("li_return_to", "", { maxAge: 0, path: "/" });
+  }
+  // `?t=<uuid>` — the page's ticket for this attempt (lib/linkedin-ticket).
+  // The callback stores the photo under it, so the page can pick it up however
+  // it gets control back. Anything that isn't a UUID is dropped.
+  const ticket = url.searchParams.get("t");
+  if (isLinkedInTicket(ticket)) {
+    res.cookies.set(LINKEDIN_TICKET_COOKIE, ticket, { httpOnly: true, sameSite: "lax", maxAge: LI_COOKIE_MAX_AGE, path: "/" });
+  } else {
+    res.cookies.set(LINKEDIN_TICKET_COOKIE, "", { maxAge: 0, path: "/" });
   }
   // `?native=1` — started from the iOS shell, which runs this in an in-app
   // browser because linkedin.com cannot load in the app's own webview. The

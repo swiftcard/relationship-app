@@ -179,7 +179,7 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
             <ImageUpload guest field="photo" shape="circle" currentUrl={sketch.headshot} label="Headshot" adjustKey={photoAdjustKey} onUploaded={(u) => patch({ headshot: u || null })} />
             {/* Looks your headshot up from the email you entered. Shows what it
                 found and applies nothing until you pick it. */}
-            <ProfilePhotoSuggest guest email={sketch.email} linkedinEnabled={linkedinEnabled} returnTo="/?builder=card" beforeLeave={holdForHop} onConfirm={(u) => patch({ headshot: u })} />
+            <ProfilePhotoSuggest guest email={sketch.email} linkedinEnabled={linkedinEnabled} returnTo="/?builder=card" scope="builder:card" beforeLeave={holdForHop} onConfirm={(u) => patch({ headshot: u })} />
           </div>
           <div>
             <ImageUpload guest field="logo" shape="square" currentUrl={sketch.logo} label="Company logo" onUploaded={(u) => patch({ logo: u || null })} />

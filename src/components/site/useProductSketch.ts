@@ -6,7 +6,7 @@ import type { CardLink } from "@/components/card-templates/types";
 import type { SwiftLinkStyle } from "@/components/SwiftLinkDesign";
 import { stashSketch, consumePrefill, writePrefill, type CardPrefill } from "@/lib/prefill";
 import { resetMarketingSketch } from "@/lib/guest-reset";
-import { stashGuestLinkedInStatus } from "@/lib/linkedin-popup";
+import { settleLinkedInPhoto, stashGuestLinkedInStatus, useLinkedInPhotoPickup } from "@/lib/linkedin-photo-return";
 
 // ── One sketch, three products ──────────────────────────────────────────────
 // The homepage builders ("see how your card / SwiftLink / signature would
@@ -225,9 +225,20 @@ export function useProductSketch(product: CardPrefill["product"], open: boolean)
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of the LinkedIn return URL on mount
     setLinkedInReturn(true);
     if (photo) setReturnedPhoto(photo);
+    // The URL brought it: the ticket's pickup below must not apply it twice.
+    settleLinkedInPhoto(`builder:${product}`);
     for (const k of ["builder", "li_photo", "integration", "status"]) url.searchParams.delete(k);
     window.history.replaceState({}, "", url.toString());
   }, [product]);
+
+  // The same photo by its ticket (lib/linkedin-photo-return), however this page
+  // got control back: the app's sheet closing, the URL return losing its
+  // parameters, a return to this tab. It goes the same way as the URL's —
+  // the builder reopens on its photo step and the photo opens in the crop tool.
+  useLinkedInPhotoPickup(`builder:${product}`, (photo) => {
+    setLinkedInReturn(true);
+    setReturnedPhoto(photo);
+  }, { onStatus: () => setLinkedInReturn(true) });
 
   const patch = useCallback((p: Partial<Sketch>) => setSketch((prev) => ({ ...prev, ...p })), []);
   const patchStyle = useCallback(

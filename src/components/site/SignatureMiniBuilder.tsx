@@ -139,7 +139,7 @@ export default function SignatureMiniBuilder({ linkedinEnabled = false }: { link
         <div className="space-y-5">
           <div>
             <ImageUpload guest field="photo" shape="circle" currentUrl={sketch.headshot} label="Headshot" adjustKey={photoAdjustKey} onUploaded={(u) => patch({ headshot: u || null })} />
-            <ProfilePhotoSuggest guest email={sketch.email} linkedinEnabled={linkedinEnabled} returnTo="/?builder=signature" beforeLeave={holdForHop} onConfirm={(u) => patch({ headshot: u })} />
+            <ProfilePhotoSuggest guest email={sketch.email} linkedinEnabled={linkedinEnabled} returnTo="/?builder=signature" scope="builder:signature" beforeLeave={holdForHop} onConfirm={(u) => patch({ headshot: u })} />
           </div>
           <div>
             <ImageUpload guest field="logo" shape="square" currentUrl={sketch.logo} label="Company logo" onUploaded={(u) => patch({ logo: u || null })} />

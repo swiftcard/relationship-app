@@ -70,12 +70,15 @@ describe("the LinkedIn callback returns to the app, not the website", () => {
     expect(callback).toMatch(/NextResponse\.redirect\(url\.toString\(\)\)/);
   });
 
-  it("clears both cookies on every exit", () => {
-    // DONE() is the single exit. A stale li_native would send a LATER web
-    // connect into a swiftcard:// redirect that a browser cannot follow.
-    const done = callback.slice(callback.indexOf("const DONE"), callback.indexOf("if (!isLinkedInEnabled"));
-    expect(done).toMatch(/li_return_to["']\s*,\s*["']{2}/);
-    expect(done).toMatch(/li_native["']\s*,\s*["']{2}/);
+  it("clears every cookie on every exit", () => {
+    // DONE() and the photo exit both go through clearCookies. A stale
+    // li_native would send a LATER web connect into a swiftcard:// page that a
+    // browser cannot follow; a stale ticket would file a later photo under it.
+    const clear = callback.slice(callback.indexOf("const clearCookies"), callback.indexOf("const DONE"));
+    expect(clear).toMatch(/li_return_to["']\s*,\s*["']{2}/);
+    expect(clear).toMatch(/li_native["']\s*,\s*["']{2}/);
+    expect(clear).toMatch(/LINKEDIN_TICKET_COOKIE\s*,\s*["']{2}/);
+    expect(callback.match(/return clearCookies\(res\);/g)?.length).toBe(2);
   });
 });
 
@@ -103,44 +106,25 @@ describe("the app handles the LinkedIn return leg", () => {
   });
 });
 
-describe("connecting from the headshot section auto-applies the photo", () => {
+describe("connecting from the headshot section applies the photo by itself", () => {
   const suggest = read("src/components/ProfilePhotoSuggest.tsx");
 
-  it("the OAuth return leg (?integration=linkedin&status=connected) imports without a second click", () => {
+  it("no second click: the page picks the photo up by its ticket and opens the crop tool", () => {
     // Owner bug report 2026-09-02: connect finished, nothing happened — the
     // user had to press "Suggest my profile picture" again to see the photo.
-    // The leg now lives in finishLinkedInReturn(), which BOTH the popup
-    // message and a plain ?integration= navigation call — so assert on the
-    // handler, not on the effect body it used to live in.
-    const effect = suggest.slice(suggest.indexOf("useEffect"), suggest.indexOf("async function suggest"));
+    // Then 2026-10-20: the photo was stored but never reached the page. The
+    // page now asks for it by ticket (lib/linkedin-photo-return).
+    expect(suggest).toMatch(/startLinkedInPhoto\(scope\)/);
+    for (const f of ["src/app/cards/[id]/edit/CardEditForm.tsx", "src/components/ProfileForm.tsx"]) {
+      expect(read(f), f).toMatch(/useLinkedInPhotoPickup\(/);
+    }
+  });
+
+  it("strips a failure's params so a refresh can't re-show it", () => {
+    const effect = suggest.slice(suggest.indexOf("useEffect(() =>"), suggest.indexOf("async function suggest"));
     expect(effect).toMatch(/integration.*linkedin/);
-    // Imports on "connected" and on nothing else.
-    expect(suggest).toMatch(/status !== "connected"\)\s*return;/);
-    expect(suggest).toMatch(/\/api\/integrations\/linkedin.*method: "POST"|method: "POST"/);
-    expect(suggest).toMatch(/onConfirm\(data\.url\)/);
-  });
-
-  it("strips the params before importing so a refresh can't re-run the leg", () => {
-    const effect = suggest.slice(suggest.indexOf("useEffect"), suggest.indexOf("async function suggest"));
     expect(effect).toMatch(/replaceState/);
-    // The strip still happens before the import is kicked off — the import is
-    // now a call to the shared handler rather than inline code.
-    // Anchor on the CALL, not the handler's definition (which sits above).
-    const call = effect.indexOf("void finishLinkedInReturn(status)");
-    expect(call, "return leg is no longer kicked off from the effect").toBeGreaterThan(-1);
-    expect(effect.indexOf("replaceState")).toBeLessThan(call);
-  });
-
-  it("falls back to the visible suggestion flow when the import can't complete", () => {
-    // Revoked token / photo-less profile must surface the reconnect UI, not silence.
-    const effect = suggest.slice(suggest.indexOf("useEffect"), suggest.indexOf("async function suggest"));
-    expect(effect).toMatch(/void suggest\(\)/);
-  });
-
-  it("one-shot imports (guests, the card wizard) are excluded — their photo returns via ?li_photo= to the builder", () => {
-    const effect = suggest.slice(suggest.indexOf("useEffect"), suggest.indexOf("async function suggest"));
-    expect(effect).toMatch(/if \(oneShot\) return/);
-    expect(read("src/app/cards/new/NewCardWizard.tsx")).toMatch(/li_photo/);
+    expect(effect.indexOf("replaceState")).toBeLessThan(effect.indexOf("oneShotFailure("));
   });
 });
 
@@ -157,15 +141,15 @@ describe("the LinkedIn hop preserves the page the user was editing", () => {
   const editorPage = read("src/app/cards/[id]/edit/page.tsx");
   const editor = read("src/app/cards/[id]/edit/CardEditForm.tsx");
 
-  it("runs the web consent hop in a popup so the editor never unloads", () => {
-    expect(suggest).toMatch(/window\.open\(/);
-    expect(suggest).toMatch(/popupConnectUrl\(/);
+  it("runs the web consent hop in a window of its own so the editor never unloads", () => {
+    expect(suggest).toMatch(/window\.open\(opts\.awayHref/);
+    expect(suggest).toMatch(/if \(!opts\.sameTab\)/);
   });
 
   it("still falls back to a normal navigation when the popup is blocked", () => {
     // window.open returns null when blocked; a dead button would be worse than
     // losing the edits we are trying to protect.
-    expect(suggest).toMatch(/window\.location\.href = href/);
+    expect(suggest).toMatch(/window\.location\.href = opts\.hopHref/);
   });
 
   it("keeps native on the in-app sheet — never the popup", () => {
@@ -185,11 +169,9 @@ describe("the LinkedIn hop preserves the page the user was editing", () => {
     expect(nativeBranch).toMatch(/Browser\.open/);
   });
 
-  it("the relay only accepts its own message and only same-origin", () => {
-    expect(relay).toMatch(/postMessage\(/);
-    expect(relay).toMatch(/window\.location\.origin/);
-    expect(suggest).toMatch(/e\.origin !== window\.location\.origin/);
-    expect(suggest).toMatch(/data\.source !== LINKEDIN_MESSAGE/);
+  it("the relay sends nothing anywhere: it only closes", () => {
+    expect(relay).not.toMatch(/postMessage\(/);
+    expect(relay).toMatch(/window\.close\(\)/);
   });
 
   it("the relay refuses an off-site ?to=", () => {

@@ -6,11 +6,51 @@ import { verifyState, stateBoundToBrowser, oauthBindCookieName } from "@/lib/oau
 import { safeNextPath } from "@/lib/safe-next";
 import { exchangeLinkedInCode, fetchLinkedInProfile, GUEST_STATE, isLinkedInEnabled } from "@/lib/sync-linkedin";
 import { fetchLinkedInPhoto } from "@/lib/linkedin-photo";
+import {
+  BLANK_GIF, isLinkedInTicket, LINKEDIN_TICKET_COOKIE, LINKEDIN_TICKET_FOLDER,
+  ticketPhotoPath, ticketStatusPath, type TicketFailure,
+} from "@/lib/linkedin-ticket";
 
 export const runtime = "nodejs";
 
 // This deployment's own address — never production from a preview (lib/app-url, audit E-02).
 const APP_URL = appUrl();
+
+const escapeHtml = (v: string) =>
+  v.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/**
+ * The app's way back: a page, not a bare 302 to swiftcard://. In the in-app
+ * sheet iOS can ask before following a custom-scheme redirect, or follow
+ * nothing at all, and a 302 left nothing on screen — the user tapped Done and
+ * was back where they started with no photo, although it had been saved
+ * (2026-10-20). The page tries the link at once (meta refresh, no script) and
+ * keeps a real button for it. The app also picks the photo up by its ticket
+ * when the sheet is closed, so even "Done" ends with the photo.
+ */
+function nativeReturnPage(appLink: string, status: string): NextResponse {
+  const href = escapeHtml(appLink);
+  const ok = status === "photo" || status === "connected";
+  const said =
+    status === "photo" ? "Your LinkedIn photo is ready."
+      : status === "connected" ? "LinkedIn is connected."
+        : status === "nophoto" ? "Your LinkedIn profile doesn't have a photo to import."
+          : "LinkedIn didn't finish connecting.";
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="0;url=${href}">
+<title>Back to SwiftCard</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#030712;color:#e5e7eb;font:15px/1.5 -apple-system,system-ui,sans-serif;text-align:center;padding:0 24px}
+a{display:inline-block;margin-top:16px;background:#2563eb;color:#fff;text-decoration:none;font-weight:600;padding:12px 28px;border-radius:999px}
+p{margin:0;max-width:280px}small{display:block;margin-top:14px;color:#6b7280;font-size:12px}</style></head>
+<body><main><p>${said}</p>
+<a href="${href}">Back to SwiftCard</a>
+<small>Or tap Done. ${ok ? "It will be there." : "You can try again from SwiftCard."}</small></main></body></html>`;
+  return new NextResponse(html, {
+    status: 200,
+    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+  });
+}
 
 export async function GET(request: NextRequest) {
   // Return the user to where they started the connect (set by /connect?next=…,
@@ -21,7 +61,30 @@ export async function GET(request: NextRequest) {
   // browser rather than the webview itself.
   const isNative = request.cookies.get("li_native")?.value === "1";
 
-  const DONE = (status: string) => {
+  // The page's ticket for this attempt (set by /connect?t=…), if it sent one.
+  const ticketRaw = request.cookies.get(LINKEDIN_TICKET_COOKIE)?.value;
+  const ticket = isLinkedInTicket(ticketRaw) ? ticketRaw : null;
+
+  const clearCookies = (res: NextResponse) => {
+    res.cookies.set("li_return_to", "", { maxAge: 0, path: "/" });
+    res.cookies.set("li_native", "", { maxAge: 0, path: "/" });
+    res.cookies.set(LINKEDIN_TICKET_COOKIE, "", { maxAge: 0, path: "/" });
+    return res;
+  };
+
+  const DONE = async (status: string) => {
+    // A one-shot import that came back without a photo says so under its
+    // ticket, so the page that is waiting for it can tell the user instead of
+    // waiting forever. Best effort: the URL return below still carries it.
+    if (ticket && (status === "nophoto" || status === "error")) {
+      try {
+        await getAdminSupabase().storage
+          .from("card-uploads")
+          .upload(ticketStatusPath(ticket, status as TicketFailure), BLANK_GIF, { contentType: "image/gif", upsert: true });
+      } catch (e) {
+        console.warn("[linkedin/callback] could not mark the ticket:", e);
+      }
+    }
     // NATIVE RETURN LEG.
     //
     // linkedin.com is not in capacitor.config's allowNavigation, so the shell
@@ -33,12 +96,13 @@ export async function GET(request: NextRequest) {
     //
     // A swiftcard:// URL instead re-enters the app: iOS hands it to
     // NativeAppBridge's appUrlOpen listener, which closes the browser sheet and
-    // navigates the WEBVIEW to `next`. Same custom-scheme mechanism the Google
+    // picks the photo up by its ticket. Same custom-scheme mechanism the Google
     // and Apple sign-in flows already return through.
     const res = isNative
-      ? NextResponse.redirect(
+      ? nativeReturnPage(
           `swiftcard://linkedin-callback?status=${encodeURIComponent(status)}` +
             `&next=${encodeURIComponent(returnTo)}`,
+          status,
         )
       : (() => {
           const url = new URL(returnTo, APP_URL);
@@ -46,9 +110,7 @@ export async function GET(request: NextRequest) {
           url.searchParams.set("status", status);
           return NextResponse.redirect(url.toString());
         })();
-    res.cookies.set("li_return_to", "", { maxAge: 0, path: "/" });
-    res.cookies.set("li_native", "", { maxAge: 0, path: "/" });
-    return res;
+    return clearCookies(res);
   };
 
   if (!isLinkedInEnabled()) return DONE("error");
@@ -100,10 +162,12 @@ export async function GET(request: NextRequest) {
       const body = photo.body;
 
       const admin = getAdminSupabase();
-      const path = `guest-linkedin/${crypto.randomUUID()}.jpg`;
+      // Under the page's ticket when it sent one, so the page can find it by
+      // itself (lib/linkedin-ticket); a fresh name otherwise.
+      const path = ticket ? ticketPhotoPath(ticket) : `${LINKEDIN_TICKET_FOLDER}/${crypto.randomUUID()}.jpg`;
       const { error: upErr } = await admin.storage
         .from("card-uploads")
-        .upload(path, body, { contentType: "image/jpeg", upsert: false });
+        .upload(path, body, { contentType: "image/jpeg", upsert: !!ticket });
       if (upErr) throw upErr;
       const { data: { publicUrl } } = admin.storage.from("card-uploads").getPublicUrl(path);
 
@@ -116,21 +180,18 @@ export async function GET(request: NextRequest) {
       // left the WEBSITE's builder showing inside that sheet while the app's
       // own builder sat behind it with no photo — the guest twin of the bug
       // DONE fixes. Same exit as DONE: a swiftcard:// URL re-enters the app
-      // and NativeAppBridge steers the webview to `next` (it appends
-      // integration/status itself), where the wizard's ?li_photo= reader
-      // applies the photo.
+      // and NativeAppBridge has the page pick the photo up by its ticket.
       const res = isNative
-        ? NextResponse.redirect(
+        ? nativeReturnPage(
             `swiftcard://linkedin-callback?status=photo&next=${encodeURIComponent(url.pathname + url.search)}`,
+            "photo",
           )
         : (() => {
             url.searchParams.set("integration", "linkedin");
             url.searchParams.set("status", "photo");
             return NextResponse.redirect(url.toString());
           })();
-      res.cookies.set("li_return_to", "", { maxAge: 0, path: "/" });
-      res.cookies.set("li_native", "", { maxAge: 0, path: "/" });
-      return res;
+      return clearCookies(res);
     } catch (e) {
       console.error("[linkedin/callback] guest photo import failed:", e);
       return DONE("error");

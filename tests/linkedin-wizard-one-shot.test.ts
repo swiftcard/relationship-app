@@ -30,9 +30,9 @@ describe("the card wizard uses the one-shot photo import", () => {
   });
 
   it("one-shot means the guest=1 connect, run as a page hop (no popup, no hand-off)", () => {
-    expect(suggest).toMatch(/const oneShot = guest \|\| photoReturn/);
-    expect(suggest).toMatch(/const connectHref = oneShot \? guestConnectHref : connectUrl/);
-    expect(suggest).toMatch(/openLinkedInConnect\(connectHref, \{ guest: oneShot/);
+    expect(suggest).toMatch(/const sameTab = guest \|\| photoReturn/);
+    expect(suggest).toMatch(/const connectHref = `\$\{connectBase\}&next=\$\{encodeURIComponent\(returnTo\)\}`/);
+    expect(suggest).toMatch(/void openLinkedInConnect\(\{\s*sameTab,/);
   });
 
   it("never leaves when the draft could not be saved", () => {
@@ -42,9 +42,9 @@ describe("the card wizard uses the one-shot photo import", () => {
     expect(guard).toBeLessThan(fn.indexOf("openLinkedInConnect("));
   });
 
-  it("a failed import is SAID, on the web return and in the app's in-place return", () => {
-    expect(suggest).toMatch(/if \(!oneShot\) return;[\s\S]*oneShotFailure\(status \?\? takeGuestLinkedInStatus\(\)\)/);
-    expect(suggest).toMatch(/addEventListener\("message", onOneShotMessage\)/);
+  it("a failed import is SAID, on the web return and when the ticket's answer arrives", () => {
+    expect(suggest).toMatch(/oneShotFailure\(status \?\? takeGuestLinkedInStatus\(\)\)/);
+    expect(suggest).toMatch(/addEventListener\(LINKEDIN_STATUS_EVENT, onStatus\)/);
     expect(suggest).toMatch(/status === "nophoto"/);
   });
 
