@@ -101,6 +101,28 @@ const PAGES = [
   "src/app/email/preferences/page.tsx",
   "src/components/email/PreferenceCenter.tsx",
   "src/components/EmailPreferencesForm.tsx",
+  // What the builders, the card page and join pull in (labels, errors, hints)
+  "src/components/CustomCardDesigner.tsx",
+  "src/components/CustomDesignCard.tsx",
+  "src/components/FreeCardEditor.tsx",
+  "src/components/LinkButtonsControls.tsx",
+  "src/components/AddLinkForm.tsx",
+  "src/components/SocialHandleField.tsx",
+  "src/components/card-templates/CardLookPicker.tsx",
+  "src/components/QRCodeModal.tsx",
+  "src/components/JoinButton.tsx",
+  "src/components/NFCWriter.tsx",
+  "src/components/EnablePushButton.tsx",
+  "src/components/GuidedTour.tsx",
+  "src/components/DownloadCardButton.tsx",
+  "src/components/MoreShareOptions.tsx",
+  "src/components/CropperLazy.tsx",
+  "src/app/login/page.tsx",
+  "src/lib/swiftlink-looks.ts",
+  "src/lib/swiftlink-tiles.ts",
+  "src/lib/card-finishes.ts",
+  "src/lib/upload-media.ts",
+  "src/lib/promo.ts",
 ];
 const SITE_DIR = "src/components/site";
 const FILES = [

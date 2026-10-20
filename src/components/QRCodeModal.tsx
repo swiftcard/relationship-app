@@ -99,8 +99,8 @@ export default function QRCodeModal({ url, firstName, label = "Show QR Code", va
             role="dialog"
             aria-modal="true"
             aria-label={showContact
-              ? `${firstName}'s contact QR code — scan to save the contact, no internet needed`
-              : `${firstName}'s QR code — scan to open the card`}
+              ? `${firstName}'s contact QR code. Scan to save the contact, no internet needed`
+              : `${firstName}'s QR code. Scan to open the card`}
             tabIndex={-1}
             className="animate-pop outline-none"
             // The tile is the card's own QR, only larger: min(78vw, 360px) so a

@@ -79,7 +79,7 @@ const RANK: Record<PushCategory, number> = {
 // never had a push to hold, and the Monday team recap is due from 9am.
 const TEAM_PUSH_TYPES = ["member_joined", "member_first_lead", "leads_waiting", "members_no_card", "team_milestone"];
 
-type TeamRow = { officeId: string; officeName: string | null; type: string; title: string; body: string | null; created_at: string; aboutUserId: string | null };
+type TeamRow = { officeId: string; officeName: string | null; type: string; title: string; body: string | null; created_at: string };
 
 const PAGE = 1000;
 
@@ -148,7 +148,7 @@ export async function GET(req: NextRequest) {
   const teamRowsFor = new Map<string, TeamRow[]>();
   try {
     const { data: recent } = await admin.from("office_notifications")
-      .select("office_id, type, title, body, created_at, meta")
+      .select("office_id, type, title, body, created_at")
       .eq("read", false)
       .in("type", TEAM_PUSH_TYPES)
       .gte("created_at", new Date(now - 24 * 3600 * 1000).toISOString())
@@ -166,16 +166,8 @@ export async function GET(req: NextRequest) {
         const rows: TeamRow[] = (recent ?? []).filter((r) => r.office_id === officeId).map((r) => ({
           officeId, officeName: nameOf.get(officeId) ?? null,
           type: r.type as string, title: r.title as string, body: (r.body as string | null) ?? null, created_at: r.created_at as string,
-          aboutUserId: typeof (r.meta as { userId?: unknown } | null)?.userId === "string" ? (r.meta as { userId: string }).userId : null,
         }));
-        // Never the person the news is about: the live push skips them
-        // (alertTeam's skipPushFor, which both callers pair with meta.userId),
-        // so an admin-role joiner was told "X joined your team" about
-        // themselves at 8am (audit NM-09).
-        for (const uid of recipients) {
-          const theirs = rows.filter((t) => t.aboutUserId !== uid);
-          if (theirs.length) teamRowsFor.set(uid, [...(teamRowsFor.get(uid) ?? []), ...theirs]);
-        }
+        for (const uid of recipients) teamRowsFor.set(uid, [...(teamRowsFor.get(uid) ?? []), ...rows]);
       }
     }
   } catch { /* team news is extra; never cost anyone their own morning */ }

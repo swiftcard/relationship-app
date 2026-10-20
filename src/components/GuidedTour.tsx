@@ -567,7 +567,7 @@ export default function GuidedTour({
           <p className="text-blue-300 text-[0.75rem] font-medium mt-2">Tap the highlighted card, or press Next.</p>
         )}
         {step.interactive && (
-          <p className="text-blue-300 text-[0.75rem] font-medium mt-2">Go ahead — try it. Then press Next to continue.</p>
+          <p className="text-blue-300 text-[0.75rem] font-medium mt-2">Go ahead and try it. Then press &quot;Next&quot; to continue.</p>
         )}
 
         {/* Progress dots */}

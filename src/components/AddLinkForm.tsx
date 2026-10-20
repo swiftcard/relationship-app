@@ -72,7 +72,7 @@ export default function AddLinkForm({
       {/* Examples first — they answer "what is this for?" before anything is
           asked. Wraps to as many rows as the width needs; never scrolls. */}
       <div>
-        <p className={`text-[0.6875rem] font-medium mb-1.5 ${t.label}`}>Ideas — tap one to start</p>
+        <p className={`text-[0.6875rem] font-medium mb-1.5 ${t.label}`}>Ideas: tap one to start</p>
         <div className="flex flex-wrap gap-1.5">
           {ideas.map((idea) => {
             const on = value.label === idea;

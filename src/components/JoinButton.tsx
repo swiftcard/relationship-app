@@ -24,7 +24,7 @@ export default function JoinButton({ token }: { token: string }) {
       }
       setStatus("declined");
     } catch {
-      setError("Network error — please try again.");
+      setError("Network error. Please try again.");
       setStatus("error");
     }
   }
@@ -65,7 +65,7 @@ export default function JoinButton({ token }: { token: string }) {
         : "/cards/new?add=1";
       setTimeout(() => { window.location.href = next; }, personalSub ? 6000 : 900);
     } catch {
-      setError("Network error — please try again.");
+      setError("Network error. Please try again.");
       setStatus("error");
     }
   }
@@ -80,14 +80,14 @@ export default function JoinButton({ token }: { token: string }) {
           <p className="mt-3 rounded-xl border border-blue-500/25 bg-blue-500/10 text-blue-200 text-xs px-3.5 py-3 leading-relaxed">
             Heads up: your team seat includes everything in Pro, and you also have your own Pro
             subscription, billed by Apple. It keeps renewing until you cancel it on your iPhone in{" "}
-            <span className="font-semibold">Settings → Apple ID → Subscriptions</span> — or keep it for if you
+            <span className="font-semibold">Settings → Apple ID → Subscriptions</span>, or keep it in case you
             ever leave the team. We&apos;ve put this in your notifications too.
           </p>
         ) : (
           <p className="mt-3 rounded-xl border border-blue-500/25 bg-blue-500/10 text-blue-200 text-xs px-3.5 py-3 leading-relaxed">
             Heads up: your team seat includes everything in Pro, and you also have your own Pro
-            subscription. You can cancel yours in <span className="font-semibold">Settings → Plan and billing</span> —
-            or keep it for if you ever leave the team. We&apos;ve put this in your notifications too.
+            subscription. You can cancel yours in <span className="font-semibold">Settings → Plan and billing</span>,
+            or keep it in case you ever leave the team. We&apos;ve put this in your notifications too.
           </p>
         ))}
       </div>

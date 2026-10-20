@@ -370,7 +370,7 @@ export default function CardLookPicker({
         type="button"
         onClick={onOriginal}
         aria-pressed={originalActive}
-        title="The template's own colours, font and finish"
+        title="The template's own colors, font and finish"
         className={`w-full min-h-[44px] flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${
           originalActive ? "bg-gray-800/50" : "hover:bg-gray-800/30"
         }`}
@@ -383,7 +383,7 @@ export default function CardLookPicker({
         </span>
         <span className="min-w-0 flex-1">
           <span className={`block text-[0.8125rem] font-semibold ${originalActive ? "text-blue-300" : "text-gray-200"}`}>Original</span>
-          <span className="block text-[0.6875rem] text-gray-500 leading-snug">The template&apos;s own colours, font and finish.</span>
+          <span className="block text-[0.6875rem] text-gray-500 leading-snug">The template&apos;s own colors, font and finish.</span>
         </span>
       </button>
 

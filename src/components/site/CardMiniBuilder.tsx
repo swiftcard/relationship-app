@@ -205,7 +205,7 @@ export default function CardMiniBuilder({ linkedinEnabled = false }: { linkedinE
               design rides the hand-off (CardPrefill.customLayout). */}
           <TemplatePicker template={sketch.template} onSelect={(id) => patch({ template: id })} data={data} customUnlocked upsell={false} />
           {customSelected ? (
-            <CustomCardDesigner layout={customLayout} data={data} onChange={(l) => patch({ customLayout: l })} canScan={false} undo={history} />
+            <CustomCardDesigner stacked layout={customLayout} data={data} onChange={(l) => patch({ customLayout: l })} canScan={false} undo={history} />
           ) : (
             <TemplateStyleControls
               value={sketch.style}

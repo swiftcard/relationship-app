@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import QRDownloadButton from "@/components/QRDownloadButton";
 import CopyButton from "@/components/CopyButton";
@@ -54,8 +55,12 @@ export default function MoreShareOptions({ url, walletUsername }: { url: string;
         Other ways to share
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 pt-[max(1rem,calc(env(safe-area-inset-top)+0.5rem))] pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))]" style={{ background: "rgba(0,0,0,0.6)" }} onClick={(e) => e.target === e.currentTarget && setOpen(false)}>
+      {/* Portaled to <body> at z-100 (2026-10-19 audit): rendered in place
+          at z-50 it sat under the site nav (z-70) on /preview, which stayed
+          bright and clickable over the dimmed page, and an ancestor cut the
+          dim 8px short of the bottom of the screen. */}
+      {open && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 pt-[max(1rem,calc(env(safe-area-inset-top)+0.5rem))] pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))]" style={{ background: "rgba(0,0,0,0.6)" }} onClick={(e) => e.target === e.currentTarget && setOpen(false)}>
           <div ref={panelRef} role="dialog" aria-modal="true" aria-labelledby="share-options-title" className="w-full max-w-sm bg-gray-950 border border-gray-800 rounded-2xl p-5 max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem)] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <p id="share-options-title" className="text-white font-semibold text-sm">Share options</p>
@@ -111,7 +116,8 @@ export default function MoreShareOptions({ url, walletUsername }: { url: string;
               </section>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );

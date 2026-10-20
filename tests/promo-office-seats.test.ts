@@ -57,9 +57,9 @@ describe("the vocabulary (lib/promo)", () => {
   });
 
   it("says the seats include the person buying", () => {
-    expect(seatsLabel(15)).toBe("15 seats — you + 14 teammates");
-    expect(seatsLabel(2)).toBe("2 seats — you + 1 teammate");
-    expect(promoSeatsMessage(15)).toBe("This code is for exactly 15 seats — you + 14 teammates.");
+    expect(seatsLabel(15)).toBe("15 seats: you + 14 teammates");
+    expect(seatsLabel(2)).toBe("2 seats: you + 1 teammate");
+    expect(promoSeatsMessage(15)).toBe("This code is for exactly 15 seats: you + 14 teammates.");
   });
 
   it("the admin list describes the seats", () => {

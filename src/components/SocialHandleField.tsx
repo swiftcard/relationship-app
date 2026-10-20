@@ -91,10 +91,10 @@ export function linkedinLinkProblem(value: string): string | null {
   }
   // Copied before the redirect finished, or typed from our own instructions.
   if (parts[0] === "in" && parts[1] === "me" && parts.length === 2) {
-    return "That’s LinkedIn’s shortcut, not your link — copy the address once your profile has opened.";
+    return "That’s LinkedIn’s shortcut, not your link. Copy the address once your profile has opened.";
   }
   if (!["in", "company", "pub", "school", "showcase"].includes(parts[0] ?? "") || !parts[1]) {
-    return "That’s a LinkedIn page, not your profile — copy the link from your profile.";
+    return "That’s a LinkedIn page, not your profile. Copy the link from your profile.";
   }
   return null;
 }
@@ -409,7 +409,7 @@ export default function SocialHandleField({
         </p>
       ) : filled ? (
         <p className="text-red-400 text-[0.6875rem] mt-1 leading-snug">
-          This won&rsquo;t open as a link — just your username, like <span className="font-medium">{spec.example}</span>
+          This won&rsquo;t open as a link. Just your username, like <span className="font-medium">{spec.example}</span>
         </p>
       ) : null}
 

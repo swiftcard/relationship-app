@@ -317,7 +317,7 @@ export default function FreeCardEditor({ layout, data, commit, undo, canvasClass
       <label className="flex items-center gap-1 text-[0.625rem] text-gray-500">
         <input
           type="color"
-          aria-label="Any colour"
+          aria-label="Any color"
           value={/^#[0-9a-f]{6}$/i.test(current ?? "") ? (current as string) : "#2563eb"}
           onChange={(e) => onPick(e.target.value)}
           className="sc-tap-sq w-7 h-7 rounded bg-transparent border border-gray-700"
@@ -367,7 +367,7 @@ export default function FreeCardEditor({ layout, data, commit, undo, canvasClass
           </div>
         </div>
         <p className="text-[0.6875rem] text-gray-500 mt-2 min-w-0">
-          {sel ? `${labelOf(sel)} — drag to move, drag the corner dot to resize.` : "Tap anything on the card to move it, resize it or restyle it."}
+          {sel ? `${labelOf(sel)}: drag to move, drag the corner dot to resize.` : "Tap anything on the card to move it, resize it or restyle it."}
         </p>
       </div>
 
@@ -434,7 +434,7 @@ export default function FreeCardEditor({ layout, data, commit, undo, canvasClass
                     <div className="flex flex-wrap gap-1.5 min-w-0">
                       {(["left", "center", "right"] as const).map((a) => (
                         <button key={a} type="button" onClick={() => setAlign(sel, a)}
-                          className={`${chip} ${(sel.align ?? "left") === a ? chipOn : chipOff}`}>{a === "left" ? "Left" : a === "center" ? "Centre" : "Right"}</button>
+                          className={`${chip} ${(sel.align ?? "left") === a ? chipOn : chipOff}`}>{a === "left" ? "Left" : a === "center" ? "Center" : "Right"}</button>
                       ))}
                     </div>
                   </div>
@@ -451,7 +451,7 @@ export default function FreeCardEditor({ layout, data, commit, undo, canvasClass
                     </div>
                   )}
                   <div className="flex gap-2">
-                    <span className={rowLabel}>Colour</span>
+                    <span className={rowLabel}>Color</span>
                     {colorRow(sel.color ?? layout.textColor, (c) => update(sel.id, { color: c }), BASE_COLORS)}
                   </div>
                 </>
@@ -475,7 +475,7 @@ export default function FreeCardEditor({ layout, data, commit, undo, canvasClass
               {sel.type === "shape" && (
                 <>
                   <div className="flex gap-2">
-                    <span className={rowLabel}>Colour</span>
+                    <span className={rowLabel}>Color</span>
                     {colorRow(/^#[0-9a-f]{6}$/i.test(sel.fill ?? "") ? sel.fill : undefined, (c) => update(sel.id, { fill: c }), BASE_COLORS)}
                   </div>
                   <div className="flex gap-2 items-center">

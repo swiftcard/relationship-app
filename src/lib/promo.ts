@@ -151,7 +151,7 @@ export function promoSeats(promo: { applies_to?: string | null; seats?: number |
 /** "15 seats — you + 14 teammates". The person buying holds seat 1. */
 export function seatsLabel(seats: number): string {
   const others = seats - 1;
-  return `${seats} seats — you + ${others} teammate${others === 1 ? "" : "s"}`;
+  return `${seats} seats: you + ${others} teammate${others === 1 ? "" : "s"}`;
 }
 
 /** Why an Office order with a different seat count can't use the code. */

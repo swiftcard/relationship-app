@@ -76,7 +76,15 @@ export default function MiniBuilderModal({
 }) {
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    // Esc closes the builder only when nothing is open ON TOP of it. Its
+    // own pop-ups (the AI design sheet, the full-size preview, the photo
+    // crop) close on Esc themselves, and a visitor pressing Esc there means
+    // "close this", not "throw the whole builder away" (2026-10-19 audit).
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
+      onClose();
+    };
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => {

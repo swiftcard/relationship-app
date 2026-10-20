@@ -120,7 +120,7 @@ export async function buildPkpass(card: WalletCard, design?: WalletDesign): Prom
       teamIdentifier: process.env.APPLE_TEAM_ID as string,
       serialNumber: card.username,
       organizationName: "SwiftCard",
-      description: `${(card.label ?? "").trim() || card.name} — SwiftCard`,
+      description: `${(card.label ?? "").trim() || card.name} | SwiftCard`,
       // No logoText either — it is the text equivalent of the wordmark and
       // lands in the same place on the pass face. `organizationName` above is
       // not drawn there; it names the pass's issuer in Settings and in the

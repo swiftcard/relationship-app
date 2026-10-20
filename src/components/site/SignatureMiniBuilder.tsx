@@ -169,7 +169,7 @@ export default function SignatureMiniBuilder({ linkedinEnabled = false }: { link
               design rides the hand-off (CardPrefill.customLayout). */}
           <TemplatePicker template={sketch.template} onSelect={(id) => patch({ template: id })} data={data} customUnlocked upsell={false} />
           {customSelected ? (
-            <CustomCardDesigner layout={customLayout} data={data} onChange={(l) => patch({ customLayout: l })} canScan={false} />
+            <CustomCardDesigner stacked layout={customLayout} data={data} onChange={(l) => patch({ customLayout: l })} canScan={false} />
           ) : (
             <TemplateStyleControls
               value={sketch.style}

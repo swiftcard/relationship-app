@@ -21,7 +21,7 @@ type Site = {
 const SITES: Site[] = [
   {
     file: "src/components/CustomDesignCard.tsx",
-    web: ["Make it unmistakably yours — unlock the custom designer with Pro →"],
+    web: ["Make it unmistakably yours. Unlock the custom designer with Pro →"],
     native: ["Pro feature — The custom card designer is only available on the Pro plan"],
   },
   {

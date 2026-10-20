@@ -13,7 +13,7 @@ import { ProTag } from "@/components/ui/DesignControls";
 // replaced — nothing is dragged any more and nothing starts blank.
 
 export const CUSTOM_DESIGN_BLURB =
-  "Photograph a card you like and AI rebuilds it with your details — or have AI design one for you. Then tap anything on it to move, resize or restyle it.";
+  "Photograph a card you like and AI rebuilds it with your details, or have AI design one for you. Then tap anything on it to move, resize or restyle it.";
 
 /**
  * The row's face: a slim full-width strip under the six thumbnails. As a
@@ -57,7 +57,7 @@ export function CustomDesignUpsell() {
       nativeCopy="Pro feature — The custom card designer is only available on the Pro plan"
     >
       <Link href="/upgrade" className="block text-center text-[0.6875rem] text-blue-400 hover:text-blue-300 mt-2">
-        Make it unmistakably yours — unlock the custom designer with Pro →
+        Make it unmistakably yours. Unlock the custom designer with Pro →
       </Link>
     </PlanGate>
   );

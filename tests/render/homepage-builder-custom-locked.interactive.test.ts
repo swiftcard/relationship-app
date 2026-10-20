@@ -104,7 +104,7 @@ describe("homepage card builder", () => {
       expect(await copy.isDisabled()).toBe(true);
       expect(await copy.innerText()).toContain("PRO");
       // The colour/font steps give way to the designer, as in the real builder.
-      expect(await page.innerText("#root")).not.toContain("unlock the custom designer with Pro");
+      expect(await page.innerText("#root")).not.toContain("Unlock the custom designer with Pro");
       // Nothing spills sideways at either width.
       expect(await page.evaluate(() => document.scrollingElement!.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
       await page.close();

@@ -31,10 +31,10 @@ import type { AiDesignBrief, CustomElement, CustomLayout } from "@/components/ca
 export const AI_THEMES = [
   { key: "modern",   label: "Modern",   blurb: "Clean shapes, confident type" },
   { key: "classic",  label: "Classic",  blurb: "Timeless and trustworthy" },
-  { key: "bold",     label: "Bold",     blurb: "Big name, strong colour" },
+  { key: "bold",     label: "Bold",     blurb: "Big name, strong color" },
   { key: "minimal",  label: "Minimal",  blurb: "Lots of space, nothing extra" },
   { key: "luxury",   label: "Luxury",   blurb: "Refined serif, fine lines" },
-  { key: "creative", label: "Creative", blurb: "Playful shapes and colour" },
+  { key: "creative", label: "Creative", blurb: "Playful shapes and color" },
   { key: "tech",     label: "Tech",     blurb: "Sharp angles, modern mono" },
   { key: "nature",   label: "Natural",  blurb: "Soft, organic and warm" },
 ] as const;

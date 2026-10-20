@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import CardScaler from "@/components/CardScaler";
 import PhotoFirst from "@/components/card-templates/PhotoFirst";
@@ -57,6 +57,12 @@ const showOnly = { pointerEvents: "none" as const };
 // The SwiftCard exactly as a recipient gets it — the same card and the same
 // card-page boxes, built from the live components.
 function SwiftCardPopup({ onClose }: { onClose: () => void }) {
+  // Esc closes it, like the site's other popups (2026-10-19 audit).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   return (
     <>
     {/* Dim + blur backdrop as its OWN fixed layer, behind the scroll container.

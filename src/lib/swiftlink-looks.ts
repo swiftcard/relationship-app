@@ -88,9 +88,9 @@ export type SwiftLinkLook = {
 export type LookFamily = "solid" | "gradient" | "glass";
 
 export const LOOK_FAMILIES: { id: LookFamily; name: string; blurb: string }[] = [
-  { id: "solid", name: "Solid", blurb: "One clean colour behind everything." },
-  { id: "gradient", name: "Gradient", blurb: "Two colours, softly blended down the page." },
-  { id: "glass", name: "Glass", blurb: "Frosted and see-through, with colour glowing behind." },
+  { id: "solid", name: "Solid", blurb: "One clean color behind everything." },
+  { id: "gradient", name: "Gradient", blurb: "Two colors, softly blended down the page." },
+  { id: "glass", name: "Glass", blurb: "Frosted and see-through, with color glowing behind." },
 ];
 
 export const SWIFTLINK_LOOKS: SwiftLinkLook[] = [
@@ -414,9 +414,9 @@ export function normalizeIconFill(v?: string | null): IconFill {
 export type HeroStyle = "cover" | "banner" | "avatar" | "none";
 
 export const HERO_STYLES: { id: HeroStyle; name: string; hint: string }[] = [
-  { id: "cover", name: "Cover photo", hint: "Your photo fills the top of the page — the classic" },
+  { id: "cover", name: "Cover photo", hint: "Your photo fills the top of the page, the classic" },
   { id: "banner", name: "Short banner", hint: "The cover at a third of the screen" },
-  { id: "avatar", name: "Compact circle", hint: "A small round photo — more room for your links" },
+  { id: "avatar", name: "Compact circle", hint: "A small round photo, with more room for your links" },
   { id: "none", name: "No header", hint: "One flat page that leads with your name" },
 ];
 

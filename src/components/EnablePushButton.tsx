@@ -536,7 +536,7 @@ export default function EnablePushButton({
   if (state === "native") {
     return (
       <p className="text-gray-500 text-xs text-center">
-        Push notifications aren&apos;t available in this version of the app — you&apos;ll still see new contacts and activity here and by email.
+        Push notifications aren&apos;t available in this version of the app. You&apos;ll still see new contacts and activity here and by email.
       </p>
     );
   }
@@ -553,7 +553,7 @@ export default function EnablePushButton({
             offers one (GetTheAppCard directly below it on both "Your card is
             live!" screens; the "Get the iPhone app" card in Settings). */}
         <p className="text-blue-300/80 text-xs mt-1.5 leading-relaxed">
-          Notifications come through the <strong>SwiftCard app</strong> — open it and allow them. Staying on the website? Tap the <strong>Share</strong> button, choose <strong>Add to Home Screen</strong>, then open SwiftCard from your home screen and switch notifications on here.
+          Notifications come through the <strong>SwiftCard app</strong>. Open it and allow them. Staying on the website? Tap the <strong>Share</strong> button, choose <strong>Add to Home Screen</strong>, then open SwiftCard from your home screen and switch notifications on here.
         </p>
       </div>
     );
@@ -625,7 +625,7 @@ export default function EnablePushButton({
     }
     return (
       <p className="text-amber-400 text-xs text-center">
-        Notifications are blocked for this site — enable them in your browser settings, then reload.
+        Notifications are blocked for this site. Turn them on in your browser settings, then reload.
       </p>
     );
   }
@@ -668,7 +668,7 @@ export default function EnablePushButton({
         </p>
       )}
       {state === "error" && reason !== "old-build" && (
-        <p className="text-amber-400 text-xs text-center">Couldn&apos;t turn notifications on — check your connection and tap the switch again.</p>
+        <p className="text-amber-400 text-xs text-center">Couldn&apos;t turn notifications on. Check your connection and tap the switch again.</p>
       )}
     </div>
   );

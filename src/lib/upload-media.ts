@@ -31,7 +31,7 @@ export type UploadedMedia = { url: string; type: "image" | "video" };
 export class UploadError extends Error {
   status: number;
   constructor(status: number, message?: unknown) {
-    super(typeof message === "string" ? message : "Upload failed — please try again.");
+    super(typeof message === "string" ? message : "Upload failed. Please try again.");
     this.status = status;
   }
 }
@@ -84,6 +84,6 @@ export async function uploadMedia(file: File, field: UploadField): Promise<Uploa
  */
 export function uploadErrorMessage(e: unknown): string {
   const status = e instanceof UploadError ? e.status : 0;
-  if (status === 401) return "Sign in to upload — finish creating your card first, then add it here.";
-  return e instanceof Error && e.message ? e.message : "Upload failed — please try again.";
+  if (status === 401) return "Sign in to upload. Finish creating your card first, then add it here.";
+  return e instanceof Error && e.message ? e.message : "Upload failed. Please try again.";
 }

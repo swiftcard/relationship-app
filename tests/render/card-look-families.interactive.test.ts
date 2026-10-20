@@ -107,7 +107,7 @@ for (const width of [390, 1280]) {
       expect(rows[1].text).toMatch(/^Gradient/);
       expect(rows[2].text).toMatch(/^Glass/);
       for (const r of rows.slice(0, 3)) expect(r.h, r.text).toBeGreaterThanOrEqual(44);
-      const original = page.locator("button[title=\"The template's own colours, font and finish\"]");
+      const original = page.locator("button[title=\"The template's own colors, font and finish\"]");
       expect(await original.getAttribute("aria-pressed")).toBe("true");
       // No tiles until a row is opened.
       expect(await page.locator("button[aria-pressed][title='Onyx']").count()).toBe(0);
@@ -172,13 +172,13 @@ for (const width of [390, 1280]) {
       expect(v.infoColor).toBe(arctic.info);
       expect(v.accentColor).toBe(arctic.accent);
       expect(await page.getAttribute("button[title^='Arctic']", "aria-pressed")).toBe("true");
-      expect(await page.getAttribute("button[title=\"The template's own colours, font and finish\"]", "aria-pressed")).toBe("false");
+      expect(await page.getAttribute("button[title=\"The template's own colors, font and finish\"]", "aria-pressed")).toBe("false");
       // Close it: the row still says which look the card is wearing.
       await row(page, "Glass").click();
       expect(await row(page, "Glass").textContent()).toContain("Arctic");
       expect(await row(page, "Solid").textContent()).not.toContain("Arctic");
       // And Original takes it all back.
-      await page.click("button[title=\"The template's own colours, font and finish\"]");
+      await page.click("button[title=\"The template's own colors, font and finish\"]");
       const back = await page.evaluate(() => (window as unknown as { __value: Record<string, unknown> }).__value);
       for (const k of ["bgColor", "textColor", "fontFamily", "finish", "surfaceColor", "titleColor", "companyColor", "infoColor", "accentColor"]) {
         expect(back[k], k).toBeUndefined();
@@ -299,7 +299,7 @@ describe("Original's thumbnail fits", () => {
     it(`${t}: nothing in the thumbnail spills past its frame`, async () => {
       const page = await mount(390, t);
       const spill = await page.evaluate(() => {
-        const btn = document.querySelector<HTMLElement>("button[title=\"The template's own colours, font and finish\"]")!;
+        const btn = document.querySelector<HTMLElement>("button[title=\"The template's own colors, font and finish\"]")!;
         const card = btn.querySelector<HTMLElement>("[data-ds='specimen']")!;
         const frame = card.parentElement!.parentElement!.getBoundingClientRect();
         const out: string[] = [];

@@ -144,7 +144,7 @@ export function aiConsentCopy(provider: string): {
     title: "Before you use AI features",
     what: [
       "Photos you take of a business card, when you scan one",
-      "A contact's name, company, where you met and your notes — plus your own name, title, company and About text — when AI writes a follow-up",
+      "A contact's name, company, where you met and your notes, plus your own name, title, company and About text, when AI writes a follow-up",
       "A card design you upload to rebuild, with your photo, logo and contact details on it",
       "Messages you type to the in-app assistant",
     ],

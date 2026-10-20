@@ -62,9 +62,9 @@ export default function NFCWriter({ url }: { url: string }) {
       setStatus("error");
       const m = e instanceof Error ? `${e.name} ${e.message}` : "";
       setMsg(timedOut.current
-        ? "No tag found — tap “Write to a tag” to try again."
+        ? "No tag found. Tap \"Write to a tag\" to try again."
         : /cancel|abort/i.test(m)
-          ? "Canceled — tap “Write to a tag” again when you’re ready."
+          ? "Canceled. Tap \"Write to a tag\" again when you’re ready."
           : "Couldn’t write. Turn NFC on, and use a blank or rewritable tag.");
     } finally {
       clearTimeout(timer);
@@ -75,7 +75,7 @@ export default function NFCWriter({ url }: { url: string }) {
   return (
     <div>
       <p className="text-gray-300 text-[0.8125rem] leading-relaxed mb-3">
-        Buy any blank NFC tag or card, write your link to it once, then a phone tap opens your card — no app for them.
+        Buy any blank NFC tag or card, write your link to it once, then a phone tap opens your card. They don&apos;t need an app.
       </p>
 
       {canWrite && (
@@ -103,8 +103,8 @@ export default function NFCWriter({ url }: { url: string }) {
       <div className={canWrite ? "mt-3 pt-3 border-t border-gray-800" : ""}>
         <p className="text-gray-500 text-[0.6875rem] mb-1.5">
           {canWrite
-            ? "Or write it yourself with an NFC app — use this link:"
-            : "Write it with a free NFC app on your phone, like NFC Tools — use this link:"}
+            ? "Or write it yourself with an NFC app using this link:"
+            : "Write it with a free NFC app on your phone, like NFC Tools, using this link:"}
         </p>
         <div className="flex items-center gap-2 bg-gray-800/60 border border-gray-700/60 rounded-xl px-3 py-2.5">
           <span className="text-blue-400 text-xs truncate flex-1">{tagUrl.replace(/^https?:\/\//, "")}</span>

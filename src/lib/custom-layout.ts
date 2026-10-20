@@ -524,7 +524,7 @@ export const LAYOUT_PRESETS: Record<string, { label: string; blurb: string; buil
   },
   signal: {
     label: "Signal",
-    blurb: "Your face on a blue panel — on the right, where nothing else puts it.",
+    blurb: "Your face on a blue panel, on the right, where nothing else puts it.",
     build: () => ({
       background: "#ffffff", textColor: "#0e1b35", accentColor: "#2563eb",
       panelBackground: "linear-gradient(200deg, #1d4ed8 0%, #3b82f6 100%)",
@@ -622,7 +622,7 @@ export const LAYOUT_PRESETS: Record<string, { label: string; blurb: string; buil
   },
   broadsheet: {
     label: "Broadsheet",
-    blurb: "No panel at all — one clean column, edge to edge.",
+    blurb: "No panel at all: one clean column, edge to edge.",
     build: () => ({
       background: "#ffffff", textColor: "#111827", accentColor: "#111827",
       fontFamily: SANS, skeleton: "split", elements: [],

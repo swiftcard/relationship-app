@@ -53,7 +53,7 @@ export type SizedLink = {
 export const TILE_SIZES: { id: TileSize; name: string; hint: string }[] = [
   { id: "featured", name: "Featured", hint: "Full-width tile with a big preview" },
   { id: "grid",     name: "Grid",     hint: "Half-width tile, shown in pairs" },
-  { id: "compact",  name: "Compact",  hint: "Slim row — icon, name, arrow" },
+  { id: "compact",  name: "Compact",  hint: "Slim row: icon, name, arrow" },
 ];
 
 /**

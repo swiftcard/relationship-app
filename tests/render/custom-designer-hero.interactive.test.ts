@@ -306,7 +306,7 @@ describe("fine-tune on the card", () => {
     const moved = (await layout(page)).elements.find((e) => e.id === "name")!;
     expect(moved.x).toBeGreaterThan(before.x + 5);
     expect(moved.y).toBeGreaterThan(before.y + 3);
-    expect(await page.locator("#root").innerText()).toContain("Name — drag to move");
+    expect(await page.locator("#root").innerText()).toContain("Name: drag to move");
 
     // Bigger with +, then with the corner handle.
     await page.getByRole("button", { name: "Bigger" }).click();

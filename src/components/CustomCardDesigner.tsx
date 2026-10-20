@@ -35,6 +35,7 @@ import type { DesignHistory } from "@/lib/use-design-history";
 // column stands down (designerIsCanvas in the editor and the wizard).
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { AiDesignBrief, CardData, CustomLayout } from "@/components/card-templates/types";
 import CustomCard, { CustomBlockCard, FaceCard, FreeCard } from "@/components/card-templates/CustomCard";
 import CardScaler from "@/components/CardScaler";
@@ -60,11 +61,20 @@ export default function CustomCardDesigner({
   canScan = true,
   teamBrand = false,
   undo: tabUndo,
+  stacked = false,
 }: {
   layout: CustomLayout;
   data: CardData;
   onChange: (layout: CustomLayout) => void;
   canScan?: boolean;
+  /**
+   * One column at every width. The side-by-side desktop layout is keyed to the
+   * SCREEN width (lg:), so inside a narrow column (the homepage builders' ~320px
+   * form) it split that column in two: a 0px canvas track, the card spilling
+   * over the panel, and "AI design" / "Copy a card" covered by the card's text
+   * (2026-10-19 audit). The homepage builders pass this.
+   */
+  stacked?: boolean;
   /**
    * Designing the look a WHOLE TEAM inherits (Office Branding). A photo then
    * copies only the LAYOUT, as an editable design each member's card fills with
@@ -205,9 +215,9 @@ export default function CustomCardDesigner({
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         setScanError(
-          res.status === 401 ? "Sign in first — copying a card design needs an account."
+          res.status === 401 ? "Sign in first. Copying a card design needs an account."
           : res.status === 403 ? ((j as { code?: string; message?: string }).code === "AI_CONSENT_REQUIRED" ? ((j as { message?: string }).message ?? "AI features are off. Turn them on in Settings.") : "Copying a card design is a Pro feature.")
-          : res.status === 429 ? "Too many copies just now — try again in a minute."
+          : res.status === 429 ? "Too many copies just now. Try again in a minute."
           : (j as { error?: string }).error === "no_ai" ? "Copying a design is unavailable right now."
           : "Couldn't rebuild that design. Try again, or try a cleaner image.",
         );
@@ -251,9 +261,9 @@ export default function CustomCardDesigner({
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         setScanError(
-          res.status === 401 ? "Sign in first — copying a card layout needs an account."
+          res.status === 401 ? "Sign in first. Copying a card layout needs an account."
           : res.status === 403 ? ((j as { code?: string; message?: string }).code === "AI_CONSENT_REQUIRED" ? ((j as { message?: string }).message ?? "AI features are off. Turn them on in Settings.") : "Copying a card layout is a Pro feature.")
-          : res.status === 429 ? "Too many copies just now — try again in a minute."
+          : res.status === 429 ? "Too many copies just now. Try again in a minute."
           : res.status === 422 ? "Couldn't read that image. Try a straight-on shot in good light."
           : (j as { error?: string }).error === "no_ai" ? "Copying a layout is unavailable right now."
           : "That didn't work. Try another image.",
@@ -269,7 +279,7 @@ export default function CustomCardDesigner({
       // Rebuilt as a free design with the copied colours, font and panel, so
       // it is fine-tuned on the card like an AI design (lib/ai-card-design).
       commit(freeFromBlocks({ ...scanned, faceImage: undefined }, designContext()));
-      setScanNote("Layout copied. Your own details are untouched — fine-tune anything on the card below, or Undo.");
+      setScanNote("Layout copied. Your own details are untouched. Fine-tune anything on the card below, or Undo.");
     } catch (e) {
       setScanError(
         (e as { name?: string })?.name === "AbortError"
@@ -325,7 +335,7 @@ export default function CustomCardDesigner({
         const j = await res.json().catch(() => ({}));
         setAiError(
           res.status === 403 ? ((j as { code?: string; message?: string }).code === "AI_CONSENT_REQUIRED" ? ((j as { message?: string }).message ?? "AI features are off. Turn them on in Settings.") : "AI design is a Pro feature.")
-          : res.status === 429 ? "Too many designs just now — try again in a minute."
+          : res.status === 429 ? "Too many designs just now. Try again in a minute."
           : (j as { error?: string }).error === "no_ai" ? "AI design is unavailable right now."
           : "Couldn't design that just now. Try again.",
         );
@@ -338,7 +348,7 @@ export default function CustomCardDesigner({
       }
       commit(designed);
       setAiOpen(false);
-      setScanNote("Here's your AI design. Tap anything on the card to move it, resize it or change its font and colour — or Try another.");
+      setScanNote("Here's your AI design. Tap anything on the card to move it, resize it or change its font and color, or tap \"Try another\".");
     } catch (e) {
       setAiError(
         (e as { name?: string })?.name === "AbortError"
@@ -358,8 +368,10 @@ export default function CustomCardDesigner({
   // The card spans both rows of the left track on desktop and sticks while
   // the controls scroll beside it; on a phone it sits between the two ways in
   // and the fine-tune panel.
-  const canvasPlace = "order-2 w-full max-w-[560px] mx-auto lg:col-start-1 lg:row-start-1 lg:row-span-2 lg:sticky lg:top-6";
-  const panelPlace = "order-3 lg:col-start-2 lg:row-start-2";
+  const canvasPlace = stacked
+    ? "order-2 w-full max-w-[560px] mx-auto"
+    : "order-2 w-full max-w-[560px] mx-auto lg:col-start-1 lg:row-start-1 lg:row-span-2 lg:sticky lg:top-6";
+  const panelPlace = stacked ? "order-3" : "order-3 lg:col-start-2 lg:row-start-2";
   const previewData: CardData = { ...data, customization: { ...(data.customization ?? {}), customLayout: layout } };
 
   if (!isFree && !hasBlocks(layout)) {
@@ -367,9 +379,9 @@ export default function CustomCardDesigner({
   }
 
   return (
-    <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-x-5 lg:gap-y-3 lg:items-start">
+    <div className={stacked ? "flex flex-col gap-3" : "flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-x-5 lg:gap-y-3 lg:items-start"}>
       {/* The two ways in. */}
-      <div className={`${card} p-3 space-y-2.5 order-1 lg:col-start-2 lg:row-start-1`}>
+      <div className={`${card} p-3 space-y-2.5 order-1${stacked ? "" : " lg:col-start-2 lg:row-start-1"}`}>
         <p className={head}>Custom design</p>
         {/* THE headline feature of the custom designer (owner order 2026-08-26:
             "the best feature we have — make people notice it"). Dressed as the
@@ -425,7 +437,7 @@ export default function CustomCardDesigner({
                     {teamBrand
                       ? "Take a photo of a card or upload a design you like. We copy its layout as editable blocks, and every teammate's card fills it with their own details."
                       : canScan
-                      ? "Take a photo of your paper card, or upload a design you like. We find the card in the picture and redraw it as a clean digital card — same colors, artwork and layout — with YOUR details and logo on it. Approve the preview, then move, resize and restyle anything."
+                      ? "Take a photo of your paper card, or upload a design you like. We find the card in the picture and redraw it as a clean digital card with the same colors, artwork and layout, with your details and logo on it. Approve the preview, then move, resize and restyle anything."
                       : "On Pro, upload a card design you like and we'll rebuild it exactly, with your details on it."}
                   </span>
                 </span>
@@ -467,7 +479,7 @@ export default function CustomCardDesigner({
               </button>
             </div>
             <p className="text-[0.65625rem] text-gray-500 leading-snug">
-              Lay your card on a plain surface and fit it inside the outline — it turns green when it fits.
+              Lay your card on a plain surface and fit it inside the outline. It turns green when it fits.
             </p>
           </div>
         )}
@@ -508,8 +520,8 @@ export default function CustomCardDesigner({
                   </span>
                   <span className="block text-[0.6875rem] text-gray-400 leading-snug mt-0.5">
                     {teamBrand
-                      ? "Pick colours and a theme — AI designs the team's card, and every teammate's card fills it with their own details."
-                      : "Pick your colours, a theme, and whether your headshot and logo go on it — AI designs your card. Then move, resize and restyle anything."}
+                      ? "Pick colors and a theme. AI designs the team's card, and each teammate's card fills in with their own details."
+                      : "Pick your colors, a theme, and whether your headshot and logo go on it. AI designs your card, then you can move, resize and restyle anything."}
                   </span>
                 </span>
               </span>
@@ -561,7 +573,7 @@ export default function CustomCardDesigner({
         {layout.faceImage && !teamBrand && (
           <div className="rounded-lg border border-blue-500/40 bg-blue-950/30 px-3 py-2.5 flex items-center gap-3">
             <p className="text-[0.6875rem] text-blue-200 leading-snug flex-1">
-              Exact design is on — your card shows the approved image. Remove it to go back to your own design.
+              Exact design is on: your card shows the approved image. Remove it to go back to your own design.
             </p>
             <button
               type="button"
@@ -577,10 +589,12 @@ export default function CustomCardDesigner({
                side by side — the copy is the REAL card renderer drawing the
                editable design, so what they approve is what lands on the
                canvas — and only their tap writes the card. ── */}
-        {transfer && (
-          <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-4 pt-[max(1rem,calc(env(safe-area-inset-top)+0.5rem))] pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))]" role="dialog" aria-modal="true" aria-label="Approve your copied card design">
+        {/* Portaled to <body>, above the editors' pinned previews and the
+            homepage builders (same fix as the photo crop, 2026-10-19). */}
+        {transfer && createPortal(
+          <div className="fixed inset-0 z-[105] bg-black/70 flex items-center justify-center px-4 pt-[max(1rem,calc(env(safe-area-inset-top)+0.5rem))] pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))]" role="dialog" aria-modal="true" aria-label="Approve your copied card design">
             <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-2xl w-full max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem)] overflow-y-auto p-4 sm:p-5 space-y-4">
-              <p className="text-sm font-semibold text-white">Your card, in that design — check it before it goes on</p>
+              <p className="text-sm font-semibold text-white">Your card in that design. Check it before it goes on.</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <p className="text-[0.65625rem] text-gray-500 mb-1.5">The design you uploaded</p>
@@ -598,7 +612,7 @@ export default function CustomCardDesigner({
               </div>
               {!transfer.artwork && (
                 <p className="text-[0.6875rem] text-amber-400" role="status">
-                  We copied the layout and colours but couldn&apos;t redraw the artwork cleanly this time — Try again for the artwork, or use this and restyle it.
+                  We copied the layout and colors but couldn&apos;t redraw the artwork cleanly this time. Tap &quot;Try again&quot; for the artwork, or use this and restyle it.
                 </p>
               )}
               {transfer.checklist.length > 0 && (
@@ -620,7 +634,7 @@ export default function CustomCardDesigner({
                     // A copy replaces any old frozen exact-copy image too.
                     commit({ ...transfer.layout, faceImage: undefined });
                     setTransfer(null);
-                    setScanNote("Design copied. Tap anything on the card to move it, resize it or change its font and colour — or Undo.");
+                    setScanNote("Design copied. Tap anything on the card to move it, resize it or change its font and color, or tap \"Undo\".");
                   }}
                   className="text-[0.78125rem] font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-full px-4 py-2"
                 >
@@ -643,7 +657,8 @@ export default function CustomCardDesigner({
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body,
         )}
       </div>
 
@@ -691,9 +706,9 @@ export default function CustomCardDesigner({
               {norm.faceImage && !teamBrand
                 ? "Your card is the exact design you approved. Remove it above to go back to your own design, or use AI design for a new one."
                 : canScan
-                ? "Use AI design or copy a card you like — then tap anything on your card to move it, resize it or change its font and colour."
+                ? "Use AI design or copy a card you like, then tap anything on your card to move it, resize it or change its font and color."
                 // Copy is locked here (a first card) — never point at it.
-                : "Use AI design — then tap anything on your card to move it, resize it or change its font and colour."}
+                : "Use AI design, then tap anything on your card to move it, resize it or change its font and color."}
             </p>
           </div>
         </>

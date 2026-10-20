@@ -49,7 +49,7 @@ export type CardFinish = {
 };
 
 export const FINISH_FAMILIES: { id: FinishFamily; name: string; blurb: string }[] = [
-  { id: "plain",    name: "Plain",    blurb: "The colour on its own." },
+  { id: "plain",    name: "Plain",    blurb: "The color on its own." },
   { id: "light",    name: "Light",    blurb: "How light falls across the card." },
   { id: "material", name: "Material", blurb: "What the card feels like it is made of." },
 ];
@@ -57,7 +57,7 @@ export const FINISH_FAMILIES: { id: FinishFamily; name: string; blurb: string }[
 export const CARD_FINISHES: CardFinish[] = [
   {
     id: "flat", name: "Flat", family: "plain", free: true,
-    blurb: "The colour on its own — how every card renders today.",
+    blurb: "The color on its own, the way every card renders today.",
     layers: [],
   },
 
@@ -74,7 +74,7 @@ export const CARD_FINISHES: CardFinish[] = [
   },
   {
     id: "frosted", name: "Frosted", family: "light", free: false, lightens: true,
-    blurb: "Colour behind a milky sheet with a bright top edge. Glass, painted rather than blurred.",
+    blurb: "Color behind a milky sheet with a bright top edge. Glass, painted rather than blurred.",
     layers: [
       "linear-gradient(180deg, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.13) 34%, rgba(255,255,255,0.07) 100%)",
       "radial-gradient(130% 80% at 22% 0%, rgba(255,255,255,0.26), rgba(255,255,255,0) 58%)",
@@ -84,7 +84,7 @@ export const CARD_FINISHES: CardFinish[] = [
   // ── MATERIAL — the card reads as a substance ──────────────────────────────
   {
     id: "brushed", name: "Brushed", family: "material", free: false,
-    blurb: "Fine directional grain with a diagonal highlight — anodised metal.",
+    blurb: "Fine directional grain with a diagonal highlight, like anodized metal.",
     layers: [
       "repeating-linear-gradient(96deg, rgba(255,255,255,0.055) 0 1px, rgba(0,0,0,0.05) 1px 3px)",
       "linear-gradient(102deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 38%, rgba(0,0,0,0.14) 100%)",
@@ -100,7 +100,7 @@ export const CARD_FINISHES: CardFinish[] = [
   },
   {
     id: "linen", name: "Linen", family: "material", free: false,
-    blurb: "A crosshatch weave — the closest thing to textured card stock.",
+    blurb: "A crosshatch weave, the closest thing to textured card stock.",
     layers: [
       "repeating-linear-gradient(0deg, rgba(255,255,255,0.045) 0 1px, transparent 1px 3px)",
       "repeating-linear-gradient(90deg, rgba(255,255,255,0.045) 0 1px, transparent 1px 3px)",

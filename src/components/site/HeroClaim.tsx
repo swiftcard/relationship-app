@@ -32,6 +32,12 @@ export default function HeroClaim() {
   return (
     <form
       onSubmit={go}
+      // Works before hydration too (AGENTS.md: everything is interactive
+      // before it is hydrated). With no handler yet, a submit takes the HTML
+      // default; without an action that was a reload of "/?" and the typed
+      // name was lost (2026-10-19 audit). Same URL the handler builds.
+      action="/cards/new"
+      method="get"
       // Ask the floating chat launcher to get off this row. On a short viewport
       // the launcher lands exactly on "Start for free" — 36.7% of it on an
       // iPhone 13 Mini — and a tap there opened support chat instead of
@@ -75,6 +81,7 @@ export default function HeroClaim() {
         <span className="text-slate-900 font-semibold text-base sm:text-[1.0625rem] whitespace-nowrap select-none">SwiftCard.me/</span>
         <input
           id="hero-claim-name"
+          name="name"
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -102,6 +109,7 @@ export default function HeroClaim() {
           cycle. Above the content (the whole point of a glare), inert to the
           pointer, and killed for reduced-motion in globals.css. */}
       <span aria-hidden="true" className="rd-claim-glare" />
+      <input type="hidden" name="src" value="hero_claim" />
     </form>
   );
 }

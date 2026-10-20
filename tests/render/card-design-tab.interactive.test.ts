@@ -170,7 +170,7 @@ describe("template gallery", () => {
     const page = await mount("picker", "unlocked=0");
     const custom = await page.$("button[aria-label='Custom design (Pro, locked)']");
     expect(await custom!.isDisabled()).toBe(true);
-    expect(await page.textContent("body")).toContain("unlock the custom designer with Pro");
+    expect(await page.textContent("body")).toContain("Unlock the custom designer with Pro");
     // Locked means tagged, on every screen (owner, 2026-09-18: "shown with a
     // very small pro tag but I want it to be locked") — not only a Free Edit
     // card any more.
@@ -214,7 +214,7 @@ describe("style panel: one numbered path, in build order", () => {
   it("Original hands back exactly the keys a Look sets — nothing else", async () => {
     const v = encodeURIComponent(JSON.stringify({ bgColor: "#052e2b", textColor: "#ffffff", finish: "sheen", accentColor: "#be123c", infoColor: "#111827", titleColor: "#d4af7a", companyColor: "#93c5fd" }));
     const page = await mount("style", `v=${v}`);
-    await page.click("button[title=\"The template's own colours, font and finish\"]");
+    await page.click("button[title=\"The template's own colors, font and finish\"]");
     await page.waitForTimeout(80);
     const { patches, value } = await page.evaluate(() => ({
       patches: (window as unknown as { __patches: Record<string, unknown>[] }).__patches,

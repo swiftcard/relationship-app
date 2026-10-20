@@ -185,7 +185,7 @@ describe("Custom design is shown everywhere; open for Pro and Office, and for AI
     for (const f of ["src/components/site/CardMiniBuilder.tsx", "src/components/site/SignatureMiniBuilder.tsx"]) {
       const b = read(f);
       expect(b, f).toMatch(/customUnlocked upsell=\{false\}/);
-      expect(b, f).toMatch(/<CustomCardDesigner layout=\{customLayout\} data=\{data\} onChange=\{\(l\) => patch\(\{ customLayout: l \}\)\} canScan=\{false\}(?: undo=\{history\})? \/>/);
+      expect(b, f).toMatch(/<CustomCardDesigner stacked layout=\{customLayout\} data=\{data\} onChange=\{\(l\) => patch\(\{ customLayout: l \}\)\} canScan=\{false\}(?: undo=\{history\})? \/>/);
     }
     const sketch = read("src/components/site/useProductSketch.ts");
     expect(sketch).toMatch(/s\.template === "custom" && s\.customLayout \? \{ customLayout: s\.customLayout \}/);

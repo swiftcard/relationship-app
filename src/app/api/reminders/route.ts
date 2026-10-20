@@ -574,22 +574,25 @@ export async function GET(req: NextRequest) {
         const sub = await stripe.subscriptions.retrieve(u.stripe_subscription_id as string);
         if (sub.status === "active" || sub.status === "trialing") {
           // Healthy. The flag is stale — clear it and leave them alone.
-          // Only that key (audit NM-14): `cust` was read at the top of this
-          // run, and writing the whole copy back undid any setting the person
-          // saved since, a push switch or quiet hours included.
-          await mergeCustomization(u.id, { set: {}, remove: ["_paymentFailedAt"] }, { admin: supabase });
+          const healthy = { ...cust };
+          delete healthy._paymentFailedAt;
+          await supabase.from("profiles").update({ customization: healthy }).eq("id", u.id);
           continue;
         }
         if (sub.status === "canceled" || sub.status === "incomplete_expired") {
           // Already gone; the deleted-webhook has handled or will handle it.
-          await mergeCustomization(u.id, { set: {}, remove: ["_paymentFailedAt"] }, { admin: supabase });
+          const done = { ...cust };
+          delete done._paymentFailedAt;
+          await supabase.from("profiles").update({ customization: done }).eq("id", u.id);
           continue;
         }
 
         await stripe.subscriptions.cancel(u.stripe_subscription_id as string);
         // Clear the marker so a FUTURE subscription (if they resubscribe later)
         // starts its own grace period instead of inheriting this expired one.
-        await mergeCustomization(u.id, { set: {}, remove: ["_paymentFailedAt"] }, { admin: supabase });
+        const rest = { ...cust };
+        delete rest._paymentFailedAt;
+        await supabase.from("profiles").update({ customization: rest }).eq("id", u.id);
       } catch (e) {
         // A stuck cancel means a non-paying customer keeps paid access — alert.
         await reportError("reminders.grace-period.cancel", e, { profileId: u.id });
@@ -701,10 +704,9 @@ export async function GET(req: NextRequest) {
     if (ownerPaid) {
       const cust = (owner.profile.customization ?? {}) as Record<string, unknown>;
       if (owner.ownerId && cust._seqPaused === true) {
-        // Merged (NM-14): the owner's profile is cached for the whole run.
-        await mergeCustomization(owner.ownerId, { set: {}, remove: ["_seqPaused"] }, { admin: supabase });
         const rest = { ...cust };
         delete rest._seqPaused;
+        await supabase.from("profiles").update({ customization: rest }).eq("id", owner.ownerId);
         (owner.profile as { customization?: unknown }).customization = rest; // keep cache coherent
       }
     }
@@ -787,7 +789,7 @@ export async function GET(req: NextRequest) {
               title: "Text follow-ups are paused",
               body: "Text follow-ups are part of Pro, so the texts in your follow-ups are waiting. Your email follow-ups are still sending, and nothing has been deleted.",
             }).catch(() => {});
-            await mergeCustomization(owner.ownerId, { set: { _seqPaused: true }, remove: [] }, { admin: supabase });
+            await supabase.from("profiles").update({ customization: { ...cust, _seqPaused: true } }).eq("id", owner.ownerId);
           }
           continue;
         }

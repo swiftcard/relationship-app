@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { AI_COLOR_SWATCHES, AI_THEMES, type AiTheme } from "@/lib/ai-card-design";
 import type { AiDesignBrief } from "@/components/card-templates/types";
 
@@ -52,9 +53,15 @@ export default function AiDesignSheet({
   const toggle = (on: boolean, disabled: boolean) =>
     `relative w-12 h-7 rounded-full shrink-0 transition-colors ${disabled ? "bg-[var(--sc-fill-3)] opacity-50" : on ? "bg-[var(--sc-green)]" : "bg-[var(--sc-fill-3)]"}`;
 
-  return (
+  // Portaled to <body> (2026-10-19 audit): opened from the homepage builders
+  // it rendered inside the builder's step (its own stacking context), so the
+  // builder's live preview painted over its header and first color swatches.
+  // z-105: above the builder (z-95) and the site nav, below the AI consent
+  // prompt (z-110) that can open from it, and below the full-size view.
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center sm:px-4 pt-[max(1rem,calc(env(safe-area-inset-top)+0.5rem))] sm:pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))]"
+      className="fixed inset-0 z-[105] bg-black/70 flex items-end sm:items-center justify-center sm:px-4 pt-[max(1rem,calc(env(safe-area-inset-top)+0.5rem))] sm:pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))]"
       role="dialog"
       aria-modal="true"
       aria-label="AI design"
@@ -191,6 +198,7 @@ export default function AiDesignSheet({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

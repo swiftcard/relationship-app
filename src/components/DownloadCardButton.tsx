@@ -78,7 +78,7 @@ export default function DownloadCardButton({ cardRef, filename = "swiftcard.png"
     </svg>
   );
   const idleLabel = labelOverride ?? (compact ? "Download" : "Download card as image");
-  const label = loading ? "Saving…" : status === "error" ? "Couldn't save — retry" : idleLabel;
+  const label = loading ? "Saving…" : status === "error" ? "Couldn't save. Retry" : idleLabel;
 
   // w-full, NOT flex-1. This button used to sit in a `flex` row beside a
   // "Preview" link, so flex-1 sized it. The Preview link was removed and the row

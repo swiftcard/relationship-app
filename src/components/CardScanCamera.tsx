@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useDialogA11y } from "@/lib/use-dialog-a11y";
 import { useIsNativeApp } from "@/lib/platform";
 import {
@@ -266,14 +267,16 @@ export default function CardScanCamera({
             ? "This browser can't open the camera here."
             : "The camera couldn't start.";
 
-  return (
+  // Portaled to <body> above the editors' pinned previews (same fix as the
+  // photo crop, 2026-10-19); below the AI consent prompt (z-110).
+  return createPortal(
     <div
       ref={rootRef}
       role="dialog"
       aria-modal="true"
       aria-label={title}
       data-card-scan-camera
-      className="sc-dark-sheet fixed inset-0 z-[70] overflow-hidden text-white"
+      className="sc-dark-sheet fixed inset-0 z-[106] overflow-hidden text-white"
       style={{ background: "#000" }}
     >
       <video
@@ -413,6 +416,7 @@ export default function CardScanCamera({
           <span />
         </div>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }

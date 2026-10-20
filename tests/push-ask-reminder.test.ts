@@ -222,7 +222,7 @@ describe("one ask on screen, and every way of saying no is honoured", () => {
 
   it("Settings on an iPhone browser points to the app first, and keeps the home-screen route", () => {
     const btn = read("src/components/EnablePushButton.tsx");
-    expect(btn).toMatch(/Notifications come through the <strong>SwiftCard app<\/strong> — open it and allow them\./);
+    expect(btn).toMatch(/Notifications come through the <strong>SwiftCard app<\/strong>\. Open it and allow them\./);
     expect(btn).toContain("Add to Home Screen");
   });
 
