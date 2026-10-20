@@ -120,7 +120,7 @@ afterAll(async () => {
 
 // ── The rig ─────────────────────────────────────────────────────────────────
 
-type Rig = { page: Page; api: string[]; connects: URL[]; popups: number; errors: string[] };
+type Rig = { page: Page; api: string[]; connects: URL[]; popups: number; errors: string[]; logs: string[] };
 
 async function rig(engine: string, width: number): Promise<Rig> {
   const ctx = await browsers[engine].newContext({
@@ -128,8 +128,10 @@ async function rig(engine: string, width: number): Promise<Rig> {
     ...(engine === "Chromium" && width < 600 ? { hasTouch: true, isMobile: true } : {}),
   });
   const page = await ctx.newPage();
-  const r: Rig = { page, api: [], connects: [], popups: 0, errors: [] };
+  const r: Rig = { page, api: [], connects: [], popups: 0, errors: [], logs: [] };
   page.on("pageerror", (e) => r.errors.push(e.message.split("\n")[0]));
+  page.on("console", (m) => r.logs.push(`[${m.type()}] ${m.text()}`));
+  page.on("requestfailed", (q) => r.logs.push(`[requestfailed] ${q.url().slice(0, 120)} ${q.failure()?.errorText ?? ""}`));
   page.on("popup", () => { r.popups++; });
   await ctx.route("**/*", async (route) => {
     const req = route.request();
@@ -175,11 +177,31 @@ async function open(r: Rig, path: string, screen: string, props: Record<string, 
 const cropper = (page: Page) => page.getByText("Adjust profile photo", { exact: true });
 
 /** The crop tool is open on the LinkedIn photo; Apply it and wait for it to close. */
-async function applyCrop(page: Page) {
+async function applyCrop(page: Page, logs: string[] = []) {
+  try {
+    await cropOpenAndApply(page);
+  } catch (e) {
+    // LI_DEBUG_DIR=<dir> keeps what the browser showed and said, for a local run.
+    const dir = process.env.LI_DEBUG_DIR;
+    if (dir) {
+      const name = `${Date.now()}-${(page.context().browser()?.browserType().name() ?? "x")}`;
+      await page.screenshot({ path: join(dir, `${name}.png`), fullPage: false }).catch(() => {});
+      const imgs = await page.locator("img").evaluateAll((all) => all.map((i) => {
+        const m = i as HTMLImageElement;
+        return `[img] ${m.src.slice(0, 60)} complete=${m.complete} natural=${m.naturalWidth}x${m.naturalHeight} shown=${m.width}x${m.height}`;
+      })).catch(() => []);
+      writeFileSync(join(dir, `${name}.txt`), [page.url(), ...imgs, ...logs].join("\n"));
+    }
+    throw e;
+  }
+}
+
+async function cropOpenAndApply(page: Page) {
   await expect.poll(() => cropper(page).isVisible(), { timeout: 8000 }).toBe(true);
-  // The picture really loaded under the cropper (not a broken image).
-  await expect.poll(() => page.locator("img").evaluateAll((imgs) =>
-    imgs.some((i) => (i as HTMLImageElement).src.startsWith("blob:") && (i as HTMLImageElement).naturalWidth === 300)), { timeout: 8000 }).toBe(true);
+  // The picture really loaded IN the cropper — not a broken image. WebKit used
+  // to open it on an undecodable copy (a "?" box), which this caught.
+  await expect.poll(() => page.locator('[role="dialog"] img').evaluateAll((imgs) =>
+    imgs.some((i) => (i as HTMLImageElement).naturalWidth === 300)), { timeout: 8000 }).toBe(true);
   await page.getByRole("button", { name: "Apply", exact: true }).click();
   await expect.poll(() => cropper(page).count(), { timeout: 8000 }).toBe(0);
 }
@@ -194,7 +216,7 @@ const ENGINES: [string, number][] = [["Chromium", 1280], ["Chromium", 390], ["We
 
 const BUILDERS = [
   { product: "card", trigger: "See how your card looks", photoStep: "Add your photo & logo", stepOf: "Step 3 of 4", forward: 2 },
-  { product: "swiftlink", trigger: "See how your SwiftLink would look", photoStep: "Name your SwiftLink", stepOf: "Step 1 of 3", forward: 0 },
+  { product: "swiftlink", trigger: "See how your Swift Links page would look", photoStep: "Name your Swift Links page", stepOf: "Step 1 of 3", forward: 0 },
   { product: "signature", trigger: "See how your Swift Signature would look", photoStep: "Add your photo & logo", stepOf: "Step 3 of", forward: 2 },
 ];
 
@@ -227,7 +249,7 @@ describe.each(ENGINES)("homepage builders — %s %ipx", (engine, width) => {
       await open(r, back(b.product), screen, { linkedinEnabled: true }, { swiftcard_prefill: { product: b.product, name: "Ada Lovelace", template: "classic-pro" } });
       expect(await r.page.getByText(b.stepOf).first().isVisible()).toBe(true);
       expect(await r.page.getByText(b.photoStep).first().isVisible()).toBe(true);
-      await applyCrop(r.page);
+      await applyCrop(r.page, r.logs);
       // The cropped photo is the headshot now, and the visitor's sketch is all there.
       await expect.poll(async () => (await stored(r.page, "swiftcard_prefill"))?.headshotUrl?.slice(0, 15), { timeout: 5000 }).toBe("data:image/jpeg");
       expect((await stored(r.page, "swiftcard_prefill"))?.name).toBe("Ada Lovelace");
@@ -281,8 +303,13 @@ describe.each(ENGINES)("the card wizard — %s %ipx", (engine, width) => {
   for (const a of ACCOUNTS) {
     it(`${a.who}: Connect LinkedIn leaves in THIS tab (no popup) with the card saved first`, async () => {
       const r = await rig(engine, width);
-      await open(r, a.path, "wizard", { ...a.props, linkedinEnabled: true }, { [a.key]: draft("Dana Ellis", "Acme") });
-      await r.page.getByRole("button", { name: "Suggest my profile picture" }).click();
+      // Coming back from an attempt that didn't finish puts every account type
+      // on the headshot step with their card (an Office member's is only ever
+      // held for this hop); Retry then Connect is the second try.
+      const sep = a.path.includes("?") ? "&" : "?";
+      await open(r, `${a.path}${sep}integration=linkedin&status=error`, "wizard", { ...a.props, linkedinEnabled: true }, { [a.key]: draft("Dana Ellis", "Acme") });
+      await expect.poll(() => r.page.getByText("LinkedIn didn't finish connecting", { exact: false }).isVisible()).toBe(true);
+      await r.page.getByRole("button", { name: "Retry", exact: true }).click();
       await r.page.getByRole("link", { name: "Connect LinkedIn", exact: true }).click();
       await expect.poll(() => r.connects.length, { timeout: 8000 }).toBe(1);
       expect(r.connects[0].searchParams.get("guest")).toBe("1");
@@ -300,7 +327,7 @@ describe.each(ENGINES)("the card wizard — %s %ipx", (engine, width) => {
         { ...a.props, linkedinEnabled: true }, { [a.key]: draft("Dana Ellis", "Acme") });
       // No "Continue your card?" question in the way: this is the same visit.
       expect(await r.page.getByText("Start a new card").count()).toBe(0);
-      await applyCrop(r.page);
+      await applyCrop(r.page, r.logs);
       if (a.upload) expect(r.api).toContain("POST /api/upload");
       await expect.poll(async () => (await stored(r.page, a.key))?.images?.photo?.slice(0, 15), { timeout: 5000 })
         .toBe(a.upload ? UPLOADED.slice(0, 15) : "data:image/jpeg");
@@ -323,7 +350,10 @@ describe.each(ENGINES)("the card wizard — %s %ipx", (engine, width) => {
       { "swiftcard_card_hop:u-member": draft("Dana Ellis", "Acme") });
     expect(await r.page.locator("#wizard-name").inputValue()).toBe("");
     expect(await r.page.getByText("Start a new card").count()).toBe(0);
-    expect(await stored(r.page, "swiftcard_card_hop:u-member")).toBeNull();
+    await r.page.waitForTimeout(600);
+    const held = await stored(r.page, "swiftcard_card_hop:u-member");
+    expect(held?.payload?.name ?? "").toBe("");
+    expect(held?.step ?? 1).toBe(1);
     await r.page.context().close();
   });
 });

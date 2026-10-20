@@ -65,6 +65,35 @@ function downscaleCanvas(source: HTMLCanvasElement, maxEdge: number): HTMLCanvas
   return out;
 }
 
+/** True once `src` has actually decoded to a picture with pixels. */
+function decodes(src: string, cors = false): Promise<boolean> {
+  const img = new Image();
+  if (cors) img.crossOrigin = "anonymous";
+  img.src = src;
+  return img.decode().then(() => img.naturalWidth > 0, () => false);
+}
+
+// The picture the crop tool opens on, for a photo already on the page.
+// react-image-crop draws it on a canvas, which a plain cross-origin <img>
+// would taint, so it is pulled as a local blob: first. In Safari that copy
+// came back undecodable for a photo the page had just shown (the LinkedIn
+// import): the cropper opened on a broken image (WebKit, 2026-10-20). So the
+// copy skips the cache and is checked to decode; failing that, the cropper
+// loads the address itself with crossOrigin (our storage answers CORS), which
+// keeps the canvas clean (CropperLazy sets crossOrigin for http sources).
+async function sourceForCrop(url: string): Promise<string> {
+  try {
+    const res = await fetch(url, { mode: "cors", cache: "no-store" });
+    if (res.ok) {
+      const local = URL.createObjectURL(await res.blob());
+      if (await decodes(local)) return local;
+      URL.revokeObjectURL(local);
+    }
+  } catch { /* fall through to the address itself */ }
+  if (/^https?:/.test(url) && (await decodes(url, true))) return url;
+  throw new Error("unreadable");
+}
+
 function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
@@ -167,17 +196,14 @@ export default function ImageUpload({ field, currentUrl, label, hint, shape = "s
 
   // Re-open the crop tool on the photo that is already applied — a LinkedIn
   // or Google import lands without ever passing through it, so until now the
-  // only way to reframe one was to find the file and upload it again. The
-  // image is pulled as a blob first: react-image-crop draws it on a canvas,
-  // which a cross-origin <img> would taint (our storage answers CORS).
+  // only way to reframe one was to find the file and upload it again. See
+  // sourceForCrop for how the picture is handed to the cropper.
   async function adjustCurrent(url: string | null = preview) {
     if (!url || uploadStatus === "uploading") return;
     try {
-      const res = await fetch(url, { mode: "cors" });
-      if (!res.ok) throw new Error("fetch");
-      const blob = await res.blob();
+      const src = await sourceForCrop(url);
       if (rawSrc) URL.revokeObjectURL(rawSrc);
-      setRawSrc(URL.createObjectURL(blob));
+      setRawSrc(src);
       setErrorMsg("");
       setUploadStatus("idle");
     } catch {

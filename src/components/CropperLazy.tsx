@@ -139,6 +139,9 @@ export default function CropModal({ src, title, aspect, circular, aspectOptions,
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={src}
+            // An address (not a local blob:) is a photo already on the page;
+            // CORS-loaded so cropToCanvas can export it (ImageUpload sourceForCrop).
+            crossOrigin={/^https?:/.test(src) ? "anonymous" : undefined}
             alt="Crop preview"
             onLoad={onImageLoad}
             style={{ maxWidth: "100%", maxHeight: "calc(100vh - 220px)", display: "block" }}

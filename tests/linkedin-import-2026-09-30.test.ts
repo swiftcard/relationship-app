@@ -51,7 +51,11 @@ describe("the LinkedIn photo: largest rendition first, enhanced when only the th
   it("any applied photo can be reframed with Adjust (imports never passed through the crop tool)", () => {
     const src = read("src/components/ImageUpload.tsx");
     expect(src).toMatch(/async function adjustCurrent\(url: string \| null = preview\)/);
-    expect(src).toMatch(/fetch\(url, \{ mode: "cors" \}\)/);
+    // Pulled fresh (not Safari's cached copy), checked to decode, else loaded
+    // with CORS so the crop canvas can still export it.
+    expect(src).toMatch(/fetch\(url, \{ mode: "cors", cache: "no-store" \}\)/);
+    expect(src).toMatch(/if \(await decodes\(local\)\) return local;/);
+    expect(read("src/components/CropperLazy.tsx")).toMatch(/crossOrigin=\{\/\^https\?:\/\.test\(src\) \? "anonymous" : undefined\}/);
     expect(src).toMatch(/>\s*Adjust\s*<\/button>/);
   });
 });
