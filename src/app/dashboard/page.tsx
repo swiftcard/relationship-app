@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { cardSlug, prettyCardSlug } from "@/lib/slug";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { createClient } from "@/lib/supabase-server";
 import { readPushPrefs } from "@/lib/push-policy";
 import { safeTimeZone, localDayKey, startOfLocalDayUtc } from "@/lib/tz-days";
@@ -13,6 +13,7 @@ import SignOutButton from "@/components/SignOutButton";
 import NotificationBell from "@/components/NotificationBell";
 import MoreShareOptions from "@/components/MoreShareOptions";
 import QRCodeModal from "@/components/QRCodeModal";
+import WalletPrompt from "@/components/WalletPrompt";
 import OfflineOwnerSnapshot from "@/components/OfflineOwnerSnapshot";
 import { qrScanUrl } from "@/lib/share-source";
 import { buildContactQr, contactPersonFromCardRow } from "@/lib/contact-qr";
@@ -46,6 +47,8 @@ import { PLAN_CHOSEN_KEY } from "@/lib/welcome-email";
 import type { CardLink } from "@/components/card-templates/types";
 import PushNudge from "@/components/PushNudge";
 import { hasWalletConfig } from "@/lib/wallet-config";
+import { hasGoogleWalletConfig } from "@/lib/google-wallet-config";
+import { walletPromptKind } from "@/lib/wallet-prompt";
 import TrackEvent from "@/components/TrackEvent";
 import Link from "next/link";
 import MobileNavGate from "@/components/MobileNavGate";
@@ -801,8 +804,20 @@ export default async function DashboardPage({
   const contactPerson = contactPersonFromCardRow(activeSource as Record<string, unknown>, APP_URL);
   const contactPayload = contactPerson ? buildContactQr(contactPerson) : undefined;
 
-  // Apple Wallet is only offered once the Apple pass certificate is configured.
+  // Apple Wallet is only offered once the Apple pass certificate is configured,
+  // Google Wallet (Android) once its issuer keys are.
   const walletEnabled = hasWalletConfig();
+  const googleWalletEnabled = hasGoogleWalletConfig();
+
+  // A brand-new card opens with its Wallet button above Show QR until it is
+  // pressed or closed (components/WalletPrompt; who gets it: lib/wallet-prompt).
+  const walletPrompt = walletPromptKind({
+    card: activeCard as Record<string, unknown> | null,
+    userAgent: (await headers()).get("user-agent"),
+    shellCookie: cookieStore.get("sc_shell")?.value ?? null,
+    appleWallet: walletEnabled,
+    googleWallet: googleWalletEnabled,
+  });
 
   // Your Card + Share + other ways to share — rendered under My Cards on mobile,
   // and in the sticky right column on desktop.
@@ -834,15 +849,21 @@ export default async function DashboardPage({
 
       {/* Share.
 
-          Show QR leads. Meeting someone is the product's most repeated
-          moment, and "open SwiftCard → show my QR" had no button of its own:
-          the only QR on a phone was the small one printed on the card, seen
+          Show QR leads — after the new-card Wallet prompt, which sits above
+          it only until it is pressed or closed (owner, 2026-10-19: a new user
+          doesn't yet know Wallet is in Other ways to share). Meeting
+          someone is the product's most repeated moment, and "open
+          SwiftCard → show my QR" had no button of its own: the only QR on a
+          phone was the small one printed on the card, seen
           by tapping the card and turning the phone sideways (that still
           works; the tour still teaches it). This is the full-size QR, one
           tap, titled for the person scanning it. Sending the link is the
           quieter second option; everything else stays behind "Other ways to
           share". (UX audit 2026-09-30.) */}
       <div data-tour="share" className="bg-gray-900 border border-gray-800/80 rounded-2xl p-5 space-y-2">
+        {walletPrompt && activeCard && (
+          <WalletPrompt cardId={activeCard.id as string} username={activeUsername} kind={walletPrompt} />
+        )}
         <QRCodeModal url={qrScanUrl(cardUrl)} firstName={ownerFirstName} label="Show QR" variant="primary" contactPayload={contactPayload} />
         <ShareButton
           url={cardUrl}
@@ -852,7 +873,11 @@ export default async function DashboardPage({
           variant="ghost"
           ownCard
         />
-        <MoreShareOptions url={cardUrl} walletUsername={walletEnabled ? activeUsername : undefined} />
+        <MoreShareOptions
+          url={cardUrl}
+          walletUsername={walletEnabled ? activeUsername : undefined}
+          googleWalletUsername={googleWalletEnabled ? activeUsername : undefined}
+        />
         {/* "At an event?" — stamps today's new contacts with where you met
             them (lib/event-tag.ts). */}
         <EventTagChip initial={activeEvent(profile.customization)} />

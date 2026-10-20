@@ -7,6 +7,8 @@ import QRDownloadButton from "@/components/QRDownloadButton";
 import CopyButton from "@/components/CopyButton";
 import NFCWriter from "@/components/NFCWriter";
 import AddToWalletButton, { useWalletMode } from "@/components/AddToWalletButton";
+import AddToGoogleWalletButton, { useIsAndroidDevice } from "@/components/AddToGoogleWalletButton";
+import { track } from "@/lib/events";
 import DownloadCardButton from "@/components/DownloadCardButton";
 import { useCardCapture } from "@/components/CardCaptureContext";
 import { qrScanUrl } from "@/lib/share-source";
@@ -18,16 +20,19 @@ import { qrScanUrl } from "@/lib/share-source";
 
 /**
  * One list, the same on a phone, in the app and on a computer (owner,
- * 2026-10-06): Apple Wallet first, then the two pictures, then the link, then
- * NFC. The big QR picture that sat here on desktop is gone — Show QR, right
- * above this button, already shows it full size.
+ * 2026-10-06): Apple Wallet first (Google Wallet on Android), then the two
+ * pictures, then the link, then NFC. The big QR picture that sat here on
+ * desktop is gone — Show QR, right above this button, already shows it full
+ * size.
  *
  * @param walletUsername Card slug to offer "Add to Apple Wallet" for, or
  *   undefined to omit it. Optional because the wallet certificates may not be
  *   configured, and because /preview renders this modal for a sample card that
  *   nobody should be putting in their Wallet.
+ * @param googleWalletUsername The same for "Add to Google Wallet", offered on
+ *   Android only (where Apple Wallet is not), once Google Wallet is configured.
  */
-export default function MoreShareOptions({ url, walletUsername }: { url: string; walletUsername?: string }) {
+export default function MoreShareOptions({ url, walletUsername, googleWalletUsername }: { url: string; walletUsername?: string; googleWalletUsername?: string }) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   // Escape closes, focus lands inside, and returns to "Other ways to share"
@@ -40,7 +45,9 @@ export default function MoreShareOptions({ url, walletUsername }: { url: string;
   const capture = useCardCapture();
   // Android has no Apple Wallet: the section goes with its button, rather
   // than leaving an "Apple Wallet" heading over nothing (AddToWalletButton).
+  // Android gets Google Wallet in the same first place instead.
   const walletMode = useWalletMode();
+  const android = useIsAndroidDevice();
 
   return (
     <>
@@ -69,12 +76,25 @@ export default function MoreShareOptions({ url, walletUsername }: { url: string;
 
             <div className="space-y-5">
               {/* Apple Wallet — first (owner, 2026-10-06: "I don't like how
-                  it's on the bottom"). It still lives only here, not in the
-                  Your Card box beside the primary share action. */}
+                  it's on the bottom"). Its permanent home: a brand-new card
+                  also shows it above Show QR until it is pressed or closed
+                  (WalletPrompt), and it stays here either way. */}
               {walletUsername && walletMode !== "none" && (
                 <section data-share-option="wallet">
                   <SectionLabel title="Apple Wallet" hint="your card on your iPhone, ready to scan" />
-                  <AddToWalletButton username={walletUsername} />
+                  <AddToWalletButton username={walletUsername}
+                    onPress={() => track("wallet_pass_added", { placement: "share_options", method: "apple_wallet" })}
+                  />
+                </section>
+              )}
+              {/* Google Wallet — the same first place on Android. */}
+              {googleWalletUsername && android && (
+                <section data-share-option="google-wallet">
+                  <SectionLabel title="Google Wallet" hint="your card on your phone, ready to scan" />
+                  <AddToGoogleWalletButton
+                    username={googleWalletUsername}
+                    onPress={() => track("wallet_pass_added", { placement: "share_options", method: "google_wallet" })}
+                  />
                 </section>
               )}
 

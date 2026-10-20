@@ -183,6 +183,24 @@ const CHECKS = [
     },
   },
   {
+    // The Android twin (lib/google-wallet.ts). Skipped until it is configured;
+    // once it is, a key Google refuses means every "Add to Google Wallet" tap
+    // fails, and only this check would say so.
+    name: "Google Wallet credentials valid (when configured)",
+    run: async () => {
+      const res = await get("/api/health");
+      let gw = null;
+      try { gw = (await res.json()).googleWallet; } catch { /* reported below */ }
+      if (!gw || gw.configured !== true) return { ok: true, detail: "not configured" };
+      return {
+        ok: gw.ok === true,
+        detail: gw.ok
+          ? "token minted"
+          : `reason=${gw.reason} — check GOOGLE_WALLET_CLIENT_EMAIL / GOOGLE_WALLET_PRIVATE_KEY in Vercel.`,
+      };
+    },
+  },
+  {
     name: "sign-in page reachable",
     run: async () => {
       const res = await get("/login");

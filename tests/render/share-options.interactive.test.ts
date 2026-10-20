@@ -55,11 +55,12 @@ beforeAll(async () => {
       return h("p", { id: "probe-" + id }, c ? c.filename : "NONE");
     }
 
-    (window as any).mount = ({ withCapture, twoPanels, wallet }: any) => {
+    (window as any).mount = ({ withCapture, twoPanels, wallet, google }: any) => {
       const el = document.getElementById("root")!;
       const walletUsername = wallet ? "alex-morgan" : undefined;
+      const googleWalletUsername = google ? "alex-morgan" : undefined;
       const panel = (id: string) =>
-        h(CardCaptureProvider, { key: id }, h(FakeCard, { id }), h(Probe, { id }), h(MoreShareOptions, { url: "${URL}", walletUsername }));
+        h(CardCaptureProvider, { key: id }, h(FakeCard, { id }), h(Probe, { id }), h(MoreShareOptions, { url: "${URL}", walletUsername, googleWalletUsername }));
       let tree;
       if (twoPanels) tree = h("div", null, panel("card-a"), panel("card-b"));
       else if (withCapture) tree = panel("card-a");
@@ -93,6 +94,9 @@ beforeAll(async () => {
     // computer shows); Next inlines it, so the bundle has to as well.
     define: { "process.env.NODE_ENV": '"production"', "process.env.NEXT_PUBLIC_APP_URL": '"https://swiftcard.me"' },
     alias: { "@": resolve("src") },
+    // lib/events (the Wallet buttons' tracking) reads other NEXT_PUBLIC_ keys
+    // that Next would inline; undefined here, as on a build without PostHog.
+    banner: { js: "var process = { env: { NODE_ENV: \"production\" } };" },
   });
   bundle = out.outputFiles[0].text;
 }, 240_000);
@@ -112,7 +116,7 @@ const UA = {
   android: "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36",
 } as const;
 
-async function mount(width: number, opts: { withCapture?: boolean; twoPanels?: boolean; wallet?: boolean }, before?: string, device: keyof typeof UA = width < 768 ? "iphone" : "mac"): Promise<Page> {
+async function mount(width: number, opts: { withCapture?: boolean; twoPanels?: boolean; wallet?: boolean; google?: boolean }, before?: string, device: keyof typeof UA = width < 768 ? "iphone" : "mac"): Promise<Page> {
   const css = await appCss();
   const page = await browser.newPage({ userAgent: UA[device] });
   // setViewportSize EXPLICITLY — the constructor option has silently not taken
@@ -163,8 +167,15 @@ async function openModal(page: Page, index = 0) {
     const cardLink = modal.querySelector("span.text-blue-400");
     const nfc = modal.querySelector('[data-share-option="nfc"]');
     const wallet = Array.from(modal.querySelectorAll("a")).find((a) => (a.textContent ?? "").includes("Add to Apple Wallet") && shown(a)) ?? null;
+    const googleSection = modal.querySelector('[data-share-option="google-wallet"]');
+    const googleBadge = Array.from(googleSection?.querySelectorAll("img") ?? []).find((i) => shown(i)) ?? null;
     return {
       walletSection: !!walletSection,
+      googleSection: !!googleSection,
+      googleText: googleSection?.textContent ?? "",
+      googleLink: googleSection?.querySelector("a")?.getAttribute("href") ?? null,
+      googleBadgeHeight: googleBadge ? Math.round(googleBadge.getBoundingClientRect().height) : 0,
+      googleTop: top(googleSection),
       walletButton: !!wallet,
       walletQr,
       walletText: walletSection?.textContent ?? "",
@@ -248,6 +259,31 @@ describe("Apple Wallet and NFC make sense on each device", () => {
       expect(m.walletSection, "an Apple Wallet heading on Android").toBe(false);
       expect(m.downloadCard).toBe(true);
     } finally { await page.close(); }
+  }, 90_000);
+
+  it("Android with Google Wallet set up: Google Wallet first, in Google's own badge", async () => {
+    const page = await mount(MOBILE, { withCapture: true, wallet: true, google: true }, undefined, "android");
+    try {
+      const m = await openModal(page);
+      expect(m.walletSection, "an Apple Wallet heading on Android").toBe(false);
+      expect(m.googleSection, "no Google Wallet on Android").toBe(true);
+      expect(m.googleText).toContain("Google Wallet");
+      expect(m.googleLink).toBe("/api/wallet/google?card=alex-morgan");
+      // Google's brand rules: the badge as shipped, never under 48px tall.
+      expect(m.googleBadgeHeight).toBeGreaterThanOrEqual(48);
+      expect(m.googleTop).toBeLessThan(m.order.downloadCard);
+    } finally { await page.close(); }
+  }, 90_000);
+
+  it("Google Wallet never shows on an iPhone, a Mac or a Windows computer", async () => {
+    for (const device of ["iphone", "mac", "windows"] as const) {
+      const page = await mount(device === "iphone" ? MOBILE : DESKTOP, { withCapture: true, wallet: true, google: true }, undefined, device);
+      try {
+        const m = await openModal(page);
+        expect(m.googleSection, device).toBe(false);
+        expect(m.walletSection, device).toBe(true);
+      } finally { await page.close(); }
+    }
   }, 90_000);
 
   it("Write to a tag only where the browser can write one", async () => {

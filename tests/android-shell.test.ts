@@ -241,12 +241,24 @@ describe("the Android app sells nothing, on purpose", () => {
 
 describe("Apple-only surfaces stay off Android", () => {
   it("Apple Wallet is hidden in the Android app", () => {
-    // There is no Apple Wallet on Android and no Google Wallet pass. Left
-    // alone this rendered "Add to Apple Wallet" and handed Chrome a .pkpass,
-    // which downloads as a file nothing on the device can open.
+    // There is no Apple Wallet on Android (Google Wallet takes its place,
+    // pinned below). Left alone this rendered "Add to Apple Wallet" and handed
+    // Chrome a .pkpass, which downloads as a file nothing on the device can open.
     const src = read("src/components/AddToWalletButton.tsx");
     expect(src).toMatch(/useIsAndroidApp/);
     expect(src).toMatch(/if \(androidApp\) return null;/);
+  });
+
+  it("Android gets Google Wallet in Apple Wallet's place, and only Android", () => {
+    // Other ways to share shows the Google section only on an Android device,
+    // only when the dashboard passed a username — which it does only when
+    // Google Wallet is configured, so it is never a dead button.
+    expect(read("src/components/MoreShareOptions.tsx")).toMatch(/\{googleWalletUsername && android &&/);
+    expect(read("src/components/AddToGoogleWalletButton.tsx")).toMatch(/\/Android\/i\.test\(navigator\.userAgent\)/);
+    expect(read("src/app/dashboard/page.tsx")).toMatch(/googleWalletUsername=\{googleWalletEnabled \?/);
+    // In the app the save page opens in a Custom Tab, like the Apple pass's
+    // Safari sheet — a plugin already in the Android build.
+    expect(read("android/app/src/main/assets/capacitor.plugins.json")).toContain("@capacitor/browser");
   });
 
   it("the App Store review card is hidden in the Android app", () => {

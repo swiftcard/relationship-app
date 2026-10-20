@@ -254,6 +254,16 @@ All five of `APPLE_PASS_TYPE_ID`, `APPLE_TEAM_ID`, `APPLE_PASS_CERT_PEM`, `APPLE
 | `APPLE_WWDR_PEM` | Apple's WWDR intermediate certificate as PEM text (apple.com/certificateauthority). |
 | `WALLET_AUTH_SECRET` | Long random string used to derive each pass's authenticationToken. Unset = falls back to `APPLE_PASS_KEY_PEM`, which works until you renew the signing cert: then **every installed pass stops updating until re-added**. Set this before the next renewal. |
 
+## Google Wallet pass (Android)
+
+All three must be set (`hasGoogleWalletConfig()` in `src/lib/google-wallet-config.ts`). **Missing any one = "Add to Google Wallet" is hidden everywhere** (the new-card prompt, Other ways to share on Android, the assistant's answer), and `/api/wallet/google` returns 501. Until Google approves the issuer for publishing, only the test accounts listed in the Wallet Console can save the pass. `/api/health` reports `googleWallet`, and the 15-minute uptime check alerts when the key stops working.
+
+| Key | What it does — and what breaks when it's missing |
+|---|---|
+| `GOOGLE_WALLET_ISSUER_ID` | The Issuer ID from pay.google.com/business/console (Google Pay & Wallet Console → Google Wallet API). Every pass id starts with it. |
+| `GOOGLE_WALLET_CLIENT_EMAIL` | The service account's `client_email` from its JSON key (Google Cloud → IAM → Service accounts, with the Google Wallet API enabled). That email must also be added as a user on the issuer in the Wallet Console, or every save returns 403. |
+| `GOOGLE_WALLET_PRIVATE_KEY` | The same JSON key's `private_key` (PEM; literal `\n` and wrapping quotes are normalised, as for Firebase). |
+
 ## iPhone app: in-app purchase, offer codes and store links
 
 | Key | What it does — and what breaks when it's missing |

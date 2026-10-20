@@ -36,7 +36,7 @@ describe("the deploy gate", () => {
   it("production says which commit it is serving", () => {
     const health = read("src/app/api/health/route.ts");
     expect(health).toMatch(/const sha = process\.env\.VERCEL_GIT_COMMIT_SHA \|\| null;/);
-    expect(health).toMatch(/\{ ok: db, db, dbMs: Date\.now\(\) - t0, push, sha \}/);
+    expect(health).toMatch(/\{ ok: db, db, dbMs: Date\.now\(\) - t0, push, googleWallet, sha \}/);
   });
 
   it("the nightly QA and the paint check test only a build that is live", () => {

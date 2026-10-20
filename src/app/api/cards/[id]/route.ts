@@ -397,6 +397,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         } catch (e) {
           console.error("[wallet] pass refresh failed after card edit:", e);
         }
+        // The Google Wallet twin: rewrite the card's object so Android phones
+        // holding it update too. No-op when Google Wallet isn't configured or
+        // nobody ever saved this card there.
+        try {
+          const { touchGoogleWalletObject } = await import("@/lib/google-wallet");
+          await touchGoogleWalletObject(username);
+        } catch (e) {
+          console.error("[google-wallet] pass refresh failed after card edit:", e);
+        }
 
         // SHARE-PREVIEW freshness: the stored pixel-perfect capture
         // (card-shares/<username>.png) is now stale. Delete it so the card's

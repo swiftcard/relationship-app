@@ -86,6 +86,7 @@ describe("getSourceLabel — attribute honestly, never invent a channel", () => 
     expect(getSourceLabel("qr_code")).toBe("QR code scan");
     expect(getSourceLabel("nfc_card")).toBe("NFC tap");
     expect(getSourceLabel("apple_wallet")).toBe("Apple Wallet");
+    expect(getSourceLabel("google_wallet")).toBe("Google Wallet");
     expect(getSourceLabel("swift_links")).toBe("Swift Links");
     expect(getSourceLabel("direct_link")).toBe("Card link");
   });

@@ -16,6 +16,7 @@ import { META } from "@/lib/template-style-presets";
 import { TOUR_STEPS, type TourStep } from "@/lib/tour-steps";
 import { ADMIN_TOUR_STEPS } from "@/lib/admin-tour-steps";
 import type { CrmProviderKey } from "@/lib/crm-connection";
+import { hasGoogleWalletConfig } from "@/lib/google-wallet-config";
 import type { Audience } from "./types";
 
 const usd = (cents: number) => `$${(cents / 100).toFixed(2)}`;
@@ -43,6 +44,11 @@ const PLACEHOLDERS: Record<string, () => string> = {
   "price.officeAnnual": () => usd(PLAN_PRICES.OFFICE_ANNUAL_PER_SEAT_CENTS),
   "product.templateCount": () => String(Object.keys(META).length),
   "product.integrations": () => integrationList(),
+  // Google Wallet exists only once its keys are in the environment
+  // (lib/google-wallet-config), so the assistant must not promise it before.
+  "wallet.android": () => hasGoogleWalletConfig()
+    ? "On an Android phone the same spot has \"Add to Google Wallet\" instead, and a card you've just made shows it above Show QR until you tap it or its X: the pass has your name, title, phone and email and a QR that opens your card."
+    : "On an Android phone there is no Apple Wallet, so the option isn't shown, and there is no Google Wallet pass yet; share the link or the QR.",
 };
 
 export const PLACEHOLDER_KEYS = Object.keys(PLACEHOLDERS);

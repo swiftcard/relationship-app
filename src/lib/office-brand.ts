@@ -618,6 +618,10 @@ export async function refreshCardSurfaces(userId: string, opts: { officeCardsOnl
       const { touchWalletPass } = await import("@/lib/wallet-registry");
       await Promise.all(slugs.map((s) => touchWalletPass(s).catch(() => {})));
     } catch { /* wallet not configured */ }
+    try {
+      const { touchGoogleWalletObject } = await import("@/lib/google-wallet");
+      await Promise.all(slugs.map((s) => touchGoogleWalletObject(s).catch(() => {})));
+    } catch { /* Google Wallet not configured */ }
   } catch { /* best-effort */ }
 }
 

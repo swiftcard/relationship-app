@@ -36,13 +36,23 @@ export async function GET() {
       webPush: !!process.env.VAPID_PRIVATE_KEY && !!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
     };
   } catch { push = null; }
+  // GOOGLE WALLET, the Android pass. Reported the same way and for the same
+  // reason: a revoked service-account key makes "Add to Google Wallet" fail on
+  // every Android phone with nothing turning red. Not configured is normal
+  // until the issuer account exists. Imported only here, so the pass builder
+  // it sits beside never loads on the hot path above.
+  let googleWallet: CredHealth | null = null;
+  try {
+    const { checkGoogleWalletCredentials } = await import("@/lib/google-wallet");
+    googleWallet = await checkGoogleWalletCredentials();
+  } catch { googleWallet = null; }
   // WHICH BUILD is answering. Deployment Checks hold a new build until CI
   // passes, so "deployed" and "live" are different moments; the post-deploy
   // checks wait for this to name their commit (scripts/wait-for-live.mjs)
   // before testing swiftcard.me. The repository is public; this is no secret.
   const sha = process.env.VERCEL_GIT_COMMIT_SHA || null;
   return NextResponse.json(
-    { ok: db, db, dbMs: Date.now() - t0, push, sha },
+    { ok: db, db, dbMs: Date.now() - t0, push, googleWallet, sha },
     { status: db ? 200 : 503, headers: { "Cache-Control": "no-store" } },
   );
 }

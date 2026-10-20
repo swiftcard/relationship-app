@@ -31,6 +31,18 @@ describe("submission copy only claims features that are actually configured", ()
     }
   });
 
+  it("Google Wallet stays gated behind hasGoogleWalletConfig()", () => {
+    // The Android twin of the rule below: no Google Wallet button, prompt or
+    // assistant answer until its three keys exist.
+    const cfg = read("src/lib/google-wallet-config.ts");
+    for (const v of ["GOOGLE_WALLET_ISSUER_ID", "GOOGLE_WALLET_CLIENT_EMAIL", "GOOGLE_WALLET_PRIVATE_KEY"]) expect(cfg).toContain(v);
+    const dash = read("src/app/dashboard/page.tsx");
+    expect(dash).toContain("hasGoogleWalletConfig()");
+    expect(dash).toMatch(/googleWallet:\s*googleWalletEnabled/);
+    expect(read("src/app/api/wallet/google/route.ts")).toMatch(/if \(!hasGoogleWalletConfig\(\)\)/);
+    expect(read("src/lib/knowledge/derived.ts")).toMatch(/"wallet\.android": \(\) => hasGoogleWalletConfig\(\)/);
+  });
+
   it("the Add to Wallet button stays gated behind hasWalletConfig()", () => {
     // The gate is what keeps an unconfigured Wallet from rendering a button
     // that errors. Losing it is worse than the copy problem.

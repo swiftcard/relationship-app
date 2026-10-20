@@ -24,8 +24,10 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 //              is a file nothing can open, so it shows a code to scan with
 //              the iPhone instead — the pass route is public, so the phone
 //              needs no sign-in.
-//   "none"     Android, web or app: no Apple Wallet at all. The whole Wallet
-//              section goes, not just the button (MoreShareOptions).
+//   "none"     Android, web or app: no Apple Wallet at all. The whole Apple
+//              Wallet section goes, not just the button — Android gets the
+//              Google Wallet one instead (MoreShareOptions,
+//              AddToGoogleWalletButton).
 // "button" on the server and the first client render, like every platform
 // hook, then the real answer after mount.
 export type WalletMode = "button" | "qr" | "none";
@@ -51,7 +53,11 @@ export function useWalletMode(): WalletMode {
   return androidApp ? "none" : mode;
 }
 
-export default function AddToWalletButton({ username, className = "" }: { username: string; className?: string }) {
+/**
+ * @param onPress Called first on every tap, before the pass opens — the new-card
+ *   Wallet prompt (WalletPrompt) uses it to record that the button was pressed.
+ */
+export default function AddToWalletButton({ username, className = "", onPress }: { username: string; className?: string; onPress?: () => void }) {
   const href = `/api/wallet/pass?card=${encodeURIComponent(username)}`;
   const mode = useWalletMode();
   // ON A MAC there is no Apple Wallet for an iOS app to add a pass to: PassKit
@@ -60,8 +66,8 @@ export default function AddToWalletButton({ username, className = "" }: { userna
   // true and point at the thing that DOES work, rather than hiding the feature
   // as if it never existed.
   const onMac = useIsIosAppOnMac();
-  // IN THE ANDROID APP there is no Apple Wallet and no Google Wallet pass (the
-  // knowledge base says so to anyone who asks). Left alone, this rendered "Add
+  // IN THE ANDROID APP there is no Apple Wallet (Android gets the Google
+  // Wallet pass instead, AddToGoogleWalletButton). Left alone, this rendered "Add
   // to Apple Wallet" inside an Android app and handed Chrome a .pkpass, which
   // downloads as a file nothing on the device can open — a dead end dressed up
   // as a feature. Android BROWSERS have the same dead end, and since
@@ -69,6 +75,7 @@ export default function AddToWalletButton({ username, className = "" }: { userna
   const androidApp = useIsAndroidApp();
 
   async function handleNativeOpen(e: React.MouseEvent<HTMLAnchorElement>) {
+    onPress?.();
     if (!detectNativeApp()) return; // web: normal link navigation
     e.preventDefault();
     try {

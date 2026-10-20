@@ -10,6 +10,8 @@ export const SOURCE_LABELS: Record<string, string> = {
   text_message: "Text message",
   email_signature: "Swift Signature",
   apple_wallet: "Apple Wallet",
+  // The QR on a Google Wallet pass (lib/google-wallet.ts), the Android twin.
+  google_wallet: "Google Wallet",
   // Opened from a contact saved by scanning the no-signal Contact QR
   // (lib/contact-qr.ts). The scan itself never reaches SwiftCard.
   contact_qr: "Contact QR",
@@ -56,6 +58,7 @@ const SOURCE_PHRASES: Record<string, string> = {
   email_signature: "from your Swift Signature",
   swift_links: "from your Swift Links",
   apple_wallet: "from Apple Wallet",
+  google_wallet: "from Google Wallet",
   contact_qr: "from the contact they saved",
   text_message: "from a text message",
   instagram_bio: "from your Instagram bio",

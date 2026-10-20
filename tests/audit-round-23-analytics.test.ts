@@ -16,7 +16,7 @@ const read = (p: string) => readFileSync(p, "utf8");
 
 describe("A-02: only sources SwiftCard puts on its own links are stored", () => {
   it("known keys pass; anything else is a plain card link (or the page's own default)", () => {
-    for (const k of ["qr_code", "nfc_card", "email_signature", "apple_wallet", "contact_qr", "swift_links", "widget"]) expect(storedSource(k)).toBe(k);
+    for (const k of ["qr_code", "nfc_card", "email_signature", "apple_wallet", "google_wallet", "contact_qr", "swift_links", "widget"]) expect(storedSource(k)).toBe(k);
     expect(storedSource("my_campaign")).toBe("direct_link");
     expect(storedSource("toString")).toBe("direct_link"); // not an inherited key
     expect(storedSource(undefined)).toBe("direct_link");
