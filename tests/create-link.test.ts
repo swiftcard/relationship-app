@@ -124,10 +124,30 @@ describe("the Create box", () => {
 
   it("uploads each distinct pasted picture once, and drops one that can't be read instead of failing", () => {
     expect(box).toContain("const stored = new Map<string, Promise<string | null>>();");
-    expect(box).toContain("if (!stored.has(p.src))");
-    expect(box).toMatch(/e\.status === 401 \|\| e\.status === 403 \|\| e\.status === 429\)\) throw e;/);
+    expect(box).toContain("if (stored.has(p.src)) continue;");
+    // …all at once, not one after another.
+    expect(box).toContain("await Promise.all([...stored]");
+    expect(box).toMatch(/e\.status === 401 \|\| e\.status === 403 \|\| e\.status === 408 \|\| e\.status === 429\)\) throw e;/);
     expect(box).toContain('else { (p.img.closest("a") ?? p.img).remove(); dropped++; }');
     expect(box).toContain("made = { html: relink(draft, PLACEHOLDER, shareUrl), shareUrl, dropped };");
+  });
+  // Owner, 2026-10-20: a paste "just stays on a loading screen". Every wait
+  // has a limit; past it the box says so (tests/render/create-link proves it).
+  it("never waits forever: every upload and the preview picture have a time limit", () => {
+    const uploads = box.match(/uploadMedia\(/g)?.length ?? 0;
+    const bounded = box.match(/uploadMedia\([^;]*\{ timeoutMs: (UPLOAD_MS|PREVIEW_UPLOAD_MS) \}\)/g)?.length ?? 0;
+    expect(uploads, "an uploadMedia call with no time limit").toBe(bounded);
+    // A too-slow pasted picture stops the paste with a message; it is not
+    // quietly dropped as "saved only on your computer".
+    expect(box).toContain("e.status === 408");
+    const upload = readFileSync("src/lib/upload-media.ts", "utf8");
+    expect(upload).toContain("signal: timeoutMs ? timeoutSignal(timeoutMs) : undefined");
+    expect(upload).toContain("throw new UploadError(408, TOOK_TOO_LONG_MESSAGE)");
+    const lib = readFileSync("src/lib/link-anything.ts", "utf8");
+    expect(lib).toMatch(/export async function snapshotPng\(html: string, budgetMs = SNAP_BUDGET_MS\)/);
+    expect(lib).not.toMatch(/await img\.decode\(\)|await document\.fonts\?\.ready;/);
+    const exact = readFileSync("src/lib/capture-exact.ts", "utf8");
+    expect(exact).toContain("return await within(toPng(node, options), timeoutMs);");
   });
   it("never ignores a drop", () => {
     const drop = box.slice(box.indexOf("  function onDrop("), box.indexOf("  async function pasteButton()"));

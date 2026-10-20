@@ -312,6 +312,46 @@ for (const engineName of ["chromium", "webkit"] as const) {
       } finally { await w.ctx.close(); }
     });
 
+    // Owner, 2026-10-20: a paste "just stays on a loading screen". html-to-image
+    // leaves its promise pending forever when the browser refuses to decode
+    // the picture it drew (no rejection handler on img.decode()), and nothing
+    // in the box had a time limit. Now the preview picture is given up on and
+    // the paste is still linked, to the card itself, within seconds.
+    it("a preview picture the browser refuses to draw never keeps the spinner", async () => {
+      const w = await open(engine);
+      try {
+        await w.page.evaluate(() => {
+          const native = HTMLImageElement.prototype.decode;
+          HTMLImageElement.prototype.decode = function () {
+            return this.src.startsWith("data:image/svg+xml") ? Promise.reject(new DOMException("refused", "EncodingError")) : native.call(this);
+          };
+          (window as unknown as { mountBox: () => void }).mountBox();
+        });
+        await w.page.locator('[role="textbox"][contenteditable]').waitFor();
+        const t0 = Date.now();
+        await w.page.evaluate((html) => {
+          const dt = new DataTransfer();
+          dt.setData("text/html", html);
+          document.querySelector('[role="textbox"][contenteditable]')!.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+        }, FIXTURES.gmail);
+        await w.page.locator("button", { hasText: /^Copy$/ }).waitFor({ timeout: 15_000 });
+        expect(Date.now() - t0, "a stuck capture held the paste up").toBeLessThan(10_000);
+        const hrefs = await w.page.evaluate(() => Array.from((document.querySelector("[data-create-preview]") as HTMLElement).shadowRoot!.querySelectorAll("a")).map((a) => a.getAttribute("href")));
+        expect(new Set(hrefs)).toEqual(new Set([`${ORIGIN}/dana?source=create_link`]));
+      } finally { await w.ctx.close(); }
+    }, 60_000);
+
+    it("an upload that never answers says so instead of spinning", async () => {
+      const w = await open(engine);
+      try {
+        await w.ctx.route(`${ORIGIN}/api/upload`, () => { /* never answered */ });
+        await w.page.evaluate(() => (window as unknown as { mountBox: () => void }).mountBox());
+        await w.page.locator('input[type="file"]').setInputFiles({ name: "photo.png", mimeType: "image/png", buffer: Buffer.from(PNG40.split(",")[1], "base64") });
+        await w.page.locator('[role="alert"]', { hasText: "That took too long" }).waitFor({ timeout: 30_000 });
+        expect(await w.page.locator('[role="status"]').count(), "the spinner is still up").toBe(0);
+      } finally { await w.ctx.close(); }
+    }, 60_000);
+
     for (const width of [390, 1280]) {
       it(`the box fits at ${width}px, empty and ready`, async () => {
         const w = await open(engine, width, width === 390 ? "light" : "dark");

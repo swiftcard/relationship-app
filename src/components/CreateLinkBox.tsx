@@ -6,6 +6,7 @@ import { createFallbackUrl, createIdFromUpload, createShareUrl, GMAIL_SIGNATURE_
 import {
   isSafeLinkedHtml, linkEverything, pictureHtml, relink, renderableDocument, renderOffscreen, snapshotPng, textToHtml, TooMuchError,
 } from "@/lib/link-anything";
+import { timeoutSignal } from "@/lib/time-limit";
 
 // The Links page's Create + side (owner, 2026-10-07): paste anything — an email
 // signature, some text — or drop a picture, and get it back looking exactly
@@ -18,6 +19,12 @@ const PLACEHOLDER = "https://swiftcard.me/__create_link__";
 // The upload route's request limit is ~4.5 MB; leave headroom.
 const MAX_UPLOAD = 4_300_000;
 const UPLOADABLE = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+// Time limits (owner, 2026-10-20: a paste "just stays on a loading screen").
+// A healthy upload is ~1–2 s. A picture the result needs gets the longer one,
+// and past it the box says "That took too long"; the share-preview picture is
+// optional, so after the shorter one the link just opens the card instead.
+const UPLOAD_MS = 20_000;
+const PREVIEW_UPLOAD_MS = 10_000;
 
 type Made = { html: string; shareUrl: string; dropped: number };
 type Phase =
@@ -59,7 +66,7 @@ async function naturalSize(file: File): Promise<{ w: number; h: number }> {
 }
 
 async function srcToFile(src: string): Promise<File> {
-  const blob = await (await fetch(src)).blob();
+  const blob = await (await fetch(src, { signal: timeoutSignal(5000) })).blob();
   const ext = blob.type.split("/")[1] || "png";
   return new File([blob], `pasted.${ext}`, { type: blob.type || "image/png" });
 }
@@ -143,7 +150,7 @@ export default function CreateLinkBox({ username, appUrl, selfToken = null }: {
       if ("file" in input) {
         const file = await uploadable(input.file);
         const { w, h } = await naturalSize(file);
-        const { url } = await uploadMedia(file, "create");
+        const { url } = await uploadMedia(file, "create", { timeoutMs: UPLOAD_MS });
         const id = createIdFromUpload(url);
         const shareUrl = id ? createShareUrl(appUrl, username, id) : createFallbackUrl(appUrl, username);
         made = { html: pictureHtml(url, w, h, shareUrl), shareUrl, dropped: 0 };
@@ -157,21 +164,25 @@ export default function CreateLinkBox({ username, appUrl, selfToken = null }: {
         // signature used to cost one upload per copy, against a limit of 30
         // per 10 minutes. A picture that can't be read (a blob: from another
         // page, say) is dropped and counted like a cid: one, instead of
-        // failing the whole paste; only "not Pro" / "too many" stop it.
+        // failing the whole paste; only "not Pro" / "too many" / "too slow"
+        // stop it. They upload all at once, not one after another.
         const stored = new Map<string, Promise<string | null>>();
+        for (const p of linked.pending) {
+          if (stored.has(p.src)) continue;
+          stored.set(p.src, (async () => {
+            try {
+              return (await uploadMedia(await uploadable(await srcToFile(p.src)), "create", { timeoutMs: UPLOAD_MS })).url;
+            } catch (e) {
+              if (e instanceof UploadError && (e.status === 401 || e.status === 403 || e.status === 408 || e.status === 429)) throw e;
+              return null;
+            }
+          })());
+        }
+        const urls = new Map<string, string | null>();
+        await Promise.all([...stored].map(async ([src, p]) => { urls.set(src, await p); }));
         let dropped = linked.dropped;
         for (const p of linked.pending) {
-          if (!stored.has(p.src)) {
-            stored.set(p.src, (async () => {
-              try {
-                return (await uploadMedia(await uploadable(await srcToFile(p.src)), "create")).url;
-              } catch (e) {
-                if (e instanceof UploadError && (e.status === 401 || e.status === 403 || e.status === 429)) throw e;
-                return null;
-              }
-            })());
-          }
-          const url = await stored.get(p.src)!;
+          const url = urls.get(p.src);
           if (url) p.img.setAttribute("src", url);
           else { (p.img.closest("a") ?? p.img).remove(); dropped++; }
         }
@@ -179,11 +190,13 @@ export default function CreateLinkBox({ username, appUrl, selfToken = null }: {
         const draft = linked.root.outerHTML;
         // The share link previews as this — a picture of it, uploaded. If the
         // picture can't be made, the link still opens the card (with the
-        // card's own preview); nothing is left half-done.
+        // card's own preview); nothing is left half-done. Both steps have a
+        // short limit (snapshotPng keeps its own), since the result doesn't
+        // need them.
         let shareUrl = createFallbackUrl(appUrl, username);
         try {
           const png = await snapshotPng(draft);
-          const { url } = await uploadMedia(new File([png], "signature.png", { type: "image/png" }), "create");
+          const { url } = await uploadMedia(new File([png], "signature.png", { type: "image/png" }), "create", { timeoutMs: PREVIEW_UPLOAD_MS });
           const id = createIdFromUpload(url);
           if (id) shareUrl = createShareUrl(appUrl, username, id);
         } catch (e) {

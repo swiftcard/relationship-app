@@ -32,6 +32,7 @@
 import { EMAIL_MAX_WIDTH } from "@/lib/create-link";
 import { pixelsOf } from "@/lib/capture-verify";
 import { toPngExact } from "@/lib/capture-exact";
+import { timeoutSignal, TookTooLongError, within } from "@/lib/time-limit";
 
 export const MAX_PASTE_CHARS = 400_000;
 const MAX_ELEMENTS = 3000;
@@ -331,6 +332,7 @@ export function pictureHtml(url: string, naturalW: number, naturalH: number, hre
 // ── The share preview picture of a pasted signature ─────────────────────────
 
 const SNAP_SCALE = 2;
+const SNAP_BUDGET_MS = 6000;
 
 /** Something was actually drawn: a few pixels that aren't the white
  *  background. A blank raster (WebKit painting before it's ready) is not a
@@ -346,13 +348,14 @@ async function hasInk(dataUrl: string): Promise<boolean> {
   return false;
 }
 
-async function toDataUrl(src: string): Promise<string | null> {
+async function toDataUrl(src: string, ms: number): Promise<string | null> {
   if (src.startsWith("data:")) return src;
   const candidates = [src];
   if (/^https?:\/\//.test(src)) candidates.push(`/api/img-proxy?url=${encodeURIComponent(src)}`);
   for (const url of candidates) {
     try {
-      const res = await fetch(url, { cache: "force-cache" });
+      // A logo host that never answers must not hold the paste up.
+      const res = await fetch(url, { cache: "force-cache", signal: timeoutSignal(ms) });
       if (!res.ok) continue;
       const blob = await res.blob();
       return await new Promise<string>((resolve, reject) => {
@@ -374,7 +377,17 @@ async function toDataUrl(src: string): Promise<string | null> {
  * inlined and DECODED first and the first raster is thrown away: WebKit — every
  * iPhone — paints the SVG before its images otherwise (lib/card-png).
  */
-export async function snapshotPng(html: string): Promise<Blob> {
+export async function snapshotPng(html: string, budgetMs = SNAP_BUDGET_MS): Promise<Blob> {
+  // ONE budget for the whole picture: every wait below takes its share of
+  // what is left, so it never runs past `budgetMs`, and nothing keeps working
+  // once it has given up. It is the one step of Create + the result doesn't
+  // need (the link falls back to the card's own preview), so it stays short.
+  const end = Date.now() + budgetMs;
+  const left = (cap: number) => {
+    const ms = Math.min(cap, end - Date.now());
+    if (ms <= 0) throw new TookTooLongError();
+    return ms;
+  };
   // The OUTER box is parked offscreen; the captured host inside it is not
   // positioned at all. html-to-image copies the captured node's own computed
   // style into the picture — a host that was itself left:-10000px drew its
@@ -390,15 +403,19 @@ export async function snapshotPng(html: string): Promise<Blob> {
   try {
     await Promise.all(Array.from(shadow.querySelectorAll("img")).map(async (img) => {
       const src = img.getAttribute("src") || "";
-      const data = src ? await toDataUrl(src) : null;
+      const data = src ? await toDataUrl(src, left(3000)) : null;
       if (data) {
-        await new Promise<void>((resolve) => { img.onload = img.onerror = () => resolve(); img.src = data; setTimeout(resolve, 3000); });
+        const ms = left(3000);
+        await new Promise<void>((resolve) => { img.onload = img.onerror = () => resolve(); img.src = data; setTimeout(resolve, ms); });
       }
-      try { await img.decode(); } catch { /* the size check below decides */ }
+      // decode() waits for a load that may never come (an unreachable host).
+      try { await within(img.decode(), left(3000)); } catch { /* the size check below decides */ }
     }));
-    try { await document.fonts?.ready; } catch { /* fonts API absent */ }
+    try { await within(Promise.resolve(document.fonts?.ready), left(1500)); } catch { /* fonts API absent or stuck */ }
     await new Promise((r) => setTimeout(r, 120));
     // toPngExact: the pasted signature's text at its real size (lib/capture-exact).
+    // A healthy raster takes well under a second; one that hangs (WebKit's
+    // refused decode) is given up on.
     const w = Math.ceil(host.getBoundingClientRect().width) || EMAIL_MAX_WIDTH;
     const h = Math.ceil(host.getBoundingClientRect().height) || 200;
     const raster = () => toPngExact(host, {
@@ -408,10 +425,10 @@ export async function snapshotPng(html: string): Promise<Blob> {
       cacheBust: false,
       backgroundColor: "#ffffff",
       style: { transform: `scale(${SNAP_SCALE})`, transformOrigin: "top left" },
-    });
+    }, left(3000));
     await raster().catch(() => null); // primes WebKit's decode; never used
     for (let attempt = 0; attempt < 3; attempt++) {
-      if (attempt) await new Promise((r) => setTimeout(r, 250 * attempt));
+      if (attempt) await new Promise((r) => setTimeout(r, left(250 * attempt)));
       const url = await raster().catch(() => null);
       if (url && (await hasInk(url))) {
         const [head, body] = url.split(",");

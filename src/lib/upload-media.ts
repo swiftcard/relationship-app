@@ -20,6 +20,8 @@
 // object key, so /api/upload rejects anything not on its list rather than
 // letting a caller invent a path.
 
+import { isTimeout, timeoutSignal } from "@/lib/time-limit";
+
 export const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 export const VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
 
@@ -44,13 +46,19 @@ export function isAllowedMedia(file: File): boolean {
 export const WRONG_TYPE_MESSAGE =
   "Use a JPG, PNG, WebP or GIF photo, or an MP4, MOV or WebM video.";
 
+/** The message for an upload cancelled by its `timeoutMs`. */
+export const TOOK_TOO_LONG_MESSAGE = "That took too long. Check your connection and try again.";
+
 /**
  * Upload a photo or a short video and return the public URL to persist.
  *
  * Throws UploadError, whose `status` lets the caller tell a guest's 401 (which
  * needs "sign in first", not "upload failed") apart from a real failure.
+ *
+ * `timeoutMs` (photos): past it the request is cancelled — so it can't still
+ * land after the person was told it didn't — and it throws UploadError 408.
  */
-export async function uploadMedia(file: File, field: UploadField): Promise<UploadedMedia> {
+export async function uploadMedia(file: File, field: UploadField, { timeoutMs }: { timeoutMs?: number } = {}): Promise<UploadedMedia> {
   if (VIDEO_TYPES.includes(file.type)) {
     const r = await fetch("/api/upload/link-video", {
       method: "POST",
@@ -70,7 +78,13 @@ export async function uploadMedia(file: File, field: UploadField): Promise<Uploa
   // defer=true: return the URL for the caller to store in customization
   // instead of writing it to a column on the profile/card.
   fd.append("defer", "true");
-  const r = await fetch("/api/upload", { method: "POST", body: fd });
+  let r: Response;
+  try {
+    r = await fetch("/api/upload", { method: "POST", body: fd, signal: timeoutMs ? timeoutSignal(timeoutMs) : undefined });
+  } catch (e) {
+    if (timeoutMs && isTimeout(e)) throw new UploadError(408, TOOK_TOO_LONG_MESSAGE);
+    throw e;
+  }
   const d = await r.json().catch(() => ({}));
   if (!r.ok || !d?.url) throw new UploadError(r.status, d?.error);
   return { url: d.url, type: "image" };

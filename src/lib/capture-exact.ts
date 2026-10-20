@@ -28,6 +28,7 @@
 // tests/render/card-capture-exact.test.ts holds the picture to the card.
 
 import type { Options } from "html-to-image/lib/types";
+import { within } from "@/lib/time-limit";
 
 const roots = new Set<Node>();
 let nativeGetComputedStyle: typeof window.getComputedStyle | null = null;
@@ -81,11 +82,17 @@ function hold(root: Node): () => void {
 }
 
 /** html-to-image's toPng, with every font drawn at its real size. */
-export async function toPngExact(node: HTMLElement, options?: Options): Promise<string> {
+export async function toPngExact(node: HTMLElement, options?: Options, timeoutMs = 20_000): Promise<string> {
+  // Never waits forever: the library's createImage calls `img.decode()` with
+  // no rejection handler and then waits for a requestAnimationFrame, so a
+  // decode WebKit refuses (or a tab in the background) left the promise
+  // pending for good, with the getComputedStyle patch above still installed.
+  // Past `timeoutMs` it rejects and lets go of the patch; every caller already
+  // treats a failed picture as one to retry or fall back from.
   const { toPng } = await import("html-to-image");
   const release = hold(node);
   try {
-    return await toPng(node, options);
+    return await within(toPng(node, options), timeoutMs);
   } finally {
     release();
   }
