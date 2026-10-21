@@ -157,7 +157,7 @@ export async function GET(request: NextRequest) {
     try {
       // Largest rendition LinkedIn will give, enhanced if it is only the
       // thumbnail — see lib/linkedin-photo.
-      const photo = await fetchLinkedInPhoto(profile.picture);
+      const photo = await fetchLinkedInPhoto(profile.picture, { accessToken: tokens.access_token });
       if (!photo) throw new Error("source unavailable");
       const body = photo.body;
 

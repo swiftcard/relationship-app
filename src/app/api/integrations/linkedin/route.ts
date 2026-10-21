@@ -93,7 +93,7 @@ export async function POST() {
   // Download the largest rendition LinkedIn's CDN will give (https-validated
   // upstream), enhance it if only the thumbnail came back, and re-encode
   // exactly like a manual photo upload so the stored file is ours.
-  const photo = await fetchLinkedInPhoto(profile.picture);
+  const photo = await fetchLinkedInPhoto(profile.picture, { accessToken: token });
   if (!photo) return NextResponse.json({ error: "fetch_failed" }, { status: 502 });
   const body = photo.body;
 

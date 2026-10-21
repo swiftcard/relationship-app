@@ -11,13 +11,17 @@ const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 
 describe("the LinkedIn photo: largest rendition first, enhanced when only the thumbnail comes back", () => {
   it("asks the CDN for 800, 400 and 200 before settling for the 100px thumbnail", () => {
-    const thumb = "https://media.licdn.com/dms/image/v2/ABC/profile-displayphoto-shrink_100_100/0/1?e=1&v=beta&t=sig";
+    // The real shape: the size is in the path TWICE. Swapping only the first
+    // (until 2026-10-20) asked for a path that doesn't exist, so every import
+    // was the thumbnail blown up.
+    const thumb = "https://media.licdn.com/dms/image/v2/ABC/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1?e=1&v=beta&t=sig";
     expect(linkedInPhotoCandidates(thumb)).toEqual([
-      thumb.replace("shrink_100_100", "shrink_800_800"),
-      thumb.replace("shrink_100_100", "shrink_400_400"),
-      thumb.replace("shrink_100_100", "shrink_200_200"),
+      thumb.replaceAll("shrink_100_100", "shrink_800_800"),
+      thumb.replaceAll("shrink_100_100", "shrink_400_400"),
+      thumb.replaceAll("shrink_100_100", "shrink_200_200"),
       thumb,
     ]);
+    for (const c of linkedInPhotoCandidates(thumb).slice(0, -1)) expect(c).not.toContain("shrink_100_100");
   });
 
   it("only tries sizes LARGER than the one given, and leaves an unknown URL alone", () => {
@@ -37,7 +41,8 @@ describe("the LinkedIn photo: largest rendition first, enhanced when only the th
   it("both import paths use the one helper, so they can never disagree", () => {
     for (const f of ["src/app/api/integrations/linkedin/route.ts", "src/app/api/integrations/linkedin/callback/route.ts"]) {
       const src = read(f);
-      expect(src, f).toMatch(/fetchLinkedInPhoto\(profile\.picture\)/);
+      // …with the access token, so LinkedIn's own list of sizes is asked first.
+      expect(src, f).toMatch(/fetchLinkedInPhoto\(profile\.picture, \{ accessToken: (tokens\.access_token|token) \}\)/);
       expect(src, f).not.toMatch(/resize\(1000, 1000/);
     }
     // The signed-in import says when LinkedIn only had the thumbnail…
