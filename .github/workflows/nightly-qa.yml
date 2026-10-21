@@ -123,6 +123,14 @@ jobs:
           if [ -z "$CREW_TICK_SECRET" ] || [ ! -f nightly/summary.json ]; then exit 0; fi
           curl -sS --max-time 30 -X POST -H "Authorization: Bearer $CREW_TICK_SECRET" -H "Content-Type: application/json" \
             --data @nightly/summary.json "https://swiftcard.me/api/crew/ingest?source=nightly&run=${{ github.run_id }}" || true
+      # The QA accounts above are deleted, but their rendered card images were
+      # not, and they filled Supabase storage past the free plan (2.8 GB by
+      # 2026-10-20). Removes only qa-*.png older than 6 hours whose account is
+      # gone; see the SAFETY notes in the script.
+      - name: Remove card images left by deleted QA accounts
+        if: always()
+        continue-on-error: true
+        run: node scripts/cleanup-qa-images.mjs --go
       - name: Open, update or close the incident
         uses: actions/github-script@v7
         with:
