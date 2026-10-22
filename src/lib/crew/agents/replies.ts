@@ -4,12 +4,13 @@ import { propose } from "../approvals";
 import { normalizeHandle } from "../ledger";
 import { runEngagement, type Candidate } from "../replies/engine";
 import { redditConfigured, rulesBanPromotion, searchSubreddits, subredditRules } from "../sources/reddit";
+import { searchBluesky } from "../sources/bluesky";
 import { searchPlatform } from "../sources/web-discovery";
 import type { CrewInput, Platform } from "../types";
 
 // ── Team 1: Replies (one agent per platform) ────────────────────────────────
 // Every reply is a DRAFT for a person to post by hand. Where the platform has
-// an API we may read (Reddit), the agent reads it; where it doesn't, it finds
+// an API we may read (Reddit, Bluesky), the agent reads it; where it doesn't, it finds
 // public posts through web search, or works from posts the owner pastes in
 // (Facebook groups have had no API since April 2024).
 
@@ -155,6 +156,51 @@ export const threadsReplies = webAgent({ id: "replies-threads", name: "Threads r
 export const quoraReplies = webAgent({ id: "replies-quora", name: "Quora answers", platform: "quora", ceiling: 3, hour: 11, register: "Quora: a clear, useful answer; personal experience welcome.", purpose: "Finds Quora questions about business cards and link-in-bio tools and drafts an answer for you to post." });
 export const ihReplies = webAgent({ id: "replies-indiehackers", name: "Indie Hackers replies", platform: "indiehackers", ceiling: 3, hour: 12, register: "Indie Hackers: founder to founder, honest, specific.", purpose: "Finds Indie Hackers threads about cards, link-in-bio and personal branding and drafts a reply." });
 
+// Bluesky's search takes plain words or "phrases"; OR is not reliable there.
+// Highest signal first: only the first 15 on-topic posts are scored, and
+// "linktree" / "link in bio" are mostly artists linking their own pages (seen
+// live 2026-10-21).
+export const BLUESKY_QUERIES = ["\"digital business card\"", "\"business card app\"", "\"business cards\" networking", "hihello", "blinq", "popl", "linktree", "\"link in bio\""];
+
+/** Our own posts come back in search; never draft a reply to ourselves. */
+export function isOwnBlueskyHandle(handle: string): boolean {
+  return /swiftcard/i.test(handle);
+}
+
+export const blueskyReplies: AgentDef = {
+  ...base,
+  id: "replies-bluesky",
+  name: "Bluesky replies",
+  schedule: { kind: "daily", hour: 15, minute: 0 },
+  dailyUsd: 0.5,
+  purpose: "Searches Bluesky for posts where SwiftCard would help and drafts a reply for you to post (most are just helpful, with no mention of SwiftCard).",
+  async run(ctx) {
+    return runEngagement(ctx, {
+      platform: "bluesky",
+      kind: "reply",
+      action: "reply",
+      ceiling: 5,
+      // Bluesky is quick to block accounts that look like ads.
+      pitchShare: 1 / 3,
+      register: "Bluesky: short, warm, conversational, under 300 characters (Bluesky's limit). No hashtags, no emoji.",
+      length: "under 300 characters",
+      label: (c) => `Bluesky${c.author ? ` @${c.author}` : ""}: ${c.title.slice(0, 90)}`,
+      person: (c) => (c.author ? { platform: "bluesky", handle: normalizeHandle("bluesky", c.author) } : null),
+      async find() {
+        const pasted = fromInputs(await ctx.store.takeInputs(["bluesky"], 5, ctx.def.id), "bluesky");
+        const out: Candidate[] = [...pasted];
+        for (const q of ctx.config<string[]>("queries", BLUESKY_QUERIES)) {
+          for (const p of await searchBluesky(q, 25, ctx.now())) {
+            if (p.replyCount > 40 || isOwnBlueskyHandle(p.author)) continue; // lost in a huge thread, or our own post
+            out.push({ platform: "bluesky", url: p.url, author: p.author, title: p.title, text: p.text, community: null, promoAllowed: true });
+          }
+        }
+        return out;
+      },
+    });
+  },
+};
+
 export const facebookReplies: AgentDef = {
   ...base,
   id: "replies-facebook",
@@ -253,4 +299,4 @@ export const linkedinComments: AgentDef = {
   },
 };
 
-export const REPLIES: AgentDef[] = [redditReplies, threadsReplies, facebookReplies, quoraReplies, ihReplies, instagramComments, linkedinComments];
+export const REPLIES: AgentDef[] = [redditReplies, threadsReplies, blueskyReplies, facebookReplies, quoraReplies, ihReplies, instagramComments, linkedinComments];

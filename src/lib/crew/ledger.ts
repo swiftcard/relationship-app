@@ -28,6 +28,10 @@ export function normalizeHandle(platform: Platform, raw: string): string {
       const m = s.match(/(?:instagram\.com|threads\.net|threads\.com|tiktok\.com)\/@?([A-Za-z0-9._]+)/i);
       return `@${(m ? m[1] : s.replace(/^@/, "")).toLowerCase()}`;
     }
+    case "bluesky": {
+      const m = s.match(/bsky\.app\/profile\/([A-Za-z0-9.:-]+)/i);
+      return `@${(m ? m[1] : s.replace(/^@/, "")).toLowerCase()}`;
+    }
     case "linkedin": {
       const m = s.match(/linkedin\.com\/in\/([^/]+)/i);
       return `in/${decodeURIComponent(m ? m[1] : s.replace(/^in\//i, "")).toLowerCase()}`;

@@ -544,6 +544,7 @@ function Paste() {
             <option value="instagram">Instagram</option>
             <option value="linkedin">LinkedIn</option>
             <option value="threads">Threads</option>
+            <option value="bluesky">Bluesky</option>
             <option value="quora">Quora</option>
             <option value="indiehackers">Indie Hackers</option>
             <option value="reddit">Reddit</option>

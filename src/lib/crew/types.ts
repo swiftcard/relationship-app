@@ -22,6 +22,7 @@ export type Platform =
   | "reddit"
   | "instagram"
   | "threads"
+  | "bluesky"
   | "facebook"
   | "quora"
   | "indiehackers"

@@ -1,8 +1,11 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { factChanges } from "@/lib/crew/agents/competitor-watch";
-import { guessAuthor, REPLIES } from "@/lib/crew/agents/replies";
+import { blueskyReplies, guessAuthor, isOwnBlueskyHandle, REPLIES } from "@/lib/crew/agents/replies";
 import { competitorFacts, freshFacts } from "@/lib/crew/facts";
+import { normalizeHandle } from "@/lib/crew/ledger";
 import { runEngagement, type Candidate } from "@/lib/crew/replies/engine";
+import { searchBluesky, toPosts } from "@/lib/crew/sources/bluesky";
 import { rulesBanPromotion } from "@/lib/crew/sources/reddit";
 import { AGENTS } from "@/lib/crew/registry";
 import { fakeAgent, setup } from "./crew-helpers";
@@ -101,9 +104,52 @@ describe("competitor facts", () => {
 
 describe("registry", () => {
   it("one Replies agent per platform from the spec, all drafting by hand, plus a manager", () => {
-    const platforms = ["reddit", "instagram", "threads", "facebook", "quora", "indiehackers", "linkedin"];
+    const platforms = ["reddit", "instagram", "threads", "bluesky", "facebook", "quora", "indiehackers", "linkedin"];
     for (const p of platforms) expect(REPLIES.some((a) => a.id === `replies-${p}`), p).toBe(true);
     expect(AGENTS.some((a) => a.id === "replies-manager")).toBe(true);
     expect(AGENTS.some((a) => a.id === "competitor-watch" && a.schedule.kind === "daily" && JSON.stringify(a.schedule.days) === "[0,3]")).toBe(true);
+  });
+});
+
+describe("Bluesky", () => {
+  const raw = (o: Record<string, unknown> = {}) => ({
+    uri: "at://did:plc:abc123/app.bsky.feed.post/3mygjozbl422n",
+    author: { handle: "jane.realtor.bsky.social" },
+    record: { text: "Linktree keeps raising prices.\nAny digital business card that does both?" },
+    replyCount: 2,
+    ...o,
+  });
+
+  it("turns search results into bsky.app links and skips labeled or broken posts", () => {
+    const posts = toPosts([raw(), raw({ labels: [{ val: "porn" }] }), raw({ author: { handle: "handle.invalid" } }), raw({ uri: "at://did/other/x" }), raw({ record: { text: "  " } })]);
+    expect(posts).toEqual([
+      { url: "https://bsky.app/profile/jane.realtor.bsky.social/post/3mygjozbl422n", author: "jane.realtor.bsky.social", title: "Linktree keeps raising prices.", text: "Linktree keeps raising prices.\nAny digital business card that does both?", replyCount: 2, isReply: false },
+    ]);
+  });
+
+  it("a refused search is no results, not a failed run", async () => {
+    const real = globalThis.fetch;
+    globalThis.fetch = (async () => new Response("<html>403</html>", { status: 403 })) as typeof fetch;
+    try {
+      expect(await searchBluesky("linktree")).toEqual([]);
+    } finally {
+      globalThis.fetch = real;
+    }
+  });
+
+  it("one person per handle, however it was written", () => {
+    expect(normalizeHandle("bluesky", "https://bsky.app/profile/Jane.Realtor.bsky.social")).toBe("@jane.realtor.bsky.social");
+    expect(normalizeHandle("bluesky", "@jane.realtor.bsky.social")).toBe("@jane.realtor.bsky.social");
+  });
+
+  it("never replies to our own account", () => {
+    expect(isOwnBlueskyHandle("swiftcardapp.bsky.social")).toBe(true);
+    expect(isOwnBlueskyHandle("jane.realtor.bsky.social")).toBe(false);
+  });
+
+  it("drafts only; mentions SwiftCard in at most about 1 in 3", () => {
+    expect(blueskyReplies.approvalKind).toBe("reply");
+    expect(readFileSync("src/lib/crew/agents/replies.ts", "utf8")).toMatch(/id: "replies-bluesky"[\s\S]*?pitchShare: 1 \/ 3/);
+    expect(readFileSync("src/lib/crew/sources/bluesky.ts", "utf8")).not.toMatch(/createRecord|createSession|method: "POST"/);
   });
 });

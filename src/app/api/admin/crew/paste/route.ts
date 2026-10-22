@@ -7,7 +7,7 @@ import type { CrewInput, Platform } from "@/lib/crew/types";
 // "Paste a post": for the platforms with no API we may read (Facebook groups,
 // Alignable, Instagram and LinkedIn posts), a person pastes what they saw and
 // the matching agent drafts from it on its next run.
-const PASTE_PLATFORMS: Platform[] = ["facebook", "alignable", "instagram", "linkedin", "threads", "quora", "indiehackers", "reddit", "web"];
+const PASTE_PLATFORMS: Platform[] = ["facebook", "alignable", "instagram", "linkedin", "threads", "bluesky", "quora", "indiehackers", "reddit", "web"];
 const KINDS: CrewInput["kind"][] = ["post", "profile", "page"];
 
 export async function POST(req: NextRequest) {

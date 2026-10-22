@@ -453,3 +453,10 @@ Turning economy off restores the original spec exactly (Sonnet workers, Opus man
 - The daily cap went from $2 to $3 (the $100/month credit allows about $3.30 a day). Open-web leads are held at $0.60 a day so they can't use up the shared cap.
 - The first run of each new agent worked except Threads: Anthropic's search refuses threads.net. Discovery now uses threads.com only, and a blocked domain gives "no results" instead of a failed run.
 - Created two Google Sheets (cold leads, Office prospects) and set CREW_LEADS_SHEET_ID and CREW_OFFICE_SHEET_ID in Vercel. Rows copy over once GOOGLE_SHEETS_SA_JSON exists and both sheets are shared with its client_email.
+
+### 2026-10-21: Bluesky replies (owner request)
+- `replies-bluesky` added; it starts OFF like every new agent. It reads Bluesky's public search with no login: `api.bsky.app` `app.bsky.feed.searchPosts`. (`public.api.bsky.app` answers search with a 403 page, seen live.)
+- It looks at the last 7 days of English posts. It skips labeled posts, threads with 40+ replies and our own swiftcardapp account. A refused search counts as no results, not a failed run.
+- Drafts only, with a ceiling of 5 a day that warms up. SwiftCard is mentioned in at most about 1 draft in 3. Pasting a Bluesky post works too.
+- Links are plain swiftcard.me, because lib/referral has no Bluesky campaign prefix yet.
+- Live-checked 2026-10-21: "digital business card" and "business cards networking" find real posts; competitor names find none this week.
