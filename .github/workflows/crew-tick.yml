@@ -12,9 +12,11 @@ name: Crew tick (agents clock)
 #
 # Until CREW_TICK_SECRET exists as a repo secret it exits quietly (green), so a
 # fresh setup never opens an incident.
+#
+# The 15-minute schedule now lives in Supabase (supabase/clock.sql, pg_cron job
+# `crew-tick`, secret `crew_tick_secret` in Vault), which has run it since
+# 2026-10-21. This workflow stays for a manual run.
 on:
-  schedule:
-    - cron: "*/15 * * * *"
   workflow_dispatch:
 
 concurrency:

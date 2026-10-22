@@ -24,10 +24,13 @@ describe("always-on production guards", () => {
     for (const m of hc.matchAll(/"\/[^"]*": (\d+)/g)) expect(Number(m[1])).toBeLessThanOrEqual(5000);
   });
 
-  it("the nightly real-browser run is scheduled AND fires after every production deploy", () => {
+  // Owner, 2026-10-21: once a night, not after every deploy. Run after every
+  // deploy it used ~5,000 GitHub minutes a month on a 2,000-minute plan, and
+  // GitHub stopped starting any job. Deploys stay covered by CI + paint-check.
+  it("the nightly real-browser run is scheduled every night", () => {
     const wf = read(".github/workflows/nightly-qa.yml");
     expect(wf).toMatch(/- cron: "0 9 \* \* \*"/);
-    expect(wf).toContain("deployment_status:");
+    expect(wf).not.toMatch(/^\s*deployment_status:/m);
     for (const s of ["qa-prod-probe.mjs", "health-check.mjs", "qa-flows.mjs", "qa-office-links-brand.mjs", "qa-office-shell.mjs", "qa-android-shell.mjs", "qa-sweep.mjs", "qa-share-preview.mjs", "qa-offline.mjs", "qa-nightly-summary.mjs"]) {
       expect(wf, s).toContain(`scripts/${s}`);
     }

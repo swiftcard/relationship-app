@@ -76,9 +76,9 @@ describe("routes", () => {
 });
 
 describe("the clock", () => {
-  it("crew-tick.yml runs every 15 minutes and only holds the tick secret", () => {
+  it("the tick runs every 15 minutes from Supabase pg_cron; crew-tick.yml only holds the tick secret", () => {
+    expect(read("supabase/clock.sql")).toContain("cron.schedule('crew-tick', '*/15 * * * *',");
     const wf = read(".github/workflows/crew-tick.yml");
-    expect(wf).toContain('- cron: "*/15 * * * *"');
     expect(wf).toContain("secrets.CREW_TICK_SECRET");
     expect(wf).not.toMatch(/ANTHROPIC|OPENAI/);
   });

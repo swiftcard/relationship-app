@@ -64,8 +64,10 @@ jobs:
           # the truth:  curl -s -o /dev/null -w '%{http_code}\n' \
           #               https://swiftcard.me/api/card/<slug>/vcard   # 200 = real
           HEALTH_REAL_CARDS: "aaronlavi-malvecapital,aaronlavi-nadlanhomesllc"
-          # Reads push-catchup.yml / trial-notice.yml run history (audit N-21).
-          GITHUB_TOKEN: ${{ github.token }}
+          # Reads the Supabase clock's call log, clock_status() (audit N-21;
+          # supabase/clock.sql). Service-role only, read through env:.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set -o pipefail
           node scripts/health-check.mjs > health.json || true

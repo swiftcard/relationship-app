@@ -15,9 +15,12 @@ name: Trial charge notice
 # /api/reminders calls the same function daily as a backstop, and the route
 # stamps _trialChargeWarnedFor before sending, so a duplicate or delayed run
 # cannot email anyone twice.
+#
+# ── The hourly schedule now lives in Supabase (2026-10-21) ───────────────────
+# supabase/clock.sql: pg_cron job `trial-notice` calls the same route at :17
+# every hour with the same secret (from Vault). GitHub-hosted minutes on this
+# private repo ran out. This workflow stays for a manual run.
 on:
-  schedule:
-    - cron: "17 * * * *"
   workflow_dispatch:
 
 concurrency:

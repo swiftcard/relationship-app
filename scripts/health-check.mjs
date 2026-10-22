@@ -314,36 +314,44 @@ CHECKS.push({
   },
 });
 
-// ── The hourly GitHub jobs are running and succeeding (audit N-21) ──────────
+// ── The scheduled jobs are running and succeeding (audit N-21) ──────────────
 // The morning catch-up, the Monday recap, the getting-started push, due
-// deletions (push-catchup.yml) and the 7-day trial charge notice
-// (trial-notice.yml) all live on GitHub's scheduler, which is best-effort:
-// it skips hours, and a run that fails just turns red in a list nobody
-// reads. This puts them in the same incident as everything else. Two failed
-// runs in a row (one is a blip the next hour retries), or no success in 12
-// hours (the scheduler has gone ~5 hours between runs on a normal day).
-// Needs the repo and a token from the workflow; skipped anywhere else.
+// deletions and the 7-day trial charge notice run hourly, and the agents'
+// tick every 15 minutes, from Supabase pg_cron (supabase/clock.sql; they left
+// GitHub's scheduler on 2026-10-21 when its free minutes ran out). A call
+// that fails there is silent, so this puts it in the same incident as
+// everything else: two failed calls in a row (one is a blip the next run
+// retries), or no success in 12 hours. clock_status() is service-role only;
+// skipped wherever the Supabase env isn't set.
 const SCHEDULED_JOBS = [
-  ["push-catchup.yml", "morning catch-up, Monday recap, deletions"],
-  ["trial-notice.yml", "7-day trial charge notice"],
+  ["push-catchup:catchup", "morning catch-up"],
+  ["push-catchup:recap", "Monday recap and team check"],
+  ["push-catchup:activation", "getting-started push"],
+  ["push-catchup:purge-due", "due deletions"],
+  ["trial-notice", "7-day trial charge notice"],
+  ["crew-tick", "agents clock"],
 ];
 const SCHEDULED_STALE_MS = 12 * 60 * 60 * 1000;
-if (process.env.GITHUB_REPOSITORY) {
+const CLOCK_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const CLOCK_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (CLOCK_URL && CLOCK_KEY) {
   CHECKS.push({
-    name: "scheduled jobs ran and succeeded (push catch-up, trial notice)",
+    name: "scheduled jobs ran and succeeded (push catch-up, trial notice, agents clock)",
     run: async () => {
+      const res = await fetch(`${CLOCK_URL.replace(/\/$/, "")}/rest/v1/rpc/clock_status`, {
+        method: "POST",
+        headers: { apikey: CLOCK_KEY, Authorization: `Bearer ${CLOCK_KEY}`, "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (!res.ok) return { ok: false, detail: `clock_status: HTTP ${res.status}` };
+      const rows = await res.json();
       const parts = [], bad = [];
-      for (const [file, what] of SCHEDULED_JOBS) {
-        const res = await fetch(`https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/actions/workflows/${file}/runs?per_page=10&status=completed`, {
-          headers: { Accept: "application/vnd.github+json", ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}) },
-        });
-        if (!res.ok) { bad.push(`${file}: GitHub API ${res.status}`); continue; }
-        const runs = (await res.json()).workflow_runs ?? [];
-        const lastOk = runs.find((r) => r.conclusion === "success");
-        const age = lastOk ? Date.now() - Date.parse(lastOk.updated_at) : Infinity;
-        if (runs[0]?.conclusion === "failure" && runs[1]?.conclusion === "failure") bad.push(`${file} (${what}): the last two runs failed — ${runs[0].html_url}`);
-        else if (age > SCHEDULED_STALE_MS) bad.push(`${file} (${what}): no successful run in ${lastOk ? `${Math.round(age / 3600000)}h` : "its last 10"}`);
-        else parts.push(`${file} ok ${Math.round(age / 60000)}m ago`);
+      for (const [job, what] of SCHEDULED_JOBS) {
+        const r = rows.find((x) => x.job === job);
+        const age = r?.last_ok ? Date.now() - Date.parse(r.last_ok) : Infinity;
+        if (r?.last_two_failed) bad.push(`${job} (${what}): the last two calls failed — ${r.last_error ?? "unknown"}`);
+        else if (age > SCHEDULED_STALE_MS) bad.push(`${job} (${what}): no successful call ${r?.last_ok ? `in ${Math.round(age / 3600000)}h` : "recorded"}${r?.last_error ? ` (${r.last_error})` : ""}`);
+        else parts.push(`${job} ok ${Math.round(age / 60000)}m ago`);
       }
       return { ok: bad.length === 0, detail: bad.length ? bad.join("; ") : parts.join(", ") };
     },

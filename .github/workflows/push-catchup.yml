@@ -18,9 +18,13 @@ name: Morning push catch-up
 # not repeat the same day), so a duplicate or delayed run cannot double-buzz
 # anyone — and it is due any time from 8am to 8pm local, not one hour, because
 # GitHub's scheduler is best-effort and runs only a few times a day.
+#
+# ── The hourly schedule now lives in Supabase (2026-10-21) ───────────────────
+# supabase/clock.sql: pg_cron job `push-catchup` calls the same four routes
+# every hour with the same secret (from Vault). GitHub-hosted minutes on this
+# private repo ran out, and every scheduled run costs at least a minute. This
+# workflow stays for a manual run (Actions → Run workflow).
 on:
-  schedule:
-    - cron: "0 * * * *"
   workflow_dispatch:
 
 concurrency:

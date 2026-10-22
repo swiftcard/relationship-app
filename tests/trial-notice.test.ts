@@ -75,12 +75,14 @@ describe("trial charge notice — what the email must say", () => {
 });
 
 describe("trial charge notice — the schedule that makes it land on time", () => {
-  it("runs hourly on GitHub, not as a Vercel cron (Hobby allows two daily jobs)", () => {
-    const wf = readFileSync(".github/workflows/trial-notice.yml", "utf8");
+  it("runs hourly from Supabase pg_cron, not as a Vercel cron (Hobby allows two daily jobs)", () => {
+    // Moved off GitHub's scheduler on 2026-10-21 (its free minutes ran out).
+    const sql = readFileSync("supabase/clock.sql", "utf8");
     // Any hourly cron expression is fine; a daily one is not — it cannot hit
     // the 7-day mark, which is the whole point of the job.
-    expect(wf).toMatch(/cron:\s*"\d+ \* \* \* \*"/);
-    expect(wf).toContain("/api/billing/trial-notice");
+    expect(sql).toMatch(/cron\.schedule\('trial-notice', '\d+ \* \* \* \*'/);
+    expect(sql).toContain("'https://swiftcard.me/api/billing/trial-notice'");
+    expect(readFileSync(".github/workflows/trial-notice.yml", "utf8")).toContain("/api/billing/trial-notice");
 
     const vercel = JSON.parse(readFileSync("vercel.json", "utf8")) as { crons?: { path: string }[] };
     // An hourly entry here does not warn — it makes every later deployment fail
