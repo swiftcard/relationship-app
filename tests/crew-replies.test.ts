@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { factChanges } from "@/lib/crew/agents/competitor-watch";
-import { blueskyReplies, guessAuthor, isOwnBlueskyHandle, REPLIES } from "@/lib/crew/agents/replies";
+import { BLUESKY_QUERIES, blueskyReplies, guessAuthor, interleave, isOwnBlueskyHandle, REPLIES } from "@/lib/crew/agents/replies";
 import { competitorFacts, freshFacts } from "@/lib/crew/facts";
 import { normalizeHandle } from "@/lib/crew/ledger";
 import { runEngagement, type Candidate } from "@/lib/crew/replies/engine";
@@ -140,6 +140,11 @@ describe("Bluesky", () => {
   it("one person per handle, however it was written", () => {
     expect(normalizeHandle("bluesky", "https://bsky.app/profile/Jane.Realtor.bsky.social")).toBe("@jane.realtor.bsky.social");
     expect(normalizeHandle("bluesky", "@jane.realtor.bsky.social")).toBe("@jane.realtor.bsky.social");
+  });
+
+  it("takes one post from each search in turn, so one search can't fill the scored batch", () => {
+    expect(interleave([[1, 2, 3], [], [10, 20], [100]])).toEqual([1, 10, 100, 2, 20, 3]);
+    expect(BLUESKY_QUERIES).not.toContain("linktree");
   });
 
   it("never replies to our own account", () => {

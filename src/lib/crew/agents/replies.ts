@@ -157,10 +157,19 @@ export const quoraReplies = webAgent({ id: "replies-quora", name: "Quora answers
 export const ihReplies = webAgent({ id: "replies-indiehackers", name: "Indie Hackers replies", platform: "indiehackers", ceiling: 3, hour: 12, register: "Indie Hackers: founder to founder, honest, specific.", purpose: "Finds Indie Hackers threads about cards, link-in-bio and personal branding and drafts a reply." });
 
 // Bluesky's search takes plain words or "phrases"; OR is not reliable there.
-// Highest signal first: only the first 15 on-topic posts are scored, and
-// "linktree" / "link in bio" are mostly artists linking their own pages (seen
-// live 2026-10-21).
-export const BLUESKY_QUERIES = ["\"digital business card\"", "\"business card app\"", "\"business cards\" networking", "hihello", "blinq", "popl", "linktree", "\"link in bio\""];
+// Searched live 2026-10-22: hardly anyone there talks about card apps, and
+// realtor / loan officer / recruiter searches return ads and listings. What
+// does turn up is people about to hand out paper business cards at an event,
+// and networking-event posts, so those lead. "linktree" / "link in bio" are
+// artists linking their own pages, and are gone.
+export const BLUESKY_QUERIES = ["\"business cards\"", "\"networking event\"", "\"QR code\" business", "\"digital business card\"", "\"business card app\"", "hihello", "blinq", "popl"];
+
+/** One from each search in turn, so the 15 posts that get scored aren't all from the first search. */
+export function interleave<T>(lists: T[][]): T[] {
+  const out: T[] = [];
+  for (let i = 0; lists.some((l) => i < l.length); i++) for (const l of lists) if (i < l.length) out.push(l[i]);
+  return out;
+}
 
 /** Our own posts come back in search; never draft a reply to ourselves. */
 export function isOwnBlueskyHandle(handle: string): boolean {
@@ -188,14 +197,15 @@ export const blueskyReplies: AgentDef = {
       person: (c) => (c.author ? { platform: "bluesky", handle: normalizeHandle("bluesky", c.author) } : null),
       async find() {
         const pasted = fromInputs(await ctx.store.takeInputs(["bluesky"], 5, ctx.def.id), "bluesky");
-        const out: Candidate[] = [...pasted];
+        const perQuery: Candidate[][] = [];
         for (const q of ctx.config<string[]>("queries", BLUESKY_QUERIES)) {
-          for (const p of await searchBluesky(q, 25, ctx.now())) {
-            if (p.replyCount > 40 || isOwnBlueskyHandle(p.author)) continue; // lost in a huge thread, or our own post
-            out.push({ platform: "bluesky", url: p.url, author: p.author, title: p.title, text: p.text, community: null, promoAllowed: true });
-          }
+          perQuery.push(
+            (await searchBluesky(q, 25, ctx.now()))
+              .filter((p) => p.replyCount <= 40 && !isOwnBlueskyHandle(p.author)) // lost in a huge thread, or our own post
+              .map((p) => ({ platform: "bluesky" as const, url: p.url, author: p.author, title: p.title, text: p.text, community: null, promoAllowed: true })),
+          );
         }
-        return out;
+        return [...pasted, ...interleave(perQuery)];
       },
     });
   },
