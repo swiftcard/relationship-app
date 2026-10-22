@@ -13,14 +13,10 @@ name: CI
 # A red run means the push is NOT live: swiftcard.me keeps the last green
 # build until a fix makes CI pass again.
 #
-# Both jobs run on the owner's own Mac (self-hosted runner `swiftcard-mac`,
-# ~/actions-runner/swiftcard, a launchd service), not on GitHub's machines
-# (2026-10-21). This repo is private, so GitHub-hosted minutes are limited, and
-# macOS minutes count 10x: this file alone was ~25,000 of the 2,000 free minutes
-# a month, and GitHub stopped starting jobs at all. A self-hosted runner uses no
-# minutes. While the Mac is asleep or off, CI waits in the queue, and so does
-# every deploy (the Vercel gate above). Runner gone for good? Re-register one
-# with the same label, or put `runs-on` back to ubuntu-latest / macos-latest.
+# The repo is PUBLIC (since 2026-10-22), which is what makes GitHub-hosted
+# minutes free, macOS included. Never point a job here at a self-hosted runner:
+# this workflow runs on pull_request, and on a public repo anyone can open a
+# PR that rewrites it and runs their code on that machine.
 
 on:
   push:
@@ -34,7 +30,7 @@ concurrency:
 
 jobs:
   verify:
-    runs-on: [self-hosted, swiftcard-mac]
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -73,7 +69,7 @@ jobs:
   # Separate job so a Chromium download never slows the fast checks, and so a
   # red render suite names itself in the checks list.
   render:
-    # macOS, not ubuntu (now the owner's Mac; see the top of this file).
+    # macOS, not ubuntu, and it costs more minutes on purpose.
     #
     # These tests MEASURE text: "does this company name fit", "does the contact
     # row overflow at 375px". The app ships Geist (next/font/google, fetched at
@@ -83,9 +79,9 @@ jobs:
     # signup-nudge a clipped line that neither shows on a machine with the real
     # font. Testing a fiction is worse than not testing.
     #
-    # If the Mac ever can't run it, ubuntu-latest works but the pixel-exact
-    # tests are only advisory there.
-    runs-on: [self-hosted, swiftcard-mac]
+    # If the minutes ever matter more than the signal, move this back to
+    # ubuntu-latest and accept that the pixel-exact tests are advisory there.
+    runs-on: macos-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4

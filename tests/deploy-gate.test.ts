@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll, beforeAll } from "vitest";
-import { readFileSync, mkdtempSync, rmSync } from "node:fs";
+import { readFileSync, readdirSync, mkdtempSync, rmSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { execFile } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -31,6 +31,14 @@ describe("the deploy gate", () => {
     expect(ci).toMatch(/^ {2}render:$/m);
     // A push to main must start CI, or the build it deploys is never released.
     expect(ci).toMatch(/push:\s*\n\s*branches: \[main\]/);
+  });
+
+  // The repo is public (2026-10-22). Every workflow a stranger's pull request
+  // can start must run on GitHub's machines, never on a self-hosted runner.
+  it("no workflow uses a self-hosted runner (the repo is public)", () => {
+    for (const f of readdirSync(".github/workflows").filter((n) => n.endsWith(".yml"))) {
+      expect(read(`.github/workflows/${f}`), f).not.toMatch(/runs-on:.*self-hosted/);
+    }
   });
 
   it("production says which commit it is serving", () => {

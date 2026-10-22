@@ -3,18 +3,12 @@ name: Nightly production QA (real browser, every plan)
 # drives it — signs in, saves, reloads, signs out, walks every screen at phone
 # and laptop width as Free, Pro and Office, and pushes a view and a visit
 # through the real analytics and notification endpoints — with throwaway
-# accounts it deletes afterwards. It runs every night, and keeps ONE issue
-# open while anything is wrong.
-#
-# Once a night only, not after every deploy (owner, 2026-10-21). At ~20
-# GitHub-hosted minutes a run and ~10 deploys a day it was ~5,000 of the
-# private repo's 2,000 free minutes a month. Each deploy is still gated by CI
-# and checked by paint-check.yml; run this by hand (Actions → Run workflow)
-# after a risky release. The `live` job below still handles a deploy event,
-# so putting `deployment_status:` back is the whole change.
+# accounts it deletes afterwards. It runs every night and after every
+# production deploy, and keeps ONE issue open while anything is wrong.
 on:
   schedule:
     - cron: "0 9 * * *"          # 05:00 New York, before the day starts
+  deployment_status:
   workflow_dispatch:
 concurrency:
   group: nightly-qa

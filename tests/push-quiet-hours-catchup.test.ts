@@ -352,20 +352,16 @@ describe("the window is exactly quiet hours", () => {
     expect(quietWindowStart(now, "Mars/Olympus_Mons")).toBe(now - QUIET_WINDOW_MS);
   });
 
-  // ── The schedule is not on Vercel, and that is not a preference ───────────
+  // ── The schedule lives on GitHub, and that is not a preference ────────────
   //
   // Vercel's Hobby plan allows two cron jobs per project, each at most once a
   // day. An hourly entry in vercel.json does not warn — it makes EVERY later
   // deployment fail validation with cron_jobs_limits_reached, so the whole
   // pipeline stops, for every session working in this repo. That happened on
   // 2026-09-11 and cost a deploy window; these two keep it from happening twice.
-  // The hourly run moved from GitHub to Supabase pg_cron on 2026-10-21 (GitHub
-  // minutes ran out); the workflow stays for a manual run.
-  it("runs hourly from Supabase pg_cron, because 8am local is a different hour everywhere", () => {
-    const sql = readFileSync(join(process.cwd(), "supabase/clock.sql"), "utf8");
-    expect(sql).toMatch(/cron\.schedule\('push-catchup', '0 \* \* \* \*'/);
-    expect(sql).toContain("clock_call('push-catchup:catchup', 'https://swiftcard.me/api/push/catchup', 'push_catchup_secret')");
+  it("runs hourly on GitHub's scheduler, because 8am local is a different hour everywhere", () => {
     const wf = readFileSync(join(process.cwd(), ".github/workflows/push-catchup.yml"), "utf8");
+    expect(wf).toMatch(/- cron: "0 \* \* \* \*"/);
     expect(wf).toMatch(/\/api\/push\/catchup/);
     // The secret is read through env:, never interpolated into the shell.
     expect(wf).toMatch(/SECRET: \$\{\{ secrets\.PUSH_CATCHUP_SECRET \}\}/);
