@@ -40,7 +40,7 @@ export const KNOWLEDGE: readonly KnowledgeDoc[] = [
 export const UNDOCUMENTED_ROUTES: Record<string, string> = {
   "/admin": "SwiftCard staff console. Never describe it to a customer — it is not the Office admin console.",
   "/admin/analytics": "Staff console — company-wide metrics, not a customer surface.",
-  "/admin/crew": "Staff console — the internal AI agent inbox (drafts staff approve before posting by hand), team switches and spend. Never describe it to a customer.",
+  "/admin/crew": "Staff console — the internal AI office: team rooms with doors and opening hours, drafts staff approve before posting by hand, a chat with each team manager, and spend. Never describe it to a customer.",
   "/admin/marketing": "Staff console — internal marketing tooling.",
   "/admin/plans": "Staff console — internal plan matrix.",
   "/admin/referrals": "Staff console — internal referral auditing.",

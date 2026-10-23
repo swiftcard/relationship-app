@@ -57,7 +57,7 @@ export const headAgent: AgentDef = {
     const body = `The plan for tomorrow\n${out.plan}`;
     if (!readableEnough(out.plan)) ctx.log("plan read above grade 5");
     await ctx.store.saveReport({ agent_id: ctx.def.id, team: "system", day: today, body, stats: { reports: reports.length } });
-    await sendOwnerDigest("The plan for tomorrow", reportHtml(body));
+    await sendOwnerDigest("The plan for tomorrow", reportHtml(body, "desk"));
     let asked = 0;
     for (const a of out.asks.slice(0, 3)) {
       const r = await propose(ctx, { kind: "ask", title: a.title, summary: a.why, body: "" });

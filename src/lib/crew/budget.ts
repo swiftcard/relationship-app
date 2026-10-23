@@ -24,7 +24,7 @@ export function checkBudget(i: {
   estUsd: number;
 }): BudgetCheck {
   if (i.hardDisabled) return { ok: false, reason: "CREW_DISABLED is set, so every agent is stopped." };
-  if (i.settings.kill_all) return { ok: false, reason: "The big red switch is on, so every agent is stopped." };
+  if (i.settings.kill_all) return { ok: false, reason: "The whole office is locked, so nobody works." };
   if (!i.state.enabled) return { ok: false, reason: "This agent is switched off." };
 
   const agentCap = i.state.daily_usd_cap ?? i.agent.dailyUsd;

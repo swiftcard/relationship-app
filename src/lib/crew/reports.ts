@@ -129,14 +129,15 @@ export async function writeReport(ctx: AgentContext, stats: TeamStats, teamName:
   return templateReport(stats, teamName);
 }
 
-export function reportHtml(body: string): string {
+/** `tab`: the room the email's link opens (the team's room, or "desk" for Hannah's plan). */
+export function reportHtml(body: string, tab?: string): string {
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const lines = body.split("\n").map((l) => {
     if (/^(What happened|What I need from you|Money used today|How I saved tokens|The plan for tomorrow)\s*$/.test(l.trim())) return `<h3 style="margin:16px 0 4px;font-size:15px">${esc(l.trim())}</h3>`;
     if (l.startsWith("- ")) return `<div style="margin:2px 0 2px 8px">&bull; ${esc(l.slice(2))}</div>`;
     return l.trim() ? `<p style="margin:4px 0">${esc(l)}</p>` : "";
   });
-  return `<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.5;color:#111">${lines.join("")}<p style="margin-top:20px"><a href="${appBase()}/admin/crew">Open the Agents tab</a> to approve or reject.</p></div>`;
+  return `<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.5;color:#111">${lines.join("")}<p style="margin-top:20px"><a href="${appBase()}/admin/crew${tab ? `?tab=${tab}` : ""}">Open the office</a> to approve or reject.</p></div>`;
 }
 
 export function modelLine(ctx: AgentContext): string {

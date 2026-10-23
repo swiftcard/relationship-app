@@ -99,7 +99,49 @@ export type AgentState = {
   next_run_at: string | null;
   lease_until: string | null;
   status_note: string | null;
+  /** Set by the team manager from chat ("pause Reddit for today"); null = not paused. */
+  paused_until?: string | null;
+  pause_note?: string | null;
 };
+
+// ── The office: one door per team, opening hours, the manager's chat ────────
+
+/** New York minutes after midnight; `days` = 0 (Sun) … 6 (Sat). Same-day hours only (close > open). */
+export type OfficeHours = { days: number[]; open: number; close: number };
+
+/** One row per team (crew_teams). The desk ("system") has no door: only the office lock stops it. */
+export type TeamRow = {
+  team: TeamId;
+  /** The door when no hours are set. */
+  door_open: boolean;
+  hours: OfficeHours | null;
+  /** A one-tap open/lock while hours are set, until the next scheduled change. */
+  override_open: boolean | null;
+  override_until: string | null;
+  /** The manager's standing order for the team ("focus on dentists this week"). */
+  focus: string | null;
+  focus_until: string | null;
+  focus_by: string | null;
+};
+
+export type ChatAuthor = "owner" | "manager" | "system";
+export type ChatMessage = {
+  id: string;
+  created_at: string;
+  team: TeamId;
+  author: ChatAuthor;
+  body: string;
+  /** "pending" while the manager is still writing. */
+  status: "pending" | "done" | "failed";
+  meta: Record<string, unknown>;
+};
+
+/** What a manager may do from chat. Only ever narrows what the team does. */
+export type ChatOrder =
+  | { type: "pause_agent"; agent: string; until: "end_of_day" | "tomorrow_morning" | "until_resumed" }
+  | { type: "resume_agent"; agent: string }
+  | { type: "set_focus"; text: string; days: number }
+  | { type: "clear_focus" };
 
 export type Approval = {
   id: string;

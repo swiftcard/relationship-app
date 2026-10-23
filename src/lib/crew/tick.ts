@@ -1,6 +1,7 @@
 import type { AgentDef } from "./agent-def";
 import { BudgetStop } from "./budget";
-import { buildContext, type Providers } from "./context";
+import { DoorLocked, buildContext, type Providers } from "./context";
+import { blockedBy, doorState } from "./doors";
 import { crewHardDisabled, missingEnv } from "./env";
 import { AGENTS } from "./registry";
 import { isDue, nextRun } from "./schedule";
@@ -35,7 +36,11 @@ export async function runAgent(o: { def: AgentDef; store: CrewStore; providers: 
     stats = { ...ctx.stats, ...(r.stats ?? {}) };
     if (ctx.tierWhy) note = ctx.tierWhy;
   } catch (e) {
-    if (e instanceof BudgetStop) {
+    if (e instanceof DoorLocked) {
+      // The door was locked (or the agent paused) mid-shift: stop quietly.
+      status = "locked";
+      summary = e.reason;
+    } else if (e instanceof BudgetStop) {
       status = "budget";
       summary = e.reason;
       note = e.reason;
@@ -70,16 +75,24 @@ export async function runTick(o: { store: CrewStore; providers: Providers; now?:
   if (!(await o.store.ready())) return { ...report, ready: false, stopped: "Run supabase/crew.sql first." };
   if (crewHardDisabled()) return { ...report, stopped: "CREW_DISABLED is set." };
   const settings = await o.store.getSettings();
-  if (settings.kill_all) return { ...report, stopped: "The big red switch is on." };
+  if (settings.kill_all) return { ...report, stopped: "The whole office is locked." };
 
   report.expired = await o.store.expireOld(now());
   const states = new Map((await o.store.listAgentStates()).map((s) => [s.id, s]));
+  const teams = new Map((await o.store.listTeams()).map((t) => [t.team, t]));
 
   for (const def of o.agents ?? AGENTS) {
     const st = states.get(def.id);
     if (!st?.enabled) continue;
     if (def.locked) {
       report.skipped.push({ agent: def.id, why: def.locked });
+      continue;
+    }
+    // A locked door or a pause holds the shift; next_run_at stays put, so an
+    // overdue agent runs once as soon as the door opens.
+    const blocked = blockedBy(def, st, doorState(teams.get(def.team), { team: def.team, settings, hardDisabled: false }, now()), now());
+    if (blocked) {
+      report.skipped.push({ agent: def.id, why: blocked });
       continue;
     }
     const missing = missingEnv(def.needs);

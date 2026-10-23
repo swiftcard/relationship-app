@@ -190,7 +190,7 @@ export async function reportFindings(
   ctx.stat("findings_new", fresh.length);
   ctx.stat("fixes_proposed", proposed);
   if (critical.length) {
-    await sendOwnerDigest(`Urgent: ${critical.length} serious problem${critical.length > 1 ? "s" : ""} on the site`, reportHtml(["What happened", ...critical.map((c) => `- ${c.replace(/\n/g, " ")}`), "", "What I need from you", "- Open the Agents tab and look at the Fix card."].join("\n")));
+    await sendOwnerDigest(`Urgent: ${critical.length} serious problem${critical.length > 1 ? "s" : ""} on the site`, reportHtml(["What happened", ...critical.map((c) => `- ${c.replace(/\n/g, " ")}`), "", "What I need from you", "- Open the Watchdog room and look at the Fix card."].join("\n"), "watchdog"));
   }
   return { fresh: fresh.length, proposed };
 }

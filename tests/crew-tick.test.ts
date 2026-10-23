@@ -50,7 +50,7 @@ describe("tick", () => {
     expect((await store.getAgentState("needy")).status_note).toBe("Needs: CREW_STRIPE_READ_KEY");
 
     await store.updateSettings({ kill_all: true });
-    expect((await runTick({ store, providers: { claude: null, critic: null }, agents: [busy] })).stopped).toMatch(/red switch/);
+    expect((await runTick({ store, providers: { claude: null, critic: null }, agents: [busy] })).stopped).toMatch(/office is locked/);
   });
 
   it("a budget stop is recorded as 'budget', not an error, and the lease is released", async () => {
@@ -67,6 +67,68 @@ describe("tick", () => {
     const store = new MemoryStore();
     store.isReady = false;
     expect(await runTick({ store, providers: { claude: null, critic: null } })).toMatchObject({ ready: false, ran: [] });
+  });
+});
+
+describe("tick and the office doors", () => {
+  const WED_2PM = () => new Date("2026-10-21T18:00:00Z");
+  const providers = { claude: null, critic: null };
+
+  it("a locked door holds its workers; opening it lets the overdue ones run", async () => {
+    const store = new MemoryStore();
+    const worker = fakeAgent({ id: "w", team: "replies" });
+    const other = fakeAgent({ id: "o", team: "contact" });
+    for (const id of ["w", "o"]) await store.patchAgentState(id, { enabled: true });
+    await store.patchTeam("replies", { door_open: false });
+    const r = await runTick({ store, providers, agents: [worker, other], now: WED_2PM });
+    expect(r.ran.map((x) => x.agent)).toEqual(["o"]);
+    expect(r.skipped).toEqual([{ agent: "w", why: "door locked" }]);
+    // The skip writes nothing on the agent: its next run time stays due.
+    expect((await store.getAgentState("w")).next_run_at).toBeNull();
+
+    await store.patchTeam("replies", { door_open: true });
+    expect((await runTick({ store, providers, agents: [worker], now: WED_2PM })).ran.map((x) => x.agent)).toEqual(["w"]);
+  });
+
+  it("a manager still writes its morning report behind a locked door", async () => {
+    const store = new MemoryStore();
+    const mgr = fakeAgent({ id: "replies-mgr", team: "replies", role: "manager" });
+    await store.patchAgentState(mgr.id, { enabled: true });
+    await store.patchTeam("replies", { door_open: false });
+    expect((await runTick({ store, providers, agents: [mgr], now: WED_2PM })).ran.map((x) => x.agent)).toEqual(["replies-mgr"]);
+  });
+
+  it("respects opening hours and a manager's pause", async () => {
+    const store = new MemoryStore();
+    const w = fakeAgent({ id: "w", team: "replies" });
+    await store.patchAgentState("w", { enabled: true });
+    await store.patchTeam("replies", { hours: { days: [1, 2, 3, 4, 5], open: 540, close: 1080 } });
+    const night = () => new Date("2026-10-22T02:00:00Z"); // Wed 10pm
+    expect((await runTick({ store, providers, agents: [w], now: night })).skipped).toEqual([{ agent: "w", why: "door locked" }]);
+
+    await store.patchAgentState("w", { paused_until: "2026-10-22T03:59:00Z" });
+    expect((await runTick({ store, providers, agents: [w], now: WED_2PM })).skipped[0].why).toMatch(/^paused until/);
+    // Once the pause is over the shift runs.
+    expect((await runTick({ store, providers, agents: [w], now: () => new Date("2026-10-22T14:00:00Z") })).ran).toHaveLength(1);
+  });
+
+  it("a door locked mid-shift stops the agent at its next model call", async () => {
+    const store = new MemoryStore();
+    const w = fakeAgent({
+      id: "w",
+      team: "replies",
+      run: async (ctx) => {
+        await ctx.store.patchTeam("replies", { door_open: false });
+        await ctx.llm.ask("draft", { system: "s", prompt: "p" });
+        return { summary: "should not get here" };
+      },
+    });
+    await store.patchAgentState("w", { enabled: true });
+    const claude = new FakeClaude();
+    const r = await runTick({ store, providers: { claude, critic: null }, agents: [w], now: WED_2PM });
+    expect(r.ran[0]).toMatchObject({ status: "locked", summary: "Stopped: door locked." });
+    expect(claude.calls).toHaveLength(0);
+    expect((await store.getAgentState("w")).lease_until).toBeNull();
   });
 });
 

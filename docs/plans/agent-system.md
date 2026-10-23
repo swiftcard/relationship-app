@@ -460,3 +460,42 @@ Turning economy off restores the original spec exactly (Sonnet workers, Opus man
 - Drafts only, with a ceiling of 5 a day that warms up. SwiftCard is mentioned in at most about 1 draft in 3. Pasting a Bluesky post works too.
 - Links are plain swiftcard.me, because lib/referral has no Bluesky campaign prefix yet.
 - Live-checked 2026-10-21: "digital business card" and "business cards networking" find real posts; competitor names find none this week.
+
+## The office (2026-10-23, owner request: "like real employees working in my office")
+
+The Agents tab became an office. Nothing about what the agents do changed; how
+the owner runs them did.
+
+- **Lobby** (`?tab=lobby`, the default): "Lock the whole office" (`kill_all`),
+  spend today, who is working right now, what waits in which room, one door
+  card per team.
+- **One room per team** (`?tab=watchdog|replies|contact|leads|office|marketing`):
+  the door (open / lock in one tap, optional opening hours in New York time),
+  the drafts waiting for the owner, the team chat, the manager and the staff
+  board, and the team's output (lead lists, open problems).
+- **Your desk** (`?tab=desk`): Hannah's (head agent) plan and questions, and
+  "Hand something to the team" (the paste form). No door; only the office lock.
+- **Settings**: every $ limit in one form (office, team, person), economy,
+  second opinion, disclosure, missing keys.
+- Old tab names (`inbox`, `teams`, `reports`, `usage`, `paste`) land in the
+  lobby, settings or desk (`src/lib/crew/office-tabs.ts`).
+
+Rules (pinned in tests/crew-doors, crew-tick, crew-manager-chat, crew-staff):
+
+- A **door** gates workers only. Managers still write the morning report behind
+  a locked door; the desk only stops for the whole-office lock. A tap while
+  hours are set overrides until the next scheduled change. A lock takes effect
+  at the agent's next model call (`DoorLocked` in `context.ts`), not only at
+  the next tick. Overdue agents run once when the door opens.
+- **Staff names** are labels only (`src/lib/crew/staff.ts`). `hired: false` and
+  locked agents sit in a collapsed "Not hired yet" list unless switched on.
+- **Manager chat** (`src/lib/crew/manager-chat.ts`, `crew_chat`): answers from
+  a brief built in code (no draft text), Opus (Sonnet in economy), metered as
+  `<team>-manager` / `chat`. Orders can only narrow: pause / resume one of its
+  own team's agents, set / clear a focus (≤280 chars, 1–14 days) that is added
+  to the prompt (never the system text) for search, sort and draft calls. It
+  cannot switch agents on, open doors, change limits, start shifts or post.
+- **Start a shift now** runs after the response (`after()`), so the button
+  never hangs.
+- Schema: `supabase/crew-office.sql` (`crew_teams`, `crew_chat`,
+  `crew_agents.paused_until/pause_note`). Doors seed open.

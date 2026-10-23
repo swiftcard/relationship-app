@@ -96,7 +96,7 @@ export const competitorWatch: AgentDef = {
     }
     const body = [`Competitor report for ${nyDay(ctx.now())}`, "", "What happened", ...lines, "", "What I need from you", priceChanges.length ? "- A price changed. Look at the card to update our compare pages." : "- Nothing right now."].join("\n");
     await ctx.store.saveReport({ agent_id: ctx.def.id, team: "marketing", day: nyDay(ctx.now()), body, stats: { checked } });
-    await sendOwnerDigest("Competitor report", reportHtml(body));
+    await sendOwnerDigest("Competitor report", reportHtml(body, "marketing"));
     if (priceChanges.length) {
       await propose(ctx, {
         kind: "code_fix",

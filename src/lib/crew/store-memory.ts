@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { DEFAULT_SETTINGS, type CrewStore, type NewApproval, type ReportRow, type RunRow, type UsageRow, type UsageTotals } from "./store";
-import type { AgentState, Approval, ApprovalKind, ApprovalStatus, CrewInput, Finding, Lead, Platform, Settings, TeamId, TouchKind } from "./types";
+import { DEFAULT_SETTINGS, DOOR_TEAMS, defaultTeam, type CrewStore, type NewApproval, type ReportRow, type RunRow, type UsageRow, type UsageTotals } from "./store";
+import type { AgentState, Approval, ApprovalKind, ApprovalStatus, ChatMessage, CrewInput, Finding, Lead, Platform, Settings, TeamId, TeamRow, TouchKind } from "./types";
 
 // ── In-memory CrewStore for tests and local dry runs ───────────────────────
 // Mirrors the SQL semantics that matter: the one-reply-per-thread unique
@@ -25,6 +25,8 @@ export class MemoryStore implements CrewStore {
   suppression = new Map<string, string>();
   leads: (Lead & { id: string; created_at: string; sheet_synced_at: string | null })[] = [];
   facts: { competitor: string; fact: string; value: string; source_url: string; seen_at: string }[] = [];
+  teams = new Map<TeamId, TeamRow>();
+  chat: ChatMessage[] = [];
   isReady = true;
   clock: () => Date = () => new Date();
 
@@ -308,6 +310,26 @@ export class MemoryStore implements CrewStore {
   }
   async listLeads(list: Lead["list"], limit: number) {
     return this.leads.filter((l) => l.list === list).slice(-limit).reverse();
+  }
+
+  async listTeams() {
+    return DOOR_TEAMS.map((t) => ({ ...(this.teams.get(t) ?? defaultTeam(t)) }));
+  }
+  async patchTeam(team: TeamId, patch: Partial<Omit<TeamRow, "team">>) {
+    this.teams.set(team, { ...(this.teams.get(team) ?? defaultTeam(team)), ...patch });
+  }
+
+  async addChat(m: { team: TeamId; author: ChatMessage["author"]; body: string; status?: ChatMessage["status"]; meta?: Record<string, unknown> }) {
+    const id = randomUUID();
+    this.chat.push({ id, created_at: this.now(), team: m.team, author: m.author, body: m.body, status: m.status ?? "done", meta: m.meta ?? {} });
+    return id;
+  }
+  async updateChat(id: string, patch: Partial<Pick<ChatMessage, "body" | "status" | "meta">>) {
+    const m = this.chat.find((x) => x.id === id);
+    if (m) Object.assign(m, patch);
+  }
+  async listChat(team: TeamId, limit: number) {
+    return this.chat.filter((m) => m.team === team).slice(-limit).map((m) => ({ ...m }));
   }
 
   async competitorFacts() {

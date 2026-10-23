@@ -13,7 +13,7 @@ import { join } from "node:path";
 const read = (p: string) => readFileSync(p, "utf8");
 function* files(dir: string): Generator<string> {
   for (const n of readdirSync(dir)) {
-    const p = join(dir, n);
+    const p = join(dir, n).replace(/\\/g, "/");
     if (statSync(p).isDirectory()) yield* files(p);
     else if (/\.(ts|tsx)$/.test(n)) yield p;
   }
@@ -68,10 +68,19 @@ describe("routes", () => {
     expect(read("src/app/admin/crew/page.tsx")).toContain("if (!(await requireAdmin())) notFound();");
   });
   it("every form on the Agents tab posts (works before hydration, nothing in a URL)", () => {
-    const page = read("src/app/admin/crew/CrewView.tsx");
-    const forms = page.match(/<form\b[^>]*>/g) ?? [];
+    const views = appFiles.filter((f) => f.startsWith("src/app/admin/crew/") && f.endsWith(".tsx"));
+    const forms = views.flatMap((f) => read(f).match(/<form\b[^>]*>/g) ?? []);
     expect(forms.length).toBeGreaterThan(5);
     for (const f of forms) expect(f).toContain('method="post"');
+  });
+  it("the manager chat can only narrow what a team does", () => {
+    // Pause, resume, focus: yes. Switching agents on, starting shifts,
+    // approving, or creating anything outward: never from chat.
+    const src = read("src/lib/crew/manager-chat.ts");
+    expect(src).not.toMatch(/from\s+["'](\.\/execute|\.\/decide|\.\/approvals)/);
+    expect(src).not.toMatch(/propose\(|insertApproval\(|runAgent\(|claimLease\(|updateSettings\(/);
+    for (const call of src.match(/patchAgentState\([^)]*\)/g) ?? []) expect(call).not.toMatch(/enabled|daily_usd_cap|model_override/);
+    for (const call of src.match(/patchTeam\([^)]*\)/g) ?? []) expect(call).not.toMatch(/door_open|hours|override/);
   });
 });
 

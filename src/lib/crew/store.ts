@@ -3,12 +3,14 @@ import type {
   Approval,
   ApprovalKind,
   ApprovalStatus,
+  ChatMessage,
   CrewInput,
   Finding,
   Lead,
   Platform,
   Settings,
   TeamId,
+  TeamRow,
   TouchKind,
 } from "./types";
 
@@ -27,6 +29,14 @@ export const DEFAULT_SETTINGS: Settings = {
   economy: true,
   second_opinion: false,
 };
+
+/** Teams with a door, in the order the office shows them. */
+export const DOOR_TEAMS: TeamId[] = ["watchdog", "replies", "contact", "leads", "office", "marketing"];
+
+/** Every door starts open, so turning the office on changes nothing until the owner taps. */
+export function defaultTeam(team: TeamId): TeamRow {
+  return { team, door_open: true, hours: null, override_open: null, override_until: null, focus: null, focus_until: null, focus_by: null };
+}
 
 export type UsageRow = {
   run_id: string | null;
@@ -148,6 +158,15 @@ export interface CrewStore {
   unsyncedLeads(list: Lead["list"], limit: number): Promise<(Lead & { id: string; created_at: string })[]>;
   markLeadsSynced(ids: string[]): Promise<void>;
   listLeads(list: Lead["list"], limit: number): Promise<(Lead & { id: string; created_at: string })[]>;
+
+  /** One row per door team; a team with no row yet comes back as defaultTeam(). */
+  listTeams(): Promise<TeamRow[]>;
+  patchTeam(team: TeamId, patch: Partial<Omit<TeamRow, "team">>): Promise<void>;
+
+  addChat(m: { team: TeamId; author: ChatMessage["author"]; body: string; status?: ChatMessage["status"]; meta?: Record<string, unknown> }): Promise<string>;
+  updateChat(id: string, patch: Partial<Pick<ChatMessage, "body" | "status" | "meta">>): Promise<void>;
+  /** Newest `limit` messages for a team, oldest first. */
+  listChat(team: TeamId, limit: number): Promise<ChatMessage[]>;
 
   competitorFacts(): Promise<{ competitor: string; fact: string; value: string; source_url: string; seen_at: string }[]>;
   upsertCompetitorFact(f: { competitor: string; fact: string; value: string; source_url: string }): Promise<{ changed: boolean; previous: string | null }>;

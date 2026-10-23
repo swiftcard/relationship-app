@@ -21,5 +21,5 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   else if (action === "posted") r = await decide(store, id, { action: "posted", by });
   else if (action === "edit") r = await decide(store, id, { action: "edit", body: field(form, "body"), by });
   else r = { ok: false, message: "Unknown button." };
-  return backToTab(req, field(form, "tab") || "inbox", r.message);
+  return backToTab(req, field(form, "tab") || "lobby", r.message, undefined, "waiting");
 }

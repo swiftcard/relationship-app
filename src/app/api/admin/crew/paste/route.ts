@@ -17,9 +17,9 @@ export async function POST(req: NextRequest) {
   const kind = (field(form, "kind") || "post") as CrewInput["kind"];
   const url = field(form, "url");
   const text = field(form, "text");
-  if (!PASTE_PLATFORMS.includes(platform) || !KINDS.includes(kind)) return backToTab(req, "paste", "Pick where it's from.");
-  if (text.length < 20) return backToTab(req, "paste", "Paste the whole post or profile text.");
-  if (url && !/^https?:\/\//i.test(url)) return backToTab(req, "paste", "The link should start with https://");
+  if (!PASTE_PLATFORMS.includes(platform) || !KINDS.includes(kind)) return backToTab(req, "desk", "Pick where it's from.", undefined, "hand-off");
+  if (text.length < 20) return backToTab(req, "desk", "Paste the whole post or profile text.", undefined, "hand-off");
+  if (url && !/^https?:\/\//i.test(url)) return backToTab(req, "desk", "The link should start with https://", undefined, "hand-off");
   await new SupabaseStore().addInput({ platform, kind, url: url || null, text: text.slice(0, 8000) });
-  return backToTab(req, "paste", "Got it. The agent will draft from it on its next run.");
+  return backToTab(req, "desk", "Got it. The right person drafts from it on their next shift (when their door is open).", undefined, "hand-off");
 }

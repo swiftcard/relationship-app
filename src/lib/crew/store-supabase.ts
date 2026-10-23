@@ -1,6 +1,6 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
-import { DEFAULT_SETTINGS, type CrewStore, type NewApproval, type ReportRow, type RunRow, type UsageRow, type UsageTotals } from "./store";
-import type { AgentState, Approval, ApprovalKind, ApprovalStatus, CrewInput, Finding, Lead, Platform, Settings, TeamId, TouchKind } from "./types";
+import { DEFAULT_SETTINGS, DOOR_TEAMS, defaultTeam, type CrewStore, type NewApproval, type ReportRow, type RunRow, type UsageRow, type UsageTotals } from "./store";
+import type { AgentState, Approval, ApprovalKind, ApprovalStatus, ChatMessage, CrewInput, Finding, Lead, OfficeHours, Platform, Settings, TeamId, TeamRow, TouchKind } from "./types";
 
 // ── The real CrewStore: service-role Supabase, tables from supabase/crew.sql ─
 // Server-only (it imports the service-role client; tests/server-only-boundary
@@ -52,6 +52,9 @@ export class SupabaseStore implements CrewStore {
       next_run_at: (r.next_run_at as string) ?? null,
       lease_until: (r.lease_until as string) ?? null,
       status_note: (r.status_note as string) ?? null,
+      // Columns from supabase/crew-office.sql.
+      paused_until: (r.paused_until as string) ?? null,
+      pause_note: (r.pause_note as string) ?? null,
     };
   }
   async listAgentStates() {
@@ -352,6 +355,43 @@ export class SupabaseStore implements CrewStore {
   async listLeads(list: Lead["list"], limit: number) {
     return (must(await this.db.from("crew_leads").select("*").eq("list", list).order("created_at", { ascending: false }).limit(limit), "leads") ??
       []) as (Lead & { id: string; created_at: string })[];
+  }
+
+  async listTeams(): Promise<TeamRow[]> {
+    // Table from supabase/crew-office.sql; until it runs every door reads open,
+    // so the tick behaves exactly as before.
+    const { data, error } = await this.db.from("crew_teams").select("*");
+    const byTeam = new Map(error ? [] : (data ?? []).map((r: Row) => [String(r.team), r]));
+    return DOOR_TEAMS.map((team) => {
+      const r = byTeam.get(team);
+      if (!r) return defaultTeam(team);
+      return {
+        team,
+        door_open: r.door_open !== false,
+        hours: (r.hours as OfficeHours | null) ?? null,
+        override_open: r.override_open == null ? null : !!r.override_open,
+        override_until: (r.override_until as string) ?? null,
+        focus: (r.focus as string) ?? null,
+        focus_until: (r.focus_until as string) ?? null,
+        focus_by: (r.focus_by as string) ?? null,
+      };
+    });
+  }
+  async patchTeam(team: TeamId, patch: Partial<Omit<TeamRow, "team">>) {
+    must(await this.db.from("crew_teams").upsert({ team, ...patch, updated_at: new Date().toISOString() }), "team patch");
+  }
+
+  async addChat(m: { team: TeamId; author: ChatMessage["author"]; body: string; status?: ChatMessage["status"]; meta?: Record<string, unknown> }) {
+    const data = must(await this.db.from("crew_chat").insert({ team: m.team, author: m.author, body: m.body, status: m.status ?? "done", meta: m.meta ?? {} }).select("id").single(), "chat add");
+    return String((data as Row).id);
+  }
+  async updateChat(id: string, patch: Partial<Pick<ChatMessage, "body" | "status" | "meta">>) {
+    must(await this.db.from("crew_chat").update(patch).eq("id", id), "chat update");
+  }
+  async listChat(team: TeamId, limit: number) {
+    const { data, error } = await this.db.from("crew_chat").select("*").eq("team", team).order("created_at", { ascending: false }).limit(limit);
+    if (error) return [];
+    return ((data ?? []) as ChatMessage[]).reverse();
   }
 
   async competitorFacts() {

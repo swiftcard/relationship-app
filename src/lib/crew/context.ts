@@ -1,5 +1,6 @@
 import type { AgentDef } from "./agent-def";
 import { BudgetStop, checkBudget, estimateUsd, pickTier } from "./budget";
+import { blockedBy, doorState } from "./doors";
 import { crewHardDisabled, openAiPriceRaw } from "./env";
 import type { ClaudeProvider, CriticProvider, CriticReply, Effort, LlmRequest, LlmResponse } from "./llm/types";
 import { MODEL_ID, costUsd, priceFor } from "./models";
@@ -13,6 +14,17 @@ import type { AgentState, Settings, Tier, Usage } from "./types";
 // reports all see the same numbers. Agents get read-only tools; anything that
 // posts, sends or changes code lives in src/lib/crew/execute and runs only
 // from the Approve button.
+
+/** A worker's team door was locked (or the agent paused) during its shift. */
+export class DoorLocked extends BudgetStop {
+  constructor(reason: string) {
+    super(reason);
+    this.name = "DoorLocked";
+  }
+}
+
+/** Calls that follow the manager's standing order; checks, reports and tie-breaks don't. */
+export const FOCUS_PURPOSES = ["discover", "research", "score", "triage", "draft", "revise", "idea", "captions", "answer"];
 
 export type Providers = { claude: ClaudeProvider | null; critic: CriticProvider | null };
 
@@ -37,6 +49,8 @@ export class Llm {
       providers: Providers;
       now: () => Date;
       defaultTier: Tier;
+      /** The manager's standing order for this team, or null. */
+      focus?: string | null;
     },
   ) {}
 
@@ -60,6 +74,15 @@ export class Llm {
       estUsd,
     });
     if (!c.ok) throw new BudgetStop(c.reason);
+    // Re-read the door and the pause before every model call, so a lock takes
+    // effect mid-shift, not only at the next tick.
+    if (this.o.def.role === "worker") {
+      const now = this.o.now();
+      const [teams, state] = await Promise.all([this.o.store.listTeams(), this.o.store.getAgentState(this.o.def.id)]);
+      const door = doorState(teams.find((t) => t.team === this.o.def.team), { team: this.o.def.team, settings: this.o.settings, hardDisabled: false }, now);
+      const why = blockedBy(this.o.def, state, door, now);
+      if (why) throw new DoorLocked(`Stopped: ${why}.`);
+    }
   }
 
   private async record(provider: "anthropic" | "openai", model: string, purpose: string, u: Usage, batch = false) {
@@ -84,7 +107,11 @@ export class Llm {
     return {
       model: MODEL_ID[routeTier({ asked: o.tier, agentTier: this.o.defaultTier, purpose, economy: this.o.settings.economy, webSearch: !!o.webSearch })],
       system: o.system,
-      prompt: o.prompt,
+      // The focus goes on the prompt, never the system text, so the prompt cache still hits.
+      prompt: this.o.focus && FOCUS_PURPOSES.includes(purpose) ? `${o.prompt}
+
+THE OWNER'S ORDERS FOR THIS TEAM RIGHT NOW (follow them unless they break a rule above):
+- ${this.o.focus}` : o.prompt,
       maxTokens: o.maxTokens ?? 4000,
       effort: o.effort ?? "medium",
       schema: o.schema,
@@ -201,6 +228,8 @@ export type AgentContext = {
   llm: Llm;
   tier: Tier;
   tierWhy: string | null;
+  /** The manager's standing order for this team (set from the team chat), or null. */
+  teamFocus: string | null;
   stats: Record<string, number>;
   stat(key: string, n?: number): void;
   notes: string[];
@@ -224,6 +253,8 @@ export async function buildContext(o: {
   const decisions = o.def.approvalKind && o.def.role === "worker" ? await o.store.recentDecisions(o.def.id, o.def.approvalKind, 5) : [];
   const base = settings.economy && o.def.economyTier ? o.def.economyTier : o.def.tier;
   const picked = pickTier(base, state.model_override, decisions);
+  const team = o.def.team === "system" ? undefined : (await o.store.listTeams()).find((t) => t.team === o.def.team);
+  const teamFocus = team?.focus && (!team.focus_until || new Date(team.focus_until).getTime() > now().getTime()) ? team.focus : null;
   const stats: Record<string, number> = {};
   const notes: string[] = [];
   let config = { ...state.config };
@@ -234,9 +265,10 @@ export async function buildContext(o: {
     store: o.store,
     runId: o.runId,
     now,
-    llm: new Llm({ store: o.store, def: o.def, state, settings, runId: o.runId, providers: o.providers, now, defaultTier: picked.tier }),
+    llm: new Llm({ store: o.store, def: o.def, state, settings, runId: o.runId, providers: o.providers, now, defaultTier: picked.tier, focus: teamFocus }),
     tier: picked.tier,
     tierWhy: picked.why,
+    teamFocus,
     stats,
     stat(key, n = 1) {
       stats[key] = (stats[key] ?? 0) + n;

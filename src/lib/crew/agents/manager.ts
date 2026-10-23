@@ -43,7 +43,7 @@ export function managerAgent(team: TeamId, o?: { hour?: number; minute?: number 
       const body = ctx.settings.economy || !ctx.llm.hasClaude ? templateReport(stats, TEAM_NAME[team]) : await writeReport(ctx, stats, TEAM_NAME[team]);
       if (ctx.settings.economy || !ctx.llm.hasClaude) ctx.stat("no_llm_needed");
       const id = await ctx.store.saveReport({ agent_id: ctx.def.id, team, day: stats.day, body, stats: stats as unknown as Record<string, unknown> });
-      const sent = await sendOwnerDigest(`${TEAM_NAME[team]} daily report`, reportHtml(body));
+      const sent = await sendOwnerDigest(`${TEAM_NAME[team]} daily report`, reportHtml(body, team));
       if (sent.ok) await ctx.store.markReportEmailed(id);
       ctx.stat("reports_written");
       return { summary: `Wrote the ${TEAM_NAME[team]} report${sent.ok ? " and emailed it" : " (email not sent: " + (sent.skipped ?? "send failed") + ")"}.` };
