@@ -5,7 +5,7 @@ import type { TeamId } from "@/lib/crew/types";
 import ChatAutoRefresh from "./ChatAutoRefresh";
 import { Avatar, btn, card, input, nyTime } from "./ui";
 
-// A room's chat: you and the manager, plus everything the team did this week
+// A group's chat: you and its manager, plus everything the group did this week
 // (drafts, your decisions, the morning report, problems), oldest at the top.
 
 const CHIPS: Record<TeamId, string[]> = {
@@ -35,7 +35,7 @@ function Item({ it }: { it: TimelineItem }) {
       <div className="flex items-end gap-2">
         {it.who && <Avatar name={it.who.first} team={it.who.team} size="sm" />}
         <div className={`max-w-[85%] rounded-2xl rounded-bl-md px-3.5 py-2 ${it.status === "failed" ? "bg-red-500/10 border border-red-900/40" : "bg-gray-800"}`}>
-          <p className="text-gray-400 text-[0.6875rem] mb-0.5">{it.who?.first ?? "Manager"}</p>
+          <p className="text-gray-400 text-[0.6875rem] mb-0.5">Manager</p>
           {it.status === "pending" ? (
             <p className="text-gray-300 text-sm" data-writing>
               writing<span className="animate-pulse">…</span>
@@ -54,7 +54,7 @@ function Item({ it }: { it: TimelineItem }) {
         {it.who && <Avatar name={it.who.first} team={it.who.team} size="sm" />}
         <div className="min-w-0 flex-1 rounded-2xl border border-gray-800 bg-gray-900/60 px-3.5 py-3">
           <p className="text-gray-400 text-xs mb-1.5">
-            {it.who?.first ?? "The manager"}&apos;s report · {nyTime(it.at)}
+            Daily report · {nyTime(it.at)}
           </p>
           <pre className="text-gray-200 text-sm whitespace-pre-wrap break-words font-sans">{it.body}</pre>
         </div>
@@ -85,24 +85,24 @@ function Item({ it }: { it: TimelineItem }) {
 }
 
 export default function TeamChat({ room, timeline, tab }: { room: Room; timeline: TimelineItem[]; tab: string }) {
-  const name = room.manager?.person.first ?? "the manager";
+  const name = "the manager";
   const writing = timeline.some((t) => t.kind === "manager" && t.status === "pending");
   return (
     <section id="chat" className={`${card} p-0 overflow-hidden scroll-mt-20`} aria-labelledby={`chat-${room.team}`}>
       <div className="flex items-center gap-2.5 border-b border-gray-800 px-4 py-3">
-        {room.manager && <Avatar name={room.manager.person.first} team={room.team} size="sm" />}
+        {room.manager && <Avatar name="M" team={room.team} size="sm" />}
         <div className="min-w-0">
           <h2 id={`chat-${room.team}`} className="text-white font-semibold text-sm">
-            Team chat
+            Ask the manager
           </h2>
-          <p className="text-gray-500 text-xs">Talk to {name}. The team&apos;s week shows up here too.</p>
+          <p className="text-gray-500 text-xs">Ask how things went, or ask it to pause one of its agents. The group&apos;s week shows up here too.</p>
         </div>
       </div>
       {/* Reversed column: the newest message sits at the bottom, in view, with no script. */}
       <div className="max-h-[30rem] overflow-y-auto flex flex-col-reverse">
         <div className="space-y-3 px-3 py-4">
           {timeline.length === 0 ? (
-            <p className="text-center text-sm text-gray-500 py-6">Nothing here yet this week. Say hi to {name}.</p>
+            <p className="text-center text-sm text-gray-500 py-6">Nothing here yet this week. Ask {name} anything.</p>
           ) : (
             timeline.map((it) => <Item key={it.key} it={it} />)
           )}
@@ -111,6 +111,7 @@ export default function TeamChat({ room, timeline, tab }: { room: Room; timeline
       <div id="chat-end" className="border-t border-gray-800 p-3 space-y-2 scroll-mt-20">
         {CHIPS[room.team].length > 0 && (
           <form method="post" action={`/api/admin/crew/chat/${room.team}`} className="flex gap-1.5 overflow-x-auto no-scrollbar">
+            <input type="hidden" name="tab" value={tab} />
             {CHIPS[room.team].map((c) => (
               <button key={c} name="text" value={c} className="shrink-0 min-h-10 rounded-full border border-gray-700 px-3 text-xs text-gray-300 hover:text-white hover:border-gray-500">
                 {c}

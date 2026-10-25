@@ -2,28 +2,35 @@ import type { AgentDef } from "./agent-def";
 import { doorState, teamDoor, type DoorState } from "./doors";
 import { ENV_HELP, crewHardDisabled, missingEnv } from "./env";
 import { AGENTS } from "./registry";
-import { describeSchedule, nyDayStart } from "./schedule";
-import { ROOM_JOB, ROOM_NAME, notHired, staffFor, staffStatus, type Person, type StaffStatus } from "./staff";
+import { GROUP_JOB, GROUP_NAME, agentName, agentStatus, type AgentStatus } from "./agent-status";
+import { SCHEDULE_OVERRIDES_KEY, effectiveSchedule, nyDayStart, plainSchedule, type ScheduleOverrides } from "./schedule";
+import { notHired } from "./staff";
 import { DOOR_TEAMS, type CrewStore, type ReportRow, type RunRow, type UsageTotals } from "./store";
 import { TIMELINE_DAYS, teamTimeline, type TimelineItem } from "./timeline";
-import type { AgentState, Approval, EnvKey, Finding, Lead, Settings, TeamId, TeamRow } from "./types";
+import type { AgentState, Approval, EnvKey, Finding, Lead, Schedule, Settings, TeamId, TeamRow } from "./types";
 
 // Everything the Agents tab (the office) shows, loaded in one place (server only).
 
 export type AgentRow = {
   def: AgentDef;
+  /** Plain name shown everywhere ("Reddit replies"). */
+  name: string;
   state: AgentState;
   missing: EnvKey[];
+  /** The schedule it runs on (yours, if you changed it) and that in words. */
+  rule: Schedule;
   schedule: string;
+  customSchedule: boolean;
   today: { usd: number; tokens: number };
   cap: number;
   lastRun: RunRow | null;
+  /** Items from this agent waiting for you (to decide or to post). */
+  waiting: number;
+  door: DoorState;
+  status: AgentStatus;
 };
 
-/** One agent as a member of staff. */
-export type StaffRow = AgentRow & { person: Person; status: StaffStatus };
-
-/** One room of the office: a team, its door, its people and what waits for you. */
+/** One group (team): its pause switch (the "door"), its agents and what waits for you. */
 export type Room = {
   team: TeamId;
   name: string;
@@ -33,9 +40,10 @@ export type Room = {
   ownDoor: DoorState;
   /** The team's stored door row; null for the desk, which has no door. */
   row: TeamRow | null;
-  manager: StaffRow | null;
-  staff: StaffRow[];
-  notHired: StaffRow[];
+  manager: AgentRow | null;
+  staff: AgentRow[];
+  /** Folded away: agents that can never run, and extras that are off. */
+  notHired: AgentRow[];
   pending: Approval[];
   approved: Approval[];
   usdToday: number;
@@ -61,6 +69,10 @@ export type Dashboard = {
   findings: Finding[];
   /** The open room's chat timeline (empty in the lobby and settings). */
   timeline: TimelineItem[];
+  /** The home screen's three numbers. */
+  summary: { running: number; doneToday: number; decidedToday: number; needsYou: number };
+  /** Recent runs, newest first (for the task list). */
+  runs: RunRow[];
   leads: { todayBySource: Record<string, number>; officeToday: Record<string, number>; recent: (Lead & { id: string; created_at: string })[]; office: (Lead & { id: string; created_at: string })[] };
   envNeeded: { key: EnvKey; help: string; agents: string[] }[];
 };
@@ -77,7 +89,7 @@ export async function loadDashboard(
   const dayStart = nyDayStart(now).toISOString();
   const weekStart = new Date(now.getTime() - 7 * 86400_000).toISOString();
   const room = o.room ?? null;
-  const [settings, states, teams, inbox, approved, recentDone, today, week, reports, findings, runs, todayBySource, officeToday, recent, office] = await Promise.all([
+  const [settings, states, teams, inbox, approved, recentDone, today, week, reports, findings, runs, todayBySource, officeToday, recent, office, overrides, runsToday, decided] = await Promise.all([
     store.getSettings(),
     store.listAgentStates(),
     store.listTeams(),
@@ -93,33 +105,47 @@ export async function loadDashboard(
     store.countLeadsSince(dayStart, "office"),
     store.listLeads("cold", 40),
     store.listLeads("office", 60),
+    store.kvGet<ScheduleOverrides>(SCHEDULE_OVERRIDES_KEY).catch(() => null),
+    store.runsSince(dayStart),
+    store.listApprovals({ sinceIso: weekStart, limit: 300 }),
   ]);
   const byId = new Map(states.map((s) => [s.id, s]));
+  const hardDisabled = crewHardDisabled();
+  const doors = new Map(ROOM_TEAMS.map((team) => [team, doorState(team === "system" ? undefined : teams.find((t) => t.team === team), { team, settings, hardDisabled }, now)]));
+  const waitingFor = (id: string) => inbox.filter((a) => a.agent_id === id).length + approved.filter((a) => a.agent_id === id).length;
   const agents: AgentRow[] = AGENTS.map((def) => {
     const state = byId.get(def.id) ?? blankState(def.id);
+    const rule = effectiveSchedule(def, overrides);
+    const missing = missingEnv(def.needs);
+    const lastRun = runs.find((r) => r.agent_id === def.id) ?? null;
+    const door = doors.get(def.team)!;
+    const waiting = waitingFor(def.id);
     return {
       def,
+      name: agentName(def),
       state,
-      missing: missingEnv(def.needs),
-      schedule: describeSchedule(def.schedule),
+      missing,
+      rule,
+      schedule: plainSchedule(rule),
+      customSchedule: rule !== def.schedule,
       today: today.byAgent[def.id] ?? { usd: 0, tokens: 0 },
       cap: state.daily_usd_cap ?? def.dailyUsd,
-      lastRun: runs.find((r) => r.agent_id === def.id) ?? null,
+      lastRun,
+      waiting,
+      door,
+      status: agentStatus({ def, state, missing, door, now, lastRun, waiting, schedule: rule }),
     };
   });
-  const hardDisabled = crewHardDisabled();
   const teamOf = (a: Approval) => AGENTS.find((d) => d.id === a.agent_id)?.team ?? a.team;
   const rooms: Room[] = ROOM_TEAMS.map((team) => {
     const row = team === "system" ? null : (teams.find((t) => t.team === team) ?? null);
-    const door = doorState(row ?? undefined, { team, settings, hardDisabled }, now);
-    const members: StaffRow[] = agents
-      .filter((a) => a.def.team === team)
-      .map((a) => ({ ...a, person: staffFor(a.def), status: staffStatus({ def: a.def, state: a.state, missing: a.missing, door, now }) }));
+    const door = doors.get(team)!;
+    const members = agents.filter((a) => a.def.team === team);
     const focusLive = row?.focus && (!row.focus_until || new Date(row.focus_until).getTime() > now.getTime());
     return {
       team,
-      name: ROOM_NAME[team],
-      job: ROOM_JOB[team],
+      name: GROUP_NAME[team],
+      job: GROUP_JOB[team],
       door,
       ownDoor: row ? teamDoor(row, now) : door,
       row,
@@ -138,8 +164,15 @@ export async function loadDashboard(
   if (room) {
     const since = new Date(now.getTime() - TIMELINE_DAYS * 86400_000).toISOString();
     const [chat, roomApprovals, roomReports] = await Promise.all([store.listChat(room, 60), store.listApprovals({ sinceIso: since, limit: 300 }), store.listReports(10, room)]);
-    timeline = teamTimeline({ team: room, defs: AGENTS, chat, approvals: roomApprovals, reports: roomReports, runs, findings, now });
+    timeline = teamTimeline({ team: room, defs: AGENTS, chat, approvals: roomApprovals, reports: roomReports, runs, findings, now, plain: true });
   }
+
+  const summary = {
+    running: agents.filter((a) => a.status.kind === "running").length,
+    doneToday: runsToday.filter((r) => r.status === "ok" && r.finished_at).length,
+    decidedToday: decided.filter((a) => a.decided_at && a.decided_at >= dayStart && (a.status === "approved" || a.status === "done")).length,
+    needsYou: inbox.length + approved.length + agents.filter((a) => a.status.kind === "failed").length,
+  };
 
   return {
     ready: true,
@@ -156,6 +189,8 @@ export async function loadDashboard(
     reports,
     findings,
     timeline,
+    summary,
+    runs,
     leads: { todayBySource, officeToday, recent, office },
     envNeeded,
   };
@@ -163,6 +198,6 @@ export async function loadDashboard(
 
 function neededEnv(defs: AgentDef[]): Dashboard["envNeeded"] {
   const map = new Map<EnvKey, string[]>();
-  for (const d of defs) for (const k of missingEnv(d.needs)) map.set(k, [...(map.get(k) ?? []), d.name]);
+  for (const d of defs) for (const k of missingEnv(d.needs)) map.set(k, [...(map.get(k) ?? []), agentName(d)]);
   return [...map.entries()].map(([key, agents]) => ({ key, help: ENV_HELP[key], agents }));
 }

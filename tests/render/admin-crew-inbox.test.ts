@@ -2,13 +2,14 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { Browser } from "playwright";
 import { launchBrowser, appCss } from "./harness";
 
-// ── The Agents tab (the office), measured ───────────────────────────────────
-// The owner runs the office from a phone. A draft whose Approve button is
-// pushed off-screen, a door switch that is covered, a chat box squeezed below
-// a tap target: each is a control that silently doesn't work. Built from a
-// MemoryStore through the real loadDashboard, rendered from the real view
-// (CrewView) with the app's real CSS at a phone and a desktop width, then
-// measured.
+// ── The Agents tab (the control panel), measured ────────────────────────────
+// The owner runs the agents from a phone and must know in 10 seconds what's
+// running, what got done, what needs them and how to pause everything. A
+// Pause all below the fold, an Approve button pushed off-screen or covered,
+// a raw error code on screen: each is a control or a sentence that silently
+// doesn't work. Built from a MemoryStore through the real loaders, rendered
+// from the real views (CrewView, AgentDetail) with the app's real CSS at a
+// phone and a desktop width, then measured.
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {} }) }));
 
@@ -59,25 +60,46 @@ async function fixtureStore() {
   await store.insertLeads(
     Array.from({ length: 4 }, (_, i) => ({ list: "cold" as const, email: `info${i}@a-very-long-realty-company-name-for-testing.com`, phone: "+17045550100", company: "Queen City Realty Group of Charlotte and the Surrounding Areas", business_type: "real estate offices", city: "Charlotte", region: "NC", country: "US", region_restricted: i === 3, source_platform: "web" as const, source_url: "https://www.queencityrealtygroup.example.com/contact-us/our-agents-and-staff" })),
   );
+  // One agent whose last run failed, one that finished fine today.
+  const bad = await store.startRun("watch-bugs");
+  await store.finishRun(bad, "error", "TypeError: fetch failed ECONNRESET", {}, "TypeError: fetch failed ECONNRESET");
+  await store.patchAgentState("watch-bugs", { last_run_at: "2026-10-21T17:45:00Z", status_note: "Last run failed: TypeError: fetch failed ECONNRESET" });
+  const good = await store.startRun("replies-bluesky");
+  await store.finishRun(good, "ok", "Found 6 posts and drafted 2 replies.", { drafts: 2 });
+  await store.patchAgentState("replies-bluesky", { last_run_at: "2026-10-21T17:30:00Z" });
   await store.recordUsage({ run_id: null, agent_id: "replies-reddit", team: "replies", provider: "anthropic", model: "claude-sonnet-5-5", purpose: "draft", input_tokens: 4000, output_tokens: 500, cache_read: 2000, cache_write: 0, web_searches: 0, batch: false, cost_usd: 0.12 });
   return store;
 }
 
-async function renderView(browser: Browser, width: number, tab: string) {
+type View = { tab?: string; filter?: string; edit?: string; agent?: string };
+
+async function markup(v: View, store?: Awaited<ReturnType<typeof fixtureStore>>) {
   const { renderToStaticMarkup } = await import("react-dom/server");
   const { createElement } = await import("react");
+  const st = store ?? (await fixtureStore());
+  if (v.agent) {
+    const { default: AgentDetail } = await import("@/app/admin/crew/AgentDetail");
+    const { loadAgentDetail } = await import("@/lib/crew/agent-detail");
+    const x = await loadAgentDetail(st, v.agent, NOW);
+    if (!x || !("row" in x)) throw new Error(`no agent ${v.agent}`);
+    return renderToStaticMarkup(createElement(AgentDetail, { x, edit: v.edit, msg: "Reddit replies is paused." }));
+  }
   const { default: CrewView } = await import("@/app/admin/crew/CrewView");
   const { loadDashboard } = await import("@/lib/crew/dashboard");
   const { resolveTab, roomTeam } = await import("@/lib/crew/office-tabs");
-  const data = await loadDashboard(await fixtureStore(), NOW, { room: roomTeam(resolveTab(tab)) });
+  const data = await loadDashboard(st, NOW, { room: roomTeam(resolveTab(v.tab)) });
+  return renderToStaticMarkup(createElement(CrewView, { data, tab: v.tab, filter: v.filter, edit: v.edit, msg: "Approved. Post it, then tap “I posted it”." }));
+}
+
+async function renderView(browser: Browser, width: number, v: View, height = 1600) {
   const css = await appCss();
-  const markup = renderToStaticMarkup(createElement(CrewView, { data, tab, msg: "Approved. Post it, then tap “I posted it”." }));
+  const html = await markup(v);
   const page = await browser.newPage();
-  await page.setViewportSize({ width, height: 1600 });
+  await page.setViewportSize({ width, height });
   await page.setContent(
     `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style>
      <style>body{margin:0;background:#030712}</style></head>
-     <body class="sc-app"><main style="max-width:72rem;margin:0 auto;padding:24px 20px">${markup}</main></body></html>`,
+     <body class="sc-app"><main style="max-width:72rem;margin:0 auto;padding:24px 20px">${html}</main></body></html>`,
     { waitUntil: "load" },
   );
   await page.waitForTimeout(100);
@@ -99,10 +121,50 @@ async function measure(page: Awaited<ReturnType<typeof renderView>>, want: strin
   }, want);
 }
 
-describe("the Agents tab (the office)", () => {
+function tappable(res: { label: string; h: number; covered: boolean }[]) {
+  for (const r of res) {
+    expect(r.h, `${r.label} is shorter than a tap target`).toBeGreaterThanOrEqual(40);
+    expect(r.covered, `${r.label} is covered`).toBe(false);
+  }
+}
+
+/** The words on screen with every panel open, leaving out the "technical details" panels. */
+async function plainText(page: Awaited<ReturnType<typeof renderView>>) {
+  return page.evaluate(() => {
+    document.querySelectorAll("details:not([data-technical])").forEach((d) => ((d as HTMLDetailsElement).open = true));
+    const clone = document.body.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll("[data-technical]").forEach((d) => d.remove());
+    document.body.appendChild(clone);
+    const text = clone.innerText;
+    clone.remove();
+    return text;
+  });
+}
+
+const VIEWS: View[] = [
+  { tab: "lobby" },
+  { tab: "tasks", filter: "waiting" },
+  { tab: "tasks", filter: "next" },
+  { tab: "tasks", filter: "done" },
+  { tab: "tasks", filter: "failed" },
+  { tab: "replies" },
+  { tab: "watchdog" },
+  { tab: "contact" },
+  { tab: "leads" },
+  { tab: "office" },
+  { tab: "marketing" },
+  { tab: "desk" },
+  { tab: "settings" },
+  { agent: "replies-reddit" },
+  { agent: "watch-bugs" },
+  { agent: "replies-facebook" },
+];
+const name = (v: View) => (v.agent ? `agent ${v.agent}` : `${v.tab}${v.filter ? `/${v.filter}` : ""}`);
+
+describe("the Agents tab (the control panel)", () => {
   let browser: Browser;
   beforeAll(async () => {
-    // Set up like production: the Replies team has its key, so its people show their real status.
+    // Set up like production: the AI key exists, so agents show their real status.
     vi.stubEnv("CREW_ANTHROPIC_API_KEY", "test");
     browser = await launchBrowser();
   }, 120_000);
@@ -111,10 +173,10 @@ describe("the Agents tab (the office)", () => {
     await browser?.close();
   });
 
-  for (const tab of ["lobby", "replies", "watchdog", "contact", "leads", "office", "marketing", "desk", "settings"]) {
+  for (const v of VIEWS) {
     for (const width of [390, 1280]) {
-      it(`${tab} fits at ${width}px: nothing spills sideways, even with every panel open`, async () => {
-        const page = await renderView(browser, width, tab);
+      it(`${name(v)} fits at ${width}px: nothing spills sideways, even with every panel open`, async () => {
+        const page = await renderView(browser, width, v);
         try {
           await page.evaluate(() => document.querySelectorAll("details").forEach((d) => (d.open = true)));
           const bad = await page.evaluate(() => {
@@ -133,78 +195,130 @@ describe("the Agents tab (the office)", () => {
         }
       });
     }
-  }
 
-  for (const width of [390, 1280]) {
-    it(`in a room, every Approve, Reject, "I posted it", Send and door button is visible, uncovered and tappable at ${width}px`, async () => {
-      const page = await renderView(browser, width, "replies");
+    it(`${name(v)} speaks plain English: no setting names, model names, raw errors or code`, async () => {
+      const page = await renderView(browser, 390, v);
       try {
-        const res = await measure(page, ["Approve", "Reject", "I posted it", "Copy & open", "Send", "Lock the door", "How did today go?", "Clear"]);
-        expect(res.filter((r) => r.label === "Approve")).toHaveLength(3);
-        for (const l of ["I posted it", "Send", "Lock the door", "How did today go?"]) expect(res.some((r) => r.label === l), l).toBe(true);
-        for (const r of res) {
-          expect(r.h, `${r.label} is shorter than a tap target`).toBeGreaterThanOrEqual(40);
-          expect(r.covered, `${r.label} is covered`).toBe(false);
-        }
-        // The staff card's buttons sit behind "More".
-        await page.evaluate(() => document.querySelectorAll("details").forEach((d) => (d.open = true)));
-        const staff = await measure(page, ["Take off the team", "Start a shift now", "Resume"]);
-        for (const l of ["Take off the team", "Start a shift now", "Resume"]) expect(staff.some((r) => r.label === l), l).toBe(true);
-        for (const r of staff) {
-          expect(r.h, `${r.label} is shorter than a tap target`).toBeGreaterThanOrEqual(40);
-          expect(r.covered, `${r.label} is covered`).toBe(false);
-        }
-      } finally {
-        await page.close();
-      }
-    });
-
-    it(`the lobby's office lock, door switches and room links are tappable at ${width}px`, async () => {
-      const page = await renderView(browser, width, "lobby");
-      try {
-        const res = await measure(page, ["Lock the whole office", "Lock the door", "Open the door", "Enter room"]);
-        expect(res.filter((r) => r.label === "Lock the whole office")).toHaveLength(1);
-        expect(res.filter((r) => r.label === "Enter room")).toHaveLength(6);
-        expect(res.filter((r) => r.label === "Open the door")).toHaveLength(2); // Marketing (by hand) and Contact (after hours)
-        for (const r of res) {
-          expect(r.h, `${r.label} is shorter than a tap target`).toBeGreaterThanOrEqual(40);
-          expect(r.covered, `${r.label} is covered`).toBe(false);
-        }
+        const text = await plainText(page);
+        for (const bad of [/CREW_|_KEY\b|_SECRET\b/, /\b(Haiku|Sonnet|Opus|Fable)\b/, /\btokens?\b/i, /TypeError|ECONNRESET|Error:/, /\{"|":\s/, /\bundefined\b|\bnull\b|NaN/, /supabase|\.sql\b|Vercel/i])
+          expect(text, `${name(v)} shows ${bad}`).not.toMatch(bad);
       } finally {
         await page.close();
       }
     });
   }
 
-  it("a room shows its people, the chat, the second opinion and the model upgrade", async () => {
-    const page = await renderView(browser, 390, "replies");
+  it("on a phone, Pause all and the three numbers are on the first screen, with no scrolling", async () => {
+    const page = await renderView(browser, 390, { tab: "lobby" }, 844);
     try {
-      const text = await page.evaluate(() => document.body.innerText);
-      for (const s of ["Maya", "Reddit replies", "Working now", "Paused until 11:59pm", "Rachel", "Team chat", "writing", "Focus:", "ChatGPT asked for changes", "Upgraded to Opus", "Waiting for you (4)"]) expect(text, s).toContain(s);
+      const boxes = await page.evaluate(() => {
+        const find = (t: string) => ([...document.querySelectorAll("button, a, span")] as HTMLElement[]).find((e) => e.innerText.trim() === t);
+        return ["Pause all agents", "Running now", "Done today", "Needs you"].map((t) => {
+          const e = find(t);
+          const r = e?.getBoundingClientRect();
+          return { t, found: !!e, bottom: r?.bottom ?? 9999, h: r?.height ?? 0 };
+        });
+      });
+      for (const b of boxes) {
+        expect(b.found, b.t).toBe(true);
+        expect(b.bottom, `${b.t} is below the first screen`).toBeLessThanOrEqual(844);
+      }
+      tappable(await measure(page, ["Pause all agents"]));
     } finally {
       await page.close();
     }
   });
 
-  it("'Not hired yet' starts collapsed", async () => {
-    const page = await renderView(browser, 390, "leads");
+  for (const width of [390, 1280]) {
+    it(`home: every Approve, Edit, Reject, Retry, Run now, Pause, Resume, Stop and group switch is tappable at ${width}px`, async () => {
+      const page = await renderView(browser, width, { tab: "lobby" });
+      try {
+        const res = await measure(page, ["Approve", "Edit", "Reject", "Retry", "Run now", "Pause", "Resume", "Stop", "Pause group", "Resume group", "Pause all agents"]);
+        expect(res.filter((r) => r.label === "Approve")).toHaveLength(3);
+        for (const l of ["Edit", "Reject", "Retry", "Run now", "Pause", "Resume", "Stop", "Pause group", "Resume group"]) expect(res.some((r) => r.label === l), l).toBe(true);
+        tappable(res);
+      } finally {
+        await page.close();
+      }
+    });
+
+    it(`a group page: drafts, agents, the chat and the hours are tappable at ${width}px`, async () => {
+      const page = await renderView(browser, width, { tab: "replies" });
+      try {
+        await page.evaluate(() => document.querySelectorAll("details").forEach((d) => (d.open = true)));
+        const res = await measure(page, ["Approve", "Edit", "Reject", "I posted it", "Copy & open", "Send", "Pause group", "How did today go?", "Clear", "Run now", "Pause", "Resume", "Stop", "Save hours"]);
+        expect(res.filter((r) => r.label === "Approve")).toHaveLength(3);
+        for (const l of ["I posted it", "Send", "Pause group", "How did today go?", "Resume", "Stop", "Save hours"]) expect(res.some((r) => r.label === l), l).toBe(true);
+        tappable(res);
+      } finally {
+        await page.close();
+      }
+    });
+
+    it(`an agent page: controls, the schedule form and Retry are tappable at ${width}px`, async () => {
+      const page = await renderView(browser, width, { agent: "watch-bugs" });
+      try {
+        await page.evaluate(() => document.querySelectorAll("details").forEach((d) => (d.open = true)));
+        const res = await measure(page, ["Retry", "Pause", "Stop", "Change schedule", "Save schedule"]);
+        for (const l of ["Retry", "Pause", "Stop", "Save schedule"]) expect(res.some((r) => r.label === l), l).toBe(true);
+        tappable(res);
+      } finally {
+        await page.close();
+      }
+    });
+
+    it(`the task list filters and Retry are tappable at ${width}px`, async () => {
+      const page = await renderView(browser, width, { tab: "tasks", filter: "failed" });
+      try {
+        const res = await measure(page, ["Retry"]);
+        expect(res).toHaveLength(1);
+        tappable(res);
+        const text = await page.evaluate(() => document.body.innerText);
+        for (const s of ["Waiting on me", "Up next", "Done", "Failed", "Bug watch"]) expect(text, s).toContain(s);
+      } finally {
+        await page.close();
+      }
+    });
+  }
+
+  it("home says what is running, what got done and what needs you, with a word for every status", async () => {
+    const page = await renderView(browser, 390, { tab: "lobby" });
+    try {
+      const text = await page.evaluate(() => document.body.innerText);
+      for (const s of ["Running now", "Done today", "Needs you", "Bug watch", "didn't finish", "Dev", "Sales", "Outreach", "Marketing", "Planning", "Reddit replies", "Running", "Paused", "Failed", "Last run", "Next run", "Last result"]) expect(text, s).toContain(s);
+      expect(text).toContain("Asks you before anything goes out: always on");
+    } finally {
+      await page.close();
+    }
+  });
+
+  it("Edit opens the text box in place, with Save and approve", async () => {
+    const store = await fixtureStore();
+    const first = (await store.listApprovals({ status: ["pending"] })).find((a) => a.kind === "reply")!;
+    const html = await markup({ tab: "replies", edit: first.id }, store);
+    expect(html).toContain("Save and approve");
+    expect(html).toContain('name="body"');
+    expect(await markup({ tab: "replies" })).not.toContain("Save and approve");
+  });
+
+  it("'Not available' starts collapsed", async () => {
+    const page = await renderView(browser, 390, { tab: "leads" });
     try {
       expect(await page.evaluate(() => document.body.innerText)).not.toContain("LinkedIn leads");
-      await page.evaluate(() => document.querySelectorAll("details[data-not-hired]").forEach((d) => ((d as HTMLDetailsElement).open = true)));
+      await page.evaluate(() => document.querySelectorAll("details[data-unavailable]").forEach((d) => ((d as HTMLDetailsElement).open = true)));
       expect(await page.evaluate(() => document.body.innerText)).toContain("LinkedIn leads");
     } finally {
       await page.close();
     }
   });
 
-  it("old links land in the lobby, which says what waits where", async () => {
-    const page = await renderView(browser, 390, "inbox");
+  it("old links land somewhere sensible", async () => {
+    const page = await renderView(browser, 390, { tab: "inbox" });
     try {
       const text = await page.evaluate(() => document.body.innerText);
-      expect(text).toContain("The teams");
-      expect(text).toContain("3 to decide");
-      expect(text).toContain("1 to post");
-      expect(text).toContain("Locked · opens tomorrow 9:00am"); // Contact: Mon–Fri 9–12, now 2pm
+      expect(text).toContain("Waiting on me");
+      expect(await markup({ tab: "teams" })).toContain("Pause all agents");
+      expect(await markup({ tab: "paste" })).toContain("Hand something to the agents");
     } finally {
       await page.close();
     }

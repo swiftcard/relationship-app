@@ -83,3 +83,81 @@ export function describeSchedule(s: Schedule): string {
   const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   return `${s.days.map((d) => names[d]).join(" + ")} ${t}`;
 }
+
+// ── Your own schedule for an agent ──────────────────────────────────────────
+// The Agents tab can change when an agent runs. The change is stored in one
+// crew_kv row ({agentId: Schedule}), not in the agent's config, so a run that
+// rewrites its own config can never wipe it. Nothing faster than every 15
+// minutes (the clock only ticks that often), and agents that run on pasted
+// input keep their trigger.
+
+export const SCHEDULE_OVERRIDES_KEY = "schedule_overrides";
+export type ScheduleOverrides = Record<string, Schedule>;
+
+export const EVERY_CHOICES = [15, 30, 60, 120, 360, 720] as const;
+const MINUTE_CHOICES = [0, 15, 30, 45];
+
+export function validSchedule(s: unknown): s is Schedule {
+  if (!s || typeof s !== "object") return false;
+  const x = s as Record<string, unknown>;
+  if (x.kind === "every") return (EVERY_CHOICES as readonly number[]).includes(Number(x.minutes));
+  if (x.kind !== "daily") return false;
+  if (!Number.isInteger(x.hour) || (x.hour as number) < 0 || (x.hour as number) > 23) return false;
+  if (x.minute !== undefined && !MINUTE_CHOICES.includes(x.minute as number)) return false;
+  if (x.days === undefined) return true;
+  return Array.isArray(x.days) && x.days.length > 0 && x.days.length <= 7 && new Set(x.days).size === x.days.length && x.days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6);
+}
+
+/** Whether the owner may change this agent's schedule. */
+export function canReschedule(def: { schedule: Schedule; locked?: string }): boolean {
+  return !def.locked && def.schedule.kind !== "on_input";
+}
+
+/** The schedule an agent actually runs on: yours if you set one, else its default. */
+export function effectiveSchedule(def: { id: string; schedule: Schedule; locked?: string }, overrides: ScheduleOverrides | null | undefined): Schedule {
+  const o = overrides?.[def.id];
+  return canReschedule(def) && validSchedule(o) ? o : def.schedule;
+}
+
+/** The schedule form: `mode` = every | daily | days, `every` (minutes), `time` ("HH:MM"), `day_0`…`day_6`. A string is an error to show. */
+export function parseScheduleForm(get: (k: string) => string): Schedule | string {
+  const mode = get("mode");
+  if (mode === "every") {
+    const minutes = Number(get("every"));
+    return (EVERY_CHOICES as readonly number[]).includes(minutes) ? { kind: "every", minutes } : "Pick how often.";
+  }
+  const m = /^(\d{1,2}):(\d{2})$/.exec(get("time"));
+  if (!m) return "Pick a time.";
+  const hour = Number(m[1]);
+  const minute = Number(m[2]);
+  if (hour > 23 || !MINUTE_CHOICES.includes(minute)) return "Pick a time.";
+  if (mode === "daily") return { kind: "daily", hour, minute };
+  if (mode === "days") {
+    const days = [0, 1, 2, 3, 4, 5, 6].filter((d) => get(`day_${d}`) === "on");
+    if (!days.length) return "Pick at least one day.";
+    return days.length === 7 ? { kind: "daily", hour, minute } : { kind: "daily", hour, minute, days };
+  }
+  return "Pick how often.";
+}
+
+function clock(hour: number, minute = 0) {
+  return `${((hour + 11) % 12) + 1}:${String(minute).padStart(2, "0")}${hour < 12 ? "am" : "pm"}`;
+}
+
+/** "Every 15 minutes", "Every 2 hours", "Every day at 9:00am", "Weekdays at 9:00am", "Wed and Sun at 8:00am". */
+export function plainSchedule(s: Schedule): string {
+  if (s.kind === "on_input") return "When you hand it something";
+  if (s.kind === "every") {
+    if (s.minutes < 60) return `Every ${s.minutes} minutes`;
+    const h = s.minutes / 60;
+    return h === 1 ? "Every hour" : `Every ${h} hours`;
+  }
+  const t = clock(s.hour, s.minute ?? 0);
+  if (!s.days || s.days.length === 7) return `Every day at ${t}`;
+  const days = [...s.days].sort((a, b) => a - b);
+  if (days.join() === "1,2,3,4,5") return `Weekdays at ${t}`;
+  if (days.join() === "0,6") return `Weekends at ${t}`;
+  const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const list = days.map((d) => names[d]);
+  return `${list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}` : list[0]} at ${t}`;
+}

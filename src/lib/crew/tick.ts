@@ -4,8 +4,9 @@ import { DoorLocked, buildContext, type Providers } from "./context";
 import { blockedBy, doorState } from "./doors";
 import { crewHardDisabled, missingEnv } from "./env";
 import { AGENTS } from "./registry";
-import { isDue, nextRun } from "./schedule";
+import { SCHEDULE_OVERRIDES_KEY, effectiveSchedule, isDue, nextRun, type ScheduleOverrides } from "./schedule";
 import type { CrewStore } from "./store";
+import type { Schedule } from "./types";
 
 // ── One tick of the clock ───────────────────────────────────────────────────
 // .github/workflows/crew-tick.yml calls /api/crew/tick every 15 minutes. Each
@@ -20,7 +21,16 @@ export const TICK_BUDGET_MS = 240_000;
 export type TickOutcome = { agent: string; status: string; summary: string };
 export type TickReport = { ready: boolean; stopped?: string; expired: number; ran: TickOutcome[]; skipped: { agent: string; why: string }[] };
 
-export async function runAgent(o: { def: AgentDef; store: CrewStore; providers: Providers; now?: () => Date }): Promise<TickOutcome> {
+/** The owner's schedule changes from the Agents tab; a missing or unreadable row means every agent keeps its default. */
+export async function scheduleOverrides(store: CrewStore): Promise<ScheduleOverrides> {
+  try {
+    return (await store.kvGet<ScheduleOverrides>(SCHEDULE_OVERRIDES_KEY)) ?? {};
+  } catch {
+    return {};
+  }
+}
+
+export async function runAgent(o: { def: AgentDef; store: CrewStore; providers: Providers; now?: () => Date; schedule?: Schedule }): Promise<TickOutcome> {
   const now = o.now ?? (() => new Date());
   const runId = await o.store.startRun(o.def.id);
   let status = "ok";
@@ -60,7 +70,7 @@ export async function runAgent(o: { def: AgentDef; store: CrewStore; providers: 
   const t = now();
   await o.store.patchAgentState(o.def.id, {
     last_run_at: t.toISOString(),
-    next_run_at: nextRun(o.def.schedule, t).toISOString(),
+    next_run_at: nextRun(o.schedule ?? o.def.schedule, t).toISOString(),
     lease_until: null,
     status_note: note,
   });
@@ -80,6 +90,7 @@ export async function runTick(o: { store: CrewStore; providers: Providers; now?:
   report.expired = await o.store.expireOld(now());
   const states = new Map((await o.store.listAgentStates()).map((s) => [s.id, s]));
   const teams = new Map((await o.store.listTeams()).map((t) => [t.team, t]));
+  const overrides = await scheduleOverrides(o.store);
 
   for (const def of o.agents ?? AGENTS) {
     const st = states.get(def.id);
@@ -111,7 +122,7 @@ export async function runTick(o: { store: CrewStore; providers: Providers; now?:
       report.skipped.push({ agent: def.id, why: "already running" });
       continue;
     }
-    report.ran.push(await runAgent({ def, store: o.store, providers: o.providers, now }));
+    report.ran.push(await runAgent({ def, store: o.store, providers: o.providers, now, schedule: effectiveSchedule(def, overrides) }));
   }
   return report;
 }

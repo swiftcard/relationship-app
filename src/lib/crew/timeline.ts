@@ -1,4 +1,5 @@
 import type { AgentDef } from "./agent-def";
+import { agentName, plainFinding, plainResult } from "./agent-status";
 import { staffFor, type Person } from "./staff";
 import type { ReportRow, RunRow } from "./store";
 import type { Approval, ApprovalKind, ChatMessage, Finding, TeamId } from "./types";
@@ -46,12 +47,15 @@ export function teamTimeline(o: {
   runs: RunRow[];
   findings: Finding[];
   now: Date;
+  /** Plain names ("Reddit replies") instead of the office's first names, and no raw run text. */
+  plain?: boolean;
 }): TimelineItem[] {
   const since = new Date(o.now.getTime() - TIMELINE_DAYS * 86400_000).toISOString();
   const byId = new Map(o.defs.map((d) => [d.id, d]));
   const person = (agentId: string) => {
     const d = byId.get(agentId);
-    return d ? { ...staffFor(d), team: d.team } : null;
+    if (!d) return null;
+    return o.plain ? { first: agentName(d), title: agentName(d), team: d.team } : { ...staffFor(d), team: d.team };
   };
   const manager = person(`${o.team}-manager`);
   const mine = (agentId: string) => byId.get(agentId)?.team === o.team;
@@ -80,7 +84,8 @@ export function teamTimeline(o: {
       items.push({ key: `a-${a.id}`, at: a.created_at, kind: "event", who, body: `${name} drafted ${WHAT[a.kind] ?? "something"}: ${title}`, href: waiting ? `#a-${a.id}` : undefined });
     }
     if (a.decided_at && a.decided_at >= since && a.status !== "expired") {
-      const verdict = a.status === "rejected" ? `You rejected ${name}'s draft${a.reject_reason && a.reject_reason !== "no reason given" ? ` (${a.reject_reason.toLowerCase()})` : ""}.` : `You approved ${name}'s draft.`;
+      const whose = o.plain ? `the draft from ${name}` : `${name}'s draft`;
+      const verdict = a.status === "rejected" ? `You rejected ${whose}${a.reject_reason && a.reject_reason !== "no reason given" ? ` (${a.reject_reason.toLowerCase()})` : ""}.` : `You approved ${whose}.`;
       items.push({ key: `d-${a.id}`, at: a.decided_at, kind: "event", who: null, body: verdict });
     }
     if (a.done_at && a.done_at >= since && a.status === "done") items.push({ key: `p-${a.id}`, at: a.done_at, kind: "event", who: null, body: `Done: ${title}` });
@@ -95,13 +100,15 @@ export function teamTimeline(o: {
     if (!mine(r.agent_id) || r.started_at < since || !["error", "budget", "locked"].includes(r.status)) continue;
     const who = person(r.agent_id);
     const why = r.status === "budget" ? "hit a money limit" : r.status === "locked" ? "stopped when the door locked" : "ran into a problem";
-    items.push({ key: `u-${r.id}`, at: r.finished_at ?? r.started_at, kind: "alert", who, body: `${who?.first ?? "A shift"} ${why}: ${r.summary ?? r.error ?? r.status}` });
+    const body = o.plain ? `${who?.first ?? "An agent"}: ${plainResult(r)}` : `${who?.first ?? "A shift"} ${why}: ${r.summary ?? r.error ?? r.status}`;
+    items.push({ key: `u-${r.id}`, at: r.finished_at ?? r.started_at, kind: "alert", who, body });
   }
 
   for (const f of o.findings) {
     if (!mine(f.agent_id) || f.last_seen < since) continue;
     const who = person(f.agent_id);
-    items.push({ key: `f-${f.id}`, at: f.last_seen, kind: "alert", who, body: `${who?.first ?? "The Watchdog"} found: ${f.title}${f.count > 1 ? ` (seen ${f.count} times)` : ""}` });
+    const body = o.plain ? `${who?.first ?? "Website health"}: ${plainFinding(f)}` : `${who?.first ?? "The Watchdog"} found: ${f.title}${f.count > 1 ? ` (seen ${f.count} times)` : ""}`;
+    items.push({ key: `f-${f.id}`, at: f.last_seen, kind: "alert", who, body });
   }
 
   return items.sort((x, y) => (x.at < y.at ? -1 : x.at > y.at ? 1 : 0)).slice(-TIMELINE_MAX);
