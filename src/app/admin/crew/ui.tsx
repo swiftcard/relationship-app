@@ -1,8 +1,9 @@
+import type { AgentStatus, Tone } from "@/lib/crew/agent-status";
 import type { StaffStatusKind } from "@/lib/crew/staff";
 import { TEAM_COLOR } from "@/lib/crew/staff";
 import type { TeamId } from "@/lib/crew/types";
 
-// ── Shared pieces for the office (server components) ───────────────────────
+// ── Shared pieces for the Agents tab (server components) ────────────────────
 
 export const card = "rounded-2xl border border-gray-800 bg-gray-950/50 p-4";
 export const btn = "inline-flex items-center justify-center gap-1.5 min-h-10 px-3 rounded-lg text-sm font-medium";
@@ -100,4 +101,58 @@ export function usd(n: number) {
 /** "Oct 20, 3:05pm" in New York time. */
 export function nyTime(iso: string) {
   return new Date(iso).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).replace(" AM", "am").replace(" PM", "pm");
+}
+
+// ── The control panel's pieces ──────────────────────────────────────────────
+
+const TONE: Record<Tone, { pill: string; dot: string }> = {
+  blue: { pill: "bg-blue-500/15 text-blue-200 border-blue-700/50", dot: "bg-blue-400 animate-pulse" },
+  green: { pill: "bg-emerald-500/10 text-emerald-300 border-emerald-800/50", dot: "bg-emerald-400" },
+  amber: { pill: "bg-amber-500/10 text-amber-200 border-amber-800/50", dot: "bg-amber-400" },
+  violet: { pill: "bg-violet-500/15 text-violet-200 border-violet-700/50", dot: "bg-violet-400" },
+  red: { pill: "bg-red-500/15 text-red-200 border-red-800/60", dot: "bg-red-400" },
+  gray: { pill: "bg-gray-800/80 text-gray-300 border-gray-700", dot: "bg-gray-500" },
+};
+
+/** The status word with its colour dot: Running, On schedule, Paused, Needs you, Failed, Off… */
+export function Status({ status }: { status: Pick<AgentStatus, "word" | "tone"> }) {
+  const t = TONE[status.tone];
+  return (
+    <span className={`inline-flex shrink-0 items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${t.pill}`} data-status={status.word}>
+      <span className={`h-2 w-2 rounded-full ${t.dot}`} aria-hidden />
+      {status.word}
+    </span>
+  );
+}
+
+/** One big number on the home screen. */
+export function Tile({ label, value, sub, tone = "gray", href }: { label: string; value: number | string; sub?: string; tone?: "gray" | "blue" | "red" | "green"; href?: string }) {
+  const color = { gray: "text-white", blue: "text-blue-300", red: "text-red-300", green: "text-emerald-300" }[tone];
+  const body = (
+    <>
+      <span className="block text-gray-400 text-xs leading-tight">{label}</span>
+      <span className={`block text-2xl font-bold leading-tight mt-0.5 ${color}`}>{value}</span>
+      {sub && <span className="block text-gray-500 text-[0.6875rem] leading-tight mt-0.5 truncate">{sub}</span>}
+    </>
+  );
+  const cls = "block min-w-0 rounded-2xl border border-gray-800 bg-gray-900 px-3 py-2.5";
+  return href ? (
+    <a href={href} className={`${cls} hover:border-gray-600`}>
+      {body}
+    </a>
+  ) : (
+    <div className={cls}>{body}</div>
+  );
+}
+
+/** Raw records, folded away. Everything inside is excluded from the plain-language check. */
+export function Technical({ children, label = "Show technical details" }: { children: React.ReactNode; label?: string }) {
+  return (
+    <details data-technical className="rounded-xl border border-gray-800 bg-gray-950">
+      <summary className={`${summaryBtn} w-full`}>
+        {label} <Chevron />
+      </summary>
+      <div className="px-3 pb-3 text-xs text-gray-400 space-y-2 font-mono break-words">{children}</div>
+    </details>
+  );
 }

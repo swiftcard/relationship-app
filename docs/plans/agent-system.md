@@ -499,3 +499,18 @@ Rules (pinned in tests/crew-doors, crew-tick, crew-manager-chat, crew-staff):
   never hangs.
 - Schema: `supabase/crew-office.sql` (`crew_teams`, `crew_chat`,
   `crew_agents.paused_until/pause_note`). Doors seed open.
+
+## The control panel (2026-10-24, owner request: "simple enough for an 18-year-old with no tech experience")
+
+The office metaphor is gone from the screen; nothing about what the agents do changed.
+
+- **Home** (`?tab=lobby`, the default): Pause all agents / Resume all agents (`kill_all`), three numbers (Running now, Done today, Needs you), a pinned "Needs you" (failed agents with Retry, then up to 3 drafts with Approve / Edit / Reject), then the agents that are on, grouped by job: Dev (Website health), Sales (Office prospects, Email leads), Outreach (Replies, Messages), Marketing, Planning. Each card: plain name, one-line purpose, a status word with a colour (Running, On schedule, Paused, Needs you, Failed, Off, Needs setup, Not available), last run, next run, last result, and Run now / Pause or Resume / Stop.
+- **Group pages** (`?tab=<team>`, `?tab=desk` for Planning): Pause group / Resume group (the team's door), what waits, every agent, the outputs, "Ask the manager" (the chat) and working hours under More options.
+- **Agent page** (`/admin/crew/agent/[id]`): status and buttons, the schedule editor, what it did this week in plain words, what it made, and the raw run records behind "Show technical details".
+- **Tasks** (`?tab=tasks&filter=waiting|next|done|failed`), Failed with Retry.
+- Wording lives in `src/lib/crew/agent-status.ts` (names, status words, plain results, `scrub()` for setting and model names). Edit is a link (`?edit=<id>`) so it works before hydration.
+
+Small control changes (pinned in tests/crew-control-panel):
+- `action=pause` sets `paused_until` = PAUSE_FOREVER ("Paused by you."); `action=stop` does that and switches the agent off, so a run under way halts at its next model call. Turning an agent on clears the pause.
+- **Schedules**: your changes live in one `crew_kv` row, `schedule_overrides` ({agentId: Schedule}), never in an agent's config (a run rewrites its config). `effectiveSchedule()` is what the tick and Run now use for the next run; agents that run on pasted input and locked agents keep their trigger; nothing faster than every 15 minutes. Saving sets `next_run_at` to the new next time. The manager chat can't touch it.
+- Route messages carry `tone=err` for failures (red banner).

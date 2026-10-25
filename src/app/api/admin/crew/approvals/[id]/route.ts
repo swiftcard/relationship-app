@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/admin";
-import { backToTab, field } from "@/lib/crew/admin-form";
+import { ERR, backToTab, field } from "@/lib/crew/admin-form";
+import { scrub } from "@/lib/crew/agent-status";
 import { decide } from "@/lib/crew/decide";
 import { SupabaseStore } from "@/lib/crew/store-supabase";
 
@@ -21,5 +22,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   else if (action === "posted") r = await decide(store, id, { action: "posted", by });
   else if (action === "edit") r = await decide(store, id, { action: "edit", body: field(form, "body"), by });
   else r = { ok: false, message: "Unknown button." };
-  return backToTab(req, field(form, "tab") || "lobby", r.message, undefined, "waiting");
+  const tab = field(form, "tab") || "lobby";
+  return backToTab(req, tab, scrub(r.message), r.ok ? undefined : ERR, tab.includes(":") ? undefined : "waiting");
 }

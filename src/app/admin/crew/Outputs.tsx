@@ -1,9 +1,13 @@
+import { plainFinding, scrub } from "@/lib/crew/agent-status";
 import type { Dashboard } from "@/lib/crew/dashboard";
 import type { Lead } from "@/lib/crew/types";
-import { Badge, card, nyTime } from "./ui";
+import { PLATFORM } from "./ApprovalCard";
+import { Badge, Technical, card, nyTime } from "./ui";
 
-// What some rooms produce, shown at the bottom of the room: the lead lists,
-// the Watchdog's open findings and the fixes you approved.
+// What some groups produce, shown on the group's page: the lead lists, the
+// website-health group's open problems and the fixes you approved.
+
+const FINDING_KIND: Record<string, string> = { bug: "Website error", speed: "Speed", security: "Security", ui: "Screen layout", flow: "Sign-up or flow", payment: "Payments", app: "Phone app" };
 
 type LeadRow = Lead & { id: string; created_at: string };
 
@@ -34,7 +38,7 @@ export function LeadsList({ list, title, today, rows }: { list: Lead["list"]; ti
         </a>
       </div>
       <p className="text-gray-400 text-sm">
-        {total} found today{Object.keys(today).length ? ` (${Object.entries(today).map(([k, v]) => `${k} ${v}`).join(", ")})` : ""}.
+        {total} found today{Object.keys(today).length ? ` (${Object.entries(today).map(([k, v]) => `${PLATFORM[k] ?? "other"}: ${v}`).join(", ")})` : ""}.
       </p>
       {rows.length === 0 ? (
         <p className="text-gray-500 text-sm">None yet.</p>
@@ -48,10 +52,10 @@ export function LeadsList({ list, title, today, rows }: { list: Lead["list"]; ti
               </p>
               <p className="text-gray-400 text-xs break-all">
                 {[r.email, r.phone, [r.city, r.region].filter(Boolean).join(", ")].filter(Boolean).join(" · ")}
-                {r.region_restricted ? " · flagged region" : ""}
+                {r.region_restricted ? " · outside the US rules, kept off the list" : ""}
               </p>
               <a href={r.source_url.startsWith("http") ? r.source_url : undefined} target="_blank" rel="noopener noreferrer" className="text-gray-600 text-xs break-all">
-                {r.source_platform} · {r.source_url.slice(0, 80)}
+                Found on {PLATFORM[r.source_platform] ?? "the web"}
               </a>
             </li>
           ))}
@@ -67,19 +71,18 @@ export function Findings({ d }: { d: Dashboard }) {
     <section className={`${card} space-y-3`}>
       <h2 className="text-white font-semibold">Open problems</h2>
       {d.findings.length === 0 ? (
-        <p className="text-gray-500 text-sm">Nothing open. The Watchdog writes up anything broken here and in the chat.</p>
+        <p className="text-gray-500 text-sm">Nothing open. Anything broken shows up here.</p>
       ) : (
         <ul className="divide-y divide-gray-800">
           {d.findings.slice(0, 15).map((f) => (
             <li key={f.id} className="py-2 space-y-1">
               <div className="flex flex-wrap items-center gap-1.5">
                 <Badge tone={f.status === "proposed" ? "blue" : "amber"}>{f.status === "proposed" ? "Fix drafted" : "Open"}</Badge>
-                <Badge>{f.kind}</Badge>
+                <Badge>{FINDING_KIND[f.kind] ?? "Problem"}</Badge>
               </div>
-              <p className="text-gray-200 text-sm break-words">{f.title}</p>
-              <p className="text-gray-500 text-xs">
-                Seen {f.count} time{f.count === 1 ? "" : "s"} · last {nyTime(f.last_seen)}
-              </p>
+              <p className="text-gray-200 text-sm break-words">{plainFinding(f)}</p>
+              <p className="text-gray-500 text-xs">Last seen {nyTime(f.last_seen)}</p>
+              {f.kind === "bug" && <Technical>{f.title}</Technical>}
             </li>
           ))}
         </ul>
@@ -91,10 +94,10 @@ export function Findings({ d }: { d: Dashboard }) {
             const r = (a.meta?.result ?? {}) as { pr_url?: string | null; run_url?: string | null };
             return (
               <p key={a.id} className="text-sm text-gray-300 break-words">
-                {a.title.replace(/^Fix:\s*/, "")}:{" "}
+                {scrub(a.title.replace(/^Fix:\s*/, ""))}:{" "}
                 {r.pr_url ? (
                   <a href={r.pr_url} target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:underline">
-                    review the pull request
+                    review the fix
                   </a>
                 ) : r.run_url ? (
                   <a href={r.run_url} target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:underline">

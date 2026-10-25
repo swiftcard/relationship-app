@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/admin";
-import { backToTab, field } from "@/lib/crew/admin-form";
+import { ERR, backToTab, field } from "@/lib/crew/admin-form";
 import { describeHours, parseHoursForm, teamDoor, togglePatch } from "@/lib/crew/doors";
-import { ROOM_NAME } from "@/lib/crew/staff";
+import { GROUP_NAME } from "@/lib/crew/agent-status";
 import { DOOR_TEAMS, defaultTeam } from "@/lib/crew/store";
 import { SupabaseStore } from "@/lib/crew/store-supabase";
 import type { TeamId } from "@/lib/crew/types";
@@ -14,36 +14,36 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ team: stri
   const { team: raw } = await ctx.params;
   const form = await req.formData();
   const back = field(form, "tab") || raw;
-  if (!(DOOR_TEAMS as string[]).includes(raw)) return backToTab(req, "lobby", "No such team.");
+  if (!(DOOR_TEAMS as string[]).includes(raw)) return backToTab(req, "lobby", "No such group.", ERR);
   const team = raw as TeamId;
   const store = new SupabaseStore();
   const row = (await store.listTeams()).find((t) => t.team === team) ?? defaultTeam(team);
   const now = new Date();
   const action = field(form, "action");
-  const name = ROOM_NAME[team];
+  const name = GROUP_NAME[team];
   const say = (body: string) => store.addChat({ team, author: "system", body }).catch(() => undefined);
 
   if (action === "toggle") {
     const patch = togglePatch(row, now);
     await store.patchTeam(team, patch);
     const door = teamDoor({ ...row, ...patch }, now);
-    const line = door.open ? `You opened the door. ${door.label}.` : `You locked the door. ${door.label}.`;
-    await say(line);
-    return backToTab(req, back, `${name}: ${door.open ? "door open" : "door locked"}. ${door.label}.`, undefined, "door");
+    const label = door.reason === "manual" ? "" : ` ${door.label.replace("Open", "Running").replace("Locked", "Paused")}.`;
+    await say(door.open ? `You resumed the group.${label}` : `You paused the group.${label}`);
+    return backToTab(req, back, door.open ? `${name} is running again.${label}` : `${name} is paused. Its agents finish the step they're on, then wait.${label}`, undefined, back.includes(":") ? undefined : "door");
   }
   if (action === "hours") {
     const hours = parseHoursForm((k) => field(form, k));
-    if (typeof hours === "string") return backToTab(req, back, hours, undefined, "door");
+    if (typeof hours === "string") return backToTab(req, back, hours, ERR, "door");
     await store.patchTeam(team, { hours, override_open: null, override_until: null });
-    await say(`You set opening hours: ${describeHours(hours)} (New York).`);
-    return backToTab(req, back, `${name} hours saved: ${describeHours(hours)}.`, undefined, "door");
+    await say(`You set working hours: ${describeHours(hours)} (New York).`);
+    return backToTab(req, back, `${name} working hours saved: ${describeHours(hours)}.`, undefined, "door");
   }
   if (action === "clear_hours") {
     // Keep the door the way it is right now, just stop following hours.
     const open = teamDoor(row, now).open;
     await store.patchTeam(team, { hours: null, override_open: null, override_until: null, door_open: open });
-    await say(`You turned off opening hours. The door stays ${open ? "open" : "locked"} until you tap it.`);
-    return backToTab(req, back, `${name} hours turned off.`, undefined, "door");
+    await say(`You turned off working hours. The group stays ${open ? "running" : "paused"} until you tap it.`);
+    return backToTab(req, back, `${name} working hours turned off.`, undefined, "door");
   }
   if (action === "clear_focus") {
     await store.patchTeam(team, { focus: null, focus_until: null, focus_by: null });
