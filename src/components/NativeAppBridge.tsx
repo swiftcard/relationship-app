@@ -76,6 +76,31 @@ export default function NativeAppBridge() {
     return () => { cancelled = true; remove?.(); };
   }, []);
 
+  // ── Status-bar icons follow the APP's theme ────────────────────────────
+  // Without an explicit style Android picks the icon colour from the PHONE's
+  // dark mode, so a light app on a dark phone shows white icons on white. The
+  // layout script marks a light theme with data-sc-theme="light"; no attribute
+  // means dark. SystemBars: LIGHT = dark icons (for a light screen).
+  useEffect(() => {
+    if (detectNativePlatform() !== "android") return;
+    let stopped = false;
+    let last = "";
+    const apply = async () => {
+      const want = document.documentElement.getAttribute("data-sc-theme") === "light" ? "LIGHT" : "DARK";
+      if (want === last) return;
+      last = want;
+      try {
+        const { SystemBars, SystemBarsStyle } = await import("@capacitor/core");
+        if (stopped) return;
+        await SystemBars.setStyle({ style: want === "LIGHT" ? SystemBarsStyle.Light : SystemBarsStyle.Dark });
+      } catch { last = ""; /* older shell without the plugin: nothing to set */ }
+    };
+    void apply();
+    const mo = new MutationObserver(() => { void apply(); });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-sc-theme"] });
+    return () => { stopped = true; mo.disconnect(); };
+  }, []);
+
   useEffect(() => {
     if (!detectNativeApp()) return;
 
