@@ -31,6 +31,8 @@ export type Platform =
   | "tiktok"
   | "pinterest"
   | "youtube"
+  | "x"
+  | "hackernews"
   | "web"
   | "email"
   | "site";
@@ -43,7 +45,9 @@ export type TouchKind =
   | "connect_sent"
   | "emailed"
   | "called"
-  | "lead_listed";
+  | "lead_listed"
+  /** The person said no, or unsubscribed, from the Sheet: every channel stops. */
+  | "opted_out";
 
 /** Every env var Crew reads. env.ts is the only file that touches process.env for these. */
 export type EnvKey =
@@ -59,7 +63,15 @@ export type EnvKey =
   | "REDDIT_USER_AGENT"
   | "GOOGLE_SHEETS_SA_JSON"
   | "CREW_LEADS_SHEET_ID"
-  | "CREW_OFFICE_SHEET_ID";
+  | "CREW_OFFICE_SHEET_ID"
+  // The Google Sheets headquarters ("SwiftCard Leads"), src/lib/crew/sheets.
+  | "CREW_SHEET_ID"
+  | "CREW_SHEET_ID_TEST"
+  | "CREW_SHARED_DRIVE_ID"
+  | "CREW_SHEET_SHARE_EMAILS"
+  | "CREW_SHEET_HOOK_SECRET"
+  | "BLUESKY_HANDLE"
+  | "BLUESKY_APP_PASSWORD";
 
 export type Schedule =
   | { kind: "every"; minutes: number }
@@ -216,6 +228,56 @@ export type CrewInput = {
   url: string | null;
   text: string;
   status: "new" | "used" | "skipped";
+};
+
+// ── The Google Sheet (src/lib/crew/sheets) ──────────────────────────────────
+
+/** What a row in the Sheet points at. */
+export type SheetEntityKind = "approval" | "lead" | "finding" | "custom";
+
+/** One row of one tab, as the backend remembers it (crew_sheet_rows). */
+export type SheetRow = {
+  id: string;
+  tab: string;
+  row_key: string;
+  entity_kind: SheetEntityKind;
+  entity_id: string;
+  /** The Status word the owner sees (and may change) in the Sheet. */
+  status: string;
+  /** Every owner-owned column, by column key: Notes, Date Contacted, an edited message… */
+  owner_cols: Record<string, string>;
+  /** Hash of the agent-owned cells last written, so an unchanged row costs no write. */
+  agent_hash: string;
+  created_at: string;
+  synced_at: string | null;
+  owner_edited_at: string | null;
+};
+
+/** One line of the Activity Log (crew_activity): the full audit trail. */
+export type ActivityRow = {
+  id: string;
+  at: string;
+  agent_id: string | null;
+  platform: string | null;
+  action: string;
+  target: string | null;
+  message: string | null;
+  result: string;
+  error: string | null;
+  row_key: string | null;
+  approved_by: string | null;
+  simulated: boolean;
+};
+
+/** An edit the owner made to a draft in the Sheet (crew_edits), kept as a writing example. */
+export type EditRow = {
+  id: string;
+  at: string;
+  agent_id: string;
+  kind: ApprovalKind;
+  approval_id: string;
+  before: string;
+  after: string;
 };
 
 export type RunResult = {

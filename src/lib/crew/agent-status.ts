@@ -26,13 +26,9 @@ export const STATUS_TONE: Record<AgentStatusKind, Tone> = {
 };
 
 /** The jobs on the Agents tab, in the order they show, and the groups (teams) inside each. */
-export const JOBS: { id: string; name: string; teams: TeamId[] }[] = [
-  { id: "dev", name: "Dev", teams: ["watchdog"] },
-  { id: "sales", name: "Sales", teams: ["office", "leads"] },
-  { id: "outreach", name: "Outreach", teams: ["replies", "contact"] },
-  { id: "marketing", name: "Marketing", teams: ["marketing"] },
-  { id: "planning", name: "Planning", teams: ["system"] },
-];
+// Only the Dev job is on the admin page; Sales, Outreach, Marketing and
+// Planning are run from the Google Sheet (src/lib/crew/sheets) since 2026-10-26.
+export const JOBS: { id: string; name: string; teams: TeamId[] }[] = [{ id: "dev", name: "Dev", teams: ["watchdog"] }];
 
 export const GROUP_NAME: Record<TeamId, string> = {
   watchdog: "Website health",
@@ -77,6 +73,13 @@ const NEEDS: Record<EnvKey, string> = {
   GOOGLE_SHEETS_SA_JSON: "the Google Sheets connection",
   CREW_LEADS_SHEET_ID: "the Google Sheets connection",
   CREW_OFFICE_SHEET_ID: "the Google Sheets connection",
+  CREW_SHEET_ID: "the Google Sheets connection",
+  CREW_SHEET_ID_TEST: "the Google Sheets connection",
+  CREW_SHARED_DRIVE_ID: "the Google Drive connection",
+  CREW_SHEET_SHARE_EMAILS: "the Google Sheets connection",
+  CREW_SHEET_HOOK_SECRET: "the Google Sheets connection",
+  BLUESKY_HANDLE: "the Bluesky connection",
+  BLUESKY_APP_PASSWORD: "the Bluesky connection",
 };
 
 /** Missing settings, as words: "the Stripe connection", "the Reddit connection and the Claude connection". */

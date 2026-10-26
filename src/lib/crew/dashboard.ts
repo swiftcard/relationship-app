@@ -1,15 +1,18 @@
 import type { AgentDef } from "./agent-def";
 import { doorState, teamDoor, type DoorState } from "./doors";
-import { ENV_HELP, crewHardDisabled, missingEnv } from "./env";
-import { AGENTS } from "./registry";
+import { ENV_HELP, crewHardDisabled, env, missingEnv } from "./env";
+import { ADMIN_TEAMS, AGENTS } from "./registry";
 import { GROUP_JOB, GROUP_NAME, agentName, agentStatus, type AgentStatus } from "./agent-status";
 import { SCHEDULE_OVERRIDES_KEY, effectiveSchedule, nyDayStart, plainSchedule, type ScheduleOverrides } from "./schedule";
 import { notHired } from "./staff";
-import { DOOR_TEAMS, type CrewStore, type ReportRow, type RunRow, type UsageTotals } from "./store";
+import type { CrewStore, ReportRow, RunRow, UsageTotals } from "./store";
 import { TIMELINE_DAYS, teamTimeline, type TimelineItem } from "./timeline";
 import type { AgentState, Approval, EnvKey, Finding, Lead, Schedule, Settings, TeamId, TeamRow } from "./types";
 
-// Everything the Agents tab (the office) shows, loaded in one place (server only).
+// Everything the Agents tab shows, loaded in one place (server only). Since
+// 2026-10-26 the tab shows the Watchdog only (ADMIN_TEAMS): the marketing,
+// outreach and lead agents are run from the Google Sheet (src/lib/crew/sheets),
+// so every list here is filtered to the admin teams first.
 
 export type AgentRow = {
   def: AgentDef;
@@ -51,7 +54,10 @@ export type Room = {
   focus: { text: string; until: string | null; by: string | null } | null;
 };
 
-export const ROOM_TEAMS: TeamId[] = [...DOOR_TEAMS, "system"];
+export const ROOM_TEAMS: TeamId[] = [...ADMIN_TEAMS];
+/** The agents the admin page shows and counts. */
+export const ADMIN_AGENTS = AGENTS.filter((d) => ADMIN_TEAMS.includes(d.team));
+const ADMIN_IDS = new Set(ADMIN_AGENTS.map((d) => d.id));
 
 export type Dashboard = {
   ready: boolean;
@@ -75,6 +81,8 @@ export type Dashboard = {
   runs: RunRow[];
   leads: { todayBySource: Record<string, number>; officeToday: Record<string, number>; recent: (Lead & { id: string; created_at: string })[]; office: (Lead & { id: string; created_at: string })[] };
   envNeeded: { key: EnvKey; help: string; agents: string[] }[];
+  /** The SwiftCard Leads workbook, where every other agent is run from (null until it exists). */
+  sheetUrl: string | null;
 };
 
 const blankState = (id: string): AgentState => ({ id, enabled: false, model_override: null, daily_usd_cap: null, config: {}, last_run_at: null, next_run_at: null, lease_until: null, status_note: null });
@@ -84,18 +92,19 @@ export async function loadDashboard(
   now = new Date(),
   o: { room?: TeamId | null } = {},
 ): Promise<Dashboard | { ready: false; envNeeded: Dashboard["envNeeded"] }> {
-  const envNeeded = neededEnv(AGENTS);
+  const envNeeded = neededEnv(ADMIN_AGENTS);
   if (!(await store.ready())) return { ready: false, envNeeded };
   const dayStart = nyDayStart(now).toISOString();
   const weekStart = new Date(now.getTime() - 7 * 86400_000).toISOString();
   const room = o.room ?? null;
-  const [settings, states, teams, inbox, approved, recentDone, today, week, reports, findings, runs, todayBySource, officeToday, recent, office, overrides, runsToday, decided] = await Promise.all([
+  const ids = [...ADMIN_IDS];
+  const [settings, states, teams, inbox, approved, recentDone, today, week, reportsAll, findingsAll, runsAll, todayBySource, officeToday, recent, office, overrides, runsTodayAll, decided, sheetId] = await Promise.all([
     store.getSettings(),
     store.listAgentStates(),
     store.listTeams(),
-    store.listApprovals({ status: ["pending"], limit: 60 }),
-    store.listApprovals({ status: ["approved"], limit: 60 }),
-    store.listApprovals({ status: ["done", "rejected"], limit: 15 }),
+    store.listApprovals({ status: ["pending"], agentIds: ids, limit: 60 }),
+    store.listApprovals({ status: ["approved"], agentIds: ids, limit: 60 }),
+    store.listApprovals({ status: ["done", "rejected"], agentIds: ids, limit: 15 }),
     store.usageTotals(dayStart),
     store.usageTotals(weekStart),
     store.listReports(14),
@@ -107,13 +116,20 @@ export async function loadDashboard(
     store.listLeads("office", 60),
     store.kvGet<ScheduleOverrides>(SCHEDULE_OVERRIDES_KEY).catch(() => null),
     store.runsSince(dayStart),
-    store.listApprovals({ sinceIso: weekStart, limit: 300 }),
+    store.listApprovals({ sinceIso: weekStart, agentIds: ids, limit: 300 }),
+    store.kvGet<string>("sheet:id").catch(() => null),
   ]);
+  const reports = reportsAll.filter((r) => ADMIN_IDS.has(r.agent_id));
+  const findings = findingsAll.filter((f) => ADMIN_IDS.has(f.agent_id));
+  const runs = runsAll.filter((r) => ADMIN_IDS.has(r.agent_id));
+  const runsToday = runsTodayAll.filter((r) => ADMIN_IDS.has(r.agent_id));
+  const sheet = env("CREW_SHEET_ID") || sheetId;
+  const sheetUrl = sheet ? `https://docs.google.com/spreadsheets/d/${sheet}/edit` : null;
   const byId = new Map(states.map((s) => [s.id, s]));
   const hardDisabled = crewHardDisabled();
   const doors = new Map(ROOM_TEAMS.map((team) => [team, doorState(team === "system" ? undefined : teams.find((t) => t.team === team), { team, settings, hardDisabled }, now)]));
   const waitingFor = (id: string) => inbox.filter((a) => a.agent_id === id).length + approved.filter((a) => a.agent_id === id).length;
-  const agents: AgentRow[] = AGENTS.map((def) => {
+  const agents: AgentRow[] = ADMIN_AGENTS.map((def) => {
     const state = byId.get(def.id) ?? blankState(def.id);
     const rule = effectiveSchedule(def, overrides);
     const missing = missingEnv(def.needs);
@@ -164,7 +180,7 @@ export async function loadDashboard(
   if (room) {
     const since = new Date(now.getTime() - TIMELINE_DAYS * 86400_000).toISOString();
     const [chat, roomApprovals, roomReports] = await Promise.all([store.listChat(room, 60), store.listApprovals({ sinceIso: since, limit: 300 }), store.listReports(10, room)]);
-    timeline = teamTimeline({ team: room, defs: AGENTS, chat, approvals: roomApprovals, reports: roomReports, runs, findings, now, plain: true });
+    timeline = teamTimeline({ team: room, defs: ADMIN_AGENTS, chat, approvals: roomApprovals.filter((a) => ADMIN_IDS.has(a.agent_id)), reports: roomReports, runs, findings, now, plain: true });
   }
 
   const summary = {
@@ -193,6 +209,7 @@ export async function loadDashboard(
     runs,
     leads: { todayBySource, officeToday, recent, office },
     envNeeded,
+    sheetUrl,
   };
 }
 

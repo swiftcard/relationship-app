@@ -340,5 +340,12 @@ All three must be set (`hasGoogleWalletConfig()` in `src/lib/google-wallet-confi
 | `REDDIT_USER_AGENT` | Admin agent tooling only. Reddit requires a descriptive user agent, e.g. `web:me.swiftcard.crew:v1 (by /u/yourname)`. |
 | `GOOGLE_SHEETS_SA_JSON` | Admin agent tooling only. A Google Cloud service-account key (the whole JSON) for the lead sheets. Share each sheet with the key's `client_email`. Missing = leads stay in the Agents tab (with CSV download) and nothing is written to Sheets. |
 | `CREW_LEADS_SHEET_ID` | Admin agent tooling only. Id of the cold-lead sheet (from its URL). |
-| `CREW_OFFICE_SHEET_ID` | Admin agent tooling only. Id of the Office-prospects call sheet. |
+| `CREW_OFFICE_SHEET_ID` | Admin agent tooling only. Id of the Office-prospects call sheet (the old mirror; quiet once `CREW_SHEET_ID` is set). |
+| `CREW_SHEET_ID` | Admin agent tooling only. The "SwiftCard Leads" workbook, the marketing and outreach headquarters (SETUP.md). The sync agent creates it in the Shared Drive and prints the id when this is unset; set it to pin the workbook. Missing with no Shared Drive = no Sheet, the marketing agents still run but their rows have nowhere to go. |
+| `CREW_SHEET_ID_TEST` | Development only. A second workbook that local runs write to instead of the live one. Ignored in production. |
+| `CREW_SHARED_DRIVE_ID` | Admin agent tooling only. The Google Workspace Shared Drive the service account is a Content manager of; the workbook and the daily snapshots are created there (a service account cannot own files in a My Drive). Missing = no workbook is created and no snapshots are saved. |
+| `CREW_SHEET_SHARE_EMAILS` | Admin agent tooling only. Comma-separated Google account emails that get Editor access to the workbook. Empty = nobody is added (nothing is guessed). |
+| `CREW_SHEET_HOOK_SECRET` | Admin agent tooling only. Bearer token for `/api/crew/sheet-hook`, the same value as the Apps Script's `HOOK_SECRET` property. Missing = the hook is a 404 and Sheet edits are picked up by the 15-minute poll instead. |
+| `BLUESKY_HANDLE` | Admin agent tooling only. The SwiftCard Bluesky account, for approval-triggered replies (Controls → Bluesky → "Approval posts it", Dry run off). Missing = Bluesky rows are copy-and-open like the rest. |
+| `BLUESKY_APP_PASSWORD` | Admin agent tooling only. An app password for that account (Settings → App passwords), never the login password. |
 | `VERCEL_TOKEN` | Admin agent tooling only. Optional; lets the security agent read traffic data. Also used by the deploy watchdog workflow (as a GitHub secret). |

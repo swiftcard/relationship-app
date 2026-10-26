@@ -6,7 +6,7 @@ import type { ClaudeProvider, CriticProvider, CriticReply, Effort, LlmRequest, L
 import { MODEL_ID, costUsd, priceFor } from "./models";
 import { nyDayStart } from "./schedule";
 import type { CrewStore } from "./store";
-import type { AgentState, Settings, Tier, Usage } from "./types";
+import type { AgentState, ApprovalKind, Settings, Tier, Usage } from "./types";
 
 // ── What an agent gets when it runs ─────────────────────────────────────────
 // `ctx.llm` is the only way to reach a model. Every call is budget-checked
@@ -236,6 +236,12 @@ export type AgentContext = {
   log(msg: string): void;
   config<T>(key: string, fallback: T): T;
   saveConfig(patch: Record<string, unknown>): Promise<void>;
+  /**
+   * How the owner rewrote this agent's earlier drafts (up to the last 30
+   * edits made in the Sheet), as a block for the draft prompt, or "" when
+   * there are none. Goes on the prompt, never the system text.
+   */
+  ownerExamples(kind: ApprovalKind): Promise<string>;
 };
 
 export async function buildContext(o: {
@@ -284,6 +290,18 @@ export async function buildContext(o: {
       config = { ...config, ...patch };
       await o.store.patchAgentState(o.def.id, { config });
     },
+    async ownerExamples(kind) {
+      const edits = await o.store.recentEdits(o.def.id, kind, 30).catch(() => []);
+      return formatExamples(edits);
+    },
   };
   return ctx;
+}
+
+/** The owner's edits as examples: what the draft said, what they changed it to. Private details are not copied forward: only the pair is shown, trimmed. */
+export function formatExamples(edits: { before: string; after: string }[]): string {
+  const pairs = edits.filter((e) => e.after.trim() && e.after.trim() !== e.before.trim()).slice(0, 30);
+  if (!pairs.length) return "";
+  const cut = (s: string) => s.trim().replace(/\s+/g, " ").slice(0, 400);
+  return `HOW THE OWNER REWRITES DRAFTS (match this taste; never reuse names, numbers or private details from these):\n${pairs.map((e, i) => `${i + 1}. Draft: "${cut(e.before)}"\n   Owner's version: "${cut(e.after)}"`).join("\n")}`;
 }

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { DEFAULT_SETTINGS, DOOR_TEAMS, defaultTeam, type CrewStore, type NewApproval, type ReportRow, type RunRow, type UsageRow, type UsageTotals } from "./store";
-import type { AgentState, Approval, ApprovalKind, ApprovalStatus, ChatMessage, CrewInput, Finding, Lead, Platform, Settings, TeamId, TeamRow, TouchKind } from "./types";
+import { DEFAULT_SETTINGS, DOOR_TEAMS, defaultTeam, type CrewStore, type NewApproval, type ReportRow, type RunRow, type SuppressionRow, type UsageRow, type UsageTotals } from "./store";
+import type { ActivityRow, AgentState, Approval, ApprovalKind, ApprovalStatus, ChatMessage, CrewInput, EditRow, Finding, Lead, Platform, Settings, SheetRow, TeamId, TeamRow, TouchKind } from "./types";
 
 // ── In-memory CrewStore for tests and local dry runs ───────────────────────
 // Mirrors the SQL semantics that matter: the one-reply-per-thread unique
@@ -22,7 +22,12 @@ export class MemoryStore implements CrewStore {
   inputs: CrewInput[] = [];
   limits = new Map<string, { ceiling: number; warmup_start: string }>();
   kv = new Map<string, unknown>();
-  suppression = new Map<string, string>();
+  suppression = new Map<string, SuppressionRow>();
+  sheetRows: SheetRow[] = [];
+  activity: ActivityRow[] = [];
+  controls = new Map<string, { value: unknown; source: string; updated_at: string }>([["dry_run", { value: true, source: "system", updated_at: "1970-01-01T00:00:00Z" }]]);
+  edits: EditRow[] = [];
+  sheetTables = true;
   leads: (Lead & { id: string; created_at: string; sheet_synced_at: string | null })[] = [];
   facts: { competitor: string; fact: string; value: string; source_url: string; seen_at: string }[] = [];
   teams = new Map<TeamId, TeamRow>();
@@ -135,9 +140,9 @@ export class MemoryStore implements CrewStore {
     const a = this.approvals.find((x) => x.id === id);
     return a ? { ...a } : null;
   }
-  async listApprovals(f: { status?: ApprovalStatus[]; agentId?: string; sinceIso?: string; limit?: number }) {
+  async listApprovals(f: { status?: ApprovalStatus[]; agentId?: string; agentIds?: string[]; sinceIso?: string; limit?: number }) {
     return this.approvals
-      .filter((a) => (!f.status || f.status.includes(a.status)) && (!f.agentId || a.agent_id === f.agentId) && (!f.sinceIso || a.created_at >= f.sinceIso))
+      .filter((a) => (!f.status || f.status.includes(a.status)) && (!f.agentId || a.agent_id === f.agentId) && (!f.agentIds || f.agentIds.includes(a.agent_id)) && (!f.sinceIso || a.created_at >= f.sinceIso))
       .slice()
       .reverse()
       .slice(0, f.limit ?? 100);
@@ -196,6 +201,16 @@ export class MemoryStore implements CrewStore {
   }
   async identitiesFor(personId: string) {
     return this.identities.filter((i) => i.person_id === personId).map(({ platform, handle_norm }) => ({ platform, handle_norm }));
+  }
+  async listTouchedPeople(limit: number) {
+    const real = this.touches.filter((t) => t.kind !== "lead_listed" && t.kind !== "dm_drafted");
+    const ids = [...new Set(real.slice().reverse().map((t) => t.person_id))].slice(0, limit);
+    return ids.map((id) => ({
+      id,
+      display_name: this.people.get(id)?.display_name ?? null,
+      identities: this.identities.filter((i) => i.person_id === id).map(({ platform, handle_norm }) => ({ platform, handle_norm })),
+      touches: this.touches.filter((t) => t.person_id === id).map(({ platform, kind, at, approval_id }) => ({ platform, kind, at, approval_id })),
+    }));
   }
   async claimDm(personId: string, approvalId: string) {
     if (this.touches.some((t) => t.person_id === personId && t.kind !== "lead_listed")) return false;
@@ -285,8 +300,13 @@ export class MemoryStore implements CrewStore {
   async isSuppressed(values: string[]) {
     return values.some((v) => this.suppression.has(v.toLowerCase()));
   }
-  async addSuppression(value: string, reason: string) {
-    this.suppression.set(value.toLowerCase(), reason);
+  async addSuppression(value: string, reason: string, o: { source?: string; channel?: string } = {}) {
+    const v = value.toLowerCase();
+    const prev = this.suppression.get(v);
+    this.suppression.set(v, { value: v, reason, added_at: prev?.added_at ?? this.now(), source: o.source ?? prev?.source ?? "manual", channel: o.channel ?? prev?.channel ?? "email" });
+  }
+  async listSuppression(limit: number) {
+    return [...this.suppression.values()].slice(-limit).reverse();
   }
   async insertLeads(leads: Lead[]) {
     let n = 0;
@@ -344,5 +364,61 @@ export class MemoryStore implements CrewStore {
     }
     this.facts.push({ ...f, seen_at: this.now() });
     return { changed: true, previous: null };
+  }
+
+  async sheetsReady() {
+    return this.sheetTables;
+  }
+  async listSheetRows(tab?: string) {
+    return this.sheetRows.filter((r) => !tab || r.tab === tab).map((r) => ({ ...r, owner_cols: { ...r.owner_cols } }));
+  }
+  async getSheetRow(rowKey: string) {
+    const r = this.sheetRows.find((x) => x.row_key === rowKey);
+    return r ? { ...r, owner_cols: { ...r.owner_cols } } : null;
+  }
+  async sheetRowFor(kind: SheetRow["entity_kind"], entityId: string) {
+    const r = this.sheetRows.find((x) => x.entity_kind === kind && x.entity_id === entityId);
+    return r ? { ...r, owner_cols: { ...r.owner_cols } } : null;
+  }
+  async upsertSheetRow(r: Omit<SheetRow, "id" | "created_at">) {
+    const ex = this.sheetRows.find((x) => x.row_key === r.row_key);
+    if (ex) {
+      Object.assign(ex, r);
+      return { ...ex };
+    }
+    const row: SheetRow = { ...r, id: randomUUID(), created_at: this.now() };
+    this.sheetRows.push(row);
+    return { ...row };
+  }
+  async patchSheetRow(rowKey: string, patch: Partial<Omit<SheetRow, "id" | "row_key" | "created_at">>) {
+    const r = this.sheetRows.find((x) => x.row_key === rowKey);
+    if (r) Object.assign(r, patch);
+  }
+
+  async logActivity(a: Omit<ActivityRow, "id" | "at">) {
+    this.activity.push({ ...a, id: randomUUID(), at: this.now() });
+  }
+  async listActivity(limit: number) {
+    return this.activity.slice(-limit).reverse();
+  }
+  async activitySince(sinceIso: string) {
+    return this.activity.filter((a) => a.at >= sinceIso);
+  }
+
+  async getControls() {
+    return Object.fromEntries([...this.controls.entries()].map(([k, v]) => [k, v.value]));
+  }
+  async setControl(key: string, value: unknown, source: "sheet" | "admin" | "system") {
+    this.controls.set(key, { value, source, updated_at: this.now() });
+  }
+
+  async addEdit(e: Omit<EditRow, "id" | "at">) {
+    this.edits.push({ ...e, id: randomUUID(), at: this.now() });
+  }
+  async recentEdits(agentId: string, kind: ApprovalKind, n: number) {
+    return this.edits
+      .filter((e) => e.agent_id === agentId && e.kind === kind)
+      .slice(-n)
+      .reverse();
   }
 }

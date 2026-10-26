@@ -33,7 +33,17 @@ export default function CrewView({ data, tab: tabParam, msg, tone, filter, edit 
     <div className="space-y-5">
       <div>
         <h1 className="text-xl font-bold text-white">Agents</h1>
-        <p className="text-gray-500 text-sm mt-1">Your AI agents. They draft, you approve. Nothing goes out without your OK.</p>
+        <p className="text-gray-500 text-sm mt-1">
+          The website-health agents: they watch the site, the app and payments, and write up fixes for you to approve. The marketing, outreach and lead agents are run from the{" "}
+          {data.ready && data.sheetUrl ? (
+            <a href={data.sheetUrl} target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:underline">
+              SwiftCard Leads sheet
+            </a>
+          ) : (
+            "SwiftCard Leads sheet"
+          )}
+          .
+        </p>
       </div>
 
       {msg && <Banner msg={scrub(msg)} tone={tone} />}

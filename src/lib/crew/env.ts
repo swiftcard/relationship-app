@@ -22,7 +22,27 @@ export const ENV_HELP: Record<EnvKey, string> = {
   GOOGLE_SHEETS_SA_JSON: "Google Cloud service-account key (the whole JSON). Share each sheet with its client_email.",
   CREW_LEADS_SHEET_ID: "The id in the cold-lead sheet's URL (docs.google.com/spreadsheets/d/<id>/edit).",
   CREW_OFFICE_SHEET_ID: "The id in the Office-prospects sheet's URL.",
+  CREW_SHEET_ID: "The id in the SwiftCard Leads workbook's URL (docs.google.com/spreadsheets/d/<id>/edit). The sync agent creates the workbook in the Shared Drive and prints the id when this is unset.",
+  CREW_SHEET_ID_TEST: "Development only. A second workbook that local runs and tests write to, never the live one.",
+  CREW_SHARED_DRIVE_ID: "The id of the Google Workspace Shared Drive (drive.google.com/drive/folders/<id>) the service account is a Content manager of. The workbook and the daily snapshots are created there.",
+  CREW_SHEET_SHARE_EMAILS: "Comma-separated Google account emails that get Editor access to the workbook (the owners). Nobody is guessed; empty = nobody added.",
+  CREW_SHEET_HOOK_SECRET: "Any long random string. The same value goes in the Apps Script's Script Properties as HOOK_SECRET, so edits in the Sheet reach the backend within seconds.",
+  BLUESKY_HANDLE: "The SwiftCard Bluesky account handle (e.g. swiftcardapp.bsky.social) for approval-triggered replies.",
+  BLUESKY_APP_PASSWORD: "An app password for that Bluesky account (Settings → App passwords), never the account password.",
 };
+
+/** The SwiftCard Bluesky account is connected (needed before an approved reply can be posted). */
+export function blueskyConfigured(): boolean {
+  return hasEnv("BLUESKY_HANDLE") && hasEnv("BLUESKY_APP_PASSWORD");
+}
+
+/** Emails the workbook is shared with: the owners' Google accounts, never guessed. */
+export function sheetShareEmails(): string[] {
+  return (env("CREW_SHEET_SHARE_EMAILS") ?? "")
+    .split(/[,\s]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(s));
+}
 
 export function env(key: EnvKey): string | undefined {
   const v = process.env[key];

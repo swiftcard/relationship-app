@@ -163,9 +163,11 @@ export default function Home({ d, edit }: { d: Dashboard; edit?: string }) {
       <NeedsYou d={d} edit={edit} />
       <Jobs d={d} />
       <div className="flex flex-wrap gap-2">
-        <Link href="/admin/crew?tab=desk#hand-off" className={`${btn} bg-gray-900 border border-gray-700 text-white hover:bg-gray-800`}>
-          Hand something to the agents
-        </Link>
+        {d.sheetUrl && (
+          <a href={d.sheetUrl} target="_blank" rel="noopener noreferrer" className={`${btn} bg-gray-900 border border-gray-700 text-white hover:bg-gray-800`}>
+            Open the SwiftCard Leads sheet
+          </a>
+        )}
         <Link href="/admin/crew?tab=settings" className={`${btn} bg-gray-900 border border-gray-700 text-white hover:bg-gray-800`}>
           Settings
         </Link>

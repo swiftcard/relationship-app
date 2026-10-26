@@ -61,6 +61,8 @@ export const STAFF: Record<string, Person> = {
 
   head: { first: "Hannah", title: "Chief of staff" },
   "system-test": { first: "Tess", title: "Trainee (practice drafts)", hired: false },
+  "sheet-sync": { first: "Shea", title: "Sheet sync" },
+  "sheet-daily": { first: "Dana", title: "Sheet daily snapshot" },
 };
 
 /** What each room is called in the office. */

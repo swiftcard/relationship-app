@@ -162,7 +162,7 @@ async function draftEmails(ctx: AgentContext, rows: Lead[]): Promise<number> {
       platform: "email",
       person: { platform: "email", handle: r.email!, name: r.name },
       debate: record,
-      meta: { company: r.company, phone: r.phone, source_url: r.source_url },
+      meta: { company: r.company, phone: r.phone, source_url: r.source_url, email: r.email, name: r.name, title: r.title, business_type: r.business_type, talking_point: r.notes },
     });
     if (res.ok) made++;
   }
