@@ -89,6 +89,14 @@ export default function NotificationBell({
   useEffect(() => {
     openRef.current = open;
   }, [open]);
+  // Escape closes the panel — and it is what the Android back button sends to
+  // an open dialog (NativeAppBridge), so without it back left the bell open.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
 
   // "Get notifications like this on your phone" — under ONE row at most (the
   // newest unread new contact / reply / contact download), only while the
