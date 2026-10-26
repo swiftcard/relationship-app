@@ -369,8 +369,10 @@ export async function sendPushToUser(userId: string, payload: {
             }
           });
           if (r.result === "sent") return true;
-          if (r.status === 404 || r.status === 410) {
-            // Expired browser subscription: prune, not a fault.
+          if (r.status === 404 || r.status === 410 || r.status === 403) {
+            // Expired browser subscription: prune, not a fault. A 403 from a
+            // browser push service means the subscription was created under a
+            // different VAPID key (or was revoked) and can never be delivered to.
             await admin.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
             return false;
           }
