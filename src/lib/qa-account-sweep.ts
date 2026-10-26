@@ -21,6 +21,8 @@ export const QA_SWEEP_BUDGET_MS = 45_000;
 const QA_SWEEP_PARALLEL = 5;
 const PER_PAGE = 1000;
 const MAX_PAGES = 50;
+const LIST_ATTEMPTS = 3;
+const LIST_RETRY_DELAY_MS = 500;
 
 type Admin = ReturnType<typeof getAdminSupabase>;
 
@@ -35,8 +37,18 @@ export function isLeftoverQaAccount(u: { email?: string | null; created_at?: str
 export async function purgeLeftoverQaAccounts(admin: Admin, nowMs: number = Date.now()): Promise<number> {
   const due: string[] = [];
   for (let page = 1; page <= MAX_PAGES && due.length < QA_SWEEP_LIMIT; page++) {
-    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: PER_PAGE });
-    if (error) throw new Error(`listUsers page ${page}: ${error.message}`);
+    // A listing can fail once on a blip (the 2026-10-20 error had an empty
+    // message), so ask again before giving up on the day's sweep.
+    let res = await admin.auth.admin.listUsers({ page, perPage: PER_PAGE });
+    for (let attempt = 1; res.error && attempt < LIST_ATTEMPTS; attempt++) {
+      await new Promise((r) => setTimeout(r, LIST_RETRY_DELAY_MS * attempt));
+      res = await admin.auth.admin.listUsers({ page, perPage: PER_PAGE });
+    }
+    const { data, error } = res;
+    if (error) {
+      const why = error.message || [error.name, (error as { status?: number }).status].filter(Boolean).join(" ") || JSON.stringify(error);
+      throw new Error(`listUsers page ${page}: ${why}`);
+    }
     const users = data?.users ?? [];
     for (const u of users) if (isLeftoverQaAccount(u, nowMs)) due.push(u.id);
     if (users.length < PER_PAGE) break;
