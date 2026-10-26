@@ -111,6 +111,30 @@ export default function NativeAppBridge() {
       }
     } catch { /* ignore */ }
 
+    // ── Android status-bar icons follow the APP's theme ────────────────────
+    // Unset, Android picks the icon colour from the PHONE's dark mode, so a
+    // light app on a dark phone got light icons on a light screen. The theme
+    // is the data-sc-theme attribute ("light" or absent = dark); the style
+    // names are the bar's BACKGROUND, so light theme → "LIGHT" (dark icons).
+    let themeWatch: MutationObserver | null = null;
+    if (detectNativePlatform() === "android") {
+      const systemBars = (window as unknown as {
+        Capacitor?: { Plugins?: { SystemBars?: { setStyle: (o: { style: string }) => Promise<void> } } };
+      }).Capacitor?.Plugins?.SystemBars;
+      let lastBarStyle = "";
+      const applyBarStyle = () => {
+        const style = document.documentElement.getAttribute("data-sc-theme") === "light" ? "LIGHT" : "DARK";
+        if (style === lastBarStyle) return;
+        lastBarStyle = style;
+        try { void systemBars?.setStyle({ style })?.catch?.(() => { /* older shell: bar keeps its default */ }); } catch { /* ignore */ }
+      };
+      applyBarStyle();
+      try {
+        themeWatch = new MutationObserver(applyBarStyle);
+        themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-sc-theme"] });
+      } catch { /* ignore */ }
+    }
+
     // ── A public card / Swift Links page must never be a screen in the app ──
     // Owner, 2026-09-29: "We don't want links ever opening in that app. That
     // glitch cannot happen." No link opens the app and no app button loads one
@@ -508,6 +532,7 @@ export default function NativeAppBridge() {
       removeListener?.();
       window.removeEventListener(ACTIVE_CARD_EVENT, onActiveCard);
       publicWatch?.disconnect();
+      themeWatch?.disconnect();
     };
   }, []);
 
