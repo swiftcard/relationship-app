@@ -301,3 +301,11 @@ describe("the section costs no first-party network", () => {
     expect(c).toMatch(/el\?\.complete && el\.naturalWidth > 0\) setLoaded\(true\)/);
   });
 });
+
+describe("faviconFor skips the fictional demo business", () => {
+  it("asks for no icon, so the demos never request a guaranteed 404", () => {
+    expect(faviconFor("https://coastlinehomes.com")).toBeNull();
+    expect(faviconFor("https://www.coastlinehomes.com/listings")).toBeNull();
+    expect(faviconFor("https://calendly.com/x")).toBe("/api/link-icon?host=calendly.com");
+  });
+});
