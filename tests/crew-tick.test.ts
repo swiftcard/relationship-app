@@ -76,17 +76,17 @@ describe("tick and the office doors", () => {
 
   it("a locked door holds its workers; opening it lets the overdue ones run", async () => {
     const store = new MemoryStore();
-    const worker = fakeAgent({ id: "w", team: "replies" });
+    const worker = fakeAgent({ id: "w", team: "watchdog" });
     const other = fakeAgent({ id: "o", team: "contact" });
     for (const id of ["w", "o"]) await store.patchAgentState(id, { enabled: true });
-    await store.patchTeam("replies", { door_open: false });
+    await store.patchTeam("watchdog", { door_open: false });
     const r = await runTick({ store, providers, agents: [worker, other], now: WED_2PM });
     expect(r.ran.map((x) => x.agent)).toEqual(["o"]);
     expect(r.skipped).toEqual([{ agent: "w", why: "door locked" }]);
     // The skip writes nothing on the agent: its next run time stays due.
     expect((await store.getAgentState("w")).next_run_at).toBeNull();
 
-    await store.patchTeam("replies", { door_open: true });
+    await store.patchTeam("watchdog", { door_open: true });
     expect((await runTick({ store, providers, agents: [worker], now: WED_2PM })).ran.map((x) => x.agent)).toEqual(["w"]);
   });
 
@@ -100,9 +100,9 @@ describe("tick and the office doors", () => {
 
   it("respects opening hours and a manager's pause", async () => {
     const store = new MemoryStore();
-    const w = fakeAgent({ id: "w", team: "replies" });
+    const w = fakeAgent({ id: "w", team: "watchdog" });
     await store.patchAgentState("w", { enabled: true });
-    await store.patchTeam("replies", { hours: { days: [1, 2, 3, 4, 5], open: 540, close: 1080 } });
+    await store.patchTeam("watchdog", { hours: { days: [1, 2, 3, 4, 5], open: 540, close: 1080 } });
     const night = () => new Date("2026-10-22T02:00:00Z"); // Wed 10pm
     expect((await runTick({ store, providers, agents: [w], now: night })).skipped).toEqual([{ agent: "w", why: "door locked" }]);
 
@@ -116,9 +116,9 @@ describe("tick and the office doors", () => {
     const store = new MemoryStore();
     const w = fakeAgent({
       id: "w",
-      team: "replies",
+      team: "watchdog",
       run: async (ctx) => {
-        await ctx.store.patchTeam("replies", { door_open: false });
+        await ctx.store.patchTeam("watchdog", { door_open: false });
         await ctx.llm.ask("draft", { system: "s", prompt: "p" });
         return { summary: "should not get here" };
       },

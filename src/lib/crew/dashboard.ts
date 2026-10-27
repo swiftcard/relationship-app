@@ -4,15 +4,17 @@ import { ENV_HELP, crewHardDisabled, env, missingEnv } from "./env";
 import { ADMIN_TEAMS, AGENTS } from "./registry";
 import { GROUP_JOB, GROUP_NAME, agentName, agentStatus, type AgentStatus } from "./agent-status";
 import { SCHEDULE_OVERRIDES_KEY, effectiveSchedule, nyDayStart, plainSchedule, type ScheduleOverrides } from "./schedule";
+import { loadSheetAgents, type SheetAgentRow } from "./sheet-agents";
 import { notHired } from "./staff";
 import type { CrewStore, ReportRow, RunRow, UsageTotals } from "./store";
 import { TIMELINE_DAYS, teamTimeline, type TimelineItem } from "./timeline";
 import type { AgentState, Approval, EnvKey, Finding, Lead, Schedule, Settings, TeamId, TeamRow } from "./types";
 
 // Everything the Agents tab shows, loaded in one place (server only). Since
-// 2026-10-26 the tab shows the Watchdog only (ADMIN_TEAMS): the marketing,
-// outreach and lead agents are run from the Google Sheet (src/lib/crew/sheets),
-// so every list here is filtered to the admin teams first.
+// 2026-10-26 the tab shows the Watchdog as its group (ADMIN_TEAMS) plus one
+// Start / Stop row per marketing, outreach and lead agent (sheet-agents.ts),
+// whose work lands in the Google Sheet (src/lib/crew/sheets). Every other
+// list here is filtered to the admin teams first.
 
 export type AgentRow = {
   def: AgentDef;
@@ -81,8 +83,10 @@ export type Dashboard = {
   runs: RunRow[];
   leads: { todayBySource: Record<string, number>; officeToday: Record<string, number>; recent: (Lead & { id: string; created_at: string })[]; office: (Lead & { id: string; created_at: string })[] };
   envNeeded: { key: EnvKey; help: string; agents: string[] }[];
-  /** The SwiftCard Leads workbook, where every other agent is run from (null until it exists). */
+  /** The SwiftCard Leads workbook, where every other agent's rows go (null until it exists). */
   sheetUrl: string | null;
+  /** The Start / Stop list: every agent that works into the Sheet, named after its tab. */
+  sheetAgents: SheetAgentRow[];
 };
 
 const blankState = (id: string): AgentState => ({ id, enabled: false, model_override: null, daily_usd_cap: null, config: {}, last_run_at: null, next_run_at: null, lease_until: null, status_note: null });
@@ -119,14 +123,16 @@ export async function loadDashboard(
     store.listApprovals({ sinceIso: weekStart, agentIds: ids, limit: 300 }),
     store.kvGet<string>("sheet:id").catch(() => null),
   ]);
+  const hardDisabledNow = crewHardDisabled();
+  const sheetIdNow = env("CREW_SHEET_ID") || sheetId;
+  const sheetAgents = await loadSheetAgents(store, { now, settings, hardDisabled: hardDisabledNow, states, runs: runsAll, overrides, sheetId: sheetIdNow, gids: await store.kvGet<Record<string, number>>("sheet:gids").catch(() => null) });
   const reports = reportsAll.filter((r) => ADMIN_IDS.has(r.agent_id));
   const findings = findingsAll.filter((f) => ADMIN_IDS.has(f.agent_id));
   const runs = runsAll.filter((r) => ADMIN_IDS.has(r.agent_id));
   const runsToday = runsTodayAll.filter((r) => ADMIN_IDS.has(r.agent_id));
-  const sheet = env("CREW_SHEET_ID") || sheetId;
-  const sheetUrl = sheet ? `https://docs.google.com/spreadsheets/d/${sheet}/edit` : null;
+  const sheetUrl = sheetIdNow ? `https://docs.google.com/spreadsheets/d/${sheetIdNow}/edit` : null;
   const byId = new Map(states.map((s) => [s.id, s]));
-  const hardDisabled = crewHardDisabled();
+  const hardDisabled = hardDisabledNow;
   const doors = new Map(ROOM_TEAMS.map((team) => [team, doorState(team === "system" ? undefined : teams.find((t) => t.team === team), { team, settings, hardDisabled }, now)]));
   const waitingFor = (id: string) => inbox.filter((a) => a.agent_id === id).length + approved.filter((a) => a.agent_id === id).length;
   const agents: AgentRow[] = ADMIN_AGENTS.map((def) => {
@@ -210,6 +216,7 @@ export async function loadDashboard(
     leads: { todayBySource, officeToday, recent, office },
     envNeeded,
     sheetUrl,
+    sheetAgents,
   };
 }
 

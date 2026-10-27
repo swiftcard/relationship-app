@@ -283,5 +283,7 @@ export type EditRow = {
 export type RunResult = {
   summary: string;
   stats?: Record<string, number>;
+  /** Wait at least this long before the next run (nothing new found, or today's ceiling reached). */
+  restMinutes?: number;
   status?: "ok" | "skipped";
 };

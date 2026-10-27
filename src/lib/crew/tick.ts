@@ -37,12 +37,14 @@ export async function runAgent(o: { def: AgentDef; store: CrewStore; providers: 
   let summary = "";
   let stats: Record<string, number> = {};
   let note: string | null = null;
+  let rest = 0;
   try {
     const ctx = await buildContext({ def: o.def, store: o.store, providers: o.providers, runId, now });
     stats = ctx.stats;
     const r = await o.def.run(ctx);
     status = r.status ?? "ok";
     summary = r.summary;
+    rest = r.restMinutes ?? 0;
     stats = { ...ctx.stats, ...(r.stats ?? {}) };
     if (ctx.tierWhy) note = ctx.tierWhy;
   } catch (e) {
@@ -68,9 +70,11 @@ export async function runAgent(o: { def: AgentDef; store: CrewStore; providers: 
   }
   await o.store.finishRun(runId, status, summary, stats, status === "error" ? summary : undefined);
   const t = now();
+  // A continuous agent with nothing new, or at today's ceiling, rests instead of paying for searches that find nothing.
+  const next = new Date(Math.max(nextRun(o.schedule ?? o.def.schedule, t).getTime(), t.getTime() + rest * 60_000));
   await o.store.patchAgentState(o.def.id, {
     last_run_at: t.toISOString(),
-    next_run_at: nextRun(o.schedule ?? o.def.schedule, t).toISOString(),
+    next_run_at: next.toISOString(),
     lease_until: null,
     status_note: note,
   });

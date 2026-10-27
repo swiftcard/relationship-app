@@ -7,10 +7,10 @@ import { logActivity } from "./activity";
 import { applyChange, applyControlCell, applyPasteRow, applySuppressionRow } from "./apply";
 import { HEADER_ROWS, createWorkbook, ensureWorkbook, shareWorkbook, sheetsHqConfigured, workbookId } from "./bootstrap";
 import { dryRun } from "./controls";
-import { activityRows, controlsRows, dashboardCells, intentRows, performanceRows, queueRows, sourceStatsRows, suppressionRows, top50Rows, type Counts, type Placement } from "./derived";
+import { activityRows, allLeadsRows, controlsRows, dashboardCells, intentRows, performanceRows, queueRows, sourceStatsRows, suppressionRows, top50Rows, type Counts, type Placement } from "./derived";
 import { agentHash, buildRows, type BuiltRow, type RowSources } from "./rows";
 import type { TabSpec } from "./spec";
-import { ACTIVITY, ALL_TABS, CONTROLS, DASHBOARD, INTENT, PASTE, PERFORMANCE, QUEUE, SOURCE_STATS, SUPPRESSION, TOP50 } from "./tabs";
+import { ACTIVITY, ALL_LEADS, ALL_TABS, CONTROLS, DASHBOARD, INTENT, PASTE, PERFORMANCE, QUEUE, SOURCE_STATS, SUPPRESSION, TOP50 } from "./tabs";
 
 // ── One sync: read the Sheet, apply what the owner changed, write what the
 // agents made, rebuild the computed tabs ────────────────────────────────────
@@ -107,6 +107,8 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
     }
   }
   const gid = new Map(shaped.meta.sheets.map((s) => [s.title, s.sheetId]));
+  // The admin page's "Open its tab" links land on the right tab with these.
+  await store.kvSet("sheet:gids", Object.fromEntries(gid)).catch(() => undefined);
 
   // 1. Read every tab the owner can type in: one request.
   const tabs = readableTabs();
@@ -142,6 +144,10 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
       });
     });
   }
+  // Notes and edited messages first, Status last: an edit made with the same
+  // sweep as an Approved (an option picked in Notes, a reworded message) must
+  // be in place before the decision uses it.
+  pending.sort((x, y) => Number(x.col === "status") - Number(y.col === "status"));
   for (const ch of pending) {
     report.changes++;
     try {
@@ -320,6 +326,7 @@ async function derivedTabs(store: CrewStore, id: string, o: { built: BuiltRow[];
   await rewrite(store, id, QUEUE, queue, report);
   await rewrite(store, id, INTENT, intentRows(built, sources.approvals, known), report);
   await rewrite(store, id, TOP50, top50Rows(built, known, now), report);
+  await rewrite(store, id, ALL_LEADS, allLeadsRows(built, known), report);
   await rewrite(store, id, SOURCE_STATS, sourceStatsRows({ built, known, approvals: sources.approvals, counts, now }), report);
   const leads7dByAgent: Record<string, number> = {};
   const agentOf: Record<string, string> = { web: "leads-web", reddit: "leads-reddit", quora: "leads-quora", facebook: "leads-facebook", alignable: "leads-alignable" };

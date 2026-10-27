@@ -129,8 +129,14 @@ describe("your schedule", () => {
     expect(effectiveSchedule(fb, { [fb.id]: { kind: "every", minutes: 15 } })).toBe(fb.schedule);
     const li = agentById("leads-linkedin")!;
     expect(effectiveSchedule(li, { [li.id]: { kind: "every", minutes: 15 } })).toBe(li.schedule);
+    // A continuous agent (Start / Stop) runs every clock tick unless you set a schedule; a bad one is ignored.
     const maya = agentById("replies-reddit")!;
-    expect(effectiveSchedule(maya, { [maya.id]: { kind: "every", minutes: 3 } as never })).toBe(maya.schedule);
+    expect(maya.continuous).toBe(true);
+    expect(effectiveSchedule(maya, { [maya.id]: { kind: "every", minutes: 3 } as never })).toEqual({ kind: "every", minutes: 15 });
+    expect(effectiveSchedule(maya, { [maya.id]: { kind: "daily", hour: 9, minute: 0 } })).toEqual({ kind: "daily", hour: 9, minute: 0 });
+    // The Watchdog keeps its own default.
+    const ben = agentById("watch-bugs")!;
+    expect(effectiveSchedule(ben, {})).toBe(ben.schedule);
   });
 
   it("the clock follows your schedule when it sets the next run", async () => {

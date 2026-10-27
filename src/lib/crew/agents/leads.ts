@@ -2,6 +2,9 @@ import type { AgentDef } from "../agent-def";
 import type { AgentContext } from "../context";
 import { mailtos, pageTitle, phonesIn, readSite, textOf } from "../leads/fetch-page";
 import { cleanEmails, leadsToday, recordLeads } from "../leads/record";
+import { pairs, rotate } from "../replies/engine";
+import { minutesToTomorrow } from "../schedule";
+import { PROFESSIONS, US_METROS } from "../search-plan";
 import { emailsIn } from "../ledger";
 import { redditConfigured, searchSubreddits } from "../sources/reddit";
 import { syncLeadsToSheet } from "../sources/sheets";
@@ -107,14 +110,17 @@ const base = { team: "leads" as const, role: "worker" as const, tier: "sonnet" a
 export const leadsWeb: AgentDef = {
   ...base,
   id: "leads-web",
-  name: "Open-web leads",
+  name: "Web Leads",
+  continuous: true,
   schedule: { kind: "every", minutes: 30 },
   dailyUsd: 3,
   needs: ["CREW_ANTHROPIC_API_KEY"],
   purpose: "Runs all day: searches for business types in US cities (like real estate offices in Charlotte), reads their own websites and saves the business emails they publish to the lead sheet.",
   async run(ctx) {
-    const ceiling = ctx.config<number>("daily_ceiling", DAILY_CEILING);
-    if ((await leadsToday(ctx, "cold")) >= ceiling) return { summary: `Reached today's ceiling of ${ceiling} leads.` };
+    // Controls → "New leads per day (max)" wins over the agent's own default.
+    const limit = Number((await ctx.store.getControls().catch(() => ({}) as Record<string, unknown>)).daily_lead_limit ?? NaN);
+    const ceiling = Number.isFinite(limit) ? limit : ctx.config<number>("daily_ceiling", DAILY_CEILING);
+    if ((await leadsToday(ctx, "cold")) >= ceiling) return { summary: `Done for today: ${ceiling} new leads is today's limit. Back tomorrow.`, restMinutes: minutesToTomorrow(ctx.now()) };
     const n = ctx.config<number>("query_index", 0);
     const { type, city } = queryAt(n);
     await ctx.saveConfig({ query_index: n + 1 });
@@ -131,7 +137,8 @@ export const leadsWeb: AgentDef = {
 export const leadsReddit: AgentDef = {
   ...base,
   id: "leads-reddit",
-  name: "Reddit leads",
+  name: "Reddit Leads",
+  continuous: true,
   schedule: { kind: "daily", hour: 16, minute: 0 },
   dailyUsd: 0.1,
   needs: ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "REDDIT_USER_AGENT"],
@@ -155,13 +162,15 @@ export const leadsReddit: AgentDef = {
 export const leadsQuora: AgentDef = {
   ...base,
   id: "leads-quora",
-  name: "Quora leads",
+  name: "Quora Leads",
+  continuous: true,
   schedule: { kind: "daily", hour: 16, minute: 30 },
   dailyUsd: 0.3,
   needs: ["CREW_ANTHROPIC_API_KEY"],
   purpose: "Looks for business owners on Quora who list a public business email, and saves them to the lead sheet. No messages.",
   async run(ctx) {
-    const found = await searchPlatform(ctx, "quora", ["profiles or answers by realtors, loan officers, recruiters or local service business owners that list a business email address"], 15);
+    const [[who, where]] = await rotate(ctx, "where_i", pairs(PROFESSIONS, US_METROS), 1);
+    const found = await searchPlatform(ctx, "quora", [`profiles or answers by ${who} in ${where} that list a business email address`], 15);
     const leads = found.flatMap((f) => cleanEmails([f.text]).map((email) => ({ list: "cold" as const, name: f.author, email, source_platform: "quora" as const, source_url: f.url })));
     const added = await recordLeads(ctx, leads);
     await syncLeadsToSheet(ctx.store, "cold").catch(() => 0);
@@ -195,8 +204,8 @@ function pasteLeads(platform: Platform, id: string, name: string, why: string): 
   };
 }
 
-export const leadsFacebook = pasteLeads("facebook", "leads-facebook", "Facebook group leads", "Facebook group posts and pages");
-export const leadsAlignable = pasteLeads("alignable", "leads-alignable", "Alignable leads", "Alignable profiles");
+export const leadsFacebook = pasteLeads("facebook", "leads-facebook", "Facebook Group Leads", "Facebook group posts and pages");
+export const leadsAlignable = pasteLeads("alignable", "leads-alignable", "Alignable Leads", "Alignable profiles");
 
 export const leadsLinkedIn: AgentDef = {
   ...base,

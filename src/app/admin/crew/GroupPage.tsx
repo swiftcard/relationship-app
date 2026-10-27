@@ -3,13 +3,15 @@ import { describeHours, minutesLabel, whenLabel } from "@/lib/crew/doors";
 import { tabForTeam } from "@/lib/crew/office-tabs";
 import AgentCard from "./AgentCard";
 import ApprovalCard from "./ApprovalCard";
-import { ColdEmailRules, Findings, LeadsList } from "./Outputs";
+import { Findings } from "./Outputs";
 import TeamChat from "./TeamChat";
 import { Chevron, Status, btn, card, input, summaryBtn, usd } from "./ui";
 
-// One group's page: pause or resume the whole group, what waits for you, its
-// agents, what it produces, and the chat with its manager. "Planning" (the
-// desk) has no pause switch of its own and no chat: only Pause all stops it.
+// One group's page (since 2026-10-26 only the Watchdog has one): pause or
+// resume the whole group, what waits for you, its agents, the problems it
+// found, and the chat with its manager. The marketing agents have no group
+// page: they are started and stopped one by one on Home, and work into the
+// Google Sheet.
 
 /** "Pause group" / "Resume group": the team's door, one tap. Hidden for Planning, which has none. */
 export function GroupSwitch({ room, back }: { room: Room; back: string }) {
@@ -119,67 +121,6 @@ export function Waiting({ room, tab, here, edit }: { room: Room; tab: string; he
   );
 }
 
-function Plan({ d }: { d: Dashboard }) {
-  const plan = d.reports.find((r) => r.agent_id === "head");
-  return (
-    <section className={`${card} space-y-2`} aria-labelledby="plan">
-      <h3 id="plan" className="text-white font-semibold">
-        Tomorrow&apos;s plan
-      </h3>
-      {plan ? (
-        <pre className="text-gray-200 text-sm whitespace-pre-wrap break-words font-sans">{plan.body}</pre>
-      ) : (
-        <p className="text-gray-400 text-sm">No plan yet. Turn on &quot;Tomorrow&apos;s plan&quot; below and it writes one here every morning from the groups&apos; daily reports.</p>
-      )}
-    </section>
-  );
-}
-
-export function HandOff() {
-  return (
-    <form id="hand-off" method="post" action="/api/admin/crew/paste" className={`${card} space-y-3 scroll-mt-20`}>
-      <h3 className="text-white font-semibold">Hand something to the agents</h3>
-      <p className="text-gray-400 text-sm">
-        For places the agents can&apos;t read on their own, like Facebook groups, Alignable, Instagram and LinkedIn. Paste what you saw and the right agent drafts from it on its next run.
-      </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <label className="text-sm text-gray-300 space-y-1">
-          <span>Where is it from?</span>
-          <select name="platform" className={input} defaultValue="facebook">
-            <option value="facebook">Facebook group</option>
-            <option value="alignable">Alignable</option>
-            <option value="instagram">Instagram</option>
-            <option value="linkedin">LinkedIn</option>
-            <option value="threads">Threads</option>
-            <option value="bluesky">Bluesky</option>
-            <option value="quora">Quora</option>
-            <option value="indiehackers">Indie Hackers</option>
-            <option value="reddit">Reddit</option>
-            <option value="web">Somewhere else</option>
-          </select>
-        </label>
-        <label className="text-sm text-gray-300 space-y-1">
-          <span>What is it?</span>
-          <select name="kind" className={input} defaultValue="post">
-            <option value="post">A post</option>
-            <option value="profile">A person&apos;s profile</option>
-            <option value="page">A business page</option>
-          </select>
-        </label>
-      </div>
-      <label className="block text-sm text-gray-300 space-y-1">
-        <span>Link (optional)</span>
-        <input name="url" type="url" inputMode="url" className={input} placeholder="https://" />
-      </label>
-      <label className="block text-sm text-gray-300 space-y-1">
-        <span>The text</span>
-        <textarea name="text" rows={7} required minLength={20} className={input} placeholder="Paste the post, including the person's name or handle" />
-      </label>
-      <button className={`${btn} bg-blue-600 text-white hover:bg-blue-500`}>Hand it over</button>
-    </form>
-  );
-}
-
 export default function GroupPage({ room, d, edit }: { room: Room; d: Dashboard; edit?: string }) {
   const now = new Date(d.now);
   const tab = tabForTeam(room.team);
@@ -223,7 +164,6 @@ export default function GroupPage({ room, d, edit }: { room: Room; d: Dashboard;
 
       <Waiting room={room} tab={tab} here={here} edit={edit} />
 
-      {room.team === "system" && <Plan d={d} />}
 
       <section className="space-y-3" aria-labelledby={`agents-${room.team}`}>
         <h3 id={`agents-${room.team}`} className="text-white font-semibold">
@@ -262,15 +202,7 @@ export default function GroupPage({ room, d, edit }: { room: Room; d: Dashboard;
         )}
       </section>
 
-      {room.team === "leads" && (
-        <div className="space-y-4">
-          <LeadsList list="cold" title="Email lead list" today={d.leads.todayBySource} rows={d.leads.recent} />
-          <ColdEmailRules />
-        </div>
-      )}
-      {room.team === "office" && <LeadsList list="office" title="Offices to call" today={d.leads.officeToday} rows={d.leads.office} />}
       {room.team === "watchdog" && <Findings d={d} />}
-      {room.team === "system" && <HandOff />}
 
       {room.row && <TeamChat room={room} timeline={d.timeline} tab={tab} />}
 

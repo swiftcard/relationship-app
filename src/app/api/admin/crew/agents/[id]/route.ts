@@ -106,5 +106,28 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     });
     return back(`${who} started. This page updates by itself while it runs.`);
   }
+  if (action === "start") {
+    // Start (the Sheet agents' button): on, unpaused, and working right now.
+    // While it is on it keeps going every 15 minutes until today's ceiling,
+    // then picks up again tomorrow, until Stop.
+    if (def.locked) return back(`${who} can't be started: ${def.locked}`, true);
+    const missing = missingEnv(def.needs);
+    if (missing.length) return back(`${who} needs ${plainNeeds(missing)} first.`, true);
+    const now = new Date();
+    await store.patchAgentState(id, { enabled: true, status_note: null, paused_until: null, pause_note: null, next_run_at: now.toISOString() });
+    const settings = await store.getSettings();
+    if (settings.kill_all || crewHardDisabled()) return back(`${who} is on, but all agents are paused. Tap Resume all agents to let it work.`, true);
+    if (await store.claimLease(id, new Date(now.getTime() + LEASE_MS), now)) {
+      const schedule = effectiveSchedule(def, await scheduleOverrides(store));
+      after(async () => {
+        try {
+          await runAgent({ def, store, providers: liveProviders(), schedule });
+        } catch {
+          await store.patchAgentState(id, { lease_until: null }).catch(() => undefined);
+        }
+      });
+    }
+    return back(`${who} started. It keeps adding rows to its tab in the Sheet until you press Stop.`);
+  }
   return back("Unknown button.", true);
 }

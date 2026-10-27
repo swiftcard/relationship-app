@@ -10,7 +10,7 @@ import { controlDefs } from "./controls";
 import { SHEET_AGENT_IDS } from "./registry";
 import type { BuiltRow } from "./rows";
 import { PRIORITY_RANK } from "./status";
-import { ACTIVITY, CONTROLS, INTENT, PERFORMANCE, QUEUE, SOURCE_STATS, SUPPRESSION, TOP50, tabById } from "./tabs";
+import { ACTIVITY, ALL_LEADS, CONTROLS, INTENT, LEAD_COLUMNS, LEAD_TAB_BY_SOURCE, PERFORMANCE, QUEUE, SOURCE_STATS, SUPPRESSION, TOP50, tabsForAgent } from "./tabs";
 import type { TabSpec } from "./spec";
 
 // ── The tabs that are computed, not stored ──────────────────────────────────
@@ -59,7 +59,30 @@ export function queueRows(built: BuiltRow[], known: Map<string, SheetRow>, sheet
 }
 
 function platformOf(r: BuiltRow): string {
-  const map: Record<string, string> = { "reddit-reply": "Reddit", "reddit-dms": "Reddit", "instagram-linkedin-bio": "Instagram", "instagram-dms": "Instagram", "instagram-comments": "Instagram", linkedin: "LinkedIn", quora: "Quora", bluesky: "Bluesky", threads: "Threads", facebook: "Facebook", indiehackers: "Indie Hackers", alignable: "Alignable", seo: "Website", geo: "AI search", content: "Social / Blog", partnerships: "Email", "competitor-intel": "Web", "office-prospects": "Email / Phone" };
+  const map: Record<string, string> = {
+    "reddit-reply": "Reddit",
+    "reddit-dms": "Reddit",
+    "instagram-linkedin-bio": "Instagram",
+    "instagram-dms": "Instagram",
+    "instagram-comments": "Instagram",
+    "linkedin-comments": "LinkedIn",
+    "linkedin-connections": "LinkedIn",
+    quora: "Quora",
+    bluesky: "Bluesky",
+    threads: "Threads",
+    facebook: "Facebook",
+    indiehackers: "Indie Hackers",
+    alignable: "Alignable",
+    hackernews: "Hacker News",
+    seo: "Website",
+    geo: "AI search",
+    social: "Social",
+    blog: "Blog",
+    partnerships: "Email",
+    events: "In person",
+    "competitor-intel": "Web",
+    "office-prospects": "Email / Phone",
+  };
   return map[r.tab.id] ?? r.tab.name;
 }
 
@@ -80,14 +103,30 @@ export function intentRows(built: BuiltRow[], approvals: Approval[], known: Map<
     });
 }
 
+/** The lead agents' own tabs (All Leads and Top 50 are built from them). */
+export const LEAD_TAB_IDS = new Set(Object.values(LEAD_TAB_BY_SOURCE).map((t) => t.id));
+
+function leadCells(r: BuiltRow, known: Map<string, SheetRow>): CellValue[] {
+  return LEAD_COLUMNS.map((col) => (col.kind === "key" ? r.key : col.kind === "status" ? (known.get(r.key)?.status ?? r.initialStatus) : col.owner ? (known.get(r.key)?.owner_cols[col.key] ?? "") : (r.cells[col.key] ?? "")));
+}
+
 export function top50Rows(built: BuiltRow[], known: Map<string, SheetRow>, now: Date): CellValue[][] {
   const today = nyDay(now);
-  const leads = built.filter((r) => r.tab.id === "all-leads" && String(r.cells.date_found) === today);
+  const leads = built.filter((r) => LEAD_TAB_IDS.has(r.tab.id) && String(r.cells.date_found) === today);
   const score = (r: BuiltRow) => Number(r.cells.score ?? 0) || 0;
   return leads
     .sort((a, b) => score(b) - score(a))
     .slice(0, 50)
-    .map((r) => TOP50.columns.map((col) => (col.kind === "key" ? r.key : col.kind === "status" ? (known.get(r.key)?.status ?? r.initialStatus) : col.owner ? (known.get(r.key)?.owner_cols[col.key] ?? "") : (r.cells[col.key] ?? ""))));
+    .map((r) => leadCells(r, known));
+}
+
+/** All Leads: every lead agent's rows together, newest first. */
+export function allLeadsRows(built: BuiltRow[], known: Map<string, SheetRow>, limit = 2900): CellValue[][] {
+  return built
+    .filter((r) => LEAD_TAB_IDS.has(r.tab.id))
+    .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))
+    .slice(0, limit)
+    .map((r) => leadCells(r, known));
 }
 
 export type Counts = { leadsToday: Record<string, number>; leads7d: Record<string, number>; leadsAll: Record<string, number> };
@@ -128,7 +167,7 @@ export async function performanceRows(o: { store: CrewStore; approvals: Approval
     const leads = o.leads7dByAgent[d.id] ?? 0;
     const door = doorState(teams.find((t) => t.team === d.team), { team: d.team, settings, hardDisabled: hard }, o.now);
     const st = agentStatus({ def: d, state, missing: missingEnv(d.needs), door, now: o.now, lastRun: o.runs.find((r) => r.agent_id === d.id) ?? null, waiting: statuses.filter((s) => OPEN_WORDS.has(s)).length, schedule: effectiveSchedule(d, overrides) });
-    const tab = tabById(d.id) ?? null;
+    const tab = tabsForAgent(d.id)[0] ?? null;
     return [agentName(d), tab?.name ?? (d.team === "leads" ? "All Leads" : ""), st.word, leads, mine.length, sent, replied, replied, meetings, customers, sent ? `${Math.round((replied / sent) * 100)}%` : "", Math.round(cost * 100) / 100, leads ? Math.round((cost / leads) * 1000) / 1000 : "", runs.filter((r) => r.status === "error").length, lastOk?.finished_at ? nyStamp(lastOk.finished_at) : "never"];
   });
 }
@@ -208,4 +247,4 @@ export async function dashboardCells(o: { store: CrewStore; sheetId: string; bui
   return rows;
 }
 
-export { QUEUE, INTENT, TOP50, SOURCE_STATS, PERFORMANCE, ACTIVITY, CONTROLS, SUPPRESSION, PRIORITY_RANK };
+export { QUEUE, INTENT, TOP50, ALL_LEADS, SOURCE_STATS, PERFORMANCE, ACTIVITY, CONTROLS, SUPPRESSION, PRIORITY_RANK };

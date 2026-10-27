@@ -26,6 +26,9 @@ async function fixtureStore() {
   await store.patchAgentState("watch-ui", { enabled: true, next_run_at: "2026-10-21T19:00:00Z" });
   await store.patchAgentState("watchdog-manager", { enabled: true });
   await store.patchAgentState("watch-bugs", { enabled: true });
+  // The marketing agents' Start / Stop list: one running, one working right now, the rest stopped.
+  await store.patchAgentState("contact-instagram-linkinbio", { enabled: true });
+  await store.patchAgentState("replies-reddit", { enabled: true, lease_until: "2026-10-21T18:05:00Z" });
   await store.patchTeam("watchdog", { focus: "The sign-up flow and the card pages come first this week", focus_until: "2026-10-28T18:00:00Z", focus_by: "Walter" });
   const add = async (o: Record<string, unknown>) => {
     const r = await store.insertApproval({
@@ -229,6 +232,35 @@ describe("the Agents tab (the control panel)", () => {
         expect(res.filter((r) => r.label === "Approve")).toHaveLength(3);
         for (const l of ["Reject", "Retry", "Run now", "Pause", "Resume", "Stop", "Pause group"]) expect(res.some((r) => r.label === l), l).toBe(true);
         tappable(res);
+      } finally {
+        await page.close();
+      }
+    });
+
+    it(`home: every marketing agent has a Start or Stop button you can tap, named after its tab, at ${width}px`, async () => {
+      const page = await renderView(browser, width, { tab: "lobby" });
+      try {
+        const rows = await page.evaluate(() =>
+          ([...document.querySelectorAll("[data-sheet-agent]")] as HTMLElement[]).map((li) => {
+            const b = li.querySelector("button") as HTMLElement;
+            b.scrollIntoView({ block: "center" });
+            const r = b.getBoundingClientRect();
+            const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+            return { id: li.dataset.sheetAgent, name: (li.querySelector("p") as HTMLElement).innerText, button: b.innerText.trim(), h: r.height, covered: !(top === b || b.contains(top)) };
+          }),
+        );
+        expect(rows.length).toBeGreaterThan(15);
+        expect(rows[0]).toMatchObject({ id: "contact-instagram-linkinbio", name: "Instagram LinkedIn Bio", button: "Stop" });
+        expect(rows.find((r) => r.id === "replies-reddit")).toMatchObject({ name: "Reddit Reply", button: "Stop" });
+        expect(rows.find((r) => r.id === "replies-hackernews")).toMatchObject({ name: "Hacker News", button: "Start" });
+        for (const r of rows) {
+          expect(r.h, `${r.name} button is shorter than a tap target`).toBeGreaterThanOrEqual(40);
+          expect(r.covered, `${r.name} button is covered`).toBe(false);
+        }
+        const text = await page.evaluate(() => (document.querySelector("#sheet-agents") as HTMLElement).innerText);
+        expect(text).toContain("Working now");
+        expect(text).toContain("Running");
+        expect(text).toContain("Stopped");
       } finally {
         await page.close();
       }

@@ -553,3 +553,21 @@ answers did. Full audit: `AUDIT.md`; setup: `SETUP.md`; code:
 - **Dry run** starts on (`crew_controls.dry_run`). Ships as PR 1 of 4 on
   branch `agents/sheets-hq`; PR 2 = lead engine + new agents, PR 3 = cold email
   + reply handler + meetings, PR 4 = 8:00 brief + performance + cleanup.
+
+## Start / Stop (2026-10-27, owner request: "press Start and it keeps going until I press Stop")
+
+- Admin Agents tab: a Start / Stop list, one row per marketing agent, named
+  after its tab in the Sheet (`src/app/admin/crew/SheetAgents.tsx`,
+  `src/lib/crew/sheet-agents.ts`). Start = on + run now; Stop = off at the next
+  step. Same switch as the Sheet's Controls ("Start / Stop").
+- One tab per agent, one agent per tab, same name (pinned in
+  tests/crew-start-stop). All Leads = the combined lead tabs.
+- Continuous finders (`AgentDef.continuous`, `CONTINUOUS` in schedule.ts):
+  every tick while on, rotating searches, Safe ceilings with warm-up, rest an
+  hour when nothing is new and until tomorrow at the ceiling.
+- Exact links only (`src/lib/crew/exact-links.ts`); the engine drops anything
+  else before a model is called.
+- New agents: replies-hackernews, partnerships, events (`agents/growth.ts`).
+- Voice: Menash; no dashes of any kind; a reason, not a pitch; "I built…" is
+  the disclosure.
+- Doors gate only `ADMIN_TEAMS` (`src/lib/crew/teams.ts`).

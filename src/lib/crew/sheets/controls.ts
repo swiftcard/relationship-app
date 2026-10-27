@@ -3,8 +3,9 @@ import { AGENTS } from "../registry";
 import { SCHEDULE_OVERRIDES_KEY, canReschedule, nextRun, plainSchedule, validSchedule, type ScheduleOverrides } from "../schedule";
 import { PAUSE_FOREVER } from "../doors";
 import type { CrewStore } from "../store";
-import type { Platform, Schedule } from "../types";
+import type { Platform, Schedule, TeamId } from "../types";
 import { SHEET_AGENT_IDS } from "./registry";
+import { tabsForAgent } from "./tabs";
 
 // ── The Controls tab ────────────────────────────────────────────────────────
 // Every switch the owner may flip from the Sheet, with what the backend does
@@ -31,7 +32,10 @@ export type ControlDef = {
 
 const yesNo = (raw: string) => (/^(yes|on|true|1|y)$/i.test(raw.trim()) ? true : /^(no|off|false|0|n)$/i.test(raw.trim()) ? false : null);
 const showYesNo = (v: unknown) => (v ? "Yes" : "No");
-const showOnOff = (v: unknown) => (v ? "On" : "Off");
+const startStop = (raw: string) => (/^(start|started|running|run|go)$/i.test(raw.trim()) ? true : /^(stop|stopped|off|pause)$/i.test(raw.trim()) ? false : yesNo(raw));
+const showStartStop = (v: unknown) => (v ? "Running" : "Stopped");
+/** The agent's tab name is its name in the Sheet and on the admin page's Start / Stop list. */
+const agentLabel = (def: { id: string; name: string; team: TeamId; role: "worker" | "manager" | "head" }) => tabsForAgent(def.id)[0]?.name ?? agentName(def);
 const money = (raw: string) => {
   const n = Number(String(raw).replace(/[$,\s]/g, ""));
   return Number.isFinite(n) && n >= 0 && n <= 500 ? Math.round(n * 100) / 100 : null;
@@ -157,20 +161,22 @@ export function controlDefs(): ControlDef[] {
   }
 
   for (const def of AGENTS.filter((d) => SHEET_AGENT_IDS.has(d.id))) {
+    // The same switch as Start / Stop on the admin page's list.
     defs.push({
       key: `agent:${def.id}`,
-      label: `${agentName(def)}: on or off`,
-      what: def.locked ? `Can't be turned on: ${def.locked}` : `${def.purpose} Off stops it; On starts it at its next scheduled time.`,
-      allowed: def.locked ? "Off" : "On / Off",
-      parse: (raw) => (def.locked ? false : yesNo(raw)),
-      show: showOnOff,
+      label: `${agentLabel(def)}: Start / Stop`,
+      what: def.locked ? `Can't be started: ${def.locked}` : `${def.purpose} Start: it begins within 15 minutes (or seconds with the Sheet's script) and keeps adding rows to its tab until Stop.`,
+      allowed: def.locked ? "Stop" : "Start / Stop",
+      parse: (raw) => (def.locked ? false : startStop(raw)),
+      show: showStartStop,
       get: async (s) => (await s.getAgentState(def.id)).enabled,
-      set: async (s, v) => s.patchAgentState(def.id, v ? { enabled: true, paused_until: null, pause_note: null } : { enabled: false, paused_until: PAUSE_FOREVER, pause_note: "Turned off in the Sheet." }),
+      set: async (s, v) =>
+        s.patchAgentState(def.id, v ? { enabled: true, paused_until: null, pause_note: null, status_note: null, next_run_at: new Date().toISOString() } : { enabled: false, paused_until: PAUSE_FOREVER, pause_note: "Stopped in the Sheet." }),
     });
     if (canReschedule(def)) {
       defs.push({
         key: `schedule:${def.id}`,
-        label: `${agentName(def)}: schedule`,
+        label: `${agentLabel(def)}: schedule`,
         what: `When it runs (New York time). Default: ${plainSchedule(def.schedule)}. Write "default" to go back to it.`,
         allowed: '"every 30 min", "every 2 hours", "daily 9:00am", "Mon, Wed 8:00am", "weekdays 9:00am", or "default"',
         parse: (raw) => parseScheduleText(raw),
@@ -188,7 +194,7 @@ export function controlDefs(): ControlDef[] {
     }
     defs.push({
       key: `cap:${def.id}`,
-      label: `${agentName(def)}: spending limit per day ($)`,
+      label: `${agentLabel(def)}: spending limit per day ($)`,
       what: `Its own AI limit for a day. Default $${def.dailyUsd}.`,
       allowed: "0 to 500, or blank for the default",
       parse: (raw) => (raw.trim() === "" || /^default$/i.test(raw.trim()) ? "default" : money(raw)),

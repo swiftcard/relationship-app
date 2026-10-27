@@ -127,14 +127,15 @@ describe("rows", () => {
     expect(row.cells.username).toBe("@jane.realtor");
     expect(row.cells.profile).toContain("https://www.instagram.com/jane.realtor/");
     expect(row.cells.linkedin).toContain("https://www.linkedin.com/in/jane-realtor/");
-    expect(row.cells.open).toBe('=HYPERLINK("https://ig.me/m/jane.realtor","Open DM (phone)")');
+    expect(row.cells.open).toBe('=HYPERLINK("https://ig.me/m/jane.realtor","Open DM (Instagram app)")');
     expect(linkedinIn("see https://www.linkedin.com/in/some-one/ for more")).toBe("https://www.linkedin.com/in/some-one/");
     expect(linkedinIn("nothing here")).toBeNull();
   });
 
   it("a cold lead lands on All Leads with a source link; an office lead on Office Prospects", () => {
     const [cold] = leadRows({ id: "11111111-2222-3333-4444-555555555555", created_at: "2026-10-25T10:00:00Z", list: "cold", email: "hi@acme.com", company: "Acme Realty", business_type: "real estate offices", city: "Charlotte", region: "NC", source_platform: "web", source_url: "https://acme.com/contact" }, sources());
-    expect(cold.tab.id).toBe("all-leads");
+    // Each lead lands on its own agent's tab; All Leads is the combined view rebuilt every sync.
+    expect(cold.tab.id).toBe("web-leads");
     expect(cold.key).toMatch(/^L-[a-f0-9]{10}$/);
     expect(cold.cells).toMatchObject({ email: "hi@acme.com", business: "Acme Realty", industry: "real estate offices", state: "NC", email_status: "Risky", source_platform: "Web" });
     expect(cold.cells.website).toContain("https://acme.com");
@@ -166,7 +167,7 @@ describe("rows", () => {
     const built = buildRows(sources({ approvals: [low, high, done], known }));
     const q = queueRows(built, known, "sheet1", { gid: new Map([["Reddit Reply", 7]]), rowOf: new Map([[approvalKey(high.id), 5]]) });
     expect(q.map((r) => r[0])).toEqual(["High", "Low"]);
-    expect(q[0][1]).toBe("Reddit replies");
+    expect(q[0][1]).toBe("Reddit Reply");
     expect(q[0][10]).toBe(approvalKey(high.id));
     expect(String(q[0][9])).toContain("gid=7&range=A5");
   });
@@ -266,9 +267,9 @@ describe("controls", () => {
     expect((await store.getSettings()).kill_all).toBe(true);
     expect(await applyControl(store, "daily_usd_cap", "$7.50", "owner")).toMatchObject({ ok: true, shown: "7.5" });
     expect(await applyControl(store, "daily_usd_cap", "9999", "owner")).toMatchObject({ ok: false });
-    expect(await applyControl(store, "agent:replies-reddit", "On", "owner")).toMatchObject({ ok: true, shown: "On" });
+    expect(await applyControl(store, "agent:replies-reddit", "Start", "owner")).toMatchObject({ ok: true, shown: "Running" });
     expect((await store.getAgentState("replies-reddit")).enabled).toBe(true);
-    expect(await applyControl(store, "agent:leads-linkedin", "On", "owner")).toMatchObject({ ok: true, shown: "Off" });
+    expect(await applyControl(store, "agent:leads-linkedin", "Start", "owner")).toMatchObject({ ok: true, shown: "Stopped" });
     expect(await applyControl(store, "agent:watch-bugs", "Off", "owner")).toMatchObject({ ok: false, message: "unknown setting" });
     expect(await applyControl(store, "tier:bluesky", "Approval posts it", "owner")).toMatchObject({ ok: true });
     expect(await applyControl(store, "tier:reddit", "Approval posts it", "owner")).toMatchObject({ ok: false });

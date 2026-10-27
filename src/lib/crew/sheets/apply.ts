@@ -63,7 +63,9 @@ async function applyStatus(store: CrewStore, row: SheetRow, word: string, by: st
     if (!a) return { ok: false, message: "draft gone", status: row.status };
     let r: { ok: boolean; message: string } = { ok: true, message: "" };
     if (word === "Approved") {
-      if (a.status === "pending") r = await decide(store, a.id, { action: "approve", by }, now);
+      // The social post's first step is a pick: the owner types 1, 2 or 3 in Notes.
+      const choice = Array.isArray(a.meta?.options) ? /\b([1-3])\b/.exec(row.owner_cols.notes ?? "")?.[1] : undefined;
+      if (a.status === "pending") r = await decide(store, a.id, { action: "approve", by, ...(choice ? { choice } : {}) }, now);
       else if (a.status !== "approved") r = { ok: false, message: "already decided" };
     } else if ((SENT_WORDS as string[]).includes(word)) {
       if (a.status === "pending") r = await decide(store, a.id, { action: "approve", by }, now);

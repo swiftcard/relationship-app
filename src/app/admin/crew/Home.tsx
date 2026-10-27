@@ -5,11 +5,13 @@ import { tabForTeam } from "@/lib/crew/office-tabs";
 import AgentCard from "./AgentCard";
 import ApprovalCard from "./ApprovalCard";
 import { GroupSwitch, groupStatus } from "./GroupPage";
+import SheetAgents from "./SheetAgents";
 import { Chevron, Status, Tile, btn, card, summaryBtn, usd } from "./ui";
 
 // Home: the 10-second view. Pause all; how many are running, done today and
-// waiting for you; what needs you (pinned first); then every agent, grouped
-// by job. Every button is a plain post.
+// waiting for you; Start / Stop for every marketing agent (their work is in
+// the Sheet); what needs you (the website fixes, pinned first); then the
+// website-health agents. Every button is a plain post.
 
 const HOME_APPROVALS = 3;
 
@@ -160,6 +162,7 @@ export default function Home({ d, edit }: { d: Dashboard; edit?: string }) {
   return (
     <div className="space-y-6">
       <TopBar d={d} />
+      <SheetAgents rows={d.sheetAgents} sheetUrl={d.sheetUrl} />
       <NeedsYou d={d} edit={edit} />
       <Jobs d={d} />
       <div className="flex flex-wrap gap-2">

@@ -44,14 +44,14 @@ describe("manager chat", () => {
     const team = (await store.listTeams()).find((t) => t.team === "replies")!;
     expect(team).toMatchObject({ focus: "Dentists and dental offices", focus_by: "Rachel" });
     expect(store.chat.filter((m) => m.author === "system").map((m) => m.body)).toEqual([
-      "Done: Maya (Reddit replies) is paused until 11:59pm.",
+      "Done: Maya (Reddit Reply) is paused until 11:59pm.",
       expect.stringMatching(/^Done: the team's focus is "Dentists and dental offices" until /),
     ]);
     // Opus outside economy mode, metered as the manager's "chat".
     expect(claude.calls[0].model).toBe(MODEL_ID.opus);
     expect(store.usage).toEqual([expect.objectContaining({ agent_id: "replies-manager", team: "replies", purpose: "chat" })]);
     // The brief has who is on the team, but never a draft's text.
-    expect(claude.calls[0].prompt).toContain("Maya, Reddit replies (id replies-reddit)");
+    expect(claude.calls[0].prompt).toContain("Maya, Reddit Reply (id replies-reddit)");
   });
 
   it("uses Sonnet in economy mode", async () => {

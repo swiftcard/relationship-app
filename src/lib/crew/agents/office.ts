@@ -6,7 +6,8 @@ import { productFacts } from "../facts";
 import { everContacted, personFor } from "../ledger";
 import { pageTitle, phonesIn, readSite, textOf } from "../leads/fetch-page";
 import { cleanEmails, recordLeads } from "../leads/record";
-import { nyDayStart } from "../schedule";
+import { minutesToTomorrow, nyDayStart } from "../schedule";
+import { SHEET_MAX_PENDING } from "./replies";
 import { syncLeadsToSheet } from "../sources/sheets";
 import { searchItems } from "../sources/web-discovery";
 import type { Lead } from "../types";
@@ -96,21 +97,22 @@ async function findOffices(ctx: AgentContext, type: string, area: string): Promi
 
 export const officeOutreach: AgentDef = {
   id: "office-outreach",
-  name: "Office outreach",
+  name: "Office Prospects",
   team: "office",
   role: "worker",
   tier: "sonnet",
+  continuous: true,
   schedule: { kind: "every", minutes: 360 },
   dailyUsd: 1.5,
   needs: ["CREW_ANTHROPIC_API_KEY"],
-  maxPending: 6,
+  maxPending: SHEET_MAX_PENDING,
   approvalKind: "dm",
-  purpose: "Finds NYC real estate teams and other businesses with staff: owners, brokers and sales heads with phone and email, about 30 a day, for you to call about the Office Plan. Drafts a few personal emails and suggests partnerships.",
+  purpose: "Finds NYC real estate teams and other businesses with staff: owners, brokers and sales heads with phone and email, about 30 a day, for you to call about the Office Plan. Each gets a talking point for the call and sometimes a personal email.",
   async run(ctx) {
     const today = await ctx.store.countLeadsSince(nyDayStart(ctx.now()).toISOString(), "office");
     const target = ctx.config<number>("daily_rows", 30);
     const have = Object.values(today).reduce((a, b) => a + b, 0);
-    if (have >= target) return { summary: `Today's ${target} call rows are ready.` };
+    if (have >= target) return { summary: `Done for today: ${target} call rows are ready. Back tomorrow.`, restMinutes: minutesToTomorrow(ctx.now()) };
 
     const n = ctx.config<number>("query_index", 0);
     const { area, type } = officeQuery(n);
@@ -132,7 +134,6 @@ export const officeOutreach: AgentDef = {
     const added = await recordLeads(ctx, rows);
     const synced = await syncLeadsToSheet(ctx.store, "office").catch(() => 0);
     const drafted = await draftEmails(ctx, rows.filter((r) => r.email && r.name).slice(0, 2));
-    await partnerships(ctx, readable.map((s) => s.name));
     return { summary: `${type} in ${area}: ${added} new call rows${synced ? ` (${synced} on the sheet)` : ""}, ${drafted} email drafts.` };
   },
 };
@@ -168,20 +169,6 @@ async function draftEmails(ctx: AgentContext, rows: Lead[]): Promise<number> {
   }
   ctx.stat("emails_drafted", made);
   return made;
-}
-
-async function partnerships(ctx: AgentContext, names: string[]) {
-  const last = ctx.config<number>("partners_at", 0);
-  if (Date.now() - last < 7 * 86400_000) return;
-  await ctx.saveConfig({ partners_at: Date.now() });
-  const res = await ctx.llm.ask("partners", {
-    effort: "low",
-    maxTokens: 1200,
-    system: "You suggest practical partnerships for a tiny startup that sells digital business cards and a team plan to real estate offices and local businesses.",
-    prompt: `Suggest 3 to 5 concrete partnership ideas in New York City (associations, brokerage networks, coworking spaces, real estate schools, vendors who already sell to these offices). One line each, starting with "- ". Plain words. Businesses we just looked at: ${names.slice(0, 10).join(", ")}.`,
-  });
-  if (!res.text) return;
-  await propose(ctx, { kind: "ask", title: "Partnership ideas this week", summary: "Ideas for partners who already reach the offices we want. Approve the ones worth a call.", body: res.text, platform: "web" });
 }
 
 export const OFFICE: AgentDef[] = [officeOutreach];

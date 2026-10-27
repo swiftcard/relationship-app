@@ -1,11 +1,13 @@
 import type { AgentDef } from "../agent-def";
 import type { AgentContext } from "../context";
 import { normalizeHandle } from "../ledger";
-import { runEngagement, type Candidate } from "../replies/engine";
+import { exactProfileLink, instagramHandle } from "../exact-links";
+import { pairs, rotate, runEngagement, type Candidate } from "../replies/engine";
+import { PROFESSIONS, US_METROS } from "../search-plan";
 import { redditConfigured, searchSubreddits } from "../sources/reddit";
-import { searchPlatform } from "../sources/web-discovery";
+import { searchItems, searchPlatform } from "../sources/web-discovery";
 import type { CrewInput, Platform } from "../types";
-import { DEFAULT_SUBREDDITS, guessAuthor } from "./replies";
+import { DEFAULT_SUBREDDITS, SHEET_MAX_PENDING, guessAuthor } from "./replies";
 
 // ── Team 2: Contact (the team that DMs) ─────────────────────────────────────
 // Every message is a DRAFT a person sends by hand from their own account:
@@ -49,9 +51,16 @@ const base = {
   role: "worker" as const,
   tier: "sonnet" as const,
   needs: ["CREW_ANTHROPIC_API_KEY" as const],
-  maxPending: 6,
+  maxPending: SHEET_MAX_PENDING,
   approvalKind: "dm" as const,
+  continuous: true,
 };
+
+/** The next profession and city to look in (an endless rotation, remembered per agent). */
+async function nextWhoWhere(ctx: AgentContext): Promise<{ who: string; where: string }> {
+  const [[who, where]] = await rotate(ctx, "where_i", pairs(PROFESSIONS, US_METROS), 1);
+  return { who, where };
+}
 
 export const redditDms: AgentDef = {
   ...base,
@@ -59,7 +68,7 @@ export const redditDms: AgentDef = {
   name: "Reddit DMs",
   schedule: { kind: "daily", hour: 10, minute: 30 },
   dailyUsd: 0.6,
-  purpose: "Drafts up to 10 tailored DMs a day to people on Reddit asking for a link-in-bio or card tool, or complaining about a competitor. You send them by hand.",
+  purpose: "Finds people on Reddit asking for a card or link page tool, or unhappy with a competitor, and writes them a short private message. The link opens Reddit's message screen to that person.",
   async run(ctx) {
     return runEngagement(ctx, {
       platform: "reddit",
@@ -75,7 +84,7 @@ export const redditDms: AgentDef = {
         const out: Candidate[] = pasted(await ctx.store.takeInputs(["reddit"], 3, ctx.def.id), "reddit");
         // Reddit blocks Anthropic's web search: without the API keys, pasted posts only.
         if (!redditConfigured()) return out;
-        for (const q of REDDIT_DM_QUERIES) {
+        for (const q of await rotate(ctx, "query_i", REDDIT_DM_QUERIES, 2)) {
           for (const p of await searchSubreddits(ctx.config<string[]>("subreddits", DEFAULT_SUBREDDITS), q, 10)) {
             out.push({ platform: "reddit", url: p.url, author: p.author, title: p.title, text: p.text, community: p.subreddit, promoAllowed: true });
           }
@@ -88,7 +97,7 @@ export const redditDms: AgentDef = {
 
 async function igCandidates(ctx: AgentContext, topic: string): Promise<Candidate[]> {
   const fromPaste = pasted(await ctx.store.takeInputs(["instagram"], 5, ctx.def.id), "instagram");
-  const web = (await searchPlatform(ctx, "instagram", [topic], 10)).map((w) => ({ ...w, author: w.author ?? handleFromUrl("instagram", w.url), promoAllowed: true }));
+  const web = (await searchPlatform(ctx, "instagram", [topic], 10)).map((w) => ({ ...w, author: instagramHandle(w.author) ?? handleFromUrl("instagram", w.url), promoAllowed: true }));
   return [...fromPaste, ...web].filter((c) => !!c.author);
 }
 
@@ -98,7 +107,7 @@ export const instagramDms: AgentDef = {
   name: "Instagram DMs",
   schedule: { kind: "daily", hour: 15, minute: 0 },
   dailyUsd: 0.6,
-  purpose: "Drafts tailored Instagram DMs to business professionals, about something they actually posted. You send them by hand.",
+  purpose: "Finds business professionals' recent Instagram posts and writes each a short DM about that post. The link opens the chat with them in the Instagram app.",
   async run(ctx) {
     return runEngagement(ctx, {
       platform: "instagram",
@@ -111,46 +120,90 @@ export const instagramDms: AgentDef = {
       length: "35 to 80 words",
       label: (c) => `Instagram DM to @${normalizeHandle("instagram", c.author ?? "").replace(/^@/, "")}`,
       person: (c) => (c.author ? { platform: "instagram", handle: c.author } : null),
-      find: () => igCandidates(ctx, "public posts by realtors, recruiters, loan officers, sales coaches, wholesalers or local service businesses (plumbers, window washers, landscapers) about their work. No law firms."),
-    });
-  },
-};
-
-export const instagramSwitchers: AgentDef = {
-  ...base,
-  id: "contact-instagram-linkinbio",
-  name: "Instagram link-in-bio switchers",
-  schedule: { kind: "daily", hour: 15, minute: 30 },
-  dailyUsd: 0.6,
-  purpose: "Finds business pros with a Linktree, Hoobe or Link.me link in their bio and drafts a DM on why SwiftCard does more (link page plus business card).",
-  async run(ctx) {
-    return runEngagement(ctx, {
-      platform: "instagram",
-      kind: "dm",
-      action: "dm_switch",
-      ceiling: 10,
-      mustBePro: true,
-      keywordFilter: false,
-      register: "Instagram DM: warm and brief. Mention that their bio uses a link page, and that SwiftCard gives the same link page plus a digital business card. No hard sell.",
-      length: "35 to 80 words",
-      label: (c) => `Instagram DM to @${normalizeHandle("instagram", c.author ?? "").replace(/^@/, "")} (uses a link-in-bio tool)`,
-      person: (c) => (c.author ? { platform: "instagram", handle: c.author } : null),
       async find() {
-        const all = await igCandidates(ctx, "Instagram profiles of realtors, recruiters, loan officers or local service businesses whose bio links to linktr.ee, hoo.be or link.me");
-        return all.filter((c) => LINK_IN_BIO.test(`${c.title} ${c.text}`));
+        const { who, where } = await nextWhoWhere(ctx);
+        return igCandidates(ctx, `recent public Instagram posts (instagram.com/p/ or /reel/ links) by ${who} in ${where} about their work. For author give their @username. No law firms.`);
       },
     });
   },
 };
 
+/** A professional whose Instagram bio links to their LinkedIn, as web search shows it. */
+type BioHit = { username: string; name: string; occupation: string; company: string; location: string; linkedin_url: string; bio: string };
+
+const LINKEDIN_IN = /linkedin\.com\/in\/[\w%.-]+/i;
+
+/** Keep only real profiles whose bio links a real LinkedIn profile. */
+export function bioCandidates(hits: BioHit[]): Candidate[] {
+  const out: Candidate[] = [];
+  for (const h of hits) {
+    const handle = instagramHandle(h.username);
+    const inBio = LINKEDIN_IN.exec(h.bio)?.[0];
+    const linkedin = exactProfileLink("linkedin", h.linkedin_url) ?? (inBio ? exactProfileLink("linkedin", `https://www.${inBio}`) : null);
+    if (!handle || !linkedin) continue;
+    out.push({
+      platform: "instagram",
+      url: `https://www.instagram.com/${handle}/`,
+      author: handle,
+      title: [h.name, h.occupation].filter(Boolean).join(", ") || `@${handle}`,
+      text: h.bio.slice(0, 600),
+      community: null,
+      promoAllowed: true,
+      extra: { name: h.name.slice(0, 80), occupation: h.occupation.slice(0, 80), company: h.company.slice(0, 120), location: h.location.slice(0, 80), linkedin },
+    });
+  }
+  return out;
+}
+
+export const instagramLinkedinBio: AgentDef = {
+  ...base,
+  id: "contact-instagram-linkinbio",
+  name: "Instagram LinkedIn Bio",
+  schedule: { kind: "daily", hour: 15, minute: 30 },
+  dailyUsd: 0.8,
+  purpose: "Finds realtors, insurance agents, loan officers and other professionals whose Instagram bio links to their LinkedIn, and writes each one a short message built on what their bio says. The link opens the chat with them in the Instagram app.",
+  async run(ctx) {
+    return runEngagement(ctx, {
+      platform: "instagram",
+      kind: "dm",
+      action: "dm_linkedin_bio",
+      ceiling: 10,
+      mustBePro: true,
+      keywordFilter: false,
+      linkKind: "profile",
+      register:
+        "Instagram DM: warm, brief, written like a quick text. Open with something specific from their bio or their work (their niche, their area, their brokerage, something they're proud of). They send people from Instagram to LinkedIn, so being easy to find and remembered matters to them; if SwiftCard comes up, connect it to that in your own words (one tap saves their contact with everything, LinkedIn included) without listing features. Ask one easy question.",
+      length: "30 to 70 words",
+      label: (c) => `Instagram DM to @${c.author} (LinkedIn in bio)`,
+      person: (c) => (c.author ? { platform: "instagram", handle: c.author, name: c.extra?.name || null } : null),
+      async find() {
+        const fromPaste = pasted(await ctx.store.takeInputs(["instagram"], 3, ctx.def.id), "instagram").filter((c) => LINKEDIN_IN.test(c.text));
+        const { who, where } = await nextWhoWhere(ctx);
+        const hits = await searchItems<BioHit>(ctx, {
+          system: "You find public Instagram profiles of working professionals from web search results.",
+          prompt: `Find Instagram profiles (instagram.com/<username>) of ${who} in or near ${where} whose Instagram bio contains a link to their LinkedIn profile (linkedin.com/in/...). Search for example: site:instagram.com "linkedin.com/in" ${who} ${where}. For each profile: username (without @), name, occupation, company (brokerage, agency or business, if shown), location, linkedin_url (the linkedin.com/in/ link in the bio, exactly as shown), bio (the bio text as shown, under 400 characters). Skip anyone whose bio has no LinkedIn link. No law firms, no students.`,
+          fields: ["username", "name", "occupation", "company", "location", "linkedin_url", "bio"],
+          domains: ["instagram.com"],
+          maxUses: 5,
+          want: 12,
+        }).catch(() => [] as BioHit[]);
+        return [...fromPaste, ...bioCandidates(hits)];
+      },
+    });
+  },
+};
+
+/** The old name, kept for anything that imported it. */
+export const instagramSwitchers = instagramLinkedinBio;
+
 export const linkedinConnect: AgentDef = {
   ...base,
   id: "contact-linkedin",
-  name: "LinkedIn connections",
+  name: "LinkedIn Connections",
   approvalKind: "connect_note",
   schedule: { kind: "daily", hour: 11, minute: 30 },
   dailyUsd: 0.6,
-  purpose: "Picks a few new business pros a day and drafts a very specific connection note and a follow-up message. You send them from LinkedIn.",
+  purpose: "Finds business professionals on LinkedIn and writes a very specific connection note plus a follow up message for after they accept. The link opens their profile, where the Connect button is.",
   async run(ctx) {
     return runEngagement(ctx, {
       platform: "linkedin",
@@ -167,9 +220,19 @@ export const linkedinConnect: AgentDef = {
         const h = c.author && /^[a-z0-9-]+$/i.test(c.author) ? c.author : handleFromUrl("linkedin", c.url);
         return h ? { platform: "linkedin", handle: h, name: c.author } : null;
       },
+      linkKind: "profile",
       async find() {
         const fromPaste = pasted(await ctx.store.takeInputs(["linkedin"], 5, ctx.def.id), "linkedin");
-        const web = (await searchPlatform(ctx, "linkedin", ["recent posts or profiles of realtors, recruiters, sales coaches, loan officers or small business owners building a personal brand (no lawyers)"], 10)).map((w) => ({ ...w, promoAllowed: true }));
+        const { who, where } = await nextWhoWhere(ctx);
+        const hits = await searchItems<{ url: string; name: string; headline: string; location: string; detail: string }>(ctx, {
+          system: "You find public LinkedIn profiles of working professionals from web search results.",
+          prompt: `Find LinkedIn profiles (linkedin.com/in/...) of ${who} in or near ${where} who post about their work or build a personal brand. No lawyers, no students. For each: url (the linkedin.com/in/ profile link exactly as shown), name, headline, location, detail (one specific, checkable thing from the result: a recent post topic, a niche, an award, years in business).`,
+          fields: ["url", "name", "headline", "location", "detail"],
+          domains: ["linkedin.com"],
+          maxUses: 5,
+          want: 10,
+        }).catch(() => []);
+        const web: Candidate[] = hits.map((h) => ({ platform: "linkedin", url: h.url, author: h.name || null, title: [h.name, h.headline].filter(Boolean).join(", "), text: h.detail, community: null, promoAllowed: true, extra: { name: h.name, occupation: h.headline, location: h.location } }));
         return [...fromPaste, ...web];
       },
     });
@@ -179,7 +242,8 @@ export const linkedinConnect: AgentDef = {
 export const alignableMessages: AgentDef = {
   ...base,
   id: "contact-alignable",
-  name: "Alignable messages",
+  name: "Alignable",
+  continuous: false,
   schedule: { kind: "on_input", platforms: ["alignable"] },
   dailyUsd: 0.4,
   purpose: "Drafts personable, non-pitchy Alignable messages to the profiles you paste in (Alignable has no API).",
@@ -204,4 +268,4 @@ export const alignableMessages: AgentDef = {
   },
 };
 
-export const CONTACT: AgentDef[] = [redditDms, instagramDms, instagramSwitchers, linkedinConnect, alignableMessages];
+export const CONTACT: AgentDef[] = [redditDms, instagramDms, instagramLinkedinBio, linkedinConnect, alignableMessages];

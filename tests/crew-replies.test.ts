@@ -39,7 +39,7 @@ describe("the engagement engine", () => {
   it("drafts only up to today's warmed-up cap, with disclosure and a tracked link", async () => {
     const { ctx, store } = await setup({ def: fakeAgent({ id: "replies-reddit", maxPending: 10 }), script: script("Same boat last year. I moved to SwiftCard since it does the card and the link page together: https://swiftcard.me/go/rd_cr_reply_abc") });
     const r = await runEngagement(ctx, { platform: "reddit", kind: "reply", action: "reply", ceiling: 8, register: "", length: "", label: (c) => c.title, find: async () => [post(1), post(2), post(3), post(4)] });
-    expect(r.summary).toMatch(/drafted 1/); // week 1: 20% of 8 = 1
+    expect(r.summary).toMatch(/added 1 to the Sheet/); // week 1: 20% of 8 = 1
     expect(store.approvals).toHaveLength(1);
     expect(store.approvals[0].body).toContain("(I work on SwiftCard, so I'm biased.)");
     expect(store.approvals[0].summary).toMatch(/post it yourself/);
@@ -50,7 +50,7 @@ describe("the engagement engine", () => {
     await store.setRateLimit("reddit", "reply", 50, "2026-01-01");
     const r = await runEngagement(ctx, { platform: "reddit", kind: "reply", action: "reply", ceiling: 50, register: "", length: "", label: (c) => c.title, find: async () => [post(1, { promoAllowed: false })] });
     expect(store.approvals).toHaveLength(0);
-    expect(r.summary).toMatch(/drafted 0/);
+    expect(r.summary).toMatch(/added 0 to the Sheet/);
     expect(ctx.stats.skipped_pitch_not_allowed).toBe(1);
   });
 

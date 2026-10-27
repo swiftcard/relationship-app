@@ -1,6 +1,7 @@
 import type { AgentDef } from "./agent-def";
 import { defaultTeam } from "./store";
 import { fromNy, nyDay, nyParts } from "./schedule";
+import { isAdminTeam } from "./teams";
 import type { AgentState, OfficeHours, Settings, TeamId, TeamRow } from "./types";
 
 // ── The office doors ────────────────────────────────────────────────────────
@@ -128,6 +129,8 @@ export function pauseLabel(until: string, now: Date): string {
 export function blockedBy(def: AgentDef, state: AgentState, door: DoorState, now: Date): string | null {
   if (door.reason === "office" && !door.open) return "the whole office is locked";
   if (isPaused(state, now)) return `paused ${pauseLabel(state.paused_until!, now)}`;
-  if (def.role === "worker" && !door.open) return "door locked";
+  // Only the admin page's groups still have a door you can see and open; the
+  // Sheet agents are started and stopped one by one (teams.ts).
+  if (def.role === "worker" && !door.open && isAdminTeam(def.team)) return "door locked";
   return null;
 }

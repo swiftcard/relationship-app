@@ -68,8 +68,6 @@ export function outputsFor(row: AgentRow, approvals: Approval[]): Output[] {
     else if (a.status === "done") out.push({ key: `done-${a.id}`, label, note: "Posted", href: a.target_url });
     else if (a.status === "approved") out.push({ key: `ok-${a.id}`, label, note: "Approved, waiting for you to post", href: `#a-${a.id}` });
   }
-  if (row.def.team === "leads") out.unshift({ key: "csv-cold", label: "The email lead list", note: "Download", href: "/api/admin/crew/leads?list=cold" });
-  if (row.def.id === "office-outreach") out.unshift({ key: "csv-office", label: "Offices to call", note: "Download", href: "/api/admin/crew/leads?list=office" });
   return out;
 }
 

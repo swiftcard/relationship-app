@@ -1,0 +1,128 @@
+import type { Platform } from "./types";
+
+// ── Exact links ─────────────────────────────────────────────────────────────
+// Every row in the Sheet ends with a link the owner taps to land exactly where
+// the message goes: the Reddit comment or thread to reply to, the Threads
+// post, the Quora question, the LinkedIn post, the Hacker News comment. A
+// subreddit's front page, a search page, a hashtag page or a profile where a
+// post was promised is not an exact link, so a found item without one never
+// becomes a row (replies/engine.ts drops it). Pure, so tests pin each shape.
+
+const clean = (u: URL) => {
+  u.hash = "";
+  for (const k of [...u.searchParams.keys()]) if (/^(utm_|ref|share|igsh|igshid|rdt|context|sort)/i.test(k)) u.searchParams.delete(k);
+  return u;
+};
+
+function parse(raw: string): URL | null {
+  try {
+    const u = new URL(raw.trim());
+    return u.protocol === "https:" || u.protocol === "http:" ? u : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The exact post (or comment) a reply goes under, normalized; null when the link isn't one. */
+export function exactPostLink(platform: Platform, raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const u = parse(raw);
+  if (!u) return null;
+  const host = u.hostname.replace(/^(www|old|m|new|np)\./, "");
+  const path = u.pathname.replace(/\/+$/, "");
+  switch (platform) {
+    case "reddit": {
+      // /r/<sub>/comments/<post>[/<slug>[/<comment>]]
+      const m = /^\/r\/([A-Za-z0-9_]+)\/comments\/([a-z0-9]+)(?:\/([^/]*)(?:\/([a-z0-9]+))?)?$/i.exec(path);
+      if (host !== "reddit.com" || !m) return null;
+      return `https://www.reddit.com/r/${m[1]}/comments/${m[2]}/${m[3] || "_"}/${m[4] ? `${m[4]}/` : ""}`;
+    }
+    case "threads": {
+      const m = /^\/@([\w.]+)\/post\/([\w-]+)$/.exec(path);
+      return (host === "threads.com" || host === "threads.net") && m ? `https://www.threads.com/@${m[1]}/post/${m[2]}` : null;
+    }
+    case "quora": {
+      if (host !== "quora.com") return null;
+      // A question, or an answer on it: the owner answers the question.
+      const seg = path.split("/").filter(Boolean);
+      if (!seg.length || /^(profile|topic|search|spaces|q|unanswered|answer|about|careers|settings|notifications)$/i.test(seg[0])) return null;
+      if (seg.length === 1 || (seg.length === 3 && seg[1] === "answer")) return /-/.test(seg[0]) ? `https://www.quora.com/${seg[0]}` : null;
+      return null;
+    }
+    case "indiehackers": {
+      const m = /^\/(post|forum\/[\w-]+|product\/[\w-]+\/[\w-]+)\/[\w-]+$/.exec(path);
+      return host === "indiehackers.com" && m ? `https://www.indiehackers.com${path}` : null;
+    }
+    case "linkedin": {
+      if (host !== "linkedin.com") return null;
+      if (/^\/posts\/[\w%.-]+$/.test(path) || /^\/feed\/update\/urn:li:(activity|share|ugcPost):\d+$/.test(path)) return `https://www.linkedin.com${path}/`;
+      return null;
+    }
+    case "instagram": {
+      const m = /^\/(?:[\w.]+\/)?(p|reel|reels)\/([\w-]+)$/.exec(path);
+      return host === "instagram.com" && m ? `https://www.instagram.com/${m[1] === "reels" ? "reel" : m[1]}/${m[2]}/` : null;
+    }
+    case "bluesky": {
+      const m = /^\/profile\/([\w.:-]+)\/post\/([a-z0-9]+)$/i.exec(path);
+      return host === "bsky.app" && m ? `https://bsky.app/profile/${m[1]}/post/${m[2]}` : null;
+    }
+    case "facebook": {
+      if (host !== "facebook.com") return null;
+      return /\/(posts|permalink|story\.php|groups\/[\w.]+\/posts|groups\/[\w.]+\/permalink)/.test(path) || u.searchParams.has("story_fbid") ? clean(u).toString() : null;
+    }
+    case "hackernews": {
+      const id = u.searchParams.get("id");
+      return host === "news.ycombinator.com" && path === "/item" && id && /^\d+$/.test(id) ? `https://news.ycombinator.com/item?id=${id}` : null;
+    }
+    case "x": {
+      const m = /^\/(\w{1,15})\/status\/(\d+)$/.exec(path);
+      return (host === "x.com" || host === "twitter.com") && m ? `https://x.com/${m[1]}/status/${m[2]}` : null;
+    }
+    default:
+      return null;
+  }
+}
+
+const IG_RESERVED = /^(p|reel|reels|explore|stories|accounts|about|developer|legal|direct|tv|tags|locations|web)$/i;
+
+/** A person's own profile page, normalized; null when the link isn't one. */
+export function exactProfileLink(platform: Platform, raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const u = parse(raw);
+  if (!u) return null;
+  const host = u.hostname.replace(/^(www|m)\./, "");
+  const path = u.pathname.replace(/\/+$/, "");
+  switch (platform) {
+    case "instagram": {
+      const m = /^\/([\w.]{1,30})$/.exec(path);
+      return host === "instagram.com" && m && !IG_RESERVED.test(m[1]) ? `https://www.instagram.com/${m[1].toLowerCase()}/` : null;
+    }
+    case "linkedin": {
+      const m = /^\/in\/([\w%.-]+)$/.exec(path);
+      return host === "linkedin.com" && m ? `https://www.linkedin.com/in/${m[1]}/` : null;
+    }
+    case "alignable": {
+      return host === "alignable.com" && path.split("/").filter(Boolean).length >= 1 && !/^\/(search|biz\/search|forum)/.test(path) ? `https://www.alignable.com${path}` : null;
+    }
+    default:
+      return null;
+  }
+}
+
+/** Instagram handle from a profile link or "@name". */
+export function instagramHandle(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const fromUrl = exactProfileLink("instagram", raw);
+  const h = (fromUrl ? fromUrl.split("/")[3] : raw.trim().replace(/^@/, "")).toLowerCase();
+  return /^[\w.]{1,30}$/.test(h) && !IG_RESERVED.test(h) ? h : null;
+}
+
+/** Opens a direct-message thread with this Instagram account in the Instagram app (Meta's ig.me link). */
+export function instagramDmLink(handle: string): string {
+  return `https://ig.me/m/${handle}`;
+}
+
+/** Opens Reddit's private-message screen addressed to this user. */
+export function redditMessageLink(username: string): string {
+  return `https://www.reddit.com/message/compose/?to=${encodeURIComponent(username.replace(/^\/?u\//i, ""))}`;
+}
