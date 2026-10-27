@@ -8,6 +8,7 @@ import { LEADS } from "./agents/leads";
 import { MARKETING_BASIC } from "./agents/marketing";
 import { OFFICE } from "./agents/office";
 import { REPLIES } from "./agents/replies";
+import { SHEET_AGENTS } from "./agents/sheet-sync";
 import { socialManager } from "./agents/social";
 import { testAgent } from "./agents/test-agent";
 import { watchBugs } from "./agents/watch-bugs";
@@ -22,7 +23,10 @@ import type { TeamId } from "./types";
 
 const WATCHDOG: AgentDef[] = [watchBugs, watchSpeed, watchSecurity, watchApp, watchUi, watchFlows, watchProbe, watchPayments, watchRevenue, scanCostWatch];
 
-export const AGENTS: AgentDef[] = withManagers([...WATCHDOG, ...REPLIES, ...CONTACT, ...LEADS, ...OFFICE, ...MARKETING_BASIC, socialManager, competitorWatch, testAgent, headAgent]);
+export const AGENTS: AgentDef[] = withManagers([...WATCHDOG, ...REPLIES, ...CONTACT, ...LEADS, ...OFFICE, ...MARKETING_BASIC, socialManager, competitorWatch, testAgent, headAgent, ...SHEET_AGENTS]);
+
+/** The teams the admin page shows. Everything else is run from the Google Sheet (src/lib/crew/sheets). */
+export const ADMIN_TEAMS: TeamId[] = ["watchdog"];
 
 export const TEAMS: TeamId[] = ["watchdog", "replies", "contact", "leads", "office", "marketing", "system"];
 

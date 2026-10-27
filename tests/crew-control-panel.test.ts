@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { activityFor } from "@/lib/crew/agent-detail";
 import { JOBS, GROUP_NAME, agentName, agentStatus, askLine, nextRunLabel, plainFinding, plainNeeds, plainResult, scrub } from "@/lib/crew/agent-status";
 import { PAUSE_FOREVER, doorState } from "@/lib/crew/doors";
-import { AGENTS, agentById } from "@/lib/crew/registry";
+import { ADMIN_TEAMS, AGENTS, agentById } from "@/lib/crew/registry";
 import { SCHEDULE_OVERRIDES_KEY, effectiveSchedule, nextRun, parseScheduleForm, plainSchedule, validSchedule } from "@/lib/crew/schedule";
 import { DEFAULT_SETTINGS, DOOR_TEAMS, defaultTeam } from "@/lib/crew/store";
 import { MemoryStore } from "@/lib/crew/store-memory";
@@ -28,7 +28,9 @@ describe("names and groups", () => {
     for (const n of names) expect(n).not.toMatch(JARGON);
     const teams = JOBS.flatMap((j) => j.teams);
     expect(new Set(teams).size).toBe(teams.length);
-    for (const t of [...DOOR_TEAMS, "system" as const]) expect(teams, t).toContain(t);
+    // Only the admin teams are jobs on the page; the rest run from the Google Sheet.
+    for (const t of ADMIN_TEAMS) expect(teams, t).toContain(t);
+    for (const t of DOOR_TEAMS.filter((x) => !ADMIN_TEAMS.includes(x))) expect(teams, t).not.toContain(t);
     for (const t of teams) expect(GROUP_NAME[t]).toBeTruthy();
   });
 

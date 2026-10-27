@@ -26,10 +26,19 @@ describe("approval gate", () => {
     const importers = [...crewFiles, ...appFiles].filter((f) => !f.startsWith("src/lib/crew/execute/") && /from\s+["'](\.\/execute|\.\.\/execute|@\/lib\/crew\/execute)/.test(read(f)));
     expect(importers).toEqual(["src/lib/crew/decide.ts"]);
   });
-  it("decide.ts is reachable only from the Approve route", () => {
+  it("decide.ts is reachable only from the Approve route and the Sheet's apply step", () => {
+    // Two owner interfaces, one decision path: the admin page's buttons and a
+    // Status set in the Google Sheet (sheets/apply.ts) both go through decide().
     const users = [...crewFiles, ...appFiles].filter((f) => f !== "src/lib/crew/decide.ts" && /from\s+["'](@\/lib\/crew\/decide|\.\/decide|\.\.\/decide)["']/.test(read(f)));
-    expect(users).toEqual(["src/app/api/admin/crew/approvals/[id]/route.ts"]);
+    expect(users.sort()).toEqual(["src/app/api/admin/crew/approvals/[id]/route.ts", "src/lib/crew/sheets/apply.ts"]);
     expect(read("src/app/api/admin/crew/approvals/[id]/route.ts")).toContain("await requireAdmin()");
+  });
+  it("the Sheet's apply step is reached only by the authenticated hook and the sync", () => {
+    const users = [...crewFiles, ...appFiles].filter((f) => !f.startsWith("src/lib/crew/sheets/") && /from\s+["'](@\/lib\/crew\/sheets\/apply|\.\/apply|\.\.\/sheets\/apply)["']/.test(read(f)));
+    expect(users).toEqual(["src/app/api/crew/sheet-hook/route.ts"]);
+    const hook = read("src/app/api/crew/sheet-hook/route.ts");
+    expect(hook).toMatch(/if \(!process\.env\.CREW_SHEET_HOOK_SECRET\) return NextResponse\.json\(\{ error: "not found" \}, \{ status: 404 \}\)/);
+    expect(hook).toContain("timingSafeEqual");
   });
   it("agents never write approvals directly", () => {
     const writers = crewFiles.filter((f) => f.startsWith("src/lib/crew/agents/") && /insertApproval\(/.test(read(f)));

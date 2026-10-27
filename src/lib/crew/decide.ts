@@ -1,16 +1,18 @@
 import { DISCLOSE_KINDS, TEXT_KINDS } from "./approvals";
 import { applyDisclosure } from "./disclosure";
-import { executeApproval, EXECUTED_KINDS } from "./execute";
+import { executeApproval, EXECUTED_KINDS, tier2Executable } from "./execute";
 import type { CrewStore } from "./store";
 import type { Approval, Platform, TouchKind } from "./types";
 import { stripEmDashes } from "./voice";
 
 // ── What the owner's buttons do ─────────────────────────────────────────────
-// The only importer of ./execute (tests/crew-approval-gate pins that), so the
-// only path from an agent's draft to the outside world is a person pressing
-// Approve. Drafts we post ourselves (replies, DMs, comments) are just marked
-// approved (a reply counts as contact from then on); "I posted it" turns a
-// DM's claim into a recorded contact.
+// The only importer of ./execute (tests/crew-guards pins that), so the only
+// path from an agent's draft to the outside world is a person approving: the
+// Approve button on the admin page, or a Status set in the Google Sheet
+// (sheets/apply.ts, the Sheet's "button"). Drafts we post ourselves (replies,
+// DMs, comments) are just marked approved (a reply counts as contact from
+// then on); "I posted it" / Status "Sent / Posted" turns a DM's claim into a
+// recorded contact.
 
 export type Decision =
   | { action: "approve"; body?: string; choice?: string; by: string }
@@ -51,9 +53,13 @@ export async function decide(store: CrewStore, id: string, d: Decision, now = ne
     if (a.status !== "pending") return { ok: false, message: "Already decided." };
     const body = d.body !== undefined ? clean(d.body) : a.body;
     await store.updateApproval(id, { status: "approved", body, decided_at: now.toISOString(), ...(d.choice ? { meta: { ...a.meta, choice: d.choice.slice(0, 20) } } : {}) });
-    if (EXECUTED_KINDS.includes(a.kind)) {
-      const r = await executeApproval(store, { ...a, body, status: "approved" });
-      await store.updateApproval(id, r.ok ? { status: "done", done_at: now.toISOString(), meta: { ...a.meta, result: r.result } } : { meta: { ...a.meta, error: r.message } });
+    const controls = await store.getControls().catch(() => ({}) as Record<string, unknown>);
+    if (EXECUTED_KINDS.includes(a.kind) || tier2Executable(a, controls)) {
+      const r = await executeApproval(store, { ...a, body, status: "approved" }, d.by);
+      if (r.ok && !r.simulated) {
+        await store.updateApproval(id, { status: "done", done_at: now.toISOString(), meta: { ...a.meta, result: r.result } });
+        if ((a.kind === "reply" || a.kind === "comment") && a.person_id) await store.addTouch(a.person_id, (a.platform ?? "web") as Platform, POSTED_TOUCH[a.kind]!, id);
+      } else if (!r.ok) await store.updateApproval(id, { meta: { ...a.meta, error: r.message } });
       return { ok: r.ok, message: r.message };
     }
     // A reply counts as contact from the moment it is approved, so no DM can be

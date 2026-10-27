@@ -8,7 +8,8 @@ import { crewLink } from "../links";
 import { remainingToday } from "../rate-limit";
 import { nyDayStart } from "../schedule";
 import type { ApprovalKind, Platform } from "../types";
-import { HUMAN_VOICE, voiceProblems } from "../voice";
+import { HUMAN_VOICE } from "../voice";
+import { writingProblems } from "../writing-check";
 
 // ── The shared engine behind every Replies and Contact agent ────────────────
 // find posts → drop ones already seen → cheap keyword filter (no model) →
@@ -125,8 +126,15 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
 
   const facts = await competitorFacts(ctx.store, ctx.now());
   const system = `${HUMAN_VOICE}\n\n${productFacts()}`;
+  const examples = await ctx.ownerExamples(o.kind);
+  const replyCap = Number((await ctx.store.getControls().catch(() => ({}) as Record<string, unknown>)).social_reply_limit ?? 0);
   let promoBudget = await pitchBudget(ctx, o, picks.length);
   let made = 0;
+  if (replyCap > 0) {
+    // Controls → "Social replies per platform per day": a ceiling on top of the warm-up cap.
+    const todayOnPlatform = await ctx.store.countTouchesSince(o.platform, ["replied", "commented", "dm_drafted", "dm_sent", "connect_sent"], nyDayStart(ctx.now()).toISOString());
+    if (todayOnPlatform >= replyCap) return { summary: `Reached the Controls limit of ${replyCap} ${o.platform} drafts today.` };
+  }
 
   for (const s of picks) {
     if (await inboxFull(ctx)) break;
@@ -152,11 +160,12 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
         ? `You MAY mention SwiftCard in one low-key sentence if it honestly fits${s.asks_for_tools ? " (they asked for tools)" : ""}. If you include a link, use exactly ${link}.`
         : "Do NOT mention SwiftCard or any product, and include no link. Just be genuinely helpful or insightful about their post.",
       facts,
+      ...(examples ? [examples] : []),
       `POST:\n${brief}`,
     ].join("\n\n");
     const first = await ctx.llm.ask("draft", { system, effort: "medium", maxTokens: 1200, prompt: instructions });
     if (first.refused || !first.text) continue;
-    const { final, record } = await debate(ctx, {
+    let { final, record } = await debate(ctx, {
       kind: o.kind,
       draft: first.text,
       brief,
@@ -168,7 +177,18 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
       ctx.stat("skipped_pitch_not_allowed");
       continue;
     }
-    const problems = voiceProblems(final);
+    // The writing check: one rewrite when a draft trips it; a second failure
+    // reaches the Sheet as Needs Review (propose() marks it) rather than vanishing.
+    let problems = writingProblems(final, { kind: o.kind, platform: o.platform });
+    if (problems.length) {
+      ctx.stat("rewritten_for_style");
+      const again = await ctx.llm.ask("revise", { system, effort: "medium", maxTokens: 1200, prompt: `${instructions}\n\nYOUR DRAFT:\n${final}\n\nRewrite it without these problems and return only the new text:\n- ${problems.join("\n- ")}` });
+      if (again.text && !writingProblems(again.text, { kind: o.kind, platform: o.platform }).length) {
+        final = again.text;
+        record = { ...record, line: `${record.line} Rewritten once for style.` };
+      }
+      problems = writingProblems(final, { kind: o.kind, platform: o.platform });
+    }
     const r = await propose(ctx, {
       kind: o.kind,
       title: o.label(c),
@@ -178,7 +198,20 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
       targetUrl: c.url,
       person,
       debate: record,
-      meta: { score: s.score, angle: s.angle, community: c.community, pitched: isPromotional(final), ...(o.platform === "reddit" ? {} : { excerpt: c.text.slice(0, 280) }) },
+      // The Sheet's row is built from this: who, where, what they asked, why
+      // it matters. Reddit's terms want post bodies gone quickly, so Reddit
+      // rows carry the title and the link only.
+      meta: {
+        score: s.score,
+        angle: s.angle,
+        why: s.why,
+        asks_for_tools: s.asks_for_tools,
+        author: c.author,
+        post_title: c.title.slice(0, 200),
+        community: c.community,
+        pitched: isPromotional(final),
+        ...(o.platform === "reddit" ? {} : { excerpt: c.text.slice(0, 500) }),
+      },
     });
     if (r.ok) {
       made++;

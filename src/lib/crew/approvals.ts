@@ -1,8 +1,9 @@
 import type { AgentContext } from "./context";
 import { applyDisclosure, hasRequiredDisclosure } from "./disclosure";
-import { everContacted, personFor } from "./ledger";
+import { everContacted, normalizeHandle, personFor } from "./ledger";
 import type { ApprovalKind, DebateRecord, Platform } from "./types";
 import { stripEmDashes } from "./voice";
+import { writingProblems } from "./writing-check";
 
 // ── Putting something in the owner's inbox ──────────────────────────────────
 // The ONLY way an agent's work leaves the agent. propose() never posts, sends
@@ -54,8 +55,18 @@ export async function propose(ctx: AgentContext, p: Proposal): Promise<ProposeRe
     }
   }
 
+  // The writing check (spec §18): a draft that fails still reaches the owner,
+  // marked Needs Review with the problems named, never silently dropped.
+  const problems = TEXT_KINDS.includes(p.kind) ? writingProblems(body, { kind: p.kind, platform: p.platform ?? p.person?.platform ?? null }) : [];
+  const review = problems.length ? { needs_review: true, writing_problems: problems } : {};
+  if (problems.length) ctx.stat("needs_review");
+
   let personId: string | null = null;
   if (p.person) personId = await personFor(ctx.store, p.person.platform, p.person.handle, p.person.name);
+  if (p.person && personId && (await ctx.store.isSuppressed(suppressionKeys(p.person.platform, p.person.handle)))) {
+    ctx.stat("skipped_suppressed");
+    return { ok: false, reason: "on the suppression list" };
+  }
 
   if (DM_KINDS.includes(p.kind)) {
     if (!personId) return { ok: false, reason: "a DM needs a person" };
@@ -77,7 +88,7 @@ export async function propose(ctx: AgentContext, p: Proposal): Promise<ProposeRe
     person_id: personId,
     debate: p.debate ?? null,
     model_used: ctx.tier,
-    meta: { ...(p.meta ?? {}), ...(ctx.tierWhy ? { tier_why: ctx.tierWhy } : {}) },
+    meta: { ...(p.meta ?? {}), ...review, ...(ctx.tierWhy ? { tier_why: ctx.tierWhy } : {}) },
   });
   if ("conflict" in ins) {
     ctx.stat("skipped_thread_answered");
@@ -95,4 +106,12 @@ export async function propose(ctx: AgentContext, p: Proposal): Promise<ProposeRe
 
   ctx.stat("proposed");
   return { ok: true, id: ins.id };
+}
+
+/** The suppression keys for a person: their normalized handle on that platform (email: the address and its @domain). */
+export function suppressionKeys(platform: Platform, handle: string): string[] {
+  const norm = normalizeHandle(platform, handle);
+  if (!norm) return [];
+  if (platform === "email") return [norm, `@${norm.split("@")[1] ?? ""}`];
+  return [`${platform}:${norm}`];
 }

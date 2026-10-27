@@ -514,3 +514,42 @@ Small control changes (pinned in tests/crew-control-panel):
 - `action=pause` sets `paused_until` = PAUSE_FOREVER ("Paused by you."); `action=stop` does that and switches the agent off, so a run under way halts at its next model call. Turning an agent on clears the pause.
 - **Schedules**: your changes live in one `crew_kv` row, `schedule_overrides` ({agentId: Schedule}), never in an agent's config (a run rewrites its config). `effectiveSchedule()` is what the tick and Run now use for the next run; agents that run on pasted input and locked agents keep their trigger; nothing faster than every 15 minutes. Saving sets `next_run_at` to the new next time. The manager chat can't touch it.
 - Route messages carry `tone=err` for failures (red banner).
+
+## The Sheet (2026-10-26, owner request: "ONE Google Sheet is the headquarters")
+
+The marketing, outreach and lead agents are run from one Google Sheets
+workbook, "SwiftCard Leads"; the admin page keeps the Watchdog only. Nothing
+about what the agents do changed; where their work lands and how the owner
+answers did. Full audit: `AUDIT.md`; setup: `SETUP.md`; code:
+`src/lib/crew/sheets/` and `src/lib/crew/google/`.
+
+- **Tabs** (`sheets/tabs.ts`): Dashboard, Today - Top 50, Today - Action
+  Queue, All Leads, Intent Leads, Pipeline, Meetings, Source Stats, Agent
+  Performance, Controls, Activity Log, Suppression List, Paste a Post; then one
+  tab per agent with its own columns (Instagram LinkedIn Bio, Reddit Reply,
+  Instagram DMs, Instagram Comments, Reddit DMs, LinkedIn Engagement, Quora
+  Replies, Bluesky Engagement, Threads Replies, Facebook Groups, Indie Hackers,
+  Alignable, SEO Opportunities, GEO Opportunities, Content Creator,
+  Partnerships, Competitor Intel, Office Prospects; placeholders for Hacker
+  News, X Replies, Events). Every row: a prepared message, an exact link, a
+  Status dropdown, a Key.
+- **Sync** (`sheets/sync.ts`, agent `sheet-sync`, every 15 min, no AI): read
+  every editable tab in one request → apply the owner's changes through
+  `decide()` (`sheets/apply.ts`) → write new/changed rows by Key → rebuild the
+  computed tabs. `sheet-daily` (7:30 NY) also copies the workbook to
+  `SwiftCard Leads/Daily/YYYY-MM-DD` in the Shared Drive (90 days kept).
+- **Hook**: `apps-script/SwiftCardLeads.gs` → `POST /api/crew/sheet-hook`
+  (Bearer `CREW_SHEET_HOOK_SECRET`) applies an edit within seconds; the poll
+  is the fallback. Delay documented: seconds / ≤15 minutes.
+- **Rules pinned in tests/crew-sheets**: Sent / Posted never sends; Approved
+  executes only blog posts, Fix PRs and (when the tier says so) Bluesky
+  replies, never in dry run; Not Interested / Unsubscribed suppress every
+  identity and add an `opted_out` touch; Controls are validated in code and a
+  bad value is written back; the writing check sends a failing draft to
+  Needs Review, never to the bin; owner edits become examples for the model.
+- **Schema**: `supabase/crew-sheets.sql` (`crew_sheet_rows`, `crew_activity`,
+  `crew_controls`, `crew_edits`; `crew_suppression.source/channel`). Not
+  applied by the build; the owner runs it.
+- **Dry run** starts on (`crew_controls.dry_run`). Ships as PR 1 of 4 on
+  branch `agents/sheets-hq`; PR 2 = lead engine + new agents, PR 3 = cold email
+  + reply handler + meetings, PR 4 = 8:00 brief + performance + cleanup.

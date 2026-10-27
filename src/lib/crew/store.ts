@@ -1,14 +1,17 @@
 import type {
+  ActivityRow,
   AgentState,
   Approval,
   ApprovalKind,
   ApprovalStatus,
   ChatMessage,
   CrewInput,
+  EditRow,
   Finding,
   Lead,
   Platform,
   Settings,
+  SheetRow,
   TeamId,
   TeamRow,
   TouchKind,
@@ -111,7 +114,7 @@ export interface CrewStore {
 
   insertApproval(a: NewApproval): Promise<{ id: string } | { conflict: true }>;
   getApproval(id: string): Promise<Approval | null>;
-  listApprovals(filter: { status?: ApprovalStatus[]; agentId?: string; sinceIso?: string; limit?: number }): Promise<Approval[]>;
+  listApprovals(filter: { status?: ApprovalStatus[]; agentId?: string; agentIds?: string[]; sinceIso?: string; limit?: number }): Promise<Approval[]>;
   updateApproval(id: string, patch: Partial<Approval>): Promise<void>;
   countPending(agentId: string): Promise<number>;
   /** Most recent decided statuses (approved/done/rejected) for one agent and kind, newest first. */
@@ -125,6 +128,8 @@ export interface CrewStore {
   addTouch(personId: string, platform: Platform, kind: TouchKind, approvalId: string | null): Promise<void>;
   touchesFor(personId: string): Promise<{ platform: string; kind: TouchKind; at: string }[]>;
   identitiesFor(personId: string): Promise<{ platform: string; handle_norm: string }[]>;
+  /** People anyone has talked to (any touch but lead_listed / dm_drafted), newest touch first, for the Pipeline tab. */
+  listTouchedPeople(limit: number): Promise<TouchedPerson[]>;
   /** The hard DM rule, atomically (SQL function crew_claim_dm). */
   claimDm(personId: string, approvalId: string): Promise<boolean>;
   releaseDmClaim(approvalId: string): Promise<void>;
@@ -152,7 +157,8 @@ export interface CrewStore {
   kvSet(key: string, value: unknown): Promise<void>;
 
   isSuppressed(emailOrDomain: string[]): Promise<boolean>;
-  addSuppression(value: string, reason: string): Promise<void>;
+  addSuppression(value: string, reason: string, o?: { source?: string; channel?: string }): Promise<void>;
+  listSuppression(limit: number): Promise<SuppressionRow[]>;
   insertLeads(leads: Lead[]): Promise<number>;
   countLeadsSince(sinceIso: string, list?: Lead["list"]): Promise<Record<string, number>>;
   unsyncedLeads(list: Lead["list"], limit: number): Promise<(Lead & { id: string; created_at: string })[]>;
@@ -170,4 +176,33 @@ export interface CrewStore {
 
   competitorFacts(): Promise<{ competitor: string; fact: string; value: string; source_url: string; seen_at: string }[]>;
   upsertCompetitorFact(f: { competitor: string; fact: string; value: string; source_url: string }): Promise<{ changed: boolean; previous: string | null }>;
+
+  // ── The Google Sheet (supabase/crew-sheets.sql) ──────────────────────────
+  /** False until crew-sheets.sql has been applied; the Sheet features then stay quiet. */
+  sheetsReady(): Promise<boolean>;
+  listSheetRows(tab?: string): Promise<SheetRow[]>;
+  getSheetRow(rowKey: string): Promise<SheetRow | null>;
+  sheetRowFor(kind: SheetRow["entity_kind"], entityId: string): Promise<SheetRow | null>;
+  /** Insert or update by row_key. */
+  upsertSheetRow(r: Omit<SheetRow, "id" | "created_at">): Promise<SheetRow>;
+  patchSheetRow(rowKey: string, patch: Partial<Omit<SheetRow, "id" | "row_key" | "created_at">>): Promise<void>;
+
+  logActivity(a: Omit<ActivityRow, "id" | "at">): Promise<void>;
+  listActivity(limit: number): Promise<ActivityRow[]>;
+  activitySince(sinceIso: string): Promise<ActivityRow[]>;
+
+  getControls(): Promise<Record<string, unknown>>;
+  setControl(key: string, value: unknown, source: "sheet" | "admin" | "system"): Promise<void>;
+
+  addEdit(e: Omit<EditRow, "id" | "at">): Promise<void>;
+  recentEdits(agentId: string, kind: ApprovalKind, n: number): Promise<EditRow[]>;
 }
+
+export type SuppressionRow = { value: string; reason: string; added_at: string; source: string; channel: string };
+
+export type TouchedPerson = {
+  id: string;
+  display_name: string | null;
+  identities: { platform: string; handle_norm: string }[];
+  touches: { platform: string; kind: TouchKind; at: string; approval_id: string | null }[];
+};

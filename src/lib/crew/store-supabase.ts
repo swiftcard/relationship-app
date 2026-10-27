@@ -1,6 +1,6 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
-import { DEFAULT_SETTINGS, DOOR_TEAMS, defaultTeam, type CrewStore, type NewApproval, type ReportRow, type RunRow, type UsageRow, type UsageTotals } from "./store";
-import type { AgentState, Approval, ApprovalKind, ApprovalStatus, ChatMessage, CrewInput, Finding, Lead, OfficeHours, Platform, Settings, TeamId, TeamRow, TouchKind } from "./types";
+import { DEFAULT_SETTINGS, DOOR_TEAMS, defaultTeam, type CrewStore, type NewApproval, type ReportRow, type RunRow, type SuppressionRow, type UsageRow, type UsageTotals } from "./store";
+import type { ActivityRow, AgentState, Approval, ApprovalKind, ApprovalStatus, ChatMessage, CrewInput, EditRow, Finding, Lead, OfficeHours, Platform, Settings, SheetRow, TeamId, TeamRow, TouchKind } from "./types";
 
 // ── The real CrewStore: service-role Supabase, tables from supabase/crew.sql ─
 // Server-only (it imports the service-role client; tests/server-only-boundary
@@ -154,10 +154,11 @@ export class SupabaseStore implements CrewStore {
     const { data } = await this.db.from("crew_approvals").select("*").eq("id", id).maybeSingle();
     return (data as Approval) ?? null;
   }
-  async listApprovals(f: { status?: ApprovalStatus[]; agentId?: string; sinceIso?: string; limit?: number }) {
+  async listApprovals(f: { status?: ApprovalStatus[]; agentId?: string; agentIds?: string[]; sinceIso?: string; limit?: number }) {
     let q = this.db.from("crew_approvals").select("*").order("created_at", { ascending: false }).limit(f.limit ?? 100);
     if (f.status) q = q.in("status", f.status);
     if (f.agentId) q = q.eq("agent_id", f.agentId);
+    if (f.agentIds) q = q.in("agent_id", f.agentIds);
     if (f.sinceIso) q = q.gte("created_at", f.sinceIso);
     return (must(await q, "approvals") ?? []) as Approval[];
   }
@@ -232,6 +233,27 @@ export class SupabaseStore implements CrewStore {
       platform: string;
       handle_norm: string;
     }[];
+  }
+  async listTouchedPeople(limit: number) {
+    const { data, error } = await this.db
+      .from("crew_touches")
+      .select("person_id, platform, kind, at, approval_id")
+      .not("kind", "in", "(lead_listed,dm_drafted)")
+      .order("at", { ascending: false })
+      .limit(limit * 4);
+    if (error || !data?.length) return [];
+    const ids = [...new Set(data.map((t) => String(t.person_id)))].slice(0, limit);
+    const [people, identities, touches] = await Promise.all([
+      this.db.from("crew_people").select("id, display_name").in("id", ids),
+      this.db.from("crew_identities").select("person_id, platform, handle_norm").in("person_id", ids),
+      this.db.from("crew_touches").select("person_id, platform, kind, at, approval_id").in("person_id", ids).order("at"),
+    ]);
+    return ids.map((id) => ({
+      id,
+      display_name: (people.data ?? []).find((p) => String(p.id) === id)?.display_name ?? null,
+      identities: (identities.data ?? []).filter((i) => String(i.person_id) === id).map((i) => ({ platform: String(i.platform), handle_norm: String(i.handle_norm) })),
+      touches: (touches.data ?? []).filter((t) => String(t.person_id) === id).map((t) => ({ platform: String(t.platform), kind: t.kind as TouchKind, at: String(t.at), approval_id: t.approval_id ? String(t.approval_id) : null })),
+    }));
   }
   async claimDm(personId: string, approvalId: string) {
     const data = must(await this.db.rpc("crew_claim_dm", { p_person: personId, p_approval: approvalId }), "claim dm");
@@ -324,8 +346,17 @@ export class SupabaseStore implements CrewStore {
     const { data } = await this.db.from("crew_suppression").select("value").in("value", values.map((v) => v.toLowerCase())).limit(1);
     return (data ?? []).length > 0;
   }
-  async addSuppression(value: string, reason: string) {
-    must(await this.db.from("crew_suppression").upsert({ value: value.toLowerCase(), reason }), "suppression");
+  async addSuppression(value: string, reason: string, o: { source?: string; channel?: string } = {}) {
+    // source/channel columns come from crew-sheets.sql; before it runs the plain upsert still works.
+    const extra = o.source || o.channel ? { ...(o.source ? { source: o.source } : {}), ...(o.channel ? { channel: o.channel } : {}) } : {};
+    const res = await this.db.from("crew_suppression").upsert({ value: value.toLowerCase(), reason, ...extra });
+    if (res.error && Object.keys(extra).length) must(await this.db.from("crew_suppression").upsert({ value: value.toLowerCase(), reason }), "suppression");
+    else must(res, "suppression");
+  }
+  async listSuppression(limit: number) {
+    const { data, error } = await this.db.from("crew_suppression").select("*").order("added_at", { ascending: false }).limit(limit);
+    if (error) return [];
+    return (data ?? []).map((r: Row) => ({ value: String(r.value), reason: String(r.reason ?? ""), added_at: String(r.added_at ?? ""), source: String(r.source ?? "manual"), channel: String(r.channel ?? "email") })) as SuppressionRow[];
   }
   async insertLeads(leads: Lead[]) {
     let n = 0;
@@ -408,5 +439,79 @@ export class SupabaseStore implements CrewStore {
     must(await this.db.from("crew_competitor_facts").upsert({ ...f, seen_at: new Date().toISOString() }, { onConflict: "competitor,fact" }), "fact upsert");
     const previous = prev ? String(prev.value) : null;
     return { changed: previous !== f.value, previous };
+  }
+
+  // ── The Google Sheet (supabase/crew-sheets.sql) ──────────────────────────
+
+  async sheetsReady() {
+    const { error } = await this.db.from("crew_sheet_rows").select("id").limit(1);
+    return !error;
+  }
+  private toSheetRow(r: Row): SheetRow {
+    return {
+      id: String(r.id),
+      tab: String(r.tab),
+      row_key: String(r.row_key),
+      entity_kind: r.entity_kind as SheetRow["entity_kind"],
+      entity_id: String(r.entity_id),
+      status: String(r.status ?? "New"),
+      owner_cols: (r.owner_cols ?? {}) as Record<string, string>,
+      agent_hash: String(r.agent_hash ?? ""),
+      created_at: String(r.created_at),
+      synced_at: (r.synced_at as string) ?? null,
+      owner_edited_at: (r.owner_edited_at as string) ?? null,
+    };
+  }
+  async listSheetRows(tab?: string) {
+    let q = this.db.from("crew_sheet_rows").select("*").order("created_at").limit(20000);
+    if (tab) q = q.eq("tab", tab);
+    return (must(await q, "sheet rows") ?? []).map((r: Row) => this.toSheetRow(r));
+  }
+  async getSheetRow(rowKey: string) {
+    const { data } = await this.db.from("crew_sheet_rows").select("*").eq("row_key", rowKey).maybeSingle();
+    return data ? this.toSheetRow(data) : null;
+  }
+  async sheetRowFor(kind: SheetRow["entity_kind"], entityId: string) {
+    const { data } = await this.db.from("crew_sheet_rows").select("*").eq("entity_kind", kind).eq("entity_id", entityId).limit(1).maybeSingle();
+    return data ? this.toSheetRow(data) : null;
+  }
+  async upsertSheetRow(r: Omit<SheetRow, "id" | "created_at">) {
+    const data = must(await this.db.from("crew_sheet_rows").upsert(r, { onConflict: "row_key" }).select("*").single(), "sheet row upsert");
+    return this.toSheetRow(data as Row);
+  }
+  async patchSheetRow(rowKey: string, patch: Partial<Omit<SheetRow, "id" | "row_key" | "created_at">>) {
+    must(await this.db.from("crew_sheet_rows").update(patch).eq("row_key", rowKey), "sheet row patch");
+  }
+
+  async logActivity(a: Omit<ActivityRow, "id" | "at">) {
+    // The audit trail must never break the action it records.
+    await this.db.from("crew_activity").insert(a);
+  }
+  async listActivity(limit: number) {
+    const { data, error } = await this.db.from("crew_activity").select("*").order("at", { ascending: false }).limit(limit);
+    return error ? [] : ((data ?? []) as ActivityRow[]);
+  }
+  async activitySince(sinceIso: string) {
+    const { data, error } = await this.db.from("crew_activity").select("*").gte("at", sinceIso).order("at").limit(5000);
+    return error ? [] : ((data ?? []) as ActivityRow[]);
+  }
+
+  async getControls() {
+    const { data, error } = await this.db.from("crew_controls").select("key, value");
+    if (error) return { dry_run: true };
+    const out: Record<string, unknown> = { dry_run: true };
+    for (const r of data ?? []) out[String(r.key)] = r.value;
+    return out;
+  }
+  async setControl(key: string, value: unknown, source: "sheet" | "admin" | "system") {
+    must(await this.db.from("crew_controls").upsert({ key, value, source, updated_at: new Date().toISOString() }), "control");
+  }
+
+  async addEdit(e: Omit<EditRow, "id" | "at">) {
+    await this.db.from("crew_edits").insert(e);
+  }
+  async recentEdits(agentId: string, kind: ApprovalKind, n: number) {
+    const { data, error } = await this.db.from("crew_edits").select("*").eq("agent_id", agentId).eq("kind", kind).order("at", { ascending: false }).limit(n);
+    return error ? [] : ((data ?? []) as EditRow[]);
   }
 }
