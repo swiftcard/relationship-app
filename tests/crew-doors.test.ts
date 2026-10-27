@@ -79,7 +79,9 @@ describe("the whole office", () => {
   it("a locked door holds workers, not managers; a pause holds anyone", () => {
     const locked = doorState(row({ door_open: false }), opts(), WED_2PM);
     const st = { id: "x", enabled: true, model_override: null, daily_usd_cap: null, config: {}, last_run_at: null, next_run_at: null, lease_until: null, status_note: null };
-    expect(blockedBy(fakeAgent(), st, locked, WED_2PM)).toBe("door locked");
+    expect(blockedBy(fakeAgent({ team: "watchdog" }), st, locked, WED_2PM)).toBe("door locked");
+    // The marketing teams have no door anyone can see any more (Start / Stop per agent): it never holds them.
+    expect(blockedBy(fakeAgent({ team: "replies" }), st, locked, WED_2PM)).toBeNull();
     expect(blockedBy(fakeAgent({ role: "manager" }), st, locked, WED_2PM)).toBeNull();
     expect(blockedBy(fakeAgent({ role: "manager" }), st, doorState(row(), opts(true), WED_2PM), WED_2PM)).toBe("the whole office is locked");
     const open = doorState(row(), opts(), WED_2PM);

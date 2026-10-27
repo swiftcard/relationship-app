@@ -1,10 +1,10 @@
-import type { AgentDef } from "../agent-def";
-import { propose } from "../approvals";
-import { debate } from "../debate";
-import { productFacts } from "../facts";
-import { HUMAN_VOICE } from "../voice";
+import type { AgentDef } from "@/lib/crew/agent-def";
+import { propose } from "@/lib/crew/approvals";
+import { debate } from "@/lib/crew/debate";
+import { productFacts } from "@/lib/crew/facts";
+import { HUMAN_VOICE } from "@/lib/crew/voice";
 
-// ── The test agent ──────────────────────────────────────────────────────────
+// ── The practice agent (a test fixture since 2026-10-27, not registered) ──
 // Proves the whole loop end to end with no platform account: it drafts one
 // reply to a made-up forum post, runs it past the second opinion, checks the
 // ledger and puts it in the inbox. Nothing it makes is ever posted anywhere;

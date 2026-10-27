@@ -75,15 +75,6 @@ export function isDue(nextRunAt: string | null, now: Date): boolean {
   return !nextRunAt || new Date(nextRunAt).getTime() <= now.getTime();
 }
 
-export function describeSchedule(s: Schedule): string {
-  if (s.kind === "every") return s.minutes % 60 === 0 ? `every ${s.minutes / 60} h` : `every ${s.minutes} min`;
-  if (s.kind === "on_input") return "when you paste something in";
-  const t = `${((s.hour + 11) % 12) + 1}:${String(s.minute ?? 0).padStart(2, "0")}${s.hour < 12 ? "am" : "pm"}`;
-  if (!s.days) return `daily ${t}`;
-  const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  return `${s.days.map((d) => names[d]).join(" + ")} ${t}`;
-}
-
 // ── Your own schedule for an agent ──────────────────────────────────────────
 // The Agents tab can change when an agent runs. The change is stored in one
 // crew_kv row ({agentId: Schedule}), not in the agent's config, so a run that
@@ -108,15 +99,26 @@ export function validSchedule(s: unknown): s is Schedule {
   return Array.isArray(x.days) && x.days.length > 0 && x.days.length <= 7 && new Set(x.days).size === x.days.length && x.days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6);
 }
 
+/** How often a continuous agent runs while it is on: every clock tick. */
+export const CONTINUOUS: Schedule = { kind: "every", minutes: 15 };
+
+/** Minutes until just after the next New York midnight: when a day's ceiling resets. */
+export function minutesToTomorrow(now: Date): number {
+  const p = nyParts(now);
+  const tomorrow = fromNy(p.y, p.m, p.d + 1, 0, 5);
+  return Math.max(15, Math.ceil((tomorrow.getTime() - now.getTime()) / 60_000));
+}
+
 /** Whether the owner may change this agent's schedule. */
 export function canReschedule(def: { schedule: Schedule; locked?: string }): boolean {
   return !def.locked && def.schedule.kind !== "on_input";
 }
 
-/** The schedule an agent actually runs on: yours if you set one, else its default. */
-export function effectiveSchedule(def: { id: string; schedule: Schedule; locked?: string }, overrides: ScheduleOverrides | null | undefined): Schedule {
+/** The schedule an agent actually runs on: yours if you set one, else continuous (every tick) or its default. */
+export function effectiveSchedule(def: { id: string; schedule: Schedule; locked?: string; continuous?: boolean }, overrides: ScheduleOverrides | null | undefined): Schedule {
   const o = overrides?.[def.id];
-  return canReschedule(def) && validSchedule(o) ? o : def.schedule;
+  if (canReschedule(def) && validSchedule(o)) return o;
+  return def.continuous && def.schedule.kind !== "on_input" ? CONTINUOUS : def.schedule;
 }
 
 /** The schedule form: `mode` = every | daily | days, `every` (minutes), `time` ("HH:MM"), `day_0`…`day_6`. A string is an error to show. */

@@ -100,8 +100,9 @@ describe("social manager", () => {
 });
 
 describe("registry", () => {
-  it("every Marketing agent from the spec, with a manager", () => {
-    for (const id of ["marketing-seo", "marketing-geo", "marketing-blog", "marketing-social", "competitor-watch", "marketing-manager"]) expect(AGENTS.some((a) => a.id === id), id).toBe(true);
+  it("every Marketing agent from the spec; its manager was retired with the admin rooms (2026-10-27)", () => {
+    for (const id of ["marketing-seo", "marketing-geo", "marketing-blog", "marketing-social", "competitor-watch"]) expect(AGENTS.some((a) => a.id === id), id).toBe(true);
+    expect(AGENTS.some((a) => a.id === "marketing-manager")).toBe(false);
   });
   it("covers every agent in the plan's table", () => {
     const n = AGENTS.filter((a) => a.role === "worker").length;

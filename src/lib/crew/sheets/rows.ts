@@ -9,7 +9,8 @@ import { normalizeHandle } from "../ledger";
 import { approvalKey, customKey, leadKey, personKey } from "./keys";
 import type { TabSpec } from "./spec";
 import { priorityOf, stageForPerson, statusForApproval } from "./status";
-import { ALL_LEADS, BLUESKY, COMPETITOR_INTEL, CONTENT, GEO, INSTAGRAM_DMS, INSTAGRAM_LINKEDIN_BIO, LINKEDIN, OFFICE_PROSPECTS, PARTNERSHIPS, PIPELINE, QUORA, REDDIT_DMS, REDDIT_REPLY, SEO, tabsForAgent } from "./tabs";
+import { exactPostLink, exactProfileLink, instagramDmLink, instagramHandle, redditMessageLink } from "../exact-links";
+import { BLOG, BLUESKY, COMPETITOR_INTEL, EVENTS, GEO, INSTAGRAM_DMS, INSTAGRAM_LINKEDIN_BIO, LEAD_TAB_BY_SOURCE, LINKEDIN_COMMENTS, LINKEDIN_CONNECTIONS, OFFICE_PROSPECTS, PARTNERSHIPS, PIPELINE, QUORA, REDDIT_DMS, REDDIT_REPLY, SEO, SOCIAL, WEB_LEADS, tabsForAgent } from "./tabs";
 
 // ── A record → a row ────────────────────────────────────────────────────────
 // Every row carries a Key (a short, stable id) and the cells of its tab's
@@ -75,6 +76,15 @@ export function profileUrl(platform: string, h: string): string | null {
   }
 }
 
+/** What a pasted item's link cell says when it was pasted without a link. */
+export const NO_LINK = "(pasted without a link)";
+
+/** Office Prospects: an email to the contact when their site shows one, else their website. */
+function officeOpen(email: string, site: string | null): string {
+  if (/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(email)) return link(`mailto:${email}`, `Email ${email}`);
+  return link(site, "Open website");
+}
+
 /** The LinkedIn profile mentioned in a bio or post, if any. */
 export function linkedinIn(text: string): string | null {
   const m = /https?:\/\/(?:www\.)?linkedin\.com\/in\/[A-Za-z0-9_%.-]+\/?/i.exec(text) ?? /linkedin\.com\/in\/([A-Za-z0-9_%.-]+)/i.exec(text);
@@ -109,16 +119,26 @@ export function approvalRows(a: Approval, s: RowSources): BuiltRow[] {
   const tab = tabs[0];
   const excerpt = str(m.excerpt);
   const common: Cells = { priority: priorityOf(a), why: str(m.why), asking: str(m.angle), message: a.body, date_found: day(a.created_at) };
+  // Exact links only. A social draft whose link isn't the exact post, comment
+  // or person (one made before the rule, from a search result) never becomes
+  // a row; one pasted without a link says so in its link cell.
+  const social = ["reply", "comment", "dm", "connect_note"].includes(a.kind) && a.platform !== "email" && a.platform !== "web";
+  const pasted = !a.target_url || a.target_url.startsWith("paste:");
+  const p = (a.platform ?? "web") as Parameters<typeof exactPostLink>[0];
+  const exact = pasted ? null : (exactPostLink(p, a.target_url) ?? exactProfileLink(p, a.target_url));
+  if (social && !pasted && !exact) return [];
+  /** The link cell: the exact place, or, for something pasted without a link, a plain note saying so. */
+  const go = (label: string, url: string | null = exact) => link(url, label) || (pasted ? NO_LINK : "");
 
   switch (tab.id) {
     case REDDIT_REPLY.id:
-      return [base(tab, a, { ...common, subreddit: m.community ? `r/${m.community}` : "", thread: str(m.post_title) || a.title.replace(/^Reddit[^:]*:\s*/, ""), who: author ? `u/${author}` : "", post: "(Reddit asks us not to keep post text; open the thread)", open: link(a.target_url, "Open thread / comment") }, s.known)];
+      return [base(tab, a, { ...common, subreddit: m.community ? `r/${m.community}` : "", thread: str(m.post_title) || a.title.replace(/^Reddit[^:]*:\s*/, ""), who: author ? `u/${author}` : "", post: "(Reddit asks us not to keep post text; open the thread)", open: go("Open thread / comment") }, s.known)];
     case REDDIT_DMS.id: {
       const u = handle("reddit", author);
-      return [base(tab, a, { ...common, who: u ? `u/${u}` : "", community: m.community ? `r/${m.community}` : "", post: "(open their post)", open: link(u ? `https://www.reddit.com/message/compose/?to=${encodeURIComponent(u)}` : null, "Open chat"), open_post: link(a.target_url, "Open post") }, s.known)];
+      return [base(tab, a, { ...common, who: u ? `u/${u}` : "", community: m.community ? `r/${m.community}` : "", post: "(Reddit asks us not to keep post text; open their post)", open: link(u ? redditMessageLink(u) : null, `Message u/${u}`), open_post: go("Their post") }, s.known)];
     }
     case INSTAGRAM_LINKEDIN_BIO.id: {
-      const u = handle("instagram", author);
+      const u = instagramHandle(author) ?? instagramHandle(a.target_url);
       return [
         base(tab, a, {
           priority: priorityOf(a),
@@ -126,27 +146,29 @@ export function approvalRows(a: Approval, s: RowSources): BuiltRow[] {
           occupation: str(m.occupation),
           company: str(m.company),
           username: u ? `@${u}` : "",
-          profile: link(profileUrl("instagram", u), "Profile"),
-          linkedin: link(str(m.linkedin) || linkedinIn(`${excerpt} ${str(m.post_title)}`), "LinkedIn"),
+          profile: link(profileUrl("instagram", u ?? ""), "Profile"),
+          linkedin: link(exactProfileLink("linkedin", str(m.linkedin)) ?? linkedinIn(`${excerpt} ${str(m.post_title)}`), "LinkedIn"),
           location: str(m.location),
           why: str(m.why),
           detail: str(m.angle) || excerpt.slice(0, 200),
           message: a.body,
-          open: link(u ? `https://ig.me/m/${u}` : null, "Open DM (phone)") || link(profileUrl("instagram", u), "Open profile"),
+          open: link(u ? instagramDmLink(u) : null, "Open DM (Instagram app)"),
           date_found: day(a.created_at),
         }, s.known),
       ];
     }
     case INSTAGRAM_DMS.id: {
-      const u = handle("instagram", author);
-      return [base(tab, a, { priority: priorityOf(a), name: str(m.name) || (u ? `@${u}` : ""), occupation: str(m.occupation), username: u ? `@${u}` : "", profile: link(profileUrl("instagram", u), "Profile"), post: excerpt || str(m.post_title), why: str(m.why), message: a.body, open: link(u ? `https://ig.me/m/${u}` : null, "Open DM (phone)") || link(profileUrl("instagram", u), "Open profile"), date_found: day(a.created_at) }, s.known)];
+      const u = instagramHandle(author);
+      return [base(tab, a, { priority: priorityOf(a), name: str(m.name) || (u ? `@${u}` : ""), username: u ? `@${u}` : "", profile: link(profileUrl("instagram", u ?? ""), "Profile"), their_post: link(exactPostLink("instagram", a.target_url), "Their post"), post: excerpt || str(m.post_title), why: str(m.why), message: a.body, open: link(u ? instagramDmLink(u) : null, "Open DM (Instagram app)"), date_found: day(a.created_at) }, s.known)];
     }
-    case LINKEDIN.id:
-      return [base(tab, a, { priority: priorityOf(a), type: a.kind === "connect_note" ? "Connection" : "Comment", name: author, occupation: str(m.occupation), company: str(m.company), topic: str(m.post_title) || excerpt.slice(0, 200), detail: str(m.angle), message: a.body, open: link(a.target_url, a.kind === "connect_note" ? "Open profile" : "Open post"), date_found: day(a.created_at) }, s.known)];
+    case LINKEDIN_COMMENTS.id:
+      return [base(tab, a, { priority: priorityOf(a), name: author, occupation: str(m.occupation), topic: str(m.post_title) || excerpt.slice(0, 200), detail: str(m.angle), message: a.body, open: go("Open post"), date_found: day(a.created_at) }, s.known)];
+    case LINKEDIN_CONNECTIONS.id:
+      return [base(tab, a, { priority: priorityOf(a), name: str(m.name) || author, occupation: str(m.occupation), location: str(m.location), detail: str(m.angle) || excerpt.slice(0, 200), message: a.body, open: go("Open profile"), date_found: day(a.created_at) }, s.known)];
     case QUORA.id:
-      return [base(tab, a, { priority: priorityOf(a), question: str(m.post_title) || a.title.replace(/^Quora[^:]*:\s*/, ""), topic: str(m.angle), why: str(m.why), message: a.body, open: link(a.target_url, "Open question"), date_found: day(a.created_at) }, s.known)];
+      return [base(tab, a, { priority: priorityOf(a), question: str(m.post_title) || a.title.replace(/^Quora[^:]*:\s*/, ""), topic: str(m.angle), why: str(m.why), message: a.body, open: go("Open question"), date_found: day(a.created_at) }, s.known)];
     case BLUESKY.id:
-      return [base(tab, a, { priority: priorityOf(a), who: author ? `@${author}` : "", post: excerpt || str(m.post_title), why: str(m.why), message: a.body, open: link(a.target_url, "Open post"), method: s.blueskyLive ? "Approval posts it (set Status to Approved)" : "Copy & open (Approval posts it once Bluesky is connected and Dry run is off)", date_found: day(a.created_at) }, s.known)];
+      return [base(tab, a, { priority: priorityOf(a), who: author ? `@${author}` : "", post: excerpt || str(m.post_title), why: str(m.why), message: a.body, open: go("Open post"), method: s.blueskyLive ? "Approval posts it (set Status to Approved)" : "Copy & open (Approval posts it once Bluesky is connected and Dry run is off)", date_found: day(a.created_at) }, s.known)];
     case SEO.id: {
       const f = s.findings.find((x) => x.id === m.finding_id);
       const d = (f?.detail ?? {}) as { url?: string; problems?: string[] };
@@ -155,32 +177,31 @@ export function approvalRows(a: Approval, s: RowSources): BuiltRow[] {
     }
     case GEO.id:
       return [base(tab, a, { platform: "Site change", question: "", mentioned: "", competitors: "", citation: "", problem: a.title.replace(/^Fix:\s*/, ""), fix: triageNotes(a.body), page: str(((s.findings.find((x) => x.id === m.finding_id)?.detail ?? {}) as { url?: string }).url) || "/", date_tested: day(a.created_at) }, s.known)];
-    case CONTENT.id: {
-      if (a.kind === "blog_post") return [base(tab, a, { priority: "Medium", platform: "Blog", type: "Article", topic: a.title.replace(/^Blog:\s*/, ""), hook: str(m.description), caption: str(m.description), script: a.body, asset: "", hashtags: "", cta: "Approved = goes live at swiftcard.me/blog", publishing: a.status === "done" ? "Published" : "Not published", signups: "" }, s.known)];
+    case BLOG.id:
+      return [base(tab, a, { priority: "Medium", platform: "Blog", type: "Article", topic: a.title.replace(/^Blog:\s*/, ""), hook: str(m.description), caption: str(m.description), script: a.body, asset: "", hashtags: "", cta: "Approved = goes live at swiftcard.me/blog", publishing: a.status === "done" ? "Published" : "Not published", signups: "" }, s.known)];
+    case SOCIAL.id: {
       const step = Number(m.step ?? 1);
       const images = (m.images as { key: string; url: string }[] | undefined) ?? [];
-      return [base(tab, a, { priority: "Medium", platform: "LinkedIn, Instagram, Threads, TikTok, Pinterest, YouTube, Reddit, Alignable", type: step === 1 ? "Pick 1 of 3 options" : "Image / slideshow + captions", topic: a.title.replace(/^Social:\s*/, ""), hook: step === 1 ? "Type 1, 2 or 3 in Notes, then set Status to Approved" : "Download the pictures, post with the caption, set Status to Sent / Posted", caption: step === 2 ? a.body : "", script: step === 1 ? a.body : "", asset: link(images[0]?.url, images.length ? `${images.length} pictures` : ""), hashtags: "", cta: "", publishing: a.status === "done" ? "Posted by you" : "Not posted", signups: "" }, s.known)];
+      return [base(tab, a, { priority: "Medium", platform: "LinkedIn, Instagram, Threads, TikTok, Pinterest, YouTube, Reddit, Alignable", type: step === 1 ? "Pick 1 of 3 options" : "Image / slideshow + captions", topic: a.title.replace(/^Social:\s*/, ""), hook: step === 1 ? "Type 1, 2 or 3 in Notes, then set Approval Status to Approved" : "Download the pictures, post with the caption, set it to Sent / Posted", caption: step === 2 ? a.body : "", script: step === 1 ? a.body : "", asset: link(images[0]?.url, images.length ? `${images.length} pictures` : ""), hashtags: "", cta: "", publishing: a.status === "done" ? "Posted by you" : "Not posted", signups: "" }, s.known)];
     }
-    case PARTNERSHIPS.id: {
-      if (a.kind !== "ask") return [];
-      const lines = a.body.split("\n").map((l) => l.replace(/^[-•*]\s*/, "").trim()).filter(Boolean);
-      return lines.map((line, i) => {
-        const key = customKey("A", `${a.id}:${i}`);
-        return { tab, key, kind: "custom" as const, entityId: `${a.id}:${i}`, cells: { org: line.split(/[:,(]/)[0].slice(0, 80), industry: "", contact: "", opportunity: line, why: "", proposal: "", message: "", open: "" }, initialStatus: s.known.get(key)?.status ?? "New", rank: 15, agent: agentLabel(a.agent_id), createdAt: a.created_at };
-      });
-    }
+    case PARTNERSHIPS.id:
+      if (a.kind !== "dm") return [];
+      return [base(tab, a, { org: str(m.org) || a.title.replace(/^Partner:\s*/, ""), industry: str(m.industry), contact: str(m.contact_name), opportunity: str(m.opportunity), why: str(m.why), proposal: str(m.proposal), message: a.body, open: link(a.target_url, "Contact page") }, s.known)];
+    case EVENTS.id:
+      return [base(tab, a, { name: str(m.event_name) || a.title.replace(/^Event:\s*/, ""), location: str(m.location), date: str(m.date), audience: str(m.audience), cost: str(m.cost), why: str(m.why) || a.summary, organizer: str(m.organizer), open: link(a.target_url, "Event page"), action: a.body }, s.known)];
     case COMPETITOR_INTEL.id:
       return [base(tab, a, { competitor: "Several", change: a.title.replace(/^Fix:\s*/, ""), source: "", date: day(a.created_at), why: a.summary, opportunity: "", action: a.body }, s.known)];
     case OFFICE_PROSPECTS.id: {
       if (a.kind !== "dm") return [];
       const name = str(m.name) || /Office email to ([^(]+)/.exec(a.title)?.[1]?.trim() || "";
-      return [base(tab, a, { company: str(m.company), type: str(m.business_type), name, title: str(m.title), phone: str(m.phone), email: str(m.email), talking_point: str(m.talking_point), message: a.body, open: link(str(m.source_url), "Open website"), date_found: day(a.created_at) }, s.known)];
+      return [base(tab, a, { company: str(m.company), type: str(m.business_type), name, title: str(m.title), phone: str(m.phone), email: str(m.email), talking_point: str(m.talking_point), message: a.body, open: officeOpen(str(m.email), str(m.source_url)) }, s.known)];
     }
     default: {
-      // The generic social layout (Threads, Facebook, Indie Hackers, Alignable, Instagram comments).
-      const p = a.platform ?? "";
+      // The shared social layout (Threads, Facebook, Indie Hackers, Alignable, Instagram comments, Hacker News).
       const who = author ? (p === "instagram" || p === "threads" || p === "bluesky" ? `@${handle(p, author)}` : author) : "";
-      return [base(tab, a, { ...common, who, community: str(m.community), post: excerpt || str(m.post_title), open: link(a.target_url?.startsWith("http") ? a.target_url : profileUrl(p, handle(p, author)), a.kind === "dm" ? "Open profile" : "Open post") }, s.known)];
+      // A pasted post with no link opens the author's profile when there is one; otherwise the cell says it was pasted.
+      const where = exact ?? (pasted ? profileUrl(p, handle(p, author)) : null);
+      return [base(tab, a, { ...common, who, community: str(m.community), post: excerpt || str(m.post_title), open: go(p === "hackernews" ? "Open comment" : a.kind === "dm" ? "Open profile" : "Open post", where) }, s.known)];
     }
   }
 }
@@ -191,6 +212,8 @@ function triageNotes(body: string): string {
 }
 
 export function leadRows(l: Lead & { id: string; created_at: string }, s: RowSources): BuiltRow[] {
+  // Europe, the UK, Switzerland, Canada and Brazil stay out of the Sheet (and every export), as before.
+  if (l.region_restricted) return [];
   const key = leadKey(l.id);
   const known = s.known.get(key);
   const site = l.source_url.startsWith("http") ? l.source_url : null;
@@ -201,10 +224,10 @@ export function leadRows(l: Lead & { id: string; created_at: string }, s: RowSou
     /* pasted source */
   }
   if (l.list === "office") {
-    return [{ tab: OFFICE_PROSPECTS, key, kind: "lead", entityId: l.id, cells: { company: str(l.company), type: str(l.business_type), name: str(l.name), title: str(l.title), phone: str(l.phone), email: str(l.email), talking_point: str(l.notes), message: "", open: link(site, host || "Open website"), date_found: day(l.created_at) }, initialStatus: known?.status ?? "New", rank: 30, agent: agentLabel("office-outreach"), createdAt: l.created_at }];
+    return [{ tab: OFFICE_PROSPECTS, key, kind: "lead", entityId: l.id, cells: { company: str(l.company), type: str(l.business_type), name: str(l.name), title: str(l.title), phone: str(l.phone), email: str(l.email), talking_point: str(l.notes), message: "", open: officeOpen(str(l.email), site), date_found: day(l.created_at) }, initialStatus: known?.status ?? "New", rank: 30, agent: agentLabel("office-outreach"), createdAt: l.created_at }];
   }
   return [{
-    tab: ALL_LEADS,
+    tab: LEAD_TAB_BY_SOURCE[l.source_platform] ?? WEB_LEADS,
     key,
     kind: "lead",
     entityId: l.id,
@@ -227,7 +250,7 @@ export function leadRows(l: Lead & { id: string; created_at: string }, s: RowSou
     },
     initialStatus: known?.status ?? "New",
     rank: 40,
-    agent: "Leads",
+    agent: (LEAD_TAB_BY_SOURCE[l.source_platform] ?? WEB_LEADS).name,
     createdAt: l.created_at,
   }];
 }

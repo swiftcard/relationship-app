@@ -2,17 +2,17 @@ import type { AgentDef } from "../agent-def";
 
 // ── The Sheet keepers ───────────────────────────────────────────────────────
 // Two code-only agents (no AI, no cost) that run the Google Sheets
-// headquarters. They sit on the system team with no door of their own: the
-// Sheet keeps syncing while the marketing teams are paused, so a Status set
-// in the Sheet is still honoured and the Controls tab still works. Only the
-// whole-office lock (Pause all) and CREW_DISABLED stop them, and they never
-// draft or send anything.
+// headquarters. They are infrastructure: always on, with no switch anywhere,
+// and they keep running through Pause all, because the sync is what reads the
+// Sheet's Controls (a Pause all set in the Sheet must be liftable from the
+// Sheet) and what records the Statuses the owner sets. Only CREW_DISABLED
+// stops them. They never draft, post or send anything.
 //
 // The sync module is imported lazily: it reads the registry (which lists
 // these agents), and a static import would be a cycle.
 
 // tier is never used (no model is ever called); "sonnet" keeps the registry rule that every worker is a Sonnet worker.
-const sheetFree = { team: "system" as const, role: "worker" as const, tier: "sonnet" as const, freeInEconomy: true, needs: ["GOOGLE_SHEETS_SA_JSON" as const], maxPending: 1, dailyUsd: 0 };
+const sheetFree = { team: "system" as const, role: "worker" as const, tier: "sonnet" as const, infrastructure: true, freeInEconomy: true, needs: ["GOOGLE_SHEETS_SA_JSON" as const], maxPending: 1, dailyUsd: 0 };
 
 export const sheetSync: AgentDef = {
   ...sheetFree,

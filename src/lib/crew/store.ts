@@ -106,8 +106,9 @@ export interface CrewStore {
 
   startRun(agentId: string): Promise<string>;
   finishRun(id: string, status: string, summary: string, stats: Record<string, number>, error?: string): Promise<void>;
-  recentRuns(agentId: string | null, limit: number): Promise<RunRow[]>;
-  runsSince(sinceIso: string): Promise<RunRow[]>;
+  /** Newest first. `agentIds` keeps busy agents (the continuous finders) from crowding out the rest. */
+  recentRuns(agentId: string | null, limit: number, agentIds?: string[]): Promise<RunRow[]>;
+  runsSince(sinceIso: string, agentIds?: string[]): Promise<RunRow[]>;
 
   recordUsage(row: UsageRow): Promise<void>;
   usageTotals(sinceIso: string): Promise<UsageTotals>;
@@ -161,6 +162,7 @@ export interface CrewStore {
   listSuppression(limit: number): Promise<SuppressionRow[]>;
   insertLeads(leads: Lead[]): Promise<number>;
   countLeadsSince(sinceIso: string, list?: Lead["list"]): Promise<Record<string, number>>;
+  getLead(id: string): Promise<(Lead & { id: string; created_at: string }) | null>;
   unsyncedLeads(list: Lead["list"], limit: number): Promise<(Lead & { id: string; created_at: string })[]>;
   markLeadsSynced(ids: string[]): Promise<void>;
   listLeads(list: Lead["list"], limit: number): Promise<(Lead & { id: string; created_at: string })[]>;
@@ -186,6 +188,8 @@ export interface CrewStore {
   /** Insert or update by row_key. */
   upsertSheetRow(r: Omit<SheetRow, "id" | "created_at">): Promise<SheetRow>;
   patchSheetRow(rowKey: string, patch: Partial<Omit<SheetRow, "id" | "row_key" | "created_at">>): Promise<void>;
+  /** Record that every copy of these rows now shows `status` (one write per word, not per row). */
+  markShown(status: string, rowKeys: string[]): Promise<void>;
 
   logActivity(a: Omit<ActivityRow, "id" | "at">): Promise<void>;
   listActivity(limit: number): Promise<ActivityRow[]>;

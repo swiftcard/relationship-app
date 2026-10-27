@@ -28,5 +28,19 @@ export type AgentDef = {
   approvalKind?: ApprovalKind;
   /** Set when it must never be switched on (e.g. it would break a platform's rules). */
   locked?: string;
+  /**
+   * While it is on, it keeps working: a run every clock tick (15 minutes)
+   * until today's ceiling, each run trying new searches so it never repeats
+   * itself. Start / Stop on the admin page turns it on and off. A run can ask
+   * to rest (RunResult.restMinutes) when there is nothing new or the day's
+   * ceiling is reached, so an idle agent costs nothing.
+   */
+  continuous?: boolean;
+  /**
+   * Runs on its schedule whether or not anyone switched it on, and through
+   * Pause all (only CREW_DISABLED stops it). For code-only plumbing that never
+   * sends, posts or calls a model: the Sheet sync and the daily snapshot.
+   */
+  infrastructure?: boolean;
   run(ctx: AgentContext): Promise<RunResult>;
 };

@@ -77,10 +77,11 @@ export class MemoryStore implements CrewStore {
     const r = this.runs.find((x) => x.id === id);
     if (r) Object.assign(r, { status, summary, stats, error: error ?? null, finished_at: this.now() });
   }
-  async recentRuns(agentId: string | null, limit: number) {
-    return this.runs.filter((r) => !agentId || r.agent_id === agentId).slice(-limit).reverse();
+  async recentRuns(agentId: string | null, limit: number, agentIds?: string[]) {
+    return this.runs.filter((r) => (!agentId || r.agent_id === agentId) && (!agentIds || agentIds.includes(r.agent_id))).slice(-limit).reverse();
   }
-  async runsSince(sinceIso: string) {
+  async runsSince(sinceIso: string, agentIds?: string[]) {
+    if (agentIds) return this.runs.filter((r) => r.started_at >= sinceIso && agentIds.includes(r.agent_id));
     return this.runs.filter((r) => r.started_at >= sinceIso);
   }
 
@@ -322,6 +323,10 @@ export class MemoryStore implements CrewStore {
     for (const l of this.leads.filter((x) => x.created_at >= sinceIso && (!list || x.list === list))) out[l.source_platform] = (out[l.source_platform] ?? 0) + 1;
     return out;
   }
+  async getLead(id: string) {
+    const l = this.leads.find((x) => x.id === id);
+    return l ? { ...l } : null;
+  }
   async unsyncedLeads(list: Lead["list"], limit: number) {
     return this.leads.filter((l) => l.list === list && !l.sheet_synced_at && !l.region_restricted).slice(0, limit);
   }
@@ -393,6 +398,9 @@ export class MemoryStore implements CrewStore {
   async patchSheetRow(rowKey: string, patch: Partial<Omit<SheetRow, "id" | "row_key" | "created_at">>) {
     const r = this.sheetRows.find((x) => x.row_key === rowKey);
     if (r) Object.assign(r, patch);
+  }
+  async markShown(status: string, rowKeys: string[]) {
+    for (const r of this.sheetRows) if (rowKeys.includes(r.row_key)) r.shown_status = status;
   }
 
   async logActivity(a: Omit<ActivityRow, "id" | "at">) {

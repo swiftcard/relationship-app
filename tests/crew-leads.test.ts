@@ -94,7 +94,7 @@ describe("registry", () => {
   it("covers every lead source, rotates queries, and keeps LinkedIn locked", () => {
     expect(LEADS.map((a) => a.id)).toEqual(["leads-web", "leads-reddit", "leads-facebook", "leads-alignable", "leads-quora", "leads-linkedin"]);
     expect(AGENTS.find((a) => a.id === "leads-linkedin")!.locked).toBeTruthy();
-    expect(AGENTS.some((a) => a.id === "leads-manager")).toBe(true);
+    expect(AGENTS.some((a) => a.id === "leads-manager")).toBe(false); // retired 2026-10-27: the Sheet replaced its room
     expect(queryAt(0)).toEqual({ type: BUSINESS_TYPES[0], city: US_CITIES[0] });
     expect(queryAt(BUSINESS_TYPES.length)).toEqual({ type: BUSINESS_TYPES[0], city: US_CITIES[1] });
     for (const a of LEADS) expect(a.approvalKind ?? null, a.id).toBeNull(); // they never draft a message

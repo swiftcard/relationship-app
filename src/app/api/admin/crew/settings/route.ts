@@ -30,8 +30,12 @@ export async function POST(req: NextRequest) {
   patch.second_opinion = field(form, "second_opinion") === "on";
   const disclosure = field(form, "disclosure");
   if (disclosure) patch.disclosure = disclosure.slice(0, 200);
-  const caps: Settings["team_caps"] = {};
+  // Only the groups the form shows (the Watchdog) are changed here; any other
+  // team's limit is kept as it was, never wiped because it has no field.
+  const caps: Settings["team_caps"] = { ...(await store.getSettings()).team_caps };
   for (const t of TEAMS) {
+    if (!form.has(`team_cap_${t}`)) continue;
+    delete caps[t];
     const v = field(form, `team_cap_${t}`);
     if (v !== "" && Number.isFinite(Number(v)) && Number(v) >= 0) caps[t] = { usd: Math.round(Number(v) * 100) / 100 };
     else if (v !== "") skipped.push(`a group limit`);

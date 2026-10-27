@@ -1,4 +1,5 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
+import { paged } from "./paged";
 import { DEFAULT_SETTINGS, DOOR_TEAMS, defaultTeam, type CrewStore, type NewApproval, type ReportRow, type RunRow, type SuppressionRow, type UsageRow, type UsageTotals } from "./store";
 import type { ActivityRow, AgentState, Approval, ApprovalKind, ApprovalStatus, ChatMessage, CrewInput, EditRow, Finding, Lead, OfficeHours, Platform, Settings, SheetRow, TeamId, TeamRow, TouchKind } from "./types";
 
@@ -87,13 +88,28 @@ export class SupabaseStore implements CrewStore {
   async finishRun(id: string, status: string, summary: string, stats: Record<string, number>, error?: string) {
     await this.db.from("crew_runs").update({ status, summary, stats, error: error ?? null, finished_at: new Date().toISOString() }).eq("id", id);
   }
-  async recentRuns(agentId: string | null, limit: number) {
-    let q = this.db.from("crew_runs").select("*").order("started_at", { ascending: false }).limit(limit);
-    if (agentId) q = q.eq("agent_id", agentId);
-    return (must(await q, "runs") ?? []) as RunRow[];
+  async recentRuns(agentId: string | null, limit: number, agentIds?: string[]) {
+    return paged<RunRow>(
+      (from, to) => {
+        let q = this.db.from("crew_runs").select("*").order("started_at", { ascending: false }).order("id");
+        if (agentId) q = q.eq("agent_id", agentId);
+        if (agentIds) q = q.in("agent_id", agentIds);
+        return q.range(from, to);
+      },
+      limit,
+      "runs",
+    );
   }
-  async runsSince(sinceIso: string) {
-    return (must(await this.db.from("crew_runs").select("*").gte("started_at", sinceIso).limit(5000), "runs since") ?? []) as RunRow[];
+  async runsSince(sinceIso: string, agentIds?: string[]) {
+    return paged<RunRow>(
+      (from, to) => {
+        let q = this.db.from("crew_runs").select("*").gte("started_at", sinceIso).order("started_at").order("id");
+        if (agentIds) q = q.in("agent_id", agentIds);
+        return q.range(from, to);
+      },
+      20000,
+      "runs since",
+    );
   }
 
   async recordUsage(row: UsageRow) {
@@ -101,12 +117,10 @@ export class SupabaseStore implements CrewStore {
     must(await this.db.from("crew_usage").insert(row), "usage");
   }
   async usageTotals(sinceIso: string): Promise<UsageTotals> {
-    const data = must(
-      await this.db
-        .from("crew_usage")
-        .select("agent_id, team, input_tokens, output_tokens, cache_read, cache_write, cost_usd")
-        .gte("created_at", sinceIso)
-        .limit(20000),
+    // Every row, not the first 1,000: the budget check depends on this total.
+    const data = await paged<Row>(
+      (from, to) => this.db.from("crew_usage").select("id, agent_id, team, input_tokens, output_tokens, cache_read, cache_write, cost_usd").gte("created_at", sinceIso).order("id").range(from, to),
+      200000,
       "usage totals",
     );
     const t: UsageTotals = { total: { usd: 0, tokens: 0, cacheRead: 0, input: 0 }, byAgent: {}, byTeam: {} };
@@ -155,12 +169,18 @@ export class SupabaseStore implements CrewStore {
     return (data as Approval) ?? null;
   }
   async listApprovals(f: { status?: ApprovalStatus[]; agentId?: string; agentIds?: string[]; sinceIso?: string; limit?: number }) {
-    let q = this.db.from("crew_approvals").select("*").order("created_at", { ascending: false }).limit(f.limit ?? 100);
-    if (f.status) q = q.in("status", f.status);
-    if (f.agentId) q = q.eq("agent_id", f.agentId);
-    if (f.agentIds) q = q.in("agent_id", f.agentIds);
-    if (f.sinceIso) q = q.gte("created_at", f.sinceIso);
-    return (must(await q, "approvals") ?? []) as Approval[];
+    return paged<Approval>(
+      (from, to) => {
+        let q = this.db.from("crew_approvals").select("*").order("created_at", { ascending: false }).order("id");
+        if (f.status) q = q.in("status", f.status);
+        if (f.agentId) q = q.eq("agent_id", f.agentId);
+        if (f.agentIds) q = q.in("agent_id", f.agentIds);
+        if (f.sinceIso) q = q.gte("created_at", f.sinceIso);
+        return q.range(from, to);
+      },
+      f.limit ?? 100,
+      "approvals",
+    );
   }
   async updateApproval(id: string, patch: Partial<Approval>) {
     must(await this.db.from("crew_approvals").update(patch).eq("id", id), "approval update");
@@ -354,9 +374,8 @@ export class SupabaseStore implements CrewStore {
     else must(res, "suppression");
   }
   async listSuppression(limit: number) {
-    const { data, error } = await this.db.from("crew_suppression").select("*").order("added_at", { ascending: false }).limit(limit);
-    if (error) return [];
-    return (data ?? []).map((r: Row) => ({ value: String(r.value), reason: String(r.reason ?? ""), added_at: String(r.added_at ?? ""), source: String(r.source ?? "manual"), channel: String(r.channel ?? "email") })) as SuppressionRow[];
+    const data = await paged<Row>((from, to) => this.db.from("crew_suppression").select("*").order("added_at", { ascending: false }).order("value").range(from, to), limit, "suppression").catch(() => [] as Row[]);
+    return data.map((r: Row) => ({ value: String(r.value), reason: String(r.reason ?? ""), added_at: String(r.added_at ?? ""), source: String(r.source ?? "manual"), channel: String(r.channel ?? "email") })) as SuppressionRow[];
   }
   async insertLeads(leads: Lead[]) {
     let n = 0;
@@ -368,11 +387,23 @@ export class SupabaseStore implements CrewStore {
     return n;
   }
   async countLeadsSince(sinceIso: string, list?: Lead["list"]) {
-    let q = this.db.from("crew_leads").select("source_platform").gte("created_at", sinceIso).limit(20000);
-    if (list) q = q.eq("list", list);
+    // Every row: a day of 1,000+ leads must count past 1,000, or the daily limit never trips.
+    const rows = await paged<Row>(
+      (from, to) => {
+        let q = this.db.from("crew_leads").select("id, source_platform").gte("created_at", sinceIso).order("id");
+        if (list) q = q.eq("list", list);
+        return q.range(from, to);
+      },
+      500000,
+      "lead counts",
+    );
     const out: Record<string, number> = {};
-    for (const r of must(await q, "lead counts") ?? []) out[String(r.source_platform)] = (out[String(r.source_platform)] ?? 0) + 1;
+    for (const r of rows) out[String(r.source_platform)] = (out[String(r.source_platform)] ?? 0) + 1;
     return out;
+  }
+  async getLead(id: string) {
+    const { data } = await this.db.from("crew_leads").select("*").eq("id", id).maybeSingle();
+    return (data as Lead & { id: string; created_at: string }) ?? null;
   }
   async unsyncedLeads(list: Lead["list"], limit: number) {
     return (must(
@@ -384,8 +415,7 @@ export class SupabaseStore implements CrewStore {
     if (ids.length) await this.db.from("crew_leads").update({ sheet_synced_at: new Date().toISOString() }).in("id", ids);
   }
   async listLeads(list: Lead["list"], limit: number) {
-    return (must(await this.db.from("crew_leads").select("*").eq("list", list).order("created_at", { ascending: false }).limit(limit), "leads") ??
-      []) as (Lead & { id: string; created_at: string })[];
+    return paged<Lead & { id: string; created_at: string }>((from, to) => this.db.from("crew_leads").select("*").eq("list", list).order("created_at", { ascending: false }).order("id").range(from, to), limit, "leads");
   }
 
   async listTeams(): Promise<TeamRow[]> {
@@ -444,7 +474,8 @@ export class SupabaseStore implements CrewStore {
   // ── The Google Sheet (supabase/crew-sheets.sql) ──────────────────────────
 
   async sheetsReady() {
-    const { error } = await this.db.from("crew_sheet_rows").select("id").limit(1);
+    // shown_status too: a database that ran an older copy of crew-sheets.sql is "not ready" until it runs this one.
+    const { error } = await this.db.from("crew_sheet_rows").select("id, shown_status").limit(1);
     return !error;
   }
   private toSheetRow(r: Row): SheetRow {
@@ -457,15 +488,24 @@ export class SupabaseStore implements CrewStore {
       status: String(r.status ?? "New"),
       owner_cols: (r.owner_cols ?? {}) as Record<string, string>,
       agent_hash: String(r.agent_hash ?? ""),
+      shown_status: (r.shown_status as string) ?? null,
       created_at: String(r.created_at),
       synced_at: (r.synced_at as string) ?? null,
       owner_edited_at: (r.owner_edited_at as string) ?? null,
     };
   }
   async listSheetRows(tab?: string) {
-    let q = this.db.from("crew_sheet_rows").select("*").order("created_at").limit(20000);
-    if (tab) q = q.eq("tab", tab);
-    return (must(await q, "sheet rows") ?? []).map((r: Row) => this.toSheetRow(r));
+    // All of them: a row missing here would read as "unknown" and be re-added or overwritten.
+    const rows = await paged<Row>(
+      (from, to) => {
+        let q = this.db.from("crew_sheet_rows").select("*").order("created_at").order("id");
+        if (tab) q = q.eq("tab", tab);
+        return q.range(from, to);
+      },
+      1_000_000,
+      "sheet rows",
+    );
+    return rows.map((r) => this.toSheetRow(r));
   }
   async getSheetRow(rowKey: string) {
     const { data } = await this.db.from("crew_sheet_rows").select("*").eq("row_key", rowKey).maybeSingle();
@@ -482,6 +522,10 @@ export class SupabaseStore implements CrewStore {
   async patchSheetRow(rowKey: string, patch: Partial<Omit<SheetRow, "id" | "row_key" | "created_at">>) {
     must(await this.db.from("crew_sheet_rows").update(patch).eq("row_key", rowKey), "sheet row patch");
   }
+  async markShown(status: string, rowKeys: string[]) {
+    // Only shown_status: the owner's Status (set through the hook a moment ago) is never touched here.
+    for (let i = 0; i < rowKeys.length; i += 200) must(await this.db.from("crew_sheet_rows").update({ shown_status: status }).in("row_key", rowKeys.slice(i, i + 200)), "sheet rows shown");
+  }
 
   async logActivity(a: Omit<ActivityRow, "id" | "at">) {
     // The audit trail must never break the action it records.
@@ -492,8 +536,7 @@ export class SupabaseStore implements CrewStore {
     return error ? [] : ((data ?? []) as ActivityRow[]);
   }
   async activitySince(sinceIso: string) {
-    const { data, error } = await this.db.from("crew_activity").select("*").gte("at", sinceIso).order("at").limit(5000);
-    return error ? [] : ((data ?? []) as ActivityRow[]);
+    return paged<ActivityRow>((from, to) => this.db.from("crew_activity").select("*").gte("at", sinceIso).order("at").order("id").range(from, to), 50000, "activity since").catch(() => [] as ActivityRow[]);
   }
 
   async getControls() {

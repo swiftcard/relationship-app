@@ -1,10 +1,10 @@
 import type { AgentDef } from "./agent-def";
 import type { AgentContext } from "./context";
-import { appBase } from "./env";
-import { TIER_LABEL } from "./models";
+import { appBase, env } from "./env";
 import { numbersAreGrounded, readableEnough } from "./readability";
 import { nyDay, nyDayStart } from "./schedule";
 import type { CrewStore } from "./store";
+import { isAdminTeam } from "./teams";
 import type { TeamId } from "./types";
 
 // ── The managers' daily report ──────────────────────────────────────────────
@@ -129,17 +129,24 @@ export async function writeReport(ctx: AgentContext, stats: TeamStats, teamName:
   return templateReport(stats, teamName);
 }
 
-/** `tab`: the room the email's link opens (the team's room, or "desk" for Hannah's plan). */
-export function reportHtml(body: string, tab?: string): string {
+/**
+ * The email's link goes where the items are: the admin Agents tab for the
+ * Watchdog's group, the SwiftCard Leads sheet for everything a marketing
+ * agent made (its rows are there, not on the admin page).
+ */
+export function reportLink(team?: TeamId): { href: string; label: string } {
+  if (team && !isAdminTeam(team) && env("CREW_SHEET_ID")) return { href: `https://docs.google.com/spreadsheets/d/${env("CREW_SHEET_ID")}/edit`, label: "Open the SwiftCard Leads sheet" };
+  return { href: `${appBase()}/admin/crew${team && isAdminTeam(team) ? `?tab=${team}` : ""}`, label: "Open the Agents tab" };
+}
+
+/** `team`: whose report this is; the link opens where its items are (reportLink). */
+export function reportHtml(body: string, team?: TeamId): string {
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const lines = body.split("\n").map((l) => {
     if (/^(What happened|What I need from you|Money used today|How I saved tokens|The plan for tomorrow)\s*$/.test(l.trim())) return `<h3 style="margin:16px 0 4px;font-size:15px">${esc(l.trim())}</h3>`;
     if (l.startsWith("- ")) return `<div style="margin:2px 0 2px 8px">&bull; ${esc(l.slice(2))}</div>`;
     return l.trim() ? `<p style="margin:4px 0">${esc(l)}</p>` : "";
   });
-  return `<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.5;color:#111">${lines.join("")}<p style="margin-top:20px"><a href="${appBase()}/admin/crew${tab ? `?tab=${tab}` : ""}">Open the office</a> to approve or reject.</p></div>`;
-}
-
-export function modelLine(ctx: AgentContext): string {
-  return `${ctx.def.name} on ${TIER_LABEL[ctx.tier]}`;
+  const link = reportLink(team);
+  return `<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.5;color:#111">${lines.join("")}<p style="margin-top:20px"><a href="${link.href}">${link.label}</a></p></div>`;
 }

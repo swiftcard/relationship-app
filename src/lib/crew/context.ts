@@ -64,10 +64,14 @@ export class Llm {
   }
 
   private async guard(estUsd: number) {
+    // Pause all, read fresh before every model call: a run under way stops at
+    // its next step, not when it happens to finish.
+    const settings = await this.o.store.getSettings();
+    if (settings.kill_all) throw new DoorLocked("Stopped: all agents are paused.");
     const totals = await this.o.store.usageTotals(nyDayStart(this.o.now()).toISOString());
     const c = checkBudget({
       hardDisabled: crewHardDisabled(),
-      settings: this.o.settings,
+      settings,
       state: this.o.state,
       agent: { id: this.o.def.id, team: this.o.def.team, dailyUsd: this.o.def.dailyUsd },
       totals,
@@ -79,7 +83,7 @@ export class Llm {
     if (this.o.def.role === "worker") {
       const now = this.o.now();
       const [teams, state] = await Promise.all([this.o.store.listTeams(), this.o.store.getAgentState(this.o.def.id)]);
-      const door = doorState(teams.find((t) => t.team === this.o.def.team), { team: this.o.def.team, settings: this.o.settings, hardDisabled: false }, now);
+      const door = doorState(teams.find((t) => t.team === this.o.def.team), { team: this.o.def.team, settings, hardDisabled: false }, now);
       const why = blockedBy(this.o.def, state, door, now);
       if (why) throw new DoorLocked(`Stopped: ${why}.`);
     }

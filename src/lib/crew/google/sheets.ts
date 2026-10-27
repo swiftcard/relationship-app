@@ -36,9 +36,9 @@ export function safeCell(v: CellValue): CellValue {
   return /^[=+\-@]/.test(v) ? `'${v}` : v;
 }
 
-/** A clickable cell: =HYPERLINK("url","label"). */
+/** A clickable cell: =HYPERLINK("url","label"). Web links and mailto: only; anything else (javascript:, a paste id) is no link. */
 export function link(url: string | null | undefined, label: string): string {
-  if (!url || !/^https?:\/\//i.test(url)) return "";
+  if (!url || !/^(https?:\/\/|mailto:[^@\s]+@[^@\s]+$)/i.test(url)) return "";
   const q = (s: string) => s.replace(/"/g, '""');
   return `=HYPERLINK("${q(url)}","${q(label)}")`;
 }

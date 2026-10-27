@@ -3,7 +3,7 @@ import { requireAdmin } from "@/lib/admin";
 import { backToTab, field } from "@/lib/crew/admin-form";
 import { answerOwner, canSend } from "@/lib/crew/manager-chat";
 import { liveProviders } from "@/lib/crew/providers";
-import { DOOR_TEAMS } from "@/lib/crew/store";
+import { ADMIN_TEAMS } from "@/lib/crew/registry";
 import { SupabaseStore } from "@/lib/crew/store-supabase";
 import type { TeamId } from "@/lib/crew/types";
 
@@ -15,7 +15,8 @@ export const maxDuration = 300;
 export async function POST(req: NextRequest, ctx: { params: Promise<{ team: string }> }) {
   if (!(await requireAdmin())) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { team: raw } = await ctx.params;
-  if (!(DOOR_TEAMS as string[]).includes(raw)) return backToTab(req, "lobby", "No such team.");
+  // Only the admin page's groups (the Watchdog) have a chat; the marketing teams have none any more.
+  if (!(ADMIN_TEAMS as string[]).includes(raw)) return backToTab(req, "lobby", "No such team.");
   const team = raw as TeamId;
   const form = await req.formData();
   const text = field(form, "text");

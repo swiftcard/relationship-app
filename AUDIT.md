@@ -80,9 +80,9 @@ Columns: what it does · data source · sends anything? · what you do · where 
 | marketing-geo | Asks buyer questions with web search, tracks whether SwiftCard is named; proposes llms.txt / schema | web search | No | Approve | **GEO Opportunities** |
 | marketing-social | One idea a day, 3 options, then every size + captions (rendered by `crew-render.yml`) | — | No (you post) | Pick, download, post | Content Creator |
 | competitor-watch | Wed + Sun: competitors' own pricing pages → dated facts; price change → compare-page Fix | web search | No; emails a report | Approve | **Competitor Intel** |
-| *-manager ×5, head | Daily reports / tomorrow's plan | counts | Email you | Read | Kept; on/off from Controls |
-| system-test | A practice draft | — | No | — | Not hired |
-| **sheet-sync**, **sheet-daily** (new) | The Sheet: read your edits, write rows, rebuild computed tabs; daily snapshot | — | No | — | Infrastructure |
+| *-manager ×5, head | Daily reports / tomorrow's plan | counts | Email you | Read | **Retired 2026-10-27** (§6): the Sheet's Dashboard and Agent Performance replaced the rooms they reported into. Only watchdog-manager remains. |
+| system-test | A practice draft | — | No | — | **Removed 2026-10-27**: now a test fixture (`tests/crew-practice-agent.ts`) |
+| **sheet-sync**, **sheet-daily** (new) | The Sheet: read your edits, write rows, rebuild computed tabs; daily snapshot | — | No | — | Infrastructure: always on, runs through Pause all |
 
 **Does any agent send anything by itself?** No. Before this PR nothing could reach the public except an approved blog post (and a Fix PR). After it, the only additions are approval-triggered and dry-run-gated: a Bluesky reply when you turn its tier up. Cold email does not exist yet (PR 3), and nothing will send until `Dry run` is No in Controls.
 
@@ -117,4 +117,50 @@ Tiers: **1 Auto** (official API, no human step) · **2 Approval** (prepared; a S
 - **Controls tab** backed by `crew_controls`: pause all, dry run (starts Yes), spending caps, economy, per-platform tier, paid-service approvals, per-agent on/off, schedule and cap. Validated in the backend; a bad value is written back.
 - **Writing check** (`writing-check.ts`): the owner's banned list, em dashes, stacked exclamation points, pitch bullets, hashtags; one rewrite, then Needs Review. Owner edits to messages are stored (`crew_edits`) and the last 30 are shown to the model as examples.
 - **Admin page**: Watchdog only, with a link to the Sheet. Marketing agents keep running; their on/off moved to Controls.
-- Not in this PR (next ones): lead scoring and the 1,000-lead engine (PR 2), Hacker News / Events / Instagram-bio finder improvements (PR 2), cold email + reply handler + meetings (PR 3), the 8:00 brief, performance attribution and cleanup (PR 4).
+
+## 5. What PR 2 changed (owner's model, 2026-10-27: "press Start and it just keeps going")
+
+- **Start / Stop on the admin Agents tab** (`SheetAgents.tsx`, `sheet-agents.ts`): one row per marketing agent, named after its tab, with what it does, its state (Running, Working now, Done for today, Stopped, Paused, Failed, Needs setup), rows added today, and one button. Start = on, any pause cleared, and a run right away; Stop = off at its next step. The Sheet's Controls tab flips the same switch ("Start / Stop"). The admin page keeps the Watchdog group as before; the old paste form, lead lists and their routes (`/api/admin/crew/paste`, `/api/admin/crew/leads`) are gone (Paste a Post and the lead tabs are in the Sheet).
+- **One tab per agent, named after it** (28 agent tabs): Instagram LinkedIn Bio, Instagram DMs, Instagram Comments, Reddit Reply, Reddit DMs, LinkedIn Comments, LinkedIn Connections, Quora Answers, Threads Replies, Bluesky Replies, Facebook Groups, Indie Hackers, Alignable, Hacker News, Office Prospects, Partnerships, Events, Web Leads, Reddit Leads, Quora Leads, Facebook Group Leads, Alignable Leads, Social Media, Blog Writer, SEO Opportunities, GEO Opportunities, Competitor Intel, X Replies (placeholder). All Leads is now the combined view of the lead tabs, rebuilt every sync.
+- **Continuous** (`AgentDef.continuous`): the finders run every tick (15 minutes) while on, each run searching somewhere new (a rotation of profession × problem or profession × city, `search-plan.ts`), up to the Safe daily ceilings with the five-week warm-up. A run with nothing new rests an hour; at the ceiling it rests until just after New York midnight (`RunResult.restMinutes`), so an agent left on costs nothing while it waits. Content agents (blog, social, SEO, GEO, competitor watch) keep their day schedule; paste agents still wait for a paste. The old team "doors" no longer gate the marketing agents (nobody can see them now); they still gate the Watchdog.
+- **Exact links** (`exact-links.ts`): a found item becomes a row only if its link is the exact Reddit thread or comment, Threads post, Quora question, LinkedIn post, Indie Hackers post, Bluesky post, Hacker News item, Instagram post, or (for people) the exact Instagram or LinkedIn profile. Instagram rows open the chat in the app (`ig.me/m/<user>`); Reddit DMs open Reddit's message screen addressed to the person; LinkedIn connections open the profile where the Connect button is.
+- **New and rebuilt agents**: Instagram LinkedIn Bio now finds professionals whose bio links to their LinkedIn (name, occupation, company, location, LinkedIn) and writes from the bio; LinkedIn Connections finds profiles, not posts; Hacker News (free Algolia search, checked live 2026-10-27); Partnerships (its own agent, was a weekly line inside Office outreach); Events.
+- **Voice**: Menash's voice; no dashes of any kind (em, en, or a spaced hyphen; caught by the check and stripped); SwiftCard comes up only with a reason that fits that person, in one sentence, never a feature list; "I built…" inside the sentence counts as the disclosure, so the tacked-on line only appears when a draft forgot.
+- Still next: the 1,000-lead engine with scoring (PR 3 now), cold email + replies + meetings, the 8:00 brief and cleanup.
+
+## 6. The audit after PR 2 (2026-10-27)
+
+An independent review of PRs 1 and 2 found twelve problems. All twelve were
+real; all are fixed and each is pinned by a test (`tests/crew-sheet-audit.test.ts`
+unless noted).
+
+| # | Problem | Fix |
+|---|---|---|
+| 1 | The Sheet keepers (`sheet-sync`, `sheet-daily`) started off and nothing turned them on, so the Sheet never synced. Pause all also stopped them, so a Pause set in the Sheet could not be lifted there. | `AgentDef.infrastructure`: they run whatever their switch says and through Pause all, first in every tick. Only `CREW_DISABLED` stops them. |
+| 2 | The Controls tab undid an admin Start / Stop: the old "Running" still in the cell was read back as the owner's choice. A real change in the Sheet was stamped in Last Changed only when the typed word differed from the shown one. | The sync remembers what it last wrote into each Controls cell (`sheet:controls-shown`); only a different value counts. Every real change is stamped and logged once, from the hook or the sync. |
+| 3 | The Blog tab's caption cell looked editable but was overwritten. | Read-only. |
+| 4 | Sent / Posted or Completed on a row went through Approve, so Completed on an unapproved blog post would publish it and a Fix would open a pull request. | New decision `done_by_hand`: records it as done (and the contact), never runs anything. |
+| 5 | A stale copy of a Status (the Action Queue still showing the old word) was read as a decision and could undo one made on the agent's tab or the admin page. | `crew_sheet_rows.shown_status`: a cell counts only when it differs from what the sync last wrote everywhere. Changed in two copies at once, the agent's own tab wins. Notes are applied before the Status. The computed tabs' other columns are read-only copies. |
+| 6 | Reads stopped silently at 1,000 rows (PostgREST's limit): spend, leads and Sheet rows were undercounted past that. | `paged()` (`src/lib/crew/paged.ts`) on every read that can pass it. |
+| 7 | A row the owner deleted came back every 15 minutes, and a long tab was only read up to row 2,000. | A row placed before and now gone stays gone; tabs are read to the end; rows are matched per tab. |
+| 8 | Leads from restricted regions (EU, UK, Switzerland, Canada, Brazil) reached the Sheet. | Left out, as in every export. |
+| 9 | Not Interested / Unsubscribed on someone known only by a display name (Quora, Facebook, LinkedIn comments) blocked nothing; a handle typed into the Suppression List was stored in a form the agents never check. | The name is suppressed on that platform and the reply engine skips it; typed entries are normalized (`instagram:Jane` → `instagram:@jane`), and an unknown platform or empty handle is refused. |
+| 10 | Drafts made before the exact-link rule showed search-result links; Office Prospects opened a website even when an email was known. | Social drafts without an exact link are not shown; pasted ones say "(pasted without a link)"; Office rows open an email when there is one. |
+| 11 | Leftovers from the old admin rooms: five marketing managers and the head agent still ran and emailed daily reports nobody could reply to; the chat and group routes accepted any team; saving Settings could wipe a hidden team's limit; the practice agent was registered. | Removed (see below). The chat and group routes answer only for the Watchdog; Settings keeps limits it has no field for. |
+| 12 | Smaller: the reply cap was checked after paying for a search; two different daily lead limits; a model call could start after Pause all; a schedule written the way the Controls tab shows it didn't read back; the hook accepted edits to any Controls column. | All fixed; schedules round-trip; the hook takes only the Value column and refuses everything else before touching the database. |
+
+Found while fixing these: `supabase/crew-sheets.sql` lacked the
+`shown_status` column the code writes (every Sheet row write would have
+failed). Added, with an `alter table` for a database that ran the earlier
+copy; the sync reports "not ready" until it exists, and a test now compares
+the table with the code's row type.
+
+**Removed cleanly:** the marketing teams' managers (`replies-manager`,
+`contact-manager`, `leads-manager`, `office-manager`, `marketing-manager`)
+and their daily emails; the head agent (`agents/head.ts`) and its plan;
+the practice agent (moved to `tests/crew-practice-agent.ts`); the "head"
+role; their staff names; unused exports (`StatusPill`, `DoorPill`,
+`DoorIcon`, `ROOM_JOB`, `describeSchedule`, `ZERO_USAGE`, `totalTokens`,
+`PageCheck`, `checkWriting`, `getFile`, `tabForAgent`, `instagramSwitchers`).
+Nothing in the database is deleted: old reports and chat rows stay as
+history.

@@ -20,6 +20,7 @@ create table if not exists crew_sheet_rows (
   entity_id       text not null,
   status          text not null default 'New',              -- the Status word in the Sheet
   owner_cols      jsonb not null default '{}'::jsonb,       -- what the owner typed, by column key
+  shown_status    text,                                     -- the Status the sync last wrote into every copy (a copy still showing it is stale, not a decision)
   agent_hash      text not null default '',                 -- hash of the agent-owned cells last written
   synced_at       timestamptz,
   owner_edited_at timestamptz
@@ -70,6 +71,10 @@ create table if not exists crew_edits (
   after       text not null
 );
 create index if not exists crew_edits_agent_idx on crew_edits (agent_id, at desc);
+
+-- shown_status was added 2026-10-27: a database that ran an earlier copy of
+-- this file gets it here (the whole file is safe to run again).
+alter table crew_sheet_rows add column if not exists shown_status text;
 
 -- Suppression gains where an entry came from and which channel it covers
 -- (email, or a platform handle such as instagram:@name). Existing rows keep

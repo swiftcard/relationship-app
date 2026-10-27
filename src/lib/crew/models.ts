@@ -69,9 +69,3 @@ export function costUsd(
 export function round6(n: number): number {
   return Math.round(n * 1_000_000) / 1_000_000;
 }
-
-export const ZERO_USAGE: Usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, webSearches: 0 };
-
-export function totalTokens(u: Usage): number {
-  return u.input + u.output + u.cacheRead + u.cacheWrite;
-}

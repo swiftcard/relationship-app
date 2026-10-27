@@ -97,8 +97,6 @@ export const blogWriter: AgentDef = {
 
 // ── M1 SEO: one improvement a day, found by code ────────────────────────────
 
-export type PageCheck = { url: string; problems: string[] };
-
 export function seoProblems(url: string, html: string): string[] {
   const out: string[] = [];
   const title = html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1]?.trim() ?? "";

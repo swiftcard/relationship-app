@@ -108,6 +108,11 @@ export async function propose(ctx: AgentContext, p: Proposal): Promise<ProposeRe
   return { ok: true, id: ins.id };
 }
 
+/** The suppression key for a display name on a platform with no stable handle (Quora, Indie Hackers, LinkedIn comments, Facebook). */
+export function authorKey(platform: string, author: string): string {
+  return `${platform}:author:${author.trim().toLowerCase().replace(/\s+/g, " ")}`;
+}
+
 /** The suppression keys for a person: their normalized handle on that platform (email: the address and its @domain). */
 export function suppressionKeys(platform: Platform, handle: string): string[] {
   const norm = normalizeHandle(platform, handle);

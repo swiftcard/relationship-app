@@ -3,7 +3,8 @@ import { requireAdmin } from "@/lib/admin";
 import { ERR, backToTab, field } from "@/lib/crew/admin-form";
 import { describeHours, parseHoursForm, teamDoor, togglePatch } from "@/lib/crew/doors";
 import { GROUP_NAME } from "@/lib/crew/agent-status";
-import { DOOR_TEAMS, defaultTeam } from "@/lib/crew/store";
+import { ADMIN_TEAMS } from "@/lib/crew/registry";
+import { defaultTeam } from "@/lib/crew/store";
 import { SupabaseStore } from "@/lib/crew/store-supabase";
 import type { TeamId } from "@/lib/crew/types";
 
@@ -14,7 +15,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ team: stri
   const { team: raw } = await ctx.params;
   const form = await req.formData();
   const back = field(form, "tab") || raw;
-  if (!(DOOR_TEAMS as string[]).includes(raw)) return backToTab(req, "lobby", "No such group.", ERR);
+  // Only the admin page's groups have a pause switch and hours; the marketing agents are started and stopped one by one.
+  if (!(ADMIN_TEAMS as string[]).includes(raw)) return backToTab(req, "lobby", "No such group.", ERR);
   const team = raw as TeamId;
   const store = new SupabaseStore();
   const row = (await store.listTeams()).find((t) => t.team === team) ?? defaultTeam(team);

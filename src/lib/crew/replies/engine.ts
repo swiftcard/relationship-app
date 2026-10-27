@@ -1,21 +1,25 @@
-import { inboxFull, propose } from "../approvals";
+import { authorKey, inboxFull, propose } from "../approvals";
 import type { AgentContext } from "../context";
 import { debate } from "../debate";
 import { isPromotional } from "../disclosure";
 import { competitorFacts, productFacts } from "../facts";
+import { exactPostLink, exactProfileLink } from "../exact-links";
 import { everContacted, personFor } from "../ledger";
 import { crewLink } from "../links";
 import { remainingToday } from "../rate-limit";
-import { nyDayStart } from "../schedule";
-import type { ApprovalKind, Platform } from "../types";
+import { minutesToTomorrow, nyDayStart } from "../schedule";
+import type { ApprovalKind, Platform, RunResult } from "../types";
 import { HUMAN_VOICE } from "../voice";
 import { writingProblems } from "../writing-check";
 
 // ── The shared engine behind every Replies and Contact agent ────────────────
-// find posts → drop ones already seen → cheap keyword filter (no model) →
-// ONE scoring call for the batch → draft only the best few, within today's
-// warmed-up cap → second opinion → the inbox. Nothing is posted or sent: a
-// person copies the approved draft and posts it from their own account.
+// find posts → keep only ones with an exact link (the post, comment or
+// person the message goes to) → drop ones already seen → cheap keyword
+// filter (no model) → ONE scoring call for the batch → draft only the best
+// few, within today's warmed-up cap → second opinion → the Sheet. Nothing is
+// posted or sent: a person copies the draft, taps the link, pastes, sends.
+// A run with nothing new rests an hour; a run at today's ceiling rests until
+// tomorrow, so an agent left on costs nothing while it waits.
 
 export type Candidate = {
   platform: Platform;
@@ -27,7 +31,12 @@ export type Candidate = {
   /** False where the community's rules ban self-promotion. */
   promoAllowed: boolean;
   fromPaste?: boolean;
+  /** Facts about the person found with the post (name, occupation, company, location, linkedin). Shown to the writer and kept on the row. */
+  extra?: Record<string, string>;
 };
+
+/** Rest after a run that found nothing new. */
+export const QUIET_REST_MINUTES = 60;
 
 export type EngageOptions = {
   platform: Platform;
@@ -49,7 +58,16 @@ export type EngageOptions = {
   person?: (c: Candidate) => { platform: Platform; handle: string; name?: string | null } | null;
   /** Skip the keyword filter (e.g. pasted input, which a person already chose). */
   keywordFilter?: boolean;
+  /** What a found item's link must be: the exact post (default) or the person's own profile. */
+  linkKind?: "post" | "profile";
 };
+
+/** A found item's link, made exact, or null (the item is dropped). Pasted items keep what was pasted. */
+export function exactTarget(c: Candidate, linkKind: "post" | "profile" = "post"): string | null {
+  const exact = linkKind === "profile" ? exactProfileLink(c.platform, c.url) : exactPostLink(c.platform, c.url);
+  if (exact) return exact;
+  return c.fromPaste ? c.url : null;
+}
 
 export const RELEVANT =
   /linktree|linktr\.ee|link[- ]?in[- ]?bio|link\.me|hoo\.?be|hihello|blinq|popl|digital business card|business cards?|e-?card|vcard|qr code|nfc|networking|contact card|personal brand|lead capture|swift ?card/i;
@@ -93,21 +111,35 @@ async function markSeen(ctx: AgentContext, urls: string[]) {
   await ctx.store.kvSet(seenKey(ctx), [...new Set([...urls, ...prev])].slice(0, 600));
 }
 
-export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promise<{ summary: string }> {
+export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promise<RunResult> {
   const quota = await remainingToday(ctx.store, { agentId: ctx.def.id, platform: o.platform, action: o.action, defaultCeiling: o.ceiling, now: ctx.now() });
-  if (quota.left === 0) return { summary: `Reached today's limit of ${quota.cap} drafts (it rises as the account warms up).` };
-  if (await inboxFull(ctx)) return { summary: "Waiting: the inbox already has enough of my drafts." };
+  if (quota.left === 0) return { summary: `Done for today: ${quota.cap} drafts is today's limit (it rises as the account warms up). Back tomorrow.`, restMinutes: minutesToTomorrow(ctx.now()) };
+  if (await inboxFull(ctx)) return { summary: "Waiting: there are already plenty of my drafts to work through.", restMinutes: QUIET_REST_MINUTES };
+
+  // Controls → "Social replies per platform per day": a ceiling on top of the
+  // warm-up cap, checked before paying for a search.
+  const replyCap = Number((await ctx.store.getControls().catch(() => ({}) as Record<string, unknown>)).social_reply_limit ?? 0);
+  if (replyCap > 0) {
+    const todayOnPlatform = await ctx.store.countTouchesSince(o.platform, ["replied", "commented", "dm_drafted", "dm_sent", "connect_sent"], nyDayStart(ctx.now()).toISOString());
+    if (todayOnPlatform >= replyCap) return { summary: `Done for today: the Controls limit of ${replyCap} ${o.platform} messages is reached.`, restMinutes: minutesToTomorrow(ctx.now()) };
+  }
 
   const seen = new Set((await ctx.store.kvGet<string[]>(seenKey(ctx))) ?? []);
   const found = await o.find();
   ctx.stat("posts_read", found.length);
-  const unique = [...new Map(found.map((c) => [c.url, c])).values()].filter((c) => !seen.has(c.url));
+  // Exact links only: a row must open the very post, comment or person the message goes to.
+  const exact = found.flatMap((c) => {
+    const url = exactTarget(c, o.linkKind);
+    return url ? [{ ...c, url }] : [];
+  });
+  ctx.stat("skipped_no_exact_link", found.length - exact.length);
+  const unique = [...new Map(exact.map((c) => [c.url, c])).values()].filter((c) => !seen.has(c.url));
   const relevant = unique.filter((c) => c.fromPaste || o.keywordFilter === false || RELEVANT.test(`${c.title} ${c.text}`));
   ctx.stat("posts_relevant", relevant.length);
   await markSeen(ctx, unique.map((c) => c.url));
   if (!relevant.length) {
     ctx.stat("no_llm_needed");
-    return { summary: `Read ${found.length} posts; none worth a reply.` };
+    return { summary: `Read ${found.length} posts; nothing new worth a message. Trying new searches next run.`, restMinutes: QUIET_REST_MINUTES };
   }
 
   const batch = relevant.slice(0, 15);
@@ -116,7 +148,7 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
     maxTokens: 2500,
     schema: SCORE_SCHEMA as unknown as Record<string, unknown>,
     system: SCORE_SYSTEM,
-    prompt: batch.map((c, i) => `#${i} [${c.platform}${c.community ? ` / ${c.community}` : ""}] ${c.title}\n${c.text.slice(0, 700)}`).join("\n\n"),
+    prompt: batch.map((c, i) => `#${i} [${c.platform}${c.community ? ` / ${c.community}` : ""}] ${c.title}${c.extra ? `\n(${Object.entries(c.extra).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join("; ")})` : ""}\n${c.text.slice(0, 700)}`).join("\n\n"),
   });
   const picks = (scored?.items ?? [])
     .filter((s) => s.i >= 0 && s.i < batch.length && s.score >= 0.55 && (!o.mustBePro || s.business_pro))
@@ -127,19 +159,18 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
   const facts = await competitorFacts(ctx.store, ctx.now());
   const system = `${HUMAN_VOICE}\n\n${productFacts()}`;
   const examples = await ctx.ownerExamples(o.kind);
-  const replyCap = Number((await ctx.store.getControls().catch(() => ({}) as Record<string, unknown>)).social_reply_limit ?? 0);
   let promoBudget = await pitchBudget(ctx, o, picks.length);
   let made = 0;
-  if (replyCap > 0) {
-    // Controls → "Social replies per platform per day": a ceiling on top of the warm-up cap.
-    const todayOnPlatform = await ctx.store.countTouchesSince(o.platform, ["replied", "commented", "dm_drafted", "dm_sent", "connect_sent"], nyDayStart(ctx.now()).toISOString());
-    if (todayOnPlatform >= replyCap) return { summary: `Reached the Controls limit of ${replyCap} ${o.platform} drafts today.` };
-  }
 
   for (const s of picks) {
     if (await inboxFull(ctx)) break;
     const c = batch[s.i];
     const person = o.person?.(c) ?? null;
+    // Someone marked Not Interested or Unsubscribed in the Sheet, known only by a display name on this platform.
+    if (!person && c.author && (await ctx.store.isSuppressed([authorKey(o.platform, c.author)]))) {
+      ctx.stat("skipped_suppressed");
+      continue;
+    }
     if ((o.kind === "dm" || o.kind === "connect_note") && !person) {
       ctx.stat("skipped_no_person");
       continue;
@@ -153,11 +184,18 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
     }
     const mayPitch = c.promoAllowed && promoBudget > 0;
     const link = crewLink(o.platform, o.kind, c.url);
-    const brief = `${o.platform}${c.community ? ` (${c.community})` : ""} post by ${c.author ?? "someone"}:\n${c.title}\n${c.text.slice(0, 1500)}\n\nWhy it's worth it: ${s.why}. Angle: ${s.angle}.`;
+    const message = o.kind === "dm" || o.kind === "connect_note";
+    const about = c.extra ? Object.entries(c.extra).filter(([, v]) => v).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join("\n") : "";
+    const brief = `${o.platform}${c.community ? ` (${c.community})` : ""} ${message ? "person" : "post"}: ${c.author ?? "someone"}\n${about ? `${about}\n` : ""}${c.title}\n${c.text.slice(0, 1500)}\n\nWhy it's worth it: ${s.why}. Angle: ${s.angle}.`;
     const instructions = [
       `Write a ${o.kind === "reply" ? "reply" : o.kind === "comment" ? "comment" : o.kind === "dm" ? "private message" : "connection note"} on ${o.platform}. Length: ${o.length}. ${o.register}`,
       mayPitch
-        ? `You MAY mention SwiftCard in one low-key sentence if it honestly fits${s.asks_for_tools ? " (they asked for tools)" : ""}. If you include a link, use exactly ${link}.`
+        ? [
+            "You may bring up SwiftCard in at most one sentence, and only with a reason that fits THIS person: tie it to something they said or do, and say what it would change for them, not what features it has.",
+            "Say plainly that you built it, inside the sentence (\"I built something for exactly this\", \"we made SwiftCard because…\"). Never pretend to be a customer.",
+            message ? "No link in a first message. End with one easy question they would actually want to answer." : s.asks_for_tools ? `They asked for a tool, so a link is fine: use exactly ${link}.` : "No link unless they asked for a tool.",
+            "If no honest reason exists, leave SwiftCard out and just be useful.",
+          ].join(" ")
         : "Do NOT mention SwiftCard or any product, and include no link. Just be genuinely helpful or insightful about their post.",
       facts,
       ...(examples ? [examples] : []),
@@ -211,6 +249,7 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
         community: c.community,
         pitched: isPromotional(final),
         ...(o.platform === "reddit" ? {} : { excerpt: c.text.slice(0, 500) }),
+        ...(c.extra ?? {}),
       },
     });
     if (r.ok) {
@@ -219,7 +258,26 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
     }
   }
   ctx.stat("drafts_made", made);
-  return { summary: `Read ${found.length} posts, ${relevant.length} on topic, drafted ${made}.` };
+  return { summary: `Read ${found.length} posts, ${relevant.length} on topic, added ${made} to the Sheet.`, ...(made === 0 ? { restMinutes: QUIET_REST_MINUTES } : {}) };
+}
+
+/**
+ * The next `n` items of an endless rotation, remembered per agent, so a
+ * continuous agent searches something new every run and picks up where it
+ * stopped when it is started again.
+ */
+export async function rotate<T>(ctx: AgentContext, key: string, list: T[], n = 1): Promise<T[]> {
+  if (!list.length) return [];
+  const i = ctx.config<number>(key, 0);
+  await ctx.saveConfig({ [key]: i + n });
+  return Array.from({ length: Math.min(n, list.length) }, (_, k) => list[(i + k) % list.length]);
+}
+
+/** Every pairing of two lists, interleaved so neighbours differ (professions × cities). */
+export function pairs<A, B>(as: A[], bs: B[]): [A, B][] {
+  const out: [A, B][] = [];
+  for (let k = 0; k < as.length * bs.length; k++) out.push([as[k % as.length], bs[Math.floor(k / as.length) % bs.length]]);
+  return out;
 }
 
 async function pitchBudget(ctx: AgentContext, o: EngageOptions, n: number): Promise<number> {

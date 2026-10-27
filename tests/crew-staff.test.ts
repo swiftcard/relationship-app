@@ -40,7 +40,7 @@ describe("staff", () => {
     expect(s({ paused_until: "2099-12-31T00:00:00Z" }).label).toBe("Paused until you say go");
     expect(s({}, locked).label).toBe("Locked out");
     expect(s({ next_run_at: "2026-10-21T19:00:00Z" })).toMatchObject({ kind: "break", line: "Next shift 3:00pm." });
-    expect(staffStatus({ def: agentById("replies-manager")!, state: state(), missing: [], door: locked, now: NOW }).kind).toBe("break");
+    expect(staffStatus({ def: agentById("watchdog-manager")!, state: state(), missing: [], door: locked, now: NOW }).kind).toBe("break");
     expect(staffStatus({ def: agentById("leads-linkedin")!, state: state(), missing: [], door: open, now: NOW }).kind).toBe("not_hired");
   });
 });

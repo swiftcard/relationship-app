@@ -3,6 +3,7 @@ import { inboxFull, propose } from "../approvals";
 import type { AgentContext } from "../context";
 import { reportHtml } from "../reports";
 import type { Finding } from "../types";
+import { isAdminTeam } from "../teams";
 import { sendOwnerDigest } from "@/lib/owner-digest";
 
 // ── Watchdog findings: notice once, explain plainly, propose a fix ──────────
@@ -190,7 +191,9 @@ export async function reportFindings(
   ctx.stat("findings_new", fresh.length);
   ctx.stat("fixes_proposed", proposed);
   if (critical.length) {
-    await sendOwnerDigest(`Urgent: ${critical.length} serious problem${critical.length > 1 ? "s" : ""} on the site`, reportHtml(["What happened", ...critical.map((c) => `- ${c.replace(/\n/g, " ")}`), "", "What I need from you", "- Open the Watchdog room and look at the Fix card."].join("\n"), "watchdog"));
+    // The SEO and GEO agents use this too; their Fix rows are in the Sheet, not on the admin page.
+    const where = isAdminTeam(ctx.def.team) ? "- Open the Agents tab and look at the Fix card." : "- Open its row in the SwiftCard Leads sheet and set Status to Approved to get the fix.";
+    await sendOwnerDigest(`Urgent: ${critical.length} serious problem${critical.length > 1 ? "s" : ""} on the site`, reportHtml(["What happened", ...critical.map((c) => `- ${c.replace(/\n/g, " ")}`), "", "What I need from you", where].join("\n"), ctx.def.team));
   }
   return { fresh: fresh.length, proposed };
 }

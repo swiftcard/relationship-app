@@ -553,3 +553,37 @@ answers did. Full audit: `AUDIT.md`; setup: `SETUP.md`; code:
 - **Dry run** starts on (`crew_controls.dry_run`). Ships as PR 1 of 4 on
   branch `agents/sheets-hq`; PR 2 = lead engine + new agents, PR 3 = cold email
   + reply handler + meetings, PR 4 = 8:00 brief + performance + cleanup.
+
+## Start / Stop (2026-10-27, owner request: "press Start and it keeps going until I press Stop")
+
+- Admin Agents tab: a Start / Stop list, one row per marketing agent, named
+  after its tab in the Sheet (`src/app/admin/crew/SheetAgents.tsx`,
+  `src/lib/crew/sheet-agents.ts`). Start = on + run now; Stop = off at the next
+  step. Same switch as the Sheet's Controls ("Start / Stop").
+- One tab per agent, one agent per tab, same name (pinned in
+  tests/crew-start-stop). All Leads = the combined lead tabs.
+- Continuous finders (`AgentDef.continuous`, `CONTINUOUS` in schedule.ts):
+  every tick while on, rotating searches, Safe ceilings with warm-up, rest an
+  hour when nothing is new and until tomorrow at the ceiling.
+- Exact links only (`src/lib/crew/exact-links.ts`); the engine drops anything
+  else before a model is called.
+- New agents: replies-hackernews, partnerships, events (`agents/growth.ts`).
+- Voice: Menash; no dashes of any kind; a reason, not a pitch; "I built…" is
+  the disclosure.
+- Doors gate only `ADMIN_TEAMS` (`src/lib/crew/teams.ts`).
+
+## The audit after Start / Stop (2026-10-27, owner request: "make sure the whole system is clean and everything is working")
+
+- Twelve findings from an independent review, all fixed and pinned
+  (tests/crew-sheet-audit; list in AUDIT.md §6). The big ones: the Sheet
+  keepers are `infrastructure` (always on, through Pause all); Controls and
+  Status cells count only when they differ from what the sync last wrote
+  (`sheet:controls-shown`, `crew_sheet_rows.shown_status`); Sent / Posted
+  and Completed are `done_by_hand` and never run an executor; deleted rows
+  stay deleted; every read pages past 1,000 rows (`paged.ts`).
+- Retired: the five marketing managers, the head agent and the practice
+  agent (now `tests/crew-practice-agent.ts`). Only the Watchdog has a
+  manager, a chat and a group switch.
+- Schema: `crew_sheet_rows.shown_status` (the file adds it to an existing
+  table too); the owner runs `supabase/crew-sheets.sql` again if an earlier
+  copy was applied.

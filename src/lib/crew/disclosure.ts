@@ -11,10 +11,14 @@ export function isPromotional(text: string): boolean {
   return PRODUCT.test(text);
 }
 
+/** "I built…", "we made…", "I'm building…", "which I built", "my app": the writer says it's theirs. */
+const OWNS = /\b(i|we)(?:'m|'re| am| are)?\s+(?:the one who\s+)?(work on|work at|built|build|building|made|make|making|run|started|founded|co-?founded)\b|\bwhich (i|we) (built|made|run)\b|\b(my|our) (own )?(app|tool|product|company|startup)\b/i;
+
 function alreadyDisclosed(text: string, disclosure: string): boolean {
   const t = text.toLowerCase();
   if (disclosure && t.includes(disclosure.toLowerCase())) return true;
-  return /\b(i|we) (work on|work at|built|make|run|founded|co-?founded) swift\s?card\b/i.test(text);
+  // Said naturally, in the sentence that names SwiftCard (the voice asks for that instead of a tacked-on line).
+  return text.split(/(?<=[.!?])\s+|\n+/).some((s) => PRODUCT.test(s) && OWNS.test(s));
 }
 
 export function applyDisclosure(text: string, opts: { on: boolean; disclosure: string }): string {
