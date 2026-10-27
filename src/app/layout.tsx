@@ -152,7 +152,9 @@ export default function RootLayout({
               // even for someone who saved dark (owner, 2026-09-16). Must be
               // decided here, before paint, or a dark-mode phone flashes black.
               // ForceLightTheme keeps it light across client-side navigation.
-              "if(localStorage.getItem('sc_theme')!=='dark'||location.pathname.indexOf('/cards/new')===0)document.documentElement.setAttribute('data-sc-theme','light');" +
+              // The site admin (/admin) is always light too (owner, 2026-10-27).
+              // "Starts with", so /office/admin keeps the person's own theme.
+              "if(localStorage.getItem('sc_theme')!=='dark'||location.pathname.indexOf('/cards/new')===0||location.pathname.indexOf('/admin')===0)document.documentElement.setAttribute('data-sc-theme','light');" +
               // A sign-in cookie exists → mark it before paint, so /pricing can
               // hold its plan-dependent prices until it knows this account
               // rather than flash the new-customer trial (see home.css). Only a

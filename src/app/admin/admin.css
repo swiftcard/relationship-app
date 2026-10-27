@@ -1,0 +1,189 @@
+/* ── The site admin (/admin): one light, organized vocabulary ──────────────
+   The owner's console (owner, 2026-10-27: "I don't like how it's dark … I
+   just want everything to be very organized and also visually organized").
+
+   Colours come from the app's semantic tokens (.sc-app in globals.css), so
+   the console speaks the same Apple-style language as the rest of the signed-
+   in app. The only raw values in this file are the light-theme patch for
+   Marketing/Agents at the end (the remap's own values) and the chart palette
+   below — run
+   through the dataviz validator against the light surface: lightness band,
+   chroma floor, adjacent colour-blind separation (protan/deutan/tritan) and
+   contrast all pass. #7E22CE (the badge purple) collapses into the Pro blue
+   for protanopes (ΔE 3), which is why Office is drawn lighter in charts.
+
+   Every page uses the same few pieces: .adm-card surfaces, .adm-tabs, .adm-kpi,
+   .adm-table, the charts in _ui/charts.tsx and one look per state. */
+
+.sc-admin {
+  --adm-series-1: #1D4ED8;               /* SwiftCard blue — the primary series */
+  --adm-series-1-soft: rgba(29, 78, 216, 0.20); /* the same blue as a wash, for a series drawn behind */
+  --adm-series-2: #0D9488;               /* teal */
+  --adm-series-3: #C2410C;               /* orange */
+  --adm-plan-free: #A1A1AA;              /* neutral: Free is the remainder, never competes */
+  --adm-plan-pro: #1D4ED8;
+  --adm-plan-office: #B26CF5;
+  --adm-good: #1E8E3E;
+  --adm-bad: #C62828;
+  --adm-warn: #A85C00;
+  --adm-grid: rgba(60, 60, 67, 0.12);
+  --adm-hover: rgba(120, 120, 128, 0.08);
+  --adm-sidebar-w: 15rem;
+  background: var(--sc-bg);
+  color: var(--sc-label);
+}
+
+/* ── Text ─────────────────────────────────────────────────────────────── */
+.sc-admin .adm-muted { color: var(--sc-label-muted); }
+.sc-admin .adm-faint { color: var(--sc-label-2); }
+.sc-admin .adm-link { color: var(--sc-tint); font-weight: 500; }
+.sc-admin .adm-link:hover { color: var(--sc-tint-hover); text-decoration: underline; text-underline-offset: 2px; }
+.sc-admin .adm-good { color: var(--adm-good); }
+.sc-admin .adm-bad { color: var(--adm-bad); }
+.sc-admin .adm-warn { color: var(--adm-warn); }
+.sc-admin .adm-num { font-variant-numeric: tabular-nums; }
+
+/* ── Surfaces ─────────────────────────────────────────────────────────── */
+.sc-admin .adm-card {
+  background: var(--sc-bg-elevated);
+  border-radius: var(--sc-r-card);
+  box-shadow: var(--sc-shadow-card);
+  min-width: 0;
+}
+.sc-admin .adm-inset { background: var(--sc-bg-tertiary); border-radius: var(--sc-r-control); }
+.sc-admin .adm-divide > * + * { border-top: 1px solid var(--adm-grid); }
+.sc-admin .adm-rule { border-top: 1px solid var(--adm-grid); }
+
+/* A tile for a number that has no data source yet: visibly a placeholder,
+   never mistakable for a zero. */
+.sc-admin .adm-notracked {
+  border: 1.5px dashed var(--sc-separator-opaque);
+  border-radius: var(--sc-r-card);
+  background: transparent;
+  color: var(--sc-label-2);
+}
+
+/* Callouts (closed account, refusals) */
+.sc-admin .adm-callout-danger { background: rgba(255, 59, 48, 0.07); box-shadow: inset 0 0 0 1px rgba(198, 40, 40, 0.18); border-radius: var(--sc-r-card); }
+.sc-admin .adm-callout-warn { background: rgba(255, 149, 0, 0.08); box-shadow: inset 0 0 0 1px rgba(168, 92, 0, 0.18); border-radius: var(--sc-r-card); }
+.sc-admin .adm-callout-good { background: rgba(52, 199, 89, 0.10); box-shadow: inset 0 0 0 1px rgba(30, 142, 62, 0.18); border-radius: var(--sc-r-card); }
+
+/* ── Sidebar (computer) and top bar (phone) ───────────────────────────── */
+.sc-admin .adm-sidebar {
+  width: var(--adm-sidebar-w);
+  background: var(--sc-bg-elevated);
+  box-shadow: inset -1px 0 0 var(--adm-grid);
+}
+.sc-admin .adm-nav-group { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--sc-label-2); }
+.sc-admin .adm-nav-item {
+  display: flex; align-items: center; gap: 0.75rem;
+  min-height: 44px; padding: 0 0.75rem;
+  border-radius: var(--sc-r-control);
+  font-size: 0.9375rem; font-weight: 500;
+  color: var(--sc-label);
+  transition: background-color var(--sc-dur-fast) ease, color var(--sc-dur-fast) ease;
+}
+.sc-admin .adm-nav-item svg { width: 1.25rem; height: 1.25rem; flex: none; color: var(--sc-label-2); }
+.sc-admin .adm-nav-item:hover { background: var(--adm-hover); }
+.sc-admin .adm-nav-item[aria-current="page"] { background: var(--sc-tint-soft); color: var(--sc-tint); font-weight: 600; }
+.sc-admin .adm-nav-item[aria-current="page"] svg { color: var(--sc-tint); }
+
+.sc-admin .adm-topbar { box-shadow: inset 0 -1px 0 var(--adm-grid); }
+.sc-admin .adm-menu > summary { list-style: none; }
+.sc-admin .adm-menu > summary::-webkit-details-marker { display: none; }
+.sc-admin .adm-menu-panel {
+  background: var(--sc-bg-elevated);
+  border-radius: var(--sc-r-card);
+  box-shadow: var(--sc-shadow-float);
+}
+
+/* ── Tabs: one row, scrolls inside itself on a phone, never the page ──── */
+.sc-admin .adm-tabs {
+  display: flex; gap: 0.25rem;
+  overflow-x: auto; overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  box-shadow: inset 0 -1px 0 var(--adm-grid);
+}
+.sc-admin .adm-tabs::-webkit-scrollbar { display: none; }
+.sc-admin .adm-tab {
+  display: inline-flex; align-items: center; gap: 0.375rem;
+  flex: none; min-height: 44px; padding: 0 0.75rem;
+  font-size: 0.9375rem; font-weight: 500; white-space: nowrap;
+  color: var(--sc-label-muted);
+  border-bottom: 2px solid transparent;
+  transition: color var(--sc-dur-fast) ease, border-color var(--sc-dur-fast) ease;
+}
+.sc-admin .adm-tab:hover { color: var(--sc-label); }
+.sc-admin .adm-tab[aria-current="page"] { color: var(--sc-tint); border-bottom-color: var(--sc-tint); font-weight: 600; }
+.sc-admin .adm-tab-count {
+  font-size: 0.75rem; font-weight: 600; font-variant-numeric: tabular-nums;
+  padding: 0 0.4375rem; border-radius: 999px; line-height: 1.25rem;
+  background: var(--sc-fill); color: var(--sc-label-muted);
+}
+.sc-admin .adm-tab[aria-current="page"] .adm-tab-count { background: var(--sc-tint-soft); color: var(--sc-tint); }
+
+/* ── KPI tiles ────────────────────────────────────────────────────────── */
+.sc-admin .adm-kpi-value { font-size: 1.75rem; line-height: 1.15; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.sc-admin a.adm-kpi { transition: box-shadow var(--sc-dur-fast) ease, transform var(--sc-dur-fast) ease; }
+.sc-admin a.adm-kpi:hover { box-shadow: var(--sc-shadow-float); }
+.sc-admin .adm-delta { display: inline-flex; align-items: center; gap: 0.125rem; font-size: 0.75rem; font-weight: 600; font-variant-numeric: tabular-nums; padding: 0.0625rem 0.375rem; border-radius: 999px; }
+.sc-admin .adm-delta-good { color: var(--adm-good); background: rgba(52, 199, 89, 0.12); }
+.sc-admin .adm-delta-bad { color: var(--adm-bad); background: rgba(255, 59, 48, 0.10); }
+.sc-admin .adm-delta-flat { color: var(--sc-label-muted); background: var(--sc-fill); }
+
+/* ── Tables (become stacked rows below 640px, in the components) ──────── */
+.sc-admin .adm-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.sc-admin .adm-table th {
+  text-align: left; font-size: 0.8125rem; font-weight: 600; color: var(--sc-label-muted);
+  padding: 0.625rem 0.75rem; white-space: nowrap; border-bottom: 1px solid var(--adm-grid);
+}
+.sc-admin .adm-table td { padding: 0.75rem; border-bottom: 1px solid var(--adm-grid); vertical-align: middle; }
+.sc-admin .adm-table tr:last-child td { border-bottom: 0; }
+.sc-admin .adm-table th:first-child, .sc-admin .adm-table td:first-child { padding-left: 1.25rem; }
+.sc-admin .adm-table th:last-child, .sc-admin .adm-table td:last-child { padding-right: 1.25rem; }
+.sc-admin .adm-table .adm-r { text-align: right; font-variant-numeric: tabular-nums; }
+.sc-admin .adm-table tbody tr.adm-row-link { cursor: pointer; }
+.sc-admin .adm-table tbody tr.adm-row-link:hover td { background: var(--adm-hover); }
+.sc-admin .adm-list-row { min-height: 52px; }
+.sc-admin a.adm-list-row:hover, .sc-admin button.adm-list-row:hover { background: var(--adm-hover); }
+
+/* ── Charts ───────────────────────────────────────────────────────────── */
+.sc-admin .adm-grid-line { border-top: 1px solid var(--adm-grid); }
+.sc-admin .adm-bar-v { border-radius: 4px 4px 0 0; }   /* rounded data-end, square at the baseline */
+.sc-admin .adm-bar-h { border-radius: 0 4px 4px 0; }
+.sc-admin .adm-track { background: var(--sc-fill); border-radius: 999px; }
+.sc-admin .adm-tip {
+  background: var(--sc-label); color: var(--sc-bg-elevated);
+  border-radius: 8px; box-shadow: var(--sc-shadow-float);
+}
+
+/* ── Loading skeleton: shaped like the page, so nothing jumps ─────────── */
+.sc-admin .adm-skel { background: var(--sc-fill); border-radius: 8px; animation: adm-pulse 1.4s ease-in-out infinite; }
+@keyframes adm-pulse { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .sc-admin .adm-skel { animation: none; } }
+
+/* Two-line clamp for quoted comments in lists */
+.sc-admin .adm-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ── Marketing and Agents, painted light without touching their files ─────
+   Both were written dark. globals.css's remap layer repaints almost all of
+   it; these are the utilities it never named, found by rendering both pages
+   in this shell and measuring (a dark grey promo-code preview box with grey
+   text on it; pale status-pill and chat text that vanished on white). Same
+   values as the remap uses for their neighbours, scoped to the admin. */
+[data-sc-theme="light"] .sc-admin .bg-gray-950\/60 { background-color: var(--sc-bg-tertiary) !important; }
+[data-sc-theme="light"] .sc-admin :is(.bg-amber-900\/40, .bg-amber-700\/50) { background-color: #FFF7E6 !important; }
+[data-sc-theme="light"] .sc-admin :is(.bg-red-900\/40, .bg-red-900\/50) { background-color: #FFF0EF !important; }
+[data-sc-theme="light"] .sc-admin .hover\:bg-red-950:hover { background-color: #FFE1DE !important; }
+[data-sc-theme="light"] .sc-admin .text-amber-200\/90 { color: #9A5300 !important; }
+[data-sc-theme="light"] .sc-admin .text-blue-200\/70 { color: var(--sc-tint) !important; }
+[data-sc-theme="light"] .sc-admin :is(.text-emerald-200\/80, .text-emerald-300\/90) { color: #1E7D3A !important; }
+[data-sc-theme="light"] .sc-admin .text-red-100 { color: #A31515 !important; }
+[data-sc-theme="light"] .sc-admin .text-sky-200 { color: #0369A1 !important; }
+[data-sc-theme="light"] .sc-admin .text-violet-200 { color: #6D28D9 !important; }
+[data-sc-theme="light"] .sc-admin .hover\:text-red-400:hover { color: #A31515 !important; }
+[data-sc-theme="light"] .sc-admin :is(.border-amber-600\/50, .border-amber-800\/30) { border-color: #FFE0A3 !important; }
+[data-sc-theme="light"] .sc-admin :is(.border-blue-500\/30, .border-blue-800\/50) { border-color: #C7D7F8 !important; }
+[data-sc-theme="light"] .sc-admin :is(.border-emerald-700, .border-emerald-800\/50) { border-color: #B7E8C4 !important; }
+[data-sc-theme="light"] .sc-admin .border-sky-800\/40 { border-color: #BAE6FD !important; }
+[data-sc-theme="light"] .sc-admin .border-violet-700\/50 { border-color: #DDD6FE !important; }
