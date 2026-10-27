@@ -62,18 +62,20 @@ export function sheetAgentState(o: { def: AgentDef; state: AgentState | undefine
   return { kind: "running", line: "Keeps adding rows until you press Stop." };
 }
 
-export async function loadSheetAgents(store: CrewStore, o: { now: Date; settings: Settings; hardDisabled: boolean; states: AgentState[]; runs: RunRow[]; overrides: ScheduleOverrides | null; sheetId: string | null; gids: Record<string, number> | null }): Promise<SheetAgentRow[]> {
+export async function loadSheetAgents(store: CrewStore, o: { now: Date; settings: Settings; hardDisabled: boolean; states: AgentState[]; overrides: ScheduleOverrides | null; sheetId: string | null; gids: Record<string, number> | null }): Promise<SheetAgentRow[]> {
   const defs = sheetAgentDefs();
   const day = nyDayStart(o.now).toISOString();
-  const [approvals, coldToday, officeToday] = await Promise.all([
-    store.listApprovals({ sinceIso: day, agentIds: defs.map((d) => d.def.id), limit: 3000 }),
+  // Each agent's own last run (one small read each): a shared "latest 300 runs" would be all continuous finders.
+  const [approvals, coldToday, officeToday, lastRuns] = await Promise.all([
+    store.listApprovals({ sinceIso: day, agentIds: defs.map((d) => d.def.id), limit: 5000 }),
     store.countLeadsSince(day, "cold"),
     store.countLeadsSince(day, "office"),
+    Promise.all(defs.map((d) => store.recentRuns(d.def.id, 1).then((r) => r[0] ?? null))),
   ]);
   const byState = new Map(o.states.map((s) => [s.id, s]));
   const leadSource = Object.fromEntries(Object.entries(LEAD_TAB_BY_SOURCE).map(([src, t]) => [t.agents[0], src]));
-  return defs.map(({ def, tab }) => {
-    const lastRun = o.runs.find((r) => r.agent_id === def.id) ?? null;
+  return defs.map(({ def, tab }, i) => {
+    const lastRun = lastRuns[i];
     const { kind, line } = sheetAgentState({ def, state: byState.get(def.id), lastRun, now: o.now, settings: o.settings, hardDisabled: o.hardDisabled });
     const drafts = approvals.filter((a) => a.agent_id === def.id).length;
     const added = leadSource[def.id] ? (coldToday[leadSource[def.id]] ?? 0) : def.id === "office-outreach" ? Object.values(officeToday).reduce((a, b) => a + b, 0) + drafts : drafts;

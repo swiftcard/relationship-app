@@ -9,6 +9,7 @@ import { fakeAgent } from "./crew-helpers";
 // Talking to a team manager. The model's orders are checked in code: only
 // pause / resume one of its OWN team's agents, or set a short focus. Nothing
 // from chat can switch an agent on, start a shift or create anything outward.
+// Since 2026-10-27 the Watchdog is the only team with a manager (and a chat).
 
 const NOW = () => new Date("2026-10-21T18:00:00Z"); // Wed 2pm New York
 
@@ -16,9 +17,9 @@ async function chatSetup(reply: unknown, settings: Record<string, unknown> = { e
   const store = new MemoryStore();
   await store.updateSettings(settings);
   const claude = new FakeClaude(() => JSON.stringify(reply));
-  await store.addChat({ team: "replies", author: "owner", body: "Pause Reddit for today and focus on dentists" });
-  const replyId = await store.addChat({ team: "replies", author: "manager", body: "", status: "pending" });
-  const run = () => answerOwner({ store, providers: { claude, critic: null }, team: "replies", text: "Pause Reddit for today and focus on dentists", replyId, now: NOW });
+  await store.addChat({ team: "watchdog", author: "owner", body: "Pause the bug watch for today and focus on checkout" });
+  const replyId = await store.addChat({ team: "watchdog", author: "manager", body: "", status: "pending" });
+  const run = () => answerOwner({ store, providers: { claude, critic: null }, team: "watchdog", text: "Pause the bug watch for today and focus on checkout", replyId, now: NOW });
   return { store, claude, replyId, run };
 }
 
@@ -27,31 +28,31 @@ const order = (o: Record<string, unknown>) => ({ type: "", agent: "", until: "",
 describe("manager chat", () => {
   it("answers, applies its own team's orders and confirms each one", async () => {
     const { store, claude, replyId, run } = await chatSetup({
-      reply: "Done. Maya is off Reddit until tonight, and the team will look for dentists.",
+      reply: "Done. Ben is off until tonight, and the team will look at checkout first.",
       orders: [
-        order({ type: "pause_agent", agent: "replies-reddit", until: "end_of_day" }),
-        order({ type: "set_focus", text: "Dentists and dental offices", days: 7 }),
-        order({ type: "pause_agent", agent: "contact-reddit", until: "end_of_day" }), // another team's agent
-        order({ type: "enable_agent", agent: "replies-threads" }), // not an order a manager has
+        order({ type: "pause_agent", agent: "watch-bugs", until: "end_of_day" }),
+        order({ type: "set_focus", text: "Checkout and the upgrade page", days: 7 }),
+        order({ type: "pause_agent", agent: "replies-reddit", until: "end_of_day" }), // another team's agent
+        order({ type: "enable_agent", agent: "watch-speed" }), // not an order a manager has
       ],
     });
     await run();
     const msg = store.chat.find((m) => m.id === replyId)!;
-    expect(msg).toMatchObject({ status: "done", body: "Done. Maya is off Reddit until tonight, and the team will look for dentists." });
-    expect((await store.getAgentState("replies-reddit")).paused_until).toBe("2026-10-22T03:59:00.000Z");
-    expect((await store.getAgentState("contact-reddit")).paused_until ?? null).toBeNull();
-    expect((await store.getAgentState("replies-threads")).enabled).toBe(false);
-    const team = (await store.listTeams()).find((t) => t.team === "replies")!;
-    expect(team).toMatchObject({ focus: "Dentists and dental offices", focus_by: "Rachel" });
+    expect(msg).toMatchObject({ status: "done", body: "Done. Ben is off until tonight, and the team will look at checkout first." });
+    expect((await store.getAgentState("watch-bugs")).paused_until).toBe("2026-10-22T03:59:00.000Z");
+    expect((await store.getAgentState("replies-reddit")).paused_until ?? null).toBeNull();
+    expect((await store.getAgentState("watch-speed")).enabled).toBe(false);
+    const team = (await store.listTeams()).find((t) => t.team === "watchdog")!;
+    expect(team).toMatchObject({ focus: "Checkout and the upgrade page", focus_by: "Walter" });
     expect(store.chat.filter((m) => m.author === "system").map((m) => m.body)).toEqual([
-      "Done: Maya (Reddit Reply) is paused until 11:59pm.",
-      expect.stringMatching(/^Done: the team's focus is "Dentists and dental offices" until /),
+      "Done: Ben (Bug watch) is paused until 11:59pm.",
+      expect.stringMatching(/^Done: the team's focus is "Checkout and the upgrade page" until /),
     ]);
     // Opus outside economy mode, metered as the manager's "chat".
     expect(claude.calls[0].model).toBe(MODEL_ID.opus);
-    expect(store.usage).toEqual([expect.objectContaining({ agent_id: "replies-manager", team: "replies", purpose: "chat" })]);
+    expect(store.usage).toEqual([expect.objectContaining({ agent_id: "watchdog-manager", team: "watchdog", purpose: "chat" })]);
     // The brief has who is on the team, but never a draft's text.
-    expect(claude.calls[0].prompt).toContain("Maya, Reddit Reply (id replies-reddit)");
+    expect(claude.calls[0].prompt).toContain("Ben, Bug watch (id watch-bugs)");
   });
 
   it("uses Sonnet in economy mode", async () => {
@@ -61,17 +62,17 @@ describe("manager chat", () => {
   });
 
   it("resume ends a pause but never puts an agent on the team", async () => {
-    const { store, run } = await chatSetup({ reply: "Maya is back.", orders: [order({ type: "resume_agent", agent: "replies-reddit" })] });
-    await store.patchAgentState("replies-reddit", { enabled: false, paused_until: "2099-12-31T00:00:00.000Z" });
+    const { store, run } = await chatSetup({ reply: "Ben is back.", orders: [order({ type: "resume_agent", agent: "watch-bugs" })] });
+    await store.patchAgentState("watch-bugs", { enabled: false, paused_until: "2099-12-31T00:00:00.000Z" });
     await run();
-    expect(await store.getAgentState("replies-reddit")).toMatchObject({ enabled: false, paused_until: null });
+    expect(await store.getAgentState("watch-bugs")).toMatchObject({ enabled: false, paused_until: null });
   });
 
-  it("with the whole office locked it answers without calling the model", async () => {
+  it("with all agents paused it answers without calling the model", async () => {
     const { store, claude, replyId, run } = await chatSetup({ reply: "x", orders: [] }, { kill_all: true });
     await run();
     expect(claude.calls).toHaveLength(0);
-    expect(store.chat.find((m) => m.id === replyId)!.body).toMatch(/whole office is locked/);
+    expect(store.chat.find((m) => m.id === replyId)!.body).toMatch(/All agents are paused.*Resume all agents/);
   });
 
   it("a money limit becomes a failed message that says where to raise it", async () => {
@@ -83,23 +84,23 @@ describe("manager chat", () => {
 
   it("checks every order: team, length, days, how many", () => {
     const long = "x".repeat(400);
-    expect(parseOrders([order({ type: "set_focus", text: long, days: 99 })], "replies")).toEqual([{ type: "set_focus", text: "x".repeat(280), days: 14 }]);
-    expect(parseOrders([order({ type: "pause_agent", agent: "leads-linkedin" })], "leads")).toEqual([]); // locked: not on any team
-    expect(parseOrders([order({ type: "pause_agent", agent: "replies-manager" })], "replies")).toEqual([]); // managers aren't orderable
-    expect(parseOrders(Array.from({ length: 9 }, () => order({ type: "clear_focus" })), "replies")).toHaveLength(5);
-    expect(parseOrders("nonsense", "replies")).toEqual([]);
+    expect(parseOrders([order({ type: "set_focus", text: long, days: 99 })], "watchdog")).toEqual([{ type: "set_focus", text: "x".repeat(280), days: 14 }]);
+    expect(parseOrders([order({ type: "pause_agent", agent: "watch-scan-cost" })], "watchdog")).toEqual([]); // locked: not on any team
+    expect(parseOrders([order({ type: "pause_agent", agent: "watchdog-manager" })], "watchdog")).toEqual([]); // managers aren't orderable
+    expect(parseOrders([order({ type: "pause_agent", agent: "replies-reddit" })], "watchdog")).toEqual([]); // another team's agent
+    expect(parseOrders(Array.from({ length: 9 }, () => order({ type: "clear_focus" })), "watchdog")).toHaveLength(5);
+    expect(parseOrders("nonsense", "watchdog")).toEqual([]);
   });
 
   it("refuses an empty message, a double tap, and more than the daily limit", async () => {
     const store = new MemoryStore();
     store.clock = NOW;
-    expect(await canSend(store, "replies", "  ", NOW())).toBe("Type a message first.");
-    await store.addChat({ team: "replies", author: "owner", body: "How did today go?" });
-    expect(await canSend(store, "replies", "How did today go?", new Date(NOW().getTime() + 5000))).toBe("Already sent.");
-    expect(await canSend(store, "replies", "How did today go?", new Date(NOW().getTime() + 60_000))).toBeNull();
-    for (let i = 1; i < CHAT_DAILY_LIMIT; i++) await store.addChat({ team: "replies", author: "owner", body: `m${i}` });
-    expect(await canSend(store, "replies", "one more", NOW())).toMatch(/40 messages/);
-    expect(await canSend(store, "contact", "one more", NOW())).toBeNull();
+    expect(await canSend(store, "watchdog", "  ", NOW())).toBe("Type a message first.");
+    await store.addChat({ team: "watchdog", author: "owner", body: "How did today go?" });
+    expect(await canSend(store, "watchdog", "How did today go?", new Date(NOW().getTime() + 5000))).toBe("Already sent.");
+    expect(await canSend(store, "watchdog", "How did today go?", new Date(NOW().getTime() + 60_000))).toBeNull();
+    for (let i = 1; i < CHAT_DAILY_LIMIT; i++) await store.addChat({ team: "watchdog", author: "owner", body: `m${i}` });
+    expect(await canSend(store, "watchdog", "one more", NOW())).toMatch(/40 messages/);
   });
 });
 

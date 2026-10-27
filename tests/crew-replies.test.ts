@@ -103,10 +103,10 @@ describe("competitor facts", () => {
 });
 
 describe("registry", () => {
-  it("one Replies agent per platform from the spec, all drafting by hand, plus a manager", () => {
+  it("one Replies agent per platform from the spec, all drafting by hand, and no manager", () => {
     const platforms = ["reddit", "instagram", "threads", "bluesky", "facebook", "quora", "indiehackers", "linkedin"];
     for (const p of platforms) expect(REPLIES.some((a) => a.id === `replies-${p}`), p).toBe(true);
-    expect(AGENTS.some((a) => a.id === "replies-manager")).toBe(true);
+    expect(AGENTS.some((a) => a.id === "replies-manager")).toBe(false); // retired 2026-10-27: the Sheet replaced its room
     expect(AGENTS.some((a) => a.id === "competitor-watch" && a.schedule.kind === "daily" && JSON.stringify(a.schedule.days) === "[0,3]")).toBe(true);
   });
 });

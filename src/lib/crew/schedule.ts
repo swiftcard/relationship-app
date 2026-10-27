@@ -75,15 +75,6 @@ export function isDue(nextRunAt: string | null, now: Date): boolean {
   return !nextRunAt || new Date(nextRunAt).getTime() <= now.getTime();
 }
 
-export function describeSchedule(s: Schedule): string {
-  if (s.kind === "every") return s.minutes % 60 === 0 ? `every ${s.minutes / 60} h` : `every ${s.minutes} min`;
-  if (s.kind === "on_input") return "when you paste something in";
-  const t = `${((s.hour + 11) % 12) + 1}:${String(s.minute ?? 0).padStart(2, "0")}${s.hour < 12 ? "am" : "pm"}`;
-  if (!s.days) return `daily ${t}`;
-  const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  return `${s.days.map((d) => names[d]).join(" + ")} ${t}`;
-}
-
 // ── Your own schedule for an agent ──────────────────────────────────────────
 // The Agents tab can change when an agent runs. The change is stored in one
 // crew_kv row ({agentId: Schedule}), not in the agent's config, so a run that

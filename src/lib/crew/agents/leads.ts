@@ -49,7 +49,8 @@ export const US_CITIES = [
   "Cincinnati, OH", "St. Louis, MO", "Salt Lake City, UT", "Richmond, VA", "Birmingham, AL", "Boise, ID", "Scottsdale, AZ", "Charleston, SC", "Greenville, SC", "Knoxville, TN",
 ];
 
-export const DAILY_CEILING = 3000;
+/** New leads a day, unless Controls → "New leads per day (max)" says otherwise (the spec's target; the same number the Controls tab shows). */
+export const DAILY_LEAD_LIMIT = 1000;
 
 /** The n-th query of an endless rotation through business types × cities. */
 export function queryAt(n: number): { type: string; city: string } {
@@ -119,7 +120,7 @@ export const leadsWeb: AgentDef = {
   async run(ctx) {
     // Controls → "New leads per day (max)" wins over the agent's own default.
     const limit = Number((await ctx.store.getControls().catch(() => ({}) as Record<string, unknown>)).daily_lead_limit ?? NaN);
-    const ceiling = Number.isFinite(limit) ? limit : ctx.config<number>("daily_ceiling", DAILY_CEILING);
+    const ceiling = Number.isFinite(limit) ? limit : DAILY_LEAD_LIMIT;
     if ((await leadsToday(ctx, "cold")) >= ceiling) return { summary: `Done for today: ${ceiling} new leads is today's limit. Back tomorrow.`, restMinutes: minutesToTomorrow(ctx.now()) };
     const n = ctx.config<number>("query_index", 0);
     const { type, city } = queryAt(n);

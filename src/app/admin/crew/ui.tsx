@@ -44,39 +44,6 @@ export function Avatar({ name, team, status, size = "md" }: { name: string; team
   );
 }
 
-const PILL: Record<StaffStatusKind, string> = {
-  working: "bg-emerald-500/10 text-emerald-300 border-emerald-800/40",
-  break: "bg-sky-500/10 text-sky-200 border-sky-800/40",
-  paused: "bg-amber-500/10 text-amber-200 border-amber-800/40",
-  locked: "bg-gray-800 text-gray-300 border-gray-700",
-  setup: "bg-amber-500/10 text-amber-200 border-amber-800/40",
-  off: "bg-gray-900 text-gray-400 border-gray-800",
-  not_hired: "bg-gray-900 text-gray-500 border-gray-800",
-};
-
-export function StatusPill({ kind, label }: { kind: StaffStatusKind; label: string }) {
-  return <span className={`inline-flex items-center gap-1 text-[0.6875rem] px-2 py-0.5 rounded-full border ${PILL[kind]}`}>{label}</span>;
-}
-
-/** Green "Open" / gray "Locked" pill for a door. */
-export function DoorPill({ open, label }: { open: boolean; label: string }) {
-  return (
-    <span className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border ${open ? "bg-emerald-500/10 text-emerald-300 border-emerald-800/40" : "bg-gray-800 text-gray-300 border-gray-700"}`}>
-      {open ? <DoorIcon /> : <LockIcon />}
-      {label}
-    </span>
-  );
-}
-
-export function DoorIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-      <path d="M3 14.5h10M4.5 14.5V2.5a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1v12" />
-      <circle cx="9.5" cy="8.5" r=".75" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
 export function LockIcon({ className = "h-3.5 w-3.5" }: { className?: string }) {
   return (
     <svg viewBox="0 0 16 16" className={className} fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>

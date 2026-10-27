@@ -9,8 +9,9 @@ import type { AgentState, OfficeHours, Settings, TeamId, TeamRow } from "./types
 // wait. A door is either set by hand (one tap) or follows opening hours in New
 // York time; a tap while hours are set overrides them only until the next
 // scheduled change. "Lock the whole office" (settings.kill_all) beats every
-// door. The managers' morning report and the desk (Hannah, Tess) only stop for
-// the whole-office lock. Pure functions, so tests pin every branch.
+// door. The Watchdog manager's morning report only stops for the whole-office
+// lock. Since 2026-10-27 only the Watchdog's door gates anything (teams.ts).
+// Pure functions, so tests pin every branch.
 
 export type DoorState = {
   open: boolean;

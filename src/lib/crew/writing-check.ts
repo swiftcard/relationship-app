@@ -1,5 +1,5 @@
 import type { ApprovalKind } from "./types";
-import { BANNED_PHRASES, voiceProblems } from "./voice";
+import { voiceProblems } from "./voice";
 
 // ── The writing-quality check (spec §18) ────────────────────────────────────
 // Deterministic, runs on every draft before it reaches the Sheet. A draft
@@ -10,10 +10,6 @@ import { BANNED_PHRASES, voiceProblems } from "./voice";
 
 /** The owner's banned list, on top of the voice file's. */
 export const OWNER_BANNED = ["i hope this finds you well", "i came across", "leverage", "streamline", "game-changer", "game changer", "elevate", "seamless", "unlock", "excited to"];
-
-export const ALL_BANNED = [...new Set([...BANNED_PHRASES, ...OWNER_BANNED])];
-
-export type WritingCheck = { ok: boolean; problems: string[] };
 
 export function writingProblems(text: string, o: { kind?: ApprovalKind | "cold_email"; platform?: string | null } = {}): string[] {
   const t = text.toLowerCase();
@@ -32,9 +28,4 @@ export function writingProblems(text: string, o: { kind?: ApprovalKind | "cold_e
     if (/https?:\/\//i.test(text.replace(/unsubscribe[^\n]*/gi, ""))) out.add("has a promotional link in the first email");
   }
   return [...out];
-}
-
-export function checkWriting(text: string, o: { kind?: ApprovalKind | "cold_email"; platform?: string | null } = {}): WritingCheck {
-  const problems = writingProblems(text, o);
-  return { ok: problems.length === 0, problems };
 }

@@ -18,6 +18,8 @@ export type Decision =
   | { action: "approve"; body?: string; choice?: string; by: string }
   | { action: "reject"; reason: string; by: string }
   | { action: "posted"; by: string }
+  /** The owner did it themselves (the Sheet's Sent / Posted, Completed): recorded as done, and nothing is ever run or sent. */
+  | { action: "done_by_hand"; by: string }
   | { action: "edit"; body: string; by: string };
 
 const POSTED_TOUCH: Partial<Record<Approval["kind"], TouchKind>> = {
@@ -68,6 +70,21 @@ export async function decide(store: CrewStore, id: string, d: Decision, now = ne
       await store.addTouch(a.person_id, (a.platform ?? "web") as Platform, POSTED_TOUCH[a.kind]!, id);
     }
     return { ok: true, message: "Approved. Post it, then tap “I posted it”." };
+  }
+
+  if (d.action === "done_by_hand") {
+    // No executor, ever: the owner already sent, posted or did it.
+    if (a.status === "done") return { ok: true, message: "Already done." };
+    if (a.status !== "pending" && a.status !== "approved") return { ok: false, message: "Already decided." };
+    const firstTime = a.status === "pending";
+    await store.updateApproval(id, { status: "done", done_at: now.toISOString(), ...(firstTime ? { decided_at: now.toISOString() } : {}), meta: { ...a.meta, done_by_hand: true } });
+    const touch = POSTED_TOUCH[a.kind];
+    if (touch && a.person_id) {
+      await store.releaseDmClaim(id);
+      // An approved reply already counted as contact; don't record it twice.
+      if (firstTime || a.kind === "dm" || a.kind === "connect_note") await store.addTouch(a.person_id, (a.platform ?? "web") as Platform, touch, id);
+    }
+    return { ok: true, message: "Logged as done by you. Nothing was sent by the system." };
   }
 
   // posted

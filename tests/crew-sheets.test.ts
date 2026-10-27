@@ -69,7 +69,7 @@ describe("the tabs", () => {
 
   it("every agent that drafts something has a tab of its own; the Watchdog and the Sheet keepers have none", () => {
     for (const id of TAB_WORKER_IDS) expect(tabsForAgent(id).length, `${id} has a tab`).toBeGreaterThan(0);
-    for (const id of ["watch-bugs", "watch-security", "sheet-sync", "sheet-daily", "replies-manager"]) expect(tabsForAgent(id)).toEqual([]);
+    for (const id of ["watch-bugs", "watch-security", "sheet-sync", "sheet-daily", "watchdog-manager"]) expect(tabsForAgent(id)).toEqual([]);
     expect(SHEET_AGENT_IDS.has("replies-reddit")).toBe(true);
     expect(SHEET_AGENT_IDS.has("watch-bugs")).toBe(false);
     expect(SHEET_AGENT_IDS.has("sheet-sync")).toBe(false);

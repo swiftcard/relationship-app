@@ -37,7 +37,7 @@ export const GROUP_NAME: Record<TeamId, string> = {
   replies: "Replies",
   contact: "Messages",
   marketing: "Marketing",
-  system: "Planning",
+  system: "The Sheet",
 };
 
 export const GROUP_JOB: Record<TeamId, string> = {
@@ -47,10 +47,10 @@ export const GROUP_JOB: Record<TeamId, string> = {
   replies: "Finds people asking about cards or link pages and drafts replies for you to post.",
   contact: "Drafts first messages and connection notes for you to send.",
   marketing: "Writes the blog, checks search and AI answers, plans social posts, watches competitors.",
-  system: "Writes tomorrow's plan from every group's report, plus a practice agent.",
+  system: "Keeps the SwiftCard Leads sheet in step with the agents and saves a copy of it every day.",
 };
 
-const NAME: Record<string, string> = { head: "Tomorrow's plan", "system-test": "Practice agent" };
+const NAME: Record<string, string> = {};
 
 /** The agent's plain name: "Reddit replies", "Website health daily report". */
 export function agentName(def: Pick<AgentDef, "id" | "name" | "team" | "role">): string {

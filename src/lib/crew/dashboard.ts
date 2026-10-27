@@ -8,7 +8,7 @@ import { loadSheetAgents, type SheetAgentRow } from "./sheet-agents";
 import { notHired } from "./staff";
 import type { CrewStore, ReportRow, RunRow, UsageTotals } from "./store";
 import { TIMELINE_DAYS, teamTimeline, type TimelineItem } from "./timeline";
-import type { AgentState, Approval, EnvKey, Finding, Lead, Schedule, Settings, TeamId, TeamRow } from "./types";
+import type { AgentState, Approval, EnvKey, Finding, Schedule, Settings, TeamId, TeamRow } from "./types";
 
 // Everything the Agents tab shows, loaded in one place (server only). Since
 // 2026-10-26 the tab shows the Watchdog as its group (ADMIN_TEAMS) plus one
@@ -81,7 +81,6 @@ export type Dashboard = {
   summary: { running: number; doneToday: number; decidedToday: number; needsYou: number };
   /** Recent runs, newest first (for the task list). */
   runs: RunRow[];
-  leads: { todayBySource: Record<string, number>; officeToday: Record<string, number>; recent: (Lead & { id: string; created_at: string })[]; office: (Lead & { id: string; created_at: string })[] };
   envNeeded: { key: EnvKey; help: string; agents: string[] }[];
   /** The SwiftCard Leads workbook, where every other agent's rows go (null until it exists). */
   sheetUrl: string | null;
@@ -102,7 +101,7 @@ export async function loadDashboard(
   const weekStart = new Date(now.getTime() - 7 * 86400_000).toISOString();
   const room = o.room ?? null;
   const ids = [...ADMIN_IDS];
-  const [settings, states, teams, inbox, approved, recentDone, today, week, reportsAll, findingsAll, runsAll, todayBySource, officeToday, recent, office, overrides, runsTodayAll, decided, sheetId] = await Promise.all([
+  const [settings, states, teams, inbox, approved, recentDone, today, week, reportsAll, findingsAll, runs, overrides, runsToday, decided, sheetId] = await Promise.all([
     store.getSettings(),
     store.listAgentStates(),
     store.listTeams(),
@@ -113,23 +112,18 @@ export async function loadDashboard(
     store.usageTotals(weekStart),
     store.listReports(14),
     store.listFindings(["open", "proposed"], 30),
-    store.recentRuns(null, 300),
-    store.countLeadsSince(dayStart, "cold"),
-    store.countLeadsSince(dayStart, "office"),
-    store.listLeads("cold", 40),
-    store.listLeads("office", 60),
+    // The admin agents' runs only: the continuous finders run every 15 minutes and would crowd them out.
+    store.recentRuns(null, 300, ids),
     store.kvGet<ScheduleOverrides>(SCHEDULE_OVERRIDES_KEY).catch(() => null),
-    store.runsSince(dayStart),
+    store.runsSince(dayStart, ids),
     store.listApprovals({ sinceIso: weekStart, agentIds: ids, limit: 300 }),
     store.kvGet<string>("sheet:id").catch(() => null),
   ]);
   const hardDisabledNow = crewHardDisabled();
   const sheetIdNow = env("CREW_SHEET_ID") || sheetId;
-  const sheetAgents = await loadSheetAgents(store, { now, settings, hardDisabled: hardDisabledNow, states, runs: runsAll, overrides, sheetId: sheetIdNow, gids: await store.kvGet<Record<string, number>>("sheet:gids").catch(() => null) });
+  const sheetAgents = await loadSheetAgents(store, { now, settings, hardDisabled: hardDisabledNow, states, overrides, sheetId: sheetIdNow, gids: await store.kvGet<Record<string, number>>("sheet:gids").catch(() => null) });
   const reports = reportsAll.filter((r) => ADMIN_IDS.has(r.agent_id));
   const findings = findingsAll.filter((f) => ADMIN_IDS.has(f.agent_id));
-  const runs = runsAll.filter((r) => ADMIN_IDS.has(r.agent_id));
-  const runsToday = runsTodayAll.filter((r) => ADMIN_IDS.has(r.agent_id));
   const sheetUrl = sheetIdNow ? `https://docs.google.com/spreadsheets/d/${sheetIdNow}/edit` : null;
   const byId = new Map(states.map((s) => [s.id, s]));
   const hardDisabled = hardDisabledNow;
@@ -213,7 +207,6 @@ export async function loadDashboard(
     timeline,
     summary,
     runs,
-    leads: { todayBySource, officeToday, recent, office },
     envNeeded,
     sheetUrl,
     sheetAgents,

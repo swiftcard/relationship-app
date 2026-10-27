@@ -13,7 +13,7 @@ import { Chevron, Status, btn, card, input, summaryBtn, usd } from "./ui";
 // page: they are started and stopped one by one on Home, and work into the
 // Google Sheet.
 
-/** "Pause group" / "Resume group": the team's door, one tap. Hidden for Planning, which has none. */
+/** "Pause group" / "Resume group": the team's door, one tap. Hidden for a group with no door. */
 export function GroupSwitch({ room, back }: { room: Room; back: string }) {
   if (!room.row) return null;
   const running = room.ownDoor.open;

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { tickAuthorized } from "@/lib/crew/auth";
 import { decide } from "@/lib/crew/decide";
 import { FakeClaude, FakeCritic } from "@/lib/crew/llm/fake";
-import { testAgent } from "@/lib/crew/agents/test-agent";
+import { testAgent } from "./crew-practice-agent";
 import { MemoryStore } from "@/lib/crew/store-memory";
 import { runTick } from "@/lib/crew/tick";
 import { fakeAgent } from "./crew-helpers";

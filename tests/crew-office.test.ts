@@ -42,10 +42,10 @@ describe("office leads", () => {
     expect(officeQuery(0)).toEqual({ area: NYC_AREAS[0], type: "real estate teams" });
     expect(officeQuery(NYC_AREAS.length).type).toBe("real estate brokerages");
   });
-  it("is registered with a manager, drafting emails as DMs through the ledger", () => {
+  it("is registered without a manager, drafting emails as DMs through the ledger", () => {
     expect(OFFICE[0].id).toBe("office-outreach");
     expect(OFFICE[0].approvalKind).toBe("dm");
-    expect(AGENTS.some((a) => a.id === "office-manager")).toBe(true);
+    expect(AGENTS.some((a) => a.id === "office-manager")).toBe(false); // retired 2026-10-27: the Sheet replaced its room
   });
 });
 

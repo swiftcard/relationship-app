@@ -23,7 +23,6 @@ export const STAFF: Record<string, Person> = {
   "watch-revenue": { first: "Rita", title: "Revenue check" },
   "watch-scan-cost": { first: "Scott", title: "Scan cost watch", hired: false },
 
-  "replies-manager": { first: "Rachel", title: "Replies manager" },
   "replies-reddit": { first: "Maya", title: "Reddit Reply" },
   "replies-threads": { first: "Theo", title: "Threads Replies" },
   "replies-bluesky": { first: "Bella", title: "Bluesky Replies" },
@@ -34,14 +33,12 @@ export const STAFF: Record<string, Person> = {
   "replies-linkedin": { first: "Liam", title: "LinkedIn Comments" },
   "replies-hackernews": { first: "Hank", title: "Hacker News" },
 
-  "contact-manager": { first: "Carmen", title: "Contact manager" },
   "contact-reddit": { first: "Derek", title: "Reddit DMs" },
   "contact-instagram": { first: "Ivy", title: "Instagram DMs" },
   "contact-instagram-linkinbio": { first: "Leo", title: "Instagram LinkedIn Bio" },
   "contact-linkedin": { first: "Nora", title: "LinkedIn Connections" },
   "contact-alignable": { first: "Alan", title: "Alignable" },
 
-  "leads-manager": { first: "Lena", title: "Leads manager" },
   "leads-web": { first: "Owen", title: "Web Leads" },
   "leads-reddit": { first: "Ruby", title: "Reddit Leads" },
   "leads-quora": { first: "Kai", title: "Quora Leads" },
@@ -50,11 +47,9 @@ export const STAFF: Record<string, Person> = {
   "leads-alignable": { first: "Andy", title: "Alignable Leads", hired: false },
   "leads-linkedin": { first: "Lucas", title: "LinkedIn leads", hired: false },
 
-  "office-manager": { first: "Olivia", title: "Office outreach manager" },
   "office-outreach": { first: "Oscar", title: "Office Prospects" },
   partnerships: { first: "Petra", title: "Partnerships" },
 
-  "marketing-manager": { first: "Mia", title: "Marketing manager" },
   "marketing-blog": { first: "Ella", title: "Blog Writer" },
   "marketing-seo": { first: "Sean", title: "SEO Opportunities" },
   "marketing-geo": { first: "Gia", title: "GEO Opportunities" },
@@ -62,8 +57,6 @@ export const STAFF: Record<string, Person> = {
   "competitor-watch": { first: "Carl", title: "Competitor Intel" },
   events: { first: "Eve", title: "Events" },
 
-  head: { first: "Hannah", title: "Chief of staff" },
-  "system-test": { first: "Tess", title: "Trainee (practice drafts)", hired: false },
   "sheet-sync": { first: "Shea", title: "Sheet sync" },
   "sheet-daily": { first: "Dana", title: "Sheet daily snapshot" },
 };
@@ -76,18 +69,7 @@ export const ROOM_NAME: Record<TeamId, string> = {
   leads: "Leads",
   office: "Office outreach",
   marketing: "Marketing",
-  system: "Your desk",
-};
-
-/** One line under the room name: what this team is for. */
-export const ROOM_JOB: Record<TeamId, string> = {
-  watchdog: "Keeps an eye on the website, the app and payments, and writes up anything broken.",
-  replies: "Finds people asking about cards or link pages and drafts replies for you to post.",
-  contact: "Drafts first messages and connection notes to people who could use SwiftCard.",
-  leads: "Builds the cold-email list from public business sites.",
-  office: "Finds offices and teams that could buy SwiftCard for everyone.",
-  marketing: "Writes the blog, checks SEO and AI answers, plans social posts, watches competitors.",
-  system: "Hannah reads every manager's report and asks you what to do next.",
+  system: "The Sheet",
 };
 
 // Literal class strings so Tailwind keeps them.
@@ -127,7 +109,7 @@ export function staffStatus(o: { def: AgentDef; state: AgentState; missing: EnvK
   if (!state.enabled) return { kind: "off", label: "Off duty", line: "Not on the team yet." };
   if (isPaused(state, now)) return { kind: "paused", label: `Paused ${pauseLabel(state.paused_until!, now)}`, line: state.pause_note ?? "Paused from the team chat." };
   if (!door.open && (def.role === "worker" || door.reason === "office")) return { kind: "locked", label: "Locked out", line: door.reason === "office" ? "The whole office is locked." : "The door is locked." };
-  if (def.schedule.kind === "on_input") return { kind: "break", label: "On a break", line: "Starts when you hand them something at Your desk." };
+  if (def.schedule.kind === "on_input") return { kind: "break", label: "On a break", line: "Starts when you paste something into the Sheet's Paste a Post tab." };
   const next = state.next_run_at ? new Date(state.next_run_at) : null;
   if (!next || next.getTime() <= now.getTime()) return { kind: "break", label: "On a break", line: "Starts at the next check (within 15 minutes)." };
   return { kind: "break", label: "On a break", line: `Next shift ${whenLabel(next, now)}.` };

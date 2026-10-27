@@ -1,4 +1,4 @@
-import { inboxFull, propose } from "../approvals";
+import { authorKey, inboxFull, propose } from "../approvals";
 import type { AgentContext } from "../context";
 import { debate } from "../debate";
 import { isPromotional } from "../disclosure";
@@ -116,6 +116,14 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
   if (quota.left === 0) return { summary: `Done for today: ${quota.cap} drafts is today's limit (it rises as the account warms up). Back tomorrow.`, restMinutes: minutesToTomorrow(ctx.now()) };
   if (await inboxFull(ctx)) return { summary: "Waiting: there are already plenty of my drafts to work through.", restMinutes: QUIET_REST_MINUTES };
 
+  // Controls → "Social replies per platform per day": a ceiling on top of the
+  // warm-up cap, checked before paying for a search.
+  const replyCap = Number((await ctx.store.getControls().catch(() => ({}) as Record<string, unknown>)).social_reply_limit ?? 0);
+  if (replyCap > 0) {
+    const todayOnPlatform = await ctx.store.countTouchesSince(o.platform, ["replied", "commented", "dm_drafted", "dm_sent", "connect_sent"], nyDayStart(ctx.now()).toISOString());
+    if (todayOnPlatform >= replyCap) return { summary: `Done for today: the Controls limit of ${replyCap} ${o.platform} messages is reached.`, restMinutes: minutesToTomorrow(ctx.now()) };
+  }
+
   const seen = new Set((await ctx.store.kvGet<string[]>(seenKey(ctx))) ?? []);
   const found = await o.find();
   ctx.stat("posts_read", found.length);
@@ -151,19 +159,18 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
   const facts = await competitorFacts(ctx.store, ctx.now());
   const system = `${HUMAN_VOICE}\n\n${productFacts()}`;
   const examples = await ctx.ownerExamples(o.kind);
-  const replyCap = Number((await ctx.store.getControls().catch(() => ({}) as Record<string, unknown>)).social_reply_limit ?? 0);
   let promoBudget = await pitchBudget(ctx, o, picks.length);
   let made = 0;
-  if (replyCap > 0) {
-    // Controls → "Social replies per platform per day": a ceiling on top of the warm-up cap.
-    const todayOnPlatform = await ctx.store.countTouchesSince(o.platform, ["replied", "commented", "dm_drafted", "dm_sent", "connect_sent"], nyDayStart(ctx.now()).toISOString());
-    if (todayOnPlatform >= replyCap) return { summary: `Reached the Controls limit of ${replyCap} ${o.platform} drafts today.` };
-  }
 
   for (const s of picks) {
     if (await inboxFull(ctx)) break;
     const c = batch[s.i];
     const person = o.person?.(c) ?? null;
+    // Someone marked Not Interested or Unsubscribed in the Sheet, known only by a display name on this platform.
+    if (!person && c.author && (await ctx.store.isSuppressed([authorKey(o.platform, c.author)]))) {
+      ctx.stat("skipped_suppressed");
+      continue;
+    }
     if ((o.kind === "dm" || o.kind === "connect_note") && !person) {
       ctx.stat("skipped_no_person");
       continue;

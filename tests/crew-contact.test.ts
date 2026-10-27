@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { CONTACT, handleFromUrl, LINK_IN_BIO } from "@/lib/crew/agents/contact";
-import { headAgent } from "@/lib/crew/agents/head";
 import { buildContext } from "@/lib/crew/context";
 import { decide } from "@/lib/crew/decide";
 import { FakeClaude, FakeCritic } from "@/lib/crew/llm/fake";
@@ -9,8 +8,9 @@ import { propose } from "@/lib/crew/approvals";
 import { runEngagement, type Candidate } from "@/lib/crew/replies/engine";
 import { fakeAgent, setup } from "./crew-helpers";
 
-// Phase 3, the Contact team and the head agent. The hard rule: nobody we have
-// replied to or contacted, by any team on any platform, gets a DM draft.
+// Phase 3, the Contact team. The hard rule: nobody we have replied to or
+// contacted, by any team on any platform, gets a DM draft. (The head agent
+// that combined the managers' reports was retired 2026-10-27.)
 
 const scoreAll = (req: { schema?: unknown; prompt: string }) => {
   if (req.schema && JSON.stringify(req.schema).includes("asks_for_tools")) {
@@ -64,21 +64,12 @@ describe("helpers", () => {
   });
 });
 
-describe("head agent", () => {
-  it("is built, on Fable 5.1, and needs two manager reports before it spends anything", async () => {
-    expect(headAgent.tier).toBe("fable");
-    const { ctx, claude } = await setup({ def: headAgent });
-    const r = await headAgent.run(ctx);
-    expect(r.status).toBe("skipped");
-    expect(claude.calls).toHaveLength(0);
-  });
-});
-
 describe("registry", () => {
-  it("one Contact agent per platform from the spec, plus the link-in-bio switcher and a manager", () => {
+  it("one Contact agent per platform from the spec, plus the LinkedIn-in-bio finder; no manager or head agent", () => {
     const ids = CONTACT.map((a) => a.id);
     expect(ids).toEqual(["contact-reddit", "contact-instagram", "contact-instagram-linkinbio", "contact-linkedin", "contact-alignable"]);
-    expect(AGENTS.some((a) => a.id === "contact-manager")).toBe(true);
+    expect(AGENTS.some((a) => a.id === "contact-manager")).toBe(false); // retired 2026-10-27: the Sheet replaced its room
+    expect(AGENTS.some((a) => a.id === "head" || a.role === "head")).toBe(false);
     for (const a of CONTACT) expect(["dm", "connect_note"]).toContain(a.approvalKind);
   });
 });

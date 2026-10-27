@@ -571,3 +571,19 @@ answers did. Full audit: `AUDIT.md`; setup: `SETUP.md`; code:
 - Voice: Menash; no dashes of any kind; a reason, not a pitch; "I built…" is
   the disclosure.
 - Doors gate only `ADMIN_TEAMS` (`src/lib/crew/teams.ts`).
+
+## The audit after Start / Stop (2026-10-27, owner request: "make sure the whole system is clean and everything is working")
+
+- Twelve findings from an independent review, all fixed and pinned
+  (tests/crew-sheet-audit; list in AUDIT.md §6). The big ones: the Sheet
+  keepers are `infrastructure` (always on, through Pause all); Controls and
+  Status cells count only when they differ from what the sync last wrote
+  (`sheet:controls-shown`, `crew_sheet_rows.shown_status`); Sent / Posted
+  and Completed are `done_by_hand` and never run an executor; deleted rows
+  stay deleted; every read pages past 1,000 rows (`paged.ts`).
+- Retired: the five marketing managers, the head agent and the practice
+  agent (now `tests/crew-practice-agent.ts`). Only the Watchdog has a
+  manager, a chat and a group switch.
+- Schema: `crew_sheet_rows.shown_status` (the file adds it to an existing
+  table too); the owner runs `supabase/crew-sheets.sql` again if an earlier
+  copy was applied.

@@ -59,11 +59,6 @@ export async function deleteFile(fileId: string): Promise<void> {
   await googleFetch(`${BASE}/${encodeURIComponent(fileId)}?${ALL}`, { method: "DELETE", scopes: ["drive"], what: "drive.files.delete" });
 }
 
-export async function getFile(fileId: string): Promise<DriveFile> {
-  const r = await googleFetch(`${BASE}/${encodeURIComponent(fileId)}?${ALL}&fields=id,name,mimeType,webViewLink,createdTime`, { scopes: ["drive"], what: "drive.files.get" });
-  return (await r.json()) as DriveFile;
-}
-
 export type Permission = { id: string; emailAddress?: string; role: string; type: string };
 
 export async function listPermissions(fileId: string): Promise<Permission[]> {

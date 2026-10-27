@@ -195,7 +195,7 @@ export async function answerOwner(o: { store: CrewStore; providers: Providers; t
   const me = staffFor(def).first;
   const settings = await o.store.getSettings();
   if (settings.kill_all || crewHardDisabled()) {
-    await o.store.updateChat(o.replyId, { body: "The whole office is locked, so I'm off too. Unlock the office in the Lobby and ask me again.", status: "done" });
+    await o.store.updateChat(o.replyId, { body: "All agents are paused, so I'm off too. Tap Resume all agents on Home and ask me again.", status: "done" });
     return;
   }
   if (!o.providers.claude) return fail("I can't answer yet: CREW_ANTHROPIC_API_KEY isn't set in Vercel.");

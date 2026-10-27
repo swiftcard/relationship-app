@@ -9,6 +9,8 @@ never in the Sheet and never in git.
 Run `supabase/crew-sheets.sql` in the Supabase SQL editor (after `crew.sql`
 and `crew-office.sql`, which are already applied). Without it the Sheet
 features stay quiet and the sync agent says "Run supabase/crew-sheets.sql".
+The file is safe to run again: if you ran an earlier copy, run this one too
+(it adds the `shown_status` column; until then the sync waits for it).
 
 ## 2. Google Cloud (ten minutes, once)
 
@@ -27,8 +29,11 @@ features stay quiet and the sync agent says "Run supabase/crew-sheets.sql".
 
 ## 3. Create the workbook
 
-Either wait up to 15 minutes for the clock (the "Sheet sync" agent runs every
-tick), or run it now:
+Either wait up to 15 minutes for the clock, or run it now. The "Sheet sync"
+and "Sheet daily snapshot" agents are always on: they have no Start / Stop,
+they keep running through Pause all (they never send anything, and they are
+what reads a Pause all you lift in the Sheet), and only `CREW_DISABLED=1`
+stops them.
 
 ```
 node scripts/crew-sheet-setup.mjs
@@ -41,6 +46,25 @@ the workbook is pinned even if the database is restored.
 Every tab is created with its headers, dropdowns and colours. A tab you delete
 comes back empty at the next sync; a tab you rename is left alone and a fresh
 one is created, so don't rename tabs.
+
+How the rows behave:
+
+- **A row you delete stays deleted.** The sync never adds it back. To get
+  rid of a row without losing its history, set its Status to Skipped instead.
+- **Each agent's own tab is where you edit.** Notes, dates and a reworded
+  message are read from there. On Today - Action Queue, Today - Top 50,
+  All Leads and Intent Leads only the **Status** is yours; the other columns
+  are copies and are rewritten every sync.
+- **One Status, every copy.** Set it on the agent's tab or in the Action
+  Queue; the other copy follows at the next sync. If both were changed in the
+  same 15 minutes, the agent's own tab wins.
+- **Sent / Posted and Completed only record what you did.** They never post,
+  publish or open a pull request. Approved is the only Status that can make
+  something happen (a blog post going live; a Bluesky reply once that is
+  switched on, see 6).
+- **Controls:** change only the Value column. A change made on the admin
+  page shows up in the Sheet at the next sync and is never undone by the old
+  value that was in the cell. Last Changed shows when a value last changed.
 
 ## 4. The edit hook (three minutes, makes Status changes instant)
 
@@ -100,7 +124,7 @@ Any one of these stops every agent at its next step:
 - Vercel → `CREW_DISABLED=1` (needs a redeploy; stops the clock entirely).
 
 The Sheet keeps syncing and logging while paused, so your Status changes are
-still honoured.
+still honoured, and a Pause all set in the Sheet can be lifted in the Sheet.
 
 ## 9. Every variable
 

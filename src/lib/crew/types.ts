@@ -2,7 +2,7 @@
 // The agent system behind /admin/crew. Plan: docs/plans/agent-system.md.
 
 export type TeamId = "system" | "watchdog" | "replies" | "contact" | "leads" | "office" | "marketing";
-export type Role = "worker" | "manager" | "head";
+export type Role = "worker" | "manager";
 export type Tier = "haiku" | "sonnet" | "opus" | "fable";
 
 export type ApprovalKind =
@@ -246,6 +246,13 @@ export type SheetRow = {
   status: string;
   /** Every owner-owned column, by column key: Notes, Date Contacted, an edited message… */
   owner_cols: Record<string, string>;
+  /**
+   * The Status word the sync last wrote into every copy of this row (its own
+   * tab and the Action Queue, All Leads, Top 50, Intent Leads). A cell that
+   * still shows it is a stale copy, not a decision; only a cell that differs
+   * from it is something the owner typed.
+   */
+  shown_status: string | null;
   /** Hash of the agent-owned cells last written, so an unchanged row costs no write. */
   agent_hash: string;
   created_at: string;

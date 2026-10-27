@@ -4,10 +4,12 @@ import { reportHtml, teamStats, templateReport, writeReport } from "../reports";
 import { sendOwnerDigest } from "@/lib/owner-digest";
 import type { TeamId } from "../types";
 
-// ── One manager per team (Opus 5.5; free in economy mode) ──────────────────
-// Every morning it reads what its team did (counted in code), writes the
-// report in plain words, saves it to the Agents tab and emails it. In economy
-// mode the report is the plain template built from the same counts, no AI.
+// ── A team manager (Opus 5.5; free in economy mode) ─────────────────────────
+// One per admin group (registry.withManagers; since 2026-10-27 only the
+// Watchdog: the marketing agents report through the Sheet). Every morning it
+// reads what its team did (counted in code), writes the report in plain
+// words, saves it to the Agents tab and emails it. In economy mode the report
+// is the plain template built from the same counts, no AI.
 
 export const TEAM_NAME: Record<TeamId, string> = {
   system: "System",

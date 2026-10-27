@@ -2,14 +2,14 @@ import { blueskyConfigured, sheetShareEmails } from "../env";
 import { a1, appendRows, batchGet, batchUpdateValues, clearRange, colLetter, sheetUrl, type CellValue, type ValueWrite } from "../google/sheets";
 import { nyDayStart } from "../schedule";
 import type { CrewStore } from "../store";
-import type { Approval } from "../types";
+import type { Approval, SheetRow } from "../types";
 import { logActivity } from "./activity";
 import { applyChange, applyControlCell, applyPasteRow, applySuppressionRow } from "./apply";
 import { HEADER_ROWS, createWorkbook, ensureWorkbook, shareWorkbook, sheetsHqConfigured, workbookId } from "./bootstrap";
 import { dryRun } from "./controls";
 import { activityRows, allLeadsRows, controlsRows, dashboardCells, intentRows, performanceRows, queueRows, sourceStatsRows, suppressionRows, top50Rows, type Counts, type Placement } from "./derived";
 import { agentHash, buildRows, type BuiltRow, type RowSources } from "./rows";
-import type { TabSpec } from "./spec";
+import { ownerEditable, type TabSpec } from "./spec";
 import { ACTIVITY, ALL_LEADS, ALL_TABS, CONTROLS, DASHBOARD, INTENT, PASTE, PERFORMANCE, QUEUE, SOURCE_STATS, SUPPRESSION, TOP50 } from "./tabs";
 
 // ── One sync: read the Sheet, apply what the owner changed, write what the
@@ -23,7 +23,8 @@ import { ACTIVITY, ALL_LEADS, ALL_TABS, CONTROLS, DASHBOARD, INTENT, PASTE, PERF
 // cell, a clear and a write per computed tab: a few dozen a run, well inside
 // the 300-a-minute quota.
 
-export const MAX_ROWS = 3000;
+/** The most rows a computed tab (queue, All Leads…) is rewritten with; the agents' own tabs have no cap. */
+export const MAX_DERIVED_ROWS = 5000;
 export const APPROVAL_DAYS = 45;
 
 export type SyncReport = {
@@ -41,9 +42,11 @@ export type SyncReport = {
 
 const EDITOR = "sheet";
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 200);
+const CONTROLS_SHOWN_KEY = "sheet:controls-shown";
 
+/** A whole tab below the header, to its last filled row (no row cap: a long tab is read to the end). */
 function dataRange(tab: TabSpec): string {
-  return a1(tab.name, `A${HEADER_ROWS + 1}:${colLetter(Math.max(tab.columns.length, 1) - 1)}${MAX_ROWS}`);
+  return a1(tab.name, `A${HEADER_ROWS + 1}:${colLetter(Math.max(tab.columns.length, 1) - 1)}`);
 }
 
 /** Tabs whose cells the owner may change, plus the input tabs. */
@@ -51,12 +54,17 @@ export function readableTabs(): TabSpec[] {
   return ALL_TABS.filter((t) => t.layout !== "free" && t.layout !== "placeholder" && (t.layout === "input" || t.columns.some((c) => c.owner || c.editable || c.kind === "status")));
 }
 
+/** Which of a tab's columns are read back as the owner's: on the computed tabs only the Status (everything else there is a copy). */
+export function inboundColumns(tab: TabSpec): number[] {
+  return tab.columns.flatMap((col, k) => (ownerEditable(tab, col) ? [k] : []));
+}
+
 export async function loadSources(store: CrewStore, now: Date): Promise<RowSources> {
   const since = new Date(now.getTime() - APPROVAL_DAYS * 86400_000).toISOString();
   const [approvals, cold, office, findings, people, facts, known, geoState] = await Promise.all([
-    store.listApprovals({ sinceIso: since, limit: 2000 }),
-    store.listLeads("cold", 2500),
-    store.listLeads("office", 800),
+    store.listApprovals({ sinceIso: since, limit: 5000 }),
+    store.listLeads("cold", 5000),
+    store.listLeads("office", 2000),
     store.listFindings(["open", "proposed", "fixed"], 300),
     store.listTouchedPeople(400),
     store.competitorFacts(),
@@ -76,6 +84,51 @@ export async function loadSources(store: CrewStore, now: Date): Promise<RowSourc
 }
 
 type PendingChange = { tab: TabSpec; key: string; col: string; value: string; cell: string; before: string };
+
+/**
+ * The owner's edits in the grid. A Status counts only when it differs from
+ * what the sync last wrote into every copy of the row (shown_status): a copy
+ * still showing that is stale, not a decision, so the Action Queue can never
+ * undo a Status set on the agent's own tab, or the other way round. Owner
+ * columns and edited messages are read on the agent's own tab only. When the
+ * same row's Status was changed in two copies, the agent's own tab wins.
+ */
+export function ownerChanges(tabs: TabSpec[], grid: Map<string, CellValue[][]>, known: Map<string, SheetRow>, approvalBody: (id: string) => string | undefined): PendingChange[] {
+  const statusByKey = new Map<string, PendingChange>();
+  const other: PendingChange[] = [];
+  for (const t of tabs) {
+    if (t.layout === "input") continue;
+    const keyIdx = t.columns.findIndex((c) => c.kind === "key");
+    if (keyIdx < 0) continue;
+    const cols = inboundColumns(t);
+    (grid.get(t.id) ?? []).forEach((cells, i) => {
+      const key = String(cells[keyIdx] ?? "").trim();
+      const row = key ? known.get(key) : undefined;
+      if (!row) return;
+      const rowIndex = HEADER_ROWS + 1 + i;
+      for (const k of cols) {
+        const col = t.columns[k];
+        const value = String(cells[k] ?? "").trim();
+        const cell = a1(t.name, `${colLetter(k)}${rowIndex}`);
+        if (col.kind === "status") {
+          const shown = (row.shown_status ?? row.status).trim();
+          if (!value || value === shown) continue; // a stale copy or a cleared cell is not a decision
+          const prev = statusByKey.get(key);
+          if (!prev || t.layout === "rows") statusByKey.set(key, { tab: t, key, col: col.key, value, cell, before: row.status });
+          continue;
+        }
+        const before = (row.owner_cols[col.key] ?? (col.editable && row.entity_kind === "approval" ? (approvalBody(row.entity_id) ?? "") : "")).trim();
+        if (value === before) continue;
+        if (col.editable && !value) continue; // an emptied message is not a rewrite
+        other.push({ tab: t, key, col: col.key, value, cell, before });
+      }
+    });
+  }
+  // Notes and edited messages first, Status last: an edit made in the same
+  // sweep as an Approved (an option picked in Notes, a reworded message) must
+  // be in place before the decision uses it.
+  return [...other, ...statusByKey.values()];
+}
 
 export async function syncSheet(store: CrewStore, now = new Date()): Promise<SyncReport> {
   const report: SyncReport = { sheetId: null, url: null, tabsRead: 0, changes: 0, refused: 0, updated: 0, appended: 0, derived: 0, errors: [], notes: [] };
@@ -110,7 +163,7 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
   // The admin page's "Open its tab" links land on the right tab with these.
   await store.kvSet("sheet:gids", Object.fromEntries(gid)).catch(() => undefined);
 
-  // 1. Read every tab the owner can type in: one request.
+  // 1. Read every tab the owner can type in, to the last row: one request.
   const tabs = readableTabs();
   const ranges = tabs.map(dataRange);
   const data = await batchGet(id, ranges);
@@ -121,34 +174,20 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
   let sources = await loadSources(store, now);
   const approvalById = new Map(sources.approvals.map((a) => [a.id, a]));
   const place: Placement = { gid, rowOf: new Map() };
-  const pending: PendingChange[] = [];
-  const writes: ValueWrite[] = [];
-  for (const t of tabs) {
-    const rows = grid.get(t.id) ?? [];
+  // Where each Key sits, per tab: a row is only ever updated on its own tab.
+  const rowsByTab = new Map<string, Map<string, number>>();
+  for (const t of tabs.filter((x) => x.layout === "rows")) {
     const keyIdx = t.columns.findIndex((c) => c.kind === "key");
-    rows.forEach((cells, i) => {
-      const rowIndex = HEADER_ROWS + 1 + i;
-      if (t.layout === "input" || keyIdx < 0) return;
-      const key = String(cells[keyIdx] ?? "").trim();
-      if (!key) return;
-      if (t.layout === "rows") place.rowOf.set(key, rowIndex);
-      const known = sources.known.get(key);
-      if (!known) return;
-      t.columns.forEach((col, k) => {
-        if (!(col.owner || col.editable || col.kind === "status")) return;
-        const value = String(cells[k] ?? "").trim();
-        const before = (col.kind === "status" ? known.status : col.editable ? (known.owner_cols[col.key] ?? approvalById.get(known.entity_id)?.body ?? "") : (known.owner_cols[col.key] ?? "")).trim();
-        if (value === before) return;
-        if (!value && col.kind === "status") return; // a cleared Status is not a decision
-        pending.push({ tab: t, key, col: col.key, value, cell: a1(t.name, `${colLetter(k)}${rowIndex}`), before });
-      });
+    const at = new Map<string, number>();
+    (grid.get(t.id) ?? []).forEach((cells, i) => {
+      const key = keyIdx >= 0 ? String(cells[keyIdx] ?? "").trim() : "";
+      if (key && !at.has(key)) at.set(key, HEADER_ROWS + 1 + i);
     });
+    rowsByTab.set(t.id, at);
+    for (const [key, row] of at) place.rowOf.set(key, row);
   }
-  // Notes and edited messages first, Status last: an edit made with the same
-  // sweep as an Approved (an option picked in Notes, a reworded message) must
-  // be in place before the decision uses it.
-  pending.sort((x, y) => Number(x.col === "status") - Number(y.col === "status"));
-  for (const ch of pending) {
+  const writes: ValueWrite[] = [];
+  for (const ch of ownerChanges(tabs, grid, sources.known, (eid) => approvalById.get(eid)?.body)) {
     report.changes++;
     try {
       const r = await applyChange(store, { rowKey: ch.key, column: ch.col, value: ch.value, by: EDITOR }, now);
@@ -163,52 +202,59 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
   // Input tabs: the Suppression List, Paste a Post, Controls.
   await inboundInputs(store, grid, writes, report);
   await inboundControls(store, grid, writes, report);
-  if (pending.length || report.changes) sources = await loadSources(store, now); // statuses moved
+  sources = await loadSources(store, now); // statuses and drafts may have moved
 
   // 3. Outbound: the agents' rows, by Key.
   const built = buildRows(sources);
   const appends = new Map<string, { tab: TabSpec; rows: BuiltRow[] }>();
   for (const r of built) {
     const known = sources.known.get(r.key);
-    const rowIndex = place.rowOf.get(r.key);
+    const rowIndex = rowsByTab.get(r.tab.id)?.get(r.key);
     const hash = agentHash(r.tab, r.cells);
-    if (!rowIndex) {
-      if (known && !grid.has(r.tab.id)) continue; // a tab we don't read (none today), nothing to place
+    const action = placeRow(known, rowIndex, r.tab.id);
+    if (action === "gone") continue;
+    if (action === "append") {
       const a = appends.get(r.tab.id) ?? { tab: r.tab, rows: [] };
       a.rows.push(r);
       appends.set(r.tab.id, a);
       continue;
     }
     if (!known) {
-      // A row the Sheet has but the database forgot (restored from a snapshot): adopt it.
-      await store.upsertSheetRow({ tab: r.tab.id, row_key: r.key, entity_kind: r.kind, entity_id: r.entityId, status: r.initialStatus, owner_cols: {}, agent_hash: hash, synced_at: now.toISOString(), owner_edited_at: null });
+      // A row the Sheet has but the database doesn't (restored from a snapshot): adopt it with the Status the Sheet shows.
+      const cells = grid.get(r.tab.id)?.[rowIndex! - HEADER_ROWS - 1] ?? [];
+      const k = r.tab.columns.findIndex((c) => c.kind === "status");
+      const shownWord = k >= 0 ? String(cells[k] ?? "").trim() || r.initialStatus : r.initialStatus;
+      const adopted = await store.upsertSheetRow({ tab: r.tab.id, row_key: r.key, entity_kind: r.kind, entity_id: r.entityId, status: shownWord, owner_cols: {}, shown_status: shownWord, agent_hash: hash, synced_at: now.toISOString(), owner_edited_at: null });
+      sources.known.set(r.key, adopted);
       continue;
     }
-    const statusMoved = r.kind === "approval" && r.initialStatus !== known.status;
-    if (known.agent_hash === hash && !statusMoved) continue;
-    const segs = segments(r, known.owner_cols);
-    for (const s of segs) writes.push({ range: a1(r.tab.name, `${colLetter(s.from)}${rowIndex}:${colLetter(s.to)}${rowIndex}`), values: [s.values] });
-    if (statusMoved) {
-      const k = r.tab.columns.findIndex((c) => c.kind === "status");
-      if (k >= 0) writes.push({ range: a1(r.tab.name, `${colLetter(k)}${rowIndex}`), values: [[r.initialStatus]] });
-      await store.patchSheetRow(r.key, { status: r.initialStatus, agent_hash: hash, synced_at: now.toISOString() });
-    } else await store.patchSheetRow(r.key, { agent_hash: hash, synced_at: now.toISOString() });
+    // A draft the backend moved on (approved elsewhere, expired, failed) gets its new word.
+    if (r.kind === "approval" && r.initialStatus !== known.status) {
+      await store.patchSheetRow(r.key, { status: r.initialStatus });
+      sources.known.set(r.key, { ...known, status: r.initialStatus });
+    }
+    if (known.agent_hash === hash) continue;
+    for (const s of segments(r, known.owner_cols)) writes.push({ range: a1(r.tab.name, `${colLetter(s.from)}${rowIndex}:${colLetter(s.to)}${rowIndex}`), values: [s.values] });
+    await store.patchSheetRow(r.key, { agent_hash: hash, synced_at: now.toISOString() });
     report.updated++;
   }
+  // Every copy of a Status on the agents' own tabs shows the backend's word (stale copies are put right).
+  writes.push(...statusFixes(tabs.filter((t) => t.layout === "rows"), grid, sources.known));
   try {
-    report.updated += 0;
     await batchUpdateValues(id, writes);
   } catch (e) {
     report.errors.push(`write: ${msg(e)}`);
   }
   for (const { tab, rows } of appends.values()) {
     try {
-      const values = rows.map((r) => tab.columns.map((col) => (col.kind === "key" ? r.key : col.kind === "status" ? r.initialStatus : col.owner ? "" : (r.cells[col.key] ?? ""))));
+      // A row that moved to a new tab in a release keeps the owner's notes.
+      const mine = (r: BuiltRow) => sources.known.get(r.key)?.owner_cols ?? {};
+      const values = rows.map((r) => tab.columns.map((col) => (col.kind === "key" ? r.key : col.kind === "status" ? r.initialStatus : col.owner ? (mine(r)[col.key] ?? "") : (r.cells[col.key] ?? ""))));
       const { firstRow } = await appendRows(id, tab.name, values);
       for (const [i, r] of rows.entries()) {
         if (firstRow) place.rowOf.set(r.key, firstRow + i);
-        await store.upsertSheetRow({ tab: tab.id, row_key: r.key, entity_kind: r.kind, entity_id: r.entityId, status: r.initialStatus, owner_cols: {}, agent_hash: agentHash(tab, r.cells), synced_at: now.toISOString(), owner_edited_at: null });
-        sources.known.set(r.key, { id: "", created_at: now.toISOString(), tab: tab.id, row_key: r.key, entity_kind: r.kind, entity_id: r.entityId, status: r.initialStatus, owner_cols: {}, agent_hash: "", synced_at: null, owner_edited_at: null });
+        const saved = await store.upsertSheetRow({ tab: tab.id, row_key: r.key, entity_kind: r.kind, entity_id: r.entityId, status: r.initialStatus, owner_cols: mine(r), shown_status: r.initialStatus, agent_hash: agentHash(tab, r.cells), synced_at: now.toISOString(), owner_edited_at: null });
+        sources.known.set(r.key, saved);
       }
       report.appended += rows.length;
     } catch (e) {
@@ -216,11 +262,63 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
     }
   }
 
-  // 4. The computed tabs.
+  // 4. The computed tabs (they copy each row's current Status).
   await derivedTabs(store, id, { built, sources, place, now, report });
+
+  // 5. Remember which word every copy now shows.
+  await markShown(store, sources.known).catch((e) => report.errors.push(`remember: ${msg(e)}`));
 
   if (report.errors.length) await logActivity(store, { action: "sync", result: "failed", error: report.errors.join(" | ").slice(0, 500), message: `${report.changes} changes, ${report.updated} updated, ${report.appended} added` });
   return report;
+}
+
+/**
+ * What one built row needs. Never placed before: add it. Placed before but
+ * gone from the tab: the owner deleted it, so it stays gone (a deleted row
+ * must never come back every 15 minutes). In the tab but unknown to the
+ * database (restored from a snapshot): adopt it with the Status it shows.
+ * Placed on another tab (its agent moved tabs in a release): add it to the
+ * new one. Otherwise keep it current.
+ */
+export function placeRow(known: SheetRow | undefined, rowIndex: number | undefined, tabId: string): "append" | "gone" | "adopt" | "update" {
+  if (!rowIndex) return known && known.tab === tabId ? "gone" : "append";
+  return known ? "update" : "adopt";
+}
+
+/**
+ * The Controls rows whose Value the owner changed: it differs from what the
+ * sync last wrote there. Otherwise the admin page's Start / Stop and Pause
+ * all would be undone by the old value still sitting in the cell. Nothing
+ * counts before the sync has written the tab once.
+ */
+export function controlEdits(rows: CellValue[][], shown: Record<string, string> | null): { i: number; key: string; value: string }[] {
+  if (!shown) return [];
+  return rows.flatMap((cells, i) => {
+    const key = String(cells[5] ?? "").trim();
+    const value = String(cells[1] ?? "").trim();
+    return key && shown[key] !== undefined && shown[key] !== value ? [{ i, key, value }] : [];
+  });
+}
+
+/** Status cells on the agents' tabs that don't show the backend's word. */
+export function statusFixes(tabs: TabSpec[], grid: Map<string, CellValue[][]>, known: Map<string, SheetRow>): ValueWrite[] {
+  const out: ValueWrite[] = [];
+  for (const t of tabs) {
+    const keyIdx = t.columns.findIndex((c) => c.kind === "key");
+    const k = t.columns.findIndex((c) => c.kind === "status");
+    if (keyIdx < 0 || k < 0) continue;
+    (grid.get(t.id) ?? []).forEach((cells, i) => {
+      const row = known.get(String(cells[keyIdx] ?? "").trim());
+      if (row && String(cells[k] ?? "").trim() !== row.status) out.push({ range: a1(t.name, `${colLetter(k)}${HEADER_ROWS + 1 + i}`), values: [[row.status]] });
+    });
+  }
+  return out;
+}
+
+async function markShown(store: CrewStore, known: Map<string, SheetRow>): Promise<void> {
+  const byStatus = new Map<string, string[]>();
+  for (const r of known.values()) if (r.shown_status !== r.status) byStatus.set(r.status, [...(byStatus.get(r.status) ?? []), r.row_key]);
+  for (const [status, keys] of byStatus) await store.markShown(status, keys);
 }
 
 /** The agent-owned cells of a row, grouped into runs of adjacent columns. A message the owner edited is theirs now. */
@@ -278,18 +376,17 @@ async function inboundInputs(store: CrewStore, grid: Map<string, CellValue[][]>,
   }
 }
 
+/** The Controls the owner changed in the Sheet (controlEdits), applied through the same checks as the hook. */
 async function inboundControls(store: CrewStore, grid: Map<string, CellValue[][]>, writes: ValueWrite[], report: SyncReport) {
-  for (const [i, cells] of (grid.get(CONTROLS.id) ?? []).entries()) {
-    const key = String(cells[5] ?? "").trim();
-    if (!key) continue;
+  const shown = (await store.kvGet<Record<string, string>>(CONTROLS_SHOWN_KEY).catch(() => null)) ?? null;
+  for (const { i, key, value } of controlEdits(grid.get(CONTROLS.id) ?? [], shown)) {
     try {
-      const r = await applyControlCell(store, key, String(cells[1] ?? ""), EDITOR);
+      const r = await applyControlCell(store, key, value, EDITOR);
       if (!r.ok) {
         report.refused++;
         writes.push({ range: a1(CONTROLS.name, `B${HEADER_ROWS + 1 + i}`), values: [[r.shown]] });
-      } else if (r.shown !== String(cells[1] ?? "").trim()) {
+      } else if (r.changed) {
         report.changes++;
-        await store.setControl(`${key}:changed`, new Date().toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }), "sheet");
       }
     } catch (e) {
       report.errors.push(`controls ${key}: ${msg(e)}`);
@@ -300,7 +397,7 @@ async function inboundControls(store: CrewStore, grid: Map<string, CellValue[][]
 async function rewrite(store: CrewStore, id: string, tab: TabSpec, rows: CellValue[][], report: SyncReport, o: { clear?: boolean } = {}) {
   try {
     if (o.clear !== false) await clearRange(id, dataRange(tab));
-    if (rows.length) await batchUpdateValues(id, [{ range: a1(tab.name, `A${HEADER_ROWS + 1}`), values: rows.slice(0, MAX_ROWS - HEADER_ROWS) }]);
+    if (rows.length) await batchUpdateValues(id, [{ range: a1(tab.name, `A${HEADER_ROWS + 1}`), values: rows.slice(0, MAX_DERIVED_ROWS) }]);
     report.derived++;
   } catch (e) {
     report.errors.push(`${tab.name}: ${msg(e)}`);
@@ -316,7 +413,7 @@ async function derivedTabs(store: CrewStore, id: string, o: { built: BuiltRow[];
     store.countLeadsSince(day),
     store.countLeadsSince(week),
     store.countLeadsSince("1970-01-01T00:00:00Z"),
-    store.recentRuns(null, 600),
+    store.runsSince(week),
     store.listActivity(500),
     store.getSettings(),
     dryRun(store),
@@ -336,7 +433,10 @@ async function derivedTabs(store: CrewStore, id: string, o: { built: BuiltRow[];
   }
   await rewrite(store, id, PERFORMANCE, await performanceRows({ store, approvals: sources.approvals, runs, known, built, now, leads7dByAgent }), report);
   await rewrite(store, id, ACTIVITY, activityRows(activity), report);
-  await rewrite(store, id, CONTROLS, await controlsRows(store), report, { clear: false });
+  const controls = await controlsRows(store);
+  await rewrite(store, id, CONTROLS, controls, report);
+  // What each Controls cell now says, so the next sync can tell the owner's change from our own write.
+  await store.kvSet(CONTROLS_SHOWN_KEY, Object.fromEntries(controls.map((r) => [String(r[5]), String(r[1])])));
   await rewrite(store, id, SUPPRESSION, await suppressionRows(store), report);
   const cells = await dashboardCells({ store, sheetId: id, built, known, approvals: sources.approvals as Approval[], runs, activity: activity.filter((a) => a.at >= week), counts, now, place, queue, dryRun: dry, paused: settings.kill_all, errors: report.errors });
   try {

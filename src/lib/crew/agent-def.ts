@@ -36,5 +36,11 @@ export type AgentDef = {
    * ceiling is reached, so an idle agent costs nothing.
    */
   continuous?: boolean;
+  /**
+   * Runs on its schedule whether or not anyone switched it on, and through
+   * Pause all (only CREW_DISABLED stops it). For code-only plumbing that never
+   * sends, posts or calls a model: the Sheet sync and the daily snapshot.
+   */
+  infrastructure?: boolean;
   run(ctx: AgentContext): Promise<RunResult>;
 };

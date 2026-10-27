@@ -87,8 +87,14 @@ export const longCol = (key: string, header: string, width = 360, o: Partial<Col
 /** The prepared message column: written once by the agent, editable by the owner. */
 export const messageCol = (header = "Message to Send"): Column => ({ key: "message", header, kind: "long", width: 420, editable: true, note: "Copy this, open the link in the next column, paste, send. Edit it here first if you like; the agent learns from your edits." });
 
-export function columnIndex(spec: TabSpec, key: string): number {
-  return spec.columns.findIndex((col) => col.key === key);
+/**
+ * Whether a cell the owner types in counts: Status anywhere it appears; notes,
+ * dates and messages only on the agent's own tab (a computed tab's other
+ * columns are copies, rewritten every sync). The sync and the edit hook both
+ * use this, so they can't disagree.
+ */
+export function ownerEditable(tab: TabSpec, col: Column): boolean {
+  return col.kind === "status" || (tab.layout === "rows" && (!!col.owner || !!col.editable));
 }
 
 export function hasKeyColumn(spec: TabSpec): boolean {

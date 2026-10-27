@@ -1,4 +1,6 @@
+import { authorKey } from "../approvals";
 import { decide } from "../decide";
+import { normalizeHandle, personFor } from "../ledger";
 import type { CrewStore } from "../store";
 import type { Platform, SheetRow } from "../types";
 import { logActivity } from "./activity";
@@ -68,14 +70,20 @@ async function applyStatus(store: CrewStore, row: SheetRow, word: string, by: st
       if (a.status === "pending") r = await decide(store, a.id, { action: "approve", by, ...(choice ? { choice } : {}) }, now);
       else if (a.status !== "approved") r = { ok: false, message: "already decided" };
     } else if ((SENT_WORDS as string[]).includes(word)) {
-      if (a.status === "pending") r = await decide(store, a.id, { action: "approve", by }, now);
-      const fresh = await store.getApproval(a.id);
-      if (r.ok && fresh?.status === "approved") r = await decide(store, a.id, { action: "posted", by }, now);
+      // The owner did it. Recorded as done; nothing is published, posted or opened as a PR.
+      r = await decide(store, a.id, { action: "done_by_hand", by }, now);
     } else if (word === "Skipped") {
       if (a.status === "pending" || a.status === "approved") r = await decide(store, a.id, { action: "reject", reason: "skipped in the Sheet", by }, now);
     } else if (word === "Not Interested" || word === "Unsubscribed") {
       if (a.status === "pending" || a.status === "approved") r = await decide(store, a.id, { action: "reject", reason: word.toLowerCase(), by }, now);
       if (a.person_id) await optOut(store, a.person_id, word, by, a.platform);
+      else if (a.platform && typeof a.meta?.author === "string" && a.meta.author.trim()) {
+        // A public post with only a display name (Quora, Indie Hackers, LinkedIn comments, Facebook):
+        // suppress that name on that platform, so no agent drafts to it there again.
+        const value = authorKey(a.platform, a.meta.author);
+        await store.addSuppression(value, `${word.toLowerCase()} (Sheet, ${by})`, { source: "sheet", channel: a.platform });
+        await log("suppressed", { platform: a.platform, target: value });
+      }
     }
     // New / Ready / Needs Review / Replied / Expired / Failed: a note on the row only.
     if (!r.ok) {
@@ -88,13 +96,12 @@ async function applyStatus(store: CrewStore, row: SheetRow, word: string, by: st
   }
 
   if (row.entity_kind === "lead") {
-    const lead = (await store.listLeads("cold", 5000)).find((l) => l.id === row.entity_id) ?? (await store.listLeads("office", 5000)).find((l) => l.id === row.entity_id);
+    const lead = await store.getLead(row.entity_id);
     if (lead?.email && (word === "Not Interested" || word === "Unsubscribed")) {
-      await store.addSuppression(lead.email, `${word.toLowerCase()} (Sheet, ${by})`, { source: "sheet", channel: "email" });
+      await store.addSuppression(normalizeHandle("email", lead.email), `${word.toLowerCase()} (Sheet, ${by})`, { source: "sheet", channel: "email" });
       await log("suppressed", { platform: "email", target: lead.email });
     }
     if (lead?.email && word === "Contacted") {
-      const { personFor } = await import("../ledger");
       const pid = await personFor(store, "email", lead.email, lead.name);
       if (pid) await store.addTouch(pid, "email", "emailed", null);
     }
@@ -126,16 +133,34 @@ export async function applyControlCell(store: CrewStore, key: string, value: str
   return applyControl(store, key, value, by);
 }
 
+/**
+ * What the owner typed into the Suppression List, in the exact form the
+ * agents check: "Jane@X.com" → "jane@x.com"; "reddit:spez" or
+ * "reddit:/u/Spez" → "reddit:u/spez"; "instagram:Jane" → "instagram:@jane";
+ * a profile link works too ("linkedin:https://linkedin.com/in/jane" →
+ * "linkedin:in/jane"). Null when it isn't an email, @domain or a known
+ * platform:handle (a typo like "instgram:jane" would block no one).
+ */
+const SUPPRESSIBLE: Platform[] = ["reddit", "instagram", "threads", "bluesky", "facebook", "quora", "indiehackers", "linkedin", "alignable", "tiktok", "pinterest", "youtube", "x", "hackernews"];
+
+export function normalizeSuppression(raw: string): { value: string; channel: string } | null {
+  const v = raw.trim();
+  if (/^[^@\s:]+@[^@\s]+\.[a-z]{2,}$/i.test(v)) return { value: normalizeHandle("email", v), channel: "email" };
+  if (/^@[a-z0-9.-]+\.[a-z]{2,}$/i.test(v)) return { value: v.toLowerCase(), channel: "domain" };
+  const m = /^([a-z]+):\s*(.+)$/i.exec(v);
+  if (!m) return null;
+  const platform = SUPPRESSIBLE.find((p) => p === m[1].toLowerCase());
+  if (!platform) return null;
+  const handle = normalizeHandle(platform, m[2]);
+  return handle && !["u/", "@", "in/"].includes(handle) ? { value: `${platform}:${handle}`, channel: platform } : null;
+}
+
 /** A row the owner typed into the Suppression List. */
 export async function applySuppressionRow(store: CrewStore, value: string, reason: string, by: string): Promise<boolean> {
-  const v = value.trim().toLowerCase();
-  if (!v) return false;
-  const email = /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(v);
-  const domain = /^@[a-z0-9.-]+\.[a-z]{2,}$/i.test(v);
-  const handle = /^[a-z]+:.+$/i.test(v);
-  if (!email && !domain && !handle) return false;
-  await store.addSuppression(v, reason.trim() || `added in the Sheet by ${by}`, { source: "sheet", channel: email ? "email" : domain ? "domain" : v.split(":")[0] });
-  await logActivity(store, { action: "suppressed", target: v, message: reason, approved_by: by });
+  const n = normalizeSuppression(value);
+  if (!n) return false;
+  await store.addSuppression(n.value, reason.trim() || `added in the Sheet by ${by}`, { source: "sheet", channel: n.channel });
+  await logActivity(store, { action: "suppressed", target: n.value, message: reason, approved_by: by });
   return true;
 }
 

@@ -1,6 +1,7 @@
 import { agentName } from "../agent-status";
+import { DAILY_LEAD_LIMIT } from "../agents/leads";
 import { AGENTS } from "../registry";
-import { SCHEDULE_OVERRIDES_KEY, canReschedule, nextRun, plainSchedule, validSchedule, type ScheduleOverrides } from "../schedule";
+import { SCHEDULE_OVERRIDES_KEY, canReschedule, effectiveSchedule, nextRun, plainSchedule, validSchedule, type ScheduleOverrides } from "../schedule";
 import { PAUSE_FOREVER } from "../doors";
 import type { CrewStore } from "../store";
 import type { Platform, Schedule, TeamId } from "../types";
@@ -35,7 +36,7 @@ const showYesNo = (v: unknown) => (v ? "Yes" : "No");
 const startStop = (raw: string) => (/^(start|started|running|run|go)$/i.test(raw.trim()) ? true : /^(stop|stopped|off|pause)$/i.test(raw.trim()) ? false : yesNo(raw));
 const showStartStop = (v: unknown) => (v ? "Running" : "Stopped");
 /** The agent's tab name is its name in the Sheet and on the admin page's Start / Stop list. */
-const agentLabel = (def: { id: string; name: string; team: TeamId; role: "worker" | "manager" | "head" }) => tabsForAgent(def.id)[0]?.name ?? agentName(def);
+const agentLabel = (def: { id: string; name: string; team: TeamId; role: "worker" | "manager" }) => tabsForAgent(def.id)[0]?.name ?? agentName(def);
 const money = (raw: string) => {
   const n = Number(String(raw).replace(/[$,\s]/g, ""));
   return Number.isFinite(n) && n >= 0 && n <= 500 ? Math.round(n * 100) / 100 : null;
@@ -117,8 +118,8 @@ export function controlDefs(): ControlDef[] {
       what: "The lead agents stop for the day at this many new leads. The target is 1,000; the ceiling protects the AI budget.",
       allowed: "0 to 5000",
       parse: count(5000),
-      show: (v) => String(v ?? 1000),
-      get: async (s) => Number((await s.getControls()).daily_lead_limit ?? 1000),
+      show: (v) => String(v ?? DAILY_LEAD_LIMIT),
+      get: async (s) => Number((await s.getControls()).daily_lead_limit ?? DAILY_LEAD_LIMIT),
       set: async (s, v, by) => s.setControl("daily_lead_limit", Number(v), by === "admin" ? "admin" : "sheet"),
     },
     {
@@ -177,17 +178,17 @@ export function controlDefs(): ControlDef[] {
       defs.push({
         key: `schedule:${def.id}`,
         label: `${agentLabel(def)}: schedule`,
-        what: `When it runs (New York time). Default: ${plainSchedule(def.schedule)}. Write "default" to go back to it.`,
+        what: `When it runs while it's running (New York time). Default: ${defaultPace(def)}. Write "default" to go back to it.`,
         allowed: '"every 30 min", "every 2 hours", "daily 9:00am", "Mon, Wed 8:00am", "weekdays 9:00am", or "default"',
         parse: (raw) => parseScheduleText(raw),
-        show: (v) => (v ? plainSchedule(v as Schedule) : `Default (${plainSchedule(def.schedule)})`),
+        show: (v) => (v && v !== "default" ? plainSchedule(v as Schedule) : `Default (${defaultPace(def)})`),
         get: async (s) => ((await s.kvGet<ScheduleOverrides>(SCHEDULE_OVERRIDES_KEY)) ?? {})[def.id] ?? null,
         set: async (s, v) => {
           const all = (await s.kvGet<ScheduleOverrides>(SCHEDULE_OVERRIDES_KEY)) ?? {};
           if (v === "default") delete all[def.id];
           else all[def.id] = v as Schedule;
           await s.kvSet(SCHEDULE_OVERRIDES_KEY, all);
-          const sched = (v === "default" ? def.schedule : (v as Schedule)) as Schedule;
+          const sched = v === "default" ? effectiveSchedule(def, {}) : (v as Schedule);
           await s.patchAgentState(def.id, { next_run_at: nextRun(sched, new Date()).toISOString() });
         },
       });
@@ -206,15 +207,28 @@ export function controlDefs(): ControlDef[] {
   return defs;
 }
 
+/** An agent's own pace with no schedule of yours: the continuous finders run all the time, the others on their day. */
+function defaultPace(def: Parameters<typeof effectiveSchedule>[0]): string {
+  const s = effectiveSchedule(def, {});
+  return def.continuous && s.kind === "every" ? `all the time, every ${s.minutes} minutes` : plainSchedule(s).toLowerCase();
+}
+
 const DAYS: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
 
-/** "every 30 min" | "every 2 hours" | "daily 9:00am" | "Mon, Wed 8:00am" | "weekdays 9am" | "default". Null = not understood. */
+/**
+ * "every 30 min" | "every 2 hours" | "daily 9:00am" | "Mon, Wed 8:00am" |
+ * "weekdays 9am" | "default", and everything the Controls tab itself shows
+ * ("Every hour", "Every day at 9:00am", "Mon and Wed at 8:00am",
+ * "Default (…)"), so a value the sync wrote always reads back as itself.
+ * Null = not understood.
+ */
 export function parseScheduleText(raw: string): Schedule | "default" | null {
-  const t = raw.trim().toLowerCase();
-  if (!t || t === "default") return "default";
-  let m = /^every\s+(\d+)\s*(min|minutes|m|h|hour|hours)$/.exec(t);
+  let t = raw.trim().toLowerCase();
+  if (!t || t.startsWith("default")) return "default";
+  t = t.replace(/\bat\b/g, " ").replace(/\band\b/g, ",").replace(/\s*,\s*/g, ", ").replace(/\s+/g, " ").trim();
+  let m = /^every\s+(\d+)?\s*(min|mins|minutes|m|h|hour|hours)$/.exec(t);
   if (m) {
-    const n = Number(m[1]) * (m[2].startsWith("h") ? 60 : 1);
+    const n = Number(m[1] ?? 1) * (m[2].startsWith("h") ? 60 : 1);
     const s: Schedule = { kind: "every", minutes: n };
     return validSchedule(s) ? s : null;
   }
@@ -237,19 +251,29 @@ export function parseScheduleText(raw: string): Schedule | "default" | null {
   return validSchedule(s) ? s : null;
 }
 
-export type ControlResult = { ok: true; key: string; value: unknown; shown: string } | { ok: false; key: string; message: string; shown: string };
+export type ControlResult = { ok: true; key: string; value: unknown; shown: string; changed: boolean } | { ok: false; key: string; message: string; shown: string };
 
-/** Apply one Controls cell from the Sheet. Unknown keys and bad values are refused, with the current value to write back. */
-export async function applyControl(store: CrewStore, key: string, raw: string, by: string): Promise<ControlResult> {
+/** "Oct 27, 3:05pm" in New York time, for the Controls tab's Last Changed column. */
+export function changedStamp(at: Date): string {
+  return at.toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).replace(/\s*([AP])M$/, (_, x: string) => `${x.toLowerCase()}m`);
+}
+
+/**
+ * Apply one Controls cell from the Sheet. Unknown keys and bad values are
+ * refused, with the current value to write back. A real change is logged and
+ * stamped in Last Changed, whichever way it came in (the hook or the sync).
+ */
+export async function applyControl(store: CrewStore, key: string, raw: string, by: string, now = new Date()): Promise<ControlResult> {
   const def = controlDefs().find((d) => d.key === key);
   if (!def) return { ok: false, key, message: "unknown setting", shown: "" };
   const current = await def.get(store);
   const parsed = def.parse(String(raw ?? ""));
   if (parsed === null || parsed === undefined) return { ok: false, key, message: `"${raw}" isn't allowed (${def.allowed})`, shown: def.show(current) };
-  if (def.show(parsed) === def.show(current)) return { ok: true, key, value: current, shown: def.show(current) };
+  if (def.show(parsed) === def.show(current)) return { ok: true, key, value: current, shown: def.show(current), changed: false };
   await def.set(store, parsed, by);
+  await store.setControl(`${key}:changed`, changedStamp(now), by === "admin" ? "admin" : "sheet");
   await store.logActivity({ agent_id: null, platform: null, action: "control", target: key, message: `${def.label}: ${def.show(current)} → ${def.show(parsed)}`, result: "ok", error: null, row_key: null, approved_by: by, simulated: false });
-  return { ok: true, key, value: parsed, shown: def.show(parsed) };
+  return { ok: true, key, value: parsed, shown: def.show(parsed), changed: true };
 }
 
 /** Is dry run on? (Default yes; the table may not exist yet.) */

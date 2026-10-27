@@ -13,7 +13,7 @@ import type { Lead } from "../types";
 export { signedJwt } from "../google/auth";
 
 export function sheetsConfigured(list: Lead["list"]): boolean {
-  if (env("CREW_SHEET_ID")) return false; // the workbook has these tabs now
+  if (env("CREW_SHEET_ID") || env("CREW_SHARED_DRIVE_ID")) return false; // the workbook has these tabs now
   return googleConfigured() && !!env(list === "office" ? "CREW_OFFICE_SHEET_ID" : "CREW_LEADS_SHEET_ID");
 }
 

@@ -48,14 +48,23 @@ export const LEAD_COLUMNS = [
   KEY_COLUMN,
 ];
 
+/**
+ * A computed tab's copy of a row: only Status can be changed there (it is the
+ * same Status as on the agent's own tab); notes and messages are edited on the
+ * agent's own tab, so two copies can never disagree about them.
+ */
+export function readOnlyCopy(columns: TabSpec["columns"]): TabSpec["columns"] {
+  return columns.map((col) => (col.kind === "status" || col.kind === "key" ? col : { ...col, owner: false, editable: false, note: col.kind === "long" ? undefined : col.note }));
+}
+
 export const TOP50: TabSpec = {
   id: "top50",
   name: "Today - Top 50",
   group: "operating",
   layout: "derived",
   agents: [],
-  description: "The 50 best leads found today, highest score first. Same rows as All Leads; a Status you set here shows there too.",
-  columns: LEAD_COLUMNS,
+  description: "The 50 best leads found today, highest score first. Same rows as All Leads; a Status you set here shows there too. Notes go on the lead's own tab.",
+  columns: readOnlyCopy(LEAD_COLUMNS),
   statuses: PIPE,
   color: "34a853",
 };
@@ -66,14 +75,14 @@ export const QUEUE: TabSpec = {
   group: "operating",
   layout: "derived",
   agents: [],
-  description: "Start here each day. Every message or task waiting for you, from every agent, most important first. Copy the message, open the link, send it, set Status to Sent / Posted. The same row lives on its agent's tab; a Status set here or there is one and the same.",
+  description: "Start here each day. Every message or task waiting for you, from every agent, most important first. Copy the message, open the link, send it, set Status to Sent / Posted. The same row lives on its agent's tab; a Status set here or there is one and the same. To reword a message, edit it on the agent's tab.",
   columns: [
     priority(),
     c("agent", "Agent", { width: 150 }),
     c("platform", "Platform", { width: 90 }),
     c("who", "Person / Opportunity", { width: 220 }),
     longCol("why", "Why It Matters", 260),
-    messageCol("Message / Action"),
+    longCol("message", "Message / Action", 420),
     linkCol("open", "Open Exact Destination", 170),
     status({ options: TASK }),
     dateCol("added", "Date Added"),
@@ -90,8 +99,8 @@ export const ALL_LEADS: TabSpec = {
   group: "operating",
   layout: "derived",
   agents: [],
-  description: "Every lead from every lead agent (Web Leads, Reddit Leads, Quora Leads, the paste agents), newest first, rebuilt every 15 minutes. A Status set here is the same Status as on the agent's own tab. No agent emails anyone from this list.",
-  columns: LEAD_COLUMNS,
+  description: "Every lead from every lead agent (Web Leads, Reddit Leads, Quora Leads, the paste agents), newest first, rebuilt every 15 minutes. A Status set here is the same Status as on the agent's own tab; notes go on the lead's own tab. No agent emails anyone from this list.",
+  columns: readOnlyCopy(LEAD_COLUMNS),
   statuses: PIPE,
   color: "34a853",
 };
@@ -109,7 +118,7 @@ export const INTENT: TabSpec = {
     c("who", "Person", { width: 160 }),
     longCol("said", "What They Said", 320),
     longCol("why", "Why It's Intent", 220),
-    messageCol("Suggested Response"),
+    longCol("message", "Suggested Response", 420),
     linkCol("open", "Open Post", 120),
     status({ options: TASK }),
     dateCol("date_found", "Date Found"),
@@ -700,7 +709,8 @@ const contentColumns = (bodyHeader: string): TabSpec["columns"] => [
   c("type", "Content Type", { width: 110 }),
   c("topic", "Topic", { width: 200 }),
   longCol("hook", "Hook", 220),
-  longCol("caption", "Caption", 320, { editable: true }),
+  // Not editable here: a caption is not the draft's body (a blog post's caption is its summary), and an edit would replace the body.
+  longCol("caption", "Caption", 320),
   longCol("script", bodyHeader, 320),
   linkCol("asset", "Asset Link", 120),
   c("hashtags", "Hashtags", { width: 140 }),

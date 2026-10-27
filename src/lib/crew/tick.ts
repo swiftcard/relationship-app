@@ -88,27 +88,40 @@ export async function runTick(o: { store: CrewStore; providers: Providers; now?:
   const report: TickReport = { ready: true, expired: 0, ran: [], skipped: [] };
   if (!(await o.store.ready())) return { ...report, ready: false, stopped: "Run supabase/crew.sql first." };
   if (crewHardDisabled()) return { ...report, stopped: "CREW_DISABLED is set." };
-  const settings = await o.store.getSettings();
-  if (settings.kill_all) return { ...report, stopped: "The whole office is locked." };
+  // Pause all stops every agent but the Sheet keepers (infrastructure): they
+  // never send anything, and they are what reads the Sheet's Controls, so a
+  // Pause all set in the Sheet can also be lifted from the Sheet.
+  let settings = await o.store.getSettings();
+  const readStates = async () => new Map((await o.store.listAgentStates()).map((s) => [s.id, s]));
 
   report.expired = await o.store.expireOld(now());
-  const states = new Map((await o.store.listAgentStates()).map((s) => [s.id, s]));
+  let states = await readStates();
   const teams = new Map((await o.store.listTeams()).map((t) => [t.team, t]));
-  const overrides = await scheduleOverrides(o.store);
+  let overrides = await scheduleOverrides(o.store);
+  // The Sheet keepers go first; the switches are read again after them, so a
+  // Start, Stop, schedule or Pause set in the Sheet applies in this same tick.
+  const agents = [...(o.agents ?? AGENTS)].sort((a, b) => Number(!!b.infrastructure) - Number(!!a.infrastructure));
+  let stale = false;
 
-  for (const def of o.agents ?? AGENTS) {
-    const st = states.get(def.id);
-    if (!st?.enabled) continue;
-    if (def.locked) {
-      report.skipped.push({ agent: def.id, why: def.locked });
-      continue;
+  for (const def of agents) {
+    if (stale && !def.infrastructure) {
+      [settings, states, overrides] = await Promise.all([o.store.getSettings(), readStates(), scheduleOverrides(o.store)]);
+      stale = false;
     }
-    // A locked door or a pause holds the shift; next_run_at stays put, so an
-    // overdue agent runs once as soon as the door opens.
-    const blocked = blockedBy(def, st, doorState(teams.get(def.team), { team: def.team, settings, hardDisabled: false }, now()), now());
-    if (blocked) {
-      report.skipped.push({ agent: def.id, why: blocked });
-      continue;
+    const st = states.get(def.id);
+    if (!def.infrastructure) {
+      if (settings.kill_all || !st?.enabled) continue;
+      if (def.locked) {
+        report.skipped.push({ agent: def.id, why: def.locked });
+        continue;
+      }
+      // A locked door or a pause holds the shift; next_run_at stays put, so an
+      // overdue agent runs once as soon as the door opens.
+      const blocked = blockedBy(def, st, doorState(teams.get(def.team), { team: def.team, settings, hardDisabled: false }, now()), now());
+      if (blocked) {
+        report.skipped.push({ agent: def.id, why: blocked });
+        continue;
+      }
     }
     const missing = missingEnv(def.needs);
     if (missing.length) {
@@ -116,7 +129,7 @@ export async function runTick(o: { store: CrewStore; providers: Providers; now?:
       report.skipped.push({ agent: def.id, why: `needs ${missing.join(", ")}` });
       continue;
     }
-    const due = def.schedule.kind === "on_input" ? (await o.store.countNewInputs(def.schedule.platforms)) > 0 : isDue(st.next_run_at, now());
+    const due = def.schedule.kind === "on_input" ? (await o.store.countNewInputs(def.schedule.platforms)) > 0 : isDue(st?.next_run_at ?? null, now());
     if (!due) continue;
     if (now().getTime() - started > budget) {
       report.skipped.push({ agent: def.id, why: "out of time this tick" });
@@ -127,6 +140,8 @@ export async function runTick(o: { store: CrewStore; providers: Providers; now?:
       continue;
     }
     report.ran.push(await runAgent({ def, store: o.store, providers: o.providers, now, schedule: effectiveSchedule(def, overrides) }));
+    if (def.infrastructure) stale = true;
   }
+  if (settings.kill_all) report.stopped = "The whole office is locked.";
   return report;
 }

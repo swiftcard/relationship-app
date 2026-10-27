@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/crew/env";
 import { applyChange, applyControlCell } from "@/lib/crew/sheets/apply";
+import { ownerEditable } from "@/lib/crew/sheets/spec";
 import { CONTROLS, tabByName } from "@/lib/crew/sheets/tabs";
 import { SupabaseStore } from "@/lib/crew/store-supabase";
 
@@ -40,18 +41,25 @@ export async function POST(req: NextRequest) {
   const tab = tabByName(String(body.tab ?? ""));
   if (!tab) return NextResponse.json({ ok: false, message: "unknown tab" });
   const by = /^[^@\s]+@[^@\s]+$/.test(String(body.editor ?? "")) ? String(body.editor).toLowerCase() : "sheet";
-  const store = new SupabaseStore();
-  if (!(await store.sheetsReady())) return NextResponse.json({ ok: false, message: "Run supabase/crew-sheets.sql first." });
+  // Every refusal is decided before the database is touched.
 
   if (tab.id === CONTROLS.id) {
+    // Only the Value column is a switch; every other column there is the backend's text.
+    const valueHeader = CONTROLS.columns.find((c) => c.key === "value")!.header;
+    if (String(body.header ?? "") !== valueHeader) return NextResponse.json({ ok: false, message: `Change only the ${valueHeader} column.` });
+    const store = new SupabaseStore();
+    if (!(await store.sheetsReady())) return NextResponse.json({ ok: false, message: "Run supabase/crew-sheets.sql first." });
     const r = await applyControlCell(store, String(body.key ?? ""), String(body.value ?? ""), by);
     return NextResponse.json(r.ok ? { ok: true, value: r.shown } : { ok: false, message: r.message, value: r.shown });
   }
   const col = tab.columns.find((c) => c.header === String(body.header ?? ""));
   if (!col) return NextResponse.json({ ok: false, message: "unknown column" });
-  if (!(col.owner || col.editable || col.kind === "status")) return NextResponse.json({ ok: false, message: `${col.header} is written by the agent` });
+  // The same rule as the sync: on the computed tabs only Status counts; notes and messages are edited on the agent's own tab.
+  if (!ownerEditable(tab, col)) return NextResponse.json({ ok: false, message: col.kind === "status" || tab.layout === "rows" ? `${col.header} is written by the agent` : `Edit ${col.header} on the agent's own tab` });
   const key = String(body.key ?? "").trim();
   if (!/^[A-Z]-[a-f0-9]{8,12}$/.test(key)) return NextResponse.json({ ok: false, message: "no key on that row yet; the sync will pick it up" });
+  const store = new SupabaseStore();
+  if (!(await store.sheetsReady())) return NextResponse.json({ ok: false, message: "Run supabase/crew-sheets.sql first." });
   const r = await applyChange(store, { rowKey: key, column: col.key, value: String(body.value ?? ""), by }, new Date());
   return NextResponse.json({ ok: r.ok, message: r.message, ...(r.status ? { status: r.status } : {}) });
 }

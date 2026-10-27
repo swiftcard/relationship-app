@@ -94,7 +94,7 @@ export const competitorWatch: AgentDef = {
       for (const nf of found.new_features.slice(0, 3)) lines.push(`- ${COMPETITOR_NAME[c]} new: ${nf}`);
       if (!real.length && !found.new_features.length) lines.push(`- ${COMPETITOR_NAME[c]}: no change.`);
     }
-    const body = [`Competitor report for ${nyDay(ctx.now())}`, "", "What happened", ...lines, "", "What I need from you", priceChanges.length ? "- A price changed. Look at the card to update our compare pages." : "- Nothing right now."].join("\n");
+    const body = [`Competitor report for ${nyDay(ctx.now())}`, "", "What happened", ...lines, "", "What I need from you", priceChanges.length ? "- A price changed. Its row in the Competitor Intel tab has the page it came from, so our compare pages can be updated." : "- Nothing right now."].join("\n");
     await ctx.store.saveReport({ agent_id: ctx.def.id, team: "marketing", day: nyDay(ctx.now()), body, stats: { checked } });
     await sendOwnerDigest("Competitor report", reportHtml(body, "marketing"));
     if (priceChanges.length) {

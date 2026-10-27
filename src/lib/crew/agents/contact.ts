@@ -193,9 +193,6 @@ export const instagramLinkedinBio: AgentDef = {
   },
 };
 
-/** The old name, kept for anything that imported it. */
-export const instagramSwitchers = instagramLinkedinBio;
-
 export const linkedinConnect: AgentDef = {
   ...base,
   id: "contact-linkedin",
