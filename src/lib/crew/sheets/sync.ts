@@ -145,9 +145,19 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
   report.sheetId = id;
   report.url = sheetUrl(id);
 
-  // 0. Shape and sharing.
-  const shaped = await ensureWorkbook(store, id);
+  // 0. Shape and sharing. Only missing tabs or header rows stop the sync; a
+  // formatting or protection request Google refuses is reported and the rows
+  // are still written.
+  let shaped: Awaited<ReturnType<typeof ensureWorkbook>>;
+  try {
+    shaped = await ensureWorkbook(store, id);
+  } catch (e) {
+    report.errors.push(`setup: ${msg(e)}`);
+    await logActivity(store, { action: "sync", result: "failed", error: report.errors.join(" | ").slice(0, 500), message: "The workbook's tabs or header rows could not be set up; nothing was written." });
+    return report;
+  }
   if (shaped.changed) report.notes.push(`Workbook set up${shaped.created.length ? `: added ${shaped.created.join(", ")}` : ""}.`);
+  for (const w of shaped.warnings) report.errors.push(w);
   const shareKey = `sheet:shared:${id}`;
   const wantShare = sheetShareEmails().join(",");
   if (wantShare && (await store.kvGet<string>(shareKey)) !== wantShare) {
@@ -204,8 +214,10 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
   await inboundControls(store, grid, writes, report);
   sources = await loadSources(store, now); // statuses and drafts may have moved
 
-  // 3. Outbound: the agents' rows, by Key.
+  // 3. Outbound: the agents' rows, by Key. A row's hash is recorded only
+  // after its cells are actually in the Sheet, so a failed write is retried.
   const built = buildRows(sources);
+  const written: { key: string; hash: string }[] = [];
   const appends = new Map<string, { tab: TabSpec; rows: BuiltRow[] }>();
   for (const r of built) {
     const known = sources.known.get(r.key);
@@ -235,13 +247,14 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
     }
     if (known.agent_hash === hash) continue;
     for (const s of segments(r, known.owner_cols)) writes.push({ range: a1(r.tab.name, `${colLetter(s.from)}${rowIndex}:${colLetter(s.to)}${rowIndex}`), values: [s.values] });
-    await store.patchSheetRow(r.key, { agent_hash: hash, synced_at: now.toISOString() });
-    report.updated++;
+    written.push({ key: r.key, hash });
   }
   // Every copy of a Status on the agents' own tabs shows the backend's word (stale copies are put right).
   writes.push(...statusFixes(tabs.filter((t) => t.layout === "rows"), grid, sources.known));
   try {
     await batchUpdateValues(id, writes);
+    for (const w of written) await store.patchSheetRow(w.key, { agent_hash: w.hash, synced_at: now.toISOString() });
+    report.updated += written.length;
   } catch (e) {
     report.errors.push(`write: ${msg(e)}`);
   }

@@ -20,6 +20,7 @@ import { ALL_TABS } from "./tabs";
 export const WORKBOOK_NAME = "SwiftCard Leads";
 export const DAILY_FOLDER = "Daily";
 const SPEC_KEY = "sheet:spec-hash";
+const PROTECT_KEY = "sheet:protect-hash";
 const ID_KEY = "sheet:id";
 export const HEADER_ROWS = 1;
 
@@ -66,16 +67,27 @@ export async function shareWorkbook(id: string): Promise<string[]> {
   return added;
 }
 
-/** Make every tab exist and look right. Returns what it did. */
-export async function ensureWorkbook(store: CrewStore, id: string, o: { force?: boolean } = {}): Promise<{ changed: boolean; created: string[]; meta: SpreadsheetMeta }> {
+type Req = Record<string, unknown>;
+
+/**
+ * Make every tab exist and look right. Returns what it did. Only the tabs and
+ * their header rows are required for the sync to write rows; the looks
+ * (widths, dropdowns, colours, filters) and the protections are extras, so a
+ * failure there comes back in `warnings` and never stops leads reaching the
+ * Sheet. Each extra keeps its own hash and is retried by the next sync until
+ * it goes through.
+ */
+export async function ensureWorkbook(store: CrewStore, id: string, o: { force?: boolean } = {}): Promise<{ changed: boolean; created: string[]; meta: SpreadsheetMeta; warnings: string[] }> {
   let meta = await getSpreadsheet(id);
   const want = specHash();
-  const have = await store.kvGet<string>(`${SPEC_KEY}:${id}`);
-  if (have === want && !o.force) return { changed: false, created: [], meta };
+  const [haveLooks, haveProtect] = await Promise.all([store.kvGet<string>(`${SPEC_KEY}:${id}`), store.kvGet<string>(`${PROTECT_KEY}:${id}`)]);
+  const doLooks = haveLooks !== want || !!o.force;
+  const doProtect = haveProtect !== want || !!o.force;
+  if (!doLooks && !doProtect) return { changed: false, created: [], meta, warnings: [] };
 
   // 1. Tabs that don't exist yet, in spec order; the default "Sheet1" becomes the Dashboard.
   const byName = new Map(meta.sheets.map((s) => [s.title, s]));
-  const requests: Record<string, unknown>[] = [];
+  const requests: Req[] = [];
   const created: string[] = [];
   const first = meta.sheets.find((s) => s.title === "Sheet1" && meta.sheets.length === 1);
   if (first && !byName.has(ALL_TABS[0].name)) {
@@ -92,18 +104,60 @@ export async function ensureWorkbook(store: CrewStore, id: string, o: { force?: 
     await batchUpdate(id, requests);
     meta = await getSpreadsheet(id);
   }
-  const sheetOf = (t: TabSpec) => meta.sheets.find((s) => s.title === t.name)!;
 
-  // 2. Headers, formatting, validation, colours, protection: one batch.
-  const fmt: Record<string, unknown>[] = [];
+  // 2. Header rows: required (appends land under them, reads start below them).
+  const parts = workbookRequests(meta.sheets);
+  await batchUpdate(id, parts.headers);
+
+  // 3. The looks and the protections: optional, each in its own batch.
+  const warnings: string[] = [];
+  if (doLooks) {
+    try {
+      await batchUpdate(id, parts.looks);
+      await store.kvSet(`${SPEC_KEY}:${id}`, want);
+    } catch (e) {
+      warnings.push(`formatting: ${errText(e)}`);
+    }
+  }
+  if (doProtect) {
+    try {
+      // Old protected ranges from a previous run would pile up: clear ours first.
+      const old = await existingProtections(id);
+      await batchUpdate(id, [...old.map((pid) => ({ deleteProtectedRange: { protectedRangeId: pid } })), ...parts.protection]);
+      await store.kvSet(`${PROTECT_KEY}:${id}`, want);
+    } catch (e) {
+      warnings.push(`protection: ${errText(e)}`);
+    }
+  }
+  await logActivity(store, {
+    action: "sync",
+    target: id,
+    result: warnings.length ? "failed" : "ok",
+    ...(warnings.length ? { error: warnings.join(" | ").slice(0, 500) } : {}),
+    message: `Workbook set up: ${created.length ? `added ${created.join(", ")}; ` : ""}headers ${warnings.length ? "written; some formatting did not apply and will be retried" : "and formatting refreshed"}.`,
+  });
+  return { changed: true, created, meta: await getSpreadsheet(id), warnings };
+}
+
+const errText = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 300);
+
+/**
+ * Every formatting request for the workbook's tabs, in three groups: the
+ * header rows (required), the looks, and the protections. Pure, so the
+ * requests Google would reject can be caught in a test.
+ */
+export function workbookRequests(sheets: { sheetId: number; title: string }[]): { headers: Req[]; looks: Req[]; protection: Req[] } {
+  const headers: Req[] = [];
+  const looks: Req[] = [];
+  const protection: Req[] = [];
   ALL_TABS.forEach((t, i) => {
-    const s = sheetOf(t);
+    const s = sheets.find((x) => x.title === t.name);
     if (!s) return;
-    fmt.push({ updateSheetProperties: { properties: { sheetId: s.sheetId, index: i, tabColor: hex(t.color), gridProperties: { frozenRowCount: t.layout === "free" ? 0 : HEADER_ROWS } }, fields: "index,tabColor,gridProperties.frozenRowCount" } });
+    headers.push({ updateSheetProperties: { properties: { sheetId: s.sheetId, index: i, tabColor: hex(t.color), gridProperties: { frozenRowCount: t.layout === "free" ? 0 : HEADER_ROWS } }, fields: "index,tabColor,gridProperties.frozenRowCount" } });
     if (t.layout === "free") return;
     const n = t.columns.length;
     // Header cells: text, bold, dark background, note on A1.
-    fmt.push({
+    headers.push({
       updateCells: {
         range: { sheetId: s.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: n },
         fields: "userEnteredValue,userEnteredFormat,note",
@@ -118,59 +172,56 @@ export async function ensureWorkbook(store: CrewStore, id: string, o: { force?: 
         ],
       },
     });
-    fmt.push({ updateDimensionProperties: { range: { sheetId: s.sheetId, dimension: "ROWS", startIndex: 0, endIndex: 1 }, properties: { pixelSize: 40 }, fields: "pixelSize" } });
+    if (t.layout === "placeholder" && t.placeholder) {
+      headers.push({ updateCells: { range: { sheetId: s.sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 1 }, fields: "userEnteredValue,userEnteredFormat", rows: [{ values: [{ userEnteredValue: { stringValue: t.placeholder }, userEnteredFormat: { textFormat: { italic: true, foregroundColor: { red: 0.4, green: 0.4, blue: 0.4 } } } }] }] } });
+    }
+    looks.push({ updateDimensionProperties: { range: { sheetId: s.sheetId, dimension: "ROWS", startIndex: 0, endIndex: 1 }, properties: { pixelSize: 40 }, fields: "pixelSize" } });
     // Column widths and wrapping.
     t.columns.forEach((col, k) => {
       const width = col.width ?? (col.kind === "long" ? 320 : col.kind === "link" ? 140 : 140);
-      fmt.push({ updateDimensionProperties: { range: { sheetId: s.sheetId, dimension: "COLUMNS", startIndex: k, endIndex: k + 1 }, properties: { pixelSize: width }, fields: "pixelSize" } });
+      looks.push({ updateDimensionProperties: { range: { sheetId: s.sheetId, dimension: "COLUMNS", startIndex: k, endIndex: k + 1 }, properties: { pixelSize: width }, fields: "pixelSize" } });
       const format: Record<string, unknown> = { wrapStrategy: col.kind === "long" || col.editable ? "WRAP" : "CLIP", verticalAlignment: "TOP" };
       if (col.kind === "key") format.textFormat = { foregroundColor: { red: 0.6, green: 0.6, blue: 0.6 }, fontSize: 9 };
       if (col.kind === "number") format.horizontalAlignment = "RIGHT";
-      fmt.push({ repeatCell: { range: { sheetId: s.sheetId, startRowIndex: HEADER_ROWS, startColumnIndex: k, endColumnIndex: k + 1 }, cell: { userEnteredFormat: format }, fields: "userEnteredFormat(wrapStrategy,verticalAlignment,textFormat,horizontalAlignment)" } });
+      looks.push({ repeatCell: { range: { sheetId: s.sheetId, startRowIndex: HEADER_ROWS, startColumnIndex: k, endColumnIndex: k + 1 }, cell: { userEnteredFormat: format }, fields: "userEnteredFormat(wrapStrategy,verticalAlignment,textFormat,horizontalAlignment)" } });
       // Dropdowns on status columns.
       const options = col.kind === "status" ? (col.options ?? t.statuses) : null;
       if (options?.length) {
-        fmt.push({ setDataValidation: { range: { sheetId: s.sheetId, startRowIndex: HEADER_ROWS, startColumnIndex: k, endColumnIndex: k + 1 }, rule: { condition: { type: "ONE_OF_LIST", values: options.map((v) => ({ userEnteredValue: v })) }, showCustomUi: true, strict: false } } });
+        looks.push({ setDataValidation: { range: { sheetId: s.sheetId, startRowIndex: HEADER_ROWS, startColumnIndex: k, endColumnIndex: k + 1 }, rule: { condition: { type: "ONE_OF_LIST", values: options.map((v) => ({ userEnteredValue: v })) }, showCustomUi: true, strict: false } } });
       }
       // Owner columns get a faint tint so it's obvious where to type.
       if (col.owner || col.editable) {
-        fmt.push({ repeatCell: { range: { sheetId: s.sheetId, startRowIndex: HEADER_ROWS, startColumnIndex: k, endColumnIndex: k + 1 }, cell: { userEnteredFormat: { backgroundColor: { red: 0.99, green: 0.98, blue: 0.93 } } }, fields: "userEnteredFormat.backgroundColor" } });
+        looks.push({ repeatCell: { range: { sheetId: s.sheetId, startRowIndex: HEADER_ROWS, startColumnIndex: k, endColumnIndex: k + 1 }, cell: { userEnteredFormat: { backgroundColor: { red: 0.99, green: 0.98, blue: 0.93 } } }, fields: "userEnteredFormat.backgroundColor" } });
       }
     });
     // The filter on the whole table.
-    fmt.push({ setBasicFilter: { filter: { range: { sheetId: s.sheetId, startRowIndex: 0, startColumnIndex: 0, endColumnIndex: n } } } });
+    looks.push({ setBasicFilter: { filter: { range: { sheetId: s.sheetId, startRowIndex: 0, startColumnIndex: 0, endColumnIndex: n } } } });
     // Conditional colours: priorities, scores, and the statuses that need a look.
     const col = (key: string) => t.columns.findIndex((c) => c.key === key);
     const rule = (k: number, text: string, color: Record<string, number>, type = "TEXT_EQ") => ({
       addConditionalFormatRule: { rule: { ranges: [{ sheetId: s.sheetId, startRowIndex: HEADER_ROWS, startColumnIndex: k, endColumnIndex: k + 1 }], booleanRule: { condition: { type, values: [{ userEnteredValue: text }] }, format: { backgroundColor: color } } }, index: 0 },
     });
     const p = col("priority");
-    if (p >= 0) fmt.push(rule(p, "High", RED), rule(p, "Medium", YELLOW), rule(p, "Low", GREY));
+    if (p >= 0) looks.push(rule(p, "High", RED), rule(p, "Medium", YELLOW), rule(p, "Low", GREY));
     const sc = col("score");
-    if (sc >= 0) fmt.push(rule(sc, "80", GREEN, "NUMBER_GREATER_THAN_EQ"), rule(sc, "60", YELLOW, "NUMBER_GREATER_THAN_EQ"), rule(sc, "60", GREY, "NUMBER_LESS"));
+    if (sc >= 0) looks.push(rule(sc, "80", GREEN, "NUMBER_GREATER_THAN_EQ"), rule(sc, "60", YELLOW, "NUMBER_GREATER_THAN_EQ"), rule(sc, "60", GREY, "NUMBER_LESS"));
     const st = col("status");
-    if (st >= 0) fmt.push(rule(st, "Ready", BLUE), rule(st, "Needs Review", YELLOW), rule(st, "Failed", RED), rule(st, "Sent / Posted", GREEN), rule(st, "Completed", GREEN), rule(st, "Customer", GREEN), rule(st, "Meeting", GREEN));
+    if (st >= 0) looks.push(rule(st, "Ready", BLUE), rule(st, "Needs Review", YELLOW), rule(st, "Failed", RED), rule(st, "Sent / Posted", GREEN), rule(st, "Completed", GREEN), rule(st, "Customer", GREEN), rule(st, "Meeting", GREEN));
     const mention = col("mentioned");
-    if (mention >= 0) fmt.push(rule(mention, "Yes", GREEN), rule(mention, "No", RED));
+    if (mention >= 0) looks.push(rule(mention, "Yes", GREEN), rule(mention, "No", RED));
     // Controls: everything but the Value column is read-only (a warning, not a lock: the owners are editors).
+    // Google allows unprotectedRanges only on a protection that covers the WHOLE sheet, so the
+    // range is the sheet itself ({ sheetId } and nothing else), not a block of columns.
     if (t.id === "controls") {
       const v = col("value");
-      fmt.push({ addProtectedRange: { protectedRange: { range: { sheetId: s.sheetId, startRowIndex: 0, startColumnIndex: 0, endColumnIndex: n }, description: "Written by the backend. Change only the Value column.", warningOnly: true, unprotectedRanges: [{ sheetId: s.sheetId, startRowIndex: HEADER_ROWS, startColumnIndex: v, endColumnIndex: v + 1 }] } } });
+      protection.push({ addProtectedRange: { protectedRange: { range: { sheetId: s.sheetId }, description: "Written by the backend. Change only the Value column.", warningOnly: true, unprotectedRanges: [{ sheetId: s.sheetId, startRowIndex: HEADER_ROWS, startColumnIndex: v, endColumnIndex: v + 1 }] } } });
     }
     if (hasKeyColumn(t)) {
       const k = n - 1;
-      fmt.push({ addProtectedRange: { protectedRange: { range: { sheetId: s.sheetId, startRowIndex: 0, startColumnIndex: k, endColumnIndex: k + 1 }, description: "The Key column is how the backend finds each row. Leave it alone.", warningOnly: true } } });
-    }
-    if (t.layout === "placeholder" && t.placeholder) {
-      fmt.push({ updateCells: { range: { sheetId: s.sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 1 }, fields: "userEnteredValue,userEnteredFormat", rows: [{ values: [{ userEnteredValue: { stringValue: t.placeholder }, userEnteredFormat: { textFormat: { italic: true, foregroundColor: { red: 0.4, green: 0.4, blue: 0.4 } } } }] }] } });
+      protection.push({ addProtectedRange: { protectedRange: { range: { sheetId: s.sheetId, startRowIndex: 0, startColumnIndex: k, endColumnIndex: k + 1 }, description: "The Key column is how the backend finds each row. Leave it alone.", warningOnly: true } } });
     }
   });
-  // Old protected ranges from a previous run would pile up: clear ours first.
-  const old = await existingProtections(id);
-  await batchUpdate(id, [...old.map((pid) => ({ deleteProtectedRange: { protectedRangeId: pid } })), ...fmt]);
-  await store.kvSet(`${SPEC_KEY}:${id}`, want);
-  await logActivity(store, { action: "sync", target: id, message: `Workbook set up: ${created.length ? `added ${created.join(", ")}; ` : ""}headers, dropdowns and colours refreshed.` });
-  return { changed: true, created, meta: await getSpreadsheet(id) };
+  return { headers, looks, protection };
 }
 
 async function existingProtections(id: string): Promise<number[]> {

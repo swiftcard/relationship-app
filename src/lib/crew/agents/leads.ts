@@ -116,7 +116,7 @@ export const leadsWeb: AgentDef = {
   schedule: { kind: "every", minutes: 30 },
   dailyUsd: 3,
   needs: ["CREW_ANTHROPIC_API_KEY"],
-  purpose: "Runs all day: searches for business types in US cities (like real estate offices in Charlotte), reads their own websites and saves the business emails they publish to the lead sheet.",
+  purpose: "Runs all day: searches for business types in US cities (like real estate offices in Charlotte), reads their own websites and saves the business emails they publish. Sheet sync then copies them to All Leads in the SwiftCard Leads sheet.",
   async run(ctx) {
     // Controls → "New leads per day (max)" wins over the agent's own default.
     const limit = Number((await ctx.store.getControls().catch(() => ({}) as Record<string, unknown>)).daily_lead_limit ?? NaN);
@@ -131,7 +131,7 @@ export const leadsWeb: AgentDef = {
     const added = await recordLeads(ctx, sites.flat());
     ctx.stat("sites_read", Math.min(found.length, perRun));
     const synced = await syncLeadsToSheet(ctx.store, "cold").catch((e) => (ctx.log(`sheet: ${e instanceof Error ? e.message : e}`), 0));
-    return { summary: `${type} in ${city}: read ${Math.min(found.length, perRun)} sites, saved ${added} new emails${synced ? `, ${synced} copied to the sheet` : ""}.` };
+    return { summary: `${type} in ${city}: read ${Math.min(found.length, perRun)} sites, saved ${added} new emails${synced ? `, ${synced} copied to the sheet` : " (Sheet sync adds them to the Sheet)"}.` };
   },
 };
 
