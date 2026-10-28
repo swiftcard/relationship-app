@@ -36,11 +36,24 @@ const CLOSED = [
   { id: "c1", name: "Dana Ellis", email: "dana@example.com", plan: "pro", closed_at: "2026-10-25T12:00:00Z", reason: "too-expensive", reason_text: "It costs more than I get out of it", comment: LONG, purge_at: "2099-11-24T12:00:00Z" },
   { id: "c2", name: null, email: "sam@example.com", plan: "free", closed_at: "2026-10-20T12:00:00Z", reason: "testing", reason_text: "I was just testing / signed up by mistake", comment: null, purge_at: "2099-11-19T12:00:00Z" },
 ];
+// Our own and QA's accounts (Users › Internal & test). Never counted.
+const INTERNAL = [
+  { id: "i1", kind: "test", username: "qa1", primary_username: null, name: null, email: "qa-and-pro-1@swiftcard-test.invalid", plan: "pro", effective_plan: "pro", plan_expires_at: null, signup_source: null, company: null, title: null, created_at: "2026-10-27T00:00:00Z", card_count: 0, lead_count: 0, view_count: 0, link_view_count: 0, locked_lead_count: 0, office_role: null, billing: { source: "none", trialEndsAt: null, pastDue: false, cancelling: false, everPaid: false } },
+];
+// A customer who never typed a profile name and has no card name yet: the
+// list must show their email, never a dash.
+const NAMELESS = { id: "u4", username: "u4", primary_username: null, name: null, email: "nameless@example.com", plan: "free", plan_expires_at: null, signup_source: null, company: null, title: null, created_at: "2026-07-01T00:00:00Z", card_count: 0, lead_count: 0, view_count: 0 };
+
 const DETAIL = {
   user: {
     id: "c1", username: "dana", name: "Dana Ellis", email: "dana@example.com", plan: "free", plan_expires_at: null, created_at: "2026-06-01T00:00:00Z",
     company: "Northbeam", title: "Broker", phone: null, website: null, photo_url: null, signup_source: "direct", referral_code: "DANA",
     referred_by: null, referral_reward_earned: false, deleted: true, billing: "none",
+  },
+  subscription: {
+    status: "trialing", plan: "pro", interval: "monthly", unitCents: 499, quantity: 1, monthlyCents: 499,
+    discount: { percentOff: 50, amountOff: null, duration: "repeating", end: 4_102_444_800 },
+    trialEnd: "2099-11-05T00:00:00Z", periodEnd: "2099-11-05T00:00:00Z", cancelAtPeriodEnd: true, created: "2026-10-20T00:00:00Z", livemode: true,
   },
   leaving: {
     closed: true, closed_at: "2026-10-25T12:00:00Z", purge_at: "2099-11-24T12:00:00Z", plan_at_close: "pro",
@@ -109,7 +122,7 @@ async function open(engine: string, width: number, view: { view: "users" | "deta
     if (url.pathname.startsWith("/admin/")) {
       return route.fulfill({ status: 200, contentType: "text/html", body: `<!doctype html><html data-sc-theme="light"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>${css}</style><style>body{margin:0}</style></head><body><div id="root"></div><script>window.process={env:{}};window.__VIEW=${JSON.stringify(view)};</script><script>${bundle}</script></body></html>` });
     }
-    if (url.pathname === "/api/admin/users") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ users: USERS, closed: CLOSED }) });
+    if (url.pathname === "/api/admin/users") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ users: [...USERS, NAMELESS], internal: INTERNAL, closed: CLOSED }) });
     if (url.pathname === "/api/admin/users/c1") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(DETAIL) });
     return route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
   });
@@ -122,12 +135,12 @@ const sideways = (page: Page) => page.evaluate(() => document.documentElement.sc
 
 describe.each(["Chromium", "WebKit"])("%s", (engine) => {
   for (const width of [390, 1280]) {
-    it(`Users: the five tabs with counts, and nothing sideways at ${width}px`, async () => {
+    it(`Users: the six tabs with counts, and nothing sideways at ${width}px`, async () => {
       const page = await open(engine, width, { view: "users" });
       try {
         await page.getByText("Maya Rep").waitFor();
         const tabs = await page.locator('[role="tablist"] [role="tab"]').allInnerTexts();
-        expect(tabs.map((t) => t.replace(/\s+/g, " ").trim())).toEqual(["All 3", "Free 1", "Pro 1", "Office 1", "Closed accounts 2"]);
+        expect(tabs.map((t) => t.replace(/\s+/g, " ").trim())).toEqual(["All 4", "Free 2", "Pro 1", "Office 1", "Closed accounts 2", "Internal & test 1"]);
         expect(await sideways(page), `sideways at ${width}px`).toBe(false);
         // The free month shows as words, not an icon.
         expect(await page.getByText(/Free month · ends/).count()).toBeGreaterThan(0);
@@ -193,4 +206,40 @@ describe.each(["Chromium", "WebKit"])("%s", (engine) => {
       } finally { await page.context().close(); }
     });
   }
+
+  it("a customer with no name shows their email — never a dash", async () => {
+    const page = await open(engine, 1280, { view: "users" });
+    try {
+      await page.getByText("Maya Rep").waitFor();
+      const rows = await page.locator("ul.adm-divide > li").allInnerTexts();
+      const nameless = rows.find((r) => r.includes("nameless@example.com"))!;
+      expect(nameless, "the nameless customer's row").toBeTruthy();
+      expect(nameless.split("\n")[0].trim()).not.toBe("—");
+      expect(rows.join("\n")).not.toMatch(/^—$/m);
+    } finally { await page.context().close(); }
+  });
+
+  it("Internal & test lists our own and QA's accounts, apart from customers, and says they aren't counted", async () => {
+    const page = await open(engine, 390, { view: "users" });
+    try {
+      await page.getByText("Maya Rep").waitFor();
+      await page.getByRole("tab", { name: /Internal & test/ }).click();
+      await page.getByText("qa-and-pro-1@swiftcard-test.invalid").waitFor();
+      const text = await page.evaluate(() => document.body.innerText);
+      expect(text).toContain("None of them is counted in any number");
+      expect(text).toContain("QA test account");
+      expect(text).not.toContain("Maya Rep");
+      expect(new URL(page.url()).searchParams.get("tab")).toBe("internal");
+    } finally { await page.context().close(); }
+  });
+
+  it("Plan & billing shows the live Stripe subscription: status, price, discount, dates, cancelling", async () => {
+    const page = await open(engine, 390, { view: "detail", tab: "plan" });
+    try {
+      await page.getByText("Live from Stripe").waitFor();
+      const text = await page.evaluate(() => document.body.innerText);
+      for (const s of ["Free trial", "Pro · $4.99 / month", "$4.99 a month once the trial ends", "50% off", "Trial ends", "cancelled: it ends"]) expect(text, s).toContain(s);
+      expect(await sideways(page)).toBe(false);
+    } finally { await page.context().close(); }
+  });
 });

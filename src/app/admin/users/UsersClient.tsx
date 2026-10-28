@@ -71,7 +71,18 @@ type User = {
   card_count: number;
   lead_count: number;
   view_count: number;
+  // Added 2026-10-28 (lib/admin-data/directory). Optional so an older
+  // response (and the render tests' fixtures) still draws.
+  kind?: "customer" | "internal" | "test";
+  effective_plan?: string;
+  locked_lead_count?: number;
+  link_view_count?: number;
+  office_role?: "owner" | "member" | null;
+  billing?: { source: "stripe" | "apple" | "grant" | "office_member" | "none"; trialEndsAt: string | null; pastDue: boolean; cancelling: boolean; everPaid: boolean };
 };
+
+/** The plan right now (an expired gift month reads Free). */
+const planNow = (u: User) => u.effective_plan ?? u.plan ?? "free";
 
 /** A closed account, from /api/admin/users `closed`. */
 type ClosedAccount = {
@@ -86,10 +97,10 @@ type ClosedAccount = {
   purge_at: string | null;
 };
 
-type TabKey = "all" | "free" | "pro" | "office" | "closed";
-const TAB_KEYS: TabKey[] = ["all", "free", "pro", "office", "closed"];
+type TabKey = "all" | "free" | "pro" | "office" | "closed" | "internal";
+const TAB_KEYS: TabKey[] = ["all", "free", "pro", "office", "closed", "internal"];
 
-function PlanBadgeEditor({ plan, expires, userId, who, onUpdated }: { plan: string; expires: string | null; userId: string; who: string; onUpdated: () => void }) {
+function PlanBadgeEditor({ plan, shown, expires, userId, who, onUpdated }: { plan: string; shown?: string; expires: string | null; userId: string; who: string; onUpdated: () => void }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -121,7 +132,7 @@ function PlanBadgeEditor({ plan, expires, userId, who, onUpdated }: { plan: stri
   return (
     <div onClick={(e) => e.stopPropagation()} className="min-w-0">
       <div className="flex items-center gap-2">
-        <PlanBadge plan={plan} />
+        <PlanBadge plan={shown ?? plan} />
         {/* The plan shows once, as the badge; "Change" is the real <select>
             laid invisibly over its label, so it opens the platform's own
             picker (and works with a keyboard and a screen reader). */}
@@ -153,6 +164,8 @@ export default function UsersClient({ initialTab, openCreate = false }: { initia
   const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [closed, setClosed] = useState<ClosedAccount[]>([]);
+  // Our own and QA's accounts: left out of every number, listed on their own.
+  const [internal, setInternal] = useState<User[]>([]);
   // When the list was loaded — the "now" that "closed 3 days ago" and
   // "deleted in 27 days" are measured from (read once, not on every render).
   const [loadedAt, setLoadedAt] = useState(0);
@@ -176,6 +189,7 @@ export default function UsersClient({ initialTab, openCreate = false }: { initia
         const data = await res.json();
         setUsers(data.users ?? []);
         setClosed(data.closed ?? []);
+        setInternal(data.internal ?? []);
         setLoadedAt(Date.now());
         setLoadError(null);
       } else {
@@ -210,8 +224,8 @@ export default function UsersClient({ initialTab, openCreate = false }: { initia
   const q = search.trim().toLowerCase();
   const matches = (...fields: (string | null | undefined)[]) => !q || fields.some((f) => f?.toLowerCase().includes(q));
 
-  const filtered = users
-    .filter((u) => tab === "all" || tab === "closed" || (tab === "free" ? (u.plan === "free" || !u.plan) : tab === "pro" ? u.plan === "pro" : u.plan === "enterprise"))
+  const filtered = (tab === "internal" ? internal : users)
+    .filter((u) => tab === "all" || tab === "closed" || tab === "internal" || (tab === "free" ? planNow(u) === "free" : tab === "pro" ? planNow(u) === "pro" : planNow(u) === "enterprise"))
     .filter((u) => matches(u.name, u.email, u.username, u.company, u.primary_username))
     .sort((a, b) => {
       if (sort === "leads") return b.lead_count - a.lead_count;
@@ -226,9 +240,10 @@ export default function UsersClient({ initialTab, openCreate = false }: { initia
 
   const counts = {
     all: users.length,
-    free: users.filter((u) => u.plan === "free" || !u.plan).length,
-    pro: users.filter((u) => u.plan === "pro").length,
-    enterprise: users.filter((u) => u.plan === "enterprise").length,
+    free: users.filter((u) => planNow(u) === "free").length,
+    pro: users.filter((u) => planNow(u) === "pro").length,
+    enterprise: users.filter((u) => planNow(u) === "enterprise").length,
+    internal: internal.length,
   };
 
   async function createCard(e: React.FormEvent) {
@@ -257,7 +272,7 @@ export default function UsersClient({ initialTab, openCreate = false }: { initia
   }
 
   const shown = tab === "closed" ? closedShown.length : filtered.length;
-  const of = tab === "closed" ? closed.length : tab === "all" ? counts.all : tab === "free" ? counts.free : tab === "pro" ? counts.pro : counts.enterprise;
+  const of = tab === "closed" ? closed.length : tab === "internal" ? counts.internal : tab === "all" ? counts.all : tab === "free" ? counts.free : tab === "pro" ? counts.pro : counts.enterprise;
 
   return (
     <Stack>
@@ -294,6 +309,7 @@ export default function UsersClient({ initialTab, openCreate = false }: { initia
             { key: "pro", label: "Pro", count: loading ? null : counts.pro },
             { key: "office", label: "Office", count: loading ? null : counts.enterprise },
             { key: "closed", label: "Closed accounts", count: loading ? null : closed.length },
+            { key: "internal", label: "Internal & test", count: loading ? null : counts.internal },
           ]}
         />
 
@@ -324,6 +340,11 @@ export default function UsersClient({ initialTab, openCreate = false }: { initia
       </div>
 
       {tab === "closed" && !loading && closed.length > 0 && <ClosedSummary closed={closed} now={loadedAt} />}
+      {tab === "internal" && !loading && (
+        <p className="adm-callout-warn px-4 py-3 sc-t-subhead">
+          Your own accounts (the demo, App Review and @swiftcard.me logins) and QA&apos;s automatic test accounts. None of them is counted in any number in this admin.
+        </p>
+      )}
 
       <div className="adm-card overflow-hidden">
         {loading ? (
@@ -364,12 +385,12 @@ export default function UsersClient({ initialTab, openCreate = false }: { initia
             </ul>
           )
         ) : filtered.length === 0 ? (
-          <EmptyState className="py-10">{users.length === 0 ? "No users yet." : "No users found"}</EmptyState>
+          <EmptyState className="py-10">{(tab === "internal" ? internal : users).length === 0 ? (tab === "internal" ? "No internal or test accounts." : "No users yet.") : "No users found"}</EmptyState>
         ) : (
           <>
             {/* Column headings — only where the rows are laid out as a table. */}
             <div aria-hidden className="hidden xl:grid adm-user-grid px-5 py-2.5 sc-t-footnote font-semibold adm-muted" style={{ boxShadow: "inset 0 -1px 0 var(--adm-grid)" }}>
-              <span>User</span><span>Plan</span><span className="text-right">Cards</span><span className="text-right">Contacts</span><span className="text-right">Views</span><span>Found us via</span><span>Joined</span><span>Open</span>
+              <span>User</span><span>Plan</span><span className="text-right">Cards</span><span className="text-right">Contacts</span><span className="text-right" title="Card page views · Swift Links page views">Views</span><span>Found us via</span><span>Joined</span><span>Open</span>
             </div>
             <ul className="adm-divide">
               {filtered.map((u) => (
@@ -382,22 +403,30 @@ export default function UsersClient({ initialTab, openCreate = false }: { initia
                   <div className="flex items-center gap-3 min-w-0">
                     <Avatar name={u.name || u.email} />
                     <div className="min-w-0">
-                      <p className="sc-t-subhead font-semibold truncate">{u.name || "—"}</p>
-                      <p className="sc-t-caption adm-muted truncate">{u.email}</p>
+                      {/* The name they typed (on their card) — never a dash. */}
+                      <p className="sc-t-subhead font-semibold truncate">{u.name || u.email || "Unnamed account"}</p>
+                      {u.name && <p className="sc-t-caption adm-muted truncate">{u.email}</p>}
                       <p className="sc-t-caption adm-faint truncate">/{u.username}{u.company ? ` · ${u.company}` : ""}</p>
                     </div>
                   </div>
                   {/* Plan */}
                   <div className="mt-2.5 xl:mt-0">
-                    <PlanBadgeEditor plan={u.plan} expires={u.plan_expires_at} userId={u.id} who={u.email || u.name || "this user"} onUpdated={load} />
+                    <PlanBadgeEditor plan={u.plan} shown={planNow(u)} expires={u.plan_expires_at} userId={u.id} who={u.email || u.name || "this user"} onUpdated={load} />
+                    <BillingNote u={u} />
                   </div>
                   {/* Numbers: one line on a phone, three columns on a computer. */}
                   <p className="xl:hidden sc-t-footnote adm-muted mt-2 adm-num">
-                    {fmtNum(u.card_count)} {u.card_count === 1 ? "card" : "cards"} · {fmtNum(u.lead_count)} contacts · {fmtNum(u.view_count)} views · via {getSignupSourceLabel(u.signup_source)} · joined {fmtDate(u.created_at)}
+                    {fmtNum(u.card_count)} {u.card_count === 1 ? "card" : "cards"} · {fmtNum(u.lead_count)} contacts · {fmtNum(u.view_count)} card views{typeof u.link_view_count === "number" ? <> · {fmtNum(u.link_view_count)} Swift Links views</> : null} · via {getSignupSourceLabel(u.signup_source)} · joined {fmtDate(u.created_at)}
                   </p>
                   <span className="hidden xl:block text-right sc-t-subhead font-semibold adm-num">{fmtNum(u.card_count)}</span>
-                  <span className="hidden xl:block text-right sc-t-subhead font-semibold adm-num">{fmtNum(u.lead_count)}</span>
-                  <span className="hidden xl:block text-right sc-t-subhead adm-num">{fmtNum(u.view_count)}</span>
+                  <span className="hidden xl:block text-right adm-num">
+                    <span className="sc-t-subhead font-semibold">{fmtNum(u.lead_count)}</span>
+                    {!!u.locked_lead_count && <span className="block sc-t-caption adm-warn" title="Captured past the Free limit; hidden from them until they upgrade">{fmtNum(u.locked_lead_count)} locked</span>}
+                  </span>
+                  <span className="hidden xl:block text-right adm-num">
+                    <span className="sc-t-subhead">{fmtNum(u.view_count)}</span>
+                    {typeof u.link_view_count === "number" && <span className="block sc-t-caption adm-muted" title="Swift Links page views">+{fmtNum(u.link_view_count)} Links</span>}
+                  </span>
                   <span className="hidden xl:block min-w-0"><span className="sc-badge max-w-full truncate" title={getSignupSourceLabel(u.signup_source)}>{getSignupSourceLabel(u.signup_source)}</span></span>
                   <span className="hidden xl:block sc-t-footnote adm-muted adm-num">{fmtDate(u.created_at)}</span>
                   {/* Open */}
@@ -573,6 +602,29 @@ export default function UsersClient({ initialTab, openCreate = false }: { initia
         </div>
       )}
     </Stack>
+  );
+}
+
+/** How the plan is paid for, in a few words under the plan (nothing for Free). */
+function BillingNote({ u }: { u: User }) {
+  const b = u.billing;
+  if (!b) return null;
+  const bits: { text: string; tone: "good" | "warn" | "bad" | "muted" }[] = [];
+  if (u.kind && u.kind !== "customer") bits.push({ text: u.kind === "test" ? "QA test account" : "Ours", tone: "muted" });
+  if (b.source === "office_member") bits.push({ text: "Office member (team pays)", tone: "muted" });
+  if (b.source === "apple") bits.push({ text: "Pays through Apple", tone: "good" });
+  if (b.source === "stripe") {
+    if (b.trialEndsAt) bits.push({ text: `Trial · ends ${fmtDate(b.trialEndsAt)}`, tone: "warn" });
+    else bits.push({ text: b.everPaid ? "Pays through Stripe" : "Stripe · not charged yet", tone: b.everPaid ? "good" : "muted" });
+  }
+  if (b.pastDue) bits.push({ text: "Payment failed", tone: "bad" });
+  if (b.cancelling) bits.push({ text: "Cancelling", tone: "bad" });
+  if (u.office_role === "owner") bits.push({ text: "Office owner", tone: "muted" });
+  if (!bits.length) return null;
+  return (
+    <p className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 sc-t-caption">
+      {bits.map((x) => <span key={x.text} className={x.tone === "muted" ? "adm-muted" : `adm-${x.tone}`}>{x.text}</span>)}
+    </p>
   );
 }
 

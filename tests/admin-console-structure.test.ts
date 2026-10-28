@@ -92,21 +92,22 @@ describe("Users › Closed accounts: who left, and why in their words", () => {
   // they closed the account: all the description they put in."
   const users = read("src/app/admin/users/UsersClient.tsx");
   const list = read("src/app/api/admin/users/route.ts");
+  const directory = read("src/lib/admin-data/directory.ts");
   const one = read("src/app/api/admin/users/[id]/route.ts");
   const detail = read("src/app/admin/users/[id]/UserDetailClient.tsx");
 
-  it("the Users page has All, Free, Pro, Office and Closed accounts", () => {
+  it("the Users page has All, Free, Pro, Office, Closed accounts and Internal & test", () => {
     // Tab entries carry a count; the Create card form's fields don't.
     const keys = [...users.matchAll(/\{ key: "([a-z]+)", label: "([^"]+)", count:/g)].map((m) => `${m[1]}:${m[2]}`);
-    expect(keys).toEqual(["all:All", "free:Free", "pro:Pro", "office:Office", "closed:Closed accounts"]);
+    expect(keys).toEqual(["all:All", "free:Free", "pro:Pro", "office:Office", "closed:Closed accounts", "internal:Internal & test"]);
   });
 
   it("the list API returns closed accounts with the reason in words and the plan they had", () => {
-    expect(list).toContain("reason_text: reasonText(del.reason, plan)");
-    expect(list).toContain("const plan = del.plan ??");
-    expect(list).toContain("return NextResponse.json({ users, closed });");
-    // QA's throwaway accounts are not customers.
-    expect(list).toContain("QA_EMAIL_DOMAIN");
+    expect(directory).toContain("reason_text: reasonText(del.reason, plan)");
+    expect(directory).toContain("const plan = del.plan ??");
+    expect(list).toContain("return NextResponse.json({ users, internal, closed });");
+    // QA's throwaway accounts are not customers, so never "closed accounts".
+    expect(directory).toContain('.filter((a) => a.deleted && a.kind !== "test")');
   });
 
   it("a user's page says why they left, or nearly did", () => {

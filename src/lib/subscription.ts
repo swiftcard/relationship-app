@@ -54,6 +54,11 @@ export function priceIdForPlan(plan: BillingPlan, interval: BillingInterval): st
   return priceIdFor(plan, interval, buildPrices());
 }
 
+/** Every configured price (from env), for the admin's Stripe connection check. */
+export function configuredPrices(): PriceEntry[] {
+  return buildPrices();
+}
+
 // ── Upgrade vs downgrade ─────────────────────────────────────────────────────
 // Drives WHEN money moves: an upgrade is invoiced immediately (the customer gets
 // the bigger plan now, so they pay for it now — otherwise they'd have Office

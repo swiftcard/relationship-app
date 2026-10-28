@@ -107,9 +107,14 @@ describe("the Branding page is the brand source", () => {
 describe("accounts are identified by their auth signup email", () => {
   const SITES: Array<[string, string]> = [
     ["src/app/api/stripe/checkout/route.ts", "getAccountEmail"],
-    ["src/app/api/admin/users/route.ts", "getAccountEmailMap"],
+    // The admin's Users page, its export and a user's page all read accounts
+    // through lib/admin-data (2026-10-28), which pages the auth users itself
+    // (it needs their sign-in name as well as the email).
+    ["src/app/api/admin/users/route.ts", "buildDirectory"],
+    ["src/app/api/admin/users/export/route.ts", "buildDirectory"],
+    ["src/lib/admin-data/directory.ts", "loadAccounts"],
+    ["src/lib/admin-data/accounts.ts", "auth.admin.listUsers"],
     ["src/app/api/admin/users/[id]/route.ts", "getAccountEmail"],
-    ["src/app/api/admin/users/export/route.ts", "getAccountEmailMap"],
     ["src/lib/office-team.ts", "getAccountEmailMap"],
     ["src/lib/office-analytics.ts", "getAccountEmail"],
     ["src/lib/office-cards.ts", "getAccountEmailMap"],

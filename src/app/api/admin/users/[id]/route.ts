@@ -4,47 +4,51 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { getAccountEmail } from "@/lib/account-email";
 import { requireAdmin } from "@/lib/admin";
 import { REFERRAL, freeMonthDays } from "@/lib/referral";
-import { isPaidPlan } from "@/lib/plan";
 import { DELETION_GRACE_DAYS } from "@/lib/deletion-grace";
+import { planFromPriceId } from "@/lib/subscription";
 import { reasonText, savedByText } from "@/app/admin/_ui/reasons";
+import { loadAccount, hasLegacyProfileCard } from "@/lib/admin-data/accounts";
+import { dailyActivity, perCardTotals, recentContacts, totalsFor } from "@/lib/admin-data/customer-stats";
+import { getSubscription, monthlyCents } from "@/lib/admin-data/billing";
 
-// Everything the admin needs about ONE user: identity, plan, how they pay,
-// attribution, every card with per-card views/leads, 30-day activity, recent
-// leads — and `leaving`: if they closed the account or opened the delete /
+// Everything the admin needs about ONE user: identity, plan, how they pay
+// (and, for a Stripe customer, the live subscription from Stripe), every card
+// with its own views and contacts, 30-day activity in New York days, recent
+// contacts — and `leaving`: if they closed the account or opened the delete /
 // cancel flow, why, in their own words (customization._deletion/_retention).
+// Every count goes through lib/admin-data/customer-stats: the same database
+// aggregates the customer's own pages use, so the numbers agree with what
+// they see (no 1,000-row cap, no sample contact, card and Swift Links apart).
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!(await requireAdmin())) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
 
   const admin = getAdminSupabase();
-  const { data: p } = await admin
-    .from("profiles")
-    .select("id, username, name, email, plan, created_at, company, title, phone, website, photo_url, signup_source, plan_expires_at, referral_code, referred_by, referral_reward_earned, customization, stripe_subscription_id")
-    .eq("id", id)
-    .maybeSingle();
-  if (!p) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const a = await loadAccount(id);
+  if (!a) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const { data: cards } = await admin
-    .from("cards")
-    .select("id, username, label, name, title, company, template, created_at, is_offline")
-    .eq("user_id", id)
-    .order("created_at", { ascending: true });
-
-  // All slugs this user owns (profile slug covers legacy cards).
-  const usernames = Array.from(new Set([p.username as string, ...(cards ?? []).map((c) => c.username as string)].filter(Boolean)));
-
-  const now = Date.now();
-  const DAY = 86_400_000;
-
-  const [{ data: leads }, { data: views }, { data: refRows }] = await Promise.all([
-    usernames.length
-      ? admin.from("leads").select("id, name, email, phone, source, card_owner, created_at").in("card_owner", usernames).order("created_at", { ascending: false }).limit(500)
-      : Promise.resolve({ data: [] as never[] }),
-    usernames.length
-      ? admin.from("card_views").select("username, viewed_at").in("username", usernames.flatMap((u) => [u, `${u}__links`])).limit(5000)
-      : Promise.resolve({ data: [] as never[] }),
+  const [{ data: extra }, { data: cardRows }, { data: refRows }] = await Promise.all([
+    admin.from("profiles").select("phone, website, photo_url, referred_by, referral_reward_earned").eq("id", id).maybeSingle(),
+    admin.from("cards").select("id, username, label, name, title, company, template, created_at, is_offline").eq("user_id", id),
     admin.from("referrals").select("status, reward_granted").eq("referrer_id", id),
   ]);
+
+  // A legacy profile card only by the public page's own rule (not migrated,
+  // has a name, no card at that slug) — the admin used to skip "has a name"
+  // and showed every customer a phantom "(primary)" card.
+  const legacy = hasLegacyProfileCard({ username: a.username, profileName: a.profileName, customization: a.customization, cardSlugs: a.cards.map((c) => c.username) });
+  const withLegacy = legacy && a.username
+    ? { ...a, cards: [...a.cards, { id: "profile", username: a.username, name: a.profileName, label: null, created_at: a.createdAt, is_offline: false }] }
+    : a;
+
+  const [totalsMap, perCard, series, recent, sub] = await Promise.all([
+    totalsFor([a]),
+    perCardTotals(withLegacy),
+    dailyActivity(a, 30),
+    recentContacts(a, 12),
+    a.stripeSubscriptionId ? getSubscription(a.stripeSubscriptionId) : Promise.resolve(null),
+  ]);
+  const totals = totalsMap.get(a.id)!;
 
   // Referral earnings (3 valid signups = 1 claimable month, tap-to-claim, max 3).
   const validRefs = (refRows ?? []).filter((r) => r.status !== "flagged" && r.status !== "self_referral");
@@ -52,63 +56,27 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const refMonthsClaimed = Math.min(3, Math.floor(refClaimedRows / 3));
   const refMonthsClaimable = Math.max(0, Math.min(3, Math.floor(Math.min(validRefs.length, 9) / 3)) - refMonthsClaimed);
 
-  // Per-card rollups + 30-day daily series.
-  const leadsByCard: Record<string, number> = {};
-  for (const l of leads ?? []) leadsByCard[l.card_owner as string] = (leadsByCard[l.card_owner as string] ?? 0) + 1;
-
-  const viewsByCard: Record<string, { card: number; links: number }> = {};
-  const series: Record<string, { views: number; leads: number }> = {};
-  for (let i = 29; i >= 0; i--) series[new Date(now - i * DAY).toISOString().slice(0, 10)] = { views: 0, leads: 0 };
-  let views30 = 0;
-  for (const v of views ?? []) {
-    const raw = (v.username as string) || "";
-    const base = raw.replace(/__links$/, "");
-    const slot = (viewsByCard[base] ??= { card: 0, links: 0 });
-    if (raw.endsWith("__links")) slot.links++; else slot.card++;
-    const t = new Date(v.viewed_at as string).getTime();
-    if (t >= now - 30 * DAY) {
-      views30++;
-      const k = new Date(v.viewed_at as string).toISOString().slice(0, 10);
-      if (series[k]) series[k].views++;
-    }
-  }
-  let leads30 = 0;
-  for (const l of leads ?? []) {
-    const t = new Date(l.created_at as string).getTime();
-    if (t >= now - 30 * DAY) {
-      leads30++;
-      const k = new Date(l.created_at as string).toISOString().slice(0, 10);
-      if (series[k]) series[k].leads++;
-    }
-  }
-
   // referred_by is the REFERRER'S user id — resolve it to a human identity,
   // labeled by the referrer's AUTH signup email (profiles.email drifts to the
   // card's public contact email — see lib/account-email).
   let referredBy: { id: string; name: string | null; email: string | null } | null = null;
-  if (p.referred_by) {
-    const { data: ref } = await admin.from("profiles").select("id, name, email").eq("id", p.referred_by).maybeSingle();
-    if (ref) {
-      const refEmail = await getAccountEmail(ref.id as string, ref.email as string | null);
-      referredBy = { id: ref.id as string, name: ref.name as string | null, email: refEmail };
-    }
+  if (extra?.referred_by) {
+    const ref = await loadAccount(extra.referred_by as string);
+    if (ref) referredBy = { id: ref.id, name: ref.name, email: ref.email ?? (await getAccountEmail(ref.id, null)) };
   }
 
-  const cardList = (cards ?? []).map((c) => ({
-    ...c,
-    leads: leadsByCard[c.username as string] ?? 0,
-    cardViews: viewsByCard[c.username as string]?.card ?? 0,
-    linkViews: viewsByCard[c.username as string]?.links ?? 0,
-  }));
-  // Legacy profile-slug card (pre-migration accounts have no cards rows).
-  // Migrated profiles' slugs no longer resolve publicly, so exclude them.
-  const cust = (p.customization ?? {}) as { _migrated?: boolean };
-  const hasProfileCard = !cust._migrated && !!p.username && !(cards ?? []).some((c) => c.username === p.username);
+  const byId = new Map((cardRows ?? []).map((c) => [c.id as string, c]));
+  const cardList = a.cards.map((c) => {
+    const row = byId.get(c.id) ?? {};
+    const t = perCard.get(c.id);
+    return { ...row, id: c.id, username: c.username, label: c.label, name: c.name, is_offline: c.is_offline, leads: t?.leads ?? 0, cardViews: t?.views ?? 0, linkViews: t?.swiftlinkViews ?? 0 };
+  });
+  const legacyStats = perCard.get("profile");
 
+  const custAll = a.customization;
   // Why they left, or nearly did. The delete flow writes _deletion (the
   // final answer) and every pass through its first step appends to
   // _retention.surveys; an offer they took is _retention.savedBy.
-  const custAll = (p.customization ?? {}) as Record<string, unknown>;
   const ret = (custAll._retention ?? {}) as { surveys?: { reason?: string; comment?: string; plan?: string; at?: string }[]; savedBy?: string; savedAt?: string };
   const del = custAll._deletion as { reason?: string; comment?: string; plan?: string; at?: string } | undefined;
   const closed = custAll._deleted === true;
@@ -128,50 +96,65 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       }
     : null;
 
-  // How the plan is paid for: a Stripe subscription, Apple in the iPhone app,
-  // a free month that ends by itself, or nothing (moved by hand).
-  const billing = p.stripe_subscription_id
-    ? "stripe"
-    : isApplePaid(p.customization)
-      ? "apple"
-      : isPaidPlan(p.plan as string) && p.plan_expires_at
-        ? "grant"
-        : "none";
+  // The live subscription, straight from Stripe (an error note when Stripe
+  // doesn't return it, so the page says so instead of guessing).
+  const subscription = a.stripeSubscriptionId
+    ? sub
+      ? {
+          status: sub.status,
+          plan: planFromPriceId(sub.items[0]?.priceId)?.plan ?? null,
+          interval: sub.items[0]?.interval === "year" ? "annual" : "monthly",
+          unitCents: sub.items[0]?.unitAmount ?? 0,
+          quantity: sub.items[0]?.quantity ?? 1,
+          monthlyCents: monthlyCents(sub),
+          discount: sub.discounts[0] ? { percentOff: sub.discounts[0].percentOff, amountOff: sub.discounts[0].amountOff, duration: sub.discounts[0].duration, end: sub.discounts[0].end } : null,
+          trialEnd: sub.trialEnd ? new Date(sub.trialEnd * 1000).toISOString() : null,
+          periodEnd: sub.periodEnd ? new Date(sub.periodEnd * 1000).toISOString() : null,
+          cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+          created: new Date(sub.created * 1000).toISOString(),
+          livemode: sub.livemode,
+        }
+      : { error: "Stripe didn't return this subscription (it may have been deleted, or Stripe is unreachable)." }
+    : null;
 
   return NextResponse.json({
     leaving,
+    subscription,
     user: {
-      billing,
-      id: p.id, username: p.username, name: p.name,
+      billing: a.billing.source,
+      billingState: a.billing,
+      kind: a.kind,
+      office_role: a.officeRole,
+      id: a.id, username: a.username, name: a.name,
       // Account identity = auth signup email, never the card's contact email.
-      email: await getAccountEmail(p.id as string, p.email as string | null),
-      plan: p.plan,
-      plan_expires_at: p.plan_expires_at ?? null, created_at: p.created_at,
-      company: p.company, title: p.title, phone: p.phone, website: p.website, photo_url: p.photo_url,
-      signup_source: p.signup_source ?? "direct", referral_code: p.referral_code ?? null,
-      referred_by: referredBy, referral_reward_earned: p.referral_reward_earned ?? false,
-      deleted: !!((p.customization as { _deleted?: boolean } | null)?._deleted),
+      email: a.email,
+      plan: a.plan,
+      effective_plan: a.effectivePlan,
+      plan_expires_at: a.planExpiresAt, created_at: a.createdAt,
+      company: a.company, title: a.title, phone: extra?.phone ?? null, website: extra?.website ?? null, photo_url: extra?.photo_url ?? null,
+      signup_source: a.signupSource, referral_code: a.referralCode,
+      referred_by: referredBy, referral_reward_earned: extra?.referral_reward_earned ?? false,
+      deleted: a.deleted,
+      apple: isApplePaid(a.customization),
     },
     cards: cardList,
-    profileCard: hasProfileCard
-      ? {
-          username: p.username,
-          leads: leadsByCard[p.username as string] ?? 0,
-          cardViews: viewsByCard[p.username as string]?.card ?? 0,
-          linkViews: viewsByCard[p.username as string]?.links ?? 0,
-        }
+    profileCard: legacy && a.username
+      ? { username: a.username, leads: legacyStats?.leads ?? 0, cardViews: legacyStats?.views ?? 0, linkViews: legacyStats?.swiftlinkViews ?? 0 }
       : null,
     totals: {
-      leads: (leads ?? []).length,
-      views: (views ?? []).length,
-      leads30,
-      views30,
+      leads: totals.leads,
+      lockedLeads: totals.lockedLeads,
+      views: totals.views,
+      swiftlinkViews: totals.swiftlinkViews,
+      contactsSaved: totals.contactsSaved,
+      leads30: series.reduce((n, d) => n + d.leads, 0),
+      views30: series.reduce((n, d) => n + d.views, 0),
       referred: validRefs.length,
       referralMonthsClaimed: refMonthsClaimed,
       referralMonthsClaimable: refMonthsClaimable,
     },
-    series: Object.entries(series).map(([date, v]) => ({ date, ...v })),
-    recentLeads: (leads ?? []).slice(0, 12),
+    series,
+    recentLeads: recent,
   });
 }
 

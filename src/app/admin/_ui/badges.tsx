@@ -19,12 +19,13 @@ export function ClosedBadge() {
   return <span className="sc-badge sc-badge-red">Closed</span>;
 }
 
-export type Billing = "stripe" | "apple" | "grant" | "none";
+export type Billing = "stripe" | "apple" | "grant" | "office_member" | "none";
 
 const BILLING: Record<Billing, { cls: string; label: string }> = {
   stripe: { cls: "sc-badge sc-badge-green", label: "Paying · Stripe" },
   apple: { cls: "sc-badge sc-badge-green", label: "Paying · Apple" },
   grant: { cls: "sc-badge sc-badge-orange", label: "Free Pro (gift)" },
+  office_member: { cls: "sc-badge sc-badge-office", label: "Office member · team pays" },
   none: { cls: "sc-badge", label: "Not billed" },
 };
 

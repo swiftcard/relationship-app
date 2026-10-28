@@ -2,6 +2,9 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { from as senderAddress, INBOX_ADDRESS } from "@/lib/email-senders";
 import { htmlToText } from "@/lib/email-text";
 import { escapeHtml } from "@/lib/escape";
+import { paged } from "@/lib/crew/paged";
+import { getAccountEmailMap } from "@/lib/account-email";
+import { isTestMailbox } from "@/lib/test-mailbox";
 
 // ── Someone tried to leave. Tell the owner. ──────────────────────────────────
 //
@@ -115,13 +118,20 @@ export async function retentionFunnel(limit = 200): Promise<{
   byReason: { reason: string; attempts: number; saved: number }[];
 }> {
   const admin = getAdminSupabase();
-  const { data } = await admin
-    .from("profiles")
-    .select("id, email, plan, customization")
-    .limit(2000);
+  // Every profile, paged (one select stops at 1,000 rows), with its sign-in
+  // email (profiles.email drifts to the card's public email), and never QA's
+  // throwaway accounts — they run the delete flow on purpose every night.
+  const [data, emails] = await Promise.all([
+    paged<{ id: string; email: string | null; plan: string | null; customization: unknown }>(
+      (from, to) => admin.from("profiles").select("id, email, plan, customization").order("id").range(from, to),
+      200_000, "retention profiles"),
+    getAccountEmailMap(),
+  ]);
 
   const rows: RetentionRow[] = [];
-  for (const p of data ?? []) {
+  for (const p of data) {
+    const email = emails.get(p.id) ?? p.email ?? null;
+    if (isTestMailbox(email)) continue;
     const cust = (p.customization as Record<string, unknown> | null) ?? {};
     const ret = (cust._retention as { surveys?: { reason: string; comment: string; plan: string; at: string }[]; savedBy?: string; savedAt?: string } | undefined) ?? {};
     const del = cust._deletion as { reason?: string; comment?: string; plan?: string; at?: string } | undefined;
@@ -131,7 +141,7 @@ export async function retentionFunnel(limit = 200): Promise<{
     const deleted = !!del || cust._deleted === true;
     rows.push({
       userId: p.id as string,
-      email: (p.email as string | null) ?? null,
+      email,
       // A closed account's plan is reset to free; the plan they were on when
       // they closed is the one worth showing (it's kept on _deletion).
       plan: (deleted && del?.plan) || ((p.plan as string | null) ?? null),

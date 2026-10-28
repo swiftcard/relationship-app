@@ -6,7 +6,7 @@
 // nearly was), why, in the person's own words. Tabs: Summary · Cards ·
 // Contacts · Plan & billing · Referrals.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { getSignupSourceLabel, getSourceLabel } from "@/lib/source-labels";
 import Link from "next/link";
 import { adminErrorText, grantMonthWarning, planChangeWarning, takeOfflineWarning } from "@/lib/admin-confirm";
@@ -41,13 +41,37 @@ type Detail = {
     referred_by: { id: string; name: string | null; email: string | null } | null;
     referral_reward_earned: boolean; deleted: boolean;
     billing?: Billing;
+    billingState?: { source: Billing; trialEndsAt: string | null; pastDue: boolean; cancelling: boolean; everPaid: boolean };
+    kind?: "customer" | "internal" | "test";
+    office_role?: "owner" | "member" | null;
+    effective_plan?: string;
+    apple?: boolean;
   };
   leaving?: Leaving | null;
+  /** The live Stripe subscription (null: none; {error}: Stripe didn't return it). */
+  subscription?: Subscription | { error: string } | null;
   cards: { id: string; username: string; label: string | null; name: string | null; title: string | null; company: string | null; template: string | null; created_at: string; leads: number; cardViews: number; linkViews: number; is_offline?: boolean }[];
   profileCard: { username: string; leads: number; cardViews: number; linkViews: number } | null;
-  totals: { leads: number; views: number; leads30: number; views30: number; referred: number; referralMonthsClaimed?: number; referralMonthsClaimable?: number };
+  totals: { leads: number; views: number; leads30: number; views30: number; referred: number; referralMonthsClaimed?: number; referralMonthsClaimable?: number; swiftlinkViews?: number; lockedLeads?: number; contactsSaved?: number };
   series: { date: string; views: number; leads: number }[];
-  recentLeads: { id: string; name: string | null; email: string | null; phone: string | null; source: string | null; card_owner: string; created_at: string }[];
+  recentLeads: { id: string; name: string | null; email: string | null; phone: string | null; source: string | null; card_owner: string; created_at: string; locked?: boolean }[];
+};
+
+type Subscription = {
+  status: string; plan: "pro" | "office" | null; interval: "monthly" | "annual"; unitCents: number; quantity: number; monthlyCents: number;
+  discount: { percentOff: number | null; amountOff: number | null; duration: string; end: number | null } | null;
+  trialEnd: string | null; periodEnd: string | null; cancelAtPeriodEnd: boolean; created: string; livemode: boolean;
+};
+
+const STATUS_TEXT: Record<string, { label: string; tone: "good" | "warn" | "bad" | "neutral" }> = {
+  active: { label: "Active", tone: "good" },
+  trialing: { label: "Free trial", tone: "warn" },
+  past_due: { label: "Payment failed — retrying", tone: "bad" },
+  unpaid: { label: "Unpaid", tone: "bad" },
+  canceled: { label: "Cancelled", tone: "neutral" },
+  incomplete: { label: "Checkout not finished", tone: "warn" },
+  incomplete_expired: { label: "Checkout expired", tone: "neutral" },
+  paused: { label: "Paused", tone: "neutral" },
 };
 
 type Tab = "summary" | "cards" | "contacts" | "plan" | "referrals";
@@ -131,7 +155,8 @@ export default function UserDetailClient({ userId, initialTab }: { userId: strin
     ...cards.map((c) => ({ key: c.id, username: c.username, label: c.label || c.name || c.username, template: c.template ?? "classic-pro", leads: c.leads, cardViews: c.cardViews, linkViews: c.linkViews, offline: c.is_offline === true, moderatable: true })),
     ...(profileCard ? [{ key: "profile", username: profileCard.username, label: `${user.name || user.username} (primary)`, template: "primary", leads: profileCard.leads, cardViews: profileCard.cardViews, linkViews: profileCard.linkViews, offline: false, moderatable: false }] : []),
   ];
-  const paidPlan = isPaidPlan(user.plan);
+  const planNow = user.effective_plan ?? user.plan;
+  const paidPlan = isPaidPlan(planNow);
 
   return (
     <Stack>
@@ -148,6 +173,8 @@ export default function UserDetailClient({ userId, initialTab }: { userId: strin
               {user.plan_expires_at && <FreeMonthBadge until={user.plan_expires_at} />}
               {user.deleted && <ClosedBadge />}
               {paidPlan && user.billing && <BillingBadge billing={user.billing} />}
+              {user.kind && user.kind !== "customer" && <StatusBadge tone="neutral">{user.kind === "test" ? "QA test account" : "Ours — not counted"}</StatusBadge>}
+              {user.office_role === "owner" && <StatusBadge tone="neutral">Office owner</StatusBadge>}
             </div>
             <p className="sc-t-subhead adm-muted mt-2 break-words">
               {[user.email, user.company, user.title].filter(Boolean).join(" · ")}
@@ -203,12 +230,12 @@ export default function UserDetailClient({ userId, initialTab }: { userId: strin
         <Stack>
           <KpiGrid cols={5}>
             <KpiCard label="Cards" value={fmtNum(allCards.length)} />
-            <KpiCard label="Contacts captured" value={fmtNum(totals.leads)} sub={`${fmtNum(totals.leads30)} in 30 days`} />
-            <KpiCard label="Total views" value={fmtNum(totals.views)} />
-            <KpiCard label="Views · 30 days" value={fmtNum(totals.views30)} />
+            <KpiCard label="Contacts captured" value={fmtNum(totals.leads)} sub={<>{fmtNum(totals.leads30)} in 30 days{totals.lockedLeads ? <> · <span className="adm-warn">{fmtNum(totals.lockedLeads)} locked</span></> : null}</>} />
+            <KpiCard label="Card views" value={fmtNum(totals.views)} sub="All time" />
+            <KpiCard label="Swift Links views" value={typeof totals.swiftlinkViews === "number" ? fmtNum(totals.swiftlinkViews) : "—"} sub="All time" />
             <KpiCard label="People they referred" value={fmtNum(totals.referred)} />
           </KpiGrid>
-          <Section title="Last 30 days" hint="Views of their cards and Swift Links, with the contacts they captured on top.">
+          <Section title="Last 30 days" hint={`${fmtNum(totals.views30)} views of their cards and Swift Links, with the ${fmtNum(totals.leads30)} contacts they captured on top. New York days.`}>
             <TrendBars
               mode="stack"
               data={series.map((s) => ({ date: s.date, values: [s.views, s.leads] }))}
@@ -289,15 +316,16 @@ export default function UserDetailClient({ userId, initialTab }: { userId: strin
       {tab === "plan" && (
         <Section title="Plan & billing" hint="Setting a plan directly clears any free-month expiry.">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <p className="sc-t-title2">{planName(user.plan)}</p>
+            <p className="sc-t-title2">{planName(planNow)}</p>
             {paidPlan && user.billing && <BillingBadge billing={user.billing} />}
             {user.plan_expires_at && <FreeMonthBadge until={user.plan_expires_at} />}
           </div>
           <p className="sc-t-footnote adm-muted mt-1">
             {user.plan_expires_at
               ? `A free month of Pro, ending ${fmtLongDate(user.plan_expires_at)}. It ends by itself.`
-              : !paidPlan ? "On the free plan." : user.billing === "stripe" ? "Paying through Stripe." : user.billing === "apple" ? "Paying through Apple in the iPhone app." : "On a paid plan with no payment behind it."}
+              : !paidPlan ? "On the free plan." : user.billing === "stripe" ? "Billed through Stripe — the live subscription is below." : user.billing === "apple" ? "Paying through Apple in the iPhone app (Apple keeps the billing; nothing to see in Stripe)." : user.billing === "office_member" ? "A member of an Office team — the team's owner pays for the seat." : "On a paid plan with no payment behind it (moved by hand)."}
           </p>
+          {data.subscription && <SubscriptionPanel sub={data.subscription} />}
           <div className="adm-rule mt-4 pt-4">
             <p className="sc-t-footnote font-semibold mb-2.5">Change plan</p>
             <div className="flex flex-wrap items-center gap-2">
@@ -377,7 +405,7 @@ function ContactList({ leads }: { leads: Detail["recentLeads"] }) {
           <Avatar name={l.name || l.email || l.phone} size={32} />
           <div className="min-w-0 flex-1">
             <p className="sc-t-subhead font-medium truncate">{l.name || l.email || l.phone || "—"}</p>
-            <p className="sc-t-caption adm-muted truncate">via {getSourceLabel(l.source)} · /{l.card_owner}</p>
+            <p className="sc-t-caption adm-muted truncate">via {getSourceLabel(l.source)} · /{l.card_owner}{l.locked ? <> · <span className="adm-warn">locked (over the Free limit)</span></> : null}</p>
           </div>
           <span className="sc-t-caption adm-muted shrink-0 adm-num">{fmtDate(l.created_at)}</span>
         </li>
@@ -438,4 +466,39 @@ function LeavingCallout({ leaving }: { leaving: Leaving }) {
       </div>
     </section>
   );
+}
+
+/** The live subscription from Stripe: what they pay, when, and what's next. */
+function SubscriptionPanel({ sub }: { sub: Subscription | { error: string } }) {
+  if ("error" in sub) {
+    return <p className="adm-callout-warn px-4 py-3 sc-t-subhead mt-4">{sub.error}</p>;
+  }
+  const st = STATUS_TEXT[sub.status] ?? { label: sub.status, tone: "neutral" as const };
+  const price = `${fmtMoneyCents(sub.unitCents)}${sub.quantity > 1 ? ` × ${sub.quantity} seats` : ""} / ${sub.interval === "annual" ? "year" : "month"}`;
+  const discount = sub.discount
+    ? `${sub.discount.percentOff ? `${sub.discount.percentOff}% off` : sub.discount.amountOff ? `${fmtMoneyCents(sub.discount.amountOff)} off` : "Discount"} (${sub.discount.duration === "forever" ? "forever" : sub.discount.duration === "once" ? "first payment only" : sub.discount.end ? `until ${fmtLongDate(new Date(sub.discount.end * 1000).toISOString())}` : "for a while"})`
+    : null;
+  const rows: [string, React.ReactNode][] = [
+    ["Status", <StatusBadge key="s" tone={st.tone}>{st.label}</StatusBadge>],
+    ["Plan", `${sub.plan === "office" ? "Office" : "Pro"} · ${price}`],
+    ["Brings in", `${fmtMoneyCents(sub.monthlyCents)} a month${sub.status === "trialing" ? " once the trial ends" : ""}`],
+  ];
+  if (discount) rows.push(["Discount", discount]);
+  if (sub.trialEnd && sub.status === "trialing") rows.push(["Trial ends", fmtLongDate(sub.trialEnd)]);
+  if (sub.periodEnd) rows.push([sub.cancelAtPeriodEnd ? "Ends on" : sub.status === "trialing" ? "First charge" : "Next charge", fmtLongDate(sub.periodEnd)]);
+  rows.push(["Started", fmtLongDate(sub.created)]);
+  if (!sub.livemode) rows.push(["Mode", "Stripe TEST mode — not real money"]);
+  return (
+    <div className="adm-inset mt-4 p-4">
+      <p className="sc-t-footnote font-semibold mb-2.5">Live from Stripe</p>
+      <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-[auto_1fr] sc-t-subhead">
+        {rows.map(([k, v]) => (<Fragment key={k}><dt className="adm-muted">{k}</dt><dd>{v}</dd></Fragment>))}
+      </dl>
+      {sub.cancelAtPeriodEnd && <p className="adm-bad sc-t-footnote mt-3">They&apos;ve cancelled: it ends at the date above and won&apos;t renew.</p>}
+    </div>
+  );
+}
+
+function fmtMoneyCents(c: number): string {
+  return `$${(c / 100).toLocaleString("en-US", { minimumFractionDigits: c % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
 }
