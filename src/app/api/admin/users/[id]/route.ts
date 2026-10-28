@@ -4,9 +4,14 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { getAccountEmail } from "@/lib/account-email";
 import { requireAdmin } from "@/lib/admin";
 import { REFERRAL, freeMonthDays } from "@/lib/referral";
+import { isPaidPlan } from "@/lib/plan";
+import { DELETION_GRACE_DAYS } from "@/lib/deletion-grace";
+import { reasonText, savedByText } from "@/app/admin/_ui/reasons";
 
-// Everything the admin needs about ONE user: identity, plan, attribution,
-// every card with per-card views/leads, 30-day activity, recent leads.
+// Everything the admin needs about ONE user: identity, plan, how they pay,
+// attribution, every card with per-card views/leads, 30-day activity, recent
+// leads — and `leaving`: if they closed the account or opened the delete /
+// cancel flow, why, in their own words (customization._deletion/_retention).
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!(await requireAdmin())) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
@@ -14,7 +19,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const admin = getAdminSupabase();
   const { data: p } = await admin
     .from("profiles")
-    .select("id, username, name, email, plan, created_at, company, title, phone, website, photo_url, signup_source, plan_expires_at, referral_code, referred_by, referral_reward_earned, customization")
+    .select("id, username, name, email, plan, created_at, company, title, phone, website, photo_url, signup_source, plan_expires_at, referral_code, referred_by, referral_reward_earned, customization, stripe_subscription_id")
     .eq("id", id)
     .maybeSingle();
   if (!p) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -100,8 +105,43 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const cust = (p.customization ?? {}) as { _migrated?: boolean };
   const hasProfileCard = !cust._migrated && !!p.username && !(cards ?? []).some((c) => c.username === p.username);
 
+  // Why they left, or nearly did. The delete flow writes _deletion (the
+  // final answer) and every pass through its first step appends to
+  // _retention.surveys; an offer they took is _retention.savedBy.
+  const custAll = (p.customization ?? {}) as Record<string, unknown>;
+  const ret = (custAll._retention ?? {}) as { surveys?: { reason?: string; comment?: string; plan?: string; at?: string }[]; savedBy?: string; savedAt?: string };
+  const del = custAll._deletion as { reason?: string; comment?: string; plan?: string; at?: string } | undefined;
+  const closed = custAll._deleted === true;
+  const surveys = ret.surveys ?? [];
+  const last = surveys[surveys.length - 1];
+  const leaving = closed || surveys.length > 0
+    ? {
+        closed,
+        closed_at: closed ? del?.at ?? null : null,
+        purge_at: closed && del?.at ? new Date(Date.parse(del.at) + DELETION_GRACE_DAYS * 86_400_000).toISOString() : null,
+        plan_at_close: closed ? del?.plan ?? null : null,
+        reason_text: (del?.reason || last?.reason) ? reasonText(del?.reason || last?.reason, del?.plan ?? last?.plan) : null,
+        comment: del?.comment || last?.comment || null,
+        surveys: surveys.map((s) => ({ at: s.at ?? "", plan: s.plan ?? null, reason_text: reasonText(s.reason, s.plan), comment: s.comment || null })),
+        saved_by_text: savedByText(ret.savedBy),
+        saved_at: ret.savedAt ?? null,
+      }
+    : null;
+
+  // How the plan is paid for: a Stripe subscription, Apple in the iPhone app,
+  // a free month that ends by itself, or nothing (moved by hand).
+  const billing = p.stripe_subscription_id
+    ? "stripe"
+    : isApplePaid(p.customization)
+      ? "apple"
+      : isPaidPlan(p.plan as string) && p.plan_expires_at
+        ? "grant"
+        : "none";
+
   return NextResponse.json({
+    leaving,
     user: {
+      billing,
       id: p.id, username: p.username, name: p.name,
       // Account identity = auth signup email, never the card's contact email.
       email: await getAccountEmail(p.id as string, p.email as string | null),

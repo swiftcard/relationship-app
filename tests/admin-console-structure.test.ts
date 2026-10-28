@@ -86,6 +86,41 @@ describe("Referrals and Retention are tabs of Company Analytics, not pages", () 
   });
 });
 
+describe("Users › Closed accounts: who left, and why in their words", () => {
+  // Owner, 2026-10-27: "we should also have Closed Accounts so we know which
+  // users close their accounts. When we click on that user, it'll tell us why
+  // they closed the account: all the description they put in."
+  const users = read("src/app/admin/users/UsersClient.tsx");
+  const list = read("src/app/api/admin/users/route.ts");
+  const one = read("src/app/api/admin/users/[id]/route.ts");
+  const detail = read("src/app/admin/users/[id]/UserDetailClient.tsx");
+
+  it("the Users page has All, Free, Pro, Office and Closed accounts", () => {
+    // Tab entries carry a count; the Create card form's fields don't.
+    const keys = [...users.matchAll(/\{ key: "([a-z]+)", label: "([^"]+)", count:/g)].map((m) => `${m[1]}:${m[2]}`);
+    expect(keys).toEqual(["all:All", "free:Free", "pro:Pro", "office:Office", "closed:Closed accounts"]);
+  });
+
+  it("the list API returns closed accounts with the reason in words and the plan they had", () => {
+    expect(list).toContain("reason_text: reasonText(del.reason, plan)");
+    expect(list).toContain("const plan = del.plan ??");
+    expect(list).toContain("return NextResponse.json({ users, closed });");
+    // QA's throwaway accounts are not customers.
+    expect(list).toContain("QA_EMAIL_DOMAIN");
+  });
+
+  it("a user's page says why they left, or nearly did", () => {
+    expect(one).toContain("saved_by_text: savedByText(ret.savedBy)");
+    // Every earlier answer, each in words, not only the last one.
+    expect(one).toContain("reason_text: reasonText(s.reason, s.plan)");
+    expect(detail).toContain("{leaving && <LeavingCallout leaving={leaving} />}");
+  });
+
+  it("one list per page: a single plan dropdown per person, at every width", () => {
+    expect(users.split("aria-label={`Change ${who}'s plan`}").length - 1).toBe(1);
+  });
+});
+
 describe("the building blocks stay on the semantic palette", () => {
   it("no raw hex colour in any _ui component (they live in admin.css)", () => {
     const dir = "src/app/admin/_ui";

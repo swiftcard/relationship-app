@@ -88,17 +88,19 @@ export function DeltaChip({ delta, goodWhen = "up", vs = "the previous 7 days" }
  * product doesn't measure yet — it draws the placeholder instead.
  */
 export function Kpi({
-  label, value, sub, delta, goodWhen, trend, tone,
+  label, value, sub, delta, goodWhen, trend, tone, compact = false,
 }: {
   label: string; value: React.ReactNode; sub?: React.ReactNode;
   delta?: Delta; goodWhen?: "up" | "down"; trend?: number[];
   tone?: "good" | "bad" | "warn";
+  /** For a value that is words, not a number (e.g. the most common reason). */
+  compact?: boolean;
 }) {
   return (
     <div className="p-4 sm:p-5 h-full flex flex-col">
       <p className="sc-t-footnote font-medium" style={{ color: "var(--sc-label-muted)" }}>{label}</p>
       <div className="mt-1.5 flex items-end justify-between gap-2">
-        <p className={`adm-kpi-value ${tone ? `adm-${tone}` : ""}`}>{value}</p>
+        <p className={`${compact ? "sc-t-headline" : "adm-kpi-value"} ${tone ? `adm-${tone}` : ""}`}>{value}</p>
         {trend && trend.length > 1 && <Sparkline values={trend} className="mb-1.5 shrink-0" />}
       </div>
       {(delta || sub) && (

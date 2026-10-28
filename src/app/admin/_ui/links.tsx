@@ -23,7 +23,7 @@ export function Tabs({ base, items, active, extra = {} }: { base: string; items:
           </Link>
         );
       })}
-      <TabScroller active={active} />
+      <TabScroller active={active} layout={items.map((t) => `${t.label}${t.count ?? ""}`).join("|")} />
     </nav>
   );
 }

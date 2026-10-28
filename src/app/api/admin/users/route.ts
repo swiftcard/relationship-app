@@ -2,9 +2,14 @@ import { NextResponse } from "next/server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { getAccountEmailMap } from "@/lib/account-email";
 import { requireAdmin } from "@/lib/admin";
+import { DELETION_GRACE_DAYS } from "@/lib/deletion-grace";
+import { QA_EMAIL_DOMAIN } from "@/lib/qa-account-sweep";
+import { reasonText } from "@/app/admin/_ui/reasons";
 
 // Full user directory for the admin Users page: identity, plan (+expiry),
-// signup source, cards owned (count), leads, views.
+// signup source, cards owned (count), leads, views — plus `closed`: accounts
+// closed in the last 30 days (still held for reopening), with why, in the
+// person's own words (the Users › Closed accounts tab).
 export async function GET() {
   if (!(await requireAdmin())) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -82,5 +87,29 @@ export async function GET() {
       };
     });
 
-  return NextResponse.json({ users });
+  // Closed accounts: soft-deleted, held DELETION_GRACE_DAYS for reopening, then
+  // purged with their answers (keeping the reason past that is the data pass).
+  // QA's throwaway accounts (QA_EMAIL_DOMAIN) are not customers and are left out.
+  const closed = profiles
+    .filter((p) => (p.customization as { _deleted?: boolean } | null)?._deleted)
+    .map((p) => {
+      const del = ((p.customization as Record<string, unknown>)._deletion ?? {}) as { reason?: string; comment?: string; plan?: string; at?: string };
+      const plan = del.plan ?? (p.plan as string | null) ?? null;
+      const at = del.at ?? null;
+      return {
+        id: p.id as string,
+        name: (p.name as string | null) ?? null,
+        email: authEmails.get(p.id as string) ?? (p.email as string | null) ?? null,
+        // The plan they were on when they closed (the delete sets plan to free).
+        plan,
+        closed_at: at,
+        reason: del.reason ?? null,
+        reason_text: reasonText(del.reason, plan),
+        comment: del.comment || null,
+        purge_at: at ? new Date(Date.parse(at) + DELETION_GRACE_DAYS * 86_400_000).toISOString() : null,
+      };
+    })
+    .filter((c) => !(c.email ?? "").toLowerCase().endsWith(QA_EMAIL_DOMAIN));
+
+  return NextResponse.json({ users, closed });
 }

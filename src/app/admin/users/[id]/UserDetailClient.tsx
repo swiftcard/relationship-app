@@ -1,13 +1,36 @@
 "use client";
 
-// Everything about ONE user: identity, plan controls (set plan / grant free
-// month), acquisition attribution, every card with per-card stats + live
-// links, 30-day activity, recent captured contacts, referral tools.
+// Everything about ONE user: who they are, how they found us, how they pay,
+// every card with per-card stats + live links, 30-day activity, the contacts
+// they captured, referral tools — and, for an account that was closed (or
+// nearly was), why, in the person's own words. Tabs: Summary · Cards ·
+// Contacts · Plan & billing · Referrals.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSignupSourceLabel, getSourceLabel } from "@/lib/source-labels";
 import Link from "next/link";
 import { adminErrorText, grantMonthWarning, planChangeWarning, takeOfflineWarning } from "@/lib/admin-confirm";
+import { isPaidPlan } from "@/lib/plan";
+import { KpiCard, KpiGrid, Section, Stack } from "../../_ui/layout";
+import { TabButtons } from "../../_ui/TabButtons";
+import { BackLink } from "../../_ui/links";
+import { TrendBars } from "../../_ui/charts";
+import { EmptyState, ErrorState, PageSkeleton } from "../../_ui/states";
+import { Avatar, BillingBadge, ClosedBadge, FreeMonthBadge, PlanBadge, StatusBadge, type Billing } from "../../_ui/badges";
+import { Icon } from "../../_ui/icons";
+import { daysUntil, fmtDate, fmtLongDate, fmtNum, planName } from "../../_ui/format";
+
+type Leaving = {
+  closed: boolean;
+  closed_at: string | null;
+  purge_at: string | null;
+  plan_at_close: string | null;
+  reason_text: string | null;
+  comment: string | null;
+  surveys: { at: string; plan: string | null; reason_text: string; comment: string | null }[];
+  saved_by_text: string | null;
+  saved_at: string | null;
+};
 
 type Detail = {
   user: {
@@ -17,7 +40,9 @@ type Detail = {
     signup_source: string; referral_code: string | null;
     referred_by: { id: string; name: string | null; email: string | null } | null;
     referral_reward_earned: boolean; deleted: boolean;
+    billing?: Billing;
   };
+  leaving?: Leaving | null;
   cards: { id: string; username: string; label: string | null; name: string | null; title: string | null; company: string | null; template: string | null; created_at: string; leads: number; cardViews: number; linkViews: number; is_offline?: boolean }[];
   profileCard: { username: string; leads: number; cardViews: number; linkViews: number } | null;
   totals: { leads: number; views: number; leads30: number; views30: number; referred: number; referralMonthsClaimed?: number; referralMonthsClaimable?: number };
@@ -25,24 +50,17 @@ type Detail = {
   recentLeads: { id: string; name: string | null; email: string | null; phone: string | null; source: string | null; card_owner: string; created_at: string }[];
 };
 
-const PLAN_LABEL: Record<string, string> = { free: "Free", pro: "Pro", enterprise: "Office" };
+type Tab = "summary" | "cards" | "contacts" | "plan" | "referrals";
+const TABS: Tab[] = ["summary", "cards", "contacts", "plan", "referrals"];
 
-function Stat({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3.5">
-      <p className="text-xl font-bold tabular-nums">{typeof value === "number" ? value.toLocaleString() : value}</p>
-      <p className="text-gray-400 text-[0.6875rem] mt-0.5">{label}</p>
-    </div>
-  );
-}
-
-export default function UserDetailClient({ userId }: { userId: string }) {
+export default function UserDetailClient({ userId, initialTab }: { userId: string; initialTab?: string }) {
   const [data, setData] = useState<Detail | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [codeInput, setCodeInput] = useState("");
   const [codeMsg, setCodeMsg] = useState("");
   const [actionError, setActionError] = useState("");
+  const [tab, setTab] = useState<Tab>(TABS.includes(initialTab as Tab) ? (initialTab as Tab) : "summary");
   const loaded = useRef(false);
 
   const load = useCallback(async () => {
@@ -64,6 +82,12 @@ export default function UserDetailClient({ userId }: { userId: string }) {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time data fetch on mount
   useEffect(() => { load(); }, [load]);
+
+  function selectTab(key: string) {
+    const next = key as Tab;
+    setTab(next);
+    try { window.history.replaceState(null, "", next === "summary" ? `/admin/users/${userId}` : `/admin/users/${userId}?tab=${next}`); } catch { /* ignore */ }
+  }
 
   // Every refusal is shown now, not only the referral code's (audit
   // F-ADMIN-02): a 409 or 502 on a plan change used to vanish.
@@ -91,16 +115,15 @@ export default function UserDetailClient({ userId }: { userId: string }) {
   }
 
   if (error) return (
-    <div className="py-10">
-      <p className="text-red-400 text-sm">{error}</p>
-      <Link href="/admin/users" className="text-blue-400 text-sm hover:text-blue-300 mt-2 inline-block">← Back to users</Link>
-    </div>
+    <Stack>
+      <BackLink href="/admin/users">Users</BackLink>
+      <ErrorState message={error} />
+    </Stack>
   );
-  if (!data) return <p className="text-gray-500 text-sm py-10">Loading…</p>;
+  if (!data) return <PageSkeleton kpis={4} />;
 
-  const { user, cards, profileCard, totals, series, recentLeads } = data;
+  const { user, cards, profileCard, totals, series, recentLeads, leaving } = data;
   const who = user.email || user.name || user.username || "this user";
-  const maxDay = Math.max(...series.map((s) => s.views + s.leads), 1);
   // The slug whose public pages actually exist: a real card first, then the
   // legacy profile-slug card. Null → this account has no public page yet.
   const primarySlug = cards[0]?.username ?? profileCard?.username ?? null;
@@ -108,237 +131,311 @@ export default function UserDetailClient({ userId }: { userId: string }) {
     ...cards.map((c) => ({ key: c.id, username: c.username, label: c.label || c.name || c.username, template: c.template ?? "classic-pro", leads: c.leads, cardViews: c.cardViews, linkViews: c.linkViews, offline: c.is_offline === true, moderatable: true })),
     ...(profileCard ? [{ key: "profile", username: profileCard.username, label: `${user.name || user.username} (primary)`, template: "primary", leads: profileCard.leads, cardViews: profileCard.cardViews, linkViews: profileCard.linkViews, offline: false, moderatable: false }] : []),
   ];
+  const paidPlan = isPaidPlan(user.plan);
 
   return (
-    <div className="space-y-6">
-      <Link href="/admin/users" className="text-gray-500 hover:text-white text-xs transition-colors">← All users</Link>
+    <Stack>
+      <BackLink href={user.deleted ? "/admin/users?tab=closed" : "/admin/users"}>{user.deleted ? "Closed accounts" : "Users"}</BackLink>
 
-      {/* Identity header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-4 min-w-0">
-          {user.photo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={user.photo_url} alt="" className="w-14 h-14 rounded-full object-cover border border-gray-700" />
-          ) : (
-            <div className="w-14 h-14 rounded-full bg-gray-800 flex items-center justify-center text-lg font-bold text-gray-400">
-              {(user.name || user.email || "?")[0]?.toUpperCase()}
+      {/* Who they are */}
+      <section className="adm-card p-4 sm:p-5">
+        <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+          <Avatar name={user.name || user.email} photo={user.photo_url} size={64} />
+          <div className="min-w-0 flex-1">
+            <h1 className="sc-t-title2 break-words">{user.name || user.email || user.username}</h1>
+            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+              <PlanBadge plan={user.plan} />
+              {user.plan_expires_at && <FreeMonthBadge until={user.plan_expires_at} />}
+              {user.deleted && <ClosedBadge />}
+              {paidPlan && user.billing && <BillingBadge billing={user.billing} />}
             </div>
-          )}
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold truncate">{user.name || user.email || user.username} {user.deleted && <span className="text-red-400 text-xs font-normal">(deleted account)</span>}</h1>
-            <p className="text-gray-500 text-sm truncate">{user.email}{user.company ? ` · ${user.company}` : ""}{user.title ? ` · ${user.title}` : ""}</p>
-            <p className="text-gray-600 text-xs mt-0.5">
-              Joined {new Date(user.created_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
-              {" · "}found us via: <span className="text-gray-400">{getSignupSourceLabel(user.signup_source)}</span>
+            <p className="sc-t-subhead adm-muted mt-2 break-words">
+              {[user.email, user.company, user.title].filter(Boolean).join(" · ")}
+            </p>
+            <p className="sc-t-footnote adm-muted mt-1">
+              Joined {fmtLongDate(user.created_at)}
+              {" · "}found us via <span style={{ color: "var(--sc-label)" }}>{getSignupSourceLabel(user.signup_source)}</span>
               {user.referred_by && (
                 <>
                   {" · referred by "}
-                  <Link href={`/admin/users/${user.referred_by.id}`} className="text-blue-400 hover:text-blue-300">
+                  <Link href={`/admin/users/${user.referred_by.id}`} className="adm-link">
                     {user.referred_by.name || user.referred_by.email || "another user"}
                   </Link>
                 </>
               )}
             </p>
           </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {primarySlug ? (
-            <>
-              <a href={`/${primarySlug}`} target="_blank" rel="noopener noreferrer"
-                className="text-xs font-semibold text-gray-300 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-full px-3 py-1.5 transition-colors">
-                View card ↗
-              </a>
-              <a href={`/links/${primarySlug}`} target="_blank" rel="noopener noreferrer"
-                className="text-xs font-semibold text-gray-300 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-full px-3 py-1.5 transition-colors">
-                Swift Links ↗
-              </a>
-            </>
-          ) : (
-            <span className="text-xs text-gray-600">No public card yet</span>
-          )}
-        </div>
-      </div>
-
-      {/* Plan controls */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <p className="text-white font-semibold text-sm">
-              Plan: <span className="text-blue-300">{PLAN_LABEL[user.plan] ?? user.plan ?? "Free"}</span>
-              {user.plan_expires_at && (
-                <span className="text-amber-400 text-xs font-normal ml-2">
-                  free month until {new Date(user.plan_expires_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                </span>
-              )}
-            </p>
-            <p className="text-gray-600 text-[0.6875rem] mt-0.5">Setting a plan directly clears any free-month expiry.</p>
-            {actionError && <p role="alert" className="text-red-400 text-xs mt-1.5">{actionError}</p>}
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {primarySlug ? (
+              <>
+                <a href={`/${primarySlug}`} target="_blank" rel="noopener noreferrer" className="sc-btn sc-btn-gray sc-btn-sm">
+                  View card <Icon name="external" className="w-4 h-4" />
+                </a>
+                <a href={`/links/${primarySlug}`} target="_blank" rel="noopener noreferrer" className="sc-btn sc-btn-gray sc-btn-sm">
+                  Swift Links <Icon name="external" className="w-4 h-4" />
+                </a>
+              </>
+            ) : (
+              <span className="sc-t-footnote adm-muted">No public card yet</span>
+            )}
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {(["free", "pro", "enterprise"] as const).map((p) => (
-              <button
-                key={p}
-                onClick={() => {
-                  if (!window.confirm(planChangeWarning(who, user.plan || "free", p))) return;
-                  void patch({ plan: p }, `plan-${p}`);
-                }}
-                disabled={busy !== "" || user.plan === p}
-                className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-colors disabled:opacity-50 ${
-                  user.plan === p ? "bg-blue-600 border-blue-600 text-white" : "bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500"
-                }`}
-              >
-                {busy === `plan-${p}` ? "…" : PLAN_LABEL[p]}
-              </button>
-            ))}
+        </div>
+      </section>
+
+      {actionError && <p role="alert" className="adm-callout-danger px-4 py-3 sc-t-subhead">{actionError}</p>}
+
+      {leaving && <LeavingCallout leaving={leaving} />}
+
+      <TabButtons
+        label="About this user"
+        active={tab}
+        onSelect={selectTab}
+        items={[
+          { key: "summary", label: "Summary" },
+          { key: "cards", label: "Cards", count: allCards.length },
+          { key: "contacts", label: "Contacts", count: totals.leads },
+          { key: "plan", label: "Plan & billing" },
+          { key: "referrals", label: "Referrals", count: totals.referred },
+        ]}
+      />
+
+      {tab === "summary" && (
+        <Stack>
+          <KpiGrid cols={5}>
+            <KpiCard label="Cards" value={fmtNum(allCards.length)} />
+            <KpiCard label="Contacts captured" value={fmtNum(totals.leads)} sub={`${fmtNum(totals.leads30)} in 30 days`} />
+            <KpiCard label="Total views" value={fmtNum(totals.views)} />
+            <KpiCard label="Views · 30 days" value={fmtNum(totals.views30)} />
+            <KpiCard label="People they referred" value={fmtNum(totals.referred)} />
+          </KpiGrid>
+          <Section title="Last 30 days" hint="Views of their cards and Swift Links, with the contacts they captured on top.">
+            <TrendBars
+              mode="stack"
+              data={series.map((s) => ({ date: s.date, values: [s.views, s.leads] }))}
+              series={[{ label: "Views", color: "var(--adm-series-1)" }, { label: "Contacts", color: "var(--adm-series-2)" }]}
+              caption="Views and contacts per day, last 30 days"
+            />
+          </Section>
+          <Section
+            title="Latest contacts"
+            hint="The newest people who shared their details through this user's cards."
+            action={recentLeads.length > 5 ? <button type="button" onClick={() => selectTab("contacts")} className="adm-link sc-t-footnote min-h-[28px]">See all ›</button> : undefined}
+            flush
+          >
+            <ContactList leads={recentLeads.slice(0, 5)} />
+          </Section>
+        </Stack>
+      )}
+
+      {tab === "cards" && (
+        <Section title={`Cards (${allCards.length})`} hint="Every card this account has, with its views and contacts. Taking a card offline hides it everywhere until you bring it back." flush>
+          {allCards.length === 0 ? (
+            <EmptyState className="pb-8">No cards yet.</EmptyState>
+          ) : (
+            <>
+              <div aria-hidden className="hidden lg:grid adm-card-grid px-5 py-2.5 sc-t-footnote font-semibold adm-muted" style={{ boxShadow: "inset 0 -1px 0 var(--adm-grid)" }}>
+                <span>Card</span><span>Template</span><span className="text-right">Card views</span><span className="text-right">Link views</span><span className="text-right">Contacts</span><span>Status</span><span />
+              </div>
+              <ul className="adm-divide">
+                {allCards.map((c) => (
+                  <li key={c.key} className="px-4 lg:px-5 py-3.5 lg:grid adm-card-grid lg:items-center gap-y-2">
+                    <div className="min-w-0">
+                      <p className="sc-t-subhead font-semibold truncate">{c.label}</p>
+                      <p className="sc-t-caption adm-muted truncate">/{c.username}</p>
+                    </div>
+                    <span className="hidden lg:block sc-t-footnote adm-muted capitalize">{c.template.replace(/-/g, " ")}</span>
+                    <p className="lg:hidden sc-t-footnote adm-muted mt-1 adm-num">
+                      <span className="capitalize">{c.template.replace(/-/g, " ")}</span> · {fmtNum(c.cardViews)} card views · {fmtNum(c.linkViews)} link views · {fmtNum(c.leads)} contacts
+                    </p>
+                    <span className="hidden lg:block text-right sc-t-subhead adm-num">{fmtNum(c.cardViews)}</span>
+                    <span className="hidden lg:block text-right sc-t-subhead adm-num">{fmtNum(c.linkViews)}</span>
+                    <span className="hidden lg:block text-right sc-t-subhead font-semibold adm-num">{fmtNum(c.leads)}</span>
+                    <span className="hidden lg:block">{c.offline ? <StatusBadge tone="warn">Offline</StatusBadge> : <StatusBadge tone="good">Live</StatusBadge>}</span>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 mt-2 lg:mt-0 lg:justify-end sc-t-footnote">
+                      <span className="lg:hidden">{c.offline ? <StatusBadge tone="warn">Offline</StatusBadge> : <StatusBadge tone="good">Live</StatusBadge>}</span>
+                      <a href={`/${c.username}`} target="_blank" rel="noopener noreferrer" className="adm-link">Card ↗</a>
+                      <a href={`/links/${c.username}`} target="_blank" rel="noopener noreferrer" className="adm-link">Links ↗</a>
+                      {/* Moderation kill-switch (App Review 1.2): reversible
+                          takedown of everything this card serves publicly. */}
+                      {c.moderatable && (
+                        <button
+                          type="button"
+                          disabled={busy === `offline-${c.key}`}
+                          onClick={() => {
+                            if (!c.offline && !window.confirm(takeOfflineWarning(c.username))) return;
+                            void patch({ cardOffline: { cardId: c.key, offline: !c.offline } }, `offline-${c.key}`);
+                          }}
+                          className={`sc-btn sc-btn-xs ${c.offline ? "sc-btn-tinted" : "sc-btn-destructive"}`}
+                          style={c.offline ? undefined : { background: "rgba(255, 59, 48, 0.08)" }}
+                        >
+                          {busy === `offline-${c.key}` ? "…" : c.offline ? "Bring online" : "Take offline"}
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </Section>
+      )}
+
+      {tab === "contacts" && (
+        <Section title="Contacts captured" hint={`The latest ${Math.min(recentLeads.length, 12)} of ${fmtNum(totals.leads)}, and how each one arrived.`} flush>
+          <ContactList leads={recentLeads} />
+        </Section>
+      )}
+
+      {tab === "plan" && (
+        <Section title="Plan & billing" hint="Setting a plan directly clears any free-month expiry.">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <p className="sc-t-title2">{planName(user.plan)}</p>
+            {paidPlan && user.billing && <BillingBadge billing={user.billing} />}
+            {user.plan_expires_at && <FreeMonthBadge until={user.plan_expires_at} />}
+          </div>
+          <p className="sc-t-footnote adm-muted mt-1">
+            {user.plan_expires_at
+              ? `A free month of Pro, ending ${fmtLongDate(user.plan_expires_at)}. It ends by itself.`
+              : !paidPlan ? "On the free plan." : user.billing === "stripe" ? "Paying through Stripe." : user.billing === "apple" ? "Paying through Apple in the iPhone app." : "On a paid plan with no payment behind it."}
+          </p>
+          <div className="adm-rule mt-4 pt-4">
+            <p className="sc-t-footnote font-semibold mb-2.5">Change plan</p>
+            <div className="flex flex-wrap items-center gap-2">
+              {(["free", "pro", "enterprise"] as const).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => {
+                    if (!window.confirm(planChangeWarning(who, user.plan || "free", p))) return;
+                    void patch({ plan: p }, `plan-${p}`);
+                  }}
+                  disabled={busy !== "" || user.plan === p}
+                  className={`sc-btn sc-btn-sm ${user.plan === p ? "sc-btn-filled" : "sc-btn-gray"}`}
+                >
+                  {busy === `plan-${p}` ? "…" : planName(p)}{user.plan === p ? " · current" : ""}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="adm-rule mt-4 pt-4">
+            <p className="sc-t-footnote font-semibold mb-2.5">Give them Pro for free</p>
             <button
               onClick={() => {
                 if (!window.confirm(grantMonthWarning(who))) return;
                 void patch({ grantFreeMonth: true }, "grant");
               }}
               disabled={busy !== ""}
-              className="text-xs font-semibold px-3 py-1.5 rounded-full bg-emerald-700/60 border border-emerald-600/60 text-emerald-200 hover:bg-emerald-700 transition-colors disabled:opacity-50"
+              className="sc-btn sc-btn-tinted sc-btn-sm"
             >
-              {busy === "grant" ? "…" : "🎁 Grant 1 month of Pro"}
+              <Icon name="gift" className="w-4 h-4" />
+              {busy === "grant" ? "…" : "Grant 1 month of Pro"}
             </button>
+            <p className="sc-t-caption adm-muted mt-2">Nothing is charged, and it ends by itself when the month is up.</p>
           </div>
-        </div>
-      </div>
+        </Section>
+      )}
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <Stat label="Cards" value={allCards.length} />
-        <Stat label="Contacts captured" value={totals.leads} />
-        <Stat label="Total views" value={totals.views} />
-        <Stat label="Views (30d)" value={totals.views30} />
-        <Stat label="Users they referred" value={totals.referred} />
-      </div>
-
-      {/* 30-day activity */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-        <p className="text-white font-semibold text-sm mb-3">Last 30 days <span className="text-gray-600 font-normal text-xs">— views (blue) + contacts (green)</span></p>
-        <div className="flex items-end gap-[3px] h-20">
-          {series.map((s) => (
-            <div key={s.date} className="flex-1 flex flex-col justify-end gap-[1px]" title={`${s.date}: ${s.views} views · ${s.leads} contacts`}>
-              <div className="bg-emerald-500/80 rounded-sm" style={{ height: `${(s.leads / maxDay) * 100}%`, minHeight: s.leads ? 3 : 0 }} />
-              <div className="bg-blue-500/70 rounded-sm" style={{ height: `${(s.views / maxDay) * 100}%`, minHeight: s.views ? 3 : 0 }} />
+      {tab === "referrals" && (
+        <Stack>
+          <KpiGrid cols={3}>
+            <KpiCard label="Successful signups" value={fmtNum(totals.referred)} sub="People who joined through their link" />
+            <KpiCard label="Months claimed" value={`${totals.referralMonthsClaimed ?? 0}/3`} />
+            <KpiCard label="Ready to claim" value={fmtNum(totals.referralMonthsClaimable ?? 0)} tone={(totals.referralMonthsClaimable ?? 0) > 0 ? "good" : undefined} />
+          </KpiGrid>
+          <Section title="Their referral link" hint={user.referral_code ? <>swiftcard.me/r/<span className="font-mono">{user.referral_code}</span></> : "No code yet."}>
+            <p className="sc-field-label">Custom code</p>
+            <div className="flex items-center gap-2">
+              <input
+                value={codeInput}
+                onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
+                placeholder="CUSTOM-CODE"
+                aria-label="Custom referral code"
+                className="sc-field flex-1 min-w-0 px-3.5 font-mono"
+              />
+              <button
+                onClick={() => patch({ referralCode: codeInput }, "code")}
+                disabled={busy !== "" || !codeInput.trim()}
+                className="sc-btn sc-btn-filled sc-btn-sm shrink-0"
+              >
+                {busy === "code" ? "…" : "Set code"}
+              </button>
             </div>
-          ))}
-        </div>
-      </div>
+            {codeMsg && <p role="status" className={`sc-t-footnote mt-2 ${codeMsg.includes("✓") ? "adm-good" : "adm-bad"}`}>{codeMsg}</p>}
+            <p className="sc-t-caption adm-muted mt-3">Set a memorable code (e.g. a partner or influencer promo) — anyone signing up through /r/CODE gets the free month and attributes to this user.</p>
+          </Section>
+        </Stack>
+      )}
+    </Stack>
+  );
+}
 
-      {/* Cards */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-800">
-          <p className="text-white font-semibold text-sm">Cards ({allCards.length})</p>
-        </div>
-        {allCards.length === 0 ? (
-          <p className="px-5 py-8 text-center text-gray-500 text-sm">No cards yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-800 text-gray-500 text-xs">
-                  <th className="text-left px-5 py-2.5 font-medium">Card</th>
-                  <th className="text-left px-4 py-2.5 font-medium">Template</th>
-                  <th className="text-left px-4 py-2.5 font-medium">Card views</th>
-                  <th className="text-left px-4 py-2.5 font-medium">Link views</th>
-                  <th className="text-left px-4 py-2.5 font-medium">Contacts</th>
-                  <th className="text-left px-4 py-2.5 font-medium">Open</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-800/60">
-                {allCards.map((c) => (
-                  <tr key={c.key} className="hover:bg-gray-800/30 transition-colors">
-                    <td className="px-5 py-2.5">
-                      <p className="text-white text-xs font-medium">{c.label}</p>
-                      <p className="text-gray-600 text-[0.625rem]">/{c.username}</p>
-                    </td>
-                    <td className="px-4 py-2.5 text-gray-400 text-xs">{c.template.replace(/-/g, " ")}</td>
-                    <td className="px-4 py-2.5 text-gray-300 tabular-nums">{c.cardViews}</td>
-                    <td className="px-4 py-2.5 text-gray-300 tabular-nums">{c.linkViews}</td>
-                    <td className="px-4 py-2.5 text-white font-semibold tabular-nums">{c.leads}</td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-2 text-[0.6875rem]">
-                        <a href={`/${c.username}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">Card ↗</a>
-                        <a href={`/links/${c.username}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">Links ↗</a>
-                        {/* Moderation kill-switch (App Review 1.2): reversible
-                            takedown of everything this card serves publicly. */}
-                        {c.moderatable && (
-                          <button
-                            type="button"
-                            disabled={busy === `offline-${c.key}`}
-                            onClick={() => {
-                              if (!c.offline && !window.confirm(takeOfflineWarning(c.username))) return;
-                              void patch({ cardOffline: { cardId: c.key, offline: !c.offline } }, `offline-${c.key}`);
-                            }}
-                            className={`font-semibold px-2 py-1 rounded-full transition-colors disabled:opacity-50 ${c.offline ? "text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20" : "text-red-400 bg-red-500/10 hover:bg-red-500/20"}`}
-                          >
-                            {busy === `offline-${c.key}` ? "…" : c.offline ? "Bring online" : "Take offline"}
-                          </button>
-                        )}
-                        {c.offline && <span className="text-amber-400/90 font-medium">offline</span>}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+function ContactList({ leads }: { leads: Detail["recentLeads"] }) {
+  if (leads.length === 0) return <EmptyState className="pb-6">None yet.</EmptyState>;
+  return (
+    <ul className="adm-divide">
+      {leads.map((l) => (
+        <li key={l.id} className="flex items-center gap-3 px-4 sm:px-5 py-2.5">
+          <Avatar name={l.name || l.email || l.phone} size={32} />
+          <div className="min-w-0 flex-1">
+            <p className="sc-t-subhead font-medium truncate">{l.name || l.email || l.phone || "—"}</p>
+            <p className="sc-t-caption adm-muted truncate">via {getSourceLabel(l.source)} · /{l.card_owner}</p>
           </div>
-        )}
-      </div>
+          <span className="sc-t-caption adm-muted shrink-0 adm-num">{fmtDate(l.created_at)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Referral tools */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-          <p className="text-white font-semibold text-sm mb-1">Referral</p>
-          <p className="text-gray-600 text-[0.6875rem] mb-3">
-            Their link: {user.referral_code ? <span className="font-mono text-gray-400">swiftcard.me/r/{user.referral_code}</span> : "no code yet"}
-            {" · "}<span className="text-gray-400">{totals.referred}</span> successful signups
-            {" · "}<span className="text-gray-400">{totals.referralMonthsClaimed ?? 0}/3</span> months claimed
-            {(totals.referralMonthsClaimable ?? 0) > 0 && <span className="text-emerald-400"> · {totals.referralMonthsClaimable} ready to claim</span>}
-          </p>
-          <div className="flex items-center gap-2">
-            <input
-              value={codeInput}
-              onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
-              placeholder="CUSTOM-CODE"
-              className="flex-1 bg-gray-800 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500"
-            />
-            <button
-              onClick={() => patch({ referralCode: codeInput }, "code")}
-              disabled={busy !== "" || !codeInput.trim()}
-              className="text-xs font-semibold px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white transition-colors disabled:opacity-50"
-            >
-              {busy === "code" ? "…" : "Set code"}
-            </button>
-          </div>
-          {codeMsg && <p className={`text-xs mt-2 ${codeMsg.includes("✓") ? "text-emerald-400" : "text-red-400"}`}>{codeMsg}</p>}
-          <p className="text-gray-600 text-[0.6875rem] mt-2">Set a memorable code (e.g. a partner or influencer promo) — anyone signing up through /r/CODE gets the free month and attributes to this user.</p>
-        </div>
-
-        {/* Recent contacts captured */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-          <p className="text-white font-semibold text-sm mb-1">Recent contacts captured</p>
-          <p className="text-gray-600 text-[0.6875rem] mb-3">The latest people who shared their info through this user&apos;s cards, and how each one arrived.</p>
-          {recentLeads.length === 0 ? (
-            <p className="text-gray-500 text-xs">None yet.</p>
+/** Why they closed their account (red), or that they nearly did (orange). */
+function LeavingCallout({ leaving }: { leaving: Leaving }) {
+  const left = daysUntil(leaving.purge_at);
+  // The answer shown above is the latest; the rest came before it.
+  const earlier = leaving.surveys.slice(0, -1);
+  return (
+    <section className={`${leaving.closed ? "adm-callout-danger" : "adm-callout-warn"} p-4 sm:p-5`}>
+      <div className="flex items-start gap-3">
+        <span className={leaving.closed ? "adm-bad" : "adm-warn"}><Icon name={leaving.closed ? "userMinus" : "alert"} /></span>
+        <div className="min-w-0 flex-1">
+          {leaving.closed ? (
+            <p className="sc-t-headline">
+              Closed their account on {fmtLongDate(leaving.closed_at)}
+              {left !== null && <span className="sc-t-subhead font-normal adm-muted"> · {left === 0 ? "permanently deleted today" : `permanently deleted in ${left} ${left === 1 ? "day" : "days"}`}</span>}
+            </p>
           ) : (
-            <div className="divide-y divide-gray-800/60">
-              {recentLeads.map((l) => (
-                <div key={l.id} className="py-1.5 flex items-center justify-between gap-2 text-xs">
-                  <div className="min-w-0">
-                    <p className="text-white truncate">{l.name || l.email || l.phone || "—"}</p>
-                    <p className="text-gray-600 text-[0.625rem] truncate">via {getSourceLabel(l.source)} · /{l.card_owner}</p>
-                  </div>
-                  <span className="text-gray-600 text-[0.625rem] shrink-0">
-                    {new Date(l.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <p className="sc-t-headline">Started to leave{leaving.saved_by_text ? " — and stayed" : ""}</p>
+          )}
+
+          <dl className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-[auto_1fr] sc-t-subhead">
+            {leaving.closed && leaving.plan_at_close && (<><dt className="adm-muted">Had plan</dt><dd>{planName(leaving.plan_at_close)}</dd></>)}
+            {leaving.reason_text && (<><dt className="adm-muted">Why</dt><dd className="font-medium">{leaving.reason_text}</dd></>)}
+            {leaving.saved_by_text && (<><dt className="adm-muted">What kept them</dt><dd>{leaving.saved_by_text}{leaving.saved_at ? ` (${fmtDate(leaving.saved_at)})` : ""}</dd></>)}
+          </dl>
+
+          {leaving.comment && (
+            <figure className="mt-3">
+              <figcaption className="sc-t-caption adm-muted mb-1">In their words</figcaption>
+              <blockquote className="adm-card px-4 py-3 sc-t-body whitespace-pre-wrap break-words">“{leaving.comment}”</blockquote>
+            </figure>
+          )}
+
+          {earlier.length > 0 && (
+            <details className="mt-3">
+              <summary className="cursor-pointer sc-t-footnote font-medium adm-link inline-flex min-h-[28px] items-center">
+                {earlier.length === 1 ? "1 earlier answer" : `${earlier.length} earlier answers`}
+              </summary>
+              <ul className="mt-2 space-y-2">
+                {earlier.map((s, i) => (
+                  <li key={i} className="adm-card px-3.5 py-2.5">
+                    <p className="sc-t-caption adm-muted">{fmtDate(s.at)} · on {planName(s.plan)}</p>
+                    <p className="sc-t-subhead font-medium">{s.reason_text}</p>
+                    {s.comment && <p className="sc-t-subhead mt-0.5 whitespace-pre-wrap break-words">“{s.comment}”</p>}
+                  </li>
+                ))}
+              </ul>
+            </details>
           )}
         </div>
       </div>
-    </div>
+    </section>
   );
 }

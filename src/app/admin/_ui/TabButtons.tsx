@@ -25,7 +25,7 @@ export function TabButtons({ items, active, onSelect, label = "Sections" }: { it
           {typeof t.count === "number" && <span className="adm-tab-count">{t.count.toLocaleString("en-US")}</span>}
         </button>
       ))}
-      <TabScroller active={active} />
+      <TabScroller active={active} layout={items.map((t) => `${t.label}${t.count ?? ""}`).join("|")} />
     </div>
   );
 }
