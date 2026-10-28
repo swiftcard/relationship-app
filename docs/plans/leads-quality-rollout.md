@@ -152,7 +152,8 @@ takes three steps:
    - Office Prospects: about $0.10, plus about $0.003, plus email drafts if any.
 
    Expected stats: `leads_added`, `usable_leads`, `duplicates_rejected`,
-   `contacts_suppressed` and `skipped_not_a_fit` all present.
+   `contacts_suppressed` and `rejected_poor_fit` all present, with the full
+   per-run funnel (see `LEAD_RUN_STATS` in `src/lib/crew/leads/diagnostics.ts`).
 
 Keeping the agents running after that is a separate decision.
 

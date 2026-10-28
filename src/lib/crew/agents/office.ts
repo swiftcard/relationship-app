@@ -4,7 +4,8 @@ import { propose } from "../approvals";
 import { debate } from "../debate";
 import { productFacts } from "../facts";
 import { everContacted, personFor } from "../ledger";
-import { pageTitle, phonesIn, readSite, textOf } from "../leads/fetch-page";
+import { funnelLine, recordSites, screenSearch, startFunnel } from "../leads/diagnostics";
+import { pageTitle, phonesIn, readSiteDetailed, textOf, type SiteOutcome } from "../leads/fetch-page";
 import { assessSites, type SiteAssessment } from "../leads/assess";
 import { leadScore, namedOnSite, safeText, scoreLeads, withEmailStatus } from "../leads/quality";
 import { cleanEmails, recordLeads } from "../leads/record";
@@ -89,8 +90,11 @@ async function findOffices(ctx: AgentContext, type: string, area: string): Promi
     maxUses: 6,
     want: 12,
   });
-  return items.filter((b) => /^https?:\/\//.test(b.website) && !/(yelp|facebook|instagram|linkedin|zillow|streeteasy|realtor\.com|google)\./i.test(b.website));
+  return screenSearch(ctx, items, OFFICE_DIRECTORIES);
 }
+
+/** Listing, review and social sites: never an office's own page. */
+export const OFFICE_DIRECTORIES = /(yelp|facebook|instagram|linkedin|zillow|streeteasy|realtor\.com|google)\./i;
 
 export const officeOutreach: AgentDef = {
   id: "office-outreach",
@@ -111,28 +115,38 @@ export const officeOutreach: AgentDef = {
     const have = Object.values(today).reduce((a, b) => a + b, 0);
     if (have >= target) return { summary: `Done for today: ${target} call rows are ready. Back tomorrow.`, restMinutes: minutesToTomorrow(ctx.now()) };
 
+    startFunnel(ctx);
     const n = ctx.config<number>("query_index", 0);
     const { area, type } = officeQuery(n);
     await ctx.saveConfig({ query_index: n + 1 });
-    const offices = (await findOffices(ctx, type, area)).slice(0, 8);
+    const found = await findOffices(ctx, type, area);
+    const offices = found.slice(0, 8);
     const sites: Site[] = [];
-    for (const o of offices) sites.push({ ...o, area, type, pages: await readSite(o.website) });
+    const outcomes: SiteOutcome[] = [];
+    for (const o of offices) {
+      const r = await readSiteDetailed(o.website);
+      outcomes.push(r.outcome);
+      sites.push({ ...o, area, type, pages: r.pages });
+    }
+    recordSites(ctx, { kept: found.length, outcomes });
     const readable = sites.filter((s) => s.pages.length);
-    if (!readable.length) return { summary: `${type} in ${area}: no readable sites this time.` };
+    // Which step came up empty: the search, or reading the sites it found.
+    if (!readable.length) return { summary: `${type} in ${area}: ${offices.length ? "no readable sites this time" : "the search found no office websites"}. Funnel: ${funnelLine(ctx.stats)}.` };
 
     const assessed = await assessSites(ctx, readable, { office: true }).catch(() => null);
     const fits = new Map<string, number>();
     const rows = readable.flatMap((s, i) => {
       const a = assessed?.find((x) => x.i === i);
-      if (a && a.fit <= 0) ctx.stat("skipped_not_a_fit");
       const out = officeLeads(s, a);
+      if (a && a.fit <= 0) ctx.stat("rejected_poor_fit");
+      else if (!out.length) ctx.stat("sites_no_contact");
       for (const l of out) if (a) fits.set(l.source_url, a.fit);
       return out;
     });
     const added = await recordLeads(ctx, scoreLeads(await withEmailStatus(rows), (l) => fits.get(l.source_url) ?? null));
     const synced = await syncLeadsToSheet(ctx.store, "office").catch(() => 0);
     const drafted = await draftEmails(ctx, rows.filter((r) => r.email && r.name).slice(0, 2));
-    return { summary: `${type} in ${area}: ${added} new call rows${synced ? ` (${synced} on the sheet)` : ""}, ${drafted} email drafts.` };
+    return { summary: `${type} in ${area}: ${added} new call rows${synced ? ` (${synced} on the sheet)` : ""}, ${drafted} email drafts. Funnel: ${funnelLine(ctx.stats)}.` };
   },
 };
 

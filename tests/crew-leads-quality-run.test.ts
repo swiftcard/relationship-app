@@ -19,7 +19,7 @@ const SITES: Record<string, { url: string; html: string }[]> = {
   "https://parkslopehomes.com": [{ url: "https://parkslopehomes.com/", html: "Maria Lopez, Broker/Owner. Twelve agents in Park Slope. Call (718) 555-0142" }],
 };
 
-vi.mock("@/lib/crew/leads/fetch-page", async (orig) => ({ ...(await orig<typeof import("@/lib/crew/leads/fetch-page")>()), readSite: async (u: string) => SITES[u] ?? [] }));
+vi.mock("@/lib/crew/leads/fetch-page", async (orig) => ({ ...(await orig<typeof import("@/lib/crew/leads/fetch-page")>()), readSiteDetailed: async (u: string) => (SITES[u] ? { pages: SITES[u], outcome: "readable" } : { pages: [], outcome: "unreadable" }) }));
 vi.mock("@/lib/crew/sources/web-discovery", async (orig) => ({
   ...(await orig<typeof import("@/lib/crew/sources/web-discovery")>()),
   searchItems: async (_ctx: unknown, o: { prompt: string }) =>
@@ -55,12 +55,13 @@ describe("a Web Leads run", () => {
   it("saves one scored lead per fitting business, with the decision-maker, and stats that add up", async () => {
     const { ctx, store, claude } = await setup({ def: leadsWeb, script: (req) => assessment(req) });
     const r = await leadsWeb.run(ctx);
-    expect(r.summary).toMatch(/read 2 sites, saved 1 new businesses/);
+    expect(r.summary).toMatch(/saved 1 new businesses/);
+    expect(r.summary).toContain("Funnel: search 2, 0 filtered, 2 tried, 2 readable, 1 poor fit, 1 saved.");
     expect(store.leads).toHaveLength(1);
     const [l] = store.leads;
     expect(l).toMatchObject({ name: "Jane Park", title: "Owner and Broker", email: "jane@acmerealty.com", email_status: "Domain OK", company_key: "acmerealty.com", why: "A 14-agent team.", hook: "Second office in Ballantyne.", message: "Congrats on the Ballantyne office." });
     expect(l.score).toBeGreaterThanOrEqual(80);
-    expect(ctx.stats).toMatchObject({ leads_added: 1, usable_leads: 1, duplicates_rejected: 0, contacts_suppressed: 0, skipped_not_a_fit: 1 });
+    expect(ctx.stats).toMatchObject({ leads_added: 1, usable_leads: 1, duplicates_rejected: 0, contacts_suppressed: 0, rejected_poor_fit: 1 });
     expect(claude.calls.filter((c) => JSON.stringify(c).includes("SITE #"))).toHaveLength(1); // one read for every site
     const [row] = leadRows(l, { approvals: [], leads: [], findings: [], people: [], facts: [], geoHistory: [], known: new Map(), blueskyLive: false });
     expect(row.cells).toMatchObject({ score: l.score, name: "Jane Park, Owner and Broker", email_status: "Domain OK", why: "A 14-agent team." });
