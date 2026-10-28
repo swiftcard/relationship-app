@@ -66,6 +66,10 @@ async function layoutProblems(page: Page) {
       const r = el.getBoundingClientRect();
       if (r.width > 0 && (r.right > vw + 0.5 || r.left < -0.5)) spill.push(`${el.tagName}.${String(el.className).slice(0, 60)} → ${Math.round(r.left)}..${Math.round(r.right)}`);
     });
+    // Nothing hidden may make the page longer than what's drawn (a screen-
+    // reader <table> once added 768px of blank page under a chart).
+    const canvas = document.querySelector(".sc-admin")!.getBoundingClientRect().bottom + window.scrollY;
+    if (document.documentElement.scrollHeight > Math.max(canvas, window.innerHeight) + 2) spill.push(`page is ${document.documentElement.scrollHeight}px tall but the canvas ends at ${Math.round(canvas)}px`);
     return { sideways: document.documentElement.scrollWidth > vw, spill };
   });
 }
@@ -181,6 +185,49 @@ describe.each(ENGINES)("Company Analytics (%s)", (engine) => {
       expect(text).toContain("I'm not really using it");
     } finally { await page.close(); }
   });
+});
+
+const WEBSITE = {
+  includeInternal: false,
+  capHit: false,
+  kpis: { pageviews: { d1: 120, d7: 940, d30: 4100 }, visitors: { d1: 61, d7: 410, d30: 1720 }, sessions: 1990, pagesPerSession: 2.1, avgDurationSec: 74, bounceRatePct: 48 },
+  daily: Array.from({ length: 30 }, (_, i) => ({ date: day(i), views: 90 + ((i * 37) % 80), visitors: 40 + ((i * 17) % 35) })),
+  topPages: [{ label: "/", count: 1900 }, { label: "/pricing", count: 700 }, { label: "/compare/a-very-long-comparison-page-slug-for-linktree-alternatives", count: 120 }],
+  topReferrers: [{ label: "www.google.com", count: 600 }, { label: "l.instagram.com", count: 210 }, { label: "some-unknown-referrer-with-a-very-long-hostname.example.org", count: 12 }],
+  topCountries: [{ label: "US", count: 3000 }, { label: "GB", count: 400 }, { label: "IL", count: 90 }],
+};
+
+async function website(tab: string) {
+  const { createElement } = await import("react");
+  const { default: WebsiteAnalyticsClient } = await import("@/app/admin/website/WebsiteAnalyticsClient");
+  return inShell("/admin/website", createElement(WebsiteAnalyticsClient, { initialInternalDevice: true, tab: tab as never, initial: WEBSITE }));
+}
+
+describe.each(ENGINES)("Website (%s)", (engine) => {
+  const TABS: [string, string[]][] = [
+    ["traffic", ["In the last 7 days", "410", "people visited swiftcard.me", "Google", "Home", "Visitors and pages viewed per day", "Left after one page"]],
+    ["pages", ["Most-read pages", "Pricing", "/pricing", "Time on each page"]],
+    ["sources", ["Where visitors come from", "Google", "Instagram", "www.google.com", "Campaigns"]],
+    ["audience", ["Countries", "United States", "United Kingdom", "Phone or computer"]],
+    ["settings", ["This device is excluded from the numbers.", "Count this device again", "What's counted here"]],
+  ];
+  for (const [tab, mustSay] of TABS) {
+    for (const width of [390, 1280]) {
+      it(`${tab} tab: everything there, nothing spilling at ${width}px`, async () => {
+        const page = await open(engine, width, await website(tab));
+        try {
+          const p = await layoutProblems(page);
+          expect(p.spill, `spills at ${width}px`).toEqual([]);
+          expect(p.sideways, `the page scrolls sideways at ${width}px`).toBe(false);
+          const text = await page.evaluate(() => document.body.innerText);
+          for (const s of mustSay) expect(text, `"${s}" missing on the ${tab} tab`).toContain(s);
+          // The device state and the team switch are in the header on every tab.
+          expect(text).toContain("This device: excluded");
+          expect(text).toContain("Include my team's visits");
+        } finally { await page.close(); }
+      });
+    }
+  }
 });
 
 describe.each(ENGINES)("the admin shell (%s)", (engine) => {

@@ -1,8 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+// ── Website: who visits swiftcard.me ────────────────────────────────────────
+// The marketing site's traffic (home, pricing, product and preview pages) —
+// not the app, this admin, or shared cards. The owner found the old page "a
+// mishmash" (2026-10-27), so it opens on one plain sentence, then splits into
+// one tab per question: how many came, what they read, where from, who.
+// One fetch feeds every tab; switching tabs keeps it (this stays mounted).
 
-type Data = {
+import { useCallback, useEffect, useRef, useState } from "react";
+import { PageHeader, KpiCard, KpiGrid, Section, Stack, Columns } from "../_ui/layout";
+import { Tabs } from "../_ui/links";
+import { ShareBar, TrendBars } from "../_ui/charts";
+import { EmptyState, ErrorState, HowCounted, NotTracked, PageSkeleton } from "../_ui/states";
+import { Icon } from "../_ui/icons";
+import { fmtNum } from "../_ui/format";
+import { countryFlag, countryName, pageName, referrerName } from "../_ui/labels";
+import { WEBSITE_TABS, type WebsiteTab } from "./tabs";
+
+export type WebsiteData = {
   includeInternal: boolean;
   capHit: boolean;
   kpis: {
@@ -19,7 +34,6 @@ type Data = {
   topCountries: { label: string; count: number }[];
 };
 
-function fmt(n: number) { return n.toLocaleString("en-US"); }
 function duration(sec: number) {
   if (sec < 60) return `${sec}s`;
   const m = Math.floor(sec / 60);
@@ -27,67 +41,21 @@ function duration(sec: number) {
   return `${m}m ${s.toString().padStart(2, "0")}s`;
 }
 
-function Kpi({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-      <p className="text-gray-500 text-[0.6875rem] font-medium uppercase tracking-wide">{label}</p>
-      <p className="text-white text-2xl font-bold tabular-nums mt-1">{value}</p>
-      {sub && <p className="text-gray-500 text-[0.6875rem] mt-0.5">{sub}</p>}
-    </div>
-  );
-}
-
-function DualChart({ series }: { series: Data["daily"] }) {
-  const max = Math.max(1, ...series.map((s) => s.views));
-  return (
-    <div className="flex items-end gap-1 h-40">
-      {series.map((s) => (
-        <div key={s.date} className="group relative flex-1 min-w-0 h-full flex flex-col justify-end items-center">
-          {/* pageviews (faint) with unique visitors (solid) layered in front */}
-          <div className="relative w-full flex justify-center" style={{ height: "100%" }}>
-            <div className="absolute bottom-0 w-full rounded-t-sm" style={{ height: `${(s.views / max) * 100}%`, minHeight: s.views ? 3 : 0, background: "#1e3a8a" }} />
-            <div className="absolute bottom-0 w-full rounded-t-sm" style={{ height: `${(s.visitors / max) * 100}%`, minHeight: s.visitors ? 3 : 0, background: "#3b82f6" }} />
-          </div>
-          <div className="pointer-events-none absolute -top-12 left-1/2 -translate-x-1/2 z-10 hidden group-hover:block whitespace-nowrap rounded-md bg-slate-800 px-2 py-1 text-center shadow-lg ring-1 ring-black/20">
-            <span suppressHydrationWarning className="block text-[0.625rem] text-slate-400">{new Date(s.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-            <span className="block text-[0.6875rem] font-bold text-white tabular-nums">{fmt(s.views)} views</span>
-            <span className="block text-[0.6875rem] font-semibold text-blue-300 tabular-nums">{fmt(s.visitors)} visitors</span>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function TopList({ title, rows, empty }: { title: string; rows: { label: string; count: number }[]; empty: string }) {
-  const max = Math.max(1, ...rows.map((r) => r.count));
-  return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-      <p className="text-white font-semibold text-sm mb-3">{title}</p>
-      {rows.length === 0 ? (
-        <p className="text-gray-600 text-xs">{empty}</p>
-      ) : (
-        <div className="space-y-1.5">
-          {rows.map((r) => (
-            <div key={r.label} className="relative flex items-center justify-between gap-3 rounded-md px-2 py-1.5 overflow-hidden">
-              <div className="absolute inset-y-0 left-0 rounded-md bg-blue-600/15" style={{ width: `${(r.count / max) * 100}%` }} />
-              <span className="relative text-gray-300 text-xs truncate">{r.label}</span>
-              <span className="relative text-white font-semibold text-xs tabular-nums shrink-0">{fmt(r.count)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default function WebsiteAnalyticsClient({ initialInternalDevice }: { initialInternalDevice: boolean }) {
-  const [data, setData] = useState<Data | null>(null);
-  const [loading, setLoading] = useState(true);
+export default function WebsiteAnalyticsClient({ initialInternalDevice, tab = "traffic", initial }: {
+  initialInternalDevice: boolean;
+  tab?: WebsiteTab;
+  /** Fixture data for tests/render; the page itself always fetches. */
+  initial?: WebsiteData;
+}) {
+  const [data, setData] = useState<WebsiteData | null>(initial ?? null);
+  const [loading, setLoading] = useState(!initial);
   const [err, setErr] = useState(false);
   const [includeInternal, setIncludeInternal] = useState(false);
   const [internalDevice, setInternalDevice] = useState(initialInternalDevice);
   const [savingDevice, setSavingDevice] = useState(false);
+  // With fixture data (tests/render) the first fetch is skipped; the switch
+  // still refetches.
+  const firstRun = useRef(true);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -103,8 +71,14 @@ export default function WebsiteAnalyticsClient({ initialInternalDevice }: { init
     }
   }, [includeInternal]);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on mount + when the internal-filter toggle changes; load() owns its own loading/error state
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false;
+      if (initial) return;
+    }
+    // On mount, and again whenever the team-visits switch changes.
+    load();
+  }, [load, initial]);
 
   async function toggleDevice() {
     const next = !internalDevice;
@@ -122,77 +96,203 @@ export default function WebsiteAnalyticsClient({ initialInternalDevice }: { init
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between gap-4 flex-wrap mb-5">
-        <div>
-          <h1 className="text-xl font-bold text-white">Website analytics</h1>
-          <p className="text-gray-500 text-xs mt-0.5">Traffic to the marketing site — home, pricing, product & preview pages. The app, admin, and shared cards aren&apos;t counted here.</p>
-        </div>
-        <label className="flex items-center gap-2 text-xs text-gray-400 select-none cursor-pointer">
-          <input type="checkbox" checked={includeInternal} onChange={(e) => setIncludeInternal(e.target.checked)} className="accent-blue-600" />
-          Include my team&apos;s visits
-        </label>
-      </div>
+    <Stack>
+      <PageHeader
+        title="Website"
+        description="Who visits swiftcard.me, what they read, and where they came from. Your app, this admin and shared cards aren't counted here."
+        actions={
+          <>
+            <span className={internalDevice ? "sc-badge sc-badge-green" : "sc-badge"} title="Change it on the Settings tab">
+              This device: {internalDevice ? "excluded ✓" : "counted"}
+            </span>
+            <label className="inline-flex items-center gap-2 sc-t-footnote cursor-pointer select-none min-h-[44px]">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={includeInternal}
+                onClick={() => setIncludeInternal((v) => !v)}
+                className="sc-switch sc-switch-sm"
+              />
+              Include my team&apos;s visits
+            </label>
+          </>
+        }
+      />
+      <Tabs base="/admin/website" items={[...WEBSITE_TABS]} active={tab} />
 
-      {/* Exclude-this-device control */}
-      <div className="flex items-center justify-between gap-4 flex-wrap mb-6 rounded-xl border border-gray-800 bg-gray-900/60 px-4 py-3">
-        <div className="min-w-0">
-          <p className="text-sm text-white font-medium">
-            {internalDevice ? "This device is excluded from analytics" : "This device is counted in analytics"}
-          </p>
-          <p className="text-gray-500 text-[0.6875rem] mt-0.5">
-            Turn this on wherever you and your partner browse the site, so your own visits don&apos;t inflate the numbers.
-          </p>
-        </div>
-        <button
-          onClick={toggleDevice}
-          disabled={savingDevice}
-          className={`shrink-0 text-xs font-semibold px-4 py-2 rounded-full transition-colors disabled:opacity-50 ${
-            internalDevice ? "bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700" : "bg-blue-600 hover:bg-blue-500 text-white"
-          }`}
-        >
-          {savingDevice ? "Saving…" : internalDevice ? "Count this device again" : "Exclude my visits"}
-        </button>
-      </div>
-
-      {loading && <p className="text-gray-500 text-sm">Loading…</p>}
-      {err && (
-        <p className="text-gray-400 text-sm">Couldn&apos;t load analytics. <button onClick={load} className="text-blue-400 hover:text-blue-300">Retry</button></p>
-      )}
-
-      {data && !loading && (
-        <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-            <Kpi label="Visitors today" value={fmt(data.kpis.visitors.d1)} sub={`${fmt(data.kpis.pageviews.d1)} views`} />
-            <Kpi label="Visitors · 7d" value={fmt(data.kpis.visitors.d7)} sub={`${fmt(data.kpis.pageviews.d7)} views`} />
-            <Kpi label="Visitors · 30d" value={fmt(data.kpis.visitors.d30)} sub={`${fmt(data.kpis.pageviews.d30)} views`} />
-            <Kpi label="Avg. time on page" value={duration(data.kpis.avgDurationSec)} />
-            <Kpi label="Pages / session" value={String(data.kpis.pagesPerSession)} sub={`${fmt(data.kpis.sessions)} sessions · 30d`} />
-            <Kpi label="Bounce rate" value={`${data.kpis.bounceRatePct}%`} sub="single-page sessions" />
-          </div>
-
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-white font-semibold text-sm">Last 30 days</p>
-              <div className="flex items-center gap-4 text-[0.6875rem]">
-                <span className="flex items-center gap-1.5 text-gray-400"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: "#3b82f6" }} /> Unique visitors</span>
-                <span className="flex items-center gap-1.5 text-gray-400"><span className="w-2.5 h-2.5 rounded-sm" style={{ background: "#1e3a8a" }} /> Pageviews</span>
-              </div>
-            </div>
-            <DualChart series={data.daily} />
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-4">
-            <TopList title="Top pages" rows={data.topPages} empty="No pageviews yet." />
-            <TopList title="Top referrers" rows={data.topReferrers} empty="No external referrers yet — traffic is direct." />
-            <TopList title="Top countries" rows={data.topCountries} empty="No location data yet." />
-          </div>
-
-          {data.capHit && (
-            <p className="text-amber-500/70 text-[0.6875rem] mt-4">Charts reflect the most recent 50,000 pageviews (window is busier than that).</p>
+      {err && !data ? (
+        <ErrorState message="The website numbers didn't load." onRetry={load} />
+      ) : !data ? (
+        <PageSkeleton kpis={3} />
+      ) : (
+        <div className={loading ? "opacity-60 transition-opacity" : "transition-opacity"} aria-busy={loading}>
+          {tab === "pages" ? <PagesTab d={data} />
+            : tab === "sources" ? <SourcesTab d={data} />
+            : tab === "audience" ? <AudienceTab d={data} />
+            : tab === "settings" ? <SettingsTab internalDevice={internalDevice} saving={savingDevice} onToggle={toggleDevice} />
+            : <TrafficTab d={data} />}
+          {data.capHit && tab !== "settings" && (
+            <p className="adm-callout-warn px-4 py-3 sc-t-footnote mt-6">Charts reflect the most recent 50,000 pageviews (the 30 days were busier than that).</p>
           )}
-        </>
+        </div>
       )}
-    </div>
+    </Stack>
+  );
+}
+
+/** A ranked list: name on top, the raw value under it, count + share bar. */
+function RankList({ rows, empty, name, detail }: {
+  rows: { label: string; count: number }[];
+  empty: string;
+  name: (label: string) => React.ReactNode;
+  detail?: (label: string) => React.ReactNode;
+}) {
+  if (rows.length === 0) return <EmptyState className="pb-6">{empty}</EmptyState>;
+  const max = Math.max(1, ...rows.map((r) => r.count));
+  const total = rows.reduce((n, r) => n + r.count, 0);
+  return (
+    <ol className="adm-divide">
+      {rows.map((r, i) => (
+        <li key={r.label} className="px-4 sm:px-5 py-3 flex items-center gap-3 sm:gap-4">
+          <span className="w-5 sc-t-footnote adm-faint adm-num shrink-0">{i + 1}</span>
+          <div className="min-w-0 flex-1">
+            <p className="sc-t-subhead font-medium truncate">{name(r.label)}</p>
+            {detail && <p className="sc-t-caption adm-muted truncate">{detail(r.label)}</p>}
+            <div className="mt-1.5 sm:hidden"><ShareBar value={r.count} max={max} /></div>
+          </div>
+          <div className="hidden sm:block w-40 shrink-0"><ShareBar value={r.count} max={max} /></div>
+          <span className="w-14 text-right sc-t-subhead font-semibold adm-num shrink-0">{fmtNum(r.count)}</span>
+          <span className="w-10 text-right sc-t-caption adm-muted adm-num shrink-0">{total ? `${Math.round((r.count / total) * 100)}%` : "—"}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+// ── Traffic ─────────────────────────────────────────────────────────────────
+function TrafficTab({ d }: { d: WebsiteData }) {
+  const k = d.kpis;
+  const topSource = d.topReferrers[0];
+  const topPage = d.topPages[0];
+  return (
+    <Stack>
+      <section className="adm-card p-4 sm:p-5">
+        <p className="sc-t-callout">
+          In the last 7 days, <b className="adm-num">{fmtNum(k.visitors.d7)}</b> {k.visitors.d7 === 1 ? "person" : "people"} visited swiftcard.me and viewed{" "}
+          <b className="adm-num">{fmtNum(k.pageviews.d7)}</b> {k.pageviews.d7 === 1 ? "page" : "pages"}.
+          {topSource ? <> Over 30 days the biggest outside source was <b>{referrerName(topSource.label)}</b>.</> : <> Nobody has arrived from another site yet — visits so far are typed in or from apps.</>}
+          {topPage && <> The most-read page was <b>{pageName(topPage.label)}</b>.</>}
+        </p>
+      </section>
+
+      <KpiGrid cols={3}>
+        <KpiCard label="Visitors today" value={fmtNum(k.visitors.d1)} sub={`${fmtNum(k.pageviews.d1)} pages viewed`} />
+        <KpiCard label="Visitors · 7 days" value={fmtNum(k.visitors.d7)} sub={`${fmtNum(k.pageviews.d7)} pages viewed`} />
+        <KpiCard label="Visitors · 30 days" value={fmtNum(k.visitors.d30)} sub={`${fmtNum(k.pageviews.d30)} pages viewed`} />
+        <KpiCard label="Pages per visit" value={String(k.pagesPerSession)} sub={`Across ${fmtNum(k.sessions)} visits in 30 days`} />
+        <KpiCard label="Time on a page" value={duration(k.avgDurationSec)} sub="On average, before moving on" />
+        <KpiCard label="Left after one page" value={`${k.bounceRatePct}%`} sub="Visits that saw a single page" />
+      </KpiGrid>
+
+      <Section title="Visitors and pages viewed per day" hint="The last 30 days. The pale bar is pages viewed; the solid bar inside it is the people who viewed them.">
+        <TrendBars
+          height={180}
+          data={d.daily.map((x) => ({ date: x.date, values: [x.views, x.visitors] }))}
+          series={[{ label: "Pages viewed", color: "var(--adm-series-1-soft)" }, { label: "Visitors", color: "var(--adm-series-1)" }]}
+          caption="Pages viewed and visitors per day, last 30 days"
+        />
+      </Section>
+
+      <HowCounted>
+        <p>A visitor is one browser, counted once in each period however many pages it opens. A visit ends when the tab closes or after a stretch of doing nothing.</p>
+        <p>Only the marketing site counts: home, pricing, product and preview pages. The app, this admin and shared cards have their own numbers.</p>
+        <p>Your team&apos;s visits are left out unless you switch them on above, and any device marked on the Settings tab never counts.</p>
+      </HowCounted>
+    </Stack>
+  );
+}
+
+// ── Pages ───────────────────────────────────────────────────────────────────
+function PagesTab({ d }: { d: WebsiteData }) {
+  return (
+    <Stack>
+      <Section title="Most-read pages · 30 days" hint="Every marketing page by how many times it was viewed." flush>
+        <RankList rows={d.topPages} empty="No pageviews yet." name={pageName} detail={(p) => p} />
+      </Section>
+      <Columns>
+        <NotTracked title="Time on each page" detail="which pages people actually read, not just open." />
+        <NotTracked title="Where people leave" detail="the last page before someone closes the site." />
+      </Columns>
+    </Stack>
+  );
+}
+
+// ── Sources ─────────────────────────────────────────────────────────────────
+function SourcesTab({ d }: { d: WebsiteData }) {
+  return (
+    <Stack>
+      <Section
+        title="Where visitors come from · 30 days"
+        hint="The site someone was on just before. Typed-in addresses, bookmarks and most apps don't say where they came from, so they aren't listed here."
+        flush
+      >
+        <RankList rows={d.topReferrers} empty="No outside sources yet — traffic so far is typed in or from apps." name={referrerName} detail={(h) => h} />
+      </Section>
+      <Columns>
+        <NotTracked title="Campaigns" detail="visits from your own tagged links (flyers, posts, emails), by campaign." />
+        <NotTracked title="Signups by source" detail="which source brings people who go on to make an account." />
+      </Columns>
+    </Stack>
+  );
+}
+
+// ── Audience ────────────────────────────────────────────────────────────────
+function AudienceTab({ d }: { d: WebsiteData }) {
+  return (
+    <Stack>
+      <Section title="Countries · 30 days" hint="Where visitors are, by pageviews." flush>
+        <RankList
+          rows={d.topCountries}
+          empty="No location data yet."
+          name={(c) => <><span aria-hidden className="mr-2">{countryFlag(c)}</span>{countryName(c)}</>}
+          detail={(c) => c.toUpperCase()}
+        />
+      </Section>
+      <Columns>
+        <NotTracked title="Phone or computer" detail="how many visitors are on a phone, a tablet or a computer." />
+        <NotTracked title="New or returning" detail="first-time visitors against people coming back." />
+      </Columns>
+    </Stack>
+  );
+}
+
+// ── Settings ────────────────────────────────────────────────────────────────
+function SettingsTab({ internalDevice, saving, onToggle }: { internalDevice: boolean; saving: boolean; onToggle: () => void }) {
+  return (
+    <Stack>
+      <Section title="This device" hint="Turn this on wherever you and your partner browse the site, so your own visits don't inflate the numbers.">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <p className="sc-t-subhead flex items-center gap-2">
+            <span className={internalDevice ? "adm-good" : "adm-muted"}><Icon name={internalDevice ? "check" : "website"} /></span>
+            {internalDevice ? "This device is excluded from the numbers." : "This device is counted in the numbers."}
+          </p>
+          <button
+            type="button"
+            onClick={onToggle}
+            disabled={saving}
+            className={`sc-btn sc-btn-sm ${internalDevice ? "sc-btn-gray" : "sc-btn-filled"}`}
+          >
+            {saving ? "Saving…" : internalDevice ? "Count this device again" : "Exclude my visits"}
+          </button>
+        </div>
+      </Section>
+      <Section title="What's counted here">
+        <ul className="space-y-2 sc-t-subhead">
+          <li className="flex gap-2"><span className="adm-good"><Icon name="check" /></span>The marketing site: home, pricing, the product pages and the card preview.</li>
+          <li className="flex gap-2"><span className="adm-muted"><Icon name="close" /></span>The app (dashboard, settings), this admin, and people&apos;s shared cards — those have their own numbers.</li>
+          <li className="flex gap-2"><span className="adm-muted"><Icon name="close" /></span>Your team&apos;s visits, unless you switch &ldquo;Include my team&apos;s visits&rdquo; on at the top.</li>
+        </ul>
+      </Section>
+    </Stack>
   );
 }

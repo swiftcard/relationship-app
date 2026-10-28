@@ -116,11 +116,15 @@ export function TrendBars({
           <span>{shortDate(data[n - 1].date)}</span>
         </div>
       )}
-      <table className="sr-only">
-        <caption>{caption}</caption>
-        <thead><tr><th>Day</th>{series.map((s) => <th key={s.label}>{s.label}</th>)}</tr></thead>
-        <tbody>{data.map((d) => <tr key={d.date}><td>{shortDate(d.date)}</td>{d.values.map((v, i) => <td key={i}>{v}</td>)}</tr>)}</tbody>
-      </table>
+      {/* The numbers for a screen reader. In a div: a <table> ignores the 1px
+          height sr-only gives it and stretched the page by its full length. */}
+      <div className="sr-only">
+        <table>
+          <caption>{caption}</caption>
+          <thead><tr><th>Day</th>{series.map((s) => <th key={s.label}>{s.label}</th>)}</tr></thead>
+          <tbody>{data.map((d) => <tr key={d.date}><td>{shortDate(d.date)}</td>{d.values.map((v, i) => <td key={i}>{v}</td>)}</tr>)}</tbody>
+        </table>
+      </div>
     </figure>
   );
 }

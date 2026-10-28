@@ -121,6 +121,25 @@ describe("Users › Closed accounts: who left, and why in their words", () => {
   });
 });
 
+describe("Website reads as one page per question", () => {
+  // Owner, 2026-10-27: "That whole page just looks like a mishmash."
+  it("has Traffic, Pages, Sources, Audience and Settings, in that order", () => {
+    const keys = [...read("src/app/admin/website/tabs.ts").matchAll(/key: "([a-z]+)"/g)].map((m) => m[1]);
+    expect(keys).toEqual(["traffic", "pages", "sources", "audience", "settings"]);
+  });
+
+  it("names pages, sources and countries the way people say them", () => {
+    const client = read("src/app/admin/website/WebsiteAnalyticsClient.tsx");
+    for (const fn of ["pageName", "referrerName", "countryName"]) expect(client).toContain(fn);
+  });
+
+  it("still talks to the same endpoints (the data pass changes the numbers, not this page)", () => {
+    const client = read("src/app/admin/website/WebsiteAnalyticsClient.tsx");
+    expect(client).toContain("fetch(`/api/admin/website?internal=${includeInternal ? \"1\" : \"0\"}`)");
+    expect(client).toContain('fetch("/api/admin/website/internal"');
+  });
+});
+
 describe("the building blocks stay on the semantic palette", () => {
   it("no raw hex colour in any _ui component (they live in admin.css)", () => {
     const dir = "src/app/admin/_ui";
