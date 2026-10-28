@@ -65,7 +65,9 @@ export async function recordLeads(ctx: AgentContext, leads: Lead[]): Promise<num
   let added = 0;
   let useful = 0;
   for (const l of fresh) {
-    // The database refuses an email already on this list (a duplicate too).
+    // The check above can race another run saving the same company at the same
+    // moment; the database decides (crew_leads_company_key_unique), and so it
+    // does for an email already on this list. Either refusal is a duplicate.
     if (!(await ctx.store.insertLeads([l]))) {
       duplicates++;
       continue;

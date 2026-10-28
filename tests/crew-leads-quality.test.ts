@@ -43,14 +43,27 @@ describe("email domain check", () => {
     expect(await emailDomainStatus("jo@acme.com")).toBe("Domain OK");
     expect(Object.values(EMAIL_STATUS)).not.toContain("Verified");
   });
-  it("No Mail Server for a domain that doesn't exist, has no MX, or publishes a null MX", async () => {
+  it("No Mail Server only when the domain doesn't exist, publishes a null MX, or has no MX and no address", async () => {
     const spy = vi.spyOn(dnsLookup, "mx");
+    const address = vi.spyOn(dnsLookup, "address");
     spy.mockRejectedValueOnce(Object.assign(new Error("x"), { code: "ENOTFOUND" }));
     expect(await emailDomainStatus("jo@gone.example")).toBe("No Mail Server");
-    spy.mockRejectedValueOnce(Object.assign(new Error("x"), { code: "ENODATA" }));
-    expect(await emailDomainStatus("jo@nomx.example")).toBe("No Mail Server");
     spy.mockResolvedValueOnce([{ exchange: ".", priority: 0 }]);
     expect(await emailDomainStatus("jo@nullmx.example")).toBe("No Mail Server");
+    spy.mockRejectedValueOnce(Object.assign(new Error("x"), { code: "ENODATA" }));
+    address.mockResolvedValueOnce(false);
+    expect(await emailDomainStatus("jo@bare.example")).toBe("No Mail Server");
+  });
+  it("no MX but an address record is 'No MX Record', not undeliverable: senders fall back to that address (RFC 5321 §5.1)", async () => {
+    vi.spyOn(dnsLookup, "mx").mockRejectedValueOnce(Object.assign(new Error("x"), { code: "ENODATA" }));
+    vi.spyOn(dnsLookup, "address").mockResolvedValueOnce(true);
+    expect(await emailDomainStatus("jo@amx.example")).toBe("No MX Record");
+    expect(usable(cold({ email: "jo@amx.example", email_status: "No MX Record" }))).toBe(true);
+    const ok = leadScore({ fit: 20, name: null, title: null, email: "jo@a.com", emailStatus: "Domain OK", phone: null, industry: null });
+    const noMx = leadScore({ fit: 20, name: null, title: null, email: "jo@a.com", emailStatus: "No MX Record", phone: null, industry: null });
+    const none = leadScore({ fit: 20, name: null, title: null, email: "jo@a.com", emailStatus: "No Mail Server", phone: null, industry: null });
+    expect(ok).toBeGreaterThan(noMx);
+    expect(noMx).toBeGreaterThan(none);
   });
   it("a failed or slow lookup is Unchecked, not a verdict", async () => {
     vi.spyOn(dnsLookup, "mx").mockRejectedValueOnce(Object.assign(new Error("x"), { code: "ESERVFAIL" }));
@@ -169,6 +182,61 @@ describe("recordLeads: one per company, across both lists, and stats that add up
     await store.insertLeads([cold({ email: "jo@shared.com", source_url: "paste:1", company: null })]);
     expect(await recordLeads(ctx, [cold({ email: "jo@shared.com", source_url: "paste:2", company: null })])).toBe(0);
     expect(ctx.stats).toMatchObject({ leads_added: 0, duplicates_rejected: 1 });
+  });
+});
+
+describe("one company, even when two runs save it at the same moment", () => {
+  /** Both runs pass the company check before either inserts: the race the database index decides. */
+  function raceTheCheck(store: { companyKeysTaken: (k: string[]) => Promise<Set<string>> }, runs = 2) {
+    const real = store.companyKeysTaken.bind(store);
+    let waiting = 0;
+    let open!: () => void;
+    const gate = new Promise<void>((r) => (open = r));
+    vi.spyOn(store, "companyKeysTaken").mockImplementation(async (keys) => {
+      const seen = await real(keys);
+      if (++waiting === runs) open();
+      await gate;
+      return seen;
+    });
+  }
+
+  it("Web Leads and Office Prospects on the same business: one lead, the other run counts a rejected duplicate and doesn't fail", async () => {
+    const web = await setup({ def: fakeAgent({ id: "leads-web", team: "leads" }) });
+    const office = await setup({ def: fakeAgent({ id: "office-outreach", team: "office" }) });
+    Object.assign(office.ctx, { store: web.store }); // one database
+    raceTheCheck(web.store);
+    const [a, b] = await Promise.all([
+      recordLeads(web.ctx, [cold({ email: "jane@acmerealty.com", company: "Acme Realty", source_url: "https://acmerealty.com/team" })]),
+      recordLeads(office.ctx, [{ list: "office", name: "Maria Lopez", title: "Broker", email: "maria@acmerealty.com", phone: "7045550100", company: "Acme Realty", source_platform: "web", source_url: "https://www.acmerealty.com/" }]),
+    ]);
+    expect(a + b).toBe(1);
+    expect(web.store.leads.filter((l) => l.company_key === "acmerealty.com")).toHaveLength(1);
+    expect((web.ctx.stats.duplicates_rejected ?? 0) + (office.ctx.stats.duplicates_rejected ?? 0)).toBe(1);
+    expect((web.ctx.stats.leads_added ?? 0) + (office.ctx.stats.leads_added ?? 0)).toBe(1);
+    expect((web.ctx.stats.usable_leads ?? 0) + (office.ctx.stats.usable_leads ?? 0)).toBe(1);
+    // The loser listed nobody: only the saved lead's person got a "lead_listed" mark.
+    expect(web.store.touches.filter((t) => t.kind === "lead_listed")).toHaveLength(1);
+  });
+
+  it("on compass.com: two different teams are two companies; the same team from both runs is one", async () => {
+    const web = await setup({ def: fakeAgent({ id: "leads-web", team: "leads" }) });
+    const office = await setup({ def: fakeAgent({ id: "office-outreach", team: "office" }) });
+    Object.assign(office.ctx, { store: web.store });
+    raceTheCheck(web.store);
+    const team = (list: "cold" | "office", email: string, company: string, path: string): Lead => ({ list, email, company, source_platform: "web", source_url: `https://www.compass.com/agents/${path}/` });
+    await Promise.all([
+      recordLeads(web.ctx, [team("cold", "a@compass.com", "The Kantha Team", "kantha"), team("cold", "b@compass.com", "Aaron and Geoff at Compass", "aaron-geoff")]),
+      recordLeads(office.ctx, [team("office", "c@compass.com", "The Kantha Team", "kantha-team")]),
+    ]);
+    expect(web.store.leads.map((l) => l.company_key).sort()).toEqual(["compass.com/aaron-and-geoff-at-compass", "compass.com/kantha-team"]);
+    expect((web.ctx.stats.duplicates_rejected ?? 0) + (office.ctx.stats.duplicates_rejected ?? 0)).toBe(1);
+  });
+
+  it("a suppressed contact is still counted as suppressed, not as a duplicate, in a race", async () => {
+    const web = await setup({ def: fakeAgent({ id: "leads-web", team: "leads" }) });
+    await web.store.addSuppression("@acmerealty.com", "asked to be removed");
+    expect(await recordLeads(web.ctx, [cold({ email: "jane@acmerealty.com", company: "Acme Realty" })])).toBe(0);
+    expect(web.ctx.stats).toMatchObject({ contacts_suppressed: 1, duplicates_rejected: 0, leads_added: 0 });
   });
 });
 

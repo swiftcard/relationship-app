@@ -45,6 +45,8 @@ vi.mock("@/lib/supabase-admin", () => ({
       insert: async (row: Row) => {
         if (!db.hasColumns && Object.keys(row).some((k) => NEW.includes(k))) return { error: { code: "PGRST204", message: "Could not find the 'company_key' column of 'crew_leads' in the schema cache" } };
         if (db.rows.some((r) => r.list === row.list && r.email && r.email === row.email)) return { error: { code: "23505", message: "duplicate" } };
+        // crew_leads_company_key_unique (WHERE company_key IS NOT NULL)
+        if (db.hasColumns && row.company_key && db.rows.some((r) => r.company_key === row.company_key)) return { error: { code: "23505", message: 'duplicate key value violates unique constraint "crew_leads_company_key_unique"' } };
         db.inserts.push(row);
         db.rows.push({ id: `id-${db.rows.length}`, ...row });
         return { error: null };
@@ -74,6 +76,15 @@ describe("SupabaseStore leads without the new columns", () => {
 });
 
 describe("SupabaseStore leads with the new columns", () => {
+  it("the unique company index refusing an insert is a rejected duplicate, not an error", async () => {
+    db.hasColumns = true;
+    const { SupabaseStore } = await import("@/lib/crew/store-supabase");
+    const store = new SupabaseStore();
+    expect(await store.insertLeads([lead({ list: "cold" })])).toBe(1);
+    // Another run, the other list, the same company, a different email: only the company index stops it.
+    expect(await store.insertLeads([lead({ list: "office", email: "maria@acme.com" })])).toBe(0);
+    expect(db.rows.filter((r) => r.company_key === "acme.com")).toHaveLength(1);
+  });
   it("saves every field and matches companies by key and by legacy site", async () => {
     db.hasColumns = true;
     const { SupabaseStore } = await import("@/lib/crew/store-supabase");

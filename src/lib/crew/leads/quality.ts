@@ -55,12 +55,22 @@ export const DECISION_ROLE = /\b(owner|founder|co-?founder|principal|broker|mana
 
 // ── The email's domain ──────────────────────────────────────────────────────
 
-/** Domain OK means a mail server exists for the domain. It is NOT a verified mailbox. */
-export const EMAIL_STATUS = { ok: "Domain OK", noMail: "No Mail Server", unchecked: "Unchecked", none: "None" } as const;
+/**
+ * Domain OK: the domain names a mail server (MX). It is NOT a verified mailbox.
+ * No MX Record: the domain exists without an MX but has an address record, and
+ * mail servers may still deliver to that address (RFC 5321 §5.1), so it is
+ * not called undeliverable. No Mail Server: the domain doesn't exist, declares
+ * it takes no mail (a null MX, RFC 7505), or has neither an MX nor an address.
+ */
+export const EMAIL_STATUS = { ok: "Domain OK", noMx: "No MX Record", noMail: "No Mail Server", unchecked: "Unchecked", none: "None" } as const;
 export type EmailStatus = (typeof EMAIL_STATUS)[keyof typeof EMAIL_STATUS];
 
 /** The DNS lookup, swappable in tests. */
-export const dnsLookup = { mx: (domain: string) => dns.resolveMx(domain) };
+export const dnsLookup = {
+  mx: (domain: string) => dns.resolveMx(domain),
+  /** Any A or AAAA record: the fallback a sender uses when there is no MX. */
+  address: async (domain: string) => (await dns.resolve4(domain).catch(() => [] as string[])).length > 0 || (await dns.resolve6(domain).catch(() => [] as string[])).length > 0,
+};
 
 /** Whether the email's domain has a mail server. A failed or slow lookup is "Unchecked", never a verdict. */
 export async function emailDomainStatus(email: string | null | undefined, timeoutMs = 4000): Promise<EmailStatus> {
@@ -68,13 +78,21 @@ export async function emailDomainStatus(email: string | null | undefined, timeou
   if (FREE_MAIL.test(email)) return EMAIL_STATUS.ok;
   const domain = email.split("@")[1]?.toLowerCase();
   if (!domain) return EMAIL_STATUS.noMail;
+  const timeout = <T,>(p: Promise<T>) => Promise.race([p, new Promise<never>((_, no) => setTimeout(() => no(Object.assign(new Error("timeout"), { code: "ETIMEOUT" })), timeoutMs))]);
   try {
-    const mx = await Promise.race([dnsLookup.mx(domain), new Promise<never>((_, no) => setTimeout(() => no(Object.assign(new Error("timeout"), { code: "ETIMEOUT" })), timeoutMs))]);
+    const mx = await timeout(dnsLookup.mx(domain));
     // RFC 7505: a single "." exchange says the domain accepts no mail.
     return mx.some((r) => r.exchange && r.exchange !== ".") ? EMAIL_STATUS.ok : EMAIL_STATUS.noMail;
   } catch (e) {
     const code = (e as { code?: string }).code;
-    return code === "ENOTFOUND" || code === "ENODATA" ? EMAIL_STATUS.noMail : EMAIL_STATUS.unchecked;
+    if (code === "ENOTFOUND") return EMAIL_STATUS.noMail; // the domain doesn't exist
+    if (code !== "ENODATA") return EMAIL_STATUS.unchecked;
+  }
+  // No MX: senders fall back to the domain's own address record.
+  try {
+    return (await timeout(dnsLookup.address(domain))) ? EMAIL_STATUS.noMx : EMAIL_STATUS.noMail;
+  } catch {
+    return EMAIL_STATUS.unchecked;
   }
 }
 
@@ -107,6 +125,7 @@ export function leadScore(o: { fit: number; name: string | null; title: string |
   else if (o.name) s += 8;
   if (o.email) s += isGenericEmail(o.email) ? 5 : 15;
   if (o.emailStatus === EMAIL_STATUS.noMail) s -= 15;
+  else if (o.emailStatus === EMAIL_STATUS.noMx) s -= 5;
   if (o.phone) s += 10;
   if (o.industry && CORE_INDUSTRY.test(o.industry)) s += 15;
   return Math.max(0, Math.min(100, s));
