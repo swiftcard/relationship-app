@@ -1,4 +1,5 @@
 import type { getAdminSupabase } from "@/lib/supabase-admin";
+import { paged } from "@/lib/crew/paged";
 
 type Admin = ReturnType<typeof getAdminSupabase>;
 
@@ -28,14 +29,18 @@ export type WarmLeadMetrics =
 export async function warmLeadMetrics(admin: Admin, now = Date.now()): Promise<WarmLeadMetrics> {
   const since = new Date(now - 30 * 86_400_000).toISOString();
   try {
-    const { data: alerts, error } = await admin
-      .from("notifications")
-      .select("lead_id, created_at, opened_at")
-      .in("type", ["contact_returned", "contact_engaged"])
-      .not("lead_id", "is", null)
-      .gte("created_at", since)
-      .limit(10000);
-    if (error) return { available: false };
+    // Paged: one select stops at 1,000 rows whatever .limit() asks for, so
+    // the scorecard quietly read only the newest 1,000 alerts.
+    let alerts: { lead_id: string; created_at: string; opened_at: string | null }[];
+    try {
+      alerts = await paged(
+        (from, to) => admin.from("notifications").select("lead_id, created_at, opened_at")
+          .in("type", ["contact_returned", "contact_engaged"]).not("lead_id", "is", null)
+          .gte("created_at", since).order("created_at").order("id").range(from, to),
+        500_000, "warm-lead alerts");
+    } catch {
+      return { available: false };
+    }
 
     const leadIds = [...new Set((alerts ?? []).map((a) => a.lead_id as string))];
     const outbound = new Map<string, number[]>();
@@ -57,9 +62,11 @@ export async function warmLeadMetrics(admin: Admin, now = Date.now()): Promise<W
       return (outbound.get(a.lead_id as string) ?? []).some((t) => t >= at && t <= at + 86_400_000);
     }).length;
 
-    const [{ count: wrong }, { data: devices }, { count: pushes }] = await Promise.all([
+    const [{ count: wrong }, devices, { count: pushes }] = await Promise.all([
       admin.from("contact_devices").select("id", { count: "exact", head: true }).gte("wrong_at", since),
-      admin.from("contact_devices").select("bound_via").is("superseded_at", null).is("wrong_at", null).limit(20000),
+      paged<{ bound_via: string }>(
+        (from, to) => admin.from("contact_devices").select("bound_via").is("superseded_at", null).is("wrong_at", null).order("id").range(from, to),
+        1_000_000, "warm-lead devices").catch(() => [] as { bound_via: string }[]),
       admin.from("push_log").select("id", { count: "exact", head: true })
         .eq("category", "contact_return").eq("outcome", "sent").gte("created_at", since),
     ]);

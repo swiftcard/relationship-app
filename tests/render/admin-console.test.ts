@@ -111,7 +111,20 @@ const ANALYTICS = {
       { id: "u2", name: "Bartholomew Featherstonehaugh-Montgomery", email: "bartholomew.featherstonehaugh@a-very-long-company-domain.example.com", username: "bart", plan: "enterprise", created_at: "2026-10-20T09:00:00Z" },
     ],
   },
-  plans: { free: 280, pro: 31, office: 7, paid: 22, conversion: 6.9, estMrr: 109.78, compedPaidPlans: 16 },
+  plans: { free: 280, pro: 31, office: 7, officeMembers: 12, gift: 2, apple: 1, paid: 22, conversion: 6.9, estMrr: 109.78, compedPaidPlans: 3 },
+  revenue: {
+    available: true, mode: "live",
+    summary: {
+      mrrCents: 10978, arrCents: 131736, atRiskCents: 499, paying: 22, payingPro: 19, payingOffice: 3, officeSeats: 14,
+      trials: { active: 4, endingIn7Days: 2, convertsToCents: 1497, cancelling: 1 },
+      cancelling: 1, pastDue: 1, newThisMonth: { count: 3, cents: 1497 }, lostThisMonth: { count: 1, cents: 499 }, excludedInternal: 2,
+    },
+  },
+  numberCheck: [
+    { label: "Every account was read", shown: 318, recount: 318, ok: true, how: "Accounts the admin read, against a plain count of every account." },
+    { label: "Customers' contacts", shown: 1290, recount: 1290, ok: true, how: "The contacts total, against a plain count." },
+  ],
+  internal: { accounts: 34, subscriptionsLeftOut: 2 },
   acquisition: [
     { source: "direct", signups: 200, d30: 60, paid: 12, paidRate: 6 },
     { source: "referral", signups: 40, d30: 12, paid: 6, paidRate: 15 },
@@ -152,12 +165,12 @@ async function companyAnalytics(tab: string) {
 describe.each(ENGINES)("Company Analytics (%s)", (engine) => {
   const TABS: [string, string[]][] = [
     ["growth", ["New accounts per day", "Where signups come from", "Plan mix", "Latest signups", "Not tracked yet"]],
-    ["revenue", ["Monthly revenue (est.)", "Who pays", "On a paid plan, not paying", "Paying through Apple"]],
-    ["funnel", ["Landed on the site", "Paid", "Which Pro features they want", "Most-clicked buttons"]],
+    ["revenue", ["Stripe connection", "Monthly revenue", "$109.78", "at risk (payment failed)", "On a free trial", "New this month", "Office seats billed", "Who pays", "Paying through Apple", "Office team members"]],
+    ["funnel", ["Visited the website", "Paid", "Started paying — from Stripe", "Which Pro features they want", "Most-clicked buttons"]],
     ["engagement", ["Contacts captured per day", "Where contacts come from", "Top cards by contacts"]],
     ["retention", ["Save rate", "Why they leave", "It costs more than I get out of it", "Reply to them", "Closed accounts per week"]],
     ["referrals", ["How the referral program works", "Signups by source", "Neither side is rewarded", "MAYA-2026"]],
-    ["data", ["Tracking switched on", "Returning-contact alerts", "View decisions"]],
+    ["data", ["Number check", "All agree", "Tracking switched on", "Returning-contact alerts", "View decisions"]],
   ];
   for (const [tab, mustSay] of TABS) {
     for (const width of [390, 1280]) {
@@ -253,7 +266,8 @@ describe.each(ENGINES)("Overview (%s)", (engine) => {
         expect(p.sideways, `the page scrolls sideways at ${width}px`).toBe(false);
         const text = await page.evaluate(() => document.body.innerText);
         for (const s of [
-          "Monthly revenue (est.)", "$109.78", "Paying customers", "New signups · 7 days", "Website visitors · 7 days", "410",
+          "Monthly revenue", "$109.78", "Paying customers", "19 Pro · 3 Office", "New signups · 7 days", "Website visitors · 7 days", "410",
+          "payments failed — Stripe is retrying", "free trials end this week",
           "Needs your attention", "account was closed this week", "people are partway through cancelling", "suspicious referral signups",
           "Plan mix", "Signups · last 30 days", "The journey · last 30 days", "Visited the site",
           "Newest signups", "Recently closed", "It costs more than I get out of it",

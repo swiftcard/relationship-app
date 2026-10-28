@@ -169,11 +169,22 @@ export async function listSubscriptions(force = false): Promise<SubLite[]> {
   const stripe = getStripe();
   const subs: SubLite[] = [];
   let starting_after: string | undefined;
+  // The coupon behind each discount, so a recurring 50%-off is taken off. If
+  // Stripe ever refuses that deep an expansion, read without it rather than
+  // show no revenue at all (the discount is then left out, never invented).
+  let expand = ["data.items.data.price", "data.discounts.source.coupon"];
   for (let page = 0; page < 100; page++) {
-    const res = await stripe.subscriptions.list({
-      status: "all", limit: 100, starting_after,
-      expand: ["data.items.data.price", "data.discounts.source.coupon"],
-    });
+    let res: Stripe.ApiList<Stripe.Subscription>;
+    try {
+      res = await stripe.subscriptions.list({ status: "all", limit: 100, starting_after, expand });
+    } catch (e) {
+      if (expand.length === 2 && /expand/i.test(e instanceof Error ? e.message : "")) {
+        expand = ["data.items.data.price", "data.discounts"];
+        page--;
+        continue;
+      }
+      throw e;
+    }
     subs.push(...res.data.map(toLite));
     if (!res.has_more || !res.data.length) break;
     starting_after = res.data[res.data.length - 1].id;
@@ -185,7 +196,9 @@ export async function listSubscriptions(force = false): Promise<SubLite[]> {
 /** One subscription, live — for a customer's page. */
 export async function getSubscription(id: string): Promise<SubLite | null> {
   try {
-    const s = await getStripe().subscriptions.retrieve(id, { expand: ["items.data.price", "discounts.source.coupon"] });
+    const stripe = getStripe();
+    const s = await stripe.subscriptions.retrieve(id, { expand: ["items.data.price", "discounts.source.coupon"] })
+      .catch(() => stripe.subscriptions.retrieve(id, { expand: ["items.data.price", "discounts"] }));
     return toLite(s);
   } catch {
     return null;
@@ -299,13 +312,26 @@ export async function stripeConnection(accounts: Account[]): Promise<{ ok: boole
   return { ok: checks.every((c) => c.ok), mode, checks };
 }
 
-/** For /api/health: configured and reachable, with no business data. */
+let healthCache: { at: number; value: { configured: boolean; ok: boolean; reason: string } } | null = null;
+
+/**
+ * For /api/health: configured and reachable, with no business data. Cached
+ * for five minutes and given three seconds, so Stripe being slow can never
+ * make the site's own health check slow.
+ */
 export async function stripeHealth(): Promise<{ configured: boolean; ok: boolean; reason: string }> {
   if (!process.env.STRIPE_SECRET_KEY) return { configured: false, ok: false, reason: "not_configured" };
+  if (healthCache && Date.now() - healthCache.at < 5 * 60_000) return healthCache.value;
+  let value: { configured: boolean; ok: boolean; reason: string };
   try {
-    await getStripe().prices.list({ limit: 1 });
-    return { configured: true, ok: true, reason: keyMode() };
+    await Promise.race([
+      getStripe().prices.list({ limit: 1 }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000)),
+    ]);
+    value = { configured: true, ok: true, reason: keyMode() };
   } catch (e) {
-    return { configured: true, ok: false, reason: e instanceof Error ? e.message.slice(0, 80) : "error" };
+    value = { configured: true, ok: false, reason: e instanceof Error ? e.message.slice(0, 80) : "error" };
   }
+  healthCache = { at: Date.now(), value };
+  return value;
 }

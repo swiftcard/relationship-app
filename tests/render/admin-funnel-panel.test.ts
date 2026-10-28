@@ -123,7 +123,7 @@ describe("the funnel panel", () => {
     const page = await renderPanel(browser, 1280);
     try {
       const text = await page.evaluate(() => document.body.innerText);
-      for (const label of ["Landed on the site", "Started building a card", "Created an account", "Clicked upgrade", "Paid"]) {
+      for (const label of ["Visited the website", "Started building a card", "Created an account", "Clicked upgrade", "Paid"]) {
         expect(text, `"${label}" is missing from the panel`).toContain(label);
       }
       // Percentages are what the owner reads to find the leak.

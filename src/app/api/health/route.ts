@@ -17,6 +17,10 @@ export async function GET() {
     const { error } = await getAdminSupabase().from("profiles").select("id", { count: "exact", head: true }).limit(1);
     db = !error;
   } catch { db = false; }
+  // The DATABASE's time, measured here: the credential checks below (push,
+  // Wallet, Stripe) take their own time and must not read as a slow database
+  // in the uptime guard's "database answers quickly" check (< 1,200ms).
+  const dbMs = Date.now() - t0;
   // PUSH CREDENTIALS. Reported, never part of `ok`: a broken APNs key must not
   // take the site's health down with it, but it must be VISIBLE — for a week in
   // 2026-09 not one notification reached a phone and nothing anywhere said so.
@@ -46,13 +50,22 @@ export async function GET() {
     const { checkGoogleWalletCredentials } = await import("@/lib/google-wallet");
     googleWallet = await checkGoogleWalletCredentials();
   } catch { googleWallet = null; }
+  // STRIPE, the money. Reported, never part of `ok`, for the same reason as
+  // push: a revoked or test key means no real payment goes through and
+  // nothing else turns red. "live"/"test" or Stripe's error, no business data;
+  // cached five minutes and capped at three seconds (lib/admin-data/billing).
+  let stripe: CredHealth | null = null;
+  try {
+    const { stripeHealth } = await import("@/lib/admin-data/billing");
+    stripe = await stripeHealth();
+  } catch { stripe = null; }
   // WHICH BUILD is answering. Deployment Checks hold a new build until CI
   // passes, so "deployed" and "live" are different moments; the post-deploy
   // checks wait for this to name their commit (scripts/wait-for-live.mjs)
   // before testing swiftcard.me. The repository is public; this is no secret.
   const sha = process.env.VERCEL_GIT_COMMIT_SHA || null;
   return NextResponse.json(
-    { ok: db, db, dbMs: Date.now() - t0, push, googleWallet, sha },
+    { ok: db, db, dbMs, push, googleWallet, stripe, sha },
     { status: db ? 200 : 503, headers: { "Cache-Control": "no-store" } },
   );
 }

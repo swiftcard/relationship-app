@@ -11,7 +11,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { getSignupSourceLabel, getSourceLabel } from "@/lib/source-labels";
 import type { WarmLeadMetrics } from "@/lib/warm-lead-metrics";
-import { PLAN_PRICES } from "@/lib/plan";
+import type { RevenueSummary } from "@/lib/admin-data/billing";
 import { Columns, KpiCard, KpiGrid, Section, Stack } from "../_ui/layout";
 import { BarList, PlanMixBar, TrendBars } from "../_ui/charts";
 import { EmptyState, ErrorState, HowCounted, NotTracked, PageSkeleton } from "../_ui/states";
@@ -48,13 +48,20 @@ export type Analytics = {
   /** Returning-contact alerts (lib/warm-lead-metrics.ts). */
   warmLead?: WarmLeadMetrics;
   accounts: { total: number; today: number; d7: number; d30: number; series: { date: string; count: number }[]; recent: { id?: string; name: string; email: string; username: string; plan: string; created_at: string }[] };
-  plans: { free: number; pro: number; office: number; paid: number; conversion: number; estMrr: number; compedPaidPlans?: number };
+  plans: { free: number; pro: number; office: number; paid: number; conversion: number; estMrr: number; compedPaidPlans?: number; officeMembers?: number; gift?: number; apple?: number };
+  /** Read from Stripe itself (lib/admin-data/billing). */
+  revenue?: { available: true; mode: "live" | "test"; summary: RevenueSummary } | { available: false; reason: string };
+  /** The headline numbers recounted a second, independent way. */
+  numberCheck?: { label: string; shown: number; recount: number; ok: boolean; how: string }[];
+  /** Our own and QA's accounts, left out of every number. */
+  internal?: { accounts: number; subscriptionsLeftOut: number };
+  tz?: string;
   acquisition: { source: string; signups: number; d30: number; paid: number; paidRate: number }[];
-  cards: { total: number; perAccount: number };
-  leads: { total: number; today: number; d7: number; series: { date: string; count: number }[]; bySource: [string, number][]; perAccount: number };
-  views: { total: number; d7: number; cardViews30: number; linkViews30: number };
+  cards: { total: number; perAccount: number; offline?: number };
+  leads: { total: number; today: number; d7: number; series: { date: string; count: number }[]; bySource: [string, number][]; perAccount: number; locked?: number };
+  views: { total: number; d7: number; cardViews30: number; linkViews30: number; linkTotal?: number };
   engagement: { activatedCards: number; activationRate: number };
-  topCards: { username: string; count: number }[];
+  topCards: { username: string; count: number; userId?: string | null }[];
 };
 
 // The ingest vocabulary in plain words. Written so the panel answers "why is
@@ -94,7 +101,10 @@ const GEO_LABEL: Record<string, string> = {
  * to anyone reading it quickly. `key` is the event name from lib/events.ts.
  */
 const FUNNEL_STEPS: { key: string; label: string; hint: string; fromAccounts?: boolean }[] = [
-  { key: "page_viewed", label: "Landed on the site", hint: "Home, pricing or the builder" },
+  // The website's own visits (site_pageviews), not the page_viewed event:
+  // that one also fires on /dashboard and /login, so customers opening the
+  // app read as new people arriving (route: websiteVisits).
+  { key: "page_viewed", label: "Visited the website", hint: "Visits to swiftcard.me (not the app)" },
   { key: "card_creation_started", label: "Started building a card", hint: "Opened the card editor (once per visit)" },
   { key: "card_creation_completed", label: "Finished the card", hint: "Reached the end of the builder" },
   // Counted from the accounts table, not an event: a real row is exact, can't
@@ -105,7 +115,9 @@ const FUNNEL_STEPS: { key: string; label: string; hint: string; fromAccounts?: b
   { key: "upgrade_prompt_viewed", label: "Hit a Pro-only feature", hint: "Bumped into something locked" },
   { key: "upgrade_started", label: "Clicked upgrade", hint: "Went looking for the paid plan" },
   { key: "checkout_started", label: "Opened checkout", hint: "Reached the payment step" },
-  { key: "checkout_completed", label: "Paid", hint: "Money in" },
+  // From Stripe: a customer whose subscription started charging (a trial
+  // that converted, or a paid signup). Not the browser's checkout event.
+  { key: "checkout_completed", label: "Paid", hint: "Started paying — from Stripe" },
 ];
 
 /**
@@ -266,7 +278,7 @@ function GrowthTab({ a }: { a: Analytics }) {
   return (
     <Stack>
       <KpiGrid>
-        <KpiCard label="Total accounts" value={fmtNum(a.accounts.total)} sub="Customers only — your own and the demo account are left out" />
+        <KpiCard label="Customers" value={fmtNum(a.accounts.total)} sub={a.internal ? `${fmtNum(a.internal.accounts)} of ours and QA's test accounts left out` : "Customers only"} />
         <KpiCard label="New signups · 7 days" value={fmtNum(a.accounts.d7)} delta={delta} trend={a.accounts.series.slice(-14).map((s) => s.count)} sub={`${fmtNum(a.accounts.today)} today`} />
         <KpiCard label="New signups · 30 days" value={fmtNum(a.accounts.d30)} sub={`About ${perDay >= 10 ? Math.round(perDay) : perDay.toFixed(1)} a day`} />
         <KpiCard label="Card activation" value={fmtPct(a.engagement.activationRate)} sub={`${fmtNum(a.engagement.activatedCards)} cards captured a contact`} />
@@ -320,8 +332,9 @@ function GrowthTab({ a }: { a: Analytics }) {
       </Columns>
 
       <HowCounted>
-        <p>Accounts are counted from the accounts table itself, so every number here is a real account, not a click. Your own account, any admin account and the App Review demo account are left out.</p>
-        <p>&ldquo;Went paid&rdquo; counts only accounts with a real Stripe subscription. An account you moved to Pro by hand, or a gift month, is not counted as paying.</p>
+        <p>Customers only: every account, read in full, except ours (the demo, App Review and @swiftcard.me logins) and QA&apos;s automatic test accounts. They&apos;re listed under Users › Internal &amp; test.</p>
+        <p>Days are New York days; &ldquo;today&rdquo; starts at midnight in New York.</p>
+        <p>&ldquo;Went paid&rdquo; means Stripe is charging them now — a trial that hasn&apos;t charged yet, a gift month or an account moved to Pro by hand is not paying.</p>
         <p>Card activation is the share of cards that have captured at least one real contact (the sample contact every new card starts with doesn&apos;t count).</p>
       </HowCounted>
     </Stack>
@@ -377,52 +390,105 @@ function AcquisitionTable({ rows }: { rows: Analytics["acquisition"] }) {
 // ── Revenue ─────────────────────────────────────────────────────────────────
 function RevenueTab({ a }: { a: Analytics }) {
   const p = a.plans;
-  const comped = p.compedPaidPlans ?? 0;
+  const r = a.revenue;
+  const money = (c: number) => fmtMoney(c / 100);
   return (
     <Stack>
-      <KpiGrid>
-        <KpiCard label="Monthly revenue (est.)" value={fmtMoney(p.estMrr)} sub="Stripe subscriptions at list price" />
-        <KpiCard label="Yearly run rate (est.)" value={fmtMoney(p.estMrr * 12)} sub="Monthly revenue × 12" />
-        <KpiCard label="Paying customers" value={fmtNum(p.paid)} sub={`${fmtPct(p.conversion)} of all accounts`} />
-        <KpiCard label="Per paying customer (est.)" value={p.paid ? fmtMoney(p.estMrr / p.paid) : "—"} sub="A month, on average" />
-      </KpiGrid>
+      <StripeConnection />
+
+      {!r || !r.available ? (
+        <p className="adm-callout-warn px-4 py-3 sc-t-subhead">Revenue couldn&apos;t be read from Stripe: {r && !r.available ? r.reason : "not available"}</p>
+      ) : (
+        <>
+          {r.mode === "test" && <p className="adm-callout-danger px-4 py-3 sc-t-subhead">Stripe is in TEST mode on the live site — these are not real payments.</p>}
+          <KpiGrid>
+            <KpiCard label="Monthly revenue" value={money(r.summary.mrrCents)} sub={r.summary.atRiskCents ? `${money(r.summary.atRiskCents)} at risk (payment failed)` : "What Stripe charges each month, after discounts"} />
+            <KpiCard label="Yearly run rate" value={money(r.summary.arrCents)} sub="Monthly revenue × 12" />
+            <KpiCard label="Paying customers" value={fmtNum(r.summary.paying)} sub={`${fmtPct(p.conversion)} of customers · ${fmtNum(r.summary.payingPro)} Pro · ${fmtNum(r.summary.payingOffice)} Office`} />
+            <KpiCard label="Per paying customer" value={r.summary.paying ? money(r.summary.mrrCents / r.summary.paying) : "—"} sub="A month, on average" />
+          </KpiGrid>
+
+          <KpiGrid>
+            <KpiCard label="On a free trial" value={fmtNum(r.summary.trials.active)} sub={`${fmtNum(r.summary.trials.endingIn7Days)} end this week · ${money(r.summary.trials.convertsToCents)}/mo if they convert${r.summary.trials.cancelling ? ` · ${fmtNum(r.summary.trials.cancelling)} already cancelled` : ""}`} />
+            <KpiCard label="New this month" value={money(r.summary.newThisMonth.cents)} sub={`${fmtNum(r.summary.newThisMonth.count)} started paying`} tone={r.summary.newThisMonth.cents ? "good" : undefined} />
+            <KpiCard label="Lost this month" value={money(r.summary.lostThisMonth.cents)} sub={`${fmtNum(r.summary.lostThisMonth.count)} paying customers left`} tone={r.summary.lostThisMonth.cents ? "bad" : undefined} />
+            <KpiCard label="Office seats billed" value={fmtNum(r.summary.officeSeats)} sub="Seats Stripe charges for, every Office team" />
+          </KpiGrid>
+        </>
+      )}
 
       <Columns>
-        <Section title="Who pays" hint="Everyone on a paid plan, split by whether money is actually coming in.">
+        <Section title="Who pays" hint="Every customer on a paid plan, by what's behind it.">
           <ul className="space-y-3">
             {[
-              { label: "Paying through Stripe", n: p.paid, note: "A real subscription", tone: "adm-good" },
-              { label: "On a paid plan, not paying", n: comped, note: "Moved by hand, a gift month, or a checkout that never finished", tone: comped ? "adm-warn" : "" },
-              { label: "On Pro", n: p.pro, note: "Paying or not", tone: "" },
-              { label: "On Office", n: p.office, note: "Paying or not — owners only, not seats", tone: "" },
-            ].map((r) => (
-              <li key={r.label} className="flex items-start justify-between gap-4">
+              { label: "Paying through Stripe", n: r?.available ? r.summary.paying : p.paid, note: "Charged now (trials not included)", tone: "adm-good" },
+              { label: "On a Stripe trial", n: r?.available ? r.summary.trials.active : 0, note: "Not charged yet", tone: "" },
+              { label: "Paying through Apple", n: p.apple ?? 0, note: "In the iPhone app; Apple's revenue isn't in the numbers above", tone: "" },
+              { label: "Office team members", n: p.officeMembers ?? 0, note: "Their team's owner pays for the seat", tone: "" },
+              { label: "Gift month", n: p.gift ?? 0, note: "Free Pro that ends by itself", tone: "" },
+              { label: "Moved by hand, nothing paying", n: p.compedPaidPlans ?? 0, note: "A paid plan with no subscription behind it", tone: (p.compedPaidPlans ?? 0) ? "adm-warn" : "" },
+            ].map((row) => (
+              <li key={row.label} className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <p className="sc-t-subhead font-medium">{r.label}</p>
-                  <p className="sc-t-caption adm-muted">{r.note}</p>
+                  <p className="sc-t-subhead font-medium">{row.label}</p>
+                  <p className="sc-t-caption adm-muted">{row.note}</p>
                 </div>
-                <span className={`sc-t-title3 adm-num shrink-0 ${r.tone}`}>{fmtNum(r.n)}</span>
+                <span className={`sc-t-title3 adm-num shrink-0 ${row.tone}`}>{fmtNum(row.n)}</span>
               </li>
             ))}
           </ul>
         </Section>
-        <Section title="Plan mix" hint="Everyone, by the plan they're on now.">
+        <Section title="Plan mix" hint="Customers, by the plan they're on now. Office counts teams, not their members.">
           <PlanMixBar free={p.free} pro={p.pro} office={p.office} />
         </Section>
       </Columns>
 
-      <KpiGrid>
-        <NotTracked title="Paying through Apple" detail="subscribers who pay in the iPhone app — today's revenue counts Stripe only." />
-        <NotTracked title="Office seats billed" detail="how many seats each Office team pays for." />
-        <NotTracked title="New vs lost revenue · this month" detail="money from new and upgraded customers against money from cancellations." />
-        <NotTracked title="Trials" detail="how many are on a Pro trial now, and how many trials turn into paying." />
-      </KpiGrid>
-
       <HowCounted>
-        <p>Monthly revenue counts only accounts with a real Stripe subscription, at list price ({fmtMoney(PLAN_PRICES.PRO_MONTHLY_CENTS / 100)} Pro, {fmtMoney(PLAN_PRICES.OFFICE_MONTHLY_PER_SEAT_CENTS / 100)} Office), before discounts. Annual plans, Office seat counts and Apple subscribers aren&apos;t in it yet — the data pass fixes that.</p>
-        <p>Accounts on a paid plan with nothing behind them (moved by hand, a gift month, an unfinished checkout) are listed separately rather than counted as money.</p>
+        <p>Read from Stripe itself, every subscription: an annual plan counts a twelfth a month, an Office team counts every seat it pays for, a recurring coupon is taken off, and a one-off coupon isn&apos;t (it isn&apos;t recurring money). A failed payment still counts, marked &ldquo;at risk&rdquo;, until Stripe gives up.</p>
+        <p>A free trial is not revenue until it charges. Subscriptions on our own and QA&apos;s accounts are left out{a.internal?.subscriptionsLeftOut ? ` (${a.internal.subscriptionsLeftOut} right now)` : ""}.</p>
+        <p>Apple keeps the money for subscriptions bought in the iPhone app, so they&apos;re counted as customers but not in these dollar figures.</p>
       </HowCounted>
     </Stack>
+  );
+}
+
+/** "Is Stripe properly connected?" — each piece checked against Stripe. */
+function StripeConnection() {
+  const [c, setC] = useState<{ ok: boolean; mode: string | null; checks: { label: string; ok: boolean; detail: string }[] } | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    fetch("/api/admin/billing")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("failed"))))
+      .then((d) => { if (live) setC(d); })
+      .catch(() => { if (live) setFailed(true); });
+    return () => { live = false; };
+  }, []);
+  return (
+    <Section
+      title="Stripe connection"
+      hint="Checked against Stripe itself each time you open this tab."
+      action={c ? <span className={c.ok ? "sc-badge sc-badge-green" : "sc-badge sc-badge-red"}>{c.ok ? "All connected" : "Needs attention"}</span> : undefined}
+      flush
+    >
+      {failed ? (
+        <p className="px-4 sm:px-5 pb-5 adm-bad sc-t-subhead">The check didn&apos;t run — try again in a moment.</p>
+      ) : !c ? (
+        <p className="px-4 sm:px-5 pb-5 adm-muted sc-t-subhead">Checking Stripe…</p>
+      ) : (
+        <ul className="adm-divide">
+          {c.checks.map((x) => (
+            <li key={x.label} className="flex items-start gap-3 px-4 sm:px-5 py-3">
+              <span className={x.ok ? "adm-good" : "adm-bad"}><Icon name={x.ok ? "check" : "alert"} /></span>
+              <div className="min-w-0">
+                <p className="sc-t-subhead font-medium">{x.label}</p>
+                <p className="sc-t-caption adm-muted break-words">{x.detail}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
   );
 }
 
@@ -433,7 +499,7 @@ function FunnelTab({ a }: { a: Analytics }) {
       {a.funnel ? <FunnelPanel funnel={a.funnel} signups={{ d30: a.accounts.d30, d7: a.accounts.d7 }} /> : <EmptyState>The journey isn&apos;t available.</EmptyState>}
       <HowCounted>
         <p>Each step counts a visit once, however many times it happened in that visit — a reload of the card editor doesn&apos;t count as another person starting a card.</p>
-        <p>&ldquo;Created an account&rdquo; is counted from real accounts, not clicks. Your own visits (any device you&apos;ve excluded on the Website page) are left out. Counting started 10 Sep 2026.</p>
+        <p>&ldquo;Visited the website&rdquo; is the Website page&apos;s visits. &ldquo;Created an account&rdquo; is counted from real customer accounts, not clicks. &ldquo;Paid&rdquo; comes from Stripe: a customer whose subscription started charging. Your own visits and QA&apos;s are left out. Counting started 10 Sep 2026.</p>
       </HowCounted>
     </Stack>
   );
@@ -445,9 +511,9 @@ function EngagementTab({ a }: { a: Analytics }) {
   return (
     <Stack>
       <KpiGrid>
-        <KpiCard label="Contacts captured" value={fmtNum(a.leads.total)} delta={periodDelta(a.leads.series)} sub={`+${fmtNum(a.leads.d7)} this week · ${fmtNum(a.leads.today)} today`} />
-        <KpiCard label="Cards made" value={fmtNum(a.cards.total)} sub={`${a.cards.perAccount} per account`} />
-        <KpiCard label="Views · 7 days" value={fmtNum(a.views.d7)} sub={`${fmtNum(a.views.total)} all time`} />
+        <KpiCard label="Contacts captured" value={fmtNum(a.leads.total)} delta={periodDelta(a.leads.series)} sub={<>+{fmtNum(a.leads.d7)} this week · {fmtNum(a.leads.today)} today{a.leads.locked ? <> · <span className="adm-warn">{fmtNum(a.leads.locked)} locked</span></> : null}</>} />
+        <KpiCard label="Cards made" value={fmtNum(a.cards.total)} sub={`${a.cards.perAccount} per customer${a.cards.offline ? ` · ${fmtNum(a.cards.offline)} offline` : ""}`} />
+        <KpiCard label="Views · 7 days" value={fmtNum(a.views.d7)} sub={`${fmtNum(a.views.total)} card · ${fmtNum(a.views.linkTotal ?? 0)} Swift Links, all time`} />
         <KpiCard label="Card activation" value={fmtPct(a.engagement.activationRate)} sub={`${fmtNum(a.engagement.activatedCards)} cards got a contact`} />
       </KpiGrid>
 
@@ -469,12 +535,21 @@ function EngagementTab({ a }: { a: Analytics }) {
           <ol className="adm-divide">
             {a.topCards.map((c, i) => (
               <li key={c.username}>
-                <a href={`/${c.username.replace("__links", "")}`} target="_blank" rel="noopener noreferrer" className="adm-list-row flex items-center gap-3 px-4 sm:px-5 py-2.5">
-                  <span className="w-5 sc-t-footnote adm-muted adm-num">{i + 1}</span>
-                  <span className="flex-1 min-w-0 sc-t-subhead truncate">/{c.username}</span>
-                  <span className="sc-t-subhead font-semibold adm-num">{fmtNum(c.count)}</span>
-                  <Icon name="external" className="w-4 h-4 adm-muted shrink-0" />
-                </a>
+                {c.userId ? (
+                  <Link href={`/admin/users/${c.userId}`} className="adm-list-row flex items-center gap-3 px-4 sm:px-5 py-2.5">
+                    <span className="w-5 sc-t-footnote adm-muted adm-num">{i + 1}</span>
+                    <span className="flex-1 min-w-0 sc-t-subhead truncate">/{c.username}</span>
+                    <span className="sc-t-subhead font-semibold adm-num">{fmtNum(c.count)}</span>
+                    <Icon name="chevron" className="w-4 h-4 adm-muted shrink-0" />
+                  </Link>
+                ) : (
+                  <a href={`/${c.username.replace("__links", "")}`} target="_blank" rel="noopener noreferrer" className="adm-list-row flex items-center gap-3 px-4 sm:px-5 py-2.5">
+                    <span className="w-5 sc-t-footnote adm-muted adm-num">{i + 1}</span>
+                    <span className="flex-1 min-w-0 sc-t-subhead truncate">/{c.username}</span>
+                    <span className="sc-t-subhead font-semibold adm-num">{fmtNum(c.count)}</span>
+                    <Icon name="external" className="w-4 h-4 adm-muted shrink-0" />
+                  </a>
+                )}
               </li>
             ))}
           </ol>
@@ -487,7 +562,7 @@ function EngagementTab({ a }: { a: Analytics }) {
       </Columns>
 
       <HowCounted>
-        <p>Contacts and views count only cards that exist today, and never the sample contact every new card starts with. The App Review demo account&apos;s views are left out.</p>
+        <p>Customers&apos; cards only, counted by the same database totals each customer&apos;s own dashboard and the Office console use — never the sample contact every new card starts with. &ldquo;Locked&rdquo; contacts were captured past the Free limit; they&apos;re real, and hidden from the owner until they upgrade.</p>
         <p>A view is counted once per visit; bots, link previews and the owner looking at their own card are not views. The Data quality tab shows why each one was or wasn&apos;t counted.</p>
       </HowCounted>
     </Stack>
@@ -504,6 +579,28 @@ function DataQualityTab({ a }: { a: Analytics }) {
   return (
     <Stack>
       <p className="adm-muted sc-t-subhead -mt-2">For checking the numbers are honest. Nothing here is a customer number.</p>
+
+      {a.numberCheck && a.numberCheck.length > 0 && (
+        <Section
+          title="Number check"
+          hint="Each headline number, counted a second, independent way. They should always agree."
+          action={<span className={a.numberCheck.every((x) => x.ok) ? "sc-badge sc-badge-green" : "sc-badge sc-badge-red"}>{a.numberCheck.every((x) => x.ok) ? "All agree" : "Mismatch"}</span>}
+          flush
+        >
+          <ul className="adm-divide">
+            {a.numberCheck.map((x) => (
+              <li key={x.label} className="flex items-start gap-3 px-4 sm:px-5 py-3">
+                <span className={x.ok ? "adm-good" : "adm-bad"}><Icon name={x.ok ? "check" : "alert"} /></span>
+                <div className="min-w-0 flex-1">
+                  <p className="sc-t-subhead font-medium">{x.label}</p>
+                  <p className="sc-t-caption adm-muted">{x.how}</p>
+                </div>
+                <span className="sc-t-footnote adm-num shrink-0 text-right">{fmtNum(x.shown)}{x.ok ? "" : <> vs <b className="adm-bad">{fmtNum(x.recount)}</b></>}</span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
 
       <Section title="Tracking switched on" hint="Each of these needs its table in the database. Anything off here shows as empty elsewhere." flush>
         <ul className="adm-divide">

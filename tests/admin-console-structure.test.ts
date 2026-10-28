@@ -152,7 +152,7 @@ describe("Overview leads with what matters", () => {
   });
 
   it("money and growth, then what needs a person, then the people", () => {
-    const order = ["Monthly revenue (est.)", "Needs your attention", "Signups · last 30 days", "The journey · last 30 days", "Newest signups", "Recently closed"];
+    const order = ["label=\"Monthly revenue\"", "Needs your attention", "Signups · last 30 days", "The journey · last 30 days", "Newest signups", "Recently closed"];
     const at = order.map((s) => client.indexOf(s));
     for (const [i, n] of at.entries()) expect(n, order[i]).toBeGreaterThan(-1);
     expect([...at].sort((x, y) => x - y)).toEqual(at);
@@ -161,6 +161,39 @@ describe("Overview leads with what matters", () => {
   it("each source loads on its own, so one failing never blanks the rest", () => {
     expect(client).toContain("Promise.all([");
     expect(client).toMatch(/async function getJson<T>[\s\S]*?catch \{\s*return null;/);
+  });
+});
+
+describe("Company Analytics counts real customers and real money (2026-10-28)", () => {
+  // Owner: "make sure that all the analytics are actually real and that
+  // there's nothing fake".
+  const route = read("src/app/api/admin/analytics/route.ts");
+
+  it("customers only, and every number from a full read", () => {
+    expect(route).toContain("const customers = customersOf(all);");
+    expect(route).not.toMatch(/\.limit\(1000\)|\.limit\(5000\)/);
+  });
+
+  it("revenue comes from Stripe, never a hardcoded price × a count", () => {
+    expect(route).toContain("const rev = await revenue(all);");
+    // Code only — the header comment describes the old bug in words.
+    const code = route.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    expect(code).not.toMatch(/PRO_PRICE|OFFICE_PRICE|4\.99|3\.99/);
+  });
+
+  it("the journey starts at the website's own visits and ends at money in from Stripe", () => {
+    expect(route).toContain("d30.page_viewed = visits.d30;");
+    expect(route).toContain("d30.checkout_completed = [...payingSince.values()]");
+  });
+
+  it("it checks itself: the headline numbers are recounted a second way", () => {
+    expect(route).toContain("const numberCheck = await checkNumbers(admin, {");
+  });
+
+  it("Stripe's connection is checked against Stripe, and the site's health says whether Stripe answers", () => {
+    const billing = read("src/lib/admin-data/billing.ts");
+    for (const s of ["stripe.webhookEndpoints.list", "stripe.prices.retrieve", "REQUIRED_WEBHOOK_EVENTS", "Stripe and accounts agree"]) expect(billing).toContain(s);
+    expect(read("src/app/api/health/route.ts")).toContain("stripe = await stripeHealth();");
   });
 });
 

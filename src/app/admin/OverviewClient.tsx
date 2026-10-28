@@ -106,7 +106,12 @@ function OverviewBody({ data, retention, now }: { data: OverviewData; retention:
     { icon: "userMinus", tone: "bad", n: retention.closedThisWeek, text: `${retention.closedThisWeek === 1 ? "account was" : "accounts were"} closed this week`, href: "/admin/users?tab=closed" },
     { icon: "heart", tone: "warn", n: retention.partway, text: `${retention.partway === 1 ? "person is" : "people are"} partway through cancelling — still reachable`, href: "/admin/analytics?tab=retention" },
     { icon: "shield", tone: "warn", n: r?.ready ? r.flagged ?? 0 : 0, text: "suspicious referral signups to look at", href: "/admin/analytics?tab=referrals" },
-    { icon: "creditCard", tone: "warn", n: a?.plans.compedPaidPlans ?? 0, text: "accounts on a paid plan with nothing paying for it", href: "/admin/analytics?tab=revenue" },
+    // From Stripe: money that's at risk or about to arrive.
+    { icon: "creditCard", tone: "bad", n: a?.revenue?.available ? a.revenue.summary.pastDue : 0, text: "payments failed — Stripe is retrying", href: "/admin/analytics?tab=revenue" },
+    { icon: "creditCard", tone: "warn", n: a?.revenue?.available ? a.revenue.summary.trials.endingIn7Days : 0, text: "free trials end this week", href: "/admin/analytics?tab=revenue" },
+    { icon: "creditCard", tone: "warn", n: a?.plans.compedPaidPlans ?? 0, text: "customers on a paid plan with nothing paying for it (moved by hand)", href: "/admin/analytics?tab=revenue" },
+    { icon: "alert", tone: "bad", n: a?.revenue && !a.revenue.available ? 1 : 0, text: "Stripe couldn't be read — revenue isn't showing", href: "/admin/analytics?tab=revenue" },
+    { icon: "alert", tone: "bad", n: a?.numberCheck ? a.numberCheck.filter((x) => !x.ok).length : 0, text: "numbers didn't match their recount", href: "/admin/analytics?tab=data" },
     {
       icon: "database", tone: "warn",
       n: a ? [a.funnel?.available, a.ingest?.available, a.warmLead?.available].filter((x) => x === false).length : 0,
@@ -121,12 +126,12 @@ function OverviewBody({ data, retention, now }: { data: OverviewData; retention:
     <>
       {/* Money and growth first. */}
       <KpiGrid>
-        <KpiLink href="/admin/analytics?tab=revenue" label="Monthly revenue (est.)"
-          value={a ? fmtMoney(a.plans.estMrr) : "—"}
-          sub={a ? `${fmtNum(a.plans.paid)} paying · Stripe only for now` : "Didn't load"} />
+        <KpiLink href="/admin/analytics?tab=revenue" label="Monthly revenue"
+          value={a?.revenue?.available ? fmtMoney(a.revenue.summary.mrrCents / 100) : "—"}
+          sub={!a ? "Didn't load" : a.revenue?.available ? (a.revenue.summary.trials.active ? `From Stripe · ${fmtNum(a.revenue.summary.trials.active)} on a free trial` : "From Stripe, after discounts") : "Stripe couldn't be read"} />
         <KpiLink href="/admin/users?tab=pro" label="Paying customers"
           value={a ? fmtNum(a.plans.paid) : "—"}
-          sub={a ? `${fmtNum(a.plans.pro)} on Pro · ${fmtNum(a.plans.office)} on Office` : "Didn't load"} />
+          sub={a?.revenue?.available ? `${fmtNum(a.revenue.summary.payingPro)} Pro · ${fmtNum(a.revenue.summary.payingOffice)} Office · trials not counted` : a ? `${fmtNum(a.plans.pro)} on Pro · ${fmtNum(a.plans.office)} on Office` : "Didn't load"} />
         <KpiLink href="/admin/analytics" label="New signups · 7 days"
           value={a ? fmtNum(a.accounts.d7) : "—"}
           delta={a ? periodDelta(a.accounts.series) : undefined}

@@ -28,7 +28,12 @@ function makeQuery(name: string) {
     select: (_c?: string, o?: { head?: boolean }) => { head = !!o?.head; return chain; },
     eq: (k: string, v: unknown) => { filters.push((r) => r[k] === v); return chain; },
     gte: (k: string, v: string) => { filters.push((r) => String(r[k] ?? "") >= v); return chain; },
-    or: () => chain, not: () => chain, in: () => chain, order: () => chain, limit: () => chain,
+    or: () => chain, order: () => chain, limit: () => chain, contains: () => chain,
+    in: (k: string, vals: unknown[]) => { filters.push((r) => vals.includes(r[k])); return chain; },
+    not: (k: string, op: string, v: string) => {
+      if (op === "cs" && v === "{demo}") filters.push((r) => !(Array.isArray(r[k]) && (r[k] as unknown[]).includes("demo")));
+      return chain;
+    },
     range: (a: number, b: number) => { range = [a, b]; return chain; },
     maybeSingle: async () => ({ data: run().data?.[0] ?? null, error: null }),
     then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => Promise.resolve(run()).then(res, rej),
@@ -36,7 +41,49 @@ function makeQuery(name: string) {
   return chain;
 }
 
-vi.mock("@/lib/supabase-admin", () => ({ getAdminSupabase: () => ({ from: (t: string) => makeQuery(t) }) }));
+vi.mock("@/lib/supabase-admin", () => ({
+  getAdminSupabase: () => ({
+    from: (t: string) => makeQuery(t),
+    // office_employee_view_stats for the 7/30-day windows: one card view, one Swift Links view.
+    rpc: async () => ({ data: [{ views: 1, swiftlink_views: 1 }], error: null }),
+  }),
+}));
+
+// Since 2026-10-28 the route reads accounts through lib/admin-data (customers
+// only) and counts each card through the same database totals the customer's
+// own pages use (office_employee_*_stats). Here: one customer with card "dana",
+// and one of OUR accounts with card "ours" that must never reach a number.
+const teamsAsked = vi.hoisted(() => [] as string[][]);
+vi.mock("@/lib/admin-data/accounts", async (orig) => {
+  const real = await orig<typeof import("@/lib/admin-data/accounts")>();
+  const acct = (id: string, kind: "customer" | "internal", slug: string) => ({
+    id, kind, email: `${id}@x.com`, name: id, profileName: null, username: id, plan: "pro", effectivePlan: "pro",
+    planExpiresAt: null, createdAt: new Date().toISOString(), signupSource: null, referralCode: null, company: null, title: null,
+    customization: {}, stripeSubscriptionId: null, stripeCustomerId: null, deleted: false,
+    cards: [{ id: `card-${slug}`, username: slug, name: id, label: null, created_at: new Date().toISOString(), is_offline: false }],
+    officeRole: null, billing: { source: "none", trialEndsAt: null, pastDue: false, cancelling: false, everPaid: false },
+  });
+  return { ...real, loadAccounts: async () => [acct("u1", "customer", "dana"), acct("us", "internal", "ours")] };
+});
+vi.mock("@/lib/office-analytics", async (orig) => {
+  const real = await orig<typeof import("@/lib/office-analytics")>();
+  return {
+    ...real,
+    getOfficeEmployeeMetricsForTeam: async (team: { userId: string; username: string; cardSlugs: { username: string }[] }[]) => {
+      teamsAsked.push(team.flatMap((m) => m.cardSlugs.map((c) => c.username)));
+      // The database's answer for "dana": one real contact (the sample is excluded in SQL).
+      return team.map((m) => {
+        const dana = m.cardSlugs.some((c) => c.username === "dana");
+        return { userId: m.userId, name: "", username: m.username, isOwner: false, cardName: null, cardCount: 1, views: dana ? 1 : 0, swiftlinkViews: dana ? 1 : 0, scans: 0, uniqueVisitors: 0, leads: dana ? 1 : 0, contactsSaved: 0, lastActivityAt: null };
+      });
+    },
+  };
+});
+vi.mock("@/lib/admin-data/billing", () => ({
+  revenue: async () => ({ available: false, reason: "not in this test" }),
+  listSubscriptions: async () => [],
+  monthlyCents: () => 0,
+}));
 vi.mock("@/lib/admin", () => ({ requireAdmin: async () => ({ id: "admin" }), isAdminEmail: () => false }));
 vi.mock("@/lib/account-email", () => ({ getAccountEmailMap: async () => new Map() }));
 vi.mock("@/lib/warm-lead-metrics", () => ({ warmLeadMetrics: async () => ({}) }));
@@ -59,16 +106,23 @@ beforeEach(() => {
   ];
 });
 
-describe("A-03 / A-06: admin analytics count live cards and real contacts only", () => {
-  it("leads, views, the source split, top cards and activation leave out the sample and deleted cards", async () => {
+describe("A-03 / A-06: admin analytics count customers' live cards and real contacts only", () => {
+  it("leads, views, the source split, top cards and activation: customers' cards only, never the sample or deleted cards", async () => {
     const { GET } = await import("@/app/api/admin/analytics/route");
     const d = await (await GET()).json();
     expect(d.leads.total).toBe(1);
+    // The 30-day rows: the sample contact and the deleted card's contact are left out.
     expect(d.leads.bySource).toEqual([["direct_link", 1]]);
-    expect(d.views.total).toBe(2);
+    expect(d.views.total).toBe(1);
+    expect(d.views.linkTotal).toBe(1);
     expect(d.views.cardViews30 + d.views.linkViews30).toBe(2);
-    expect(d.topCards).toEqual([{ username: "dana", count: 1 }]);
+    expect(d.topCards).toEqual([{ username: "dana", count: 1, userId: "u1" }]);
     expect(d.engagement.activatedCards).toBe(1);
+    // Our own account's card never reached a database total.
+    expect(teamsAsked.flat()).toContain("dana");
+    expect(teamsAsked.flat()).not.toContain("ours");
+    expect(d.accounts.total).toBe(1);
+    expect(d.internal.accounts).toBe(1);
   });
 });
 

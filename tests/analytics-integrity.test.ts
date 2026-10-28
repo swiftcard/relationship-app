@@ -124,16 +124,19 @@ describe("seeded demo views are not counted as real traffic", () => {
     expect(isSeededView("")).toBe(false);
   });
 
-  it("the site-wide admin totals exclude them — without dropping NULL-visitor rows", () => {
+  it("the site-wide admin totals exclude them — they live on the App Review account, which is never a customer", () => {
     // 24 of 81 rows were seeded — about 30% of the number we read to judge
-    // whether the product is working. The filter must be the or() form: a bare
-    // .not("visitor_id","like",...) is NULL — not true — for NULL visitor_id,
-    // so it silently dropped every pre-visitor-id row from the total while the
-    // 30-day loop kept them; the two numbers counted different populations.
+    // whether the product is working. The admin used to filter them out of a
+    // site-wide view count. Since 2026-10-28 every admin number counts
+    // CUSTOMERS' cards only (lib/admin-data), and the seeded views exist only
+    // on the App Review account, which accountKind() marks internal — so they
+    // can never reach a total, with no visitor_id filter to get wrong.
     const admin = read("src/app/api/admin/analytics/route.ts");
-    expect(admin).toMatch(/\.or\(`visitor_id\.is\.null,visitor_id\.not\.like\.\$\{SEEDED_VISITOR_PREFIX\}%`\)/);
-    expect(admin).not.toMatch(/\.not\("visitor_id", "like"/);
-    expect(admin).toMatch(/if \(isSeededView\(v\.visitor_id as string \| null\)\) return;/);
+    expect(admin).toContain("const customers = customersOf(all);");
+    expect(admin).toContain("const slugs = customers.flatMap((a) => accountSlugs(a));");
+    const accounts = read("src/lib/admin-data/accounts.ts");
+    expect(accounts).toContain('"applereview@swiftcard.me"');
+    expect(accounts).toContain('"applereview-free@swiftcard.me"');
   });
 
   it("customer dashboards are untouched by that filter", () => {
