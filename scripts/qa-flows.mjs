@@ -727,7 +727,9 @@ FLOWS["card-picker"] = async () => {
     return {
       at: page.url().replace(BASE, ""),
       picker: await page.getByRole("heading", { name: "Select a card" }).isVisible().catch(() => false),
-      dash: await page.locator('[data-tour="share"]').first().isVisible().catch(() => false),
+      // :visible — the share panel renders twice (phone copy lg:hidden, then
+      // the desktop column), so .first() is the hidden one at 1280px.
+      dash: await page.locator('[data-tour="share"]:visible').first().isVisible().catch(() => false),
     };
   };
   const tab1 = await ctx.newPage();
@@ -743,7 +745,7 @@ FLOWS["card-picker"] = async () => {
     // skeleton is still up, before the dashboard mounts and saves the choice —
     // leaving at that instant is a harness race, not the product. Wait for the
     // dashboard, then for the session card itself.
-    await tab1.locator('[data-tour="share"]').first().waitFor({ state: "visible", timeout: 45000 }).catch(() => {});
+    await tab1.locator('[data-tour="share"]:visible').first().waitFor({ state: "visible", timeout: 45000 }).catch(() => {});
     let saved = false;
     for (let i = 0; i < 30 && !saved; i++) {
       saved = (await ctx.cookies(BASE)).some((c) => c.name === "sc_session_card" && c.value.startsWith(`${work}.`));
