@@ -230,6 +230,56 @@ describe.each(ENGINES)("Website (%s)", (engine) => {
   }
 });
 
+async function overview(opts: { analytics?: boolean } = {}) {
+  const { createElement } = await import("react");
+  const { default: OverviewClient } = await import("@/app/admin/OverviewClient");
+  return inShell("/admin", createElement(OverviewClient, {
+    retention: {
+      partway: 2,
+      closedThisWeek: 1,
+      recentClosed: [{ userId: "r1", email: "dana.with-a-long-address@a-very-long-company-domain.example.com", plan: "pro", at: "2026-10-25T12:00:00Z", reasonText: "It costs more than I get out of it" }],
+    },
+    initial: { analytics: opts.analytics === false ? null : (ANALYTICS as never), website: WEBSITE, referrals: REFERRALS as never, updatedAt: Date.parse("2026-10-27T13:41:00Z") },
+  }));
+}
+
+describe.each(ENGINES)("Overview (%s)", (engine) => {
+  for (const width of [390, 1280]) {
+    it(`leads with money and growth, then what needs you, at ${width}px`, async () => {
+      const page = await open(engine, width, await overview());
+      try {
+        const p = await layoutProblems(page);
+        expect(p.spill, `spills at ${width}px`).toEqual([]);
+        expect(p.sideways, `the page scrolls sideways at ${width}px`).toBe(false);
+        const text = await page.evaluate(() => document.body.innerText);
+        for (const s of [
+          "Monthly revenue (est.)", "$109.78", "Paying customers", "New signups · 7 days", "Website visitors · 7 days", "410",
+          "Needs your attention", "account was closed this week", "people are partway through cancelling", "suspicious referral signups",
+          "Plan mix", "Signups · last 30 days", "The journey · last 30 days", "Visited the site",
+          "Newest signups", "Recently closed", "It costs more than I get out of it",
+          "Create a card for a business", "Email your users", "Test a plan", "Export users",
+        ]) expect(text, `"${s}" missing`).toContain(s);
+        // Money comes before the attention list, which comes before the lists of people.
+        expect(text.indexOf("Monthly revenue")).toBeLessThan(text.indexOf("Needs your attention"));
+        expect(text.indexOf("Needs your attention")).toBeLessThan(text.indexOf("Newest signups"));
+        // Every KPI tile is a link to the page behind the number.
+        const tiles = await page.locator("a.adm-kpi").evaluateAll((els) => els.map((e) => e.getAttribute("href")));
+        for (const href of ["/admin/analytics?tab=revenue", "/admin/users?tab=pro", "/admin/analytics", "/admin/website", "/admin/users?create=1"]) expect(tiles).toContain(href);
+      } finally { await page.close(); }
+    });
+  }
+
+  it("one source failing blanks only its own numbers and says so", async () => {
+    const page = await open(engine, 1280, await overview({ analytics: false }));
+    try {
+      const text = await page.evaluate(() => document.body.innerText);
+      expect(text).toContain("The company numbers didn't load");
+      expect(text).toContain("410"); // the website still shows
+      expect(text).toContain("It costs more than I get out of it"); // and who left
+    } finally { await page.close(); }
+  });
+});
+
 describe.each(ENGINES)("the admin shell (%s)", (engine) => {
   it("is light: the canvas is the app's grouped grey, cards are white", async () => {
     const page = await open(engine, 1280, await sandbox());

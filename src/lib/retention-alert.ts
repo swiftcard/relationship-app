@@ -124,7 +124,7 @@ export async function retentionFunnel(limit = 200): Promise<{
   for (const p of data ?? []) {
     const cust = (p.customization as Record<string, unknown> | null) ?? {};
     const ret = (cust._retention as { surveys?: { reason: string; comment: string; plan: string; at: string }[]; savedBy?: string; savedAt?: string } | undefined) ?? {};
-    const del = cust._deletion as { reason?: string; comment?: string; at?: string } | undefined;
+    const del = cust._deletion as { reason?: string; comment?: string; plan?: string; at?: string } | undefined;
     const survey = ret.surveys?.[ret.surveys.length - 1];
     // No survey and no deletion record → this account never opened the dialog.
     if (!survey && !del) continue;
@@ -132,7 +132,9 @@ export async function retentionFunnel(limit = 200): Promise<{
     rows.push({
       userId: p.id as string,
       email: (p.email as string | null) ?? null,
-      plan: (p.plan as string | null) ?? null,
+      // A closed account's plan is reset to free; the plan they were on when
+      // they closed is the one worth showing (it's kept on _deletion).
+      plan: (deleted && del?.plan) || ((p.plan as string | null) ?? null),
       reason: survey?.reason ?? del?.reason ?? null,
       comment: survey?.comment || del?.comment || null,
       at: ret.savedAt ?? del?.at ?? survey?.at ?? null,

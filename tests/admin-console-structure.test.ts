@@ -140,6 +140,29 @@ describe("Website reads as one page per question", () => {
   });
 });
 
+describe("Overview leads with what matters", () => {
+  // Owner, 2026-10-27: "It does not show me the really important stuff."
+  const page = read("src/app/admin/page.tsx");
+  const client = read("src/app/admin/OverviewClient.tsx");
+
+  it("checks the admin itself before reading who left and why", () => {
+    expect(page).toContain("if (!(await requireAdmin())) notFound();");
+    expect(page.indexOf("requireAdmin()")).toBeLessThan(page.indexOf("retentionFunnel("));
+  });
+
+  it("money and growth, then what needs a person, then the people", () => {
+    const order = ["Monthly revenue (est.)", "Needs your attention", "Signups · last 30 days", "The journey · last 30 days", "Newest signups", "Recently closed"];
+    const at = order.map((s) => client.indexOf(s));
+    for (const [i, n] of at.entries()) expect(n, order[i]).toBeGreaterThan(-1);
+    expect([...at].sort((x, y) => x - y)).toEqual(at);
+  });
+
+  it("each source loads on its own, so one failing never blanks the rest", () => {
+    expect(client).toContain("Promise.all([");
+    expect(client).toMatch(/async function getJson<T>[\s\S]*?catch \{\s*return null;/);
+  });
+});
+
 describe("the building blocks stay on the semantic palette", () => {
   it("no raw hex colour in any _ui component (they live in admin.css)", () => {
     const dir = "src/app/admin/_ui";
