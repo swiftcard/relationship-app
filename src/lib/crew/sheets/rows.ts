@@ -224,7 +224,7 @@ export function leadRows(l: Lead & { id: string; created_at: string }, s: RowSou
     /* pasted source */
   }
   if (l.list === "office") {
-    return [{ tab: OFFICE_PROSPECTS, key, kind: "lead", entityId: l.id, cells: { company: str(l.company), type: str(l.business_type), name: str(l.name), title: str(l.title), phone: str(l.phone), email: str(l.email), talking_point: str(l.notes), message: "", open: officeOpen(str(l.email), site), date_found: day(l.created_at) }, initialStatus: known?.status ?? "New", rank: 30, agent: agentLabel("office-outreach"), createdAt: l.created_at }];
+    return [{ tab: OFFICE_PROSPECTS, key, kind: "lead", entityId: l.id, cells: { company: str(l.company), type: str(l.business_type), name: str(l.name), title: str(l.title), phone: str(l.phone), email: str(l.email), talking_point: [str(l.notes), l.hook ? `Detail to mention: ${l.hook}` : ""].filter(Boolean).join("\n\n"), message: str(l.message), open: officeOpen(str(l.email), site), date_found: day(l.created_at) }, initialStatus: known?.status ?? "New", rank: 30, agent: agentLabel("office-outreach"), createdAt: l.created_at }];
   }
   return [{
     tab: LEAD_TAB_BY_SOURCE[l.source_platform] ?? WEB_LEADS,
@@ -232,20 +232,22 @@ export function leadRows(l: Lead & { id: string; created_at: string }, s: RowSou
     kind: "lead",
     entityId: l.id,
     cells: {
-      score: "",
-      name: str(l.name),
+      // Leads saved before scoring keep blank cells, so their rows are never rewritten.
+      score: l.score ?? "",
+      name: [str(l.name), str(l.title)].filter(Boolean).join(", "),
       business: str(l.company),
       industry: str(l.business_type),
       city: str(l.city),
       state: str(l.region),
       email: str(l.email),
-      email_status: l.email ? "Risky" : "None",
+      email_status: l.email_status || (l.email ? "Risky" : "None"),
       phone: str(l.phone),
       website: link(site && l.source_platform === "web" ? `https://${host}` : null, host),
       source_platform: platformWord(l.source_platform),
       source_link: link(site, "Source"),
-      why: "",
-      hook: "",
+      why: str(l.why),
+      // Web Leads has no message column: the opening line rides with the hook.
+      hook: [str(l.hook), l.message ? `Opener: ${l.message}` : ""].filter(Boolean).join("\n\n"),
       date_found: day(l.created_at),
     },
     initialStatus: known?.status ?? "New",

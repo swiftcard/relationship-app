@@ -2,6 +2,7 @@ import type { AgentContext } from "../context";
 import { emailsIn, personFor } from "../ledger";
 import { nyDayStart } from "../schedule";
 import type { Lead } from "../types";
+import { companyKey, usable } from "./quality";
 import { isRestrictedRegion } from "./region";
 
 // ── Saving leads: source and date always, suppression always ────────────────
@@ -23,14 +24,23 @@ export function cleanEmails(raw: string[], siteHost?: string | null): string[] {
   return [...own, ...free].length ? [...own, ...free] : all.slice(0, 1);
 }
 
+/**
+ * Save leads: suppressed contacts never, one lead per company across both
+ * lists (a company already on either list is a duplicate, and the leads
+ * already saved are never touched), and the run's stats say what happened:
+ * duplicates_rejected, contacts_suppressed, usable_leads (a phone, or an
+ * email whose domain can receive mail), leads_added.
+ */
 export async function recordLeads(ctx: AgentContext, leads: Lead[]): Promise<number> {
   const keep: Lead[] = [];
+  let suppressed = 0;
+  let duplicates = 0;
   for (const l of leads) {
     if (!l.email && !l.phone) continue;
     const email = l.email?.toLowerCase() ?? null;
     const checks = email ? [email, `@${email.split("@")[1]}`] : [];
     if (checks.length && (await ctx.store.isSuppressed(checks))) {
-      ctx.stat("skipped_suppressed");
+      suppressed++;
       continue;
     }
     let host: string | null = null;
@@ -39,16 +49,40 @@ export async function recordLeads(ctx: AgentContext, leads: Lead[]): Promise<num
     } catch {
       /* pasted source */
     }
-    keep.push({ ...l, email, region_restricted: l.region_restricted || isRestrictedRegion({ country: l.country, host, email }) });
+    keep.push({ ...l, email, company_key: l.company_key ?? companyKey(l), region_restricted: l.region_restricted || isRestrictedRegion({ country: l.country, host, email }) });
   }
-  const added = await ctx.store.insertLeads(keep);
+  // One per company: against everything already saved, and within this batch.
+  const taken = await ctx.store.companyKeysTaken(keep.map((l) => l.company_key).filter((k): k is string => !!k));
+  const fresh: Lead[] = [];
   for (const l of keep) {
+    if (l.company_key && taken.has(l.company_key)) {
+      duplicates++;
+      continue;
+    }
+    if (l.company_key) taken.add(l.company_key);
+    fresh.push(l);
+  }
+  let added = 0;
+  let useful = 0;
+  for (const l of fresh) {
+    // The check above can race another run saving the same company at the same
+    // moment; the database decides (crew_leads_company_key_unique), and so it
+    // does for an email already on this list. Either refusal is a duplicate.
+    if (!(await ctx.store.insertLeads([l]))) {
+      duplicates++;
+      continue;
+    }
+    added++;
+    if (usable(l)) useful++;
     if (!l.email) continue;
     const pid = await personFor(ctx.store, "email", l.email, l.name);
     if (pid) await ctx.store.addTouch(pid, "email", "lead_listed", null);
   }
   ctx.stat("leads_added", added);
-  ctx.stat(`leads_${keep[0]?.source_platform ?? "none"}`, added);
+  ctx.stat(`leads_${fresh[0]?.source_platform ?? keep[0]?.source_platform ?? "none"}`, added);
+  ctx.stat("usable_leads", useful);
+  ctx.stat("duplicates_rejected", duplicates);
+  ctx.stat("contacts_suppressed", suppressed);
   return added;
 }
 

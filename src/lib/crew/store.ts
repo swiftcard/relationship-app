@@ -161,6 +161,8 @@ export interface CrewStore {
   addSuppression(value: string, reason: string, o?: { source?: string; channel?: string }): Promise<void>;
   listSuppression(limit: number): Promise<SuppressionRow[]>;
   insertLeads(leads: Lead[]): Promise<number>;
+  /** Which of these company keys (leads/quality.ts) already have a lead, on either list. Leads saved before keys existed count by their site and name. */
+  companyKeysTaken(keys: string[]): Promise<Set<string>>;
   countLeadsSince(sinceIso: string, list?: Lead["list"]): Promise<Record<string, number>>;
   getLead(id: string): Promise<(Lead & { id: string; created_at: string }) | null>;
   unsyncedLeads(list: Lead["list"], limit: number): Promise<(Lead & { id: string; created_at: string })[]>;

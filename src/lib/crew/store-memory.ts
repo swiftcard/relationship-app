@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { companyKey } from "./leads/quality";
 import { DEFAULT_SETTINGS, DOOR_TEAMS, defaultTeam, type CrewStore, type NewApproval, type ReportRow, type RunRow, type SuppressionRow, type UsageRow, type UsageTotals } from "./store";
 import type { ActivityRow, AgentState, Approval, ApprovalKind, ApprovalStatus, ChatMessage, CrewInput, EditRow, Finding, Lead, Platform, Settings, SheetRow, TeamId, TeamRow, TouchKind } from "./types";
 
@@ -313,10 +314,16 @@ export class MemoryStore implements CrewStore {
     let n = 0;
     for (const l of leads) {
       if (l.email && this.leads.some((x) => x.list === l.list && x.email?.toLowerCase() === l.email!.toLowerCase())) continue;
+      // crew_leads_company_key_unique: one row per non-null company key, on either list.
+      if (l.company_key && this.leads.some((x) => x.company_key === l.company_key)) continue;
       this.leads.push({ ...l, id: randomUUID(), created_at: this.now(), sheet_synced_at: null });
       n++;
     }
     return n;
+  }
+  async companyKeysTaken(keys: string[]) {
+    const want = new Set(keys);
+    return new Set(this.leads.map((l) => l.company_key ?? companyKey(l)).filter((k): k is string => !!k && want.has(k)));
   }
   async countLeadsSince(sinceIso: string, list?: Lead["list"]) {
     const out: Record<string, number> = {};

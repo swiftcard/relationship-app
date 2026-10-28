@@ -18,7 +18,7 @@ const site = {
 };
 
 describe("office leads", () => {
-  it("keeps decision-makers, drops agents, and refuses an email the site never showed", () => {
+  it("one row per office: the decision-maker the site names, never a person or an email it doesn't show", () => {
     const rows = officeLeads(site, {
       i: 0,
       talking_point: "Twelve agents; a shared lead inbox would help the broker see every lead.",
@@ -28,11 +28,27 @@ describe("office leads", () => {
         { name: "Dana Fox", title: "Team Lead", email: "dana@invented.example.com", phone: "212-555-0100" },
       ],
     });
-    expect(rows.map((r) => r.name)).toEqual(["Maria Lopez", "Dana Fox"]);
+    // Sam isn't a decision-maker; Dana isn't on the site at all, so the model invented her.
+    expect(rows.map((r) => r.name)).toEqual(["Maria Lopez"]);
     expect(rows[0]).toMatchObject({ list: "office", email: "maria@brownstonerealty.example.com", phone: "7185550142", city: "New York", source_url: "https://brownstonerealty.example.com/" });
-    expect(rows[1].email).toBeNull(); // not on the site → never saved
-    expect(rows[1].phone).toBe("7185550142"); // their phone wasn't on the site either; the office line is
     expect(rows[0].notes).toMatch(/shared lead inbox/);
+    expect(rows[0].notes).not.toMatch(/Dana/);
+  });
+  it("names the other decision-makers in the talking point, and refuses an email the site never showed", () => {
+    const two = { ...site, pages: [...site.pages, { url: "https://brownstonerealty.example.com/about", html: "Ray Ortiz, Managing Partner" }] };
+    const rows = officeLeads(two, {
+      i: 0,
+      talking_point: "Point.",
+      people: [
+        { name: "Ray Ortiz", title: "Managing Partner", email: "ray@invented.example.com", phone: "" },
+        { name: "Maria Lopez", title: "Broker/Owner", email: "maria@brownstonerealty.example.com", phone: "" },
+      ],
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe("Maria Lopez"); // the one whose email the site shows
+    expect(rows[0].notes).toContain("Also on the site: Ray Ortiz (Managing Partner).");
+    const onlyRay = officeLeads(two, { i: 0, talking_point: "", people: [{ name: "Ray Ortiz", title: "Managing Partner", email: "ray@invented.example.com", phone: "" }] });
+    expect(onlyRay[0]).toMatchObject({ name: "Ray Ortiz", email: null, phone: "7185550142" });
   });
   it("falls back to the main office line when no one is named", () => {
     const rows = officeLeads(site, { i: 0, talking_point: "", people: [] });

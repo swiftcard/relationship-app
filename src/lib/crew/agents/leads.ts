@@ -1,6 +1,8 @@
 import type { AgentDef } from "../agent-def";
 import type { AgentContext } from "../context";
 import { mailtos, pageTitle, phonesIn, readSite, textOf } from "../leads/fetch-page";
+import { assessSites, type SiteAssessment } from "../leads/assess";
+import { DECISION_ROLE, isGenericEmail, leadScore, namedOnSite, safeText, scoreLeads, withEmailStatus } from "../leads/quality";
 import { cleanEmails, leadsToday, recordLeads } from "../leads/record";
 import { pairs, rotate } from "../replies/engine";
 import { minutesToTomorrow } from "../schedule";
@@ -84,26 +86,55 @@ async function pool<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Prom
   return out;
 }
 
-export function leadsFromSite(biz: Biz, pages: { url: string; html: string }[], type: string): Lead[] {
+/**
+ * One lead per business: the decision-maker the site names (with their own
+ * email when the site shows it), else the site's best address, with the
+ * score, why and hook from the site read. Everything the model reports is
+ * checked against the pages: a name the site doesn't show is dropped, and so
+ * is an email. A business the read calls no fit at all is skipped.
+ */
+export function leadsFromSite(biz: Biz, pages: { url: string; html: string }[], type: string, found?: SiteAssessment): Lead[] {
   if (!pages.length) return [];
+  if (found && found.fit <= 0) return [];
   const host = new URL(pages[0].url).hostname;
-  const emails = cleanEmails(pages.flatMap((p) => [...mailtos(p.html), textOf(p.html)]), host).slice(0, 3);
-  const phone = phonesIn(pages.map((p) => textOf(p.html)).join(" "))[0] ?? null;
+  const text = pages.map((p) => textOf(p.html)).join(" ");
+  const html = pages.map((p) => p.html.toLowerCase()).join(" ");
+  const emails = cleanEmails(pages.flatMap((p) => [...mailtos(p.html), textOf(p.html)]), host);
+  const onSite = (e: string) => !!e && (html.includes(e.toLowerCase()) || text.toLowerCase().includes(e.toLowerCase()));
+  const people = (found?.people ?? []).filter((p) => p.name && DECISION_ROLE.test(p.title) && namedOnSite(p.name, text));
+  const invented = (found?.people ?? []).filter((p) => !namedOnSite(p.name, text));
+  const person = people.find((p) => onSite(p.email)) ?? people[0] ?? null;
+  const personal = person && onSite(person.email) ? person.email.toLowerCase() : null;
+  const email = personal ?? emails.find((e) => !isGenericEmail(e)) ?? emails[0] ?? null;
+  if (!email) return [];
+  const phone = phonesIn(text)[0] ?? null;
   const company = biz.name || pageTitle(pages[0].html) || host;
-  const where = pages.find((p) => emails.some((e) => p.html.toLowerCase().includes(e)))?.url ?? pages[0].url;
-  return emails.map((email) => ({
-    list: "cold" as const,
-    name: null,
-    email,
-    phone,
-    company: company.slice(0, 120),
-    business_type: type,
-    city: biz.city ?? null,
-    region: biz.state ?? null,
-    country: "US",
-    source_platform: "web" as const,
-    source_url: where,
-  }));
+  const where = pages.find((p) => p.html.toLowerCase().includes(email))?.url ?? pages[0].url;
+  const others = emails.filter((e) => e !== email).slice(0, 3);
+  const name = person?.name.slice(0, 80) ?? null;
+  const title = person?.title.slice(0, 80) ?? null;
+  return [
+    {
+      list: "cold" as const,
+      name,
+      title,
+      email,
+      phone,
+      company: company.slice(0, 120),
+      business_type: type,
+      city: biz.city ?? null,
+      region: biz.state ?? null,
+      country: "US",
+      source_platform: "web" as const,
+      source_url: where,
+      notes: others.length ? `Other addresses on the site: ${others.join(", ")}` : null,
+      why: found?.why.trim().slice(0, 300) || null,
+      hook: safeText(found?.hook, invented)?.slice(0, 300) ?? null,
+      message: safeText(found?.opener, invented)?.slice(0, 300) ?? null,
+      // Scored again once the email's domain is checked (scoreLeads).
+      score: found ? leadScore({ fit: found.fit, name, title, email, emailStatus: null, phone, industry: type }) : null,
+    },
+  ];
 }
 
 const base = { team: "leads" as const, role: "worker" as const, tier: "sonnet" as const, maxPending: 2 };
@@ -116,7 +147,7 @@ export const leadsWeb: AgentDef = {
   schedule: { kind: "every", minutes: 30 },
   dailyUsd: 3,
   needs: ["CREW_ANTHROPIC_API_KEY"],
-  purpose: "Runs all day: searches for business types in US cities (like real estate offices in Charlotte), reads their own websites and saves the business emails they publish. Sheet sync then copies them to All Leads in the SwiftCard Leads sheet.",
+  purpose: "Runs all day: searches for business types in US cities (like real estate offices in Charlotte), reads their own websites and saves one lead per business: the owner or manager the site names, the best email and phone it publishes, a score, why they fit and an opening line. Sheet sync copies them to Web Leads in the SwiftCard Leads sheet.",
   async run(ctx) {
     // Controls → "New leads per day (max)" wins over the agent's own default.
     const limit = Number((await ctx.store.getControls().catch(() => ({}) as Record<string, unknown>)).daily_lead_limit ?? NaN);
@@ -127,11 +158,22 @@ export const leadsWeb: AgentDef = {
     await ctx.saveConfig({ query_index: n + 1 });
     const found = await findBusinesses(ctx, type, city);
     const perRun = ctx.config<number>("sites_per_run", 12);
-    const sites = await pool(found.slice(0, perRun), 4, async (b) => leadsFromSite(b, await readSite(b.website), type));
-    const added = await recordLeads(ctx, sites.flat());
-    ctx.stat("sites_read", Math.min(found.length, perRun));
+    const read = await pool(found.slice(0, perRun), 4, async (b) => ({ biz: b, pages: await readSite(b.website) }));
+    const readable = read.filter((r) => r.pages.length);
+    // One cheap read of every site for the decision-maker, fit, why and hook (null: the pages alone still give the email).
+    const assessed = await assessSites(ctx, readable.map((r) => ({ name: r.biz.name, website: r.biz.website, type, area: city, pages: r.pages })), { office: false }).catch(() => null);
+    const fits = new Map<string, number>();
+    const leads = readable.flatMap((r, i) => {
+      const a = assessed?.find((x) => x.i === i);
+      if (assessed && a && a.fit <= 0) ctx.stat("skipped_not_a_fit");
+      const out = leadsFromSite(r.biz, r.pages, type, a);
+      for (const l of out) if (a) fits.set(l.source_url, a.fit);
+      return out;
+    });
+    const added = await recordLeads(ctx, scoreLeads(await withEmailStatus(leads), (l) => fits.get(l.source_url) ?? null));
+    ctx.stat("sites_read", readable.length);
     const synced = await syncLeadsToSheet(ctx.store, "cold").catch((e) => (ctx.log(`sheet: ${e instanceof Error ? e.message : e}`), 0));
-    return { summary: `${type} in ${city}: read ${Math.min(found.length, perRun)} sites, saved ${added} new emails${synced ? `, ${synced} copied to the sheet` : " (Sheet sync adds them to the Sheet)"}.` };
+    return { summary: `${type} in ${city}: read ${readable.length} sites, saved ${added} new businesses${synced ? `, ${synced} copied to the sheet` : " (Sheet sync adds them to the Sheet)"}.` };
   },
 };
 
