@@ -42,18 +42,27 @@ export function robotsAllows(robots: string, path: string, ua = "swiftcardcrew")
 
 const robotsCache = new Map<string, string>();
 
-async function getText(url: string): Promise<string | null> {
+/** Why a page did or didn't come back. Only the category is kept (run stats), never the address. */
+export type FetchOutcome = "ok" | "http_403" | "http_error" | "timeout" | "unreadable";
+
+async function fetchText(url: string): Promise<{ text: string | null; outcome: FetchOutcome }> {
   try {
     const r = await safeFetch(url, { headers: { "User-Agent": CREW_UA, Accept: "text/html,text/plain" }, signal: AbortSignal.timeout(10_000) }, 3);
-    if (!r.ok) return null;
+    // 401, 403 and 429 are how bot protection answers; anything else not OK is a plain HTTP error.
+    if (!r.ok) return { text: null, outcome: [401, 403, 429].includes(r.status) ? "http_403" : "http_error" };
     const type = r.headers.get("content-type") ?? "";
-    if (!/text\/(html|plain)/.test(type)) return null;
+    if (!/text\/(html|plain)/.test(type)) return { text: null, outcome: "unreadable" };
     const len = Number(r.headers.get("content-length") ?? 0);
-    if (len > MAX_BYTES) return null;
-    return (await r.text()).slice(0, MAX_BYTES);
-  } catch {
-    return null;
+    if (len > MAX_BYTES) return { text: null, outcome: "unreadable" };
+    return { text: (await r.text()).slice(0, MAX_BYTES), outcome: "ok" };
+  } catch (e) {
+    const name = (e as { name?: string }).name ?? "";
+    return { text: null, outcome: name === "TimeoutError" || name === "AbortError" ? "timeout" : "unreadable" };
   }
+}
+
+async function getText(url: string): Promise<string | null> {
+  return (await fetchText(url)).text;
 }
 
 export async function allowedByRobots(url: string): Promise<boolean> {
@@ -68,19 +77,29 @@ export async function allowedByRobots(url: string): Promise<boolean> {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** What happened to one site: readable, or the first thing that stopped it. */
+export type SiteOutcome = "readable" | "robots" | "http_403" | "http_error" | "timeout" | "unreadable";
+export type SiteRead = { pages: { url: string; html: string }[]; outcome: SiteOutcome };
+
 /** Homepage plus up to two contact/about/team pages, one second apart. */
 export async function readSite(homeUrl: string): Promise<{ url: string; html: string }[]> {
+  return (await readSiteDetailed(homeUrl)).pages;
+}
+
+/** readSite, saying why a site gave nothing. A site is readable when its homepage is. */
+export async function readSiteDetailed(homeUrl: string): Promise<SiteRead> {
   let home: URL;
   try {
     home = new URL(homeUrl);
   } catch {
-    return [];
+    return { pages: [], outcome: "unreadable" };
   }
-  if (!/^https?:$/.test(home.protocol)) return [];
+  if (!/^https?:$/.test(home.protocol)) return { pages: [], outcome: "unreadable" };
   const pages: { url: string; html: string }[] = [];
-  if (!(await allowedByRobots(home.href))) return [];
-  const html = await getText(home.href);
-  if (!html) return [];
+  if (!(await allowedByRobots(home.href))) return { pages: [], outcome: "robots" };
+  const first = await fetchText(home.href);
+  if (!first.text) return { pages: [], outcome: first.outcome === "ok" ? "unreadable" : first.outcome };
+  const html = first.text;
   pages.push({ url: home.href, html });
   const links = [...html.matchAll(/href=["']([^"'#]+)["']/gi)]
     .map((m) => {
@@ -97,7 +116,7 @@ export async function readSite(homeUrl: string): Promise<{ url: string; html: st
     const t = await getText(l);
     if (t) pages.push({ url: l, html: t });
   }
-  return pages;
+  return { pages, outcome: "readable" };
 }
 
 export function textOf(html: string): string {

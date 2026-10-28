@@ -1,6 +1,7 @@
 import type { AgentDef } from "../agent-def";
 import type { AgentContext } from "../context";
-import { mailtos, pageTitle, phonesIn, readSite, textOf } from "../leads/fetch-page";
+import { mailtos, pageTitle, phonesIn, readSiteDetailed, textOf } from "../leads/fetch-page";
+import { funnelLine, recordSites, screenSearch, startFunnel } from "../leads/diagnostics";
 import { assessSites, type SiteAssessment } from "../leads/assess";
 import { DECISION_ROLE, isGenericEmail, leadScore, namedOnSite, safeText, scoreLeads, withEmailStatus } from "../leads/quality";
 import { cleanEmails, leadsToday, recordLeads } from "../leads/record";
@@ -70,10 +71,11 @@ async function findBusinesses(ctx: AgentContext, type: string, city: string): Pr
     maxUses: 5,
     want: 15,
   });
-  return items
-    .filter((b) => /^https?:\/\//.test(b.website) && !/(yelp|facebook|instagram|linkedin|zillow|realtor\.com|yellowpages|bbb\.org|google|mapquest|angi|thumbtack|houzz|nextdoor)\./i.test(b.website))
-    .map((b) => ({ name: b.name, website: b.website, city: b.city || undefined, state: b.state || undefined }));
+  return screenSearch(ctx, items, WEB_DIRECTORIES).map((b) => ({ name: b.name, website: b.website, city: b.city || undefined, state: b.state || undefined }));
 }
+
+/** Directories, review and social sites: never a business's own website. */
+export const WEB_DIRECTORIES = /(yelp|facebook|instagram|linkedin|zillow|realtor\.com|yellowpages|bbb\.org|google|mapquest|angi|thumbtack|houzz|nextdoor)\./i;
 
 async function pool<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Promise<R[]> {
   const out: R[] = [];
@@ -153,27 +155,29 @@ export const leadsWeb: AgentDef = {
     const limit = Number((await ctx.store.getControls().catch(() => ({}) as Record<string, unknown>)).daily_lead_limit ?? NaN);
     const ceiling = Number.isFinite(limit) ? limit : DAILY_LEAD_LIMIT;
     if ((await leadsToday(ctx, "cold")) >= ceiling) return { summary: `Done for today: ${ceiling} new leads is today's limit. Back tomorrow.`, restMinutes: minutesToTomorrow(ctx.now()) };
+    startFunnel(ctx);
     const n = ctx.config<number>("query_index", 0);
     const { type, city } = queryAt(n);
     await ctx.saveConfig({ query_index: n + 1 });
     const found = await findBusinesses(ctx, type, city);
     const perRun = ctx.config<number>("sites_per_run", 12);
-    const read = await pool(found.slice(0, perRun), 4, async (b) => ({ biz: b, pages: await readSite(b.website) }));
+    const read = await pool(found.slice(0, perRun), 4, async (b) => ({ biz: b, ...(await readSiteDetailed(b.website)) }));
+    recordSites(ctx, { kept: found.length, outcomes: read.map((r) => r.outcome) });
     const readable = read.filter((r) => r.pages.length);
     // One cheap read of every site for the decision-maker, fit, why and hook (null: the pages alone still give the email).
     const assessed = await assessSites(ctx, readable.map((r) => ({ name: r.biz.name, website: r.biz.website, type, area: city, pages: r.pages })), { office: false }).catch(() => null);
     const fits = new Map<string, number>();
     const leads = readable.flatMap((r, i) => {
       const a = assessed?.find((x) => x.i === i);
-      if (assessed && a && a.fit <= 0) ctx.stat("skipped_not_a_fit");
       const out = leadsFromSite(r.biz, r.pages, type, a);
+      if (a && a.fit <= 0) ctx.stat("rejected_poor_fit");
+      else if (!out.length) ctx.stat("sites_no_contact");
       for (const l of out) if (a) fits.set(l.source_url, a.fit);
       return out;
     });
     const added = await recordLeads(ctx, scoreLeads(await withEmailStatus(leads), (l) => fits.get(l.source_url) ?? null));
-    ctx.stat("sites_read", readable.length);
     const synced = await syncLeadsToSheet(ctx.store, "cold").catch((e) => (ctx.log(`sheet: ${e instanceof Error ? e.message : e}`), 0));
-    return { summary: `${type} in ${city}: read ${readable.length} sites, saved ${added} new businesses${synced ? `, ${synced} copied to the sheet` : " (Sheet sync adds them to the Sheet)"}.` };
+    return { summary: `${type} in ${city}: saved ${added} new businesses${synced ? `, ${synced} copied to the sheet` : " (Sheet sync adds them to the Sheet)"}. Funnel: ${funnelLine(ctx.stats)}.` };
   },
 };
 
