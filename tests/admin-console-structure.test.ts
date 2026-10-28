@@ -48,6 +48,44 @@ describe("one grouped navigation", () => {
   });
 });
 
+describe("Referrals and Retention are tabs of Company Analytics, not pages", () => {
+  // Owner, 2026-10-27: "Why is there one page for referrals and one page for
+  // retention? That doesn't make sense."
+  const nav = read("src/app/admin/AdminNav.tsx");
+  const tabs = read("src/app/admin/analytics/tabs.ts");
+
+  it("the nav has no top-level Referrals or Retention", () => {
+    expect(nav).not.toContain('href: "/admin/referrals"');
+    expect(nav).not.toContain('href: "/admin/retention"');
+  });
+
+  it("Company Analytics has its seven tabs, in reading order", () => {
+    const keys = [...tabs.matchAll(/key: "([a-z]+)"/g)].map((m) => m[1]);
+    expect(keys).toEqual(["growth", "revenue", "funnel", "engagement", "retention", "referrals", "data"]);
+  });
+
+  it("the old addresses redirect into the tabs, behind the admin check", () => {
+    for (const [file, tab] of [["src/app/admin/retention/page.tsx", "retention"], ["src/app/admin/referrals/page.tsx", "referrals"]] as const) {
+      const src = read(file);
+      expect(src).toContain("if (!(await requireAdmin())) notFound();");
+      expect(src).toContain(`redirect("/admin/analytics?tab=${tab}")`);
+      expect(src.indexOf("requireAdmin()")).toBeLessThan(src.indexOf("redirect("));
+    }
+  });
+
+  it("the Company Analytics page checks the admin itself before reading retention", () => {
+    const page = read("src/app/admin/analytics/page.tsx");
+    expect(page.indexOf("if (!(await requireAdmin())) notFound();")).toBeGreaterThan(-1);
+    expect(page.indexOf("requireAdmin()")).toBeLessThan(page.indexOf("retentionFunnel("));
+  });
+
+  it("reasons are shown in the words the person picked, not as ids", () => {
+    const tab = read("src/app/admin/analytics/RetentionTab.tsx");
+    expect(tab).toContain("reasonText(r.reason, r.plan)");
+    expect(tab).toContain("reasonText(r.reason)");
+  });
+});
+
 describe("the building blocks stay on the semantic palette", () => {
   it("no raw hex colour in any _ui component (they live in admin.css)", () => {
     const dir = "src/app/admin/_ui";

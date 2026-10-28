@@ -38,17 +38,17 @@ export const KNOWLEDGE: readonly KnowledgeDoc[] = [
  * route here is a decision, not a way to silence the test.
  */
 export const UNDOCUMENTED_ROUTES: Record<string, string> = {
-  "/admin": "SwiftCard staff console. Never describe it to a customer — it is not the Office admin console.",
-  "/admin/analytics": "Staff console — company-wide metrics, not a customer surface.",
+  "/admin": "SwiftCard staff console (the owner's \"Site\" tab): an overview of the business. Never describe it to a customer — it is not the Office admin console.",
+  "/admin/analytics": "Staff console — Company Analytics: company-wide growth, revenue, funnel, engagement, retention (who tried to leave and why) and referral numbers. Contains other customers' words; never describe or quote it to a customer.",
   "/admin/crew": "Staff console — the internal agents' control panel: Start / Stop for each marketing agent (their work goes to a staff Google Sheet), and the website-health agents with the fixes staff approve, pause/run controls and spend. Never describe it to a customer.",
   "/admin/crew/agent/[id]": "Staff console — one internal AI agent: its status, schedule, this week's activity and raw run records. Never describe it to a customer.",
   "/admin/marketing": "Staff console — internal marketing tooling.",
-  "/admin/plans": "Staff console — internal plan matrix.",
-  "/admin/referrals": "Staff console — internal referral auditing.",
-  "/admin/retention": "Staff console — the churn funnel: who opened the delete or cancel flow, the reason they gave, and whether an offer kept them. Contains other customers' words; never describe or quote it to a customer.",
+  "/admin/plans": "Staff console — the Sandbox: switch the owner's own account between Free, Pro and Office to test each, with the plan matrix.",
+  "/admin/referrals": "Staff console — old address; redirects to Company Analytics › Referrals.",
+  "/admin/retention": "Staff console — old address; redirects to Company Analytics › Retention (the churn funnel). Never describe or quote it to a customer.",
   "/admin/users": "Staff console — internal user list.",
   "/admin/users/[id]": "Staff console — internal user detail.",
-  "/admin/website": "Staff console — internal site content tooling.",
+  "/admin/website": "Staff console — traffic to the marketing website (visitors, pages, sources, countries).",
   "/pin/[slug]": "The 1000×1500 picture behind each SwiftCard Pinterest pin (a real card design with a headline), photographed by scripts/pinterest-pins.mjs. noindex, linked from nowhere, not a customer surface.",
   "/profile": "Legacy settings page, superseded by /settings/flows and linked from nowhere. Pointing customers here would show them a second, stale copy of their settings.",
   "/profile/card": "Legacy primary-card editor, unlinked and superseded by the per-card editor.",

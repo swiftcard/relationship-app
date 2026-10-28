@@ -1,9 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getSignupSourceLabel, getSourceLabel } from "@/lib/source-labels";
+// ── Company Analytics: the numbers that grow the business ──────────────────
+// One fetch of /api/admin/analytics feeds five of the seven tabs (Growth,
+// Revenue, Funnel, Engagement, Data quality); Retention is rendered on the
+// server (RetentionTab) and Referrals has its own endpoint (ReferralsTab).
+// Switching between these five tabs never refetches: the page swaps `tab`
+// and this component stays mounted.
+
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { getSignupSourceLabel, getSourceLabel } from "@/lib/source-labels";
 import type { WarmLeadMetrics } from "@/lib/warm-lead-metrics";
+import { PLAN_PRICES } from "@/lib/plan";
+import { Columns, KpiCard, KpiGrid, Section, Stack } from "../_ui/layout";
+import { BarList, PlanMixBar, TrendBars } from "../_ui/charts";
+import { EmptyState, ErrorState, HowCounted, NotTracked, PageSkeleton } from "../_ui/states";
+import { Avatar, PlanBadge } from "../_ui/badges";
+import { fmtDateTime, fmtMoney, fmtNum, fmtPct, periodDelta, timeAgo } from "../_ui/format";
+import { SeeAll } from "../_ui/links";
+import { Icon } from "../_ui/icons";
 
 type Funnel = {
   available: boolean;
@@ -14,7 +29,7 @@ type Funnel = {
   lockedFeatures: [string, number][];
 };
 
-type Analytics = {
+export type Analytics = {
   /** The click funnel (product_events). `available: false` means
    *  supabase/product-events.sql hasn't been run yet. */
   funnel?: Funnel;
@@ -32,7 +47,7 @@ type Analytics = {
   };
   /** Returning-contact alerts (lib/warm-lead-metrics.ts). */
   warmLead?: WarmLeadMetrics;
-  accounts: { total: number; today: number; d7: number; d30: number; series: { date: string; count: number }[]; recent: { name: string; email: string; username: string; plan: string; created_at: string }[] };
+  accounts: { total: number; today: number; d7: number; d30: number; series: { date: string; count: number }[]; recent: { id?: string; name: string; email: string; username: string; plan: string; created_at: string }[] };
   plans: { free: number; pro: number; office: number; paid: number; conversion: number; estMrr: number; compedPaidPlans?: number };
   acquisition: { source: string; signups: number; d30: number; paid: number; paidRate: number }[];
   cards: { total: number; perAccount: number };
@@ -41,8 +56,6 @@ type Analytics = {
   engagement: { activatedCards: number; activationRate: number };
   topCards: { username: string; count: number }[];
 };
-
-const PLAN_LABEL: Record<string, string> = { free: "Free", pro: "Pro", enterprise: "Office", office: "Office" };
 
 // The ingest vocabulary in plain words. Written so the panel answers "why is
 // that view missing?" without anyone having to open lib/ingest-log.ts.
@@ -72,53 +85,6 @@ const GEO_LABEL: Record<string, string> = {
   country: "Country only",
   "—": "No location",
 };
-const PLAN_COLOR: Record<string, string> = { free: "#6b7280", pro: "#60a5fa", office: "#c084fc" };
-
-function Kpi({ label, value, sub, accent }: { label: string; value: string | number; sub?: string; accent?: string }) {
-  return (
-    <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-4">
-      <p className="text-2xl font-bold tabular-nums" style={accent ? { color: accent } : undefined}>
-        {typeof value === "number" ? value.toLocaleString() : value}
-      </p>
-      <p className="text-gray-400 text-xs mt-0.5">{label}</p>
-      {sub && <p className="text-gray-600 text-[0.6875rem] mt-0.5">{sub}</p>}
-    </div>
-  );
-}
-
-function BarChart({ series, color = "#3b82f6" }: { series: { date: string; count: number }[]; color?: string }) {
-  const max = Math.max(1, ...series.map((s) => s.count));
-  return (
-    <div className="flex items-end gap-[3px] h-24">
-      {series.map((s) => (
-        <div key={s.date} className="flex-1 group relative flex flex-col justify-end">
-          <div className="rounded-t-sm transition-colors" style={{ height: `${(s.count / max) * 100}%`, minHeight: s.count ? 3 : 0, background: color }} />
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-gray-800 text-white text-[0.625rem] px-1.5 py-0.5 rounded whitespace-nowrap z-10">
-            {new Date(s.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}: {s.count}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Bars({ rows, color = "#3b82f6", labeler }: { rows: [string, number][]; color?: string; labeler?: (key: string) => string }) {
-  const max = Math.max(1, ...rows.map((r) => r[1]));
-  if (!rows.length) return <p className="text-gray-600 text-xs">No data yet.</p>;
-  return (
-    <div className="space-y-2">
-      {rows.map(([label, n]) => (
-        <div key={label} className="flex items-center gap-3">
-          <span className="text-gray-300 text-xs w-36 shrink-0 truncate" title={labeler ? labeler(label) : label.replace(/_/g, " ")}>{labeler ? labeler(label) : label.replace(/_/g, " ")}</span>
-          <div className="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
-            <div className="h-full rounded-full" style={{ width: `${(n / max) * 100}%`, background: color }} />
-          </div>
-          <span className="text-gray-400 text-xs w-10 text-right tabular-nums">{n.toLocaleString()}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 /**
  * The journey, in the order a real person walks it.
@@ -142,7 +108,7 @@ const FUNNEL_STEPS: { key: string; label: string; hint: string; fromAccounts?: b
   { key: "checkout_completed", label: "Paid", hint: "Money in" },
 ];
 
-export /**
+/**
  * The `feature` key on every PlanGate, in plain words.
  *
  * These keys are written for the code ("swift-links-cap"), and this panel's
@@ -150,7 +116,7 @@ export /**
  * decoding before it can answer that, which is one step too many for a number
  * you glance at.
  */
-const GATE_LABEL: Record<string, string> = {
+export const GATE_LABEL: Record<string, string> = {
   "colors-fonts": "Any color & finishes",
   "custom-designer": "The custom designer",
   customization: "Card customization",
@@ -170,15 +136,17 @@ const GATE_LABEL: Record<string, string> = {
 };
 const gateLabel = (k: string) => GATE_LABEL[k] ?? k.replace(/-/g, " ");
 
+const toRows = (pairs: [string, number][], label: (k: string) => string = (k) => k.replace(/_/g, " ")) =>
+  pairs.map(([k, n]) => ({ key: k, label: label(k), value: n }));
+
 export function FunnelPanel({ funnel, signups }: { funnel: Funnel; signups: { d30: number; d7: number } }) {
   if (!funnel.available) {
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-        <p className="text-white font-semibold text-sm mb-1">The journey · last 30 days</p>
-        <p className="text-amber-400/90 text-xs leading-relaxed">
-          Not switched on yet — run <code className="text-amber-300">supabase/product-events.sql</code> in the Supabase SQL editor and this fills in on its own.
+      <Section title="The journey · last 30 days">
+        <p className="adm-callout-warn px-4 py-3 sc-t-subhead">
+          Not switched on yet — run <code className="font-mono">supabase/product-events.sql</code> in the Supabase SQL editor and this fills in on its own.
         </p>
-      </div>
+      </Section>
     );
   }
 
@@ -191,359 +159,464 @@ export function FunnelPanel({ funnel, signups }: { funnel: Funnel; signups: { d3
   const anyData = rows.some((r) => r.n30 > 0);
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-      <div className="flex items-center justify-between gap-3 mb-1">
-        <p className="text-white font-semibold text-sm">The journey <span className="text-gray-600 font-normal">· last 30 days</span></p>
-        {funnel.internal30 > 0 && (
-          <span className="text-gray-600 text-[0.6875rem] shrink-0">{funnel.internal30.toLocaleString()} of your own events hidden</span>
-        )}
-      </div>
-      <p className="text-gray-600 text-[0.6875rem] mb-4">
-        Every step someone takes before they pay. The number on the right is how many of the previous step made it this far — that&apos;s where you&apos;re losing people. Counting started 10 Sep 2026, so the first month is still filling in.
-      </p>
-
-      {!anyData ? (
-        <p className="text-gray-600 text-xs">Nothing yet. Numbers appear here as soon as real visitors move through the site.</p>
-      ) : (
-        <div className="space-y-2.5 sm:space-y-1.5">
-          {rows.map((r, i) => {
-            const prev = i === 0 ? null : rows[i - 1].n30;
-            // Only meaningful once the step above actually happened.
-            const pct = prev && prev > 0 ? Math.round((r.n30 / prev) * 100) : null;
-            return (
-              // Stacks on a phone. Side by side, a fixed label column left the
-              // bar about 80px wide, so every step drew nearly the same length
-              // and the funnel stopped showing the drop-off it exists to show —
-              // and the count inside the bar clipped to a single digit.
-              <div key={r.key} className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-3">
-                <div className="sm:w-44 shrink-0 min-w-0">
-                  <p className="text-gray-200 text-xs truncate" title={r.label}>{r.label}</p>
-                  <p className="text-gray-600 text-[0.625rem] truncate" title={r.hint}>{r.hint}</p>
-                </div>
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <div className="flex-1 h-5 bg-gray-800/60 rounded-lg overflow-hidden min-w-0">
-                    <div
-                      className="h-full rounded-lg"
-                      style={{ width: `${(r.n30 / top) * 100}%`, background: "linear-gradient(90deg, #2563eb, #7c3aed)" }}
-                    />
+    <Stack>
+      <Section
+        title="The journey · last 30 days"
+        hint={
+          <>
+            Every step someone takes before they pay. The percentage is how many of the step before made it this far — that&apos;s where you&apos;re losing people.
+            {funnel.internal30 > 0 && <> {funnel.internal30.toLocaleString()} of your own events are left out.</>}
+          </>
+        }
+      >
+        {!anyData ? (
+          <EmptyState>Nothing yet. Numbers appear here as soon as real visitors move through the site.</EmptyState>
+        ) : (
+          <div className="space-y-3 sm:space-y-2">
+            {rows.map((r, i) => {
+              const prev = i === 0 ? null : rows[i - 1].n30;
+              // Only meaningful once the step above actually happened.
+              const pct = prev && prev > 0 ? Math.round((r.n30 / prev) * 100) : null;
+              return (
+                // Stacks on a phone. Side by side, a fixed label column left the
+                // bar about 80px wide, so every step drew nearly the same length
+                // and the funnel stopped showing the drop-off it exists to show —
+                // and the count inside the bar clipped to a single digit.
+                <div key={r.key} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
+                  <div className="sm:w-48 shrink-0 min-w-0">
+                    <p className="sc-t-subhead truncate" title={r.label}>{i + 1}. {r.label}</p>
+                    <p className="sc-t-caption adm-muted truncate" title={r.hint}>{r.hint}</p>
                   </div>
-                  {/* The count sits OUTSIDE the bar: inside, a small step's own
-                      number is wider than the bar drawn for it. */}
-                  <span className="w-12 text-right text-[0.6875rem] font-semibold text-gray-200 tabular-nums shrink-0">{r.n30.toLocaleString()}</span>
-                  <span className="w-10 text-right text-[0.6875rem] tabular-nums shrink-0">
-                    {pct === null ? <span className="text-gray-600">—</span> : pct > 100 ? (
-                      // Not every step feeds only from the one above it: someone
-                      // can sign up without ever opening the builder, and for
-                      // the first 30 days accounts predate this tracking
-                      // entirely. Shown grey rather than as a green 300%, which
-                      // would read as a wildly good conversion rate.
-                      <span className="text-gray-500" title="More than the step above — some people arrive here without passing through it.">&gt;100%</span>
-                    ) : (
-                      <span className={pct >= 50 ? "text-green-400" : pct >= 20 ? "text-amber-400" : "text-red-400"}>{pct}%</span>
-                    )}
-                  </span>
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="flex-1 h-6 adm-track overflow-hidden min-w-0" style={{ borderRadius: 6 }}>
+                      <div
+                        className="h-full"
+                        style={{ width: `${(r.n30 / top) * 100}%`, borderRadius: "0 6px 6px 0", background: "linear-gradient(90deg, var(--adm-series-1, #1D4ED8), var(--adm-plan-office, #B26CF5))" }}
+                      />
+                    </div>
+                    {/* The count sits OUTSIDE the bar: inside, a small step's own
+                        number is wider than the bar drawn for it. */}
+                    <span className="w-14 text-right sc-t-subhead font-semibold adm-num shrink-0">{r.n30.toLocaleString()}</span>
+                    <span className="w-12 text-right sc-t-footnote adm-num shrink-0">
+                      {pct === null ? <span className="adm-faint">—</span> : pct > 100 ? (
+                        // Not every step feeds only from the one above it: someone
+                        // can sign up without ever opening the builder, and for
+                        // the first 30 days accounts predate this tracking
+                        // entirely. Shown grey rather than as a green 300%, which
+                        // would read as a wildly good conversion rate.
+                        <span className="adm-faint" title="More than the step above — some people arrive here without passing through it.">&gt;100%</span>
+                      ) : (
+                        <span className={pct >= 50 ? "adm-good" : pct >= 20 ? "adm-warn" : "adm-bad"}>{pct}%</span>
+                      )}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
+      </Section>
 
       {(funnel.lockedFeatures.length > 0 || funnel.topCtas.length > 0) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-6 pt-5 border-t border-gray-800">
-          {funnel.lockedFeatures.length > 0 && (
-            <div>
-              <p className="text-white font-semibold text-xs mb-1">Which Pro features they want</p>
-              <p className="text-gray-600 text-[0.625rem] mb-3">What Free users bump into most. The top one is your best upgrade pitch.</p>
-              <Bars rows={funnel.lockedFeatures} color="#f59e0b" labeler={gateLabel} />
-            </div>
-          )}
-          {funnel.topCtas.length > 0 && (
-            <div>
-              <p className="text-white font-semibold text-xs mb-1">Most-clicked buttons</p>
-              <p className="text-gray-600 text-[0.625rem] mb-3">Which calls to action people actually press.</p>
-              <Bars rows={funnel.topCtas} color="#38bdf8" />
-            </div>
-          )}
-        </div>
+        <Columns>
+          <Section title="Which Pro features they want" hint="What Free users bump into most. The top one is your best upgrade pitch.">
+            <BarList rows={toRows(funnel.lockedFeatures, gateLabel)} color="var(--adm-series-3)" empty="No one has hit a Pro feature yet." />
+          </Section>
+          <Section title="Most-clicked buttons" hint="Which calls to action people actually press.">
+            <BarList rows={toRows(funnel.topCtas)} color="var(--adm-series-2)" empty="No button clicks yet." />
+          </Section>
+        </Columns>
       )}
-    </div>
+    </Stack>
   );
 }
 
-export default function AnalyticsClient() {
-  const [a, setA] = useState<Analytics | null>(null);
-  const [loading, setLoading] = useState(true);
+export default function AnalyticsClient({ tab, initial }: {
+  tab: "growth" | "revenue" | "funnel" | "engagement" | "data";
+  /** Fixture data for tests/render; the page itself always fetches. */
+  initial?: Analytics;
+}) {
+  const [a, setA] = useState<Analytics | null>(initial ?? null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setError(null);
     fetch("/api/admin/analytics")
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("Failed to load"))))
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("The server didn't answer. Try again in a moment."))))
       .then(setA)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+      .catch((e) => setError(e instanceof Error && e.message ? e.message : "Couldn't reach the server."));
   }, []);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time data fetch on mount; load() owns its own state
+  useEffect(() => { if (!initial) load(); }, [load, initial]);
 
+  if (error && !a) return <ErrorState message={error} onRetry={load} />;
+  if (!a) return <PageSkeleton />;
+
+  if (tab === "revenue") return <RevenueTab a={a} />;
+  if (tab === "funnel") return <FunnelTab a={a} />;
+  if (tab === "engagement") return <EngagementTab a={a} />;
+  if (tab === "data") return <DataQualityTab a={a} />;
+  return <GrowthTab a={a} />;
+}
+
+// ── Growth ──────────────────────────────────────────────────────────────────
+function GrowthTab({ a }: { a: Analytics }) {
+  const delta = periodDelta(a.accounts.series);
+  const perDay = a.accounts.d30 / 30;
   return (
-    <div>
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-white">Company analytics</h1>
-          <p className="text-gray-500 text-sm mt-1">Growth, revenue, engagement, and where users come from.</p>
-        </div>
+    <Stack>
+      <KpiGrid>
+        <KpiCard label="Total accounts" value={fmtNum(a.accounts.total)} sub="Customers only — your own and the demo account are left out" />
+        <KpiCard label="New signups · 7 days" value={fmtNum(a.accounts.d7)} delta={delta} trend={a.accounts.series.slice(-14).map((s) => s.count)} sub={`${fmtNum(a.accounts.today)} today`} />
+        <KpiCard label="New signups · 30 days" value={fmtNum(a.accounts.d30)} sub={`About ${perDay >= 10 ? Math.round(perDay) : perDay.toFixed(1)} a day`} />
+        <KpiCard label="Card activation" value={fmtPct(a.engagement.activationRate)} sub={`${fmtNum(a.engagement.activatedCards)} cards captured a contact`} />
+      </KpiGrid>
 
-        {loading ? (
-          <p className="text-gray-500 text-sm py-10 text-center">Loading analytics…</p>
-        ) : error || !a ? (
-          <p className="text-red-400 text-sm py-10 text-center">{error ?? "No data"}</p>
-        ) : (
-          <div className="space-y-8">
-            {/* Headline KPIs */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <Kpi label="Total accounts" value={a.accounts.total} sub={`+${a.accounts.d30} in 30d · +${a.accounts.today} today`} />
-              <Kpi label="Paid customers" value={a.plans.paid} sub={`${a.plans.conversion}% conversion`} accent="#60a5fa" />
-              <Kpi
-                label="Est. MRR"
-                value={`$${a.plans.estMrr.toLocaleString()}`}
-                sub={
-                  a.plans.compedPaidPlans
-                    ? `Stripe subscriptions only · ${a.plans.compedPaidPlans} comped`
-                    : "Stripe subscriptions only"
-                }
-                accent="#4ade80"
-              />
-              <Kpi label="Contacts captured" value={a.leads.total} sub={`+${a.leads.d7} this week`} />
-            </div>
+      <Section title="New accounts per day" hint="The last 30 days — your growth curve. A flat stretch means marketing needs a push.">
+        <TrendBars data={a.accounts.series.map((s) => ({ date: s.date, values: [s.count] }))} series={[{ label: "Signups", color: "var(--adm-series-1)" }]} caption="New accounts per day, last 30 days" />
+      </Section>
 
-            {/* The click funnel. Sits directly under the KPIs because it is the
-                only panel on this page that can see people who have NOT signed
-                up — everything below counts rows that already exist. */}
-            {a.funnel && <FunnelPanel funnel={a.funnel} signups={{ d30: a.accounts.d30, d7: a.accounts.d7 }} />}
+      <Columns wide>
+        <Section title="Where signups come from" hint="How each account found SwiftCard, and how many went on to pay — the column that says where marketing money works hardest." flush>
+          {a.acquisition.length === 0 ? <EmptyState className="pb-6">No signups yet.</EmptyState> : <AcquisitionTable rows={a.acquisition} />}
+        </Section>
+        <Section title="Plan mix" hint="Everyone, by the plan they're on now. Free is your upgrade pipeline.">
+          <PlanMixBar free={a.plans.free} pro={a.plans.pro} office={a.plans.office} />
+        </Section>
+      </Columns>
 
-            {/* Growth */}
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-white font-semibold text-sm">New accounts · last 30 days</p>
-                <div className="flex gap-4 text-xs text-gray-500">
-                  <span>Today <span className="text-white font-semibold">{a.accounts.today}</span></span>
-                  <span>7d <span className="text-white font-semibold">{a.accounts.d7}</span></span>
-                  <span>30d <span className="text-white font-semibold">{a.accounts.d30}</span></span>
-                </div>
-              </div>
-              <p className="text-gray-600 text-[0.6875rem] mb-4">Signups per day — your growth curve. A flat stretch means marketing needs a push.</p>
-              <BarChart series={a.accounts.series} color="#3b82f6" />
-            </div>
-
-            {/* Plans + Sources */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <p className="text-white font-semibold text-sm mb-1">Plan mix</p>
-                <p className="text-gray-600 text-[0.6875rem] mb-4">How many users sit on each plan — Free is your upgrade pipeline.</p>
-                <Bars rows={[["Free", a.plans.free], ["Pro", a.plans.pro], ["Office", a.plans.office]]} color="#8b5cf6" />
-                <div className="grid grid-cols-3 gap-2 mt-4">
-                  {[["Free", a.plans.free, "#6b7280"], ["Pro", a.plans.pro, "#60a5fa"], ["Office", a.plans.office, "#c084fc"]].map(([l, n, c]) => (
-                    <div key={l as string} className="bg-gray-800/40 rounded-xl px-3 py-2.5 text-center">
-                      <p className="text-lg font-bold tabular-nums" style={{ color: c as string }}>{(n as number).toLocaleString()}</p>
-                      <p className="text-gray-500 text-[0.6875rem]">{l as string}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <p className="text-white font-semibold text-sm mb-1">Where contacts come from <span className="text-gray-600 font-normal">· last 30d</span></p>
-                <p className="text-gray-600 text-[0.6875rem] mb-4">Across ALL users: how people reached a card before sharing their info (QR scan, card link, bio link…).</p>
-                <Bars rows={a.leads.bySource} color="#22c55e" labeler={getSourceLabel} />
-              </div>
-            </div>
-
-            {/* Contacts trend */}
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-              <div className="flex items-center justify-between mb-1">
-                <p className="text-white font-semibold text-sm">Contacts captured · last 30 days</p>
-                <div className="flex gap-4 text-xs text-gray-500">
-                  <span>Today <span className="text-white font-semibold">{a.leads.today}</span></span>
-                  <span>7d <span className="text-white font-semibold">{a.leads.d7}</span></span>
-                </div>
-              </div>
-              <p className="text-gray-600 text-[0.6875rem] mb-4">New contacts landing in users&apos; CRMs per day — the clearest signal the product is delivering value.</p>
-              <BarChart series={a.leads.series} color="#22c55e" />
-            </div>
-
-            {/* Secondary KPIs */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <Kpi label="Total cards" value={a.cards.total} sub={`${a.cards.perAccount} per account`} />
-              <Kpi label="Total views" value={a.views.total} sub={`+${a.views.d7} this week`} />
-              <Kpi label="Views by surface (30d)" value={`${a.views.cardViews30} / ${a.views.linkViews30}`} sub="card pages / Swift Links pages" />
-              <Kpi label="Card activation" value={`${a.engagement.activationRate}%`} sub={`${a.engagement.activatedCards.toLocaleString()} cards got a lead`} />
-            </div>
-
-            {/* Top cards + recent signups */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <p className="text-white font-semibold text-sm mb-1">Top cards by contacts</p>
-                <p className="text-gray-600 text-[0.6875rem] mb-3">The cards capturing the most contacts — your power users. Great candidates for testimonials and referrals.</p>
-                {a.topCards.length === 0 ? <p className="text-gray-600 text-xs">No contacts yet.</p> : (
-                  <div className="divide-y divide-gray-800/60">
-                    {a.topCards.map((c, i) => (
-                      <div key={c.username} className="flex items-center justify-between py-2 text-sm">
-                        <span className="flex items-center gap-2 min-w-0">
-                          <span className="text-gray-600 text-xs w-4">{i + 1}</span>
-                          <a href={`/${c.username.replace("__links", "")}`} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 truncate">/{c.username}</a>
-                        </span>
-                        <span className="text-white font-semibold tabular-nums shrink-0">{c.count.toLocaleString()}</span>
-                      </div>
-                    ))}
+      <Section title="Latest signups" hint="The newest accounts and the plan they're on." action={<SeeAll href="/admin/users">All users</SeeAll>} flush>
+        {a.accounts.recent.length === 0 ? <EmptyState className="pb-6">No signups yet.</EmptyState> : (
+          <ul className="adm-divide">
+            {a.accounts.recent.map((u, i) => {
+              const body = (
+                <>
+                  <Avatar name={u.name || u.email} size={32} />
+                  <div className="min-w-0 flex-1">
+                    <p className="sc-t-subhead font-medium truncate">{u.name || u.username || u.email}</p>
+                    <p className="sc-t-caption adm-muted truncate">{u.email}</p>
                   </div>
-                )}
-              </div>
+                  <PlanBadge plan={u.plan} />
+                  <span className="sc-t-caption adm-muted w-16 text-right shrink-0" title={fmtDateTime(u.created_at)}>{timeAgo(u.created_at)}</span>
+                </>
+              );
+              return (
+                <li key={u.id ?? `${u.username}-${i}`}>
+                  {u.id ? (
+                    <Link href={`/admin/users/${u.id}`} className="adm-list-row flex items-center gap-3 px-4 sm:px-5 py-2.5">{body}</Link>
+                  ) : (
+                    <div className="adm-list-row flex items-center gap-3 px-4 sm:px-5 py-2.5">{body}</div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Section>
 
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <p className="text-white font-semibold text-sm mb-1">Latest signups</p>
-                <p className="text-gray-600 text-[0.6875rem] mb-3">The most recent accounts — click through in Users to see any of them in detail.</p>
-                <div className="divide-y divide-gray-800/60">
-                  {a.accounts.recent.map((u) => (
-                    <div key={u.username} className="flex items-center justify-between py-2 text-sm">
-                      <span className="min-w-0">
-                        <span className="text-white truncate block max-w-[180px]">{u.name || u.username}</span>
-                        <span className="text-gray-600 text-[0.6875rem] truncate block max-w-[180px]">{u.email}</span>
-                      </span>
-                      <span className="flex items-center gap-2 shrink-0">
-                        <span className="text-[0.625rem] font-bold px-2 py-0.5 rounded-full" style={{ background: (PLAN_COLOR[u.plan === "enterprise" ? "office" : u.plan] ?? "#6b7280") + "22", color: PLAN_COLOR[u.plan === "enterprise" ? "office" : u.plan] ?? "#9ca3af" }}>{PLAN_LABEL[u.plan] ?? "Free"}</span>
-                        <span className="text-gray-600 text-[0.6875rem]">{new Date(u.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+      <Columns>
+        <NotTracked title="Signups by week · 12 weeks" detail="the longer trend, so a slow month stands out against the season." />
+        <NotTracked title="From signup to first contact" detail="how many new accounts make a card, share it, get a view and capture a contact — and how long each step takes." />
+      </Columns>
+
+      <HowCounted>
+        <p>Accounts are counted from the accounts table itself, so every number here is a real account, not a click. Your own account, any admin account and the App Review demo account are left out.</p>
+        <p>&ldquo;Went paid&rdquo; counts only accounts with a real Stripe subscription. An account you moved to Pro by hand, or a gift month, is not counted as paying.</p>
+        <p>Card activation is the share of cards that have captured at least one real contact (the sample contact every new card starts with doesn&apos;t count).</p>
+      </HowCounted>
+    </Stack>
+  );
+}
+
+function AcquisitionTable({ rows }: { rows: Analytics["acquisition"] }) {
+  return (
+    <>
+      {/* Phone: one source per row. */}
+      <ul className="sm:hidden adm-divide">
+        {rows.map((r) => (
+          <li key={r.source} className="px-4 py-3">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="sc-t-subhead font-medium truncate">{getSignupSourceLabel(r.source)}</span>
+              <span className="sc-t-subhead font-semibold adm-num shrink-0">{fmtNum(r.signups)}</span>
             </div>
+            <p className="sc-t-caption adm-muted mt-0.5 adm-num">
+              {fmtNum(r.d30)} in the last 30 days · {fmtNum(r.paid)} paid ·{" "}
+              <span className={r.paidRate > 0 ? "adm-good font-semibold" : ""}>{fmtPct(r.paidRate)} paid rate</span>
+            </p>
+          </li>
+        ))}
+      </ul>
+      <div className="hidden sm:block overflow-x-auto">
+        <table className="adm-table">
+          <thead>
+            <tr>
+              <th>Source</th>
+              <th className="adm-r">Signups</th>
+              <th className="adm-r">Last 30 days</th>
+              <th className="adm-r">Went paid</th>
+              <th className="adm-r">Paid rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.source}>
+                <td className="font-medium">{getSignupSourceLabel(r.source)}</td>
+                <td className="adm-r font-semibold">{fmtNum(r.signups)}</td>
+                <td className="adm-r">{fmtNum(r.d30)}</td>
+                <td className="adm-r">{fmtNum(r.paid)}</td>
+                <td className={`adm-r font-semibold ${r.paidRate > 0 ? "adm-good" : "adm-muted"}`}>{fmtPct(r.paidRate)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
 
-            {/* Acquisition — where signups come from and which sources convert to paid */}
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-              <p className="text-white font-semibold text-sm mb-1">Acquisition — where signups come from</p>
-              <p className="text-gray-600 text-[0.6875rem] mb-4">Use the paid-conversion column to decide where marketing money works hardest.</p>
-              {a.acquisition.length === 0 ? (
-                <p className="text-gray-600 text-xs">No signups yet.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-800 text-gray-500 text-xs">
-                        <th className="text-left py-2 font-medium">Source</th>
-                        <th className="text-right py-2 font-medium">Signups</th>
-                        <th className="text-right py-2 font-medium">Last 30d</th>
-                        <th className="text-right py-2 font-medium">Went paid</th>
-                        <th className="text-right py-2 font-medium">Paid rate</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-800/60">
-                      {a.acquisition.map((row) => (
-                        <tr key={row.source}>
-                          <td className="py-2 text-gray-300 text-xs">{getSignupSourceLabel(row.source)}</td>
-                          <td className="py-2 text-right text-white font-semibold tabular-nums">{row.signups.toLocaleString()}</td>
-                          <td className="py-2 text-right text-gray-400 tabular-nums">{row.d30.toLocaleString()}</td>
-                          <td className="py-2 text-right text-gray-400 tabular-nums">{row.paid.toLocaleString()}</td>
-                          <td className="py-2 text-right tabular-nums font-semibold" style={{ color: row.paidRate > 0 ? "#4ade80" : "#6b7280" }}>{row.paidRate}%</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+// ── Revenue ─────────────────────────────────────────────────────────────────
+function RevenueTab({ a }: { a: Analytics }) {
+  const p = a.plans;
+  const comped = p.compedPaidPlans ?? 0;
+  return (
+    <Stack>
+      <KpiGrid>
+        <KpiCard label="Monthly revenue (est.)" value={fmtMoney(p.estMrr)} sub="Stripe subscriptions at list price" />
+        <KpiCard label="Yearly run rate (est.)" value={fmtMoney(p.estMrr * 12)} sub="Monthly revenue × 12" />
+        <KpiCard label="Paying customers" value={fmtNum(p.paid)} sub={`${fmtPct(p.conversion)} of all accounts`} />
+        <KpiCard label="Per paying customer (est.)" value={p.paid ? fmtMoney(p.estMrr / p.paid) : "—"} sub="A month, on average" />
+      </KpiGrid>
+
+      <Columns>
+        <Section title="Who pays" hint="Everyone on a paid plan, split by whether money is actually coming in.">
+          <ul className="space-y-3">
+            {[
+              { label: "Paying through Stripe", n: p.paid, note: "A real subscription", tone: "adm-good" },
+              { label: "On a paid plan, not paying", n: comped, note: "Moved by hand, a gift month, or a checkout that never finished", tone: comped ? "adm-warn" : "" },
+              { label: "On Pro", n: p.pro, note: "Paying or not", tone: "" },
+              { label: "On Office", n: p.office, note: "Paying or not — owners only, not seats", tone: "" },
+            ].map((r) => (
+              <li key={r.label} className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="sc-t-subhead font-medium">{r.label}</p>
+                  <p className="sc-t-caption adm-muted">{r.note}</p>
                 </div>
+                <span className={`sc-t-title3 adm-num shrink-0 ${r.tone}`}>{fmtNum(r.n)}</span>
+              </li>
+            ))}
+          </ul>
+        </Section>
+        <Section title="Plan mix" hint="Everyone, by the plan they're on now.">
+          <PlanMixBar free={p.free} pro={p.pro} office={p.office} />
+        </Section>
+      </Columns>
+
+      <KpiGrid>
+        <NotTracked title="Paying through Apple" detail="subscribers who pay in the iPhone app — today's revenue counts Stripe only." />
+        <NotTracked title="Office seats billed" detail="how many seats each Office team pays for." />
+        <NotTracked title="New vs lost revenue · this month" detail="money from new and upgraded customers against money from cancellations." />
+        <NotTracked title="Trials" detail="how many are on a Pro trial now, and how many trials turn into paying." />
+      </KpiGrid>
+
+      <HowCounted>
+        <p>Monthly revenue counts only accounts with a real Stripe subscription, at list price ({fmtMoney(PLAN_PRICES.PRO_MONTHLY_CENTS / 100)} Pro, {fmtMoney(PLAN_PRICES.OFFICE_MONTHLY_PER_SEAT_CENTS / 100)} Office), before discounts. Annual plans, Office seat counts and Apple subscribers aren&apos;t in it yet — the data pass fixes that.</p>
+        <p>Accounts on a paid plan with nothing behind them (moved by hand, a gift month, an unfinished checkout) are listed separately rather than counted as money.</p>
+      </HowCounted>
+    </Stack>
+  );
+}
+
+// ── Funnel ──────────────────────────────────────────────────────────────────
+function FunnelTab({ a }: { a: Analytics }) {
+  return (
+    <Stack>
+      {a.funnel ? <FunnelPanel funnel={a.funnel} signups={{ d30: a.accounts.d30, d7: a.accounts.d7 }} /> : <EmptyState>The journey isn&apos;t available.</EmptyState>}
+      <HowCounted>
+        <p>Each step counts a visit once, however many times it happened in that visit — a reload of the card editor doesn&apos;t count as another person starting a card.</p>
+        <p>&ldquo;Created an account&rdquo; is counted from real accounts, not clicks. Your own visits (any device you&apos;ve excluded on the Website page) are left out. Counting started 10 Sep 2026.</p>
+      </HowCounted>
+    </Stack>
+  );
+}
+
+// ── Engagement ──────────────────────────────────────────────────────────────
+function EngagementTab({ a }: { a: Analytics }) {
+  const views30 = a.views.cardViews30 + a.views.linkViews30;
+  return (
+    <Stack>
+      <KpiGrid>
+        <KpiCard label="Contacts captured" value={fmtNum(a.leads.total)} delta={periodDelta(a.leads.series)} sub={`+${fmtNum(a.leads.d7)} this week · ${fmtNum(a.leads.today)} today`} />
+        <KpiCard label="Cards made" value={fmtNum(a.cards.total)} sub={`${a.cards.perAccount} per account`} />
+        <KpiCard label="Views · 7 days" value={fmtNum(a.views.d7)} sub={`${fmtNum(a.views.total)} all time`} />
+        <KpiCard label="Card activation" value={fmtPct(a.engagement.activationRate)} sub={`${fmtNum(a.engagement.activatedCards)} cards got a contact`} />
+      </KpiGrid>
+
+      <Section title="Contacts captured per day" hint="New contacts landing in users' lists — the clearest sign the product is doing its job.">
+        <TrendBars data={a.leads.series.map((s) => ({ date: s.date, values: [s.count] }))} series={[{ label: "Contacts", color: "var(--adm-series-2)" }]} caption="Contacts captured per day, last 30 days" />
+      </Section>
+
+      <Columns>
+        <Section title="Where contacts come from · 30 days" hint="Across every user: how people reached a card before sharing their details.">
+          <BarList rows={toRows(a.leads.bySource, getSourceLabel)} color="var(--adm-series-2)" showShare empty="No contacts in the last 30 days." />
+        </Section>
+        <Section title="Card pages vs Swift Links · 30 days" hint={`${fmtNum(views30)} views across both.`}>
+          <BarList rows={[{ label: "Card pages", value: a.views.cardViews30 }, { label: "Swift Links pages", value: a.views.linkViews30 }]} showShare />
+        </Section>
+      </Columns>
+
+      <Section title="Top cards by contacts" hint="The cards capturing the most contacts — your power users. Great for testimonials and referrals." flush>
+        {a.topCards.length === 0 ? <EmptyState className="pb-6">No contacts yet.</EmptyState> : (
+          <ol className="adm-divide">
+            {a.topCards.map((c, i) => (
+              <li key={c.username}>
+                <a href={`/${c.username.replace("__links", "")}`} target="_blank" rel="noopener noreferrer" className="adm-list-row flex items-center gap-3 px-4 sm:px-5 py-2.5">
+                  <span className="w-5 sc-t-footnote adm-muted adm-num">{i + 1}</span>
+                  <span className="flex-1 min-w-0 sc-t-subhead truncate">/{c.username}</span>
+                  <span className="sc-t-subhead font-semibold adm-num">{fmtNum(c.count)}</span>
+                  <Icon name="external" className="w-4 h-4 adm-muted shrink-0" />
+                </a>
+              </li>
+            ))}
+          </ol>
+        )}
+      </Section>
+
+      <Columns>
+        <NotTracked title="Active users · day / week / month" detail="how many people open SwiftCard, not just how many signed up." />
+        <NotTracked title="Feature use" detail="who connected a CRM, added the Wallet pass, set up Swift Signature or turned on follow-ups." />
+      </Columns>
+
+      <HowCounted>
+        <p>Contacts and views count only cards that exist today, and never the sample contact every new card starts with. The App Review demo account&apos;s views are left out.</p>
+        <p>A view is counted once per visit; bots, link previews and the owner looking at their own card are not views. The Data quality tab shows why each one was or wasn&apos;t counted.</p>
+      </HowCounted>
+    </Stack>
+  );
+}
+
+// ── Data quality ────────────────────────────────────────────────────────────
+function DataQualityTab({ a }: { a: Analytics }) {
+  const checks = [
+    { label: "Funnel events", detail: "The journey on the Funnel tab", on: !!a.funnel?.available, sql: "supabase/product-events.sql" },
+    { label: "View decisions log", detail: "Why each view was or wasn't counted", on: !!a.ingest?.available, sql: "supabase/analytics-accuracy.sql" },
+    { label: "Returning-contact alerts", detail: "The alert scorecard below", on: !!a.warmLead?.available, sql: "supabase/warm-lead-alerts.sql" },
+  ];
+  return (
+    <Stack>
+      <p className="adm-muted sc-t-subhead -mt-2">For checking the numbers are honest. Nothing here is a customer number.</p>
+
+      <Section title="Tracking switched on" hint="Each of these needs its table in the database. Anything off here shows as empty elsewhere." flush>
+        <ul className="adm-divide">
+          {checks.map((c) => (
+            <li key={c.label} className="flex items-center gap-3 px-4 sm:px-5 py-3">
+              <span className={c.on ? "adm-good" : "adm-warn"}><Icon name={c.on ? "check" : "alert"} /></span>
+              <div className="min-w-0 flex-1">
+                <p className="sc-t-subhead font-medium">{c.label}</p>
+                <p className="sc-t-caption adm-muted">{c.on ? c.detail : <>Off — run <span className="font-mono">{c.sql}</span> in the Supabase SQL editor.</>}</p>
+              </div>
+              <span className={c.on ? "sc-badge sc-badge-green" : "sc-badge sc-badge-orange"}>{c.on ? "Recording" : "Off"}</span>
+            </li>
+          ))}
+        </ul>
+      </Section>
+
+      {/* ── Returning-contact alerts ────────────────────────────────────
+          The warm-lead feature's own scorecard (docs/plans/
+          warm-lead-alerts.md §2.9). "Wrong person" is the number that
+          decides whether it stays on: above 2% of named alerts, the
+          recognition is not good enough to name people. */}
+      {a.warmLead && (
+        <Section title="Returning-contact alerts · last 30 days" hint="Named alerts, what owners did with them, and how often we named the wrong person (target under 2%).">
+          {!a.warmLead.available ? (
+            <p className="adm-callout-warn px-4 py-3 sc-t-subhead">
+              Not recording yet — run <span className="font-mono">supabase/warm-lead-alerts.sql</span> in the Supabase SQL editor.
+            </p>
+          ) : (
+            <div className="space-y-5">
+              <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+                {[
+                  { label: "Named alerts", value: fmtNum(a.warmLead.named), sub: `${fmtNum(a.warmLead.pushes)} reached a phone`, tone: undefined },
+                  { label: "Opened", value: fmtNum(a.warmLead.opened), sub: a.warmLead.named ? fmtPct((a.warmLead.opened / a.warmLead.named) * 100) : "—", tone: undefined },
+                  { label: "Followed up in 24h", value: fmtNum(a.warmLead.followedUp), sub: a.warmLead.named ? fmtPct((a.warmLead.followedUp / a.warmLead.named) * 100) : "—", tone: undefined },
+                  { label: "Wrong person", value: fmtNum(a.warmLead.wrong), sub: `${a.warmLead.wrongRate}% of named`, tone: a.warmLead.wrongRate > 2 ? "adm-bad" : "adm-good" },
+                  { label: "Recognised devices", value: fmtNum(a.warmLead.bindings.reduce((n, [, c]) => n + c, 0)), sub: "", tone: undefined },
+                ].map((k) => (
+                  <div key={k.label} className="adm-inset p-3.5">
+                    <p className="sc-t-caption adm-muted">{k.label}</p>
+                    <p className={`adm-kpi-value mt-1 ${k.tone ?? ""}`}>{k.value}</p>
+                    {k.sub && <p className="sc-t-caption adm-muted mt-0.5">{k.sub}</p>}
+                  </div>
+                ))}
+              </div>
+              {a.warmLead.bindings.length > 0 && (
+                <BarList rows={toRows(a.warmLead.bindings, (k) => ({ form: "Shared their details", link: "Opened a personal link", account: "Signed-in SwiftCard user" } as Record<string, string>)[k] ?? k)} />
               )}
             </div>
+          )}
+        </Section>
+      )}
 
-            {/* ── Returning-contact alerts ────────────────────────────────────
-                The warm-lead feature's own scorecard (docs/plans/
-                warm-lead-alerts.md §2.9). "Wrong person" is the number that
-                decides whether it stays on: above 2% of named alerts, the
-                recognition is not good enough to name people. */}
-            {a.warmLead && (
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <p className="text-white font-semibold text-sm">Returning-contact alerts · last 30 days</p>
-                <p className="text-gray-600 text-[0.6875rem] mt-0.5 mb-4">
-                  Named alerts, what owners did with them, and how often we named the wrong person (target under 2%).
-                </p>
-                {!a.warmLead.available ? (
-                  <p className="text-amber-400/80 text-xs">
-                    Not recording yet — run <span className="font-mono">supabase/warm-lead-alerts.sql</span> in the Supabase SQL editor.
-                  </p>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
-                      <Kpi label="Named alerts" value={a.warmLead.named} sub={`${a.warmLead.pushes} reached a phone`} />
-                      <Kpi label="Opened" value={a.warmLead.opened} sub={a.warmLead.named ? `${Math.round((a.warmLead.opened / a.warmLead.named) * 100)}%` : "—"} accent="#60a5fa" />
-                      <Kpi label="Followed up in 24h" value={a.warmLead.followedUp} sub={a.warmLead.named ? `${Math.round((a.warmLead.followedUp / a.warmLead.named) * 100)}%` : "—"} accent="#4ade80" />
-                      <Kpi label="Wrong person" value={a.warmLead.wrong} sub={`${a.warmLead.wrongRate}% of named`} accent={a.warmLead.wrongRate > 2 ? "#f87171" : "#4ade80"} />
-                      <Kpi label="Recognised devices" value={a.warmLead.bindings.reduce((n, [, c]) => n + c, 0)} />
-                    </div>
-                    {a.warmLead.bindings.length > 0 && (
-                      <Bars rows={a.warmLead.bindings} labeler={(k) => ({ form: "Shared their details", link: "Opened a personal link", account: "Signed-in SwiftCard user" } as Record<string, string>)[k] ?? k} />
-                    )}
-                  </>
-                )}
+      {/* ── Ingest decisions ────────────────────────────────────────────
+          Not a customer number and never summed into one: card_views is
+          the one source of counted truth. This is the audit trail for the
+          decisions that produce it, so "is that view real?" and "why is
+          that view missing?" stop being arguments. 7-day window; the table
+          itself keeps 14 days and trims itself. */}
+      {a.ingest && (
+        <Section title="View decisions · last 7 days" hint="Why each tracked card view was counted or not. Customer dashboards read the counted views, never this log.">
+          {!a.ingest.available ? (
+            <p className="adm-callout-warn px-4 py-3 sc-t-subhead">
+              Not recording yet — run <span className="font-mono">supabase/analytics-accuracy.sql</span> in the Supabase SQL editor.
+            </p>
+          ) : (
+            <div className="space-y-6">
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+                {[
+                  { label: "Counted", value: a.ingest.counted7, sub: "Real visits", tone: "adm-good" },
+                  { label: "Declined", value: a.ingest.declined7, sub: "Reasons below", tone: "" },
+                  { label: "Relay / cloud network", value: a.ingest.relay7, sub: "Location downgraded, still counted", tone: "" },
+                ].map((k) => (
+                  <div key={k.label} className="adm-inset p-3.5">
+                    <p className="sc-t-caption adm-muted">{k.label}</p>
+                    <p className={`adm-kpi-value mt-1 ${k.tone}`}>{fmtNum(k.value)}</p>
+                    <p className="sc-t-caption adm-muted mt-0.5">{k.sub}</p>
+                  </div>
+                ))}
               </div>
-            )}
-
-            {/* ── Ingest decisions ────────────────────────────────────────────
-                Not a customer number and never summed into one: card_views is
-                the one source of counted truth. This is the audit trail for the
-                decisions that produce it, so "is that view real?" and "why is
-                that view missing?" stop being arguments. 7-day window; the table
-                itself keeps 14 days and trims itself. */}
-            {a.ingest && (
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <p className="text-white font-semibold text-sm">Ingest decisions · last 7 days</p>
-                <p className="text-gray-600 text-[0.6875rem] mt-0.5 mb-4">
-                  Why each tracked event was counted or not. Decisions only — customer dashboards read <span className="text-gray-500">card_views</span>, never this.
-                </p>
-                {!a.ingest.available ? (
-                  <p className="text-amber-400/80 text-xs">
-                    Not recording yet — run <span className="font-mono">supabase/analytics-accuracy.sql</span> in the Supabase SQL editor.
-                  </p>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-3 gap-3 mb-5">
-                      <Kpi label="Counted" value={a.ingest.counted7} accent="#4ade80" />
-                      <Kpi label="Declined" value={a.ingest.declined7} sub="reasons below" />
-                      <Kpi label="Relay / cloud network" value={a.ingest.relay7} sub="location downgraded, still counted" />
-                    </div>
-                    <div className="grid sm:grid-cols-2 gap-5">
-                      <div>
-                        <p className="text-gray-400 text-xs font-semibold mb-2">Decision</p>
-                        <Bars rows={a.ingest.byReason} color="#60a5fa" labeler={(k) => REASON_LABEL[k] ?? k.replace(/_/g, " ")} />
-                      </div>
-                      <div>
-                        <p className="text-gray-400 text-xs font-semibold mb-2">What we thought it was</p>
-                        <Bars rows={a.ingest.byClassification} color="#c084fc" labeler={(k) => CLASSIFICATION_LABEL[k] ?? k.replace(/_/g, " ")} />
-                      </div>
-                      <div>
-                        <p className="text-gray-400 text-xs font-semibold mb-2">Location confidence</p>
-                        <Bars rows={a.ingest.byGeoAccuracy} color="#fbbf24" labeler={(k) => GEO_LABEL[k] ?? k.replace(/_/g, " ")} />
-                      </div>
-                      <div>
-                        <p className="text-gray-400 text-xs font-semibold mb-2">Most recent declines</p>
-                        {a.ingest.recentDeclines.length === 0 ? (
-                          <p className="text-gray-600 text-xs">Nothing declined in the window.</p>
-                        ) : (
-                          <div className="space-y-1.5 max-h-44 overflow-y-auto">
-                            {a.ingest.recentDeclines.map((d, i) => (
-                              <div key={`${d.at}-${i}`} className="flex items-baseline gap-2 text-[0.6875rem]">
-                                <span className="text-gray-600 tabular-nums shrink-0">{new Date(d.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
-                                <span className="text-gray-300 truncate">{d.entity}</span>
-                                <span className="text-gray-500 shrink-0 ml-auto">{REASON_LABEL[d.reason] ?? d.reason}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </>
-                )}
+              <div className="grid gap-6 sm:grid-cols-2">
+                <div>
+                  <p className="sc-t-footnote font-semibold mb-3">Decision</p>
+                  <BarList rows={toRows(a.ingest.byReason, (k) => REASON_LABEL[k] ?? k.replace(/_/g, " "))} />
+                </div>
+                <div>
+                  <p className="sc-t-footnote font-semibold mb-3">What we thought it was</p>
+                  <BarList rows={toRows(a.ingest.byClassification, (k) => CLASSIFICATION_LABEL[k] ?? k.replace(/_/g, " "))} color="var(--adm-plan-office)" />
+                </div>
+                <div>
+                  <p className="sc-t-footnote font-semibold mb-3">Location confidence</p>
+                  <BarList rows={toRows(a.ingest.byGeoAccuracy, (k) => GEO_LABEL[k] ?? k.replace(/_/g, " "))} color="var(--adm-series-3)" />
+                </div>
+                <div className="min-w-0">
+                  <p className="sc-t-footnote font-semibold mb-3">Most recent declines</p>
+                  {a.ingest.recentDeclines.length === 0 ? (
+                    <p className="adm-muted sc-t-subhead">Nothing declined in the window.</p>
+                  ) : (
+                    <ul className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                      {a.ingest.recentDeclines.map((d, i) => (
+                        <li key={`${d.at}-${i}`} className="flex items-baseline gap-2 sc-t-caption min-w-0">
+                          <span className="adm-muted adm-num shrink-0">{fmtDateTime(d.at)}</span>
+                          <span className="truncate min-w-0">{d.entity}</span>
+                          <span className="adm-muted shrink-0 ml-auto">{REASON_LABEL[d.reason] ?? d.reason}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
-            )}
-
-            <p className="text-gray-600 text-[0.6875rem] text-center">Referral & fraud analytics live in <Link href="/admin/referrals" className="text-blue-400 hover:text-blue-300">Referrals</Link>. Est. MRR uses list prices; excludes discounts &amp; Office seat counts.</p>
-          </div>
-        )}
-    </div>
+            </div>
+          )}
+        </Section>
+      )}
+    </Stack>
   );
 }

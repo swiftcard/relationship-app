@@ -11,11 +11,16 @@ import { fmtNum } from "./format";
 const compact = (n: number) =>
   n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${+(n / 1000).toFixed(1)}K` : String(n);
 
-/** The next "clean" number at or above n: 1, 2, 2.5, 5 × 10^k. */
+/**
+ * The next "clean" top for an axis at or above n, chosen so the halfway
+ * gridline is a whole number too: small counts round up to an even number
+ * (5 → 6, so the middle line reads 3, not a "3" drawn at 2.5), larger ones to
+ * 2, 4, 5 or 10 × 10^k.
+ */
 function niceCeil(n: number): number {
-  if (n <= 4) return Math.max(1, Math.ceil(n));
+  if (n <= 10) return Math.max(2, Math.ceil(n / 2) * 2);
   const p = 10 ** Math.floor(Math.log10(n));
-  for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= n) return m * p;
+  for (const m of [1, 2, 4, 5, 10]) if (m * p >= n) return m * p;
   return 10 * p;
 }
 

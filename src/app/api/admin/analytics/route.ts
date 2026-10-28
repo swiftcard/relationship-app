@@ -333,7 +333,8 @@ export async function GET() {
       total: totalAccounts,
       today: signupToday, d7: signup7, d30: signup30,
       series: Object.entries(signupSeries).map(([date, count]) => ({ date, count })),
-      recent: accounts.slice(0, 10).map((a) => ({ name: a.name, email: a.email, username: a.username, plan: a.plan, created_at: a.created_at })),
+      // id so the admin's "Latest signups" rows open that user's page.
+      recent: accounts.slice(0, 10).map((a) => ({ id: a.id, name: a.name, email: a.email, username: a.username, plan: a.plan, created_at: a.created_at })),
     },
     plans: { free: plans.free, pro: plans.pro, office: plans.enterprise, paid, conversion, estMrr, compedPaidPlans },
     acquisition,

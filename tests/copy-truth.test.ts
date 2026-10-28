@@ -113,7 +113,8 @@ describe("office branding copy matches what propagation actually does", () => {
 
 describe("the admin referrals panel no longer makes a false security claim", () => {
   it("states both sides are unrewarded, now that that is true", () => {
-    const c = code("src/app/admin/referrals/ReferralsClient.tsx");
+    // The panel moved into Company Analytics as a tab (2026-10-27).
+    const c = code("src/app/admin/analytics/ReferralsTab.tsx");
     expect(c, "the old claim was true of the referrer only").not.toMatch(/These never grant free months/);
     expect(c).toMatch(/Neither side is rewarded/);
   });

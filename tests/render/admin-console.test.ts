@@ -78,6 +78,111 @@ async function sandbox() {
   return inShell("/admin/plans", createElement(PlansClient, { userId: "u-admin", email: "hello@swiftcard.me", initialPlan: "pro" }));
 }
 
+// ── Fixture data: realistic, with the long strings that break layouts ───────
+const day = (i: number) => new Date(Date.UTC(2026, 8, 28 + i)).toISOString().slice(0, 10);
+const series = (f: (i: number) => number) => Array.from({ length: 30 }, (_, i) => ({ date: day(i), count: f(i) }));
+
+const ANALYTICS = {
+  funnel: {
+    available: true,
+    d30: { page_viewed: 1284, card_creation_started: 412, card_creation_completed: 173, plan_selected: 151, upgrade_prompt_viewed: 96, upgrade_started: 34, checkout_started: 12, checkout_completed: 3 },
+    d7: { page_viewed: 300 },
+    internal30: 57,
+    topCtas: [["create_your_card_from_the_homepage_hero", 210], ["upgrade_to_pro", 34]] as [string, number][],
+    lockedFeatures: [["colors-fonts", 51], ["swift-links-cap", 27]] as [string, number][],
+  },
+  ingest: {
+    available: true,
+    byReason: [["recorded", 900], ["bot", 120], ["deduped", 80]] as [string, number][],
+    byClassification: [["human", 900], ["crawler", 150]] as [string, number][],
+    byGeoAccuracy: [["city", 600], ["country", 200]] as [string, number][],
+    counted7: 900, declined7: 200, relay7: 30,
+    recentDeclines: [{ at: "2026-10-26T10:00:00Z", entity: "a-very-long-card-username-that-could-push-the-row-wide__links", event: "view", reason: "bot", classification: "crawler" }],
+  },
+  warmLead: { available: true as const, named: 40, pushes: 31, opened: 22, followedUp: 9, wrong: 1, wrongRate: 2.5, bindings: [["form", 20], ["link", 9]] as [string, number][] },
+  accounts: {
+    total: 318, today: 3, d7: 24, d30: 96, series: series((i) => (i * 7) % 6),
+    recent: [
+      { id: "u1", name: "Maya Rep", email: "maya@example.com", username: "maya", plan: "pro", created_at: "2026-10-27T09:00:00Z" },
+      { id: "u2", name: "Bartholomew Featherstonehaugh-Montgomery", email: "bartholomew.featherstonehaugh@a-very-long-company-domain.example.com", username: "bart", plan: "enterprise", created_at: "2026-10-20T09:00:00Z" },
+    ],
+  },
+  plans: { free: 280, pro: 31, office: 7, paid: 22, conversion: 6.9, estMrr: 109.78, compedPaidPlans: 16 },
+  acquisition: [
+    { source: "direct", signups: 200, d30: 60, paid: 12, paidRate: 6 },
+    { source: "referral", signups: 40, d30: 12, paid: 6, paidRate: 15 },
+    { source: "swiftlinks_badge_on_a_very_long_source_key", signups: 12, d30: 4, paid: 0, paidRate: 0 },
+  ],
+  cards: { total: 410, perAccount: 1.3 },
+  leads: { total: 1290, today: 4, d7: 51, series: series((i) => (i * 3) % 9), bySource: [["qr_code", 400], ["card_link", 300]] as [string, number][], perAccount: 4.1 },
+  views: { total: 22000, d7: 1400, cardViews30: 4000, linkViews30: 1900 },
+  engagement: { activatedCards: 120, activationRate: 29.3 },
+  topCards: [{ username: "maya", count: 120 }, { username: "a-very-long-username-for-a-real-estate-team__links", count: 40 }],
+};
+
+const RETENTION = {
+  rows: [
+    { userId: "r1", email: "dana@example.com", plan: "pro", reason: "too-expensive", comment: "Honestly it was great, but I only go to two events a year and paying every month for that doesn't add up. ".repeat(3), at: "2026-10-25T12:00:00Z", outcome: "deleted" as const, savedBy: null, deleted: true },
+    { userId: "r2", email: "sam@example.com", plan: "free", reason: "not-using", comment: "", at: "2026-10-22T12:00:00Z", outcome: "saved" as const, savedBy: "grant", deleted: false },
+    { userId: "r3", email: null, plan: "free", reason: "testing", comment: "", at: "2026-10-12T12:00:00Z", outcome: "open" as const, savedBy: null, deleted: false },
+  ],
+  totals: { attempts: 3, saved: 1, deleted: 1, open: 1, saveRate: 50 },
+  byReason: [{ reason: "too-expensive", attempts: 1, saved: 0 }, { reason: "not-using", attempts: 1, saved: 1 }, { reason: "testing", attempts: 1, saved: 0 }],
+};
+
+const REFERRALS = {
+  ready: true, validSignups: 40, monthsClaimed: 6, monthsClaimable: 2, activeFreeMonths: 9, flagged: 2, selfReferral: 1,
+  bySource: { direct: 200, referral: 40, swiftlinks_badge: 12 },
+  flaggedList: [{ code: "MAYA-2026", reason: "same_device_as_referrer", created_at: "2026-10-20T00:00:00Z" }],
+};
+
+async function companyAnalytics(tab: string) {
+  const { createElement } = await import("react");
+  const { default: AnalyticsView } = await import("@/app/admin/analytics/AnalyticsView");
+  return inShell("/admin/analytics", createElement(AnalyticsView, {
+    tab: tab as never, now: Date.parse("2026-10-27T12:00:00Z"),
+    initial: ANALYTICS as never, retention: RETENTION as never, referrals: REFERRALS,
+  }));
+}
+
+describe.each(ENGINES)("Company Analytics (%s)", (engine) => {
+  const TABS: [string, string[]][] = [
+    ["growth", ["New accounts per day", "Where signups come from", "Plan mix", "Latest signups", "Not tracked yet"]],
+    ["revenue", ["Monthly revenue (est.)", "Who pays", "On a paid plan, not paying", "Paying through Apple"]],
+    ["funnel", ["Landed on the site", "Paid", "Which Pro features they want", "Most-clicked buttons"]],
+    ["engagement", ["Contacts captured per day", "Where contacts come from", "Top cards by contacts"]],
+    ["retention", ["Save rate", "Why they leave", "It costs more than I get out of it", "Reply to them", "Closed accounts per week"]],
+    ["referrals", ["How the referral program works", "Signups by source", "Neither side is rewarded", "MAYA-2026"]],
+    ["data", ["Tracking switched on", "Returning-contact alerts", "View decisions"]],
+  ];
+  for (const [tab, mustSay] of TABS) {
+    for (const width of [390, 1280]) {
+      it(`${tab} tab: everything there, nothing spilling at ${width}px`, async () => {
+        const page = await open(engine, width, await companyAnalytics(tab));
+        try {
+          const p = await layoutProblems(page);
+          expect(p.spill, `spills at ${width}px`).toEqual([]);
+          expect(p.sideways, `the page scrolls sideways at ${width}px`).toBe(false);
+          const text = await page.evaluate(() => document.body.innerText);
+          for (const s of mustSay) expect(text, `"${s}" missing on the ${tab} tab`).toContain(s);
+          // The tab row marks where you are.
+          const current = await page.locator('.adm-tabs [aria-current="page"]').innerText();
+          expect(current.toLowerCase()).toContain(tab === "data" ? "data quality" : tab);
+        } finally { await page.close(); }
+      });
+    }
+  }
+
+  it("never shows a raw reason id like not-using", async () => {
+    const page = await open(engine, 1280, await companyAnalytics("retention"));
+    try {
+      const text = await page.evaluate(() => document.body.innerText);
+      for (const id of ["too-expensive", "not-using"]) expect(text).not.toContain(id);
+      expect(text).toContain("I'm not really using it");
+    } finally { await page.close(); }
+  });
+});
+
 describe.each(ENGINES)("the admin shell (%s)", (engine) => {
   it("is light: the canvas is the app's grouped grey, cards are white", async () => {
     const page = await open(engine, 1280, await sandbox());

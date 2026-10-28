@@ -99,6 +99,7 @@
 
 /* ── Tabs: one row, scrolls inside itself on a phone, never the page ──── */
 .sc-admin .adm-tabs {
+  position: relative; /* TabScroller measures the current tab against the row */
   display: flex; gap: 0.25rem;
   overflow-x: auto; overscroll-behavior-x: contain;
   scrollbar-width: none;

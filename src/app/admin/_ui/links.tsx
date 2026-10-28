@@ -6,6 +6,7 @@
 import Link from "next/link";
 import { Kpi } from "./layout";
 import { Icon } from "./icons";
+import { TabScroller } from "./TabScroller";
 
 export type TabItem = { key: string; label: string; count?: number | null };
 
@@ -22,6 +23,7 @@ export function Tabs({ base, items, active, extra = {} }: { base: string; items:
           </Link>
         );
       })}
+      <TabScroller active={active} />
     </nav>
   );
 }

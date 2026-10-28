@@ -457,8 +457,14 @@ describe("the owner hears about it, and can read the answers", () => {
     expect(a).toMatch(/decided \? Math\.round\(\(saved \/ decided\) \* 100\) : 0/);
   });
 
-  it("is reachable in the admin nav", () => {
+  // Retention is a tab of Company Analytics since 2026-10-27 (the owner asked
+  // for it not to be a page of its own); the old address redirects there.
+  it("is reachable from the admin nav: Company Analytics › Retention", () => {
     const nav = readFileSync(join(process.cwd(), "src/app/admin/AdminNav.tsx"), "utf8");
-    expect(nav).toMatch(/href: "\/admin\/retention"/);
+    expect(nav).toMatch(/href: "\/admin\/analytics", label: "Company Analytics"/);
+    const tabs = readFileSync(join(process.cwd(), "src/app/admin/analytics/tabs.ts"), "utf8");
+    expect(tabs).toMatch(/key: "retention"/);
+    const old = readFileSync(join(process.cwd(), "src/app/admin/retention/page.tsx"), "utf8");
+    expect(old).toContain('redirect("/admin/analytics?tab=retention")');
   });
 });

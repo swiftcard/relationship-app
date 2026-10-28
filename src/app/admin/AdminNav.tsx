@@ -25,8 +25,6 @@ export const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/admin/users", label: "Users", icon: "users" },
       { href: "/admin/analytics", label: "Company Analytics", icon: "analytics" },
       { href: "/admin/website", label: "Website", icon: "website" },
-      { href: "/admin/referrals", label: "Referrals", icon: "gift" },
-      { href: "/admin/retention", label: "Retention", icon: "heart" },
     ],
   },
   {

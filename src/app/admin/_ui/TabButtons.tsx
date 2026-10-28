@@ -6,6 +6,7 @@
 // Next's router.
 
 import type { TabItem } from "./links";
+import { TabScroller } from "./TabScroller";
 
 export function TabButtons({ items, active, onSelect, label = "Sections" }: { items: TabItem[]; active: string; onSelect: (key: string) => void; label?: string }) {
   return (
@@ -24,6 +25,7 @@ export function TabButtons({ items, active, onSelect, label = "Sections" }: { it
           {typeof t.count === "number" && <span className="adm-tab-count">{t.count.toLocaleString("en-US")}</span>}
         </button>
       ))}
+      <TabScroller active={active} />
     </div>
   );
 }
