@@ -200,14 +200,29 @@ describe.each(ENGINES)("Company Analytics (%s)", (engine) => {
   });
 });
 
+// The shape lib/admin-data/website.ts returns (2026-10-28).
 const WEBSITE = {
   includeInternal: false,
   capHit: false,
-  kpis: { pageviews: { d1: 120, d7: 940, d30: 4100 }, visitors: { d1: 61, d7: 410, d30: 1720 }, sessions: 1990, pagesPerSession: 2.1, avgDurationSec: 74, bounceRatePct: 48 },
+  team: { pageviews: 4394, visits: 312, visitors: 9 },
+  kpis: {
+    pageviews: { d1: 120, d7: 940, d30: 4100 }, visitors: { d1: 61, d7: 410, d30: 1720 }, visits: { d1: 70, d7: 480, d30: 1990 },
+    sessions: 1990, pagesPerSession: 2.1, avgDurationSec: 74, bounceRatePct: 48, cameBack: 230,
+  },
   daily: Array.from({ length: 30 }, (_, i) => ({ date: day(i), views: 90 + ((i * 37) % 80), visitors: 40 + ((i * 17) % 35) })),
-  topPages: [{ label: "/", count: 1900 }, { label: "/pricing", count: 700 }, { label: "/compare/a-very-long-comparison-page-slug-for-linktree-alternatives", count: 120 }],
-  topReferrers: [{ label: "www.google.com", count: 600 }, { label: "l.instagram.com", count: 210 }, { label: "some-unknown-referrer-with-a-very-long-hostname.example.org", count: 12 }],
+  topPages: [{ label: "/", count: 1900, avgSec: 41 }, { label: "/pricing", count: 700, avgSec: 95 }, { label: "/compare/a-very-long-comparison-page-slug-for-linktree-alternatives", count: 120, avgSec: null }],
+  exitPages: [{ label: "/", count: 800 }, { label: "/cards/new", count: 260 }],
+  topReferrers: [
+    { label: "Google", count: 600, detail: "com.google.android.googlequicksearchbox, www.google.com" },
+    { label: "Instagram", count: 210, detail: "l.instagram.com" },
+    { label: "some-unknown-referrer-with-a-very-long-hostname.example.org", count: 12, detail: "some-unknown-referrer-with-a-very-long-hostname.example.org" },
+  ],
+  directVisits: 1168,
   topCountries: [{ label: "US", count: 3000 }, { label: "GB", count: 400 }, { label: "IL", count: 90 }],
+  devices: [{ label: "phone", count: 1100 }, { label: "computer", count: 560 }, { label: "tablet", count: 60 }],
+  campaigns: [{ label: "src=badge", count: 140 }, { label: "flyer · nyc-october-street-team-with-a-long-name", count: 22 }],
+  builderBySource: [{ label: "No referrer", count: 120 }, { label: "Google", count: 44 }],
+  detailSince: "2026-10-28T18:00:00Z",
 };
 
 async function website(tab: string) {
@@ -218,10 +233,10 @@ async function website(tab: string) {
 
 describe.each(ENGINES)("Website (%s)", (engine) => {
   const TABS: [string, string[]][] = [
-    ["traffic", ["In the last 7 days", "410", "people visited swiftcard.me", "Google", "Home", "Visitors and pages viewed per day", "Left after one page"]],
-    ["pages", ["Most-read pages", "Pricing", "/pricing", "Time on each page"]],
-    ["sources", ["Where visitors come from", "Google", "Instagram", "www.google.com", "Campaigns"]],
-    ["audience", ["Countries", "United States", "United Kingdom", "Phone or computer"]],
+    ["traffic", ["In the last 7 days", "410", "people visited swiftcard.me", "480", "Google", "Home", "Visitors and pages viewed per day", "Left after one page"]],
+    ["pages", ["Most-read pages", "Pricing", "/pricing", "1m 35s on average", "Where people leave", "Card builder"]],
+    ["sources", ["Where visits come from", "Google", "Instagram", "www.google.com", "1,168", "Campaigns", "src=badge", "Went on to build a card"]],
+    ["audience", ["Countries", "United States", "United Kingdom", "Came back", "230", "Phone or computer", "Phone", "Computer"]],
     ["settings", ["This device is excluded from the numbers.", "Count this device again", "What's counted here"]],
   ];
   for (const [tab, mustSay] of TABS) {
@@ -234,16 +249,32 @@ describe.each(ENGINES)("Website (%s)", (engine) => {
           expect(p.sideways, `the page scrolls sideways at ${width}px`).toBe(false);
           const text = await page.evaluate(() => document.body.innerText);
           for (const s of mustSay) expect(text, `"${s}" missing on the ${tab} tab`).toContain(s);
-          // The device state and the team switch are in the header on every tab.
+          // The device state and the team switch are in the header on every tab,
+          // with what the switch is doing in words.
           expect(text).toContain("This device: excluded");
           expect(text).toContain("Include my team's visits");
+          expect(text).toContain("Your team: 312 visits (4,394 pages) left out of these numbers.");
         } finally { await page.close(); }
       });
     }
   }
 });
 
-async function overview(opts: { analytics?: boolean } = {}) {
+// /api/admin/agents-health, through the real wording (lib/admin-data/agents-health).
+async function agentsFixture() {
+  const { summarizeAgents, agentsAttention } = await import("@/lib/admin-data/agents-health");
+  const at = (h: number) => new Date(Date.parse("2026-10-27T13:00:00Z") - h * 3600_000).toISOString();
+  const err = (agent_id: string, h: number) => ({ agent_id, status: "error", started_at: at(h), finished_at: at(h), summary: "Google said no" });
+  const health = summarizeAgents({
+    killAll: true, settingsUpdatedAt: at(20),
+    states: [{ id: "leads-web", enabled: true, next_run_at: null, status_note: null }],
+    runs: [err("sheet-sync", 1), err("sheet-sync", 2), err("sheet-sync", 3), err("leads-web", 1), err("leads-web", 2), err("leads-web", 3)],
+    sheetRows: [{ tab: "web-leads" }], waiting: 4,
+  });
+  return { ...health, attention: agentsAttention(health) };
+}
+
+async function overview(opts: { analytics?: boolean; agents?: boolean } = {}) {
   const { createElement } = await import("react");
   const { default: OverviewClient } = await import("@/app/admin/OverviewClient");
   return inShell("/admin", createElement(OverviewClient, {
@@ -252,7 +283,7 @@ async function overview(opts: { analytics?: boolean } = {}) {
       closedThisWeek: 1,
       recentClosed: [{ userId: "r1", email: "dana.with-a-long-address@a-very-long-company-domain.example.com", plan: "pro", at: "2026-10-25T12:00:00Z", reasonText: "It costs more than I get out of it" }],
     },
-    initial: { analytics: opts.analytics === false ? null : (ANALYTICS as never), website: WEBSITE, referrals: REFERRALS as never, updatedAt: Date.parse("2026-10-27T13:41:00Z") },
+    initial: { analytics: opts.analytics === false ? null : (ANALYTICS as never), website: WEBSITE, referrals: REFERRALS as never, agents: opts.agents === false ? null : await agentsFixture(), updatedAt: Date.parse("2026-10-27T13:41:00Z") },
   }));
 }
 
@@ -272,6 +303,8 @@ describe.each(ENGINES)("Overview (%s)", (engine) => {
           "Plan mix", "Signups · last 30 days", "The journey · last 30 days", "Visited the site",
           "Newest signups", "Recently closed", "It costs more than I get out of it",
           "Create a card for a business", "Email your users", "Test a plan", "Export users",
+          // The agents (2026-10-28): a failing Sheet sync, a failing agent, Pause all, drafts waiting.
+          "Sheet syncs failed in a row", "failed 3 runs in a row: Web Leads", "Every agent is paused (Pause all is on)", "drafts are waiting for your Approve",
         ]) expect(text, `"${s}" missing`).toContain(s);
         // Money comes before the attention list, which comes before the lists of people.
         expect(text.indexOf("Monthly revenue")).toBeLessThan(text.indexOf("Needs your attention"));
@@ -290,6 +323,15 @@ describe.each(ENGINES)("Overview (%s)", (engine) => {
       expect(text).toContain("The company numbers didn't load");
       expect(text).toContain("410"); // the website still shows
       expect(text).toContain("It costs more than I get out of it"); // and who left
+    } finally { await page.close(); }
+  });
+
+  it("the agents' status failing to load says so, and nothing else goes", async () => {
+    const page = await open(engine, 390, await overview({ agents: false }));
+    try {
+      const text = await page.evaluate(() => document.body.innerText);
+      expect(text).toContain("The agents' status didn't load");
+      expect(text).toContain("$109.78");
     } finally { await page.close(); }
   });
 });

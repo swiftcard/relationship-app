@@ -6,33 +6,26 @@
 // mishmash" (2026-10-27), so it opens on one plain sentence, then splits into
 // one tab per question: how many came, what they read, where from, who.
 // One fetch feeds every tab; switching tabs keeps it (this stays mounted).
+// The counting lives in lib/admin-data/website.ts (2026-10-28: every row,
+// sources once per visit, New York days, the team's own visits counted apart).
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PageHeader, KpiCard, KpiGrid, Section, Stack, Columns } from "../_ui/layout";
 import { Tabs } from "../_ui/links";
 import { ShareBar, TrendBars } from "../_ui/charts";
-import { EmptyState, ErrorState, HowCounted, NotTracked, PageSkeleton } from "../_ui/states";
+import { EmptyState, ErrorState, HowCounted, PageSkeleton } from "../_ui/states";
 import { Icon } from "../_ui/icons";
-import { fmtNum } from "../_ui/format";
-import { countryFlag, countryName, pageName, referrerName } from "../_ui/labels";
+import { fmtLongDate, fmtNum } from "../_ui/format";
+import { countryFlag, countryName, pageName } from "../_ui/labels";
 import { WEBSITE_TABS, type WebsiteTab } from "./tabs";
+import type { WebsiteSummary } from "@/lib/admin-data/website";
 
-export type WebsiteData = {
-  includeInternal: boolean;
-  capHit: boolean;
-  kpis: {
-    pageviews: { d1: number; d7: number; d30: number };
-    visitors: { d1: number; d7: number; d30: number };
-    sessions: number;
-    pagesPerSession: number;
-    avgDurationSec: number;
-    bounceRatePct: number;
-  };
-  daily: { date: string; views: number; visitors: number }[];
-  topPages: { label: string; count: number }[];
-  topReferrers: { label: string; count: number }[];
-  topCountries: { label: string; count: number }[];
-};
+export type WebsiteData = { includeInternal: boolean; capHit: boolean } & WebsiteSummary;
+
+/** "1 visit", "12 visits". */
+function many(n: number, word: string) {
+  return `${fmtNum(n)} ${n === 1 ? word : `${word}s`}`;
+}
 
 function duration(sec: number) {
   if (sec < 60) return `${sec}s`;
@@ -118,6 +111,7 @@ export default function WebsiteAnalyticsClient({ initialInternalDevice, tab = "t
           </>
         }
       />
+      {data && <TeamLine d={data} />}
       <Tabs base="/admin/website" items={[...WEBSITE_TABS]} active={tab} />
 
       {err && !data ? (
@@ -132,7 +126,7 @@ export default function WebsiteAnalyticsClient({ initialInternalDevice, tab = "t
             : tab === "settings" ? <SettingsTab internalDevice={internalDevice} saving={savingDevice} onToggle={toggleDevice} />
             : <TrafficTab d={data} />}
           {data.capHit && tab !== "settings" && (
-            <p className="adm-callout-warn px-4 py-3 sc-t-footnote mt-6">Charts reflect the most recent 50,000 pageviews (the 30 days were busier than that).</p>
+            <p className="adm-callout-warn px-4 py-3 sc-t-footnote mt-6">These numbers cover the first 300,000 pageviews of the 30 days (the month was busier than that).</p>
           )}
         </div>
       )}
@@ -141,11 +135,30 @@ export default function WebsiteAnalyticsClient({ initialInternalDevice, tab = "t
 }
 
 /** A ranked list: name on top, the raw value under it, count + share bar. */
-function RankList({ rows, empty, name, detail }: {
-  rows: { label: string; count: number }[];
+/** What the switch did, in words: the team's own visits in the 30 days and
+ *  whether they're in the numbers. Zero says so too, so the switch is never a
+ *  mystery. */
+function TeamLine({ d }: { d: WebsiteData }) {
+  const n = d.team.visits;
+  const visits = many(n, "visit");
+  return (
+    <p className="sc-t-footnote adm-muted -mt-2" data-testid="team-line">
+      {n === 0
+        ? "Your team: no visits of your own in the last 30 days."
+        : d.includeInternal
+          ? <>Your team: <b className="adm-num">{visits}</b> ({many(d.team.pageviews, "page")}) included below.</>
+          : <>Your team: <b className="adm-num">{visits}</b> ({many(d.team.pageviews, "page")}) left out of these numbers.</>}
+    </p>
+  );
+}
+
+function RankList<R extends { label: string; count: number }>({ rows, empty, name, detail, value }: {
+  rows: R[];
   empty: string;
   name: (label: string) => React.ReactNode;
-  detail?: (label: string) => React.ReactNode;
+  detail?: (row: R) => React.ReactNode;
+  /** The right-hand figure, when it isn't the count. */
+  value?: (row: R) => React.ReactNode;
 }) {
   if (rows.length === 0) return <EmptyState className="pb-6">{empty}</EmptyState>;
   const max = Math.max(1, ...rows.map((r) => r.count));
@@ -157,11 +170,11 @@ function RankList({ rows, empty, name, detail }: {
           <span className="w-5 sc-t-footnote adm-faint adm-num shrink-0">{i + 1}</span>
           <div className="min-w-0 flex-1">
             <p className="sc-t-subhead font-medium truncate">{name(r.label)}</p>
-            {detail && <p className="sc-t-caption adm-muted truncate">{detail(r.label)}</p>}
+            {detail && <p className="sc-t-caption adm-muted truncate">{detail(r)}</p>}
             <div className="mt-1.5 sm:hidden"><ShareBar value={r.count} max={max} /></div>
           </div>
           <div className="hidden sm:block w-40 shrink-0"><ShareBar value={r.count} max={max} /></div>
-          <span className="w-14 text-right sc-t-subhead font-semibold adm-num shrink-0">{fmtNum(r.count)}</span>
+          <span className="w-14 text-right sc-t-subhead font-semibold adm-num shrink-0">{value ? value(r) : fmtNum(r.count)}</span>
           <span className="w-10 text-right sc-t-caption adm-muted adm-num shrink-0">{total ? `${Math.round((r.count / total) * 100)}%` : "—"}</span>
         </li>
       ))}
@@ -178,23 +191,24 @@ function TrafficTab({ d }: { d: WebsiteData }) {
     <Stack>
       <section className="adm-card p-4 sm:p-5">
         <p className="sc-t-callout">
-          In the last 7 days, <b className="adm-num">{fmtNum(k.visitors.d7)}</b> {k.visitors.d7 === 1 ? "person" : "people"} visited swiftcard.me and viewed{" "}
+          In the last 7 days, <b className="adm-num">{fmtNum(k.visitors.d7)}</b> {k.visitors.d7 === 1 ? "person" : "people"} visited swiftcard.me{" "}
+          <b className="adm-num">{fmtNum(k.visits.d7)}</b> {k.visits.d7 === 1 ? "time" : "times"} and viewed{" "}
           <b className="adm-num">{fmtNum(k.pageviews.d7)}</b> {k.pageviews.d7 === 1 ? "page" : "pages"}.
-          {topSource ? <> Over 30 days the biggest outside source was <b>{referrerName(topSource.label)}</b>.</> : <> Nobody has arrived from another site yet — visits so far are typed in or from apps.</>}
+          {topSource ? <> Over 30 days the biggest outside source was <b>{topSource.label}</b>.</> : <> Nobody has arrived from another site yet — visits so far are typed in or from apps.</>}
           {topPage && <> The most-read page was <b>{pageName(topPage.label)}</b>.</>}
         </p>
       </section>
 
       <KpiGrid cols={3}>
-        <KpiCard label="Visitors today" value={fmtNum(k.visitors.d1)} sub={`${fmtNum(k.pageviews.d1)} pages viewed`} />
-        <KpiCard label="Visitors · 7 days" value={fmtNum(k.visitors.d7)} sub={`${fmtNum(k.pageviews.d7)} pages viewed`} />
-        <KpiCard label="Visitors · 30 days" value={fmtNum(k.visitors.d30)} sub={`${fmtNum(k.pageviews.d30)} pages viewed`} />
-        <KpiCard label="Pages per visit" value={String(k.pagesPerSession)} sub={`Across ${fmtNum(k.sessions)} visits in 30 days`} />
-        <KpiCard label="Time on a page" value={duration(k.avgDurationSec)} sub="On average, before moving on" />
-        <KpiCard label="Left after one page" value={`${k.bounceRatePct}%`} sub="Visits that saw a single page" />
+        <KpiCard label="Visitors today" value={fmtNum(k.visitors.d1)} sub={`${many(k.visits.d1, "visit")} · ${many(k.pageviews.d1, "page")}`} />
+        <KpiCard label="Visitors · 7 days" value={fmtNum(k.visitors.d7)} sub={`${many(k.visits.d7, "visit")} · ${many(k.pageviews.d7, "page")}`} />
+        <KpiCard label="Visitors · 30 days" value={fmtNum(k.visitors.d30)} sub={`${many(k.visits.d30, "visit")} · ${many(k.pageviews.d30, "page")}`} />
+        <KpiCard label="Pages per visit" value={String(k.pagesPerSession)} sub={`Across ${fmtNum(k.visits.d30)} visits in 30 days`} />
+        <KpiCard label="Time on a page" value={duration(k.avgDurationSec)} sub="On average, while the page was on screen" />
+        <KpiCard label="Left after one page" value={`${k.bounceRatePct}%`} sub="Saw one page and didn't go on to sign up or in" />
       </KpiGrid>
 
-      <Section title="Visitors and pages viewed per day" hint="The last 30 days. The pale bar is pages viewed; the solid bar inside it is the people who viewed them.">
+      <Section title="Visitors and pages viewed per day" hint="The last 30 days, New York time. The pale bar is pages viewed; the solid bar inside it is the people who viewed them.">
         <TrendBars
           height={180}
           data={d.daily.map((x) => ({ date: x.date, values: [x.views, x.visitors] }))}
@@ -204,9 +218,10 @@ function TrafficTab({ d }: { d: WebsiteData }) {
       </Section>
 
       <HowCounted>
-        <p>A visitor is one browser, counted once in each period however many pages it opens. A visit ends when the tab closes or after a stretch of doing nothing.</p>
-        <p>Only the marketing site counts: home, pricing, product and preview pages. The app, this admin and shared cards have their own numbers.</p>
-        <p>Your team&apos;s visits are left out unless you switch them on above, and any device marked on the Settings tab never counts.</p>
+        <p>A visitor is one person&apos;s browser, counted once in each period however many pages it opens. A visit ends when the tab closes or after 30 minutes of doing nothing. Days are New York calendar days; &ldquo;today&rdquo; started at midnight.</p>
+        <p>A page counts once someone has had it on screen for a second. Previews, prerendered pages, automated browsers and traffic from cloud servers aren&apos;t people, so they never count.</p>
+        <p>Only the marketing site counts: home, pricing, the product, comparison and help pages, the card builder and sign-in. The app, this admin and shared cards have their own numbers.</p>
+        <p>Your team&apos;s visits (any of our accounts, signed in or not, and any device marked on the Settings tab) are left out unless you switch them on above.</p>
       </HowCounted>
     </Stack>
   );
@@ -216,51 +231,73 @@ function TrafficTab({ d }: { d: WebsiteData }) {
 function PagesTab({ d }: { d: WebsiteData }) {
   return (
     <Stack>
-      <Section title="Most-read pages · 30 days" hint="Every marketing page by how many times it was viewed." flush>
-        <RankList rows={d.topPages} empty="No pageviews yet." name={pageName} detail={(p) => p} />
+      <Section title="Most-read pages · 30 days" hint="Every marketing page by how many times it was viewed, and how long it was on screen on average." flush>
+        <RankList
+          rows={d.topPages}
+          empty="No pageviews yet."
+          name={pageName}
+          detail={(p) => <>{p.label}{p.avgSec != null && <> · {duration(p.avgSec)} on average</>}</>}
+        />
       </Section>
-      <Columns>
-        <NotTracked title="Time on each page" detail="which pages people actually read, not just open." />
-        <NotTracked title="Where people leave" detail="the last page before someone closes the site." />
-      </Columns>
+      <Section title="Where people leave · 30 days" hint="The last page of each visit." flush>
+        <RankList rows={d.exitPages} empty="No visits yet." name={pageName} detail={(p) => p.label} />
+      </Section>
     </Stack>
   );
 }
 
 // ── Sources ─────────────────────────────────────────────────────────────────
 function SourcesTab({ d }: { d: WebsiteData }) {
+  const since = d.detailSince ? fmtLongDate(d.detailSince) : null;
   return (
     <Stack>
       <Section
-        title="Where visitors come from · 30 days"
-        hint="The site someone was on just before. Typed-in addresses, bookmarks and most apps don't say where they came from, so they aren't listed here."
+        title="Where visits come from · 30 days"
+        hint="The site someone was on just before, counted once per visit."
         flush
       >
-        <RankList rows={d.topReferrers} empty="No outside sources yet — traffic so far is typed in or from apps." name={referrerName} detail={(h) => h} />
+        <RankList rows={d.topReferrers} empty="No outside sources yet — traffic so far is typed in or from apps." name={(n) => n} detail={(r) => r.detail} />
+        <p className="px-4 sm:px-5 py-3 sc-t-footnote adm-muted">
+          <b className="adm-num">{fmtNum(d.directVisits)}</b> {d.directVisits === 1 ? "visit" : "visits"} didn&apos;t say where {d.directVisits === 1 ? "it" : "they"} came from: a typed-in address, a bookmark, or an app that doesn&apos;t pass it on.
+        </p>
       </Section>
       <Columns>
-        <NotTracked title="Campaigns" detail="visits from your own tagged links (flyers, posts, emails), by campaign." />
-        <NotTracked title="Signups by source" detail="which source brings people who go on to make an account." />
+        <Section title="Campaigns · 30 days" hint={`Visits that started on one of your tagged links (?utm_… or ?src=).${since ? ` Counted since ${since}.` : ""}`} flush>
+          <RankList rows={d.campaigns} empty="No tagged visits yet. Add ?utm_campaign= or ?src= to a link to see it here." name={(n) => n} />
+        </Section>
+        <Section title="Went on to build a card · 30 days" hint="Visits that reached the card builder, by where they came from." flush>
+          <RankList rows={d.builderBySource} empty="No visit has reached the card builder yet." name={(n) => n} />
+        </Section>
       </Columns>
     </Stack>
   );
 }
 
 // ── Audience ────────────────────────────────────────────────────────────────
+const DEVICE_NAMES: Record<string, string> = { phone: "Phone", tablet: "Tablet", computer: "Computer" };
+
 function AudienceTab({ d }: { d: WebsiteData }) {
+  const since = d.detailSince ? fmtLongDate(d.detailSince) : null;
+  const people = d.kpis.visitors.d30;
   return (
     <Stack>
-      <Section title="Countries · 30 days" hint="Where visitors are, by pageviews." flush>
-        <RankList
-          rows={d.topCountries}
-          empty="No location data yet."
-          name={(c) => <><span aria-hidden className="mr-2">{countryFlag(c)}</span>{countryName(c)}</>}
-          detail={(c) => c.toUpperCase()}
-        />
-      </Section>
+      <KpiGrid cols={3}>
+        <KpiCard label="Visitors · 30 days" value={fmtNum(people)} sub={many(d.kpis.visits.d30, "visit")} />
+        <KpiCard label="Came back" value={fmtNum(d.kpis.cameBack)} sub="Two or more separate visits" />
+        <KpiCard label="Came once" value={fmtNum(Math.max(0, people - d.kpis.cameBack))} sub="One visit in the 30 days" />
+      </KpiGrid>
       <Columns>
-        <NotTracked title="Phone or computer" detail="how many visitors are on a phone, a tablet or a computer." />
-        <NotTracked title="New or returning" detail="first-time visitors against people coming back." />
+        <Section title="Countries · 30 days" hint="Where visitors are, one count per person." flush>
+          <RankList
+            rows={d.topCountries}
+            empty="No location data yet."
+            name={(c) => <><span aria-hidden className="mr-2">{countryFlag(c)}</span>{countryName(c)}</>}
+            detail={(c) => c.label.toUpperCase()}
+          />
+        </Section>
+        <Section title="Phone or computer · 30 days" hint={`One count per person, by what their browser says it is.${since ? ` Counted since ${since}.` : ""}`} flush>
+          <RankList rows={d.devices} empty="Not recorded yet — it starts with the next visit." name={(k) => DEVICE_NAMES[k] ?? k} />
+        </Section>
       </Columns>
     </Stack>
   );
@@ -288,9 +325,10 @@ function SettingsTab({ internalDevice, saving, onToggle }: { internalDevice: boo
       </Section>
       <Section title="What's counted here">
         <ul className="space-y-2 sc-t-subhead">
-          <li className="flex gap-2"><span className="adm-good"><Icon name="check" /></span>The marketing site: home, pricing, the product pages and the card preview.</li>
+          <li className="flex gap-2"><span className="adm-good"><Icon name="check" /></span>The marketing site: home, pricing, the product, comparison and help pages, the card builder and sign-in.</li>
           <li className="flex gap-2"><span className="adm-muted"><Icon name="close" /></span>The app (dashboard, settings), this admin, and people&apos;s shared cards — those have their own numbers.</li>
-          <li className="flex gap-2"><span className="adm-muted"><Icon name="close" /></span>Your team&apos;s visits, unless you switch &ldquo;Include my team&apos;s visits&rdquo; on at the top.</li>
+          <li className="flex gap-2"><span className="adm-muted"><Icon name="close" /></span>Your team&apos;s visits: any of our accounts (signed in, or on a browser one has signed in on) and any device marked here — unless you switch &ldquo;Include my team&apos;s visits&rdquo; on at the top.</li>
+          <li className="flex gap-2"><span className="adm-muted"><Icon name="close" /></span>Previews, automated browsers and traffic from cloud servers. They aren&apos;t people.</li>
         </ul>
       </Section>
     </Stack>

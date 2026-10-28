@@ -34,7 +34,7 @@ export function nextRunAt(def: Pick<AgentDef, "infrastructure">, schedule: Sched
 }
 
 export type TickOutcome = { agent: string; status: string; summary: string };
-export type TickReport = { ready: boolean; stopped?: string; expired: number; ran: TickOutcome[]; skipped: { agent: string; why: string }[] };
+export type TickReport = { ready: boolean; stopped?: string; expired: number; closed?: number; ran: TickOutcome[]; skipped: { agent: string; why: string }[] };
 
 /** The owner's schedule changes from the Agents tab; a missing or unreadable row means every agent keeps its default. */
 export async function scheduleOverrides(store: CrewStore): Promise<ScheduleOverrides> {
@@ -111,6 +111,11 @@ export async function runTick(o: { store: CrewStore; providers: Providers; now?:
   const readStates = async () => new Map((await o.store.listAgentStates()).map((s) => [s.id, s]));
 
   report.expired = await o.store.expireOld(now());
+  // A run the platform cut off (the function's time limit) never reaches
+  // finishRun, and stayed "running" forever: 6 competitor-watch runs from
+  // 2026-10-21..26 were still running on 10-28. Once its lease is long gone
+  // it is not running, so it is closed as an error and says why.
+  report.closed = await o.store.closeStaleRuns(new Date(now().getTime() - LEASE_MS), now());
   let states = await readStates();
   const teams = new Map((await o.store.listTeams()).map((t) => [t.team, t]));
   let overrides = await scheduleOverrides(o.store);

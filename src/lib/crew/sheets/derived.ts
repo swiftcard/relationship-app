@@ -203,7 +203,7 @@ export async function dashboardCells(o: { store: CrewStore; sheetId: string; bui
   const statusOf = (r: BuiltRow) => o.known.get(r.key)?.status ?? r.initialStatus;
   const ready = o.built.filter((r) => r.kind === "approval" && r.tab.group === "agent" && OPEN_WORDS.has(statusOf(r)));
   const n = (tab: string) => ready.filter((r) => r.tab.id === tab).length;
-  const messages = ready.filter((r) => ["reddit-dms", "instagram-dms", "instagram-linkedin-bio", "linkedin", "alignable", "office-prospects"].includes(r.tab.id)).length;
+  const messages = ready.filter((r) => ["reddit-dms", "instagram-dms", "instagram-linkedin-bio", "linkedin-connections", "alignable", "office-prospects"].includes(r.tab.id)).length;
   const sent = o.activity.filter((a) => ["sent", "post", "publish"].includes(a.action) && a.result === "ok").length;
   const allStatuses = [...o.known.values()].map((r) => r.status);
   const failed = AGENTS.filter((d) => SHEET_AGENT_IDS.has(d.id)).filter((d) => {

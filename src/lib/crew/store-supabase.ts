@@ -1,7 +1,7 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { companyKey } from "./leads/quality";
 import { paged } from "./paged";
-import { DEFAULT_SETTINGS, DOOR_TEAMS, defaultTeam, type CrewStore, type NewApproval, type ReportRow, type RunRow, type SuppressionRow, type UsageRow, type UsageTotals } from "./store";
+import { DEFAULT_SETTINGS, DOOR_TEAMS, STALE_RUN_SUMMARY, defaultTeam, type CrewStore, type NewApproval, type ReportRow, type RunRow, type SuppressionRow, type UsageRow, type UsageTotals } from "./store";
 import type { ActivityRow, AgentState, Approval, ApprovalKind, ApprovalStatus, ChatMessage, CrewInput, EditRow, Finding, Lead, OfficeHours, Platform, Settings, SheetRow, TeamId, TeamRow, TouchKind } from "./types";
 
 // ── The real CrewStore: service-role Supabase, tables from supabase/crew.sql ─
@@ -112,6 +112,16 @@ export class SupabaseStore implements CrewStore {
       limit,
       "runs",
     );
+  }
+  async closeStaleRuns(before: Date, now: Date) {
+    const data = must(
+      await this.db.from("crew_runs")
+        .update({ status: "error", summary: STALE_RUN_SUMMARY, error: STALE_RUN_SUMMARY, finished_at: now.toISOString() })
+        .eq("status", "running").is("finished_at", null).lt("started_at", before.toISOString())
+        .select("id"),
+      "close stale runs",
+    );
+    return (data ?? []).length;
   }
   async runsSince(sinceIso: string, agentIds?: string[]) {
     return paged<RunRow>(

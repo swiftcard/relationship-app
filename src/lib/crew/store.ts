@@ -23,6 +23,9 @@ import type {
 // backs the tests, so the whole loop (tick → agent → debate → ledger →
 // approval → decide) runs in CI with no database and no network.
 
+/** What a run that was cut off says it was, in the admin and the Sheet. */
+export const STALE_RUN_SUMMARY = "Cut off before it finished (it ran past the time limit).";
+
 export const DEFAULT_SETTINGS: Settings = {
   kill_all: false,
   daily_usd_cap: 2,
@@ -108,7 +111,12 @@ export interface CrewStore {
   finishRun(id: string, status: string, summary: string, stats: Record<string, number>, error?: string): Promise<void>;
   /** Newest first. `agentIds` keeps busy agents (the continuous finders) from crowding out the rest. */
   recentRuns(agentId: string | null, limit: number, agentIds?: string[]): Promise<RunRow[]>;
+  /** Oldest first. A caller that wants each agent's latest run sorts newest first. */
   runsSince(sinceIso: string, agentIds?: string[]): Promise<RunRow[]>;
+  /** Runs still "running" that started before `before`: cut off mid-run (the
+   *  function hit its time limit) and never finished. Closed as errors so the
+   *  admin and the Sheet stop showing them as running. Returns how many. */
+  closeStaleRuns(before: Date, now: Date): Promise<number>;
 
   recordUsage(row: UsageRow): Promise<void>;
   usageTotals(sinceIso: string): Promise<UsageTotals>;

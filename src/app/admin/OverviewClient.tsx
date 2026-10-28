@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import type { Analytics } from "./analytics/AnalyticsClient";
 import type { WebsiteData } from "./website/WebsiteAnalyticsClient";
 import type { RefStats } from "./analytics/ReferralsTab";
+import type { AgentsHealth } from "@/lib/admin-data/agents-health";
 import { Columns, KpiGrid, PageHeader, Section, Stack } from "./_ui/layout";
 import { KpiLink, SeeAll } from "./_ui/links";
 import { MiniFunnel, PlanMixBar, TrendBars } from "./_ui/charts";
@@ -29,10 +30,15 @@ export type OverviewRetention = {
   recentClosed: { userId: string; email: string | null; plan: string | null; at: string | null; reasonText: string }[];
 };
 
+/** What /api/admin/agents-health answers: the health, plus what to tell the owner. */
+export type AgentsHealthData = AgentsHealth & { attention: { key: string; tone: "bad" | "warn"; n: number; text: string }[] };
+
 export type OverviewData = {
   analytics: Analytics | null;
   website: WebsiteData | null;
   referrals: RefStats | null;
+  /** Optional so older fixtures still render; the page always asks for it. */
+  agents?: AgentsHealthData | null;
 };
 
 async function getJson<T>(url: string): Promise<T | null> {
@@ -56,12 +62,13 @@ export default function OverviewClient({ retention, initial }: {
 
   const load = useCallback(async () => {
     setRefreshing(true);
-    const [analytics, website, referrals] = await Promise.all([
+    const [analytics, website, referrals, agents] = await Promise.all([
       getJson<Analytics>("/api/admin/analytics"),
       getJson<WebsiteData>("/api/admin/website?internal=0"),
       getJson<RefStats>("/api/admin/referrals"),
+      getJson<AgentsHealthData>("/api/admin/agents-health"),
     ]);
-    setData({ analytics, website, referrals });
+    setData({ analytics, website, referrals, agents });
     setUpdatedAt(Date.now());
     setRefreshing(false);
   }, []);
@@ -117,7 +124,12 @@ function OverviewBody({ data, retention, now }: { data: OverviewData; retention:
       n: a ? [a.funnel?.available, a.ingest?.available, a.warmLead?.available].filter((x) => x === false).length : 0,
       text: "tracking tables aren't switched on yet", href: "/admin/analytics?tab=data",
     },
+    // The agents: a failing Sheet sync or agent, Pause all, missing keys, drafts waiting.
+    ...(data.agents?.attention ?? []).map((x) => ({
+      icon: x.key === "paused" ? "alert" : "agents", tone: x.tone, n: x.n, text: x.text, href: "/admin/crew",
+    })),
   ].filter((x) => x.n > 0) as Attention[];
+  if (data.agents === null) attention.push({ icon: "alert", tone: "warn", n: 1, text: "The agents' status didn't load — try Refresh", href: "/admin/crew" });
   if (!a) attention.unshift({ icon: "alert", tone: "bad", n: 1, text: "The company numbers didn't load — try Refresh", href: "/admin/analytics" });
 
   const recentClosed = retention.recentClosed;

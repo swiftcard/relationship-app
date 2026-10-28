@@ -407,13 +407,16 @@ async function inboundControls(store: CrewStore, grid: Map<string, CellValue[][]
   }
 }
 
-async function rewrite(store: CrewStore, id: string, tab: TabSpec, rows: CellValue[][], report: SyncReport, o: { clear?: boolean } = {}) {
+/** True when the tab now shows `rows`. */
+async function rewrite(store: CrewStore, id: string, tab: TabSpec, rows: CellValue[][], report: SyncReport, o: { clear?: boolean } = {}): Promise<boolean> {
   try {
     if (o.clear !== false) await clearRange(id, dataRange(tab));
     if (rows.length) await batchUpdateValues(id, [{ range: a1(tab.name, `A${HEADER_ROWS + 1}`), values: rows.slice(0, MAX_DERIVED_ROWS) }]);
     report.derived++;
+    return true;
   } catch (e) {
     report.errors.push(`${tab.name}: ${msg(e)}`);
+    return false;
   }
 }
 
@@ -426,7 +429,10 @@ async function derivedTabs(store: CrewStore, id: string, o: { built: BuiltRow[];
     store.countLeadsSince(day),
     store.countLeadsSince(week),
     store.countLeadsSince("1970-01-01T00:00:00Z"),
-    store.runsSince(week),
+    // Newest first: the Performance and Dashboard tabs take each agent's
+    // first run in this list as its latest. Oldest first (runsSince's order)
+    // they showed the state of a week-old run.
+    store.runsSince(week).then((r) => [...r].sort((a, b) => (a.started_at < b.started_at ? 1 : a.started_at > b.started_at ? -1 : 0))),
     store.listActivity(500),
     store.getSettings(),
     dryRun(store),
@@ -447,9 +453,13 @@ async function derivedTabs(store: CrewStore, id: string, o: { built: BuiltRow[];
   await rewrite(store, id, PERFORMANCE, await performanceRows({ store, approvals: sources.approvals, runs, known, built, now, leads7dByAgent }), report);
   await rewrite(store, id, ACTIVITY, activityRows(activity), report);
   const controls = await controlsRows(store);
-  await rewrite(store, id, CONTROLS, controls, report);
-  // What each Controls cell now says, so the next sync can tell the owner's change from our own write.
-  await store.kvSet(CONTROLS_SHOWN_KEY, Object.fromEntries(controls.map((r) => [String(r[5]), String(r[1])])));
+  // What each Controls cell now says, so the next sync can tell the owner's
+  // change from our own write. Only when the write landed: saved after a
+  // failed write, the Sheet's older cells read as an owner's change next
+  // time, and undid a Stop pressed in the admin.
+  if (await rewrite(store, id, CONTROLS, controls, report)) {
+    await store.kvSet(CONTROLS_SHOWN_KEY, Object.fromEntries(controls.map((r) => [String(r[5]), String(r[1])])));
+  }
   await rewrite(store, id, SUPPRESSION, await suppressionRows(store), report);
   const cells = await dashboardCells({ store, sheetId: id, built, known, approvals: sources.approvals as Approval[], runs, activity: activity.filter((a) => a.at >= week), counts, now, place, queue, dryRun: dry, paused: settings.kill_all, errors: report.errors });
   try {

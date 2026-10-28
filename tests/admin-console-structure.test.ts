@@ -131,13 +131,56 @@ describe("Website reads as one page per question", () => {
 
   it("names pages, sources and countries the way people say them", () => {
     const client = read("src/app/admin/website/WebsiteAnalyticsClient.tsx");
-    for (const fn of ["pageName", "referrerName", "countryName"]) expect(client).toContain(fn);
+    for (const fn of ["pageName", "countryName"]) expect(client).toContain(fn);
+    // Sources are grouped by name where they're counted, once per visit.
+    expect(read("src/lib/admin-data/website.ts")).toContain("referrerName(host)");
   });
 
   it("still talks to the same endpoints (the data pass changes the numbers, not this page)", () => {
     const client = read("src/app/admin/website/WebsiteAnalyticsClient.tsx");
     expect(client).toContain("fetch(`/api/admin/website?internal=${includeInternal ? \"1\" : \"0\"}`)");
     expect(client).toContain('fetch("/api/admin/website/internal"');
+  });
+});
+
+describe("Website counts every visit, once, and only people (2026-10-28)", () => {
+  // Owner: "website analytics is fake — make it accurate", and "make sure
+  // 'include my team's visits' really works".
+  const route = read("src/app/api/admin/website/route.ts");
+  const ingest = read("src/app/api/site-view/route.ts");
+  const tracker = read("src/components/SiteAnalytics.tsx");
+
+  it("reads every row of the 30 days, team rows too, and never a capped sample", () => {
+    expect(route).toContain("rows = await paged<PageviewRow>(");
+    expect(route).not.toMatch(/\.limit\(/);
+    // The switch is applied in the counting, after the read, so it changes
+    // the totals by exactly the team's rows.
+    expect(route).not.toContain('.eq("is_internal", false)');
+    expect(route).toContain("summarizeWebsite(rows, { includeInternal, now })");
+  });
+
+  it("the header says what the switch did", () => {
+    expect(read("src/app/admin/website/WebsiteAnalyticsClient.tsx")).toContain("{data && <TeamLine d={data} />}");
+  });
+
+  it("the tracker counts the pages a visit goes on to, skips app pages, and waits for a person", () => {
+    for (const p of ['"/about"', '"/faq"', '"/press"', '"/download"', '"/for"', '"/login"', '"/cards/new"']) expect(tracker, p).toContain(p);
+    for (const p of ['"/upgrade"', '"/account-deleted"', '"/unsubscribe"']) expect(tracker, p).not.toContain(p);
+    expect(tracker).toContain("waitForHuman(() => cancelled, { dwellMs: SITE_DWELL_MS })");
+    expect(tracker).toContain('classList.contains("native-app")');
+    // A storage-blocked browser is its own visit, never the shared "nostore".
+    expect(tracker).not.toContain('return "nostore"');
+    // Only the page the browser loaded carries the referrer.
+    expect(tracker).toContain("const referrer = atLoad ? document.referrer || null : null;");
+  });
+
+  it("the ingest keeps one id per person, refuses server racks, and knows our accounts signed out", () => {
+    expect(ingest).toContain("resolveVisitIdentity(req,");
+    expect(ingest).toContain("attachVisitIdentity(NextResponse.json({ ok: true, id }), identity)");
+    expect(ingest).toContain('if (geo.isHosting) return NextResponse.json({ ok: true, skipped: "hosting" });');
+    expect(ingest).toContain("await browserAccountIds(admin)");
+    // Visible time only ever grows.
+    expect(ingest).toContain(".or(`duration_ms.is.null,duration_ms.lt.${ms}`)");
   });
 });
 

@@ -38,6 +38,7 @@ export function pageName(path: string): string {
 // Longest-suffix match on the host, so "l.instagram.com", "m.facebook.com"
 // and "www.google.co.uk" all land on the name people know.
 const REFERRERS: [RegExp, string][] = [
+  [/(^|\.)mail\.google\.com$/, "Gmail"],
   [/(^|\.)google\.[a-z.]+$/, "Google"],
   [/(^|\.)bing\.com$/, "Bing"],
   [/(^|\.)duckduckgo\.com$/, "DuckDuckGo"],
@@ -58,6 +59,17 @@ const REFERRERS: [RegExp, string][] = [
   [/(^|\.)apps\.apple\.com$/, "App Store"],
   [/(^|\.)producthunt\.com$/, "Product Hunt"],
   [/(^|\.)swiftcard\.me$/, "SwiftCard (another page)"],
+  // Android apps report themselves as android-app://<package>/, which the
+  // ingest keeps as the package name: the Google app, Gmail, and the social apps.
+  [/^com\.google\.android\.googlequicksearchbox$/, "Google"],
+  [/^com\.google\.android\.gm$/, "Gmail"],
+  [/^com\.instagram\.android$/, "Instagram"],
+  [/^com\.facebook\.(katana|orca)$/, "Facebook"],
+  [/^com\.linkedin\.android$/, "LinkedIn"],
+  [/^com\.zhiliaoapp\.musically$/, "TikTok"],
+  [/^com\.twitter\.android$/, "X (Twitter)"],
+  [/^com\.slack$/, "Slack"],
+  [/(^|\.)mail\.google\.com$/, "Gmail"],
 ];
 
 export function referrerName(host: string): string {

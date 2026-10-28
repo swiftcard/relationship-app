@@ -147,6 +147,17 @@ async function selfPassClaimants(): Promise<string[]> {
   }
 }
 
+/**
+ * Every account this browser is known to belong to, by the two signals that
+ * outlive a session: the device claim (sc_device) and the owner's pass. The
+ * website ingest asks it to recognise the team's own browsers while they're
+ * signed out (2026-10-28). Never throws; [] means "no claim".
+ */
+export async function browserAccountIds(admin: Admin): Promise<string[]> {
+  const [pass, device] = await Promise.all([selfPassClaimants(), deviceClaimants(admin)]);
+  return [...new Set([...pass, ...device])];
+}
+
 // Full server-side check: is the CURRENT request coming from the slug's owner?
 // Safe to call unconditionally — with neither signal (signed-out visitor, cron,
 // bot, automated preview) it returns false and the event is recorded normally.

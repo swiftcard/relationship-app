@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { companyKey } from "./leads/quality";
-import { DEFAULT_SETTINGS, DOOR_TEAMS, defaultTeam, type CrewStore, type NewApproval, type ReportRow, type RunRow, type SuppressionRow, type UsageRow, type UsageTotals } from "./store";
+import { DEFAULT_SETTINGS, DOOR_TEAMS, STALE_RUN_SUMMARY, defaultTeam, type CrewStore, type NewApproval, type ReportRow, type RunRow, type SuppressionRow, type UsageRow, type UsageTotals } from "./store";
 import type { ActivityRow, AgentState, Approval, ApprovalKind, ApprovalStatus, ChatMessage, CrewInput, EditRow, Finding, Lead, Platform, Settings, SheetRow, TeamId, TeamRow, TouchKind } from "./types";
 
 // ── In-memory CrewStore for tests and local dry runs ───────────────────────
@@ -80,6 +80,16 @@ export class MemoryStore implements CrewStore {
   }
   async recentRuns(agentId: string | null, limit: number, agentIds?: string[]) {
     return this.runs.filter((r) => (!agentId || r.agent_id === agentId) && (!agentIds || agentIds.includes(r.agent_id))).slice(-limit).reverse();
+  }
+  async closeStaleRuns(before: Date, now: Date) {
+    let n = 0;
+    for (const r of this.runs) {
+      if (r.status === "running" && !r.finished_at && r.started_at < before.toISOString()) {
+        Object.assign(r, { status: "error", summary: STALE_RUN_SUMMARY, error: STALE_RUN_SUMMARY, finished_at: now.toISOString() });
+        n++;
+      }
+    }
+    return n;
   }
   async runsSince(sinceIso: string, agentIds?: string[]) {
     if (agentIds) return this.runs.filter((r) => r.started_at >= sinceIso && agentIds.includes(r.agent_id));
