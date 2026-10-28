@@ -1,4 +1,5 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
+import { companyKey } from "./leads/quality";
 import { paged } from "./paged";
 import { DEFAULT_SETTINGS, DOOR_TEAMS, defaultTeam, type CrewStore, type NewApproval, type ReportRow, type RunRow, type SuppressionRow, type UsageRow, type UsageTotals } from "./store";
 import type { ActivityRow, AgentState, Approval, ApprovalKind, ApprovalStatus, ChatMessage, CrewInput, EditRow, Finding, Lead, OfficeHours, Platform, Settings, SheetRow, TeamId, TeamRow, TouchKind } from "./types";
@@ -8,6 +9,18 @@ import type { ActivityRow, AgentState, Approval, ApprovalKind, ApprovalStatus, C
 // keeps every client component away from it).
 
 type Row = Record<string, unknown>;
+
+/** The columns supabase/crew-leads-quality.sql adds to crew_leads. */
+const LEAD_QUALITY_COLUMNS = ["company_key", "email_status", "score", "why", "hook", "message"] as const;
+function withoutQuality(l: Lead): Lead {
+  const out: Record<string, unknown> = { ...l };
+  for (const c of LEAD_QUALITY_COLUMNS) delete out[c];
+  return out as Lead;
+}
+/** A column the database doesn't have yet (PostgREST's schema cache, or Postgres itself). */
+function missingColumn(e: { code?: string; message: string }): boolean {
+  return e.code === "PGRST204" || e.code === "42703" || /column .* does not exist|could not find the '.*' column/i.test(e.message);
+}
 
 function must<T>(res: { data: T; error: { message: string; code?: string } | null }, what: string): T {
   if (res.error) throw new Error(`crew store ${what}: ${res.error.message}`);
@@ -377,14 +390,46 @@ export class SupabaseStore implements CrewStore {
     const data = await paged<Row>((from, to) => this.db.from("crew_suppression").select("*").order("added_at", { ascending: false }).order("value").range(from, to), limit, "suppression").catch(() => [] as Row[]);
     return data.map((r: Row) => ({ value: String(r.value), reason: String(r.reason ?? ""), added_at: String(r.added_at ?? ""), source: String(r.source ?? "manual"), channel: String(r.channel ?? "email") })) as SuppressionRow[];
   }
+  /** False once crew_leads is known to lack the columns from supabase/crew-leads-quality.sql; leads are then saved without them. */
+  private leadQualityColumns = true;
   async insertLeads(leads: Lead[]) {
     let n = 0;
     for (const l of leads) {
-      const res = await this.db.from("crew_leads").insert(l);
+      let res = await this.db.from("crew_leads").insert(this.leadQualityColumns ? l : withoutQuality(l));
+      if (res.error && this.leadQualityColumns && missingColumn(res.error)) {
+        this.leadQualityColumns = false;
+        res = await this.db.from("crew_leads").insert(withoutQuality(l));
+      }
       if (!res.error) n++;
       else if (res.error.code !== "23505") throw new Error(`crew store lead: ${res.error.message}`);
     }
     return n;
+  }
+  async companyKeysTaken(keys: string[]) {
+    const want = [...new Set(keys)];
+    const out = new Set<string>();
+    if (!want.length) return out;
+    if (this.leadQualityColumns) {
+      const res = await this.db.from("crew_leads").select("company_key").in("company_key", want);
+      if (res.error && missingColumn(res.error)) this.leadQualityColumns = false;
+      else for (const r of must(res, "company keys") ?? []) out.add(String((r as Row).company_key));
+    }
+    // Leads saved before company keys existed: their key is worked out from the site and the name.
+    const legacy = await paged<Row>(
+      (from, to) => {
+        let q = this.db.from("crew_leads").select("id, company, source_url").order("id");
+        if (this.leadQualityColumns) q = q.is("company_key", null);
+        return q.range(from, to);
+      },
+      50000,
+      "legacy company keys",
+    );
+    const wanted = new Set(want);
+    for (const r of legacy) {
+      const k = companyKey({ source_url: String(r.source_url ?? ""), company: (r.company as string | null) ?? null });
+      if (k && wanted.has(k)) out.add(k);
+    }
+    return out;
   }
   async countLeadsSince(sinceIso: string, list?: Lead["list"]) {
     // Every row: a day of 1,000+ leads must count past 1,000, or the daily limit never trips.

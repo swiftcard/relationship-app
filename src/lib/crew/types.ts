@@ -218,6 +218,16 @@ export type Lead = {
   source_platform: Platform;
   source_url: string;
   notes?: string | null;
+  /** The company this lead belongs to (leads/quality.ts companyKey): one row per company across both lists. */
+  company_key?: string | null;
+  /** Domain OK / No Mail Server / Unchecked / None. Domain OK is a mail server for the domain, never a verified mailbox. */
+  email_status?: string | null;
+  /** 0 to 100, for sorting (leads/quality.ts leadScore). */
+  score?: number | null;
+  why?: string | null;
+  hook?: string | null;
+  /** Web Leads: an email's first line. Office Prospects: the call opener. */
+  message?: string | null;
 };
 
 export type CrewInput = {

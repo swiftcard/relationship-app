@@ -1,0 +1,198 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { leadsFromSite } from "@/lib/crew/agents/leads";
+import { officeLeads } from "@/lib/crew/agents/office";
+import { assessPrompt, type SiteAssessment } from "@/lib/crew/leads/assess";
+import { EMAIL_STATUS, companyKey, dnsLookup, emailDomainStatus, leadScore, usable, withEmailStatus } from "@/lib/crew/leads/quality";
+import { recordLeads } from "@/lib/crew/leads/record";
+import { agentHash, leadRows, type RowSources } from "@/lib/crew/sheets/rows";
+import { OFFICE_PROSPECTS, WEB_LEADS } from "@/lib/crew/sheets/tabs";
+import type { Lead } from "@/lib/crew/types";
+import { fakeAgent, setup } from "./crew-helpers";
+
+// ── Phase 1 of the lead agents: fewer, better rows ──────────────────────────
+// One lead per company across Web Leads and Office Prospects, a decision-maker
+// only when the business's own site names them, an email domain checked for a
+// mail server (never called a verified mailbox), a score, why, hook and an
+// opener on the row, and run stats that say what was rejected and why. The
+// leads already saved are never changed, and their Sheet rows stay byte for
+// byte what they were, so the sync never rewrites them.
+
+afterEach(() => vi.restoreAllMocks());
+
+const sources = (): RowSources => ({ approvals: [], leads: [], findings: [], people: [], facts: [], geoHistory: [], known: new Map(), blueskyLive: false });
+const cold = (o: Partial<Lead>): Lead => ({ list: "cold", email: null, source_platform: "web", source_url: "https://acmerealty.com/contact", ...o });
+
+describe("companyKey", () => {
+  it("is the site's host, without www", () => {
+    expect(companyKey({ source_url: "https://www.AcmeRealty.com/contact", company: "Acme Realty" })).toBe("acmerealty.com");
+    expect(companyKey({ source_url: "http://acmerealty.com/", company: "Anything" })).toBe("acmerealty.com");
+  });
+  it("on a shared brokerage or site-builder host, is the host plus the team's name", () => {
+    expect(companyKey({ source_url: "https://www.compass.com/agents/ryan-team/", company: "The Ryan + Ryan Team" })).toBe("compass.com/ryan-ryan-team");
+    expect(companyKey({ source_url: "https://www.compass.com/agents/other/", company: "Aaron and Geoff at Compass" })).toBe("compass.com/aaron-and-geoff-at-compass");
+  });
+  it("falls back to the name for a pasted source, and to nothing when there is neither", () => {
+    expect(companyKey({ source_url: "paste:123", company: "Shiny Windows LLC" })).toBe("name:shiny-windows");
+    expect(companyKey({ source_url: "paste:123", company: null })).toBeNull();
+  });
+});
+
+describe("email domain check", () => {
+  it("says Domain OK only when the domain has a mail server, and never 'Verified'", async () => {
+    vi.spyOn(dnsLookup, "mx").mockResolvedValue([{ exchange: "mx.acme.com", priority: 10 }]);
+    expect(await emailDomainStatus("jo@acme.com")).toBe("Domain OK");
+    expect(Object.values(EMAIL_STATUS)).not.toContain("Verified");
+  });
+  it("No Mail Server for a domain that doesn't exist, has no MX, or publishes a null MX", async () => {
+    const spy = vi.spyOn(dnsLookup, "mx");
+    spy.mockRejectedValueOnce(Object.assign(new Error("x"), { code: "ENOTFOUND" }));
+    expect(await emailDomainStatus("jo@gone.example")).toBe("No Mail Server");
+    spy.mockRejectedValueOnce(Object.assign(new Error("x"), { code: "ENODATA" }));
+    expect(await emailDomainStatus("jo@nomx.example")).toBe("No Mail Server");
+    spy.mockResolvedValueOnce([{ exchange: ".", priority: 0 }]);
+    expect(await emailDomainStatus("jo@nullmx.example")).toBe("No Mail Server");
+  });
+  it("a failed or slow lookup is Unchecked, not a verdict", async () => {
+    vi.spyOn(dnsLookup, "mx").mockRejectedValueOnce(Object.assign(new Error("x"), { code: "ESERVFAIL" }));
+    expect(await emailDomainStatus("jo@flaky.example")).toBe("Unchecked");
+    vi.spyOn(dnsLookup, "mx").mockImplementationOnce(() => new Promise(() => undefined));
+    expect(await emailDomainStatus("jo@slow.example", 20)).toBe("Unchecked");
+  });
+  it("skips the lookup for free mail and for no email, and looks each domain up once", async () => {
+    const spy = vi.spyOn(dnsLookup, "mx").mockResolvedValue([{ exchange: "mx.acme.com", priority: 10 }]);
+    expect(await emailDomainStatus("jo@gmail.com")).toBe("Domain OK");
+    expect(await emailDomainStatus(null)).toBe("None");
+    const out = await withEmailStatus([cold({ email: "a@acme.com" }), cold({ email: "b@acme.com" }), cold({ email: null, phone: "7045550100" })]);
+    expect(out.map((l) => l.email_status)).toEqual(["Domain OK", "Domain OK", "None"]);
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("score", () => {
+  it("a named decision-maker with their own email and phone in a core industry beats an info@ inbox", () => {
+    const best = leadScore({ fit: 30, name: "Maria Lopez", title: "Broker/Owner", email: "maria@acme.com", emailStatus: "Domain OK", phone: "7185550142", industry: "real estate teams" });
+    const generic = leadScore({ fit: 30, name: null, title: null, email: "info@acme.com", emailStatus: "Domain OK", phone: null, industry: "roofing contractors" });
+    expect(best).toBeGreaterThan(generic);
+    expect(best).toBeLessThanOrEqual(100);
+    expect(leadScore({ fit: 99, name: "A B", title: "Owner", email: "a@b.com", emailStatus: null, phone: "1", industry: "mortgage" })).toBe(100);
+    expect(leadScore({ fit: 0, name: null, title: null, email: "info@x.com", emailStatus: "No Mail Server", phone: null, industry: null })).toBe(0);
+  });
+  it("usable means a phone, or an email whose domain can receive mail", () => {
+    expect(usable(cold({ email: "a@x.com", email_status: "No Mail Server" }))).toBe(false);
+    expect(usable(cold({ email: "a@x.com", email_status: "No Mail Server", phone: "7045550100" }))).toBe(true);
+    expect(usable(cold({ email: "a@x.com", email_status: "Domain OK" }))).toBe(true);
+    expect(usable(cold({ email: "a@x.de", email_status: "Domain OK", region_restricted: true }))).toBe(false);
+  });
+});
+
+describe("Web Leads: one lead per business, from the site", () => {
+  const pages = [
+    { url: "https://acmerealty.com/", html: "<title>Acme Realty</title> Our team of 14 agents opened a second office in Ballantyne. <a href='/team'>Team</a>" },
+    { url: "https://acmerealty.com/team", html: "Jane Park, Owner &amp; Broker, <a href='mailto:jane@acmerealty.com'>jane@acmerealty.com</a>. Office: info@acmerealty.com, (704) 555-0100" },
+  ];
+  const biz = { name: "Acme Realty", website: "https://acmerealty.com", city: "Charlotte", state: "NC" };
+  const read = (o: Partial<SiteAssessment> = {}): SiteAssessment => ({ i: 0, people: [{ name: "Jane Park", title: "Owner & Broker", email: "jane@acmerealty.com", phone: "" }], fit: 32, why: "A 14-agent team that meets buyers in person every week.", hook: "Opened a second office in Ballantyne.", opener: "Congrats on the Ballantyne office.", talking_point: "", ...o });
+
+  it("names the decision-maker with their own email, and fills score, why, hook and opener", () => {
+    const [l] = leadsFromSite(biz, pages, "real estate offices", read());
+    expect(l).toMatchObject({ name: "Jane Park", title: "Owner & Broker", email: "jane@acmerealty.com", phone: "7045550100", why: "A 14-agent team that meets buyers in person every week.", hook: "Opened a second office in Ballantyne.", message: "Congrats on the Ballantyne office." });
+    expect(l.score).toBeGreaterThanOrEqual(80);
+    expect(l.notes).toBe("Other addresses on the site: info@acmerealty.com");
+  });
+  it("never keeps a person or an email the site doesn't show", () => {
+    const [l] = leadsFromSite(biz, pages, "real estate offices", read({ people: [{ name: "Tom Invented", title: "Owner", email: "tom@acmerealty.com", phone: "" }] }));
+    expect(l.name).toBeNull();
+    expect(l.email).toBe("jane@acmerealty.com"); // the site's best address: a person's, before info@
+  });
+  it("drops an opener or hook that greets a person the site doesn't show", () => {
+    const [l] = leadsFromSite(biz, pages, "real estate offices", read({ people: [{ name: "Tom Invented", title: "Owner", email: "", phone: "" }], opener: "Hi Tom, congrats on Ballantyne.", hook: "Second office in Ballantyne." }));
+    expect(l.message).toBeNull();
+    expect(l.hook).toBe("Second office in Ballantyne.");
+    const [kept] = leadsFromSite(biz, pages, "real estate offices", read({ opener: "Hi Jane, congrats on Ballantyne." }));
+    expect(kept.message).toBe("Hi Jane, congrats on Ballantyne.");
+  });
+  it("skips a business the read calls no fit, and still works with no read at all", () => {
+    expect(leadsFromSite(biz, pages, "real estate offices", read({ fit: 0 }))).toEqual([]);
+    const [l] = leadsFromSite(biz, pages, "real estate offices");
+    expect(l).toMatchObject({ email: "jane@acmerealty.com", name: null, score: null, why: null });
+  });
+  it("one lead per site, however many addresses it publishes", () => {
+    expect(leadsFromSite(biz, pages, "real estate offices", read())).toHaveLength(1);
+  });
+  it("the read is told to copy, never invent, and to leave the hook empty when the site says nothing specific", () => {
+    const { system } = assessPrompt([{ name: "Acme", website: "https://acme.com", type: "x", area: "y", pages }], { office: false });
+    expect(system).toMatch(/EXACTLY as the site shows/);
+    expect(system).toMatch(/Never guess or build an email/);
+    expect(system).toMatch(/leave hook empty rather than inventing/);
+  });
+});
+
+describe("Office Prospects: a call opener whenever there's a phone", () => {
+  const site = { name: "Brownstone Realty", website: "https://brownstone.example.com", area: "Brooklyn", type: "real estate teams", pages: [{ url: "https://brownstone.example.com/", html: "Maria Lopez, Broker/Owner. Call (718) 555-0142" }] };
+  const found = { i: 0, people: [{ name: "Maria Lopez", title: "Broker/Owner", email: "", phone: "" }], fit: 30, why: "Twelve agents.", hook: "Twelve agents in Park Slope.", opener: "Hi Maria, this is [your name] from SwiftCard. How do your twelve agents share their details at open houses?", talking_point: "Matching cards and one lead inbox." };
+  it("writes the opener into the row even with no email", () => {
+    const [r] = officeLeads(site, found);
+    expect(r).toMatchObject({ name: "Maria Lopez", email: null, phone: "7185550142", message: found.opener });
+    expect(r.score).toBeGreaterThan(0);
+  });
+  it("no phone, no opener", () => {
+    const noPhone = { ...site, pages: [{ url: site.pages[0].url, html: "Maria Lopez, Broker/Owner. maria@brownstone.example.com" }] };
+    const [r] = officeLeads(noPhone, { ...found, people: [{ ...found.people[0], email: "maria@brownstone.example.com" }] });
+    expect(r.phone).toBeNull();
+    expect(r.message).toBeNull();
+  });
+});
+
+describe("recordLeads: one per company, across both lists, and stats that add up", () => {
+  it("rejects a company already on either list, in this batch or saved before company keys existed, and leaves saved leads untouched", async () => {
+    const { ctx, store } = await setup({ def: fakeAgent({ id: "office-outreach", team: "office" }) });
+    // A lead saved before this change: no company_key, no score.
+    await store.insertLeads([cold({ email: "info@acmerealty.com", company: "Acme Realty", source_url: "https://www.acmerealty.com/contact" })]);
+    const before = structuredClone(store.leads);
+    await store.addSuppression("@blocked.com", "asked to be removed");
+
+    const n = await recordLeads(ctx, [
+      { list: "office", name: "Jane Park", title: "Owner", email: "jane@acmerealty.com", source_platform: "web", source_url: "https://acmerealty.com/team" }, // same company, other list
+      { list: "office", email: "a@blocked.com", source_platform: "web", source_url: "https://blocked.com" }, // suppressed
+      { list: "office", email: "x@newco.com", email_status: "Domain OK", source_platform: "web", source_url: "https://newco.com" },
+      { list: "office", email: "y@newco.com", source_platform: "web", source_url: "https://newco.com/about" }, // same company, same batch
+      { list: "office", phone: "7185550142", email_status: "None", source_platform: "web", source_url: "https://callonly.com" },
+      { list: "office", email: "z@nomail.example", email_status: "No Mail Server", source_platform: "web", source_url: "https://nomail.example" }, // saved, not usable
+    ]);
+    expect(n).toBe(3);
+    expect(ctx.stats).toMatchObject({ leads_added: 3, duplicates_rejected: 2, contacts_suppressed: 1, usable_leads: 2 });
+    expect(store.leads.slice(0, before.length)).toEqual(before); // the old lead is exactly as it was
+    expect(store.leads.find((l) => l.email === "x@newco.com")?.company_key).toBe("newco.com");
+  });
+  it("an email the database already has counts as a duplicate, not a lead", async () => {
+    const { ctx, store } = await setup({ def: fakeAgent({ id: "leads-web", team: "leads" }) });
+    await store.insertLeads([cold({ email: "jo@shared.com", source_url: "paste:1", company: null })]);
+    expect(await recordLeads(ctx, [cold({ email: "jo@shared.com", source_url: "paste:2", company: null })])).toBe(0);
+    expect(ctx.stats).toMatchObject({ leads_added: 0, duplicates_rejected: 1 });
+  });
+});
+
+describe("the Sheet rows of leads saved before this change are exactly what they were", () => {
+  const legacyCold = { list: "cold" as const, id: "11111111-1111-4111-8111-111111111111", created_at: "2026-10-27T14:00:00Z", name: null, email: "info@acmerealty.com", phone: "7045550100", company: "Acme Realty", business_type: "real estate offices", city: "Charlotte", region: "NC", country: "US", source_platform: "web" as const, source_url: "https://acmerealty.com/contact", notes: null };
+  const legacyOffice = { ...legacyCold, id: "22222222-2222-4222-8222-222222222222", list: "office" as const, name: "Maria Lopez", title: "Broker/Owner", notes: "Twelve agents." };
+
+  it("Web Leads: blank Score, Why and Hook, Risky email status, the same hash", () => {
+    const [r] = leadRows(legacyCold, sources());
+    expect(r.tab).toBe(WEB_LEADS);
+    // Built by main before this change (fc30db1f), and pinned.
+    expect(r.cells).toEqual({ score: "", name: "", business: "Acme Realty", industry: "real estate offices", city: "Charlotte", state: "NC", email: "info@acmerealty.com", email_status: "Risky", phone: "7045550100", website: '=HYPERLINK("https://acmerealty.com","acmerealty.com")', source_platform: "Web", source_link: '=HYPERLINK("https://acmerealty.com/contact","Source")', why: "", hook: "", date_found: "2026-10-27" });
+    expect(agentHash(WEB_LEADS, r.cells)).toBe("b029be448486d599");
+  });
+  it("Office Prospects: the same talking point and an empty message, the same hash", () => {
+    const [r] = leadRows(legacyOffice, sources());
+    expect(r.tab).toBe(OFFICE_PROSPECTS);
+    expect(r.cells).toEqual({ company: "Acme Realty", type: "real estate offices", name: "Maria Lopez", title: "Broker/Owner", phone: "7045550100", email: "info@acmerealty.com", talking_point: "Twelve agents.", message: "", open: '=HYPERLINK("mailto:info@acmerealty.com","Email info@acmerealty.com")', date_found: "2026-10-27" });
+    expect(agentHash(OFFICE_PROSPECTS, r.cells)).toBe("5db914ec0f927b93");
+  });
+  it("a new lead fills the columns", () => {
+    const [w] = leadRows({ ...legacyCold, name: "Jane Park", title: "Owner", email_status: "Domain OK", score: 87, why: "Fourteen agents.", hook: "Second office.", message: "Congrats on the new office." }, sources());
+    expect(w.cells).toMatchObject({ score: 87, name: "Jane Park, Owner", email_status: "Domain OK", why: "Fourteen agents.", hook: "Second office.\n\nOpener: Congrats on the new office." });
+    const [o] = leadRows({ ...legacyOffice, hook: "Park Slope.", message: "Hi Maria." }, sources());
+    expect(o.cells).toMatchObject({ talking_point: "Twelve agents.\n\nDetail to mention: Park Slope.", message: "Hi Maria." });
+  });
+});

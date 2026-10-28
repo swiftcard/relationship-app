@@ -5,6 +5,8 @@ import { debate } from "../debate";
 import { productFacts } from "../facts";
 import { everContacted, personFor } from "../ledger";
 import { pageTitle, phonesIn, readSite, textOf } from "../leads/fetch-page";
+import { assessSites, type SiteAssessment } from "../leads/assess";
+import { leadScore, namedOnSite, safeText, scoreLeads, withEmailStatus } from "../leads/quality";
 import { cleanEmails, recordLeads } from "../leads/record";
 import { minutesToTomorrow, nyDayStart } from "../schedule";
 import { SHEET_MAX_PENDING } from "./replies";
@@ -24,64 +26,59 @@ export const NYC_AREAS = ["Manhattan", "Brooklyn", "Queens", "the Bronx", "State
 export const OFFICE_TYPES = ["real estate teams", "real estate brokerages", "mortgage brokerages", "insurance agencies", "staffing agencies", "property management companies", "commercial real estate firms"];
 export const ROLE = /\b(owner|founder|co-?founder|principal|broker|managing|manager|director|team lead(er)?|head of sales|sales (manager|director)|vp|vice president|president|ceo|partner)\b/i;
 
-const PEOPLE_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["sites"],
-  properties: {
-    sites: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["i", "people", "talking_point"],
-        properties: {
-          i: { type: "integer" },
-          talking_point: { type: "string" },
-          people: {
-            type: "array",
-            items: {
-              type: "object",
-              additionalProperties: false,
-              required: ["name", "title", "email", "phone"],
-              properties: { name: { type: "string" }, title: { type: "string" }, email: { type: "string" }, phone: { type: "string" } },
-            },
-          },
-        },
-      },
-    },
-  },
-} as const;
-
 type Site = { name: string; website: string; area: string; type: string; pages: { url: string; html: string }[] };
-type People = { i: number; talking_point: string; people: { name: string; title: string; email: string; phone: string }[] };
+/** What the site read found; older callers pass only people and a talking point. */
+type Found = Pick<SiteAssessment, "people" | "talking_point"> & Partial<Omit<SiteAssessment, "people" | "talking_point">>;
 
 export function officeQuery(n: number): { area: string; type: string } {
   return { area: NYC_AREAS[n % NYC_AREAS.length], type: OFFICE_TYPES[Math.floor(n / NYC_AREAS.length) % OFFICE_TYPES.length] };
 }
 
-/** Only decision-makers, and only contact details the site itself shows. */
-export function officeLeads(site: Site, found: People | undefined): Lead[] {
+/**
+ * One call row per office: the decision-maker the site names (the one whose
+ * email the site shows first), with any other decision-makers named in the
+ * talking point, and only contact details the site itself shows. When there's
+ * a phone, the row carries a call opener even if there is no email.
+ */
+export function officeLeads(site: Site, found: Found | undefined): Lead[] {
   if (!site.pages.length) return [];
-  const text = site.pages.map((p) => textOf(p.html)).join(" ").toLowerCase();
+  if (found?.fit !== undefined && found.fit <= 0) return [];
+  const rawText = site.pages.map((p) => textOf(p.html)).join(" ");
+  const text = rawText.toLowerCase();
   const html = site.pages.map((p) => p.html.toLowerCase()).join(" ");
   const host = new URL(site.pages[0].url).hostname;
   const sitePhone = phonesIn(text)[0] ?? null;
-  const company = site.name || pageTitle(site.pages[0].html) || host;
-  const rows: Lead[] = [];
-  for (const p of found?.people ?? []) {
-    if (!p.name || !ROLE.test(p.title)) continue;
-    const email = p.email && (text.includes(p.email.toLowerCase()) || html.includes(p.email.toLowerCase())) ? p.email.toLowerCase() : null;
-    const digits = p.phone.replace(/\D/g, "");
+  const company = (site.name || pageTitle(site.pages[0].html) || host).slice(0, 120);
+  const onSite = (e: string) => !!e && (text.includes(e.toLowerCase()) || html.includes(e.toLowerCase()));
+  const people = (found?.people ?? []).filter((p) => p.name && ROLE.test(p.title) && namedOnSite(p.name, rawText));
+  const invented = (found?.people ?? []).filter((p) => !namedOnSite(p.name, rawText));
+  const lead = people.find((p) => onSite(p.email)) ?? people[0] ?? null;
+  const others = people.filter((p) => p !== lead).slice(0, 3).map((p) => `${p.name} (${p.title})`);
+  const talking = [found?.talking_point?.trim(), others.length ? `Also on the site: ${others.join("; ")}.` : ""].filter(Boolean).join(" ");
+  let row: Lead | null = null;
+  const common = { list: "office" as const, company, business_type: site.type, city: "New York", region: "NY", country: "US", source_platform: "web" as const, source_url: site.pages[0].url, notes: talking.slice(0, 400) || null };
+  if (lead) {
+    const email = onSite(lead.email) ? lead.email.toLowerCase() : null;
+    const digits = lead.phone.replace(/\D/g, "");
     const phone = digits.length >= 10 && text.replace(/\D/g, "").includes(digits.slice(-10)) ? digits : sitePhone;
-    rows.push({ list: "office", name: p.name.slice(0, 80), title: p.title.slice(0, 80), email, phone, company: company.slice(0, 120), business_type: site.type, city: "New York", region: "NY", country: "US", source_platform: "web", source_url: site.pages[0].url, notes: found?.talking_point?.slice(0, 240) ?? null });
-  }
-  if (!rows.length) {
+    row = { ...common, name: lead.name.slice(0, 80), title: lead.title.slice(0, 80), email, phone };
+  } else {
     // No named decision-maker on the site: still a callable office line.
     const email = cleanEmails([text], host)[0] ?? null;
-    if (email || sitePhone) rows.push({ list: "office", name: null, title: "Main office", email, phone: sitePhone, company: company.slice(0, 120), business_type: site.type, city: "New York", region: "NY", country: "US", source_platform: "web", source_url: site.pages[0].url, notes: found?.talking_point?.slice(0, 240) ?? null });
+    if (email || sitePhone) row = { ...common, name: null, title: "Main office", email, phone: sitePhone };
   }
-  return rows.slice(0, 4);
+  if (!row) return [];
+  const fit = found?.fit;
+  return [
+    {
+      ...row,
+      why: found?.why?.trim().slice(0, 300) || null,
+      hook: safeText(found?.hook, invented)?.slice(0, 300) ?? null,
+      // A call opener needs a number to call.
+      message: row.phone ? (safeText(found?.opener, invented)?.slice(0, 400) ?? null) : null,
+      score: fit === undefined ? null : leadScore({ fit, name: row.name ?? null, title: row.title ?? null, email: row.email ?? null, emailStatus: null, phone: row.phone ?? null, industry: site.type }),
+    },
+  ];
 }
 
 async function findOffices(ctx: AgentContext, type: string, area: string): Promise<{ name: string; website: string }[]> {
@@ -107,7 +104,7 @@ export const officeOutreach: AgentDef = {
   needs: ["CREW_ANTHROPIC_API_KEY"],
   maxPending: SHEET_MAX_PENDING,
   approvalKind: "dm",
-  purpose: "Finds NYC real estate teams and other businesses with staff: owners, brokers and sales heads with phone and email, about 30 a day, for you to call about the Office Plan. Each gets a talking point for the call and sometimes a personal email.",
+  purpose: "Finds NYC real estate teams and other businesses with staff: owners, brokers and sales heads with phone and email, about 30 a day, for you to call about the Office Plan. One row per office, with the decision-maker the site names, a score, a talking point and a call opener whenever there is a phone number, and sometimes a personal email.",
   async run(ctx) {
     const today = await ctx.store.countLeadsSince(nyDayStart(ctx.now()).toISOString(), "office");
     const target = ctx.config<number>("daily_rows", 30);
@@ -123,15 +120,16 @@ export const officeOutreach: AgentDef = {
     const readable = sites.filter((s) => s.pages.length);
     if (!readable.length) return { summary: `${type} in ${area}: no readable sites this time.` };
 
-    const extracted = await ctx.llm.askJson<{ sites: People[] }>("extract", {
-      effort: "low",
-      maxTokens: 4000,
-      schema: PEOPLE_SCHEMA as unknown as Record<string, unknown>,
-      system: "You read business websites and list the decision-makers the site itself names (owner, broker, founder, managing director, team lead, head of sales). Copy names, titles, emails and phones EXACTLY as shown; use an empty string when not shown. Never guess an email. Also write one short talking point for a phone call about a team digital business card plan (what this business would care about).",
-      prompt: readable.map((s, i) => `SITE #${i} ${s.name} (${s.website}):\n${s.pages.map((p) => textOf(p.html).slice(0, 2500)).join("\n")}`).join("\n\n====\n\n"),
+    const assessed = await assessSites(ctx, readable, { office: true }).catch(() => null);
+    const fits = new Map<string, number>();
+    const rows = readable.flatMap((s, i) => {
+      const a = assessed?.find((x) => x.i === i);
+      if (a && a.fit <= 0) ctx.stat("skipped_not_a_fit");
+      const out = officeLeads(s, a);
+      for (const l of out) if (a) fits.set(l.source_url, a.fit);
+      return out;
     });
-    const rows = readable.flatMap((s, i) => officeLeads(s, extracted?.sites.find((x) => x.i === i)));
-    const added = await recordLeads(ctx, rows);
+    const added = await recordLeads(ctx, scoreLeads(await withEmailStatus(rows), (l) => fits.get(l.source_url) ?? null));
     const synced = await syncLeadsToSheet(ctx.store, "office").catch(() => 0);
     const drafted = await draftEmails(ctx, rows.filter((r) => r.email && r.name).slice(0, 2));
     return { summary: `${type} in ${area}: ${added} new call rows${synced ? ` (${synced} on the sheet)` : ""}, ${drafted} email drafts.` };

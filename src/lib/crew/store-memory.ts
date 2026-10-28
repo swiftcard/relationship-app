@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { companyKey } from "./leads/quality";
 import { DEFAULT_SETTINGS, DOOR_TEAMS, defaultTeam, type CrewStore, type NewApproval, type ReportRow, type RunRow, type SuppressionRow, type UsageRow, type UsageTotals } from "./store";
 import type { ActivityRow, AgentState, Approval, ApprovalKind, ApprovalStatus, ChatMessage, CrewInput, EditRow, Finding, Lead, Platform, Settings, SheetRow, TeamId, TeamRow, TouchKind } from "./types";
 
@@ -317,6 +318,10 @@ export class MemoryStore implements CrewStore {
       n++;
     }
     return n;
+  }
+  async companyKeysTaken(keys: string[]) {
+    const want = new Set(keys);
+    return new Set(this.leads.map((l) => l.company_key ?? companyKey(l)).filter((k): k is string => !!k && want.has(k)));
   }
   async countLeadsSince(sinceIso: string, list?: Lead["list"]) {
     const out: Record<string, number> = {};
