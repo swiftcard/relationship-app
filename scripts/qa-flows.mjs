@@ -683,6 +683,93 @@ FLOWS["empty-account"] = async () => {
   } finally { await ctx.close(); }
 };
 
+// ── I2. Every sign-in asks "Select a card", and never flashes a dashboard ────
+// Owner, 2026-10-27: signing in "shows the dashboard for a second and then
+// goes back to the Select a Card page", and in the tab that had picked a card
+// before it "doesn't ask; it just opens straight into the account dashboard".
+// Both came from the session card outliving a sign-in. Its own two-card
+// account (the main one has one card, which rightly opens straight in), two
+// sign-ins only (the auth rate limit — see storageState above).
+FLOWS["card-picker"] = async () => {
+  const e2 = `qa-picker-${stamp}@swiftcard-test.invalid`;
+  const work = `qa-picker-${stamp}`, side = `qa-picker-${stamp}-b`;
+  const created = await (await adm("/auth/v1/admin/users", { method: "POST", body: JSON.stringify({ email: e2, password, email_confirm: true }) })).json();
+  if (!created.id) { fail("card-picker", "could not seed the two-card account"); return; }
+  extraUsers.push({ id: created.id, uname: work });
+  await adm("/rest/v1/profiles", {
+    method: "POST", headers: { Prefer: "resolution=merge-duplicates" },
+    body: JSON.stringify({ id: created.id, username: work, name: "Dana Ellis", email: e2, plan: "pro", customization: { _aiConsent: "accepted", _planChosen: "qa-seeded" } }),
+  });
+  for (const [username, label] of [[work, "Work"], [side, "Side"]]) {
+    await adm("/rest/v1/cards", {
+      method: "POST",
+      body: JSON.stringify({ user_id: created.id, username, label, name: "Dana Ellis", title: "Principal Broker", company: "Northbeam Group", email: e2, template: "modern-bold", customization: { bio: "Principal broker." } }),
+    });
+  }
+  const ctx = await markInternal(await browser.newContext({ viewport: { width: 1280, height: 900 } }));
+  // Was the dashboard ever part of the visible page (not inside React's hidden
+  // streaming container)? Reported per page, so a flash cannot hide.
+  const painted = [];
+  await ctx.exposeBinding("__scDashPainted", (src, where) => painted.push({ page: src.page, where }));
+  await ctx.addInitScript(() => {
+    new MutationObserver(() => {
+      const el = document.querySelector('[data-tour="share"]');
+      if (el && !el.closest("[hidden]") && !window.__scDash) {
+        window.__scDash = true;
+        try { window.__scDashPainted(location.pathname + location.search); } catch { /* not bound */ }
+      }
+    }).observe(document, { childList: true, subtree: true });
+  });
+  const flashes = (page, from = 0) => painted.filter((p) => p.page === page).slice(from).map((p) => p.where);
+  const screen = async (page) => {
+    await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(1500);
+    return {
+      at: page.url().replace(BASE, ""),
+      picker: await page.getByRole("heading", { name: "Select a card" }).isVisible().catch(() => false),
+      dash: await page.locator('[data-tour="share"]').first().isVisible().catch(() => false),
+    };
+  };
+  const tab1 = await ctx.newPage();
+  tab1.on("pageerror", (err) => fail("card-picker", `js-error on ${tab1.url().replace(BASE, "")} — ${err.message.split("\n")[0].slice(0, 140)}`));
+  try {
+    await signInByLink(tab1, { adm, base: BASE, email: e2 });
+    await tab1.waitForURL(/dashboard/, { timeout: 45000 }).catch(() => {});
+    let s = await screen(tab1);
+    if (!s.picker || s.dash) { fail("card-picker", `a sign-in on a two-card account opened ${s.at} without asking which card (${JSON.stringify(s)})`); return; }
+
+    await tab1.locator(`a[href="/dashboard?card=${work}"]`).first().click();
+    await tab1.waitForURL(/card=/, { timeout: 30000 });
+    // In the same tab, a bare /dashboard (every Home link) keeps the card.
+    await tab1.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
+    s = await screen(tab1);
+    if (!s.dash || s.picker) { fail("card-picker", `after choosing a card, a bare /dashboard in the same tab showed ${JSON.stringify(s)} instead of that card`); return; }
+
+    // A NEW tab never chose it: the picker, and not one frame of dashboard.
+    const tab2 = await ctx.newPage();
+    await tab2.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
+    s = await screen(tab2);
+    if (!s.picker || s.dash || flashes(tab2).length) fail("card-picker", `a new tab ${s.picker ? "reached" : "did not reach"} "Select a card"${flashes(tab2).length ? ` but showed the dashboard first (${flashes(tab2).join(", ")})` : ""} (${JSON.stringify(s)})`);
+    await tab2.close();
+
+    // Sign in AGAIN in the tab that chose the card, without signing out (a
+    // session that simply ended): it must ask, not reopen the old card.
+    await ctx.clearCookies({ name: /^sb-/ });
+    const before = flashes(tab1).length;
+    await signInByLink(tab1, { adm, base: BASE, email: e2 });
+    await tab1.waitForURL(/dashboard/, { timeout: 45000 }).catch(() => {});
+    s = await screen(tab1);
+    if (!s.picker || s.dash || flashes(tab1, before).length) {
+      fail("card-picker", `signing in again opened ${s.at}${s.dash ? " straight into the previous card" : ""}${flashes(tab1, before).length ? " after flashing the dashboard" : ""} instead of "Select a card"`);
+      return;
+    }
+    pass("card-picker", "sign-in asks first; same tab keeps the card; a new tab and a second sign-in ask again with no dashboard flash");
+  } finally {
+    await tab1.screenshot({ path: `${OUT}/card-picker.png` }).catch(() => {});
+    await ctx.close();
+  }
+};
+
 // ── J. Mobile tab bar: every tab goes where it says ─────────────────────────
 FLOWS["mobile-tabs"] = async () => {
   const ctx = await markInternal(await browser.newContext({

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect } from "react";
-import { ACTIVE_CARD_KEY, ACTIVE_CARD_COOKIE, ACTIVE_CARD_COOKIE_MAX_AGE, ACTIVE_CARD_EVENT, SESSION_CARD_COOKIE, SESSION_CARD_FLAG } from "@/lib/active-card";
+import { ACTIVE_CARD_KEY, ACTIVE_CARD_COOKIE, ACTIVE_CARD_COOKIE_MAX_AGE, ACTIVE_CARD_EVENT, SESSION_CARD_COOKIE, SESSION_CARD_FLAG, SESSION_CARD_GUARD_SCRIPT, sessionCardValue } from "@/lib/active-card";
 
 /**
  * Persists the currently-selected card so other pages can default to it.
@@ -15,12 +15,16 @@ import { ACTIVE_CARD_KEY, ACTIVE_CARD_COOKIE, ACTIVE_CARD_COOKIE_MAX_AGE, ACTIVE
  * carrying the legacy account photo.
  *
  * Also writes the SESSION copy the dashboard reads (see SESSION_CARD_COOKIE),
- * so a fresh open of the app asks "Select a card" again. `restored` means the
- * dashboard opened this card from that session cookie rather than ?card=; if
- * this webview never wrote it (a relaunch that kept session cookies), it is a
- * previous launch's choice, so drop it and go to the picker.
+ * stamped with the sign-in it was chosen in (`signIn`, lib/active-card), so a
+ * fresh open of the app — or any new sign-in — asks "Select a card" again.
+ * `restored` means the dashboard opened this card from that session cookie
+ * rather than ?card=; if this tab or webview never wrote it (a new tab, a
+ * relaunch that kept session cookies), it is not this tab's choice, so drop it
+ * and go to the picker. On a full page load the inline guard below does that
+ * before the dashboard paints; the effect covers in-app navigations, where
+ * React inserts the script without running it.
  */
-export default function CardSelectionPersist({ selectedCard, restored = false }: { selectedCard: string | null; restored?: boolean }) {
+export default function CardSelectionPersist({ selectedCard, restored = false, signIn = "" }: { selectedCard: string | null; restored?: boolean; signIn?: string }) {
   useEffect(() => {
     if (!selectedCard) return;
     if (restored) {
@@ -53,7 +57,7 @@ export default function CardSelectionPersist({ selectedCard, restored = false }:
       /* ignore */
     }
     try {
-      document.cookie = `${SESSION_CARD_COOKIE}=${encodeURIComponent(selectedCard)}; path=/; samesite=lax`;
+      document.cookie = `${SESSION_CARD_COOKIE}=${encodeURIComponent(sessionCardValue(selectedCard, signIn))}; path=/; samesite=lax`;
       sessionStorage.setItem(SESSION_CARD_FLAG, "1");
     } catch {
       /* ignore */
@@ -65,7 +69,18 @@ export default function CardSelectionPersist({ selectedCard, restored = false }:
     } catch {
       /* ignore */
     }
-  }, [selectedCard, restored]);
+  }, [selectedCard, restored, signIn]);
 
-  return null;
+  if (!restored || !selectedCard) return null;
+  // Executable only in the server's HTML: on the client it is text/plain, so
+  // React neither runs it nor warns about a <script> on in-app navigations
+  // (Next's "Preventing Flash" guide). suppressHydrationWarning: the type
+  // differs between the two on purpose.
+  return (
+    <script
+      type={typeof window === "undefined" ? "text/javascript" : "text/plain"}
+      suppressHydrationWarning
+      dangerouslySetInnerHTML={{ __html: SESSION_CARD_GUARD_SCRIPT }}
+    />
+  );
 }

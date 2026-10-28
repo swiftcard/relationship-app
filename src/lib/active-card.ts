@@ -50,3 +50,61 @@ export const SESSION_CARD_COOKIE = "sc_session_card";
  * sessionStorage, so a session card WITHOUT this marker is a previous launch's.
  */
 export const SESSION_CARD_FLAG = "sc_session_card_set";
+
+/**
+ * Which SIGN-IN a session card was chosen in: the start of the auth session's
+ * id (the access token's `session_id` claim). It survives token refreshes and
+ * changes on every new sign-in, whatever the method (password, Google, Apple,
+ * an emailed link, the app).
+ *
+ * Owner, 2026-10-27: "The first thing that pops up when a user logs in should
+ * ask them which card they want to open." The session cookie outlives a sign-in
+ * that ended without Sign out (an expired session, a browser that restores its
+ * cookies), so the dashboard reopened the old card: straight into it in the tab
+ * that had chosen it, and for a second before the picker in any other tab.
+ * Stamping the card with its sign-in lets the SERVER tell, and render the
+ * picker first.
+ */
+export function signInTag(sessionId: unknown): string {
+  return typeof sessionId === "string" ? sessionId.replace(/[^a-z0-9]/gi, "").slice(0, 12) : "";
+}
+
+/** The {@link SESSION_CARD_COOKIE} value: the card slug, then its sign-in. */
+export function sessionCardValue(card: string, signIn: string): string {
+  return `${card}.${signIn}`;
+}
+
+/**
+ * The card a {@link SESSION_CARD_COOKIE} value holds, or null when it was
+ * chosen in a different sign-in. Slugs are [a-z0-9-], so the last "." is the
+ * separator. A value with no "." was written before sign-ins were stamped and
+ * is treated as a previous sign-in's: the picker once, then it is stamped.
+ */
+export function readSessionCard(raw: string | null | undefined, signIn: string): string | null {
+  if (!raw) return null;
+  const dot = raw.lastIndexOf(".");
+  if (dot <= 0) return null;
+  return raw.slice(dot + 1) === signIn ? raw.slice(0, dot) : null;
+}
+
+/**
+ * Parse-time guard for a dashboard opened from the session card in a tab (or an
+ * app launch) that never chose a card itself — no {@link SESSION_CARD_FLAG}.
+ * Inline in the page's HTML ahead of the dashboard markup, it runs before any
+ * of it can paint: drops the session card, stops the document (so the rest of
+ * the dashboard is never parsed or swapped in), and replaces it with the
+ * picker. It used to be decided in a mount effect, AFTER the dashboard had
+ * painted, which was the "shows the dashboard for a second, then Select a
+ * card" glitch. An app cold launch waits for its splash to finish (the splash
+ * markup removes `sc-splash-armed` when the sequence ends; only the loading
+ * skeleton is under it) so the launch animation is never cut short.
+ * Storage blocked: trust the cookie, exactly like the effect.
+ */
+export const SESSION_CARD_GUARD_SCRIPT =
+  "(function(){try{" +
+  `if(sessionStorage.getItem("${SESSION_CARD_FLAG}"))return;` +
+  `document.cookie="${SESSION_CARD_COOKIE}=; path=/; max-age=0; samesite=lax";` +
+  "window.stop();" +
+  "var d=document.documentElement;" +
+  '(function go(){if(d.classList.contains("sc-splash-armed")){setTimeout(go,100);return}location.replace("/dashboard?pick=1")})();' +
+  "}catch(e){}})();";

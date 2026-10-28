@@ -19,7 +19,7 @@ describe("returning user: open SwiftCard → show my QR", () => {
     expect(src).not.toMatch(/ACTIVE_CARD_COOKIE/);
     expect(src).toMatch(/const selectedCard = params\.card \?\? sessionCard/);
     expect(src).toMatch(/const sessionCard = params\.pick \? null :/);
-    expect(src).toMatch(/restored=\{!params\.card && !!sessionCard\}/);
+    expect(src).toMatch(/restored=\{!params\.card && !!sessionCard && allCards\.length > 1\}/);
 
     const lib = read("src/lib/active-card.ts");
     expect(lib).toMatch(/export const SESSION_CARD_COOKIE = "sc_session_card";/);

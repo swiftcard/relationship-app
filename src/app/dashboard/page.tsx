@@ -72,7 +72,7 @@ import { trialHistoryFor } from "@/lib/trial-ledger";
 import EventTagChip from "@/components/EventTagChip";
 import { activeEvent } from "@/lib/event-tag";
 import { ownLiveHref } from "@/lib/self-pass";
-import { SESSION_CARD_COOKIE } from "@/lib/active-card";
+import { SESSION_CARD_COOKIE, readSessionCard, signInTag } from "@/lib/active-card";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
@@ -99,8 +99,6 @@ export default async function DashboardPage({
   // Only a card THIS account owns is honoured (the find() below), so a cookie
   // left by a previous account on the device still lands on the picker.
   const cookieStore = await cookies();
-  const sessionCard = params.pick ? null : (cookieStore.get(SESSION_CARD_COOKIE)?.value ?? null);
-  const selectedCard = params.card ?? sessionCard;
   const viewsRange: "today" | "week" | "month" | "locations" =
     params.vrange === "week" || params.vrange === "month" || params.vrange === "locations" ? params.vrange : "today";
 
@@ -114,6 +112,12 @@ export default async function DashboardPage({
   const { data: claimsData } = await supabase.auth.getClaims();
   if (!claimsData?.claims?.sub) redirect("/login");
   const authedUserId = claimsData.claims.sub;
+  // …and only a card chosen in THIS sign-in (lib/active-card signInTag): every
+  // sign-in opens on "Select a card", even when the last one ended without
+  // Sign out and left its session card behind.
+  const signIn = signInTag(claimsData.claims.session_id);
+  const sessionCard = params.pick ? null : readSessionCard(cookieStore.get(SESSION_CARD_COOKIE)?.value, signIn);
+  const selectedCard = params.card ?? sessionCard;
 
   // Profile + cards are both keyed only to user.id, so fetch them together — one
   // parallel batch instead of two sequential round-trips (a real TTFB win on
@@ -887,6 +891,20 @@ export default async function DashboardPage({
 
   return (
     <>
+      {/* FIRST, ahead of every byte of dashboard markup: a card restored from
+          the session cookie in a tab that never chose it is sent to the
+          picker by a parse-time script here, before any of the dashboard can
+          paint (see SESSION_CARD_GUARD_SCRIPT). No Suspense around it — a
+          boundary could stream it AFTER the markup it guards.
+          Only a card THIS account owns is remembered: the raw ?card= could
+          be the previous account's address carried over by the nav on the
+          first page after a sign-in (isolation audit 2026-09-24). One card
+          has nothing to choose, so it is never sent back to the picker. */}
+      <CardSelectionPersist
+        selectedCard={selectedCard && activeCard?.username === selectedCard ? selectedCard : null}
+        restored={!params.card && !!sessionCard && allCards.length > 1}
+        signIn={signIn}
+      />
       {/* sc-app contents: overlays mounted beside <main> still wear the app theme. */}
       <div className="sc-app contents"><AppStorePopup trigger={params.welcome === "1"} /></div>
       {/* IAP preflight probe — dedicated test account only, renders nothing.
@@ -918,15 +936,6 @@ export default async function DashboardPage({
           silently swallow a leftover guest draft into it (the "bleed" bug). The
           real claim already happens on /cards/new?claim=1 in every auth path. */}
       {params.claim === "1" && <div className="sc-app contents"><GuestDraftClaim /></div>}
-      <Suspense>
-        {/* Only a card THIS account owns is remembered: the raw ?card= could
-            be the previous account's address carried over by the nav on the
-            first page after a sign-in (isolation audit 2026-09-24). */}
-        <CardSelectionPersist
-          selectedCard={selectedCard && activeCard?.username === selectedCard ? selectedCard : null}
-          restored={!params.card && !!sessionCard}
-        />
-      </Suspense>
       {/* Persist plan/role so the guided tour describes the right plan. */}
       <TourContextPersist tier={tourTier} isOfficeMember={isOfficeMember} hasCards />
 
