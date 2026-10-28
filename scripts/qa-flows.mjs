@@ -739,7 +739,17 @@ FLOWS["card-picker"] = async () => {
     if (!s.picker || s.dash) { fail("card-picker", `a sign-in on a two-card account opened ${s.at} without asking which card (${JSON.stringify(s)})`); return; }
 
     await tab1.locator(`a[href="/dashboard?card=${work}"]`).first().click();
-    await tab1.waitForURL(/card=/, { timeout: 30000 });
+    // NOT just waitForURL: with loading.tsx the address reads ?card= while the
+    // skeleton is still up, before the dashboard mounts and saves the choice —
+    // leaving at that instant is a harness race, not the product. Wait for the
+    // dashboard, then for the session card itself.
+    await tab1.locator('[data-tour="share"]').first().waitFor({ state: "visible", timeout: 45000 }).catch(() => {});
+    let saved = false;
+    for (let i = 0; i < 30 && !saved; i++) {
+      saved = (await ctx.cookies(BASE)).some((c) => c.name === "sc_session_card" && c.value.startsWith(`${work}.`));
+      if (!saved) await tab1.waitForTimeout(500);
+    }
+    if (!saved) { fail("card-picker", `choosing a card never saved it for the session (sc_session_card: ${JSON.stringify((await ctx.cookies(BASE)).find((c) => c.name === "sc_session_card")?.value ?? null)})`); return; }
     // In the same tab, a bare /dashboard (every Home link) keeps the card.
     await tab1.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
     s = await screen(tab1);
