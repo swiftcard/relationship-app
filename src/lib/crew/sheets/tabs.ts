@@ -33,7 +33,7 @@ export const LEAD_COLUMNS = [
   c("city", "City", { width: 110 }),
   c("state", "State", { width: 60 }),
   c("email", "Email", { width: 200 }),
-  c("email_status", "Email Status", { width: 100, note: "Domain OK: the address is on their own site and its domain has a mail server. That is not a verified mailbox; a bounce is still possible. No MX Record: the domain names no mail server, but mail may still reach its own address. No Mail Server: the domain doesn't exist, refuses mail, or has no address at all. Unchecked: the lookup failed. Risky: found before these checks. None: no email." }),
+  c("email_status", "Email Status", { width: 100, note: "Verified: the address is on their own site and its domain accepts mail. Risky: one of those is missing. None: no email." }),
   c("phone", "Phone", { width: 120 }),
   linkCol("website", "Website", 120),
   c("source_platform", "Source Platform", { width: 110 }),

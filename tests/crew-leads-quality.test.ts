@@ -4,6 +4,7 @@ import { officeLeads } from "@/lib/crew/agents/office";
 import { assessPrompt, type SiteAssessment } from "@/lib/crew/leads/assess";
 import { EMAIL_STATUS, companyKey, dnsLookup, emailDomainStatus, leadScore, usable, withEmailStatus } from "@/lib/crew/leads/quality";
 import { recordLeads } from "@/lib/crew/leads/record";
+import { specHash } from "@/lib/crew/sheets/bootstrap";
 import { agentHash, leadRows, type RowSources } from "@/lib/crew/sheets/rows";
 import { OFFICE_PROSPECTS, WEB_LEADS } from "@/lib/crew/sheets/tabs";
 import type { Lead } from "@/lib/crew/types";
@@ -262,5 +263,16 @@ describe("the Sheet rows of leads saved before this change are exactly what they
     expect(w.cells).toMatchObject({ score: 87, name: "Jane Park, Owner", email_status: "Domain OK", why: "Fourteen agents.", hook: "Second office.\n\nOpener: Congrats on the new office." });
     const [o] = leadRows({ ...legacyOffice, hook: "Park Slope.", message: "Hi Maria." }, sources());
     expect(o.cells).toMatchObject({ talking_point: "Twelve agents.\n\nDetail to mention: Park Slope.", message: "Hi Maria." });
+  });
+});
+
+describe("the workbook's layout is left alone", () => {
+  // Any change to a tab spec (a column, a header note, a colour) changes this
+  // hash, and the next Sheet sync then re-formats the whole workbook: it puts
+  // back the tab order, column widths and filters the owner may have changed
+  // by hand. This PR changes no spec; 31416e891591 is the hash production
+  // stored on 2026-10-28. Change this pin only when that reset is intended.
+  it("the spec hash is the one production already has", () => {
+    expect(specHash()).toBe("31416e891591");
   });
 });

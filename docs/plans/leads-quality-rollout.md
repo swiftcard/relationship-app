@@ -17,9 +17,15 @@ State at preparation (read-only):
 ## 1. Agents stay paused
 
 ```sql
-select kill_all from crew_settings;                       -- must be true
-select count(*) from crew_runs where status = 'running';  -- must be 0
+select kill_all from crew_settings;                                    -- must be true
+select count(*) from crew_runs
+ where status = 'running' and started_at > now() - interval '15 minutes';  -- must be 0
+select count(*) from crew_agents where lease_until > now();             -- must be 0
 ```
+
+Six old `competitor-watch` records from 21 and 26 October still say
+`running`. They're runs whose function was cut off, not live work, which is
+why the check only looks at the last 15 minutes.
 
 Sheet sync and the daily snapshot keep running through Pause all. That's
 expected: they never contact anyone.
@@ -86,36 +92,20 @@ the workbook itself as well:
 3. In the copy, check that Web Leads has 109 data rows and Office Prospects 87,
    and that a few rows you set by hand show your Status.
 
-## 6. The one-time formatting pass (what it changes, and what it doesn't)
+## 6. No formatting pass
 
-PR #116 rewrites one header note (Email Status). That changes the workbook's
-spec hash, so the first Sheet sync after the merge runs `ensureWorkbook` once.
+PR #116 changes no tab spec. The Email Status header note keeps its old text,
+on purpose: the workbook's spec hash stays `31416e891591`, the value
+production stored (`sheet:spec-hash:*` and `sheet:protect-hash:*` in
+`crew_kv`), so `ensureWorkbook` doesn't run after the merge. Tab order, column
+widths, filters, colours and protections are left exactly as they are. A test
+pins the hash. The new status words (Domain OK, No MX Record, No Mail Server,
+Unchecked) show in the cells; the header note can be corrected later with a
+write to that one header cell, which doesn't trigger a re-format.
 
-**It doesn't change:** any cell value below the header row, any Status, Notes
-or Next Step, which rows exist, or the column order. No column is added,
-removed or moved: every tab's column list is the same as on `main`, and only
-one note's text differs.
-
-**It does rewrite, to the values the code already uses:**
-
-- the header row text and notes;
-- column widths;
-- text wrapping and alignment;
-- Status dropdowns;
-- the tint on owner columns;
-- frozen header rows;
-- tab order and tab colours;
-- the Controls and Key-column warning protections (deleted and added back).
-
-If the owner has dragged a tab, resized a column or left a filter set on a
-tab, that resets: `setBasicFilter` replaces the tab's filter, which clears its
-active filter criteria, but no data. It also adds one more copy of each
-conditional-colour rule. That's the known cosmetic issue, and it's left alone
-for now.
-
-**Check after the first sync following the merge:** re-run ROWS_MD5 from step
-2 and confirm it's unchanged. Then open Web Leads and Office Prospects: the
-same row count as in step 5, the same Statuses, and the new Email Status note.
+**Check after the first sync following the merge:** the sync summary must
+not say "Workbook set up". Both `crew_kv` hashes must still be `31416e891591`.
+ROWS_MD5 from step 2 is unchanged unless a Status was changed in the Sheet.
 
 ## 7. Merge PR #116 **[APPROVAL]**
 
