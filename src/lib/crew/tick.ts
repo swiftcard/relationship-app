@@ -17,6 +17,21 @@ import type { Schedule } from "./types";
 
 export const LEASE_MS = 10 * 60_000;
 export const TICK_BUDGET_MS = 240_000;
+/** How late after its tick a run may start and still be due on the tick one interval later (the clock fires at :00, the run starts seconds after). */
+export const TICK_SLACK_MS = 2 * 60_000;
+
+/**
+ * When an agent is next due. Normally one interval after its run finished.
+ * The Sheet keepers (infrastructure) on an "every" schedule count from when
+ * the run STARTED, less the tick slack: counted from the finish, a 15-minute
+ * sync that ends at :00:35 is due at :15:35, after the :15 tick, and so runs
+ * only every 30 minutes. Never earlier than the finish, so a run longer than
+ * its interval is simply due on the next tick. Overlap is the lease's job.
+ */
+export function nextRunAt(def: Pick<AgentDef, "infrastructure">, schedule: Schedule, started: Date, finished: Date): Date {
+  if (!def.infrastructure || schedule.kind !== "every") return nextRun(schedule, finished);
+  return new Date(Math.max(nextRun(schedule, started).getTime() - TICK_SLACK_MS, finished.getTime()));
+}
 
 export type TickOutcome = { agent: string; status: string; summary: string };
 export type TickReport = { ready: boolean; stopped?: string; expired: number; ran: TickOutcome[]; skipped: { agent: string; why: string }[] };
@@ -32,6 +47,7 @@ export async function scheduleOverrides(store: CrewStore): Promise<ScheduleOverr
 
 export async function runAgent(o: { def: AgentDef; store: CrewStore; providers: Providers; now?: () => Date; schedule?: Schedule }): Promise<TickOutcome> {
   const now = o.now ?? (() => new Date());
+  const started = now();
   const runId = await o.store.startRun(o.def.id);
   let status = "ok";
   let summary = "";
@@ -71,7 +87,7 @@ export async function runAgent(o: { def: AgentDef; store: CrewStore; providers: 
   await o.store.finishRun(runId, status, summary, stats, status === "error" ? summary : undefined);
   const t = now();
   // A continuous agent with nothing new, or at today's ceiling, rests instead of paying for searches that find nothing.
-  const next = new Date(Math.max(nextRun(o.schedule ?? o.def.schedule, t).getTime(), t.getTime() + rest * 60_000));
+  const next = new Date(Math.max(nextRunAt(o.def, o.schedule ?? o.def.schedule, started, t).getTime(), t.getTime() + rest * 60_000));
   await o.store.patchAgentState(o.def.id, {
     last_run_at: t.toISOString(),
     next_run_at: next.toISOString(),
