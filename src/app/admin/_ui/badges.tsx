@@ -21,9 +21,12 @@ export function ClosedBadge() {
 
 export type Billing = "stripe" | "apple" | "grant" | "office_member" | "none";
 
+// "Billed", not "Paying": a subscription can be a trial or 100% off (the
+// co-founder's own Pro on 2026-10-28 read "Paying" and brought in $0). The
+// user's page shows what Stripe says it actually brings in.
 const BILLING: Record<Billing, { cls: string; label: string }> = {
-  stripe: { cls: "sc-badge sc-badge-green", label: "Paying · Stripe" },
-  apple: { cls: "sc-badge sc-badge-green", label: "Paying · Apple" },
+  stripe: { cls: "sc-badge sc-badge-green", label: "Billed · Stripe" },
+  apple: { cls: "sc-badge sc-badge-green", label: "Billed · Apple" },
   grant: { cls: "sc-badge sc-badge-orange", label: "Free Pro (gift)" },
   office_member: { cls: "sc-badge sc-badge-office", label: "Office member · team pays" },
   none: { cls: "sc-badge", label: "Not billed" },
