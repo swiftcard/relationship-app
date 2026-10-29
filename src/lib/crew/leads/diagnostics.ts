@@ -66,6 +66,18 @@ export function screenSearch<T extends { name?: string; website: string }>(ctx: 
   return kept;
 }
 
+/** The first item for each company, in order (an item with no company key stays as its own): what a run actually reads. */
+export function uniqueCompanies<T extends { name?: string; website: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter((b) => {
+    const key = companyKey({ source_url: b.website, company: b.name ?? null });
+    if (!key) return true;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 const OUTCOME_STAT: Record<SiteOutcome, LeadRunStat> = {
   readable: "sites_readable",
   robots: "sites_blocked_robots",

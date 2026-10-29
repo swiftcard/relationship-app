@@ -115,10 +115,10 @@ describe("an Office Prospects run", () => {
     expect(ctx.stats).toMatchObject({ search_results: 3, unique_companies: 3, sites_attempted: 3, sites_http_403: 2, sites_blocked_robots: 1, sites_readable: 0 });
     expect(r.summary).not.toMatch(PERSONAL);
   });
-  it("counts the offices over the per-run cap of 8 as not attempted", async () => {
-    search = Array.from({ length: 11 }, (_, i) => ({ name: `Office ${i}`, website: `https://office${i}.com/` }));
+  it("counts the offices over the per-run cap of 12 as not attempted", async () => {
+    search = Array.from({ length: 15 }, (_, i) => ({ name: `Office ${i}`, website: `https://office${i}.com/` }));
     const { ctx } = await setup({ def: officeOutreach, script: assess });
     await officeOutreach.run(ctx);
-    expect(ctx.stats).toMatchObject({ search_results: 11, sites_attempted: 8, sites_not_attempted: 3, sites_unreadable: 8 });
+    expect(ctx.stats).toMatchObject({ search_results: 15, sites_attempted: 12, sites_not_attempted: 3, sites_unreadable: 12 });
   });
 });

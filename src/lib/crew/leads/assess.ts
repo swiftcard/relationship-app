@@ -2,7 +2,8 @@ import type { AgentContext } from "../context";
 import { textOf } from "./fetch-page";
 
 // ── Reading a business's own site, once, for everything the row needs ───────
-// One cheap call (the "extract" step, Haiku) for a whole run's sites: who the
+// One cheap call (the "extract" step, Haiku) for a whole run's sites (Office
+// Prospects: one per 6 sites, so the answer fits the output limit): who the
 // site names as decision-makers, how well SwiftCard fits, why, one specific
 // detail to open with, and a short opener. The model only reads; every name,
 // email and phone it reports is checked against the page text before it is
@@ -79,10 +80,33 @@ export function assessPrompt(sites: SiteForAssess[], o: { office: boolean }): { 
   };
 }
 
-/** One extract call for the run's readable sites. Null when the model is unavailable or refuses: the agents then save only what the pages themselves show. */
-export async function assessSites(ctx: AgentContext, sites: SiteForAssess[], o: { office: boolean }): Promise<SiteAssessment[] | null> {
+/**
+ * One extract call for the run's readable sites, or one per `perCall` sites
+ * so a long run's answer can't outgrow the call's output limit. Null when no
+ * call gave an answer (the model is unavailable, refuses, or the budget says
+ * no): the agents then save only what the pages themselves show. When a later
+ * call is refused, the sites already read keep their answers and no further
+ * call is made.
+ */
+export async function assessSites(ctx: AgentContext, sites: SiteForAssess[], o: { office: boolean; perCall?: number }): Promise<SiteAssessment[] | null> {
   if (!sites.length) return [];
-  const { system, prompt } = assessPrompt(sites, o);
-  const out = await ctx.llm.askJson<{ sites: SiteAssessment[] }>("extract", { effort: "low", maxTokens: 6000, schema: ASSESS_SCHEMA as unknown as Record<string, unknown>, system, prompt });
-  return out?.sites ?? null;
+  const per = Math.max(1, o.perCall ?? sites.length);
+  const all: SiteAssessment[] = [];
+  let answered = false;
+  for (let start = 0; start < sites.length; start += per) {
+    const part = sites.slice(start, start + per);
+    const { system, prompt } = assessPrompt(part, o);
+    let out: { sites: SiteAssessment[] } | null;
+    try {
+      out = await ctx.llm.askJson<{ sites: SiteAssessment[] }>("extract", { effort: "low", maxTokens: 6000, schema: ASSESS_SCHEMA as unknown as Record<string, unknown>, system, prompt });
+    } catch (e) {
+      // The first call's error is the caller's to handle, as before; after that, keep what was answered.
+      if (!answered) throw e;
+      break;
+    }
+    if (!out?.sites) continue;
+    answered = true;
+    for (const a of out.sites) if (Number.isInteger(a.i) && a.i >= 0 && a.i < part.length) all.push({ ...a, i: a.i + start });
+  }
+  return answered ? all : null;
 }

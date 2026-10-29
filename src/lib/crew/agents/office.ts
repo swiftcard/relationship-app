@@ -4,14 +4,14 @@ import { propose } from "../approvals";
 import { debate } from "../debate";
 import { productFacts } from "../facts";
 import { everContacted, personFor } from "../ledger";
-import { funnelLine, recordSites, screenSearch, startFunnel } from "../leads/diagnostics";
-import { pageTitle, phonesIn, readSiteDetailed, textOf, type SiteOutcome } from "../leads/fetch-page";
+import { funnelLine, recordSites, screenSearch, startFunnel, uniqueCompanies } from "../leads/diagnostics";
+import { pageTitle, phonesIn, textOf } from "../leads/fetch-page";
+import { readSites } from "../leads/read-sites";
 import { assessSites, type SiteAssessment } from "../leads/assess";
 import { leadScore, namedOnSite, safeText, scoreLeads, withEmailStatus } from "../leads/quality";
 import { cleanEmails, recordLeads } from "../leads/record";
 import { minutesToTomorrow, nyDayStart } from "../schedule";
 import { SHEET_MAX_PENDING } from "./replies";
-import { syncLeadsToSheet } from "../sources/sheets";
 import { searchItems } from "../sources/web-discovery";
 import type { Lead } from "../types";
 import { HUMAN_VOICE } from "../voice";
@@ -93,6 +93,15 @@ async function findOffices(ctx: AgentContext, type: string, area: string): Promi
   return screenSearch(ctx, items, OFFICE_DIRECTORIES);
 }
 
+/** Most different offices one run reads (it used to stop at 8 and left a third of what the search found unread). */
+export const OFFICE_SITES_PER_RUN = 12;
+/** Sites read at once, never two on the same host. */
+export const OFFICE_READ_CONCURRENCY = 4;
+/** No new site read starts after this, so a run of slow sites still ends inside the tick's time limit. */
+export const OFFICE_READ_BUDGET_MS = 60_000;
+/** Sites per extract call: about 600 output tokens each, so 6 stays well inside the call's 6000. */
+export const OFFICE_SITES_PER_EXTRACT = 6;
+
 /** Listing, review and social sites: never an office's own page. */
 export const OFFICE_DIRECTORIES = /(yelp|facebook|instagram|linkedin|zillow|streeteasy|realtor\.com|google)\./i;
 
@@ -119,21 +128,18 @@ export const officeOutreach: AgentDef = {
     const n = ctx.config<number>("query_index", 0);
     const { area, type } = officeQuery(n);
     await ctx.saveConfig({ query_index: n + 1 });
-    const found = await findOffices(ctx, type, area);
-    const offices = found.slice(0, 8);
-    const sites: Site[] = [];
-    const outcomes: SiteOutcome[] = [];
-    for (const o of offices) {
-      const r = await readSiteDetailed(o.website);
-      outcomes.push(r.outcome);
-      sites.push({ ...o, area, type, pages: r.pages });
-    }
-    recordSites(ctx, { kept: found.length, outcomes });
+    // Every different office the search found, up to the ceiling: the search is
+    // most of a run's cost, so an office it found and we never read is wasted.
+    const unique = uniqueCompanies(await findOffices(ctx, type, area));
+    const offices = unique.slice(0, OFFICE_SITES_PER_RUN);
+    const { read } = await readSites(offices, { concurrency: OFFICE_READ_CONCURRENCY, deadline: Date.now() + OFFICE_READ_BUDGET_MS });
+    recordSites(ctx, { kept: unique.length, outcomes: read.map((r) => r.outcome) });
+    const sites: Site[] = read.map((r) => ({ name: r.name, website: r.website, area, type, pages: r.pages }));
     const readable = sites.filter((s) => s.pages.length);
     // Which step came up empty: the search, or reading the sites it found.
     if (!readable.length) return { summary: `${type} in ${area}: ${offices.length ? "no readable sites this time" : "the search found no office websites"}. Funnel: ${funnelLine(ctx.stats)}.` };
 
-    const assessed = await assessSites(ctx, readable, { office: true }).catch(() => null);
+    const assessed = await assessSites(ctx, readable, { office: true, perCall: OFFICE_SITES_PER_EXTRACT }).catch(() => null);
     const fits = new Map<string, number>();
     const rows = readable.flatMap((s, i) => {
       const a = assessed?.find((x) => x.i === i);
@@ -144,9 +150,9 @@ export const officeOutreach: AgentDef = {
       return out;
     });
     const added = await recordLeads(ctx, scoreLeads(await withEmailStatus(rows), (l) => fits.get(l.source_url) ?? null));
-    const synced = await syncLeadsToSheet(ctx.store, "office").catch(() => 0);
+    // Sheet sync (every 15 minutes) puts the rows on the Office Prospects tab.
     const drafted = await draftEmails(ctx, rows.filter((r) => r.email && r.name).slice(0, 2));
-    return { summary: `${type} in ${area}: ${added} new call rows${synced ? ` (${synced} on the sheet)` : ""}, ${drafted} email drafts. Funnel: ${funnelLine(ctx.stats)}.` };
+    return { summary: `${type} in ${area}: ${added} new call rows, ${drafted} email drafts. Funnel: ${funnelLine(ctx.stats)}.` };
   },
 };
 
