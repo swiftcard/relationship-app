@@ -3,6 +3,7 @@ import { paged } from "@/lib/crew/paged";
 import { AGENTS } from "@/lib/crew/registry";
 import { missingEnv } from "@/lib/crew/env";
 import type { AgentDef } from "@/lib/crew/agent-def";
+import { notifyAdmin, type AdminNotification } from "@/lib/admin-notify";
 
 // ── Are the agents working? One read-only answer for the admin ──────────────
 //
@@ -130,6 +131,46 @@ export async function agentsHealth(now = new Date()): Promise<AgentsHealth> {
     sheetRows,
     waiting: waiting.count ?? 0,
   });
+}
+
+const nyDay = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+const DAY_MS = 86_400_000;
+
+/**
+ * The notification center's agents items. Each key names one episode, so the
+ * 15-minute tick can write them every time and only the first one lands: one
+ * per Sheet outage (since its last good sync), one per pause, one a day per
+ * failing agent, one per missing connection, one a day for drafts waiting.
+ */
+export function agentNotifications(h: AgentsHealth, now = new Date()): AdminNotification[] {
+  const out: AdminNotification[] = [];
+  const base = { kind: "agents" as const, href: "/admin/crew" };
+  if (h.sheet.failuresInARow >= FAILING_AFTER) {
+    out.push({ ...base, severity: "urgent", title: "The Google Sheet isn't updating", body: `The Sheet sync failed its last ${h.sheet.failuresInARow} runs.${h.sheet.lastError ? ` The last error: ${h.sheet.lastError}` : ""}`, dedupeKey: `agents:sheet:${h.sheet.lastGoodSync ?? "never"}` });
+  }
+  for (const a of h.agents.filter((x) => x.on && x.id !== "sheet-sync" && x.failuresInARow >= FAILING_AFTER)) {
+    out.push({ ...base, severity: "urgent", title: `${a.name} keeps failing`, body: `It failed its last ${a.failuresInARow} runs.${a.lastSummary ? ` The last one said: ${a.lastSummary}` : ""}`, dedupeKey: `agents:failing:${a.id}:${nyDay(now)}` });
+  }
+  if (h.paused && h.pausedSince && now.getTime() - Date.parse(h.pausedSince) > DAY_MS) {
+    const since = new Date(h.pausedSince).toLocaleString("en-US", { timeZone: "America/New_York", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" });
+    out.push({ ...base, title: "The agents have been paused for over a day", body: `Pause all has been on since ${since}. Only the Sheet keeps updating.`, dedupeKey: `agents:paused:${h.pausedSince}` });
+  }
+  for (const a of h.agents.filter((x) => x.on && x.needs.length > 0)) {
+    out.push({ ...base, title: `${a.name} needs a connection`, body: `It can't run until ${a.needs.join(", ")} ${a.needs.length === 1 ? "is" : "are"} set up.`, dedupeKey: `agents:setup:${a.id}:${a.needs.join(",")}` });
+  }
+  if (h.waiting > 0) {
+    out.push({ ...base, title: `${h.waiting} ${h.waiting === 1 ? "draft is" : "drafts are"} waiting for your Approve`, body: "The agents wrote them and won't send anything until you approve.", dedupeKey: `agents:waiting:${nyDay(now)}` });
+  }
+  return out;
+}
+
+/** Called after every agents tick. Never throws. */
+export async function recordAgentNotifications(now = new Date()): Promise<void> {
+  try {
+    for (const n of agentNotifications(await agentsHealth(now), now)) await notifyAdmin(n);
+  } catch (e) {
+    console.error("[admin-notify] agents", e instanceof Error ? e.message : e);
+  }
 }
 
 /** What the owner should hear about, worst first. Shared by the Overview and the notification center. */

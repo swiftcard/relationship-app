@@ -14,6 +14,9 @@ import { Icon, type IconName } from "./_ui/icons";
 //
 // The phone menu is a <details>, so it opens and every link works before the
 // page has hydrated, or with no JavaScript at all.
+//
+// Notifications (2026-10-28) sits first: the bell carries the unread count in
+// the sidebar and in the phone's top bar, so it's seen on every page.
 
 type NavItem = { href: string; label: string; icon: IconName };
 
@@ -22,6 +25,7 @@ export const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: "Business",
     items: [
       { href: "/admin", label: "Overview", icon: "overview" },
+      { href: "/admin/notifications", label: "Notifications", icon: "bell" },
       { href: "/admin/users", label: "Users", icon: "users" },
       { href: "/admin/analytics", label: "Company Analytics", icon: "analytics" },
       { href: "/admin/website", label: "Website", icon: "website" },
@@ -40,7 +44,13 @@ export const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
 const isActive = (href: string, pathname: string) =>
   href === "/admin" ? pathname === "/admin" : pathname === href || pathname.startsWith(`${href}/`);
 
-function NavList({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
+/** "3" or "99+": the unread count on the bell. */
+function UnreadCount({ n, className = "" }: { n: number | null; className?: string }) {
+  if (!n) return null;
+  return <span className={`adm-unread ${className}`} aria-label={`${n} unread`}>{n > 99 ? "99+" : n}</span>;
+}
+
+function NavList({ pathname, unread, onNavigate }: { pathname: string; unread: number | null; onNavigate?: () => void }) {
   return (
     <div className="space-y-6">
       {NAV_GROUPS.map((g) => (
@@ -52,6 +62,7 @@ function NavList({ pathname, onNavigate }: { pathname: string; onNavigate?: () =
                 <Link href={it.href} onClick={onNavigate} className="adm-nav-item" aria-current={isActive(it.href, pathname) ? "page" : undefined}>
                   <Icon name={it.icon} />
                   {it.label}
+                  {it.href === "/admin/notifications" && <UnreadCount n={unread} className="ml-auto" />}
                 </Link>
               </li>
             ))}
@@ -62,7 +73,7 @@ function NavList({ pathname, onNavigate }: { pathname: string; onNavigate?: () =
   );
 }
 
-export default function AdminNav({ email }: { email: string }) {
+export default function AdminNav({ email, unread = null }: { email: string; unread?: number | null }) {
   const pathname = usePathname() ?? "/admin";
   const menu = useRef<HTMLDetailsElement>(null);
   const close = () => { if (menu.current) menu.current.open = false; };
@@ -82,7 +93,7 @@ export default function AdminNav({ email }: { email: string }) {
           <span className="sc-badge sc-badge-tint">Site admin</span>
         </Link>
         <nav aria-label="Site admin" className="flex-1">
-          <NavList pathname={pathname} />
+          <NavList pathname={pathname} unread={unread} />
         </nav>
         <div className="adm-rule pt-4 mt-6 px-3 space-y-2">
           {email && <p className="sc-t-caption adm-muted truncate" title={email}>Signed in as {email}</p>}
@@ -105,16 +116,22 @@ export default function AdminNav({ email }: { email: string }) {
               <span>Menu</span>
             </summary>
             <div className="adm-menu-panel absolute left-2 right-2 top-full mt-2 p-3 max-h-[75vh] overflow-y-auto z-50">
-              <NavList pathname={pathname} onNavigate={close} />
+              <NavList pathname={pathname} unread={unread} onNavigate={close} />
               <div className="adm-rule mt-4 pt-3 px-3">
                 {email && <p className="sc-t-caption adm-muted truncate">Signed in as {email}</p>}
               </div>
             </div>
           </details>
           <p className="sc-t-headline truncate absolute left-1/2 -translate-x-1/2 max-w-[45%] text-center pointer-events-none">{current}</p>
-          <Link href="/dashboard" className="sc-btn sc-btn-plain sc-btn-sm">
-            Dashboard
-          </Link>
+          <div className="flex items-center">
+            <Link href="/admin/notifications" className="sc-btn sc-btn-plain sc-btn-sm relative" aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}>
+              <Icon name="bell" />
+              <UnreadCount n={unread} className="absolute -top-0.5 right-0" />
+            </Link>
+            <Link href="/dashboard" className="sc-btn sc-btn-plain sc-btn-sm">
+              Dashboard
+            </Link>
+          </div>
         </div>
       </header>
     </>

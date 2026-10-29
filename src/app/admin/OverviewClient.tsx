@@ -155,7 +155,7 @@ function OverviewBody({ data, retention, now }: { data: OverviewData; retention:
       </KpiGrid>
 
       <Columns wide>
-        <Section title="Needs your attention" hint="Anything here is waiting on a person. Tap one to open it." flush>
+        <Section title="Needs your attention" hint="Anything here is waiting on a person. Tap one to open it." action={<SeeAll href="/admin/notifications">Notifications</SeeAll>} flush>
           {attention.length === 0 ? (
             <p className="flex items-center gap-2 px-4 sm:px-5 pb-5 sc-t-subhead">
               <span className="adm-good"><Icon name="check" /></span> All clear — nothing needs you right now.

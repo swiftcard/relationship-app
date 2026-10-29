@@ -5,6 +5,7 @@ import { escapeHtml } from "@/lib/escape";
 import { paged } from "@/lib/crew/paged";
 import { getAccountEmailMap } from "@/lib/account-email";
 import { isTestMailbox } from "@/lib/test-mailbox";
+import { notifyLeaving } from "@/lib/admin-notify-leaving";
 
 // ── Someone tried to leave. Tell the owner. ──────────────────────────────────
 //
@@ -47,6 +48,8 @@ export async function alertRetention(opts: {
   reason?: string | null;
   comment?: string | null;
 }): Promise<void> {
+  // The admin's notification center: who left and why, and who an offer kept.
+  await notifyLeaving(opts);
   try {
     const won = opts.outcome !== "deleted";
     const headline = LABEL[opts.outcome];

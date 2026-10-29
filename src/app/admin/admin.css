@@ -87,6 +87,17 @@
 .sc-admin .adm-nav-item:hover { background: var(--adm-hover); }
 .sc-admin .adm-nav-item[aria-current="page"] { background: var(--sc-tint-soft); color: var(--sc-tint); font-weight: 600; }
 .sc-admin .adm-nav-item[aria-current="page"] svg { color: var(--sc-tint); }
+/* The bell's unread count (sidebar row and the phone's top bar). */
+.sc-admin .adm-unread {
+  min-width: 1.25rem; height: 1.25rem; padding: 0 0.3125rem; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0.6875rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums;
+  background: var(--adm-bad); color: #fff;
+}
+/* One notification: unread ones carry a dot and a tinted edge. */
+.sc-admin .adm-note[data-unread="true"] { box-shadow: inset 3px 0 0 var(--sc-tint); }
+.sc-admin .adm-note-dot { width: 0.5rem; height: 0.5rem; border-radius: 999px; background: var(--sc-tint); flex: none; margin-top: 0.4375rem; }
+.sc-admin .adm-note-dot[data-severity="urgent"] { background: var(--adm-bad); }
 
 .sc-admin .adm-topbar { box-shadow: inset 0 -1px 0 var(--adm-grid); }
 .sc-admin .adm-menu > summary { list-style: none; }

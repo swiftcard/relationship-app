@@ -5,6 +5,10 @@ import { getStripe, subscriptionPeriodEndIso } from "@/lib/stripe";
 import type Stripe from "stripe";
 import { officeSubUserBlockMessage, resolveBillingSubjectId } from "@/lib/office-roles";
 import { mergeCustomization } from "@/lib/customization-merge";
+import { cancelKey, notifyAdmin } from "@/lib/admin-notify";
+import { getAccountEmail } from "@/lib/account-email";
+import { accountKind } from "@/lib/admin-data/accounts";
+import { reasonText } from "@/app/admin/_ui/reasons";
 
 // POST /api/stripe/subscription/cancel
 // Schedules the paid plan to end at the period boundary (cancel_at_period_end),
@@ -64,6 +68,22 @@ export async function POST(req: NextRequest) {
     set: { _cancelAtPeriodEnd: true, _cancelAt: periodEnd, _cancelReason: reason || null },
     remove: [],
   });
+
+  // The admin's notification center: the reason in the words they tapped.
+  // The webhook this fires uses the same key, so it's one notification.
+  const email = await getAccountEmail(subjectId, user.email ?? null);
+  if (email && accountKind(email) === "customer") {
+    const plan = profile.plan === "enterprise" ? "Office" : "Pro";
+    const ends = periodEnd ? new Date(periodEnd).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "long", day: "numeric", year: "numeric" }) : null;
+    await notifyAdmin({
+      kind: "leaving",
+      title: "A customer is cancelling",
+      body: `${email}'s ${plan} ends${ends ? ` ${ends}` : " at the end of the period"}. Why: "${reasonText(reason, profile.plan as string | null)}"${comment ? ` In their words: "${comment}"` : ""}`,
+      href: `/admin/users/${subjectId}`,
+      dedupeKey: cancelKey(profile.stripe_subscription_id as string),
+      meta: { reason: reason || null },
+    });
+  }
 
   return NextResponse.json({ ok: true, cancelAt: periodEnd });
 }

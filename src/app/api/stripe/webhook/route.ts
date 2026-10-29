@@ -14,6 +14,7 @@ import { PLAN_LIMITS } from "@/lib/plan";
 import { claimStripeEvent, finishStripeEvent, clearStripeEvent } from "@/lib/stripe-idempotency";
 import { cardFingerprintFor } from "@/lib/stripe-card-fingerprint";
 import { reportError } from "@/lib/report-error";
+import { notifyAdminOfStripeEvent } from "@/lib/admin-notify-stripe";
 import { insertNotification, writeNotification } from "@/lib/notify";
 import { sendPushToUser } from "@/lib/push";
 import { stripeDowngradeAllowed } from "@/lib/iap-entitlement";
@@ -399,6 +400,10 @@ export async function POST(req: NextRequest) {
   // access event, so we alert AND return 500 so Stripe retries the delivery
   // rather than dropping it silently.
   try {
+  // The admin's notification center (money): before the handlers below, so a
+  // first payment can still see the account had never paid. Never throws.
+  await notifyAdminOfStripeEvent(event);
+
   // ── First checkout / upgrade ─────────────────────────────────────────────────
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;

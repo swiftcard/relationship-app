@@ -36,12 +36,12 @@ afterAll(async () => {
 });
 
 /** The page's markup inside the real AdminShell, as the server would send it. */
-async function inShell(pathname: string, page: ReactElement): Promise<string> {
+async function inShell(pathname: string, page: ReactElement, unread: number | null = null): Promise<string> {
   nav.pathname = pathname;
   const { renderToStaticMarkup } = await import("react-dom/server");
   const { createElement } = await import("react");
   const { default: AdminShell } = await import("@/app/admin/AdminShell");
-  return renderToStaticMarkup(createElement(AdminShell, { email: "hello@swiftcard.me" }, page));
+  return renderToStaticMarkup(createElement(AdminShell, { email: "hello@swiftcard.me", unread }, page));
 }
 
 async function open(engine: string, width: number, markup: string): Promise<Page> {
@@ -336,6 +336,44 @@ describe.each(ENGINES)("Overview (%s)", (engine) => {
   });
 });
 
+// ── Notifications (2026-10-28) ──────────────────────────────────────────────
+const NOTES = [
+  { id: "n1", created_at: "2026-10-28T14:00:00Z", kind: "money", severity: "urgent", title: "A payment was disputed", body: "$49.90 — reason: product not received. Answer it in Stripe by November 7, 2026, or it's lost.", href: "/admin/analytics?tab=revenue", meta: { stripeUrl: "https://dashboard.stripe.com/disputes/dp_1" }, read_at: null },
+  { id: "n2", created_at: "2026-10-28T13:00:00Z", kind: "leaving", severity: "important", title: "An account was closed", body: `bartholomew.featherstonehaugh@a-very-long-company-domain.example.com (Pro) closed their account. Why: "It costs more than I get out of it" In their words: "Honestly it was great, but I only go to two events a year and paying every month for that doesn't add up for me right now."`, href: "/admin/users/u9", meta: {}, read_at: null },
+  { id: "n3", created_at: "2026-10-27T09:00:00Z", kind: "agents", severity: "important", title: "The agents have been paused for over a day", body: "Pause all has been on since October 26, 5:31 PM. Only the Sheet keeps updating.", href: "/admin/crew", meta: {}, read_at: "2026-10-27T10:00:00Z" },
+];
+
+async function notifications() {
+  const { createElement } = await import("react");
+  const { default: NotificationsView } = await import("@/app/admin/notifications/NotificationsView");
+  return inShell("/admin/notifications", createElement(NotificationsView, { rows: NOTES as never, tab: "all", unreadOnly: false, unread: { all: 2, money: 1, leaving: 1, agents: 0 } }), 2);
+}
+
+describe.each(ENGINES)("Notifications (%s)", (engine) => {
+  for (const width of [390, 1280]) {
+    it(`the list, the tabs and the forms, nothing spilling at ${width}px`, async () => {
+      const page = await open(engine, width, await notifications());
+      try {
+        const p = await layoutProblems(page);
+        expect(p.spill, `spills at ${width}px`).toEqual([]);
+        expect(p.sideways, `the page scrolls sideways at ${width}px`).toBe(false);
+        const text = await page.evaluate(() => document.body.innerText);
+        for (const s of ["Notifications", "A payment was disputed", "Urgent", "Open in Stripe", "An account was closed", "In their words", "The agents have been paused for over a day", "Mark all read", "Everything", "Unread", "Customers leaving"]) {
+          expect(text, `"${s}" missing`).toContain(s);
+        }
+        // Two unread → two Mark read; the read one has none. Every form posts.
+        expect(await page.getByRole("button", { name: "Mark read", exact: true }).count()).toBe(2);
+        const forms = await page.locator("form").evaluateAll((els) => els.map((f) => [f.getAttribute("method"), f.getAttribute("action")]));
+        expect(forms).toEqual(Array(3).fill(["post", "/api/admin/notifications/read"]));
+        // The bell shows the unread count where it can be seen at this width.
+        const bell = width < 1024 ? page.getByRole("link", { name: "Notifications, 2 unread" }) : page.locator(".adm-sidebar a[href='/admin/notifications']");
+        expect(await bell.isVisible()).toBe(true);
+        expect(await bell.locator(".adm-unread").innerText()).toBe("2");
+      } finally { await page.close(); }
+    });
+  }
+});
+
 describe.each(ENGINES)("the admin shell (%s)", (engine) => {
   it("is light: the canvas is the app's grouped grey, cards are white", async () => {
     const page = await open(engine, 1280, await sandbox());
@@ -382,7 +420,7 @@ describe.each(ENGINES)("the admin shell (%s)", (engine) => {
       const box = (await panel.boundingBox())!;
       expect(box.x).toBeGreaterThanOrEqual(0);
       expect(box.x + box.width).toBeLessThanOrEqual(390);
-      for (const label of ["Overview", "Users", "Company Analytics", "Website", "Marketing", "Agents", "Sandbox"]) {
+      for (const label of ["Overview", "Notifications", "Users", "Company Analytics", "Website", "Marketing", "Agents", "Sandbox"]) {
         expect(await panel.getByRole("link", { name: label, exact: true }).isVisible(), label).toBe(true);
       }
       // Every item is a real tap target.

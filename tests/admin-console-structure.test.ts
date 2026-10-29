@@ -36,7 +36,7 @@ describe("one grouped navigation", () => {
   it("groups the sections into Business and Tools", () => {
     expect(nav).toContain('title: "Business"');
     expect(nav).toContain('title: "Tools"');
-    for (const label of ["Overview", "Users", "Company Analytics", "Website", "Marketing", "Agents", "Sandbox"]) {
+    for (const label of ["Overview", "Notifications", "Users", "Company Analytics", "Website", "Marketing", "Agents", "Sandbox"]) {
       expect(nav, label).toContain(`label: "${label}"`);
     }
   });
@@ -237,6 +237,36 @@ describe("Company Analytics counts real customers and real money (2026-10-28)", 
     const billing = read("src/lib/admin-data/billing.ts");
     for (const s of ["stripe.webhookEndpoints.list", "stripe.prices.retrieve", "REQUIRED_WEBHOOK_EVENTS", "Stripe and accounts agree"]) expect(billing).toContain(s);
     expect(read("src/app/api/health/route.ts")).toContain("stripe = await stripeHealth();");
+  });
+});
+
+describe("Notifications: money, customers leaving, the agents (2026-10-28)", () => {
+  // Owner: "a notification center in our admin page … for really important
+  // things". Admin only: no email, no push.
+  it("All, Money, Customers leaving, Agents, in that order", () => {
+    const keys = [...read("src/app/admin/notifications/tabs.ts").matchAll(/key: "([a-z]+)"/g)].map((m) => m[1]);
+    expect(keys).toEqual(["all", "money", "leaving", "agents"]);
+  });
+
+  it("the page checks the admin itself before reading anything", () => {
+    const page = read("src/app/admin/notifications/page.tsx");
+    expect(page.indexOf("if (!(await requireAdmin())) notFound();")).toBeGreaterThan(-1);
+    expect(page.indexOf("requireAdmin()")).toBeLessThan(page.indexOf('from("admin_notifications")'));
+  });
+
+  it("the bell's count is read by the layout, on every admin page", () => {
+    expect(read("src/app/admin/layout.tsx")).toContain("unread={await unreadNotifications()}");
+    expect(read("src/app/admin/AdminNav.tsx")).toContain('{it.href === "/admin/notifications" && <UnreadCount n={unread} className="ml-auto" />}');
+  });
+
+  it("nothing in it emails or pushes", () => {
+    for (const f of ["src/lib/admin-notify.ts", "src/lib/admin-notify-stripe.ts"]) {
+      expect(read(f)).not.toMatch(/resend|sendPush|api.resend.com|web-push/i);
+    }
+  });
+
+  it("Overview's attention list links to it", () => {
+    expect(read("src/app/admin/OverviewClient.tsx")).toContain('action={<SeeAll href="/admin/notifications">Notifications</SeeAll>}');
   });
 });
 

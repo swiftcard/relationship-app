@@ -13,11 +13,11 @@ import AdminNav from "./AdminNav";
 // for a direct load, so it never flashes dark. Pages that were written dark
 // (Marketing, Agents) are painted light by globals.css's remap layer without
 // their files changing.
-export default function AdminShell({ email, children }: { email: string; children: React.ReactNode }) {
+export default function AdminShell({ email, unread = null, children }: { email: string; unread?: number | null; children: React.ReactNode }) {
   return (
     <div className="sc-app sc-admin min-h-screen lg:flex">
       <ForceLightTheme />
-      <AdminNav email={email} />
+      <AdminNav email={email} unread={unread} />
       <main className="flex-1 min-w-0 px-4 sm:px-6 lg:px-10 pt-5 sm:pt-6 lg:pt-8 pb-16">
         <div className="mx-auto w-full max-w-[1200px]">{children}</div>
       </main>
