@@ -76,6 +76,32 @@ export default function NativeAppBridge() {
     return () => { cancelled = true; remove?.(); };
   }, []);
 
+  // ── New-tab links to our own site leave for the browser on Android too ─────
+  // On iPhone the shell's createWebViewWith hands a target="_blank" link to
+  // UIApplication.open. The Android shell has no equivalent: the WebView would
+  // load "View live" (/api/self-view → the public card) inside the app, where
+  // the bounce above then has to undo it. So catch the tap here and hand the
+  // link to the browser through the same ACTION_VIEW plugin. Only swiftcard.me
+  // links — the plugin's allow-list refuses every other host anyway.
+  useEffect(() => {
+    if (detectNativePlatform() !== "android") return;
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0) return;
+      const a = (e.target as Element | null)?.closest?.("a[target=_blank]") as HTMLAnchorElement | null;
+      if (!a || !a.href) return;
+      let u: URL;
+      try { u = new URL(a.href, window.location.href); } catch { return; }
+      if (u.protocol !== "https:" || (u.hostname !== "swiftcard.me" && u.hostname !== "www.swiftcard.me")) return;
+      e.preventDefault();
+      const dest = u.pathname + u.search + u.hash;
+      import("@/lib/external-purchase")
+        .then(({ openLinkInDefaultBrowser }) => openLinkInDefaultBrowser(dest))
+        .catch(() => false);
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
+
   useEffect(() => {
     if (!detectNativeApp()) return;
 
