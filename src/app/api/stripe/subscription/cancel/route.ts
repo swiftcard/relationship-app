@@ -7,7 +7,7 @@ import { officeSubUserBlockMessage, resolveBillingSubjectId } from "@/lib/office
 import { mergeCustomization } from "@/lib/customization-merge";
 import { cancelKey, notifyAdmin } from "@/lib/admin-notify";
 import { getAccountEmail } from "@/lib/account-email";
-import { accountKind } from "@/lib/admin-data/accounts";
+import { accountKindOf } from "@/lib/admin-data/accounts";
 import { reasonText } from "@/app/admin/_ui/reasons";
 
 // POST /api/stripe/subscription/cancel
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
   // The admin's notification center: the reason in the words they tapped.
   // The webhook this fires uses the same key, so it's one notification.
   const email = await getAccountEmail(subjectId, user.email ?? null);
-  if (email && accountKind(email) === "customer") {
+  if (email && (await accountKindOf(subjectId, email)) === "customer") {
     const plan = profile.plan === "enterprise" ? "Office" : "Pro";
     const ends = periodEnd ? new Date(periodEnd).toLocaleDateString("en-US", { timeZone: "America/New_York", month: "long", day: "numeric", year: "numeric" }) : null;
     await notifyAdmin({

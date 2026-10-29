@@ -14,11 +14,14 @@ const state = vi.hoisted(() => ({
   user: null as { email: string } | null,
   claimants: [] as string[],
   emails: {} as Record<string, string>,
+  cards: {} as Record<string, string[]>,
 }));
 
 vi.mock("@/lib/supabase-admin", () => ({
   getAdminSupabase: () => ({
-    from: () => ({
+    from: (table: string) => ({
+      // An account's card addresses (lib/admin-data accountKindOf).
+      select: () => ({ eq: async (_k: string, userId: string) => ({ data: table === "cards" ? (state.cards[userId] ?? []).map((username) => ({ username })) : [], error: null }) }),
       insert: async (row: Record<string, unknown>) => { inserted.push(row); return { error: null }; },
       update: (values: Record<string, unknown>) => {
         const u = { values, or: null as string | null };
@@ -61,7 +64,7 @@ const view = (over: Record<string, unknown> = {}) => ({
 beforeEach(() => {
   inserted.length = 0;
   updates.length = 0;
-  Object.assign(state, { hosting: false, user: null, claimants: [], emails: {} });
+  Object.assign(state, { hosting: false, user: null, claimants: [], emails: {}, cards: {} });
 });
 
 describe("a visitor's pageview", () => {
@@ -132,6 +135,15 @@ describe("the team's own visits are marked, never mixed in", () => {
   it("signed OUT on a browser one of our accounts has signed in on", async () => {
     state.claimants = ["cust", "ours"];
     state.emails = { cust: "someone@example.com", ours: "hello@swiftcard.me" };
+    const { POST } = await import("@/app/api/site-view/route");
+    await POST(req(view()));
+    expect(inserted[0].is_internal).toBe(true);
+  });
+
+  it("a founder's browser, by their card, whatever address they signed up with", async () => {
+    state.claimants = ["founder"];
+    state.emails = { founder: "someone@company.com" };
+    state.cards = { founder: ["aaronlavi-malvecapital"] };
     const { POST } = await import("@/app/api/site-view/route");
     await POST(req(view()));
     expect(inserted[0].is_internal).toBe(true);

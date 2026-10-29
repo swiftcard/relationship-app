@@ -3,7 +3,7 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { getAccountEmail } from "@/lib/account-email";
 import { planFromPriceId } from "@/lib/subscription";
 import { EVER_PAID_KEY, TRIAL_ENDS_KEY } from "@/lib/billing-state";
-import { accountKind } from "@/lib/admin-data/accounts";
+import { accountKind, accountKindOf } from "@/lib/admin-data/accounts";
 import { cancelKey, dollars, notifyAdmin, type AdminNotification } from "@/lib/admin-notify";
 
 // ── Money, for the admin's notification center ──────────────────────────────
@@ -15,7 +15,7 @@ import { cancelKey, dollars, notifyAdmin, type AdminNotification } from "@/lib/a
 // switched on for the endpoint in Stripe (charge.refunded,
 // charge.dispute.created); until then they simply never arrive.
 
-export type PayerProfile = { id: string; plan: string | null; customization: Record<string, unknown> | null; email: string | null };
+export type PayerProfile = { id: string; plan: string | null; customization: Record<string, unknown> | null; email: string | null; ours?: boolean };
 
 const planName = (priceId: string | null | undefined, fallback: string | null) => {
   const p = planFromPriceId(priceId);
@@ -29,7 +29,7 @@ const longDate = (unix: number | null | undefined) =>
 /** The pure decision: which notification, if any, this event is. */
 export function stripeNotification(event: Stripe.Event, who: PayerProfile | null): AdminNotification | null {
   if (event.livemode === false) return null;
-  if (who?.email && accountKind(who.email) !== "customer") return null;
+  if (who?.ours || (who?.email && accountKind(who.email) !== "customer")) return null;
   const name = who?.email ?? "A customer";
   const href = who ? `/admin/users/${who.id}` : "/admin/analytics?tab=revenue";
   const base = { kind: "money" as const, href, dedupeKey: `stripe:${event.id}`, meta: { event: event.type, stripeId: (event.data.object as { id?: string }).id ?? null } };
@@ -109,7 +109,8 @@ export async function notifyAdminOfStripeEvent(event: Stripe.Event): Promise<voi
       const { data } = await getAdminSupabase().from("profiles").select("id, plan, customization").eq("stripe_customer_id", customer).maybeSingle();
       if (data) {
         const invoiceEmail = (event.data.object as { customer_email?: string | null }).customer_email ?? null;
-        who = { id: data.id as string, plan: (data.plan as string | null) ?? null, customization: (data.customization as Record<string, unknown> | null) ?? null, email: await getAccountEmail(data.id as string, invoiceEmail) };
+        const email = await getAccountEmail(data.id as string, invoiceEmail);
+        who = { id: data.id as string, plan: (data.plan as string | null) ?? null, customization: (data.customization as Record<string, unknown> | null) ?? null, email, ours: (await accountKindOf(data.id as string, email)) !== "customer" };
       }
     }
     const n = stripeNotification(event, who);

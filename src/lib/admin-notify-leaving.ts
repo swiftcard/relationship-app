@@ -1,5 +1,5 @@
 import { notifyAdmin } from "@/lib/admin-notify";
-import { accountKind } from "@/lib/admin-data/accounts";
+import { accountKindOf } from "@/lib/admin-data/accounts";
 import { reasonText } from "@/app/admin/_ui/reasons";
 
 // ── Customers leaving, for the admin's notification center ─────────────────
@@ -25,7 +25,7 @@ export async function notifyLeaving(o: {
   reason?: string | null;
   comment?: string | null;
 }): Promise<void> {
-  if (!o.email || accountKind(o.email) !== "customer") return;
+  if (!o.email || (await accountKindOf(o.userId, o.email)) !== "customer") return;
   const kept = o.outcome !== "deleted";
   const plan = o.plan === "enterprise" ? "Office" : o.plan === "pro" ? "Pro" : "Free";
   const what = kept ? KEPT_BY[o.outcome] ?? "stayed" : "closed their account";

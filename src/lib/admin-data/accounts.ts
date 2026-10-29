@@ -2,7 +2,7 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { paged } from "@/lib/crew/paged";
 import { isAdminEmail } from "@/lib/admin";
 import { isTestMailbox } from "@/lib/test-mailbox";
-import { isInternalCardSlug } from "@/lib/seeded-views";
+import { isFounderCardSlug, isInternalCardSlug } from "@/lib/seeded-views";
 import { effectivePlan } from "@/lib/effective-plan";
 import { isApplePaid } from "@/lib/iap-entitlement";
 import { isPaidPlan } from "@/lib/plan";
@@ -37,8 +37,29 @@ export function accountKind(email: string | null | undefined, cardSlugs: (string
   const e = (email ?? "").trim().toLowerCase();
   if (e && isTestMailbox(e)) return "test";
   if (e && (isAdminEmail(e) || INTERNAL_EMAILS.has(e) || e.endsWith("@swiftcard.me"))) return "internal";
+  // The founders sign up with their own addresses like anyone else; their
+  // cards are how the code already knows them (lib/seeded-views). Read on
+  // 2026-10-28: the co-founder's Office subscription was "1 paying customer,
+  // $7.98/mo" and the owner's own Pro was "moved by hand".
+  if (cardSlugs.some((s) => isFounderCardSlug(s))) return "internal";
   if (cardSlugs.some((s) => isInternalCardSlug(s))) return "test";
   return "customer";
+}
+
+/**
+ * accountKind for one account when only its id and email are at hand (the
+ * website ingest, notifications): reads its card addresses, which is how a
+ * founder's account is told apart. Fails towards what the email alone says.
+ */
+export async function accountKindOf(userId: string | null | undefined, email: string | null | undefined): Promise<AccountKind> {
+  const byEmail = accountKind(email);
+  if (byEmail !== "customer" || !userId) return byEmail;
+  try {
+    const { data } = await getAdminSupabase().from("cards").select("username").eq("user_id", userId);
+    return accountKind(email, (data ?? []).map((c) => c.username as string));
+  } catch {
+    return byEmail;
+  }
 }
 
 /**

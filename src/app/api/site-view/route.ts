@@ -7,7 +7,7 @@ import { isLikelyBot } from "@/lib/bot-detection";
 import { resolveGeo } from "@/lib/request-geo";
 import { attachVisitIdentity, resolveVisitIdentity } from "@/lib/visit-identity";
 import { browserAccountIds } from "@/lib/self-traffic";
-import { accountKind } from "@/lib/admin-data/accounts";
+import { accountKindOf } from "@/lib/admin-data/accounts";
 
 // Cookie a site-owner sets on their own device (via the Website analytics page)
 // so their and their partner's browsing is tagged internal and filtered out.
@@ -46,9 +46,9 @@ const DEVICES = new Set(["phone", "tablet", "computer"]);
 // a second card), not the website.
 const APP_WHEN_SIGNED_IN = new Set(["/cards/new", "/login"]);
 
-/** Ours: an admin, an @swiftcard.me account, QA's test mailboxes. */
-function isOurs(email: string | null | undefined): boolean {
-  return !!email && accountKind(email) !== "customer";
+/** Ours: an admin, an @swiftcard.me account, a founder's, QA's test mailboxes. */
+async function isOurs(userId: string | null | undefined, email: string | null | undefined): Promise<boolean> {
+  return !!email && (await accountKindOf(userId, email)) !== "customer";
 }
 
 export async function POST(req: NextRequest) {
@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     signedIn = !!user;
-    if (isOurs(user?.email)) isInternal = true;
+    if (user && (await isOurs(user.id, user.email))) isInternal = true;
   } catch { /* logged-out visitor — the common case */ }
   if (signedIn && APP_WHEN_SIGNED_IN.has(path)) {
     return NextResponse.json({ ok: true, skipped: "app" });
@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
     try {
       for (const userId of (await browserAccountIds(admin)).slice(0, 5)) {
         const { data } = await admin.auth.admin.getUserById(userId);
-        if (isOurs(data?.user?.email)) { isInternal = true; break; }
+        if (await isOurs(userId, data?.user?.email)) { isInternal = true; break; }
       }
     } catch { /* no claim to check — count the visit */ }
   }

@@ -111,7 +111,7 @@ export type RevenueSummary = {
  * subscriptions count (internal and test accounts are left out); a
  * subscription whose account can't be matched is counted (money is money).
  */
-export function summarize(subs: SubLite[], opts: { nonCustomerUserIds: Set<string>; everPaidUserIds?: Set<string>; now?: Date }): RevenueSummary {
+export function summarize(subs: SubLite[], opts: { nonCustomerUserIds: Set<string>; nonCustomerCustomerIds?: Set<string>; everPaidUserIds?: Set<string>; now?: Date }): RevenueSummary {
   const now = opts.now ?? new Date();
   const nowSec = Math.floor(now.getTime() / 1000);
   // The 1st of this month, New York time.
@@ -125,7 +125,9 @@ export function summarize(subs: SubLite[], opts: { nonCustomerUserIds: Set<strin
   };
   const payingCustomers = new Set<string>();
   for (const s of subs) {
-    if (s.userId && opts.nonCustomerUserIds.has(s.userId)) { out.excludedInternal++; continue; }
+    // Ours by the account id the checkout tagged it with, or — for older
+    // subscriptions that carry no tag — by the Stripe customer on our account.
+    if ((s.userId && opts.nonCustomerUserIds.has(s.userId)) || opts.nonCustomerCustomerIds?.has(s.customerId)) { out.excludedInternal++; continue; }
     const cents = monthlyCents(s, nowSec);
     const plan = planFromPriceId(s.items[0]?.priceId)?.plan ?? "pro";
     if (s.status === "active" || s.status === "past_due") {
@@ -214,9 +216,11 @@ export async function revenue(accounts: Account[]): Promise<RevenueResult> {
   if (!process.env.STRIPE_SECRET_KEY) return { available: false, reason: "STRIPE_SECRET_KEY is not set." };
   try {
     const subs = await listSubscriptions();
-    const nonCustomerUserIds = new Set(accounts.filter((a) => a.kind !== "customer").map((a) => a.id));
+    const ours = accounts.filter((a) => a.kind !== "customer");
+    const nonCustomerUserIds = new Set(ours.map((a) => a.id));
+    const nonCustomerCustomerIds = new Set(ours.map((a) => a.stripeCustomerId).filter((c): c is string => !!c));
     const everPaidUserIds = new Set(accounts.filter((a) => a.billing.everPaid).map((a) => a.id));
-    return { available: true, summary: summarize(subs, { nonCustomerUserIds, everPaidUserIds }), mode: keyMode() };
+    return { available: true, summary: summarize(subs, { nonCustomerUserIds, nonCustomerCustomerIds, everPaidUserIds }), mode: keyMode() };
   } catch (e) {
     return { available: false, reason: `Stripe didn't answer: ${e instanceof Error ? e.message : "unknown error"}` };
   }

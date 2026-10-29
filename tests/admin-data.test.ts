@@ -32,6 +32,16 @@ describe("who counts as a customer", () => {
     expect(accountKind("maya@gmail.com", ["qa-free-1234"])).toBe("test");
     expect(accountKind("maya@gmail.com", ["apple-review-pro"])).toBe("test");
   });
+  it("a founder's own account is ours, whatever address it signed up with (2026-10-28)", () => {
+    // Live on 10-28 the co-founder's own Office subscription was the "1 paying
+    // customer, $7.98/mo", and the owner's own Pro was "moved by hand". Known
+    // by their cards (lib/seeded-views), never by a name or email in code.
+    expect(accountKind("someone@gmail.com", ["menashharooni-swiftcard"])).toBe("internal");
+    expect(accountKind("someone@company.com", ["aaronlavi-malvecapital", "levleveducationalfund"])).toBe("internal");
+    // A customer whose name merely starts the same is a customer.
+    expect(accountKind("maya@gmail.com", ["menashe-cohen"])).toBe("customer");
+    expect(accountKind("maya@gmail.com", ["aaronlavine-realty"])).toBe("customer");
+  });
   it("everyone else is a customer", () => {
     expect(accountKind("Maya.Rep@Gmail.com", ["maya-rep"])).toBe("customer");
     expect(accountKind(null, [])).toBe("customer");
@@ -139,6 +149,10 @@ describe("the revenue picture", () => {
   });
   it("our own and QA's subscriptions are left out", () => {
     const r = summarize([sub({ userId: "ours" }), sub({ userId: "cust", customerId: "z" })], { nonCustomerUserIds: new Set(["ours"]), now });
+    // An older subscription with no account tag is still ours by its Stripe customer.
+    const untagged = summarize([sub({ userId: null, customerId: "cus_ours" }), sub({ userId: "cust", customerId: "z" })], { nonCustomerUserIds: new Set(), nonCustomerCustomerIds: new Set(["cus_ours"]), now });
+    expect(untagged.excludedInternal).toBe(1);
+    expect(untagged.paying).toBe(1);
     expect(r).toMatchObject({ mrrCents: 499, paying: 1, excludedInternal: 1 });
   });
   it("two subscriptions on one customer are one paying customer", () => {

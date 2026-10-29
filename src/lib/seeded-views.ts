@@ -69,6 +69,13 @@ const UNLISTED_CARD_NAMES = ["menashharooni", "menash", "aaronlavi"];
 const isUnlistedName = (slug: string) =>
   UNLISTED_CARD_NAMES.some((p) => slug === p || slug.startsWith(`${p}-`));
 
+/** One of the two founders' own cards. The site admin counts an account that
+ *  holds one as the team's, not a customer's (2026-10-28: the co-founder's own
+ *  Office subscription read as the only paying customer). */
+export function isFounderCardSlug(username: string | null | undefined): boolean {
+  return isUnlistedName((username ?? "").toLowerCase());
+}
+
 /**
  * True for a card that must not be offered to search engines: left out of
  * sitemap.xml and served with a noindex robots tag (card page and Swift
