@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { officeNotificationPath } from "@/lib/office-notification-links";
+import { useDialogA11y } from "@/lib/use-dialog-a11y";
 
 // The /office/admin team-inbox bell. A DISTINCT component from the personal
 // NotificationBell: it polls /api/office/notifications (office_notifications
@@ -40,6 +41,9 @@ export default function OfficeNotificationBell({
   const [bulkPending, setBulkPending] = useState<"markAll" | "clearRead" | null>(null);
   const openRef = useRef(open);
   useEffect(() => { openRef.current = open; }, [open]);
+  // Escape (and Android back, which the app shell sends as Escape) closes it.
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialogA11y(open, () => setOpen(false), panelRef);
 
   const unread = notifications.filter((n) => !n.read).length;
   const readCount = notifications.filter((n) => n.read).length;
@@ -215,6 +219,7 @@ export default function OfficeNotificationBell({
           <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
           {/* Centred on the page, like the personal bell (owner, 2026-09-29). */}
           <div
+            ref={panelRef}
             role="dialog"
             aria-label="Team notifications"
             className="sc-drop-in fixed z-[61] left-0 right-0 mx-auto top-[calc(env(safe-area-inset-top)+86px)] w-[min(360px,calc(100vw-1.5rem))] max-h-[70vh] sc-glass border border-gray-800 rounded-2xl shadow-2xl shadow-black/20 overflow-hidden flex flex-col"
