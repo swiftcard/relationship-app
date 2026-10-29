@@ -265,6 +265,12 @@ describe("Notifications: money, customers leaving, the agents (2026-10-28)", () 
     }
   });
 
+  it("a subscription is never called 'Paying' just for existing (it can be a trial or 100% off)", () => {
+    const badges = read("src/app/admin/_ui/badges.tsx");
+    expect(badges).toContain('label: "Billed · Stripe"');
+    expect(badges).not.toMatch(/label: "Paying ·/);
+  });
+
   it("Overview's attention list links to it", () => {
     expect(read("src/app/admin/OverviewClient.tsx")).toContain('action={<SeeAll href="/admin/notifications">Notifications</SeeAll>}');
   });
