@@ -104,6 +104,15 @@ export default function NativeAppBridge() {
         .then(({ SplashScreen }) => SplashScreen.hide({ fadeOutDuration: 180 }))
         .catch(() => { /* older shell without the plugin: auto-hide covers it */ });
     }));
+    // Status-bar icons follow the APP's theme, not the phone's. Unset, Android
+    // uses the phone's dark mode: white icons on our light screen.
+    import("@capacitor/core")
+      .then(({ SystemBars, SystemBarsStyle }) => {
+        const root = document.documentElement;
+        const dark = root.classList.contains("dark") || root.dataset.theme === "dark";
+        return SystemBars.setStyle({ style: dark ? SystemBarsStyle.Dark : SystemBarsStyle.Light });
+      })
+      .catch(() => { /* older shell without the plugin: the system default stays */ });
     try {
       const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
       if (meta && !meta.content.includes("viewport-fit")) {
