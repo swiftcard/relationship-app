@@ -15,6 +15,19 @@ export class BudgetStop extends Error {
 
 export type BudgetCheck = { ok: true } | { ok: false; reason: string };
 
+/**
+ * Jobs the owner starts with a button, each with its own daily limit (the
+ * Blog Writer, $10). Their spending is theirs: counted in the shared total it
+ * stopped the agents for the day (2026-10-29: one Generate used about half of
+ * the $3 all agents share).
+ */
+export const ON_DEMAND_AGENT_IDS = ["blog-writer"];
+
+/** Today's spending that counts against the shared limit: everything but the on-demand jobs. */
+export function sharedSpend(totals: UsageTotals): number {
+  return totals.total.usd - ON_DEMAND_AGENT_IDS.reduce((n, id) => n + (totals.byAgent[id]?.usd ?? 0), 0);
+}
+
 export function checkBudget(i: {
   hardDisabled: boolean;
   settings: Settings;
@@ -37,8 +50,9 @@ export function checkBudget(i: {
   if (teamCap !== undefined && teamSpent + i.estUsd > teamCap) {
     return { ok: false, reason: `The ${i.agent.team} team hit its daily limit: $${teamSpent.toFixed(2)} of $${teamCap.toFixed(2)}.` };
   }
-  if (i.totals.total.usd + i.estUsd > i.settings.daily_usd_cap) {
-    return { ok: false, reason: `All agents together hit today's limit: $${i.totals.total.usd.toFixed(2)} of $${i.settings.daily_usd_cap.toFixed(2)}.` };
+  const shared = sharedSpend(i.totals);
+  if (shared + i.estUsd > i.settings.daily_usd_cap) {
+    return { ok: false, reason: `All agents together hit today's limit: $${shared.toFixed(2)} of $${i.settings.daily_usd_cap.toFixed(2)}.` };
   }
   return { ok: true };
 }

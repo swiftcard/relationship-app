@@ -3,11 +3,11 @@ import type { AgentContext } from "../context";
 import { propose } from "../approvals";
 import { normalizeHandle } from "../ledger";
 import { pairs, rotate, runEngagement, type Candidate } from "../replies/engine";
-import { PROBLEMS, PROFESSIONS } from "../search-plan";
+import { PROBLEMS, PROFESSIONS, US_METROS } from "../search-plan";
 import { searchHackerNews } from "../sources/hackernews";
 import { redditConfigured, rulesBanPromotion, searchSubreddits, subredditRules } from "../sources/reddit";
 import { searchBluesky } from "../sources/bluesky";
-import { searchPlatform } from "../sources/web-discovery";
+import { searchPlatform, searchRedditByWeb } from "../sources/web-discovery";
 import type { CrewInput, Platform } from "../types";
 
 // ── Team 1: Replies (one agent per platform) ────────────────────────────────
@@ -66,9 +66,10 @@ function fromInputs(inputs: CrewInput[], platform: Platform): Candidate[] {
     title: i.text.split("\n")[0].slice(0, 140),
     text: i.text,
     community: null,
-    // A person chose this post; promotion is still only allowed if they paste
-    // from somewhere that allows it, so default to "helpful only" for groups.
-    promoAllowed: platform !== "facebook",
+    // You chose this post, and every message promotes SwiftCard (2026-10-29):
+    // a pasted Facebook post marked "no promotion" was skipped, so every
+    // Facebook paste was silently dropped.
+    promoAllowed: true,
     fromPaste: true,
   }));
 }
@@ -79,8 +80,19 @@ export function guessAuthor(text: string, platform: Platform): string | null {
   return m ? m[1] : null;
 }
 
-/** Sheet agents add rows until today's ceiling; the owner works through them in the Sheet, so they don't stop for unread drafts. */
-export const SHEET_MAX_PENDING = 300;
+/**
+ * New messages a day from EACH Sheet agent (owner, 2026-10-29: "I want each
+ * of these agents to generate me 100 new leads a day ... for every single
+ * marketing agent"). The full number from day one, no warm-up: an agent only
+ * drafts; the owner sends each one by hand.
+ */
+export const SHEET_DAILY_TARGET = 100;
+
+/** Each Sheet agent's own daily $ limit, sized for SHEET_DAILY_TARGET (about 4 to 5 cents a message with its searches). The Agents tab can still change it per agent. */
+export const SHEET_AGENT_USD = 5;
+
+/** Sheet agents add rows until today's target; the owner works through them in the Sheet, so they don't stop for unread drafts. A week of 100 a day (rows expire after a week). */
+export const SHEET_MAX_PENDING = 800;
 
 const base = {
   team: "replies" as const,
@@ -102,23 +114,25 @@ export const redditReplies: AgentDef = {
   id: "replies-reddit",
   name: "Reddit Reply",
   schedule: { kind: "daily", hour: 9, minute: 0 },
-  dailyUsd: 0.6,
+  dailyUsd: SHEET_AGENT_USD,
   purpose: "Finds Reddit threads where an answer helps (people asking about cards, follow ups, link pages, or unhappy with a competitor) and writes the reply, with the exact thread link.",
   async run(ctx) {
     const r = await runEngagement(ctx, {
       platform: "reddit",
       kind: "reply",
       action: "reply",
-      ceiling: 8,
+      ceiling: SHEET_DAILY_TARGET,
       register: "Reddit: casual, no greeting, no sign-off, no emoji.",
       length: "40 to 120 words",
       label: (c) => `Reddit${c.community ? ` r/${c.community}` : ""}: ${c.title.slice(0, 90)}`,
       person: (c) => (c.author ? { platform: "reddit", handle: `u/${c.author}` } : null),
       async find() {
         const pasted = fromInputs(await ctx.store.takeInputs(["reddit"], 5, ctx.def.id), "reddit");
-        // Reddit blocks Anthropic's web search (seen live 2026-10-20), so
-        // without the Reddit API keys only pasted posts can be answered.
-        if (!redditConfigured()) return pasted;
+        // Reddit blocks Anthropic's web search as a site filter (seen live
+        // 2026-10-20). Without the Reddit API keys, an open web search for
+        // Reddit threads is the fallback; their subreddit rules can't be read
+        // without the keys, so the reply carries the disclosure.
+        if (!redditConfigured()) return [...pasted, ...(await searchRedditByWeb(ctx, await nextTopics(ctx))).map((w) => ({ ...w, promoAllowed: true }))];
         const subs = ctx.config<string[]>("subreddits", DEFAULT_SUBREDDITS);
         // Two queries a run, in rotation, so a continuous run looks somewhere new each time.
         const queries = await rotate(ctx, "query_i", ctx.config<string[]>("queries", DEFAULT_QUERIES), 2);
@@ -132,31 +146,31 @@ export const redditReplies: AgentDef = {
         return out;
       },
     });
-    return redditConfigured() ? r : { ...r, summary: `${r.summary} Searching Reddit needs the Reddit app keys (Reddit blocks AI web search); until then it only answers posts you paste in.` };
+    return redditConfigured() ? r : { ...r, summary: `${r.summary} Without the Reddit app keys it can only find Reddit threads through web search, which sees few new ones; the keys (or posts you paste in) give it far more.` };
   },
 };
 
-function webAgent(o: { id: string; name: string; platform: Platform; purpose: string; ceiling: number; register: string; hour: number; length?: string; kind?: "reply" | "comment" }): AgentDef {
+function webAgent(o: { id: string; name: string; platform: Platform; purpose: string; register: string; hour: number; length?: string; kind?: "reply" | "comment" }): AgentDef {
   return {
     ...base,
     id: o.id,
     name: o.name,
     schedule: { kind: "daily", hour: o.hour, minute: 0 },
-    dailyUsd: 0.5,
+    dailyUsd: SHEET_AGENT_USD,
     purpose: o.purpose,
     async run(ctx) {
       return runEngagement(ctx, {
         platform: o.platform,
         kind: o.kind ?? "reply",
         action: o.kind ?? "reply",
-        ceiling: o.ceiling,
+        ceiling: SHEET_DAILY_TARGET,
         register: o.register,
         length: o.length ?? (o.platform === "quora" ? "80 to 180 words, a real answer first" : "40 to 120 words"),
         label: (c) => `${o.name.replace(/ (Replies|Answers)$/, "")}: ${c.title.slice(0, 90)}`,
         person: (c) => (c.author && (o.platform === "threads" || o.platform === "x" || o.platform === "tiktok") ? { platform: o.platform, handle: normalizeHandle(o.platform, c.author) } : null),
         async find() {
           const pasted = fromInputs(await ctx.store.takeInputs([o.platform], 5, ctx.def.id), o.platform);
-          const web = (await searchPlatform(ctx, o.platform, await nextTopics(ctx), 10)).map((w) => ({ ...w, promoAllowed: true }));
+          const web = (await searchPlatform(ctx, o.platform, await nextTopics(ctx))).map((w) => ({ ...w, promoAllowed: true }));
           return [...pasted, ...web];
         },
       });
@@ -164,9 +178,9 @@ function webAgent(o: { id: string; name: string; platform: Platform; purpose: st
   };
 }
 
-export const threadsReplies = webAgent({ id: "replies-threads", name: "Threads Replies", platform: "threads", ceiling: 5, hour: 10, register: "Threads: short, warm, conversational.", purpose: "Finds Threads posts where SwiftCard would help and drafts a reply for you to post." });
-export const quoraReplies = webAgent({ id: "replies-quora", name: "Quora Answers", platform: "quora", ceiling: 3, hour: 11, register: "Quora: a clear, useful answer; personal experience welcome.", purpose: "Finds Quora questions about business cards and link-in-bio tools and drafts an answer for you to post." });
-export const ihReplies = webAgent({ id: "replies-indiehackers", name: "Indie Hackers", platform: "indiehackers", ceiling: 3, hour: 12, register: "Indie Hackers: founder to founder, honest, specific.", purpose: "Finds Indie Hackers threads about cards, link-in-bio and personal branding and drafts a reply." });
+export const threadsReplies = webAgent({ id: "replies-threads", name: "Threads Replies", platform: "threads", hour: 10, register: "Threads: short, warm, conversational.", purpose: "Finds Threads posts where SwiftCard would help and drafts a reply for you to post." });
+export const quoraReplies = webAgent({ id: "replies-quora", name: "Quora Answers", platform: "quora", hour: 11, register: "Quora: a clear, useful answer; personal experience welcome.", purpose: "Finds Quora questions about business cards and link-in-bio tools and drafts an answer for you to post." });
+export const ihReplies = webAgent({ id: "replies-indiehackers", name: "Indie Hackers", platform: "indiehackers", hour: 12, register: "Indie Hackers: founder to founder, honest, specific.", purpose: "Finds Indie Hackers threads about cards, link-in-bio and personal branding and drafts a reply." });
 
 // Bluesky's search takes plain words or "phrases"; OR is not reliable there.
 // Searched live 2026-10-22: hardly anyone there talks about card apps, and
@@ -193,14 +207,14 @@ export const blueskyReplies: AgentDef = {
   id: "replies-bluesky",
   name: "Bluesky Replies",
   schedule: { kind: "daily", hour: 15, minute: 0 },
-  dailyUsd: 0.5,
+  dailyUsd: SHEET_AGENT_USD,
   purpose: "Searches Bluesky for posts where SwiftCard would help and drafts a reply for you to post (most are just helpful, with no mention of SwiftCard).",
   async run(ctx) {
     return runEngagement(ctx, {
       platform: "bluesky",
       kind: "reply",
       action: "reply",
-      ceiling: 5,
+      ceiling: SHEET_DAILY_TARGET,
       // Bluesky is quick to block accounts that look like ads.
       register: "Bluesky: short, warm, conversational, under 300 characters (Bluesky's limit). No hashtags, no emoji.",
       length: "under 300 characters",
@@ -222,25 +236,33 @@ export const blueskyReplies: AgentDef = {
   },
 };
 
+// Facebook groups have no API (since April 2024). Posts you paste come
+// first; on top of them it searches the web for public group posts, since
+// 2026-10-29 (100 a day). Most groups are private, so the search finds the
+// public ones only.
 export const facebookReplies: AgentDef = {
   ...base,
   id: "replies-facebook",
-  continuous: false,
   name: "Facebook Groups",
-  schedule: { kind: "on_input", platforms: ["facebook"] },
-  dailyUsd: 0.4,
-  purpose: "Drafts replies to Facebook group posts you paste in (Facebook doesn't let apps read groups).",
+  schedule: { kind: "daily", hour: 9, minute: 30 },
+  dailyUsd: SHEET_AGENT_USD,
+  purpose: "Finds public Facebook group posts where SwiftCard would help, plus the ones you paste in, and drafts a reply for each. The link opens the post.",
   async run(ctx) {
     return runEngagement(ctx, {
       platform: "facebook",
       kind: "reply",
       action: "reply",
-      ceiling: 5,
+      ceiling: SHEET_DAILY_TARGET,
       register: "Facebook group: friendly, neighborly, plain.",
       length: "30 to 100 words",
       keywordFilter: false,
       label: (c) => `Facebook group: ${c.title.slice(0, 90)}`,
-      find: async () => fromInputs(await ctx.store.takeInputs(["facebook"], 6, ctx.def.id), "facebook"),
+      async find() {
+        const pasted = fromInputs(await ctx.store.takeInputs(["facebook"], 10, ctx.def.id), "facebook");
+        const topics = (await nextTopics(ctx)).map((t) => `public Facebook group posts (facebook.com/groups/<group>/posts/<id> links) by ${t}`);
+        const web = (await searchPlatform(ctx, "facebook", topics)).map((w) => ({ ...w, promoAllowed: true }));
+        return [...pasted, ...web];
+      },
     });
   },
 };
@@ -250,24 +272,29 @@ export const instagramComments: AgentDef = {
   economyTier: "haiku",
   id: "replies-instagram",
   name: "Instagram Comments",
-  continuous: false,
   approvalKind: "comment",
   schedule: { kind: "daily", hour: 13, minute: 0 },
-  dailyUsd: 0.5,
-  purpose: "Drafts 3 to 5 useful comments a day on business pros' public posts (most don't mention SwiftCard), plus a list of 20 to 30 accounts to follow.",
+  dailyUsd: SHEET_AGENT_USD,
+  purpose: "Finds business pros' recent public Instagram posts, plus the ones you paste in, and writes a comment on each that brings up SwiftCard. The link opens the post. Once a week, a list of accounts worth following.",
   async run(ctx) {
     const follow = await followList(ctx);
     const r = await runEngagement(ctx, {
       platform: "instagram",
       kind: "comment",
       action: "comment",
-      ceiling: 5,
+      ceiling: SHEET_DAILY_TARGET,
       register: "Instagram comment: warm, specific to the post, no hashtags.",
       length: "40 words or less",
       keywordFilter: false,
       label: (c) => `Instagram comment${c.author ? ` on @${c.author}` : ""}: ${c.title.slice(0, 70)}`,
       person: (c) => (c.author ? { platform: "instagram", handle: c.author } : null),
-      find: async () => fromInputs(await ctx.store.takeInputs(["instagram"], 6, ctx.def.id), "instagram"),
+      async find() {
+        const pasted = fromInputs(await ctx.store.takeInputs(["instagram"], 10, ctx.def.id), "instagram");
+        // Since 2026-10-29 it searches too (it only had pasted posts, and so wrote almost nothing).
+        const [[who, where]] = await rotate(ctx, "where_i", pairs(PROFESSIONS, US_METROS), 1);
+        const web = (await searchPlatform(ctx, "instagram", [`recent public Instagram posts (instagram.com/p/ or /reel/ links) by ${who} in ${where} about their work. No law firms.`])).map((w) => ({ ...w, author: w.author ? w.author.replace(/^@/, "") : null, promoAllowed: true }));
+        return [...pasted, ...web];
+      },
     });
     return { summary: `${r.summary}${follow ? ` ${follow}` : ""}` };
   },
@@ -299,21 +326,21 @@ export const linkedinComments: AgentDef = {
   name: "LinkedIn Comments",
   approvalKind: "comment",
   schedule: { kind: "daily", hour: 14, minute: 0 },
-  dailyUsd: 0.5,
+  dailyUsd: SHEET_AGENT_USD,
   purpose: "Drafts insightful comments on specific LinkedIn posts by business pros, for you to post.",
   async run(ctx) {
     return runEngagement(ctx, {
       platform: "linkedin",
       kind: "comment",
       action: "comment",
-      ceiling: 5,
+      ceiling: SHEET_DAILY_TARGET,
       register: "LinkedIn: thoughtful, specific to THIS post, adds a real point of view. First person, no hashtags.",
       length: "25 to 70 words",
       keywordFilter: false,
       label: (c) => `LinkedIn comment${c.author ? ` for ${c.author}` : ""}: ${c.title.slice(0, 70)}`,
       async find() {
         const pasted = fromInputs(await ctx.store.takeInputs(["linkedin"], 5, ctx.def.id), "linkedin");
-        const web = (await searchPlatform(ctx, "linkedin", (await nextTopics(ctx)).map((t) => `LinkedIn posts by ${t}`), 10)).map((w) => ({ ...w, promoAllowed: true }));
+        const web = (await searchPlatform(ctx, "linkedin", (await nextTopics(ctx)).map((t) => `LinkedIn posts by ${t}`))).map((w) => ({ ...w, promoAllowed: true }));
         return [...pasted, ...web];
       },
     });
@@ -331,14 +358,14 @@ export const hackerNewsReplies: AgentDef = {
   id: "replies-hackernews",
   name: "Hacker News",
   schedule: { kind: "daily", hour: 12, minute: 30 },
-  dailyUsd: 0.4,
+  dailyUsd: SHEET_AGENT_USD,
   purpose: "Finds Hacker News stories and comments about business cards, networking follow ups and link pages, and writes a genuinely useful reply with the exact comment link.",
   async run(ctx) {
     return runEngagement(ctx, {
       platform: "hackernews",
       kind: "reply",
       action: "reply",
-      ceiling: 3,
+      ceiling: SHEET_DAILY_TARGET,
       register: "Hacker News: precise, technical where it helps, zero marketing tone, no greeting, no sign-off, plain text only.",
       length: "40 to 120 words",
       label: (c) => `Hacker News: ${c.title.slice(0, 90)}`,
@@ -357,7 +384,7 @@ export const hackerNewsReplies: AgentDef = {
 // X and TikTok (owner, 2026-10-29): found through web search, free, so a few
 // posts a run rather than hundreds; X's own search API would cost about $200 a
 // month and the owner chose the free way.
-export const xReplies = webAgent({ id: "replies-x", name: "X Replies", platform: "x", ceiling: 8, hour: 11, length: "15 to 45 words, under 280 characters", register: "X: short and punchy, like a real reply under a tweet. No greeting.", purpose: "Finds posts on X about business cards, link in bio pages and following up with leads, and writes a reply that brings up SwiftCard. The link opens the post." });
-export const tiktokComments = webAgent({ id: "replies-tiktok", name: "TikTok Comments", platform: "tiktok", kind: "comment", ceiling: 6, hour: 13, length: "10 to 35 words", register: "TikTok comment: casual, quick, like a real viewer who has something useful to add.", purpose: "Finds TikTok videos about networking, business cards and link in bio pages, and writes a comment that brings up SwiftCard. The link opens the video." });
+export const xReplies = webAgent({ id: "replies-x", name: "X Replies", platform: "x", hour: 11, length: "15 to 45 words, under 280 characters", register: "X: short and punchy, like a real reply under a tweet. No greeting.", purpose: "Finds posts on X about business cards, link in bio pages and following up with leads, and writes a reply that brings up SwiftCard. The link opens the post." });
+export const tiktokComments = webAgent({ id: "replies-tiktok", name: "TikTok Comments", platform: "tiktok", kind: "comment", hour: 13, length: "10 to 35 words", register: "TikTok comment: casual, quick, like a real viewer who has something useful to add.", purpose: "Finds TikTok videos about networking, business cards and link in bio pages, and writes a comment that brings up SwiftCard. The link opens the video." });
 
 export const REPLIES: AgentDef[] = [redditReplies, xReplies, threadsReplies, blueskyReplies, facebookReplies, quoraReplies, ihReplies, instagramComments, tiktokComments, linkedinComments, hackerNewsReplies];

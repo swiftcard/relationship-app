@@ -1,13 +1,13 @@
 import type { AgentDef } from "../agent-def";
 import type { AgentContext } from "../context";
 import { normalizeHandle } from "../ledger";
-import { exactProfileLink, handleFromPost, instagramHandle } from "../exact-links";
+import { exactProfileLink, handleFromPost, handleFromProfile, instagramHandle } from "../exact-links";
 import { pairs, rotate, runEngagement, type Candidate } from "../replies/engine";
 import { PROFESSIONS, US_METROS } from "../search-plan";
 import { redditConfigured, searchSubreddits } from "../sources/reddit";
-import { searchItems, searchPlatform } from "../sources/web-discovery";
+import { SEARCH_WANT, searchItems, searchPlatform, searchRedditByWeb } from "../sources/web-discovery";
 import type { CrewInput, Platform } from "../types";
-import { DEFAULT_SUBREDDITS, SHEET_MAX_PENDING, guessAuthor } from "./replies";
+import { DEFAULT_SUBREDDITS, SHEET_AGENT_USD, SHEET_DAILY_TARGET, SHEET_MAX_PENDING, guessAuthor } from "./replies";
 
 // ── Team 2: Contact (the team that DMs) ─────────────────────────────────────
 // Every message is a DRAFT a person sends by hand from their own account:
@@ -20,6 +20,9 @@ import { DEFAULT_SUBREDDITS, SHEET_MAX_PENDING, guessAuthor } from "./replies";
 export const LINK_IN_BIO = /linktr\.ee|linktree|hoo\.be|hoobe|link\.me\b/i;
 
 const REDDIT_DM_QUERIES = ["\"link in bio\" recommend", "\"good link in bio\"", "linktree expensive", "\"digital business card\" recommend", "hihello OR blinq OR popl price"];
+
+/** The same asks in plain words, for the web search used when the Reddit keys aren't set. */
+const REDDIT_DM_TOPICS = ["a good link in bio page for a business", "Linktree being too expensive", "which digital business card app to use", "HiHello, Blinq or Popl price or problems", "realtors or loan officers asking how to share contact info", "small business owners asking for a business card app"];
 
 function pasted(inputs: CrewInput[], platform: Platform): Candidate[] {
   return inputs.map((i) => ({
@@ -67,23 +70,27 @@ export const redditDms: AgentDef = {
   id: "contact-reddit",
   name: "Reddit DMs",
   schedule: { kind: "daily", hour: 10, minute: 30 },
-  dailyUsd: 0.6,
+  dailyUsd: SHEET_AGENT_USD,
   purpose: "Finds people on Reddit asking for a card or link page tool, or unhappy with a competitor, and writes them a short private message. The link opens Reddit's message screen to that person.",
   async run(ctx) {
     return runEngagement(ctx, {
       platform: "reddit",
       kind: "dm",
       action: "dm",
-      ceiling: 10,
+      ceiling: SHEET_DAILY_TARGET,
       mustBePro: true,
       register: "Reddit chat: casual and brief, like a person who read their post. Use their complaint or question to explain the one SwiftCard strength that matches it.",
       length: "35 to 80 words",
       label: (c) => `Reddit DM to u/${c.author}: ${c.title.slice(0, 80)}`,
       person: (c) => (c.author ? { platform: "reddit", handle: `u/${c.author}` } : null),
       async find() {
-        const out: Candidate[] = pasted(await ctx.store.takeInputs(["reddit"], 3, ctx.def.id), "reddit");
-        // Reddit blocks Anthropic's web search: without the API keys, pasted posts only.
-        if (!redditConfigured()) return out;
+        const out: Candidate[] = pasted(await ctx.store.takeInputs(["reddit"], 5, ctx.def.id), "reddit");
+        // Reddit blocks Anthropic's web search as a site filter: without the
+        // API keys, an open web search for Reddit threads is the fallback.
+        if (!redditConfigured()) {
+          const topics = (await rotate(ctx, "query_i", REDDIT_DM_TOPICS, 2)).map((t) => `${t} (Reddit posts asking for a recommendation)`);
+          return [...out, ...(await searchRedditByWeb(ctx, topics)).filter((w) => !!w.author).map((w) => ({ ...w, promoAllowed: true }))];
+        }
         for (const q of await rotate(ctx, "query_i", REDDIT_DM_QUERIES, 2)) {
           for (const p of await searchSubreddits(ctx.config<string[]>("subreddits", DEFAULT_SUBREDDITS), q, 10)) {
             out.push({ platform: "reddit", url: p.url, author: p.author, title: p.title, text: p.text, community: p.subreddit, promoAllowed: true });
@@ -97,8 +104,11 @@ export const redditDms: AgentDef = {
 
 async function igCandidates(ctx: AgentContext, topic: string): Promise<Candidate[]> {
   const fromPaste = pasted(await ctx.store.takeInputs(["instagram"], 5, ctx.def.id), "instagram");
-  const web = (await searchPlatform(ctx, "instagram", [topic], 10)).map((w) => ({ ...w, author: instagramHandle(w.author) ?? handleFromUrl("instagram", w.url), promoAllowed: true }));
-  return [...fromPaste, ...web].filter((c) => !!c.author);
+  const web = (await searchPlatform(ctx, "instagram", [topic])).map((w) => ({ ...w, author: instagramHandle(w.author) ?? handleFromUrl("instagram", w.url), promoAllowed: true }));
+  const out = [...fromPaste, ...web];
+  // A post or profile with no @handle can't be messaged (the link opens a chat with that handle).
+  ctx.stat("skipped_no_handle", out.filter((c) => !c.author).length);
+  return out.filter((c) => !!c.author);
 }
 
 export const instagramDms: AgentDef = {
@@ -106,23 +116,25 @@ export const instagramDms: AgentDef = {
   id: "contact-instagram",
   name: "Instagram DMs",
   schedule: { kind: "daily", hour: 15, minute: 0 },
-  dailyUsd: 0.6,
+  dailyUsd: SHEET_AGENT_USD,
   purpose: "Finds business professionals' recent Instagram posts and writes each a short DM about that post. The link opens the chat with them in the Instagram app.",
   async run(ctx) {
     return runEngagement(ctx, {
       platform: "instagram",
       kind: "dm",
       action: "dm",
-      ceiling: 10,
+      ceiling: SHEET_DAILY_TARGET,
       mustBePro: true,
       keywordFilter: false,
-      register: "Instagram DM: warm, brief, about one specific post of theirs.",
+      register: "Instagram DM: warm, brief, about one specific post of theirs (or, when all you have is their profile, one specific thing their bio says).",
       length: "35 to 80 words",
       label: (c) => `Instagram DM to @${normalizeHandle("instagram", c.author ?? "").replace(/^@/, "")}`,
       person: (c) => (c.author ? { platform: "instagram", handle: c.author } : null),
+      // Their post or their profile: either says who to message (the row's link opens the chat).
+      linkKind: "either",
       async find() {
         const { who, where } = await nextWhoWhere(ctx);
-        return igCandidates(ctx, `recent public Instagram posts (instagram.com/p/ or /reel/ links) by ${who} in ${where} about their work. For author give their @username. No law firms.`);
+        return igCandidates(ctx, `${who} in ${where} on Instagram: their recent public posts (instagram.com/<username>/p/ or /reel/ links) or their business profiles (instagram.com/<username>). For author give their @username. No law firms.`);
       },
     });
   },
@@ -160,14 +172,14 @@ export const instagramLinkedinBio: AgentDef = {
   id: "contact-instagram-linkinbio",
   name: "Instagram LinkedIn Bio",
   schedule: { kind: "daily", hour: 15, minute: 30 },
-  dailyUsd: 0.8,
+  dailyUsd: SHEET_AGENT_USD,
   purpose: "Finds realtors, insurance agents, loan officers and other professionals whose Instagram bio links to their LinkedIn, and writes each one a short message built on what their bio says. The link opens the chat with them in the Instagram app.",
   async run(ctx) {
     return runEngagement(ctx, {
       platform: "instagram",
       kind: "dm",
       action: "dm_linkedin_bio",
-      ceiling: 10,
+      ceiling: SHEET_DAILY_TARGET,
       mustBePro: true,
       keywordFilter: false,
       linkKind: "profile",
@@ -184,8 +196,8 @@ export const instagramLinkedinBio: AgentDef = {
           prompt: `Find Instagram profiles (instagram.com/<username>) of ${who} in or near ${where} whose Instagram bio contains a link to their LinkedIn profile (linkedin.com/in/...). Search for example: site:instagram.com "linkedin.com/in" ${who} ${where}. For each profile: username (without @), name, occupation, company (brokerage, agency or business, if shown), location, linkedin_url (the linkedin.com/in/ link in the bio, exactly as shown), bio (the bio text as shown, under 400 characters). Skip anyone whose bio has no LinkedIn link. No law firms, no students.`,
           fields: ["username", "name", "occupation", "company", "location", "linkedin_url", "bio"],
           domains: ["instagram.com"],
-          maxUses: 5,
-          want: 12,
+          maxUses: 8,
+          want: SEARCH_WANT,
         }).catch(() => [] as BioHit[]);
         return [...fromPaste, ...bioCandidates(hits)];
       },
@@ -199,14 +211,14 @@ export const linkedinConnect: AgentDef = {
   name: "LinkedIn Connections",
   approvalKind: "connect_note",
   schedule: { kind: "daily", hour: 11, minute: 30 },
-  dailyUsd: 0.6,
+  dailyUsd: SHEET_AGENT_USD,
   purpose: "Finds business professionals on LinkedIn and writes a very specific connection note plus a follow up message for after they accept. The link opens their profile, where the Connect button is.",
   async run(ctx) {
     return runEngagement(ctx, {
       platform: "linkedin",
       kind: "connect_note",
       action: "connect",
-      ceiling: 8,
+      ceiling: SHEET_DAILY_TARGET,
       mustBePro: true,
       keywordFilter: false,
       register:
@@ -226,8 +238,8 @@ export const linkedinConnect: AgentDef = {
           prompt: `Find LinkedIn profiles (linkedin.com/in/...) of ${who} in or near ${where} who post about their work or build a personal brand. No lawyers, no students. For each: url (the linkedin.com/in/ profile link exactly as shown), name, headline, location, detail (one specific, checkable thing from the result: a recent post topic, a niche, an award, years in business).`,
           fields: ["url", "name", "headline", "location", "detail"],
           domains: ["linkedin.com"],
-          maxUses: 5,
-          want: 10,
+          maxUses: 8,
+          want: SEARCH_WANT,
         }).catch(() => []);
         const web: Candidate[] = hits.map((h) => ({ platform: "linkedin", url: h.url, author: h.name || null, title: [h.name, h.headline].filter(Boolean).join(", "), text: h.detail, community: null, promoAllowed: true, extra: { name: h.name, occupation: h.headline, location: h.location } }));
         return [...fromPaste, ...web];
@@ -242,14 +254,14 @@ export const alignableMessages: AgentDef = {
   name: "Alignable",
   continuous: false,
   schedule: { kind: "on_input", platforms: ["alignable"] },
-  dailyUsd: 0.4,
+  dailyUsd: SHEET_AGENT_USD,
   purpose: "Drafts personable, non-pitchy Alignable messages to the profiles you paste in (Alignable has no API).",
   async run(ctx) {
     return runEngagement(ctx, {
       platform: "alignable",
       kind: "dm",
       action: "dm",
-      ceiling: 10,
+      ceiling: SHEET_DAILY_TARGET,
       keywordFilter: false,
       register: "Alignable: a neighborly local-business owner saying hello. Personal, human, about their business. No pitch at all.",
       length: "35 to 80 words",
@@ -268,8 +280,10 @@ export const alignableMessages: AgentDef = {
 /** Posts on X or TikTok by the right kind of person, each with the account that posted it. */
 async function postCandidates(ctx: AgentContext, platform: "x" | "tiktok", topic: string): Promise<Candidate[]> {
   const fromPaste = pasted(await ctx.store.takeInputs([platform], 5, ctx.def.id), platform);
-  const web = (await searchPlatform(ctx, platform, [topic], 10)).map((w) => ({ ...w, author: handleFromPost(platform, w.url) ?? (w.author ? w.author.replace(/^@/, "") : null), promoAllowed: true }));
-  return [...fromPaste, ...web].filter((c) => !!c.author);
+  const web = (await searchPlatform(ctx, platform, [topic])).map((w) => ({ ...w, author: handleFromPost(platform, w.url) ?? handleFromProfile(platform, w.url) ?? (w.author ? w.author.replace(/^@/, "") : null), promoAllowed: true }));
+  const out = [...fromPaste, ...web];
+  ctx.stat("skipped_no_handle", out.filter((c) => !c.author).length);
+  return out.filter((c) => !!c.author);
 }
 
 /** Outreach on X and TikTok (owner, 2026-10-29): a message about one post of theirs; the link opens their profile, where Message is. */
@@ -279,23 +293,27 @@ function postDmAgent(o: { id: string; name: string; platform: "x" | "tiktok"; ho
     id: o.id,
     name: o.name,
     schedule: { kind: "daily", hour: o.hour, minute: 0 },
-    dailyUsd: 0.5,
+    dailyUsd: SHEET_AGENT_USD,
     purpose: o.purpose,
     async run(ctx) {
       return runEngagement(ctx, {
         platform: o.platform,
         kind: "dm",
         action: "dm",
-        ceiling: 8,
+        ceiling: SHEET_DAILY_TARGET,
         mustBePro: true,
         keywordFilter: false,
         register: o.register,
         length: o.length,
         label: (c) => `${o.name} to @${normalizeHandle(o.platform, c.author ?? "").replace(/^@/, "")}`,
         person: (c) => (c.author ? { platform: o.platform, handle: c.author } : null),
+        // Their post or their profile (seen live 2026-10-29: the search returned
+        // 5 X profiles and no post links, and all 5 were dropped). The row's link
+        // opens their profile either way.
+        linkKind: "either",
         async find() {
           const { who, where } = await nextWhoWhere(ctx);
-          return postCandidates(ctx, o.platform, `recent public ${o.where} by ${who} in ${where} about their work. For author give their @username. No law firms.`);
+          return postCandidates(ctx, o.platform, `${who} in ${where}: recent public ${o.where}, or their business profiles. For author give their @username. No law firms.`);
         },
       });
     },

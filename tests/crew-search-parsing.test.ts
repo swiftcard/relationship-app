@@ -30,7 +30,8 @@ describe("web search agents", () => {
     const req = claude.calls[0];
     expect(req.schema).toBeTruthy();
     expect(req.effort).toBe("medium");
-    expect(req.webSearch).toMatchObject({ maxUses: 6, allowedDomains: ["linkedin.com"] });
+    // 8 searches a call since 2026-10-29: 100 messages a day per agent needs full pages.
+    expect(req.webSearch).toMatchObject({ maxUses: 8, allowedDomains: ["linkedin.com"] });
     expect(found.map((f) => f.url)).toEqual(["https://www.linkedin.com/posts/x"]); // off-domain URL dropped
     expect(found[0].community).toBeNull();
   });

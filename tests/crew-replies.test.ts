@@ -35,11 +35,14 @@ function script(draft: string) {
 }
 
 describe("the engagement engine", () => {
-  it("drafts only up to today's warmed-up cap, with disclosure and a tracked link", async () => {
+  it("drafts up to today's full target from day one (no warm-up, owner 2026-10-29), with disclosure and a tracked link", async () => {
     const { ctx, store } = await setup({ def: fakeAgent({ id: "replies-reddit", maxPending: 10 }), script: script("Same boat last year. I moved to SwiftCard since it does the card and the link page together: https://swiftcard.me/go/rd_cr_reply_abc") });
-    const r = await runEngagement(ctx, { platform: "reddit", kind: "reply", action: "reply", ceiling: 8, register: "", length: "", label: (c) => c.title, find: async () => [post(1), post(2), post(3), post(4)] });
-    expect(r.summary).toMatch(/added 1 to the Sheet/); // week 1: 20% of 8 = 1
-    expect(store.approvals).toHaveLength(1);
+    // An old warmed-up ceiling in the database follows the code's target.
+    await store.setRateLimit("reddit", "reply", 8, new Date().toISOString().slice(0, 10));
+    const r = await runEngagement(ctx, { platform: "reddit", kind: "reply", action: "reply", ceiling: 3, register: "", length: "", label: (c) => c.title, find: async () => [post(1), post(2), post(3), post(4)] });
+    expect(r.summary).toMatch(/added 3 to the Sheet/);
+    expect(store.approvals).toHaveLength(3);
+    expect((await store.getRateLimit("reddit", "reply"))!.ceiling).toBe(3);
     expect(store.approvals[0].body).toContain("(I work on SwiftCard, so I'm biased.)");
     expect(store.approvals[0].summary).toMatch(/post it yourself/);
   });

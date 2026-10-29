@@ -15,10 +15,10 @@ import { writingProblems } from "../writing-check";
 // ── The shared engine behind every Replies and Contact agent ────────────────
 // find posts → keep only ones with an exact link (the post, comment or
 // person the message goes to) → drop ones already seen → cheap keyword
-// filter (no model) → ONE scoring call for the batch → draft only the best
-// few, within today's warmed-up cap → second opinion → the Sheet. Nothing is
-// posted or sent: a person copies the draft, taps the link, pastes, sends.
-// A run with nothing new rests an hour; a run at today's ceiling rests until
+// filter (no model) → ONE scoring call for the batch → draft the best ones,
+// up to today's ceiling → second opinion → the Sheet. Nothing is posted or
+// sent: a person copies the draft, taps the link, pastes, sends. A run with
+// nothing new rests half an hour; a run at today's ceiling rests until
 // tomorrow, so an agent left on costs nothing while it waits.
 
 export type Candidate = {
@@ -35,8 +35,26 @@ export type Candidate = {
   extra?: Record<string, string>;
 };
 
-/** Rest after a run that found nothing new. */
-export const QUIET_REST_MINUTES = 60;
+/** Rest after a run that found nothing new (every other tick: 100 a day needs the searches to keep coming). */
+export const QUIET_REST_MINUTES = 30;
+
+/**
+ * How long a run that added nothing rests: half an hour, doubling with each
+ * empty run in a row up to 4 hours, so a place the search can't reach (Reddit
+ * without its keys) costs a few searches a day, not one every half hour.
+ * Any run that adds a message resets it.
+ */
+export async function emptyRest(ctx: AgentContext): Promise<number> {
+  const n = ctx.config<number>("empty_runs", 0);
+  await ctx.saveConfig({ empty_runs: n + 1 });
+  return Math.min(QUIET_REST_MINUTES * 2 ** n, 240);
+}
+
+/** Posts scored in one call: enough for a run to fill its share of the day. */
+export const SCORE_BATCH = 25;
+
+/** A draft (and its rewrites) takes up to this long; one isn't started closer than this to the run's deadline. */
+export const DRAFT_MS = 40_000;
 
 export type EngageOptions = {
   platform: Platform;
@@ -56,13 +74,14 @@ export type EngageOptions = {
   person?: (c: Candidate) => { platform: Platform; handle: string; name?: string | null } | null;
   /** Skip the keyword filter (e.g. pasted input, which a person already chose). */
   keywordFilter?: boolean;
-  /** What a found item's link must be: the exact post (default) or the person's own profile. */
-  linkKind?: "post" | "profile";
+  /** What a found item's link must be: the exact post (default), the person's own profile, or either (a message to them: their post or their profile both say who). */
+  linkKind?: "post" | "profile" | "either";
 };
 
 /** A found item's link, made exact, or null (the item is dropped). Pasted items keep what was pasted. */
-export function exactTarget(c: Candidate, linkKind: "post" | "profile" = "post"): string | null {
-  const exact = linkKind === "profile" ? exactProfileLink(c.platform, c.url) : exactPostLink(c.platform, c.url);
+export function exactTarget(c: Candidate, linkKind: "post" | "profile" | "either" = "post"): string | null {
+  const exact =
+    linkKind === "profile" ? exactProfileLink(c.platform, c.url) : linkKind === "either" ? (exactPostLink(c.platform, c.url) ?? exactProfileLink(c.platform, c.url)) : exactPostLink(c.platform, c.url);
   if (exact) return exact;
   return c.fromPaste ? c.url : null;
 }
@@ -104,18 +123,24 @@ function seenKey(ctx: AgentContext) {
   return `seen:${ctx.def.id}`;
 }
 
+/** Good posts a run ran out of time to draft: the next run starts with them. */
+function carryKey(ctx: AgentContext) {
+  return `carry:${ctx.def.id}`;
+}
+
 async function markSeen(ctx: AgentContext, urls: string[]) {
   const prev = (await ctx.store.kvGet<string[]>(seenKey(ctx))) ?? [];
-  await ctx.store.kvSet(seenKey(ctx), [...new Set([...urls, ...prev])].slice(0, 600));
+  // A day at 100 messages reads a few hundred posts; remember about a week of them.
+  await ctx.store.kvSet(seenKey(ctx), [...new Set([...urls, ...prev])].slice(0, 3000));
 }
 
 export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promise<RunResult> {
-  const quota = await remainingToday(ctx.store, { agentId: ctx.def.id, platform: o.platform, action: o.action, defaultCeiling: o.ceiling, now: ctx.now() });
-  if (quota.left === 0) return { summary: `Done for today: ${quota.cap} drafts is today's limit (it rises as the account warms up). Back tomorrow.`, restMinutes: minutesToTomorrow(ctx.now()) };
+  const quota = await remainingToday(ctx.store, { agentId: ctx.def.id, platform: o.platform, action: o.action, defaultCeiling: o.ceiling, now: ctx.now(), warmup: false });
+  if (quota.left === 0) return { summary: `Done for today: ${quota.cap} messages is today's target, all in the Sheet. Back tomorrow.`, restMinutes: minutesToTomorrow(ctx.now()) };
   if (await inboxFull(ctx)) return { summary: "Waiting: there are already plenty of my drafts to work through.", restMinutes: QUIET_REST_MINUTES };
 
-  // Controls → "Social replies per platform per day": a ceiling on top of the
-  // warm-up cap, checked before paying for a search.
+  // Controls → "Social replies per platform per day": a ceiling on top of
+  // today's, checked before paying for a search.
   const replyCap = Number((await ctx.store.getControls().catch(() => ({}) as Record<string, unknown>)).social_reply_limit ?? 0);
   if (replyCap > 0) {
     const todayOnPlatform = await ctx.store.countTouchesSince(o.platform, ["replied", "commented", "dm_drafted", "dm_sent", "connect_sent"], nyDayStart(ctx.now()).toISOString());
@@ -123,6 +148,8 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
   }
 
   const seen = new Set((await ctx.store.kvGet<string[]>(seenKey(ctx))) ?? []);
+  const carried = (await ctx.store.kvGet<Candidate[]>(carryKey(ctx))) ?? [];
+  if (carried.length) await ctx.store.kvSet(carryKey(ctx), []);
   const found = await o.find();
   ctx.stat("posts_read", found.length);
   // Exact links only: a row must open the very post, comment or person the message goes to.
@@ -131,19 +158,21 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
     return url ? [{ ...c, url }] : [];
   });
   ctx.stat("skipped_no_exact_link", found.length - exact.length);
-  const unique = [...new Map(exact.map((c) => [c.url, c])).values()].filter((c) => !seen.has(c.url));
+  const unique = [...carried, ...[...new Map(exact.map((c) => [c.url, c])).values()].filter((c) => !seen.has(c.url) && !carried.some((k) => k.url === c.url))];
   const relevant = unique.filter((c) => c.fromPaste || o.keywordFilter === false || RELEVANT.test(`${c.title} ${c.text}`));
   ctx.stat("posts_relevant", relevant.length);
   await markSeen(ctx, unique.map((c) => c.url));
   if (!relevant.length) {
     ctx.stat("no_llm_needed");
-    return { summary: `Read ${found.length} posts; nothing new worth a message. Trying new searches next run.`, restMinutes: QUIET_REST_MINUTES };
+    return { summary: `Read ${found.length} posts; nothing new worth a message. Trying new searches next run.`, restMinutes: await emptyRest(ctx) };
   }
 
-  const batch = relevant.slice(0, 15);
+  const batch = relevant.slice(0, SCORE_BATCH);
+  // More on-topic posts than one scoring call takes: the next run starts with them.
+  let carryNext = relevant.slice(SCORE_BATCH);
   const scored = await ctx.llm.askJson<{ items: Scored[] }>("score", {
     effort: "low",
-    maxTokens: 2500,
+    maxTokens: 4000,
     schema: SCORE_SCHEMA as unknown as Record<string, unknown>,
     system: SCORE_SYSTEM,
     prompt: batch.map((c, i) => `#${i} [${c.platform}${c.community ? ` / ${c.community}` : ""}] ${c.title}${c.extra ? `\n(${Object.entries(c.extra).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join("; ")})` : ""}\n${c.text.slice(0, 700)}`).join("\n\n"),
@@ -162,6 +191,13 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
 
   for (const s of picks) {
     if (await inboxFull(ctx)) break;
+    // Out of time inside this tick: the good posts not drafted yet are kept for the next run.
+    if (ctx.deadline !== null && ctx.now().getTime() > ctx.deadline - DRAFT_MS) {
+      const left = picks.slice(picks.indexOf(s)).map((p) => batch[p.i]);
+      carryNext = [...left, ...carryNext];
+      ctx.stat("stopped_for_time");
+      break;
+    }
     const c = batch[s.i];
     const person = o.person?.(c) ?? null;
     // Someone marked Not Interested or Unsubscribed in the Sheet, known only by a display name on this platform.
@@ -272,8 +308,13 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
       if (isPromotional(final)) promoBudget--;
     }
   }
+  if (carryNext.length) {
+    await ctx.store.kvSet(carryKey(ctx), carryNext.slice(0, 2 * SCORE_BATCH));
+    ctx.stat("kept_for_next_run", Math.min(carryNext.length, 2 * SCORE_BATCH));
+  }
   ctx.stat("drafts_made", made);
-  return { summary: `Read ${found.length} posts, ${relevant.length} on topic, added ${made} to the Sheet.`, ...(made === 0 ? { restMinutes: QUIET_REST_MINUTES } : {}) };
+  if (made > 0 && ctx.config<number>("empty_runs", 0) > 0) await ctx.saveConfig({ empty_runs: 0 });
+  return { summary: `Read ${found.length} posts, ${relevant.length} on topic, added ${made} to the Sheet.`, ...(made === 0 && !carryNext.length ? { restMinutes: await emptyRest(ctx) } : {}) };
 }
 
 /**

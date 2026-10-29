@@ -247,6 +247,8 @@ export type AgentContext = {
   tierWhy: string | null;
   /** The manager's standing order for this team (set from the team chat), or null. */
   teamFocus: string | null;
+  /** When this run must be done by (epoch ms), so a long run stops in time inside the tick; null = no limit. */
+  deadline: number | null;
   stats: Record<string, number>;
   stat(key: string, n?: number): void;
   notes: string[];
@@ -271,6 +273,8 @@ export async function buildContext(o: {
   settings?: Settings;
   /** See Llm's onDemand: a job the owner started by hand. */
   onDemand?: { capUsd: number };
+  /** See AgentContext.deadline. */
+  deadline?: number;
 }): Promise<AgentContext> {
   const now = o.now ?? (() => new Date());
   const state = o.state ?? (await o.store.getAgentState(o.def.id));
@@ -294,6 +298,7 @@ export async function buildContext(o: {
     tier: picked.tier,
     tierWhy: picked.why,
     teamFocus,
+    deadline: o.deadline ?? null,
     stats,
     stat(key, n = 1) {
       stats[key] = (stats[key] ?? 0) + n;
