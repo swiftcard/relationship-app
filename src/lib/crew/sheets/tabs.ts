@@ -6,7 +6,9 @@ import { KEY_COLUMN, TASK_STATUSES, c, linkCol, longCol, messageCol, type TabSpe
 // they literally just paste the message and send it. I only want those three
 // things." So every agent tab is exactly Name, Message, Link (plus the Key the
 // sync finds a row by, hidden), one tab per agent, named after it. Send it,
-// then delete the row: a deleted row counts as sent and never comes back.
+// then type "sent" over the message (or "skip", "not interested") and the row
+// comes off. Deleting a row records nothing and the sync puts it back (owner,
+// 2026-10-29: deleting must never count as outreach).
 //
 // Paste a Post is the one other tab: Facebook groups, Alignable and Instagram
 // can't be searched, so the owner pastes a post there and the right agent
@@ -31,7 +33,7 @@ const send = (o: { id: string; name: string; agent: string; description: string;
   group: "agent",
   layout: "rows",
   agents: [o.agent],
-  description: `${o.description} Copy the message, tap the link, paste, send. Then delete the row: a deleted row counts as sent and never comes back.`,
+  description: `${o.description} Copy the message, tap the link, paste, send. Then type sent over the message (or skip, or not interested) and the row comes off. Deleting a row records nothing: it comes back.`,
   columns: SEND_COLUMNS,
   statuses: TASK,
   color: o.color,

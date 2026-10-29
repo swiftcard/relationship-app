@@ -58,9 +58,15 @@ How the rows behave:
   message goes: the exact post or comment for a reply, the chat itself for an
   Instagram DM, Reddit's message screen with the message already typed, a new
   email with the message already in it.
-- **Then delete the row. A deleted row counts as sent.** The sync records it
-  (the person is marked as contacted, so no agent writes to them again) and
-  never adds it back.
+- **Then type `sent` over the message** (or `skip`, or `not interested`).
+  The sync records it (sent: the person is marked as contacted, so no agent
+  writes to them again) and the row comes off. Only the whole cell being one
+  of those words counts.
+- **Deleting a row records nothing.** The row comes back on the next sync,
+  exactly as it was; the database is the source of truth.
+- **A lead with no message yet is still listed**, its Message cell saying it
+  needs one, so no lead drops off the Sheet. Office Prospects show the phone
+  in the Name cell.
 - **A row that stops waiting comes off by itself:** sent from the admin page,
   skipped, or expired.
 - **Reword a message right in the cell** if you like; the agent learns from
@@ -69,7 +75,7 @@ How the rows behave:
 ## 4. The edit hook (optional, makes a reworded message count in seconds)
 
 Without it, a reworded message is picked up within 15 minutes. With it,
-seconds. Deleting a row is always seen by the 15-minute sync.
+seconds. A row you deleted is put back by the 15-minute sync.
 
 1. Pick any long random string and set it in Vercel as `CREW_SHEET_HOOK_SECRET`.
 2. In the workbook: **Extensions → Apps Script**. Delete the sample code and
