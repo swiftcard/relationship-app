@@ -4,7 +4,7 @@ import { groupErrors } from "@/lib/crew/agents/watch-bugs";
 import { paymentFindings } from "@/lib/crew/agents/watch-payments";
 import { watchUi } from "@/lib/crew/agents/watch-ingested";
 import { decide } from "@/lib/crew/decide";
-import { closeMissing, normalizeFailure, redact, reportFindings } from "@/lib/crew/watch/findings";
+import { closeMissing, normalizeFailure, recurrence, redact, reportFindings } from "@/lib/crew/watch/findings";
 import { healthFindings, nightlyFindings, type NightlySummary } from "@/lib/crew/watch/ingested";
 import { isSpike } from "@/lib/crew/sources/site-checks";
 import { AGENTS } from "@/lib/crew/registry";
@@ -39,13 +39,81 @@ describe("findings", () => {
     expect(card.summary).toMatch(/opens a fix for you to review/);
   });
 
-  it("a problem that went away and came back is new again", async () => {
-    const { ctx, claude } = await setup({ def: fakeAgent({ id: "watch-x", team: "watchdog", approvalKind: "code_fix", maxPending: 10 }), script: triageScript, settings: FULL });
+  // The owner, 2026-10-29: "It gives it to me once and then I approve it and
+  // it gets fixed. If it gets broken again then it does it again."
+  const watcher = () => setup({ def: fakeAgent({ id: "watch-x", team: "watchdog", approvalKind: "code_fix", maxPending: 10 }), script: triageScript, settings: FULL });
+
+  it("a problem that broke again after the fix you approved is raised again, and says so", async () => {
+    const { ctx, claude, store } = await watcher();
     await reportFindings(ctx, [raw("a")]);
+    store.approvals[0].status = "done"; // you approved the fix
     expect(await closeMissing(ctx, "error_events", new Set())).toBe(1);
     const back = await reportFindings(ctx, [raw("a")]);
-    expect(back.fresh).toBe(1);
+    expect(back).toEqual({ fresh: 1, proposed: 1 });
     expect(claude.calls).toHaveLength(2);
+    expect(store.approvals).toHaveLength(2);
+    expect(store.approvals[1].title).toMatch(/^Fix: Broken again: /);
+    expect(store.approvals[1].summary).toMatch(/You approved a fix for this on .*broken again/);
+  });
+
+  it("approved and still there: no second card while the fix is on its way", async () => {
+    const { ctx, store } = await watcher();
+    await reportFindings(ctx, [raw("a")]);
+    store.approvals[0].status = "done";
+    for (let i = 0; i < 3; i++) expect((await reportFindings(ctx, [raw("a")])).fresh).toBe(0);
+    expect(store.approvals).toHaveLength(1);
+  });
+
+  it("gone and back while its card still waits: still the one card", async () => {
+    const { ctx, store } = await watcher();
+    await reportFindings(ctx, [raw("a")]);
+    await closeMissing(ctx, "error_events", new Set());
+    expect((await reportFindings(ctx, [raw("a")])).fresh).toBe(0);
+    expect(store.approvals).toHaveLength(1);
+    expect(store.findings.find((f) => f.fingerprint === "a")!.status).toBe("proposed");
+  });
+
+  it("a card you turned down never comes back", async () => {
+    const { ctx, store } = await watcher();
+    await reportFindings(ctx, [raw("a")]);
+    store.approvals[0].status = "rejected";
+    expect((await reportFindings(ctx, [raw("a")])).fresh).toBe(0);
+    await closeMissing(ctx, "error_events", new Set());
+    expect((await reportFindings(ctx, [raw("a")])).fresh).toBe(0);
+    expect(store.approvals).toHaveLength(1);
+  });
+
+  it("one lucky passing run doesn't count as fixed", async () => {
+    const { ctx, store } = await watcher();
+    await reportFindings(ctx, [raw("a")]);
+    store.approvals[0].status = "done";
+    expect(await closeMissing(ctx, "error_events", new Set(), { quietMs: 20 * 3600_000 })).toBe(0);
+    expect((await reportFindings(ctx, [raw("a")])).fresh).toBe(0);
+    expect(store.approvals).toHaveLength(1);
+  });
+
+  it("a problem already raised under its old per-screen key gets no new card", async () => {
+    const { ctx, store } = await watcher();
+    await reportFindings(ctx, [raw("old-key")]);
+    store.approvals[0].status = "done";
+    const r = await reportFindings(ctx, [{ ...raw("new-key"), aliases: ["old-key"] }]);
+    expect(r.fresh).toBe(0);
+    expect(store.approvals).toHaveLength(1);
+    expect(store.findings.find((f) => f.fingerprint === "new-key")!.approval_id).toBe(store.approvals[0].id);
+  });
+
+  it("decides new, same, back and dismissed from the stored finding and its card", () => {
+    expect(recurrence(null, null)).toBe("new");
+    expect(recurrence({ status: "open", approval_id: null }, null)).toBe("new");
+    expect(recurrence({ status: "proposed", approval_id: "c" }, "pending")).toBe("same");
+    expect(recurrence({ status: "proposed", approval_id: "c" }, "done")).toBe("same");
+    expect(recurrence({ status: "proposed", approval_id: "c" }, "expired")).toBe("same");
+    expect(recurrence({ status: "fixed", approval_id: "c" }, "done")).toBe("back");
+    expect(recurrence({ status: "fixed", approval_id: "c" }, "approved")).toBe("back");
+    expect(recurrence({ status: "fixed", approval_id: "c" }, "pending")).toBe("same");
+    expect(recurrence({ status: "fixed", approval_id: "c" }, "rejected")).toBe("dismissed");
+    expect(recurrence({ status: "fixed", approval_id: null }, null)).toBe("new");
+    expect(recurrence({ status: "ignored", approval_id: "c" }, "done")).toBe("dismissed");
   });
 
   it("with the inbox full it doesn't pay to explain anything", async () => {
@@ -87,6 +155,42 @@ describe("sources", () => {
     expect(ui1).toHaveLength(1);
     expect(ui1[0].fingerprint).toBe(ui2[0].fingerprint); // numbers normalized away
     expect(nightlyFindings(s(1), [/^Flows/i], "flow", "nightly-flows")[0].title).toMatch(/lost the title/);
+  });
+
+  it("the same failure on many screens is one finding naming them, and a changing link or token is the same failure", () => {
+    const night = (id: string): NightlySummary => ({
+      healthy: false,
+      failedCount: 4,
+      at: "2026-10-29T09:00:00Z",
+      sections: [
+        {
+          name: "Android app: every screen, Free + Pro, both themes",
+          failures: [
+            "pixel-8-free-settings: status-bar-style-unset — the app never set the status-bar style (theme is light), so Android uses the PHONE's dark mode",
+            "small-360-pro-settings: status-bar-style-unset — the app never set the status-bar style (theme is light), so Android uses the PHONE's dark mode",
+            `pixel-8-free-view-live: new-tab-stays-in-app — "https://swiftcard.me/api/self-view?to=%2Fqa-and-free-${id}-0&t=MzA5Mzc5ZDQtMWIyYy00OWE1LWEyMDgtNTg4ZmJmMjBmZDg3fDE3`,
+            `small-360-pro-view-live: new-tab-stays-in-app — "https://swiftcard.me/api/self-view?to=%2Fqa-and-pro-${id}-3&t=ZGYyYmQ4ZDctNTIxNy00N2QzLTkxZWEtZWUyNTJjMTY0MmRlfDE3OT`,
+          ],
+        },
+      ],
+    });
+    const a = nightlyFindings(night("00509769"), [/^Android app/i], "app", "nightly-app");
+    const b = nightlyFindings(night("13779583"), [/^Android app/i], "app", "nightly-app");
+    expect(a).toHaveLength(2);
+    expect(a.map((x) => x.fingerprint)).toEqual(b.map((x) => x.fingerprint));
+    const bar = a.find((x) => /status-bar/.test(x.title))!;
+    expect(bar.title).toMatch(/\(on 2 screens\)$/);
+    expect(bar.detail.where).toEqual(["pixel-8-free-settings", "small-360-pro-settings"]);
+    // Each screen's old key, so the cards already raised under them still count.
+    expect(bar.aliases).toHaveLength(2);
+  });
+
+  it("one crash under several labels is one card", () => {
+    const row = (category: string) => ({ created_at: "1", context: "push.delivery", message: `push not delivered (${category}): web 403`, stack: null, fingerprint: `push.delivery|push not delivered (${category}): web <n>`, extra: null });
+    const g = groupErrors([row("card_view"), row("weekly_recap"), row("getting_started")]);
+    expect(g).toHaveLength(1);
+    expect(g[0].count).toBe(3);
+    expect(g[0].aliases).toHaveLength(3);
   });
 
   it("health failures become speed or outage findings", () => {

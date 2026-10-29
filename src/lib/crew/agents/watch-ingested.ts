@@ -10,6 +10,11 @@ import { healthFindings, latestIngest, nightlyFindings, type HealthJson, type Ni
 // accounts; uptime.yml checks speed every 15 minutes. These agents read those
 // results, keep one finding per distinct problem, and explain only new ones.
 
+/** A nightly problem counts as fixed only after a day of runs without it (the nightly run plus every deploy's), so one lucky pass doesn't end it and bring it back as new. */
+export const NIGHTLY_QUIET_MS = 20 * 3600_000;
+/** The 15-minute speed check flaps; a problem is fixed after 3 hours of passing. */
+export const HEALTH_QUIET_MS = 3 * 3600_000;
+
 async function fromNightly(ctx: AgentContext, sections: RegExp[], kind: Finding["kind"], source: string) {
   const ing = await latestIngest<NightlySummary>(ctx.store, "nightly");
   if (!ing) return { summary: "No nightly results yet (the nightly QA run posts them here).", status: "skipped" as const };
@@ -19,7 +24,7 @@ async function fromNightly(ctx: AgentContext, sections: RegExp[], kind: Finding[
   }
   const raws = nightlyFindings(ing.data, sections, kind, source);
   const r = await reportFindings(ctx, raws);
-  await closeMissing(ctx, source, new Set(raws.map((x) => x.fingerprint)));
+  await closeMissing(ctx, source, new Set(raws.map((x) => x.fingerprint)), { quietMs: NIGHTLY_QUIET_MS });
   await ctx.saveConfig({ last_at: ing.at });
   ctx.stat("problems_in_run", raws.length);
   return { summary: raws.length ? `${raws.length} problems in the last nightly run; ${r.fresh} new, ${r.proposed} fix cards.` : "The last nightly run was clean." };
@@ -83,7 +88,7 @@ export const watchSpeed: AgentDef = {
     }
     const raws = healthFindings(ing.data);
     const r = await reportFindings(ctx, raws);
-    await closeMissing(ctx, "health", new Set(raws.map((x) => x.fingerprint)));
+    await closeMissing(ctx, "health", new Set(raws.map((x) => x.fingerprint)), { quietMs: HEALTH_QUIET_MS });
     await ctx.saveConfig({ last_at: ing.at });
     ctx.stat("checks_failing", raws.length);
     return { summary: raws.length ? `${raws.length} checks failing; ${r.fresh} new.` : `All ${ing.data.results?.length ?? 0} checks passing.` };

@@ -7,17 +7,30 @@ import { fingerprintOf, reportFindings, type RawFinding } from "../watch/finding
 // model about ones it has not seen before (or that came back). A quiet
 // quarter-hour costs nothing.
 
+/**
+ * One crash, one key: the error's own fingerprint with the one-word label in
+ * brackets taken out, so "push not delivered (card_view): web 403" and
+ * "push not delivered (weekly_recap): web 403" are one card (they were three).
+ */
+export function bugKey(fingerprint: string): string {
+  return fingerprint.replace(/\([a-z0-9_.-]+\)/gi, "(<x>)");
+}
+
 export function groupErrors(rows: ErrorEvent[]): RawFinding[] {
-  const groups = new Map<string, { n: number; first: ErrorEvent; last: ErrorEvent }>();
+  const groups = new Map<string, { n: number; first: ErrorEvent; last: ErrorEvent; old: Set<string> }>();
   for (const r of rows) {
-    const g = groups.get(r.fingerprint);
+    const key = bugKey(r.fingerprint);
+    const g = groups.get(key);
     if (g) {
       g.n++;
       g.last = r;
-    } else groups.set(r.fingerprint, { n: 1, first: r, last: r });
+      g.old.add(r.fingerprint);
+    } else groups.set(key, { n: 1, first: r, last: r, old: new Set([r.fingerprint]) });
   }
   return [...groups.entries()].map(([fp, g]) => ({
     fingerprint: `bug:${fingerprintOf(fp)}`,
+    // How each was keyed before 2026-10-29, so a card already raised still counts.
+    aliases: [...g.old].filter((o) => o !== fp).map((o) => `bug:${fingerprintOf(o)}`),
     kind: "bug" as const,
     source: "error_events",
     title: `${g.first.context}: ${g.first.message}`.slice(0, 200),

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { inboxFull, propose } from "../approvals";
 import type { AgentContext } from "../context";
 import { reportHtml } from "../reports";
-import type { Finding } from "../types";
+import type { ApprovalStatus, Finding } from "../types";
 import { isAdminTeam } from "../teams";
 import { sendOwnerDigest } from "@/lib/owner-digest";
 
@@ -12,6 +12,13 @@ import { sendOwnerDigest } from "@/lib/owner-digest";
 // bug are one card. Only NEW or RETURNING problems reach a model, all of one
 // run's in a single call. Each becomes a "Fix" card; approving it opens a pull
 // request (never a merge). A critical one also emails right away.
+//
+// The owner, 2026-10-29: "It gives it to me once and then I approve it and it
+// gets fixed. If it gets broken again then it does it again." So a problem
+// with a card, waiting or approved, never gets a second one while it is still
+// there; it is fixed only once the checks stop seeing it (closeMissing, after
+// a quiet spell, so one lucky run doesn't count); and only a problem that
+// comes back after a fix you approved is raised again, saying so.
 
 export type RawFinding = {
   fingerprint: string;
@@ -21,7 +28,26 @@ export type RawFinding = {
   title: string;
   detail: Record<string, unknown>;
   count?: number;
+  /** Keys this same problem was stored under before (one per screen, before 2026-10-29): a card raised under any of them still counts. */
+  aliases?: string[];
 };
+
+/** What a problem seen again is, given what we stored and its card: never shown, already shown, or back after a fix you approved. */
+export type Recurrence = "new" | "same" | "back" | "dismissed";
+
+export function recurrence(prev: Pick<Finding, "status" | "approval_id"> | null, card: ApprovalStatus | null): Recurrence {
+  if (!prev || prev.status === "ignored") return prev ? "dismissed" : "new";
+  // You turned its card down: it stays quiet.
+  if (card === "rejected") return "dismissed";
+  // Never shown yet (its card was never made, or is gone): show it.
+  if (!prev.approval_id || !card) return "new";
+  if (prev.status !== "fixed") return "same"; // still there, card waiting or fix approved: one card
+  // It went away. With your fix approved, seeing it again means it broke again.
+  if (card === "approved" || card === "done") return "back";
+  // Gone and back while its card is still waiting: still that one card.
+  if (card === "pending") return "same";
+  return "new"; // its card expired unanswered, then it went away and came back
+}
 
 type Triage = { key: string; title: string; summary: string; severity: "low" | "medium" | "high" | "critical"; fix_brief: string };
 
@@ -76,6 +102,17 @@ export function fingerprintOf(...parts: string[]): string {
 
 /** Strip the things that vary between two copies of the same failure. */
 export function normalizeFailure(s: string): string {
+  return legacyNormalize(
+    s
+      // A link's values (a test account's path, a one-time token) change every run.
+      .replace(/([?&][\w.-]+=)[^&\s"'<>)]+/g, "$1<v>")
+      .replace(/\b[A-Za-z0-9+/_=-]{24,}/g, (t) => (/[A-Z]/.test(t) && /[a-z]/.test(t) && /\d/.test(t) ? "<token>" : t))
+      .replace(/\[\d+\]/g, "[<n>]"),
+  );
+}
+
+/** The normalizing findings were keyed with before 2026-10-29; kept so those keys can still be found (aliases). */
+function legacyNormalize(s: string): string {
   return s
     .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "<id>")
     .replace(/\b\d{4}-\d{2}-\d{2}T[\d:.]+Z?\b/g, "<time>")
@@ -86,6 +123,17 @@ export function normalizeFailure(s: string): string {
     .replace(/qa[-_][a-z0-9-]+@[a-z0-9.-]+/gi, "<qa-email>")
     .trim()
     .slice(0, 400);
+}
+
+/** The key a nightly failure line had before 2026-10-29 (one per screen). */
+export function legacyNightlyKey(source: string, section: string, failure: string): string {
+  return `${source}:${fingerprintOf(section, legacyNormalize(failure))}`;
+}
+
+/** "<screen>: <problem>" split, so one problem on eight screens is one finding that names all eight. */
+export function splitWhere(failure: string): { where: string | null; problem: string } {
+  const m = /^([^\s:]{1,80}):\s+([\s\S]+)$/.exec(failure.trim());
+  return m ? { where: m[1], problem: m[2] } : { where: null, problem: failure.trim() };
 }
 
 /** No personal data leaves for a model, an email or a GitHub workflow input. */
@@ -107,23 +155,27 @@ export async function reportFindings(
   opts?: { maxTriage?: number; approvalKind?: "code_fix" | "ask"; tail?: string },
 ): Promise<{ fresh: number; proposed: number }> {
   const now = ctx.now().toISOString();
-  const fresh: { raw: RawFinding; row: Finding }[] = [];
+  const fresh: { raw: RawFinding; row: Finding; backFrom: string | null }[] = [];
   for (const raw of raws) {
-    const prev = await ctx.store.getFinding(raw.fingerprint);
-    const returning = prev?.status === "fixed" || prev?.status === "ignored";
+    const prev = (await ctx.store.getFinding(raw.fingerprint)) ?? (await carriedOver(ctx, raw.aliases ?? []));
+    const card = prev?.approval_id ? await ctx.store.getApproval(prev.approval_id) : null;
+    const what = recurrence(prev, card?.status ?? null);
+    const keep = what === "same" || what === "dismissed";
     const row = await ctx.store.upsertFinding({
       fingerprint: raw.fingerprint,
       agent_id: ctx.def.id,
       kind: raw.kind,
       source: raw.source,
-      title: prev?.title && !returning ? prev.title : raw.title,
+      title: prev?.title && keep ? prev.title : raw.title,
       detail: raw.detail,
       count: (prev?.count ?? 0) + (raw.count ?? 1),
       last_seen: now,
-      status: prev && !returning ? prev.status : "open",
-      approval_id: prev && !returning ? prev.approval_id : null,
+      // Seen again while its card waits (or after you approved it): "proposed" again, never fixed.
+      status: what === "dismissed" ? "ignored" : what === "same" ? (prev!.status === "fixed" || prev!.status === "open" ? "proposed" : prev!.status) : "open",
+      approval_id: keep ? prev!.approval_id : null,
     });
-    if (!prev || returning || (row.status === "open" && !row.approval_id)) fresh.push({ raw, row });
+    if (what === "new" || what === "back") fresh.push({ raw, row, backFrom: what === "back" ? (card?.decided_at ?? card?.created_at ?? null) : null });
+    else ctx.stat(what === "dismissed" ? "findings_dismissed" : "findings_already_shown");
   }
   ctx.stat("findings_seen", raws.length);
   if (!fresh.length) {
@@ -162,10 +214,11 @@ export async function reportFindings(
   const critical: string[] = [];
   for (const [i, f] of batch.entries()) {
     const t = triage.find((x) => x.key === `f${i}`);
-    const title = t?.title || f.raw.title;
+    const title = `${f.backFrom ? "Broken again: " : ""}${t?.title || f.raw.title}`;
     const asking = opts?.approvalKind === "ask";
     const tail = opts?.tail ?? (asking ? "Tap Approve when you have looked at it." : "Tap Approve and an AI engineer opens a fix for you to review. Nothing changes until you merge it.");
-    const summary = `${t?.summary || plainFallback(f.raw)} Seen ${f.row.count} time${f.row.count === 1 ? "" : "s"}. ${tail}`;
+    const back = f.backFrom ? ` You approved a fix for this on ${f.backFrom.slice(0, 10)}, the checks stopped seeing it, and now it is broken again.` : "";
+    const summary = `${t?.summary || plainFallback(f.raw)}${back} Seen ${f.row.count} time${f.row.count === 1 ? "" : "s"}. ${tail}`;
     const brief = [
       `Finding: ${redact(f.raw.title)}`,
       `Source: ${f.raw.source}`,
@@ -198,11 +251,29 @@ export async function reportFindings(
   return { fresh: fresh.length, proposed };
 }
 
-/** Findings this agent raised that are no longer seen: mark them fixed. */
-export async function closeMissing(ctx: AgentContext, source: string, present: Set<string>): Promise<number> {
+/** The finding this problem was stored under before (an alias), preferring one that already had a card. */
+async function carriedOver(ctx: AgentContext, aliases: string[]): Promise<Finding | null> {
+  let best: Finding | null = null;
+  for (const fp of aliases.slice(0, 40)) {
+    const f = await ctx.store.getFinding(fp);
+    if (!f) continue;
+    if (f.approval_id && f.status !== "fixed") return f;
+    if (!best || (f.approval_id && !best.approval_id)) best = f;
+  }
+  return best;
+}
+
+/**
+ * Findings this agent raised that are no longer seen: mark them fixed.
+ * `quietMs`: how long a finding must have gone unseen first, so one run that
+ * happened to pass (a flaky check) doesn't call it fixed and then raise it
+ * again the next time it fails.
+ */
+export async function closeMissing(ctx: AgentContext, source: string, present: Set<string>, opts?: { quietMs?: number }): Promise<number> {
   let n = 0;
+  const cutoff = ctx.now().getTime() - (opts?.quietMs ?? 0);
   for (const f of await ctx.store.listFindings(["open", "proposed"], 500)) {
-    if (f.agent_id === ctx.def.id && f.source === source && !present.has(f.fingerprint)) {
+    if (f.agent_id === ctx.def.id && f.source === source && !present.has(f.fingerprint) && new Date(f.last_seen).getTime() <= cutoff) {
       await ctx.store.patchFinding(f.id, { status: "fixed" });
       n++;
     }
