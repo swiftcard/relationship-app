@@ -94,6 +94,10 @@ export function ownerChanges(tabs: TabSpec[], grid: Map<string, CellValue[][]>, 
       if (!row) return;
       for (const k of cols) {
         const col = t.columns[k];
+        // Only a draft's message can be reworded (apply.ts refuses the rest).
+        // A lead's message read as "changed from nothing" and was put back
+        // as an empty cell, blanking five rows (2026-10-29, 18:00 UTC).
+        if (col.editable && row.entity_kind !== "approval") continue;
         const value = String(cells[k] ?? "").trim();
         const before = (row.owner_cols[col.key] ?? (col.editable && row.entity_kind === "approval" ? (approvalBody(row.entity_id) ?? "") : "")).trim();
         if (value === before) continue;
@@ -242,7 +246,12 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
       await store.patchSheetRow(r.key, { status: r.initialStatus, shown_status: r.initialStatus });
       sources.known.set(r.key, { ...known, status: r.initialStatus });
     }
-    if (known.agent_hash === hash) continue;
+    // A message the Sheet shows empty when it shouldn't (the 18:00 blanking
+    // above) is written again even though the row's hash says it's current.
+    const msgIdx = r.tab.columns.findIndex((c) => c.key === "message");
+    const shownMessage = msgIdx >= 0 && rowIndex ? String(grid.get(r.tab.id)?.[rowIndex - HEADER_ROWS - 1]?.[msgIdx] ?? "").trim() : "x";
+    const blanked = !shownMessage && !!String(r.cells.message ?? "").trim() && known.owner_cols.message === undefined;
+    if (known.agent_hash === hash && !blanked) continue;
     for (const s of segments(r, known.owner_cols)) writes.push({ range: a1(r.tab.name, `${colLetter(s.from)}${rowIndex}:${colLetter(s.to)}${rowIndex}`), values: [s.values] });
     written.push({ key: r.key, hash });
   }

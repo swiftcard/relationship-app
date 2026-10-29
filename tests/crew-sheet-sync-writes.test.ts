@@ -21,8 +21,8 @@ import { setup } from "./crew-helpers";
 // deletes was sent (recorded, never added back); a row that is no longer
 // waiting comes off; the old tabs go once, and nothing on them counts as sent.
 
-type Fake = { sheets: { sheetId: number; title: string }[]; rows: Map<string, unknown[][]>; failProtection: boolean; failValueWrites: boolean; batches: Record<string, unknown>[][] };
-const fake: Fake = { sheets: [], rows: new Map(), failProtection: false, failValueWrites: false, batches: [] };
+type Fake = { sheets: { sheetId: number; title: string }[]; rows: Map<string, unknown[][]>; failProtection: boolean; failValueWrites: boolean; batches: Record<string, unknown>[][]; writes: { range: string; values: unknown[][] }[] };
+const fake: Fake = { sheets: [], rows: new Map(), failProtection: false, failValueWrites: false, batches: [], writes: [] };
 
 const tabOf = (range: string) => decodeURIComponent(range).replace(/^'/, "").replace(/'!.*$/, "").replace(/''/g, "'");
 const json = (v: unknown) => new Response(JSON.stringify(v), { status: 200 });
@@ -85,6 +85,7 @@ vi.mock("@/lib/crew/google/auth", async (orig) => {
       }
       if (url.includes("values:batchUpdate")) {
         if (fake.failValueWrites) throw new real.GoogleHttpError(503, "backend error", "values.batchUpdate");
+        fake.writes.push(...(body.data as { range: string; values: unknown[][] }[]));
         return json({});
       }
       if (url.includes(":clear")) return json({});
@@ -112,7 +113,7 @@ beforeEach(() => {
   vi.stubEnv("CREW_SHEET_ID_TEST", "");
   vi.stubEnv("CREW_SHARED_DRIVE_ID", "");
   vi.stubEnv("CREW_SHEET_SHARE_EMAILS", "");
-  Object.assign(fake, { sheets: [{ sheetId: 0, title: "Sheet1" }], rows: new Map(), failProtection: false, failValueWrites: false, batches: [] });
+  Object.assign(fake, { sheets: [{ sheetId: 0, title: "Sheet1" }], rows: new Map(), failProtection: false, failValueWrites: false, batches: [], writes: [] });
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -187,6 +188,28 @@ describe("syncSheet", () => {
     const ok = await syncSheet(store, new Date());
     expect(ok.updated).toBe(1);
     expect((await store.getSheetRow(row.row_key))?.agent_hash).not.toBe(row.agent_hash);
+  });
+
+  it("a lead's message is never read as a change you made, so it's never put back as an empty cell (2026-10-29)", async () => {
+    const store = await storeWithLeads(2);
+    await syncSheet(store, new Date());
+    const before = (fake.rows.get(WEB_LEADS.name) ?? []).map((r) => r[1]);
+    const r = await syncSheet(store, new Date());
+    expect(r.changes).toBe(0);
+    expect(r.refused).toBe(0);
+    expect(fake.writes.some((w) => w.values.some((row) => row.some((v) => v === "")))).toBe(false);
+    expect((fake.rows.get(WEB_LEADS.name) ?? []).map((row) => row[1])).toEqual(before);
+  });
+
+  it("a message the Sheet shows empty is written again on the next sync", async () => {
+    const store = await storeWithLeads(1);
+    await syncSheet(store, new Date());
+    const rows = fake.rows.get(WEB_LEADS.name)!;
+    const message = String(rows[0][1]);
+    rows[0][1] = ""; // what the 18:00 sync left behind
+    fake.writes = [];
+    await syncSheet(store, new Date());
+    expect(fake.writes.some((w) => w.range.startsWith("'Web Leads'!A2") && w.values[0].includes(message))).toBe(true);
   });
 
   it("a row the owner deleted is recorded as sent and never comes back", async () => {
