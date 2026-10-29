@@ -76,6 +76,32 @@ export default function NativeAppBridge() {
     return () => { cancelled = true; remove?.(); };
   }, []);
 
+  // ── Android: a new-tab link leaves for the browser ─────────────────────
+  //
+  // On iPhone Capacitor hands a target=_blank to UIApplication.open. The
+  // Android WebView has no second window to open it in, so "View live" /
+  // "Open Swift Links" did nothing or loaded inside the app. Catch the click
+  // and hand the same-site link to the default browser, as iOS does.
+  useEffect(() => {
+    if (detectNativePlatform() !== "android") return;
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0) return;
+      const a = (e.target as Element | null)?.closest?.("a[target='_blank']") as HTMLAnchorElement | null;
+      if (!a) return;
+      let u: URL;
+      try { u = new URL(a.href, window.location.href); } catch { return; }
+      if (u.protocol !== "https:" || (u.hostname !== "swiftcard.me" && u.hostname !== "www.swiftcard.me")) return;
+      const hasPlugin = !!(window as unknown as { Capacitor?: { Plugins?: { ExternalPurchase?: unknown } } }).Capacitor?.Plugins?.ExternalPurchase;
+      if (!hasPlugin) return;
+      e.preventDefault();
+      import("@/lib/external-purchase")
+        .then(({ openLinkInDefaultBrowser }) => openLinkInDefaultBrowser(u.pathname + u.search + u.hash))
+        .catch(() => false);
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
+
   useEffect(() => {
     if (!detectNativeApp()) return;
 
