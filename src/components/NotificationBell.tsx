@@ -10,6 +10,7 @@ import { useIsNativeApp } from "@/lib/platform";
 import { NATIVE_BODY_REMAP, NATIVE_HIDDEN_TYPES } from "@/lib/native-notification-copy";
 import PushAskCallout, { usePushAsk } from "@/components/PushAskCallout";
 import { pickAskCandidate } from "@/lib/push-ask";
+import { useDialogA11y } from "@/lib/use-dialog-a11y";
 
 type Notification = {
   id: string;
@@ -76,6 +77,10 @@ export default function NotificationBell({
   cardLabels?: Record<string, string>;
 }) {
   const [open, setOpen] = useState(false);
+  // Escape closes the panel — the Android back button dispatches one
+  // (NativeAppBridge), so without this back left the bell open.
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialogA11y(open, () => setOpen(false), panelRef);
   const router = useRouter();
   const [notifications, setNotifications] = useState(initialNotifications);
   // Per-item in-flight ids (Read/Unread + dismiss) and a bulk-action flag
@@ -365,6 +370,7 @@ export default function NotificationBell({
               transform, which the drop-in animation owns — so it grows from
               its top centre, not the corner. */}
           <div
+            ref={panelRef}
             role="dialog"
             aria-label="Notifications"
             className="sc-glass sc-drop-in fixed z-[61] left-0 right-0 mx-auto top-[calc(env(safe-area-inset-top)+4.25rem)] w-[min(360px,calc(100vw-1.5rem))] max-h-[70vh] border border-gray-800 rounded-2xl shadow-2xl shadow-black/20 overflow-hidden flex flex-col"
