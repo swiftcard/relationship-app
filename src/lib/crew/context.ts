@@ -51,6 +51,13 @@ export class Llm {
       defaultTier: Tier;
       /** The manager's standing order for this team, or null. */
       focus?: string | null;
+      /**
+       * Work the owner asked for by pressing a button (the Blog Writer's
+       * Generate): it runs whatever Pause all and the on/off switches say, and
+       * only its own daily ceiling applies, not the shared one, so the
+       * agents' spending can't stop a job the owner started.
+       */
+      onDemand?: { capUsd: number };
     },
   ) {}
 
@@ -64,6 +71,12 @@ export class Llm {
   }
 
   private async guard(estUsd: number) {
+    if (this.o.onDemand) {
+      if (crewHardDisabled()) throw new BudgetStop("CREW_DISABLED is set, so every agent is stopped.");
+      const spent = (await this.o.store.usageTotals(nyDayStart(this.o.now()).toISOString())).byAgent[this.o.def.id]?.usd ?? 0;
+      if (spent + estUsd > this.o.onDemand.capUsd) throw new BudgetStop(`Hit its daily limit: ${spent.toFixed(2)} of ${this.o.onDemand.capUsd.toFixed(2)}.`);
+      return;
+    }
     // Pause all, read fresh before every model call: a run under way stops at
     // its next step, not when it happens to finish.
     const settings = await this.o.store.getSettings();
@@ -256,6 +269,8 @@ export async function buildContext(o: {
   now?: () => Date;
   state?: AgentState;
   settings?: Settings;
+  /** See Llm's onDemand: a job the owner started by hand. */
+  onDemand?: { capUsd: number };
 }): Promise<AgentContext> {
   const now = o.now ?? (() => new Date());
   const state = o.state ?? (await o.store.getAgentState(o.def.id));
@@ -275,7 +290,7 @@ export async function buildContext(o: {
     store: o.store,
     runId: o.runId,
     now,
-    llm: new Llm({ store: o.store, def: o.def, state, settings, runId: o.runId, providers: o.providers, now, defaultTier: picked.tier, focus: teamFocus }),
+    llm: new Llm({ store: o.store, def: o.def, state, settings, runId: o.runId, providers: o.providers, now, defaultTier: picked.tier, focus: teamFocus, onDemand: o.onDemand }),
     tier: picked.tier,
     tierWhy: picked.why,
     teamFocus,

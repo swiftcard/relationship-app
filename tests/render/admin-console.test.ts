@@ -374,6 +374,47 @@ describe.each(ENGINES)("Notifications (%s)", (engine) => {
   }
 });
 
+// ── Blog Writer (2026-10-29) ────────────────────────────────────────────────
+async function blogWriter(status: "ready" | "writing") {
+  const { createElement } = await import("react");
+  const { default: BlogWriterView } = await import("@/app/admin/crew/blog/BlogWriterView");
+  const para = "Most open house advice stops at the sign in sheet. We built SwiftCard so visitors tap and save you, and send you their details back without a clipboard.";
+  const body = (slug: string, t: string) => [`![${t}](/press/01-public-card.jpg)`, `## Why it matters`, para, para, "| | Paper | SwiftCard |", "| --- | --- | --- |", "| Updates | Reprint | Instant, everywhere at once without reprinting anything at all |", "## Frequently asked questions", "### Is it free?", "Yes. [Create a free card](/cards/new?src=blog)."].join("\n\n");
+  const draft = (i: number) => ({ title: i ? "The open house sign in sheet alternative agents actually use" : "Digital business card for real estate agents: the honest guide", slug: `post-${i}`, description: "A real look at what happens after the handshake, and why the agents who follow up fast win the listing more often than not.", keyword: i ? "open house sign in sheet alternative" : "digital business card for real estate agents", og_title: "x", content_md: body(`post-${i}`, "A card on a phone"), reader: "real estate agents", words: 1480, problems: i ? ["the description is 170 characters (140 to 155)"] : [] });
+  const batch = { id: "b1", status, started_at: new Date(Date.now() - 120_000).toISOString(), finished_at: null, step: status === "writing" ? "Writing both posts" : "", drafts: status === "ready" ? [draft(0), draft(1)] : [], error: null, published: null };
+  return inShell("/admin/crew/blog", createElement(BlogWriterView, { batch: batch as never, log: [{ slug: "old-post", title: "Old", keyword: "k", published_at: "2026-10-01T00:00:00Z" }], posts: [{ slug: "old-post", title: "An older post with a rather long title that should wrap neatly on a phone", published_at: "2026-10-01T00:00:00Z" }], research: null, now: Date.now() }));
+}
+
+describe.each(ENGINES)("Blog Writer (%s)", (engine) => {
+  for (const width of [390, 1280]) {
+    it(`two full posts to choose from, each with Publish, nothing spilling at ${width}px`, async () => {
+      const page = await open(engine, width, await blogWriter("ready"));
+      try {
+        const p = await layoutProblems(page);
+        expect(p.spill, `spills at ${width}px`).toEqual([]);
+        expect(p.sideways, `the page scrolls sideways at ${width}px`).toBe(false);
+        expect(await page.locator("[data-blog-draft]").count()).toBe(2);
+        expect(await page.getByRole("button", { name: "Publish this one" }).count()).toBe(4); // top and bottom of each
+        const text = await page.evaluate(() => document.body.innerText);
+        for (const s of ["Blog Writer", "Option 1", "Option 2", "swiftcard.me › blog › post-0", "Frequently asked questions", "Worth a look before publishing", "Discard both", "Posted so far (1)"]) expect(text, s).toContain(s);
+        // Generate waits while two are waiting to be picked.
+        expect(await page.getByRole("button", { name: "Generate" }).isDisabled()).toBe(true);
+        expect(await page.locator("img[src='/press/01-public-card.jpg']").count()).toBe(2);
+      } finally { await page.close(); }
+    });
+  }
+
+  it("while writing, it says which step it's on and Generate can't be pressed twice", async () => {
+    const page = await open(engine, 390, await blogWriter("writing"));
+    try {
+      const text = await page.evaluate(() => document.body.innerText);
+      expect(text).toContain("Writing two posts");
+      expect(text).toContain("Writing both posts · started 2 minutes ago");
+      expect(await page.getByRole("button", { name: "Writing…" }).isDisabled()).toBe(true);
+    } finally { await page.close(); }
+  });
+});
+
 describe.each(ENGINES)("the admin shell (%s)", (engine) => {
   it("is light: the canvas is the app's grouped grey, cards are white", async () => {
     const page = await open(engine, 1280, await sandbox());

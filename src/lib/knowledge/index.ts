@@ -41,6 +41,7 @@ export const UNDOCUMENTED_ROUTES: Record<string, string> = {
   "/admin": "SwiftCard staff console (the owner's \"Site\" tab): an overview of the business. Never describe it to a customer — it is not the Office admin console.",
   "/admin/analytics": "Staff console — Company Analytics: company-wide growth, revenue, funnel, engagement, retention (who tried to leave and why) and referral numbers. Contains other customers' words; never describe or quote it to a customer.",
   "/admin/crew": "Staff console — the internal agents' control panel: Start / Stop for each marketing agent (their work goes to a staff Google Sheet), and the website-health agents with the fixes staff approve, pause/run controls and spend. Never describe it to a customer.",
+  "/admin/crew/blog": "Staff console — the Blog Writer: Generate writes two SwiftCard blog posts, staff publish one to swiftcard.me/blog. Never describe it to a customer.",
   "/admin/crew/agent/[id]": "Staff console — one internal AI agent: its status, schedule, this week's activity and raw run records. Never describe it to a customer.",
   "/admin/marketing": "Staff console — internal marketing tooling.",
   "/admin/notifications": "Staff console — the staff's notification center: payments, cancellations, closed accounts and agent problems. Contains other customers' details; never describe it to a customer.",

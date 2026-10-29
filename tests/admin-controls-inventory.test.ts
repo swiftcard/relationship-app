@@ -66,6 +66,14 @@ const INVENTORY: Entry[] = [
     ],
   },
   {
+    file: "src/app/admin/crew/blog/BlogWriterView.tsx",
+    controls: ["Generate", "Discard both", "Publish this one (top and bottom of each post)", "their hidden fields"],
+    provedBy: [
+      { test: "tests/crew-blog-writer.test.ts", mentions: "the pick goes live, the log remembers it" },
+      { test: "tests/render/admin-console.test.ts", mentions: "two full posts to choose from, each with Publish" },
+    ],
+  },
+  {
     file: "src/app/admin/website/WebsiteAnalyticsClient.tsx",
     controls: ["Include my team's visits (switch)", "Exclude my visits / Count this device again", "Try again"],
     provedBy: [
@@ -91,6 +99,7 @@ const PINNED: Record<string, number> = {
   "src/app/admin/users/UsersClient.tsx": 23,
   "src/app/admin/users/[id]/UserDetailClient.tsx": 6,
   "src/app/admin/website/WebsiteAnalyticsClient.tsx": 3,
+  "src/app/admin/crew/blog/BlogWriterView.tsx": 11,
 };
 
 function controlCount(src: string): number {

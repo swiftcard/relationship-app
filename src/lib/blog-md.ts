@@ -20,6 +20,24 @@ function inline(s: string): string {
     .replace(/\[([^\]]+)\]\((\/[^)\s"'<>]*|https:\/\/[^)\s"'<>]+)\)/g, '<a href="$2">$1</a>');
 }
 
+/**
+ * A picture on a line of its own (2026-10-29, the Blog Writer): only
+ * SwiftCard's own images (the press screenshots, the phone mockups) and a
+ * post's generated cover. Anything else stays as text. Sized inline so the
+ * page needs no new styles; the cover is full width, a tall phone screenshot
+ * is held to a readable height.
+ */
+function picture(line: string): string | null {
+  const m = /^!\[([^\]]*)\]\((\/(?:press|og|showcase|marketing)\/[\w./-]+\.(?:jpg|jpeg|png|webp|svg)|\/blog\/[a-z0-9]+(?:-[a-z0-9]+)*\/cover)\)$/.exec(line);
+  if (!m || m[2].includes("..")) return null;
+  const alt = m[1].replace(/"/g, "&quot;");
+  const cover = m[2].endsWith("/cover");
+  const style = cover
+    ? "display:block;width:100%;height:auto;border-radius:20px"
+    : "display:block;max-width:100%;max-height:560px;width:auto;height:auto;margin:0 auto;border-radius:20px";
+  return `<figure style="margin:1.75rem 0"><img src="${m[2]}" alt="${alt}" loading="${cover ? "eager" : "lazy"}" decoding="async" style="${style}"${cover ? ' width="1200" height="630"' : ""} /></figure>`;
+}
+
 export function renderBlogMarkdown(md: string): string {
   const lines = esc(md.replace(/\r/g, "")).split("\n");
   const out: string[] = [];
@@ -29,6 +47,8 @@ export function renderBlogMarkdown(md: string): string {
   const flushTable = () => {
     if (!table) return;
     const [head, ...rows] = table.filter((r) => !r.every((c) => /^:?-+:?$/.test(c.trim())));
+    // A lone rule row (a table broken up by blank lines) has nothing to show.
+    if (!head) { table = null; return; }
     out.push('<div class="overflow-x-auto"><table><thead><tr>' + head.map((c) => `<th>${inline(c)}</th>`).join("") + "</tr></thead><tbody>" +
       rows.map((r) => "<tr>" + r.map((c) => `<td>${inline(c)}</td>`).join("") + "</tr>").join("") + "</tbody></table></div>");
     table = null;
@@ -44,6 +64,8 @@ export function renderBlogMarkdown(md: string): string {
     const ol = line.match(/^\d+\.\s+(.*)/);
     if (ol) { if (list !== "ol") { closeList(); out.push("<ol>"); list = "ol"; } out.push(`<li>${inline(ol[1])}</li>`); continue; }
     if (line.startsWith("&gt; ")) { closeList(); out.push(`<blockquote>${inline(line.slice(5))}</blockquote>`); continue; }
+    const img = picture(line.trim());
+    if (img) { closeList(); out.push(img); continue; }
     if (!line.trim()) { closeList(); continue; }
     closeList();
     out.push(`<p>${inline(line)}</p>`);

@@ -158,10 +158,24 @@ function Jobs({ d }: { d: Dashboard }) {
   );
 }
 
+/** The Blog Writer works only when you press Generate on its own page (owner, 2026-10-29). */
+function BlogWriterCard() {
+  return (
+    <Link href="/admin/crew/blog" className={`${card} flex items-center justify-between gap-3 hover:border-gray-600`} data-blog-writer>
+      <span className="min-w-0">
+        <span className="block text-white font-semibold">Blog Writer</span>
+        <span className="block text-sm text-gray-400">Press Generate for two posts built to rank on Google, then publish the one you like on swiftcard.me/blog.</span>
+      </span>
+      <Chevron className="h-4 w-4 shrink-0 text-gray-400" />
+    </Link>
+  );
+}
+
 export default function Home({ d, edit }: { d: Dashboard; edit?: string }) {
   return (
     <div className="space-y-6">
       <TopBar d={d} />
+      <BlogWriterCard />
       <SheetAgents rows={d.sheetAgents} sheetUrl={d.sheetUrl} />
       <NeedsYou d={d} edit={edit} />
       <Jobs d={d} />
