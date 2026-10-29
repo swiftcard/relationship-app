@@ -356,8 +356,8 @@ function ContactsPageView() {
 // (SwiftLinkLivePreview) fed the demo identity, the way the portal feeds it the
 // account's card.
 const DEMO_LINKS = [
-  { emoji: "🏡", label: "Book a viewing", url: "https://coastlinehomes.com" },
-  { emoji: "📋", label: "Current listings", url: "https://coastlinehomes.com" },
+  { emoji: "🏡", label: "Book a viewing", url: "https://calendly.com/alexmorgan" },
+  { emoji: "📋", label: "Current listings", url: "https://zillow.com/alexmorgan" },
   { emoji: "⭐", label: "Client reviews", url: "https://linkedin.com/in/alexmorgan" },
 ];
 
