@@ -104,6 +104,28 @@ export default function NativeAppBridge() {
         .then(({ SplashScreen }) => SplashScreen.hide({ fadeOutDuration: 180 }))
         .catch(() => { /* older shell without the plugin: auto-hide covers it */ });
     }));
+    // Status-bar icons follow the APP's theme, not the phone's. Left unset,
+    // Android picks the icon colour from the phone's dark mode, so a light app
+    // on a dark phone gets white icons on a white bar. Re-applied whenever the
+    // theme flips. (LIGHT = dark icons for a light screen; DARK = the reverse.)
+    let barStyle: string | null = null;
+    const syncSystemBars = () => {
+      const root = document.documentElement;
+      const style = root.classList.contains("dark") || root.dataset.theme === "dark" ? "DARK" : "LIGHT";
+      if (style === barStyle) return;
+      const bars = (window as unknown as {
+        Capacitor?: { Plugins?: { SystemBars?: { setStyle: (o: { style: string }) => Promise<unknown> } } };
+      }).Capacitor?.Plugins?.SystemBars;
+      if (!bars) return;
+      barStyle = style;
+      void bars.setStyle({ style }).catch(() => { barStyle = null; });
+    };
+    let themeWatch: MutationObserver | null = null;
+    try {
+      syncSystemBars();
+      themeWatch = new MutationObserver(syncSystemBars);
+      themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "data-theme"] });
+    } catch { /* older shell without the plugin: the phone's setting applies */ }
     try {
       const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
       if (meta && !meta.content.includes("viewport-fit")) {
@@ -508,6 +530,7 @@ export default function NativeAppBridge() {
       removeListener?.();
       window.removeEventListener(ACTIVE_CARD_EVENT, onActiveCard);
       publicWatch?.disconnect();
+      themeWatch?.disconnect();
     };
   }, []);
 
