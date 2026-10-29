@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sheetSync } from "@/lib/crew/agents/sheet-sync";
 import { GoogleHttpError } from "@/lib/crew/google/auth";
 import { workbookRequests } from "@/lib/crew/sheets/bootstrap";
+import { leadKey } from "@/lib/crew/sheets/rows";
 import { LAYOUT_VERSION, syncSheet } from "@/lib/crew/sheets/sync";
 import { ALL_TABS, REDDIT_REPLY, WEB_LEADS } from "@/lib/crew/sheets/tabs";
 import { MemoryStore } from "@/lib/crew/store-memory";
@@ -17,9 +18,12 @@ import { setup } from "./crew-helpers";
 // tests run the whole sync against a fake Sheets API that refuses what Google
 // refuses.
 //
-// 2026-10-29 (owner): every tab is Name, Message, Link; a row the owner
-// deletes was sent (recorded, never added back); a row that is no longer
-// waiting comes off; the old tabs go once, and nothing on them counts as sent.
+// 2026-10-29 (owner): every tab is Name, Message, Link; a row that is no
+// longer waiting comes off; the old tabs go once, and nothing on them counts
+// as sent. Later that day (owner): deleting a row must never count as
+// outreach, and no lead may drop off the Sheet without a reason on record. A
+// deleted row is put back exactly as it was; "sent" typed over the message is
+// how a row is finished.
 
 type Fake = { sheets: { sheetId: number; title: string }[]; rows: Map<string, unknown[][]>; failProtection: boolean; failValueWrites: boolean; batches: Record<string, unknown>[][]; writes: { range: string; values: unknown[][] }[] };
 const fake: Fake = { sheets: [], rows: new Map(), failProtection: false, failValueWrites: false, batches: [], writes: [] };
@@ -212,19 +216,25 @@ describe("syncSheet", () => {
     expect(fake.writes.some((w) => w.range.startsWith("'Web Leads'!A2") && w.values[0].includes(message))).toBe(true);
   });
 
-  it("a row the owner deleted is recorded as sent and never comes back", async () => {
+  it("a row the owner deleted is put back as it was, and nothing is recorded as sent, contacted or suppressed", async () => {
     const store = await storeWithLeads(2);
     await syncSheet(store, new Date());
     const rows = fake.rows.get(WEB_LEADS.name)!;
     const deletedKey = String(rows[0][KEY]);
-    fake.rows.set(WEB_LEADS.name, rows.slice(1)); // the owner sent it and deleted the row
+    const before = await store.getSheetRow(deletedKey);
+    fake.rows.set(WEB_LEADS.name, rows.slice(1)); // deleted by hand
     const r = await syncSheet(store, new Date());
-    expect(r.sent).toBe(1);
-    expect((await store.getSheetRow(deletedKey))?.status).toBe("Contacted");
-    expect(store.touches.some((t) => t.kind === "emailed")).toBe(true);
-    expect(webLeadEmails()).toHaveLength(1);
-    await syncSheet(store, new Date());
-    expect(webLeadEmails()).toHaveLength(1); // not added back
+    expect(r.restored).toBe(1);
+    expect(r.errors).toEqual([]);
+    expect((await store.getSheetRow(deletedKey))?.status).toBe("New");
+    expect((await store.getSheetRow(deletedKey))?.owner_cols).toEqual(before?.owner_cols);
+    expect(store.touches).toEqual([]);
+    expect(store.suppression.size).toBe(0);
+    expect(webLeadEmails().sort()).toEqual(["owner0@realty0.com", "owner1@realty1.com"]);
+    // Once: the next sync finds it and adds nothing.
+    const again = await syncSheet(store, new Date());
+    expect([again.appended, again.restored]).toEqual([0, 0]);
+    expect(webLeadEmails()).toHaveLength(2);
   });
 
   it("a draft that stopped waiting (sent from the admin page) comes off its tab, and isn't counted as sent again", async () => {
@@ -240,7 +250,7 @@ describe("syncSheet", () => {
     await decide(store, made.id, { action: "done_by_hand", by: "admin" });
     const r = await syncSheet(store, new Date());
     expect(r.removed).toBe(1);
-    expect(r.sent).toBe(0);
+    expect(r.restored).toBe(0);
     expect(fake.rows.get(REDDIT_REPLY.name)).toHaveLength(0);
   });
 
@@ -256,7 +266,9 @@ describe("syncSheet", () => {
     expect(r.errors).toEqual([]);
     expect(fake.sheets.map((x) => x.title)).not.toContain("Dashboard");
     expect(fake.sheets.map((x) => x.title)).not.toContain("Controls");
-    expect(r.sent).toBe(0);
+    expect(r.restored).toBe(0);
+    expect(store.touches).toEqual([]);
+    expect((await store.listSheetRows()).every((x) => x.status === "New")).toBe(true);
     expect(webLeadEmails().sort()).toEqual(["owner0@realty0.com", "owner1@realty1.com"]);
     expect(await store.kvGet("sheet:layout:test-sheet")).toBe(LAYOUT_VERSION);
     // Once only.
@@ -274,5 +286,157 @@ describe("syncSheet", () => {
     expect(r.errors[0]).toMatch(/^setup:/);
     expect(r.appended).toBe(0);
     expect(webLeadEmails()).toHaveLength(0);
+  });
+});
+
+// ── Deleting is not sending; no lead drops off (owner, 2026-10-29) ──────────
+describe("a Sheet row changes outreach only when the owner says so", () => {
+  const MESSAGE = WEB_LEADS.columns.findIndex((c) => c.key === "message");
+  const leadsOf = (store: MemoryStore) => (store as unknown as { leads: (Lead & { id: string })[] }).leads;
+  /** Everything that says what happened with a person: statuses, touches, suppressions, approvals. */
+  const outreach = async (store: MemoryStore) => ({
+    statuses: (await store.listSheetRows()).map((r) => [r.row_key, r.status, JSON.stringify(r.owner_cols), r.owner_edited_at]).sort(),
+    touches: store.touches.map((t) => [t.person_id, t.kind]),
+    suppressed: [...store.suppression.keys()].sort(),
+  });
+
+  async function draft(store: MemoryStore) {
+    const { ctx } = await setup({ def: (await import("./crew-helpers")).fakeAgent({ id: "replies-reddit" }) });
+    Object.assign(ctx, { store });
+    const { propose } = await import("@/lib/crew/approvals");
+    const made = await propose(ctx, { kind: "reply", title: "Reddit: cards", summary: "s", body: "I built SwiftCard for this, free to start.", platform: "reddit", targetUrl: "https://www.reddit.com/r/realtors/comments/abc123/x/", meta: { author: "jane" } });
+    if (!made.ok) throw new Error(made.reason);
+    return made.id;
+  }
+
+  it("every row deleted at once comes back, leads and drafts, and nothing about anyone changes", async () => {
+    const store = await storeWithLeads(3);
+    const id = await draft(store);
+    await syncSheet(store, new Date());
+    const before = await outreach(store);
+    fake.rows.set(WEB_LEADS.name, []);
+    fake.rows.set(REDDIT_REPLY.name, []);
+    const r = await syncSheet(store, new Date());
+    expect(r.restored).toBe(4);
+    expect(r.errors).toEqual([]);
+    expect(await outreach(store)).toEqual(before);
+    expect((await store.getApproval(id))?.status).toBe("pending");
+    expect(webLeadEmails()).toHaveLength(3);
+    expect(fake.rows.get(REDDIT_REPLY.name)).toHaveLength(1);
+  });
+
+  it("a row put back keeps the owner's own wording and when they changed it", async () => {
+    const store = new MemoryStore();
+    const id = await draft(store);
+    await syncSheet(store, new Date());
+    fake.rows.get(REDDIT_REPLY.name)![0][MESSAGE] = "My own words. I built SwiftCard, free to start.";
+    await syncSheet(store, new Date());
+    const [row] = await store.listSheetRows(REDDIT_REPLY.id);
+    expect(row.owner_cols.message).toBe("My own words. I built SwiftCard, free to start.");
+    fake.rows.set(REDDIT_REPLY.name, []);
+    await syncSheet(store, new Date());
+    expect(fake.rows.get(REDDIT_REPLY.name)![0][MESSAGE]).toBe("My own words. I built SwiftCard, free to start.");
+    const [after] = await store.listSheetRows(REDDIT_REPLY.id);
+    expect(after.owner_edited_at).toBe(row.owner_edited_at);
+    expect((await store.getApproval(id))?.body).toBe("My own words. I built SwiftCard, free to start.");
+  });
+
+  it("never puts back a duplicate: not when the row only lost its Key, not when it sits on another tab", async () => {
+    const store = await storeWithLeads(2);
+    await syncSheet(store, new Date());
+    const rows = fake.rows.get(WEB_LEADS.name)!;
+    rows[0][KEY] = ""; // someone cleared the hidden Key
+    const r = await syncSheet(store, new Date());
+    expect(r.restored).toBe(0);
+    expect(r.notRestored).toBe(1);
+    expect(fake.rows.get(WEB_LEADS.name)).toHaveLength(2);
+    // A row cut from Web Leads and pasted onto another tab, Key and all.
+    const moved = fake.rows.get(WEB_LEADS.name)![1];
+    fake.rows.set(WEB_LEADS.name, [fake.rows.get(WEB_LEADS.name)![0]]);
+    fake.rows.set(REDDIT_REPLY.name, [moved]);
+    const again = await syncSheet(store, new Date());
+    expect(again.restored).toBe(0);
+    expect(webLeadEmails()).toHaveLength(1);
+    expect(store.touches).toEqual([]);
+  });
+
+  it('"sent" typed over a lead\'s message: Contacted, one emailed touch, the row comes off and stays off', async () => {
+    const store = await storeWithLeads(2);
+    await syncSheet(store, new Date());
+    const rows = fake.rows.get(WEB_LEADS.name)!;
+    const key = String(rows[0][KEY]);
+    rows[0][MESSAGE] = "sent";
+    const r = await syncSheet(store, new Date());
+    expect(r.changes).toBe(1);
+    expect((await store.getSheetRow(key))?.status).toBe("Contacted");
+    expect(store.touches.filter((t) => t.kind === "emailed")).toHaveLength(1);
+    expect(r.removed).toBe(1);
+    expect(webLeadEmails()).toHaveLength(1);
+    const again = await syncSheet(store, new Date());
+    expect([again.appended, again.restored]).toEqual([0, 0]);
+    expect(store.touches.filter((t) => t.kind === "emailed")).toHaveLength(1);
+  });
+
+  it('"sent" over a draft is done by hand; "skip" over a lead suppresses no one; "not interested" does', async () => {
+    const store = await storeWithLeads(2);
+    const id = await draft(store);
+    await syncSheet(store, new Date());
+    fake.rows.get(REDDIT_REPLY.name)![0][MESSAGE] = "Sent ✅";
+    const web = fake.rows.get(WEB_LEADS.name)!;
+    const [skipKey, noKey] = [String(web[0][KEY]), String(web[1][KEY])];
+    const notInterested = webLeadEmails()[1];
+    web[0][MESSAGE] = "skip";
+    web[1][MESSAGE] = "Not interested";
+    await syncSheet(store, new Date());
+    expect((await store.getApproval(id))?.status).toBe("done");
+    expect((await store.getSheetRow(skipKey))?.status).toBe("Skipped");
+    expect((await store.getSheetRow(noKey))?.status).toBe("Not Interested");
+    expect([...store.suppression.keys()]).toEqual([notInterested]);
+    expect(store.touches.filter((t) => t.kind === "emailed")).toEqual([]);
+    expect(fake.rows.get(REDDIT_REPLY.name)).toHaveLength(0);
+    expect(fake.rows.get(WEB_LEADS.name)).toHaveLength(0);
+  });
+
+  it("a reworded draft that merely mentions sending is a rewrite, never a status", async () => {
+    const store = new MemoryStore();
+    const id = await draft(store);
+    await syncSheet(store, new Date());
+    fake.rows.get(REDDIT_REPLY.name)![0][MESSAGE] = "Sent you the link earlier. I built SwiftCard, free to start.";
+    await syncSheet(store, new Date());
+    expect((await store.getApproval(id))?.status).toBe("pending");
+    expect((await store.getApproval(id))?.body).toContain("Sent you the link earlier");
+  });
+
+  it("a status set before keeps its word: a contacted lead stays off, the rest are listed", async () => {
+    const store = await storeWithLeads(3);
+    const [done] = leadsOf(store);
+    const key = leadKey(done.id);
+    await store.upsertSheetRow({ tab: `closed:${WEB_LEADS.id}`, row_key: key, entity_kind: "lead", entity_id: done.id, status: "Contacted", owner_cols: {}, shown_status: "Contacted", agent_hash: "h", synced_at: null, owner_edited_at: "2026-10-20T10:00:00Z" });
+    const r = await syncSheet(store, new Date());
+    expect((await store.getSheetRow(key))).toMatchObject({ status: "Contacted", owner_edited_at: "2026-10-20T10:00:00Z" });
+    expect(webLeadEmails()).toHaveLength(2);
+    expect(r.leads).toMatchObject({ listed: 2, unlisted: { finished: 1 } });
+  });
+
+  it("no lead drops off without a reason on record: leads with no message are listed, the rest counted by reason", async () => {
+    const store = new MemoryStore();
+    await store.insertLeads([
+      { ...lead("a@one.com", "One"), message: null },
+      lead("b@two.com", "Two"),
+      { ...lead("c@three.co.uk", "Three"), region_restricted: true },
+      { list: "office", name: "Maria Lopez", title: "Broker", email: null, phone: "7045550100", company: "Lopez Team", source_platform: "web", source_url: "paste:x" },
+      { list: "office", name: "Sam Lee", title: "Owner", email: "sam@nomail.test", email_status: "No MX Record", phone: "2125550100", company: "Lee Group", source_platform: "web", source_url: "https://leegroup.test/team" },
+    ]);
+    const { ctx } = await setup({ def: sheetSync });
+    Object.assign(ctx, { store });
+    const out = await sheetSync.run(ctx);
+    expect(ctx.stats).toMatchObject({ sheet_leads_listed: 3, sheet_leads_ready: 1, sheet_leads_need_message: 2, sheet_leads_not_listed_region_restricted: 1, sheet_leads_not_listed_no_link: 1, sheet_leads_not_listed_finished: 0 });
+    expect(out.summary).toContain("leads on the Sheet: 3 (1 ready, 2 need a message); not listed: 1 kept off by the privacy rules, 1 with no email or website");
+    const office = fake.rows.get("Office Prospects")!;
+    expect(office.map((row) => row[0])).toEqual(["Sam Lee, Owner, Lee Group · 212 555 0100"]);
+    expect(String(office[0][2])).toContain("https://leegroup.test/team"); // the domain takes no mail: the website
+    const missing = ctx.notes.filter((l) => l.includes("not on the Sheet"));
+    expect(missing).toHaveLength(2);
+    for (const l of missing) expect(l).not.toMatch(/@|555/); // ids and reasons only
   });
 });

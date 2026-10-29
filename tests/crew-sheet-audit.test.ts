@@ -189,10 +189,10 @@ describe("what the sync reads back from a row", () => {
   });
 });
 
-describe("rows the owner deleted stay deleted (and count as sent, 2026-10-29)", () => {
-  it("placed before and gone from its tab: gone (sent); never placed: added; restored: adopted; rebuilt or moved: added", () => {
+describe("a row the owner deleted is put back, and deleting records nothing (owner, 2026-10-29)", () => {
+  it("placed before and gone from its tab: put back; never placed: added; restored: adopted; rebuilt or moved: added", () => {
     expect(placeRow(undefined, undefined, REDDIT_REPLY.id)).toBe("append");
-    expect(placeRow(known(), undefined, REDDIT_REPLY.id)).toBe("gone");
+    expect(placeRow(known(), undefined, REDDIT_REPLY.id)).toBe("restore");
     expect(placeRow(undefined, 7, REDDIT_REPLY.id)).toBe("adopt");
     expect(placeRow(known(), 7, REDDIT_REPLY.id)).toBe("update");
     // An agent whose rows moved to a new tab in a release: they are added there.
@@ -214,9 +214,10 @@ describe("what reaches the Sheet", () => {
   });
 
   it("an office prospect opens a new email to them when their site shows one, else their website", () => {
+    // An Office message is what to say on the call (assess.ts), so it never becomes an email's body.
     const [withEmail] = leadRows({ ...lead, list: "office", name: "Sam", email: "sam@nycteam.com", message }, sources());
-    expect(String(withEmail.cells.link)).toContain("mailto:sam@nycteam.com?subject=");
-    expect(String(withEmail.cells.link)).toContain("&body=Sam%2C%20I%20built%20SwiftCard");
+    expect(String(withEmail.cells.link)).toContain('HYPERLINK("mailto:sam@nycteam.com?body=","Email sam@nycteam.com")');
+    expect(withEmail.cells.message).toBe(message);
     const [noEmail] = leadRows({ ...lead, list: "office", name: "Sam", message }, sources());
     expect(noEmail.cells.link).toBe('=HYPERLINK("https://acme.com/contact","Open their website")');
   });

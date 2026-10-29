@@ -9,7 +9,7 @@ import { applyChange, applyPasteRow, markSent } from "@/lib/crew/sheets/apply";
 import { specHash } from "@/lib/crew/sheets/bootstrap";
 import { applyControl, controlDefs, parseScheduleText } from "@/lib/crew/sheets/controls";
 import { SHEET_AGENT_IDS, TAB_WORKER_IDS } from "@/lib/crew/sheets/registry";
-import { NO_LINK, agentHash, approvalKey, approvalRows, buildRows, leadRows, linkedinIn, type RowSources } from "@/lib/crew/sheets/rows";
+import { NEEDS_MESSAGE, NO_LINK, agentHash, approvalKey, approvalRows, buildRows, leadRows, linkedinIn, type RowSources } from "@/lib/crew/sheets/rows";
 import { PIPELINE_STATUSES, TASK_STATUSES, hasKeyColumn } from "@/lib/crew/sheets/spec";
 import { priorityOf, statusForApproval } from "@/lib/crew/sheets/status";
 import { readableTabs } from "@/lib/crew/sheets/sync";
@@ -25,7 +25,8 @@ import { fakeAgent, setup } from "./crew-helpers";
 // message to either write to them or reply to them, a link directly to where
 // they literally just paste the message and send it. I only want those three
 // things." One tab per agent, Name, Message, Link (the Key hidden), Paste a
-// Post the only other tab, and a deleted row counts as sent. Pinned here with
+// Post the only other tab. "sent" typed over a message finishes its row; a
+// deleted row records nothing and comes back (2026-10-29). Pinned here with
 // no network: the row builders, the status words, the apply step.
 
 const sources = (over: Partial<RowSources> = {}): RowSources => ({ approvals: [], leads: [], known: new Map(), ...over });
@@ -64,7 +65,9 @@ describe("the tabs", () => {
       expect(t.columns, t.name).toBe(SEND_COLUMNS);
       expect(hasKeyColumn(t), `${t.name} ends with the Key`).toBe(true);
       expect(t.description.length, `${t.name} explains itself`).toBeGreaterThan(40);
-      expect(t.description).toContain("delete the row");
+      expect(t.description).toContain("type sent over the message");
+      expect(t.description).toContain("Deleting a row records nothing");
+      expect(t.description).not.toMatch(/counts as sent/);
     }
     expect(new Set(ALL_TABS.map((t) => t.id)).size).toBe(ALL_TABS.length);
     expect(new Set(ALL_TABS.map((t) => t.name)).size).toBe(ALL_TABS.length);
@@ -171,9 +174,11 @@ describe("rows: Name, Message, Link, and the link is where the message goes", ()
     expect(approvalRows(approval({ status: "approved" }), sources())).toHaveLength(1);
   });
 
-  it("a lead is a row only once it has a message: name, the message, an email that's ready to send", () => {
+  it("a lead with no message is a row marked as needing one; with one: name, the message, an email that's ready to send", () => {
     const lead = { id: "11111111-2222-3333-4444-555555555555", created_at: "2026-10-25T10:00:00Z", list: "cold" as const, name: "Dana Ellis", title: "Owner", email: "dana@acme.com", company: "Acme Realty", source_platform: "web" as const, source_url: "https://acme.com/contact" };
-    expect(leadRows(lead, sources())).toEqual([]);
+    const [bare] = leadRows(lead, sources());
+    expect(bare.cells.message).toBe(NEEDS_MESSAGE);
+    expect(href(bare.cells.link)).toBe("mailto:dana@acme.com?body=");
     const [row] = leadRows({ ...lead, message: "Subject: your open houses\n\nDana, I built SwiftCard so visitors tap and save you." }, sources());
     expect(row.tab.id).toBe("web-leads");
     expect(row.cells.name).toBe("Dana Ellis, Owner, Acme Realty");
@@ -213,9 +218,9 @@ describe("what the owner does in the Sheet", () => {
     return { store, ctx, a, key };
   }
 
-  it("deleting the row means it was sent: the draft is done by hand and the person is marked as contacted; nothing is sent", async () => {
+  it("\"sent\" typed over the message: the draft is done by hand and the person is marked as contacted; nothing is sent", async () => {
     const { store, ctx, a, key } = await drafted();
-    const r = await markSent(store, key, "sheet");
+    const r = await applyChange(store, { rowKey: key, column: "message", value: "sent", by: "sheet" });
     expect(r.ok).toBe(true);
     expect((await store.getApproval(a.id))!.status).toBe("done");
     expect(store.touches.some((t) => t.person_id === a.person_id && t.kind === "dm_sent")).toBe(true);
@@ -225,14 +230,16 @@ describe("what the owner does in the Sheet", () => {
     expect(again.ok).toBe(false);
   });
 
-  it("a deleted lead row is Contacted, with an emailed touch", async () => {
+  it("a lead marked sent is Contacted, with an emailed touch", async () => {
     const store = new MemoryStore();
     await store.insertLeads([{ list: "cold", name: "Dana", email: "dana@acme.com", source_platform: "web", source_url: "https://acme.com" }]);
     const id = (store as unknown as { leads: { id: string }[] }).leads[0].id;
     const key = "L-abcdef1234";
     await store.upsertSheetRow({ tab: "web-leads", row_key: key, entity_kind: "lead", entity_id: id, status: "New", owner_cols: {}, agent_hash: "x", synced_at: null, owner_edited_at: null });
-    expect((await markSent(store, key, "sheet")).ok).toBe(true);
+    expect((await applyChange(store, { rowKey: key, column: "message", value: " Sent. ", by: "sheet" })).ok).toBe(true);
     expect((await store.getSheetRow(key))!.status).toBe("Contacted");
+    // The explicit action the admin page shares is unchanged.
+    expect((await markSent(store, key, "sheet")).ok).toBe(true);
     expect(store.touches.some((t) => t.kind === "emailed")).toBe(true);
   });
 

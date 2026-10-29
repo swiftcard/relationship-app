@@ -3,9 +3,9 @@ import { a1, appendRows, batchGet, batchUpdate, batchUpdateValues, colLetter, sh
 import type { CrewStore } from "../store";
 import type { SheetRow } from "../types";
 import { logActivity } from "./activity";
-import { applyChange, applyPasteRow, markSent } from "./apply";
+import { applyChange, applyPasteRow, statusCommand } from "./apply";
 import { HEADER_ROWS, createWorkbook, ensureWorkbook, retireTabs, shareWorkbook, sheetsHqConfigured, workbookId } from "./bootstrap";
-import { agentHash, buildRows, type BuiltRow, type RowSources } from "./rows";
+import { agentHash, buildRows, leadCoverage, type BuiltRow, type LeadCoverage, type RowSources } from "./rows";
 import { ownerEditable, type TabSpec } from "./spec";
 import { AGENT_TABS, ALL_TABS, PASTE, RETIRED_TAB_NAMES } from "./tabs";
 
@@ -14,10 +14,13 @@ import { AGENT_TABS, ALL_TABS, PASTE, RETIRED_TAB_NAMES } from "./tabs";
 // Runs every 15 minutes from the sheet-sync agent and on demand. Order
 // matters: the owner's edits are read and applied BEFORE anything is written.
 // Rows are found by their (hidden) Key column, never by position, so sorting
-// and filtering in the Sheet are safe. A row the owner deleted was sent: it
-// is recorded as sent and never comes back. A row that stopped being open
-// (sent from the admin page, skipped, expired) is taken off the tab. A sync
-// costs no AI.
+// and filtering in the Sheet are safe. A row changes what happened with a
+// person only when the owner says so: "sent", "skip" or "not interested"
+// typed over its message (apply.ts statusCommand), or the admin page. A row
+// the owner deleted is put back, unchanged, with nothing recorded (owner,
+// 2026-10-29: deleting must never count as outreach); the database is the
+// source of truth. A row that stopped being open (sent, skipped, expired) is
+// taken off the tab. A sync costs no AI.
 
 export const APPROVAL_DAYS = 45;
 
@@ -37,8 +40,12 @@ export type SyncReport = {
   refused: number;
   updated: number;
   appended: number;
-  /** Rows the owner deleted, recorded as sent. */
-  sent: number;
+  /** Rows that were missing from their tab (deleted by hand) and were put back. Nothing about them changed. */
+  restored: number;
+  /** Missing rows not put back, because the tab may still hold them without their Key (a copy would be a duplicate). */
+  notRestored: number;
+  /** Where every saved lead stands: listed (ready, or needing a message), or why not. */
+  leads: LeadCoverage | null;
   /** Rows taken off because they are no longer waiting (sent elsewhere, skipped, expired). */
   removed: number;
   errors: string[];
@@ -97,8 +104,9 @@ export function ownerChanges(tabs: TabSpec[], grid: Map<string, CellValue[][]>, 
         // Only a draft's message can be reworded (apply.ts refuses the rest).
         // A lead's message read as "changed from nothing" and was put back
         // as an empty cell, blanking five rows (2026-10-29, 18:00 UTC).
-        if (col.editable && row.entity_kind !== "approval") continue;
+        // A lead's message cell is read only for a status word ("sent").
         const value = String(cells[k] ?? "").trim();
+        if (col.editable && row.entity_kind !== "approval" && !statusCommand(value, row.entity_kind)) continue;
         const before = (row.owner_cols[col.key] ?? (col.editable && row.entity_kind === "approval" ? (approvalBody(row.entity_id) ?? "") : "")).trim();
         if (value === before) continue;
         if (col.editable && !value) continue; // an emptied message is not a rewrite
@@ -110,7 +118,7 @@ export function ownerChanges(tabs: TabSpec[], grid: Map<string, CellValue[][]>, 
 }
 
 export async function syncSheet(store: CrewStore, now = new Date()): Promise<SyncReport> {
-  const report: SyncReport = { sheetId: null, url: null, tabsRead: 0, changes: 0, refused: 0, updated: 0, appended: 0, sent: 0, removed: 0, errors: [], notes: [] };
+  const report: SyncReport = { sheetId: null, url: null, tabsRead: 0, changes: 0, refused: 0, updated: 0, appended: 0, restored: 0, notRestored: 0, removed: 0, leads: null, errors: [], notes: [] };
   if (!(await store.sheetsReady())) return { ...report, errors: ["Run supabase/crew-sheets.sql first."] };
   if (!sheetsHqConfigured()) return { ...report, errors: ["Needs GOOGLE_SHEETS_SA_JSON and CREW_SHEET_ID (or CREW_SHARED_DRIVE_ID to create the workbook)."] };
 
@@ -179,14 +187,19 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
   let sources = await loadSources(store, now);
   const approvalById = new Map(sources.approvals.map((a) => [a.id, a]));
   const rowsByTab = new Map<string, Map<string, number>>();
+  /** Per tab, the Name of each row that has lost its Key. */
+  const keyless = new Map<string, Set<string>>();
   for (const t of tabs.filter((x) => x.layout === "rows")) {
     const keyIdx = t.columns.findIndex((c) => c.kind === "key");
     const at = new Map<string, number>();
+    const names = new Set<string>();
     (grid.get(t.id) ?? []).forEach((cells, i) => {
       const key = keyIdx >= 0 ? String(cells[keyIdx] ?? "").trim() : "";
       if (key && !at.has(key)) at.set(key, HEADER_ROWS + 1 + i);
+      if (!key && String(cells[0] ?? "").trim()) names.add(String(cells[0]).trim());
     });
     rowsByTab.set(t.id, at);
+    keyless.set(t.id, names);
   }
   const writes: ValueWrite[] = [];
   for (const ch of ownerChanges(tabs, grid, sources.known, (eid) => approvalById.get(eid)?.body)) {
@@ -195,7 +208,7 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
       const r = await applyChange(store, { rowKey: ch.key, column: ch.col, value: ch.value, by: EDITOR }, now);
       if (!r.ok) {
         report.refused++;
-        writes.push({ range: ch.cell, values: [[ch.before]] });
+        if (ch.before) writes.push({ range: ch.cell, values: [[ch.before]] });
       }
     } catch (e) {
       report.errors.push(`${ch.tab.name} ${ch.key}: ${msg(e)}`);
@@ -203,25 +216,16 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
   }
   await inboundPaste(store, grid, writes, report);
 
-  // 4. A row the owner deleted was sent. Recorded once, through the same
-  // decision the admin page's "I sent it" makes (the person is marked as
-  // contacted, so no agent writes to them again).
-  for (const r of buildRows(sources)) {
-    const known = sources.known.get(r.key);
-    if (placeRow(known, rowsByTab.get(r.tab.id)?.get(r.key), r.tab.id) !== "gone") continue;
-    try {
-      const done = await markSent(store, r.key, EDITOR, now);
-      if (done.ok) report.sent++;
-      else report.errors.push(`${r.tab.name} ${r.key}: ${done.message}`);
-    } catch (e) {
-      report.errors.push(`${r.tab.name} ${r.key}: ${msg(e)}`);
-    }
-  }
   sources = await loadSources(store, now); // drafts and leads may have moved
 
-  // 5. Outbound: the open items, by Key. A row's hash is recorded only after
-  // its cells are actually in the Sheet, so a failed write is retried.
+  // 4. Outbound: the open items, by Key. A row's hash is recorded only after
+  // its cells are actually in the Sheet, so a failed write is retried. A row
+  // missing from its tab is put back, unless its Key sits on another tab or a
+  // row with its Name lost its Key (putting it back would make a duplicate).
   const built = buildRows(sources);
+  report.leads = leadCoverage(sources);
+  const restoring = new Set<string>();
+  const keyedAnywhere = new Set([...rowsByTab.values()].flatMap((m) => [...m.keys()]));
   const written: { key: string; hash: string }[] = [];
   const appends = new Map<string, { tab: TabSpec; rows: BuiltRow[] }>();
   for (const r of built) {
@@ -229,8 +233,12 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
     const rowIndex = rowsByTab.get(r.tab.id)?.get(r.key);
     const hash = agentHash(r.tab, r.cells);
     const action = placeRow(known, rowIndex, r.tab.id);
-    if (action === "gone") continue;
-    if (action === "append") {
+    if (action === "restore" && (keyedAnywhere.has(r.key) || keyless.get(r.tab.id)?.has(String(r.cells.name ?? "").trim()))) {
+      report.notRestored++;
+      continue;
+    }
+    if (action === "append" || action === "restore") {
+      if (action === "restore") restoring.add(r.key);
       const a = appends.get(r.tab.id) ?? { tab: r.tab, rows: [] };
       a.rows.push(r);
       appends.set(r.tab.id, a);
@@ -263,7 +271,7 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
     report.errors.push(`write: ${msg(e)}`);
   }
 
-  // 6. Rows that are no longer waiting come off their tab (bottom up, so the
+  // 5. Rows that are no longer waiting come off their tab (bottom up, so the
   // row numbers above stay right). Their record says so, so they never read
   // as deleted by the owner.
   const open = new Set(built.map((r) => r.key));
@@ -287,34 +295,36 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
     }
   }
 
-  // 7. New rows, at the bottom of their tab.
+  // 6. New rows, and rows put back, at the bottom of their tab. A row put back
+  // keeps its status, the owner's own words and when they last changed it.
   for (const { tab, rows } of appends.values()) {
     try {
       const mine = (r: BuiltRow) => sources.known.get(r.key)?.owner_cols ?? {};
       const values = rows.map((r) => tab.columns.map((col) => (col.kind === "key" ? r.key : col.editable && mine(r)[col.key] !== undefined ? mine(r)[col.key] : (r.cells[col.key] ?? ""))));
       await appendRows(id, tab.name, values);
       for (const r of rows) {
-        const saved = await store.upsertSheetRow({ tab: tab.id, row_key: r.key, entity_kind: r.kind, entity_id: r.entityId, status: r.initialStatus, owner_cols: mine(r), shown_status: r.initialStatus, agent_hash: agentHash(tab, r.cells), synced_at: now.toISOString(), owner_edited_at: null });
+        const saved = await store.upsertSheetRow({ tab: tab.id, row_key: r.key, entity_kind: r.kind, entity_id: r.entityId, status: r.initialStatus, owner_cols: mine(r), shown_status: r.initialStatus, agent_hash: agentHash(tab, r.cells), synced_at: now.toISOString(), owner_edited_at: sources.known.get(r.key)?.owner_edited_at ?? null });
         sources.known.set(r.key, saved);
       }
       report.appended += rows.length;
+      report.restored += rows.filter((r) => restoring.has(r.key)).length;
     } catch (e) {
       report.errors.push(`${tab.name}: ${msg(e)}`);
     }
   }
 
-  if (report.errors.length) await logActivity(store, { action: "sync", result: "failed", error: report.errors.join(" | ").slice(0, 500), message: `${report.sent} sent, ${report.updated} updated, ${report.appended} added, ${report.removed} removed` });
+  if (report.errors.length) await logActivity(store, { action: "sync", result: "failed", error: report.errors.join(" | ").slice(0, 500), message: `${report.updated} updated, ${report.appended} added (${report.restored} put back), ${report.removed} removed` });
   return report;
 }
 
 /**
- * What one built row needs. Never placed before: add it. Placed before on
- * this tab but gone from it: the owner deleted it, which means they sent it
- * (it never comes back). In the tab but unknown to the database (restored from
- * a snapshot): adopt it. Placed on another tab, or before a rebuild: add it.
+ * What one built row needs. Never placed before, or placed on another tab or
+ * before a rebuild: add it. Placed before on this tab but gone from it (the
+ * owner deleted it): put it back, as it was; deleting records nothing. In the
+ * tab but unknown to the database (restored from a snapshot): adopt it.
  */
-export function placeRow(known: SheetRow | undefined, rowIndex: number | undefined, tabId: string): "append" | "gone" | "adopt" | "update" {
-  if (!rowIndex) return known && known.tab === tabId ? "gone" : "append";
+export function placeRow(known: SheetRow | undefined, rowIndex: number | undefined, tabId: string): "append" | "restore" | "adopt" | "update" {
+  if (!rowIndex) return known && known.tab === tabId ? "restore" : "append";
   return known ? "update" : "adopt";
 }
 

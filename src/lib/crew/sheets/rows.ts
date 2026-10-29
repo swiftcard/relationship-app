@@ -18,7 +18,8 @@ import { LEAD_TAB_BY_SOURCE, OFFICE_PROSPECTS, WEB_LEADS, tabsForAgent } from ".
 // reply, the chat itself for an Instagram DM, Reddit's message screen with the
 // message filled in, a new email with the message in it. A draft with no such
 // place never becomes a row. Only open items are rows: once something was
-// sent, skipped or expired it leaves the Sheet. Nothing here reads the network.
+// sent, skipped or expired it leaves the Sheet. A lead with no message yet is
+// still a row, marked as needing one. Nothing here reads the network.
 
 export type Cells = Record<string, CellValue>;
 
@@ -186,22 +187,84 @@ export function approvalRows(a: Approval, s: RowSources): BuiltRow[] {
   return [{ tab, key, kind: "approval", entityId: a.id, cells, initialStatus: word, rank: Math.min(9, age), agent: agentLabel(a.agent_id), createdAt: a.created_at }];
 }
 
-/** A lead with a written message and a way to send it: Web Leads by email, Office Prospects by email or website. */
-export function leadRows(l: Lead & { id: string; created_at: string }, s: RowSources): BuiltRow[] {
+/**
+ * What the Message cell says for a lead nobody has written to yet and no
+ * agent wrote a message for (every lead saved before 2026-10-28 has none).
+ * The lead is still listed, so it can't silently drop off the Sheet.
+ */
+export const NEEDS_MESSAGE = "Needs a message: none was written yet, and nothing has been sent.";
+
+/** Email statuses (leads/quality.ts EMAIL_STATUS) whose domain can't take mail: the row links to the website instead. */
+const UNDELIVERABLE = new Set(["No MX Record", "No Mail Server"]);
+
+/** Why a lead isn't on the Sheet: privacy rules, already finished, or nowhere to reach them. */
+export type LeadUnlisted = "region_restricted" | "finished" | "no_link";
+
+/** 2125550100 → 212 555 0100, exactly the digits the site showed; anything else as saved. */
+export function phoneText(phone: string | null | undefined): string {
+  const d = str(phone).replace(/\D/g, "");
+  const ten = d.length === 11 && d.startsWith("1") ? d.slice(1) : d;
+  return ten.length === 10 ? `${ten.slice(0, 3)} ${ten.slice(3, 6)} ${ten.slice(6)}` : str(phone).trim();
+}
+
+/**
+ * One lead's row, or the reason it has none. Every lead nobody has finished is
+ * listed: with its message, or marked as needing one (NEEDS_MESSAGE). Web
+ * Leads link to a new email with the message in it; Office Prospects are call
+ * rows, with the phone in the Name cell and a plain email or the website as
+ * the link (their message is what to say on the call, not an email body).
+ * Only what was saved is shown: nothing here invents a name or a number.
+ */
+export function leadListing(l: Lead & { id: string; created_at: string }, s: RowSources): { row: BuiltRow } | { reason: LeadUnlisted } {
   // Europe, the UK, Switzerland, Canada and Brazil stay out of the Sheet (and every export), as before.
-  if (l.region_restricted) return [];
-  const message = str(l.message).trim();
-  if (!message) return []; // nothing to send yet
+  if (l.region_restricted) return { reason: "region_restricted" };
   const key = leadKey(l.id);
   const known = s.known.get(key);
-  if (known && !OPEN_LEAD_WORDS.has(known.status)) return [];
+  if (known && !OPEN_LEAD_WORDS.has(known.status)) return { reason: "finished" };
+  const office = l.list === "office";
+  const written = str(l.message).trim();
   const site = l.source_url.startsWith("http") ? l.source_url : null;
-  const mail = l.email ? emailComposeLink(str(l.email), message) : null;
-  const cellLink = mail ? link(mail, `Email ${l.email}`) : link(site, "Open their website");
-  if (!cellLink) return [];
-  const tab = l.list === "office" ? OFFICE_PROSPECTS : LEAD_TAB_BY_SOURCE[l.source_platform] ?? WEB_LEADS;
-  const name = [str(l.name), str(l.title), str(l.company)].filter(Boolean).join(", ") || (site ? new URL(site).hostname.replace(/^www\./, "") : "");
-  return [{ tab, key, kind: "lead", entityId: l.id, cells: { name, message, link: cellLink }, initialStatus: known?.status ?? "New", rank: 20, agent: tab.name, createdAt: l.created_at }];
+  const email = l.email && !UNDELIVERABLE.has(str(l.email_status)) ? str(l.email) : "";
+  const mail = email ? emailComposeLink(email, office || !written ? "" : written) : null;
+  const cellLink = (mail ? link(mail, `Email ${email}`) : "") || link(site, "Open their website");
+  if (!cellLink) return { reason: "no_link" };
+  const tab = office ? OFFICE_PROSPECTS : LEAD_TAB_BY_SOURCE[l.source_platform] ?? WEB_LEADS;
+  const who = [str(l.name), str(l.title), str(l.company)].filter(Boolean).join(", ") || (site ? new URL(site).hostname.replace(/^www\./, "") : str(l.email));
+  const phone = office ? phoneText(l.phone) : "";
+  const name = phone ? `${who} · ${phone}` : who;
+  return { row: { tab, key, kind: "lead", entityId: l.id, cells: { name, message: written || NEEDS_MESSAGE, link: cellLink }, initialStatus: known?.status ?? "New", rank: 20, agent: tab.name, createdAt: l.created_at } };
+}
+
+/** A lead's row on its tab (Web Leads or Office Prospects), or none with the reason in leadCoverage. */
+export function leadRows(l: Lead & { id: string; created_at: string }, s: RowSources): BuiltRow[] {
+  const r = leadListing(l, s);
+  return "row" in r ? [r.row] : [];
+}
+
+export type LeadCoverage = {
+  listed: number;
+  ready: number;
+  needsMessage: number;
+  unlisted: Record<LeadUnlisted, number>;
+  /** Each lead not listed for a reason other than being finished: its id (no contact details) and why. */
+  missing: { id: string; reason: LeadUnlisted }[];
+};
+
+/** Where every saved lead stands on the Sheet, in counts, so a lead never drops off without a reason on record. */
+export function leadCoverage(s: RowSources): LeadCoverage {
+  const out: LeadCoverage = { listed: 0, ready: 0, needsMessage: 0, unlisted: { region_restricted: 0, finished: 0, no_link: 0 }, missing: [] };
+  for (const l of s.leads) {
+    const r = leadListing(l, s);
+    if ("reason" in r) {
+      out.unlisted[r.reason]++;
+      if (r.reason !== "finished") out.missing.push({ id: l.id, reason: r.reason });
+      continue;
+    }
+    out.listed++;
+    if (r.row.cells.message === NEEDS_MESSAGE) out.needsMessage++;
+    else out.ready++;
+  }
+  return out;
 }
 
 /** Every row-based tab's rows, from the records. */
