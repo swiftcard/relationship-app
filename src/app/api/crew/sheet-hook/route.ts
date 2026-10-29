@@ -1,15 +1,16 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/crew/env";
-import { applyChange, applyControlCell } from "@/lib/crew/sheets/apply";
+import { applyChange } from "@/lib/crew/sheets/apply";
 import { ownerEditable } from "@/lib/crew/sheets/spec";
-import { CONTROLS, tabByName } from "@/lib/crew/sheets/tabs";
+import { tabByName } from "@/lib/crew/sheets/tabs";
 import { SupabaseStore } from "@/lib/crew/store-supabase";
 
 // ── The Sheet's edit hook ───────────────────────────────────────────────────
 // apps-script/SwiftCardLeads.gs posts here on every edit the owners make in
-// the workbook (an installable onEdit trigger), so a Status or a Controls
-// cell takes effect within seconds instead of at the next 15-minute sync.
+// the workbook (an installable onEdit trigger), so a reworded message takes
+// effect within seconds instead of at the next 15-minute sync. Deleting a
+// row (which means it was sent) is seen by the sync.
 // Bearer CREW_SHEET_HOOK_SECRET, constant-time; a 404 until it exists. The
 // body names the tab, the row's Key and the column header; the change goes
 // through exactly the same code the sync uses (sheets/apply.ts), so the hook
@@ -43,15 +44,6 @@ export async function POST(req: NextRequest) {
   const by = /^[^@\s]+@[^@\s]+$/.test(String(body.editor ?? "")) ? String(body.editor).toLowerCase() : "sheet";
   // Every refusal is decided before the database is touched.
 
-  if (tab.id === CONTROLS.id) {
-    // Only the Value column is a switch; every other column there is the backend's text.
-    const valueHeader = CONTROLS.columns.find((c) => c.key === "value")!.header;
-    if (String(body.header ?? "") !== valueHeader) return NextResponse.json({ ok: false, message: `Change only the ${valueHeader} column.` });
-    const store = new SupabaseStore();
-    if (!(await store.sheetsReady())) return NextResponse.json({ ok: false, message: "Run supabase/crew-sheets.sql first." });
-    const r = await applyControlCell(store, String(body.key ?? ""), String(body.value ?? ""), by);
-    return NextResponse.json(r.ok ? { ok: true, value: r.shown } : { ok: false, message: r.message, value: r.shown });
-  }
   const col = tab.columns.find((c) => c.header === String(body.header ?? ""));
   if (!col) return NextResponse.json({ ok: false, message: "unknown column" });
   // The same rule as the sync: on the computed tabs only Status counts; notes and messages are edited on the agent's own tab.

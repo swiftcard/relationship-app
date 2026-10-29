@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { generateKeyPairSync, createVerify } from "node:crypto";
-import { LEADS, leadsFacebook, leadsFromSite, queryAt, BUSINESS_TYPES, US_CITIES } from "@/lib/crew/agents/leads";
+import { LEADS, leadsFromSite, queryAt, BUSINESS_TYPES, US_CITIES } from "@/lib/crew/agents/leads";
 import { robotsAllows, phonesIn, textOf } from "@/lib/crew/leads/fetch-page";
 import { cleanEmails, recordLeads } from "@/lib/crew/leads/record";
 import { isRestrictedRegion } from "@/lib/crew/leads/region";
@@ -65,13 +65,6 @@ describe("recording", () => {
     expect(isRestrictedRegion({ country: "CA" })).toBe(true);
     expect(isRestrictedRegion({ email: "x@firm.co.uk" })).toBe(true);
   });
-  it("pasted Facebook text becomes leads without any model call", async () => {
-    const { ctx, store, claude } = await setup({ def: leadsFacebook });
-    await store.addInput({ platform: "facebook", kind: "page", url: "https://facebook.com/groups/x/posts/1", text: "Window washing in Austin, email jose@shinywindows.com" });
-    expect((await leadsFacebook.run(ctx)).summary).toMatch(/saved 1/);
-    expect((await leadsFacebook.run(ctx)).summary).toMatch(/Nothing new/);
-    expect(claude.calls).toHaveLength(0);
-  });
 });
 
 describe("sheet", () => {
@@ -91,9 +84,9 @@ describe("sheet", () => {
 });
 
 describe("registry", () => {
-  it("covers every lead source, rotates queries, and keeps LinkedIn locked", () => {
-    expect(LEADS.map((a) => a.id)).toEqual(["leads-web", "leads-reddit", "leads-facebook", "leads-alignable", "leads-quora", "leads-linkedin"]);
-    expect(AGENTS.find((a) => a.id === "leads-linkedin")!.locked).toBeTruthy();
+  it("Web Leads is the one lead agent (the others never saved a lead or wrote a message, removed 2026-10-29), and it rotates queries", () => {
+    expect(LEADS.map((a) => a.id)).toEqual(["leads-web"]);
+    for (const id of ["leads-reddit", "leads-facebook", "leads-alignable", "leads-quora", "leads-linkedin"]) expect(AGENTS.some((a) => a.id === id), id).toBe(false);
     expect(AGENTS.some((a) => a.id === "leads-manager")).toBe(false); // retired 2026-10-27: the Sheet replaced its room
     expect(queryAt(0)).toEqual({ type: BUSINESS_TYPES[0], city: US_CITIES[0] });
     expect(queryAt(BUSINESS_TYPES.length)).toEqual({ type: BUSINESS_TYPES[0], city: US_CITIES[1] });

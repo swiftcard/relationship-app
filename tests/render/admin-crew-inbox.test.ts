@@ -250,7 +250,10 @@ describe("the Agents tab (the control panel)", () => {
           }),
         );
         expect(rows.length).toBeGreaterThan(15);
-        expect(rows[0]).toMatchObject({ id: "contact-instagram-linkinbio", name: "Instagram LinkedIn Bio", button: "Stop" });
+        // The workbook order starts with X (2026-10-29).
+        expect(rows[0]).toMatchObject({ id: "replies-x", name: "X Replies", button: "Start" });
+        expect(rows.find((r) => r.id === "contact-instagram-linkinbio")).toMatchObject({ name: "Instagram LinkedIn Bio", button: "Stop" });
+        for (const id of ["contact-x", "replies-tiktok", "contact-tiktok"]) expect(rows.some((r) => r.id === id), id).toBe(true);
         expect(rows.find((r) => r.id === "replies-reddit")).toMatchObject({ name: "Reddit Reply", button: "Stop" });
         expect(rows.find((r) => r.id === "replies-hackernews")).toMatchObject({ name: "Hacker News", button: "Start" });
         for (const r of rows) {
@@ -311,7 +314,8 @@ describe("the Agents tab (the control panel)", () => {
       const text = await page.evaluate(() => document.body.innerText);
       for (const s of ["Running now", "Done today", "Needs you", "Bug watch", "didn't finish", "Dev", "Website security", "Running", "Paused", "Failed", "Last run", "Next run", "Last result", "SwiftCard Leads sheet"]) expect(text, s).toContain(s);
       // The marketing groups are no longer on this page: they live in the Sheet.
-      for (const s of ["Sales", "Outreach", "Reddit replies", "Planning"]) expect(text, s).not.toContain(s);
+      // ("Outreach" alone is fine now: X Outreach and TikTok Outreach are agents, 2026-10-29.)
+      for (const s of ["Sales", "Reddit replies", "Planning"]) expect(text, s).not.toContain(s);
       expect(text).toContain("Asks you before anything goes out: always on");
     } finally {
       await page.close();

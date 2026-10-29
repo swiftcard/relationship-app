@@ -63,8 +63,11 @@ describe("a Web Leads run", () => {
     expect(l.score).toBeGreaterThanOrEqual(80);
     expect(ctx.stats).toMatchObject({ leads_added: 1, usable_leads: 1, duplicates_rejected: 0, contacts_suppressed: 0, rejected_poor_fit: 1 });
     expect(claude.calls.filter((c) => JSON.stringify(c).includes("SITE #"))).toHaveLength(1); // one read for every site
-    const [row] = leadRows(l, { approvals: [], leads: [], findings: [], people: [], facts: [], geoHistory: [], known: new Map(), blueskyLive: false });
-    expect(row.cells).toMatchObject({ score: l.score, name: "Jane Park, Owner and Broker", email_status: "Domain OK", why: "A 14-agent team." });
+    // On the Sheet it is Name, Message, Link: the person and a new email with the message in it (2026-10-29).
+    const [row] = leadRows(l, { approvals: [], leads: [], known: new Map() });
+    expect(row.cells.name).toBe("Jane Park, Owner and Broker, Acme Realty");
+    expect(row.cells.message).toBe("Congrats on the Ballantyne office.");
+    expect(String(row.cells.link)).toContain("mailto:jane@acmerealty.com?body=Congrats");
   });
   it("the same business again is a duplicate, not a second lead", async () => {
     const { ctx, store } = await setup({ def: leadsWeb, script: (req) => assessment(req) });

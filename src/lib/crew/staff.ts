@@ -24,38 +24,28 @@ export const STAFF: Record<string, Person> = {
   "watch-scan-cost": { first: "Scott", title: "Scan cost watch", hired: false },
 
   "replies-reddit": { first: "Maya", title: "Reddit Reply" },
+  "replies-x": { first: "Xavi", title: "X Replies" },
   "replies-threads": { first: "Theo", title: "Threads Replies" },
   "replies-bluesky": { first: "Bella", title: "Bluesky Replies" },
   "replies-facebook": { first: "Fiona", title: "Facebook Groups" },
   "replies-quora": { first: "Quinn", title: "Quora Answers" },
   "replies-indiehackers": { first: "Ian", title: "Indie Hackers" },
   "replies-instagram": { first: "Isla", title: "Instagram Comments" },
+  "replies-tiktok": { first: "Tara", title: "TikTok Comments" },
   "replies-linkedin": { first: "Liam", title: "LinkedIn Comments" },
   "replies-hackernews": { first: "Hank", title: "Hacker News" },
 
   "contact-reddit": { first: "Derek", title: "Reddit DMs" },
+  "contact-x": { first: "Max", title: "X Outreach" },
   "contact-instagram": { first: "Ivy", title: "Instagram DMs" },
   "contact-instagram-linkinbio": { first: "Leo", title: "Instagram LinkedIn Bio" },
+  "contact-tiktok": { first: "Tess", title: "TikTok Outreach" },
   "contact-linkedin": { first: "Nora", title: "LinkedIn Connections" },
   "contact-alignable": { first: "Alan", title: "Alignable" },
 
   "leads-web": { first: "Owen", title: "Web Leads" },
-  "leads-reddit": { first: "Ruby", title: "Reddit Leads" },
-  "leads-quora": { first: "Kai", title: "Quora Leads" },
-  // Same pasted posts that Fiona (Facebook replies) and Alan (Alignable) already work from.
-  "leads-facebook": { first: "Faye", title: "Facebook Group Leads", hired: false },
-  "leads-alignable": { first: "Andy", title: "Alignable Leads", hired: false },
-  "leads-linkedin": { first: "Lucas", title: "LinkedIn leads", hired: false },
 
   "office-outreach": { first: "Oscar", title: "Office Prospects" },
-  partnerships: { first: "Petra", title: "Partnerships" },
-
-  "marketing-blog": { first: "Ella", title: "Blog Writer" },
-  "marketing-seo": { first: "Sean", title: "SEO Opportunities" },
-  "marketing-geo": { first: "Gia", title: "GEO Opportunities" },
-  "marketing-social": { first: "Sofia", title: "Social Media" },
-  "competitor-watch": { first: "Carl", title: "Competitor Intel" },
-  events: { first: "Eve", title: "Events" },
 
   "sheet-sync": { first: "Shea", title: "Sheet sync" },
   "sheet-daily": { first: "Dana", title: "Sheet daily snapshot" },

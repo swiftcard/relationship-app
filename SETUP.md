@@ -43,32 +43,33 @@ It prints the workbook URL. Put the id from that URL
 (`docs.google.com/spreadsheets/d/<id>/edit`) in Vercel as `CREW_SHEET_ID`, so
 the workbook is pinned even if the database is restored.
 
-Every tab is created with its headers, dropdowns and colours. A tab you delete
-comes back empty at the next sync; a tab you rename is left alone and a fresh
-one is created, so don't rename tabs.
+Every tab is created with its headers. A tab you delete comes back empty at
+the next sync; a tab you rename is left alone and a fresh one is created, so
+don't rename tabs.
+
+What's in it (owner, 2026-10-29): one tab per agent, each exactly three
+columns, **Name, Message, Link** (a hidden Key column is how the sync finds a
+row; leave it hidden), plus **Paste a Post**. No dashboard, queues, pipeline,
+stats, Controls or logs; Start, Stop and Pause all are in admin → Agents.
 
 How the rows behave:
 
-- **A row you delete stays deleted.** The sync never adds it back. To get
-  rid of a row without losing its history, set its Status to Skipped instead.
-- **Each agent's own tab is where you edit.** Notes, dates and a reworded
-  message are read from there. On Today - Action Queue, Today - Top 50,
-  All Leads and Intent Leads only the **Status** is yours; the other columns
-  are copies and are rewritten every sync.
-- **One Status, every copy.** Set it on the agent's tab or in the Action
-  Queue; the other copy follows at the next sync. If both were changed in the
-  same 15 minutes, the agent's own tab wins.
-- **Sent / Posted and Completed only record what you did.** They never post,
-  publish or open a pull request. Approved is the only Status that can make
-  something happen (a blog post going live; a Bluesky reply once that is
-  switched on, see 6).
-- **Controls:** change only the Value column. A change made on the admin
-  page shows up in the Sheet at the next sync and is never undone by the old
-  value that was in the cell. Last Changed shows when a value last changed.
+- **Copy the message, tap the link, paste, send.** The link is the place the
+  message goes: the exact post or comment for a reply, the chat itself for an
+  Instagram DM, Reddit's message screen with the message already typed, a new
+  email with the message already in it.
+- **Then delete the row. A deleted row counts as sent.** The sync records it
+  (the person is marked as contacted, so no agent writes to them again) and
+  never adds it back.
+- **A row that stops waiting comes off by itself:** sent from the admin page,
+  skipped, or expired.
+- **Reword a message right in the cell** if you like; the agent learns from
+  your edits.
 
-## 4. The edit hook (three minutes, makes Status changes instant)
+## 4. The edit hook (optional, makes a reworded message count in seconds)
 
-Without it, a Status you set is picked up within 15 minutes. With it, seconds.
+Without it, a reworded message is picked up within 15 minutes. With it,
+seconds. Deleting a row is always seen by the 15-minute sync.
 
 1. Pick any long random string and set it in Vercel as `CREW_SHEET_HOOK_SECRET`.
 2. In the workbook: **Extensions → Apps Script**. Delete the sample code and
@@ -96,16 +97,17 @@ drive, not the files.
 1. Bluesky → Settings → App passwords → create one for "SwiftCard agents".
 2. Vercel: `BLUESKY_HANDLE` (e.g. `swiftcardapp.bsky.social`) and
    `BLUESKY_APP_PASSWORD`.
-3. In the Sheet, Controls → "Bluesky: how far automation may go" →
-   `Approval posts it`.
-4. When you are ready for real posts: Controls → "Dry run" → `No`.
+3. The "Bluesky: how far automation may go" setting → `Approval posts it`.
+4. When you are ready for real posts: the "Dry run" setting → `No`.
+   (These settings were on the Sheet's Controls tab, removed 2026-10-29; ask
+   for them to be changed until they have a place in admin → Agents.)
 
 Until all four are true, a Bluesky row works like every other one: copy the
 reply, open the post, paste.
 
 ## 7. Dry run
 
-The whole system ships with Controls → **Dry run = Yes**. Agents research,
+The whole system ships with **Dry run = Yes**. Agents research,
 draft and fill the Sheet; nothing is published, posted or sent, and no paid
 service is charged. Setting a row to Sent / Posted only records that you did
 it yourself. Turn Dry run off only after:
@@ -118,13 +120,11 @@ it yourself. Turn Dry run off only after:
 
 Any one of these stops every agent at its next step:
 
-- Sheet → Controls → **Pause all agents** → `Yes` (seconds with the hook,
-  15 minutes without);
 - `/admin/crew` → **Pause all agents**;
 - Vercel → `CREW_DISABLED=1` (needs a redeploy; stops the clock entirely).
 
-The Sheet keeps syncing and logging while paused, so your Status changes are
-still honoured, and a Pause all set in the Sheet can be lifted in the Sheet.
+The Sheet keeps syncing while paused, so a row you delete is still recorded
+as sent.
 
 ## 9. Every variable
 

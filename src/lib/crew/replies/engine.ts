@@ -51,8 +51,6 @@ export type EngageOptions = {
   length: string;
   /** Who the post or person must be. Contact agents require a business professional. */
   mustBePro?: boolean;
-  /** Share of drafts allowed to mention SwiftCard at all (comments: about 1 in 3). */
-  pitchShare?: number;
   /** What the draft is for, in one line, for the card. */
   label: (c: Candidate) => string;
   person?: (c: Candidate) => { platform: Platform; handle: string; name?: string | null } | null;
@@ -182,7 +180,14 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
         continue;
       }
     }
-    const mayPitch = c.promoAllowed && promoBudget > 0;
+    // Every message promotes SwiftCard (owner, 2026-10-29). Where the
+    // community's own rules ban promotion, a reply that couldn't mention it
+    // isn't worth the owner's time, so the post is skipped instead.
+    if (!c.promoAllowed) {
+      ctx.stat("skipped_promo_banned");
+      continue;
+    }
+    const mayPitch = promoBudget > 0;
     const link = crewLink(o.platform, o.kind, c.url);
     const message = o.kind === "dm" || o.kind === "connect_note";
     const about = c.extra ? Object.entries(c.extra).filter(([, v]) => v).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join("\n") : "";
@@ -191,10 +196,10 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
       `Write a ${o.kind === "reply" ? "reply" : o.kind === "comment" ? "comment" : o.kind === "dm" ? "private message" : "connection note"} on ${o.platform}. Length: ${o.length}. ${o.register}`,
       mayPitch
         ? [
-            "You may bring up SwiftCard in at most one sentence, and only with a reason that fits THIS person: tie it to something they said or do, and say what it would change for them, not what features it has.",
-            "Say plainly that you built it, inside the sentence (\"I built something for exactly this\", \"we made SwiftCard because…\"). Never pretend to be a customer.",
-            message ? "No link in a first message. End with one easy question they would actually want to answer." : s.asks_for_tools ? `They asked for a tool, so a link is fine: use exactly ${link}.` : "No link unless they asked for a tool.",
-            "If no honest reason exists, leave SwiftCard out and just be useful.",
+            "This message has one goal: get THIS person to try SwiftCard, and it must never read like that is the goal.",
+            "Open on their exact situation from the post, then the small cost they live with now, then SwiftCard by name as the obvious fix for exactly that, in their terms (what changes for them, not a feature list).",
+            "Say plainly that you built it, inside the sentence (\"I built SwiftCard for this\", \"we made SwiftCard because…\"). Never pretend to be a customer. Mention that it's free to start.",
+            message ? "No link in a first message. End with one easy question they would actually want to answer." : s.asks_for_tools ? `They asked for a tool, so a link is fine: use exactly ${link}.` : o.platform === "reddit" ? "No link." : "No link; saying swiftcard.me in plain text is fine.",
           ].join(" ")
         : "Do NOT mention SwiftCard or any product, and include no link. Just be genuinely helpful or insightful about their post.",
       facts,
@@ -208,12 +213,22 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
       draft: first.text,
       brief,
       score: s.score,
-      rules: `${HUMAN_VOICE}\n\n${productFacts()}\n\n${facts}\n\n${mayPitch ? "A product mention is allowed if it fits." : "No product mention or link is allowed here."}`,
+      rules: `${HUMAN_VOICE}\n\n${productFacts()}\n\n${facts}\n\n${mayPitch ? "The message must bring up SwiftCard by name, positively, tied to this person." : "No product mention or link is allowed here."}`,
       revise: async (draft, issues) => (await ctx.llm.ask("revise", { system, effort: "medium", maxTokens: 1200, prompt: `${instructions}\n\nYOUR DRAFT:\n${draft}\n\nFix these problems and return only the new text:\n- ${issues.join("\n- ")}` })).text || draft,
     });
     if (!mayPitch && isPromotional(final)) {
       ctx.stat("skipped_pitch_not_allowed");
       continue;
+    }
+    // Every message brings SwiftCard up (owner, 2026-10-29): one rewrite for a
+    // draft that left it out, and a draft that still won't is not used.
+    if (mayPitch && !isPromotional(final)) {
+      const again = await ctx.llm.ask("revise", { system, effort: "medium", maxTokens: 1200, prompt: `${instructions}\n\nYOUR DRAFT:\n${final}\n\nIt never mentions SwiftCard. Rewrite it so SwiftCard comes in naturally, by name, as the fix for this person's situation. Return only the new text.` });
+      if (!again.text || !isPromotional(again.text)) {
+        ctx.stat("skipped_no_swiftcard");
+        continue;
+      }
+      final = again.text;
     }
     // The writing check: one rewrite when a draft trips it; a second failure
     // reaches the Sheet as Needs Review (propose() marks it) rather than vanishing.
@@ -280,11 +295,7 @@ export function pairs<A, B>(as: A[], bs: B[]): [A, B][] {
   return out;
 }
 
-async function pitchBudget(ctx: AgentContext, o: EngageOptions, n: number): Promise<number> {
-  const share = o.pitchShare ?? 1;
-  if (share >= 1) return n;
-  const today = await ctx.store.listApprovals({ agentId: ctx.def.id, sinceIso: nyDayStart(ctx.now()).toISOString(), limit: 100 });
-  const pitched = today.filter((a) => a.meta?.pitched === true).length;
-  const allowed = Math.floor((today.length + n) * share);
-  return Math.max(0, allowed - pitched);
+/** Every draft may promote SwiftCard (owner, 2026-10-29): the budget is the whole batch. */
+async function pitchBudget(_ctx: AgentContext, _o: EngageOptions, n: number): Promise<number> {
+  return n;
 }

@@ -1,7 +1,7 @@
 import type { AgentDef } from "../agent-def";
 import type { AgentContext } from "../context";
 import { normalizeHandle } from "../ledger";
-import { exactProfileLink, instagramHandle } from "../exact-links";
+import { exactProfileLink, handleFromPost, instagramHandle } from "../exact-links";
 import { pairs, rotate, runEngagement, type Candidate } from "../replies/engine";
 import { PROFESSIONS, US_METROS } from "../search-plan";
 import { redditConfigured, searchSubreddits } from "../sources/reddit";
@@ -265,4 +265,44 @@ export const alignableMessages: AgentDef = {
   },
 };
 
-export const CONTACT: AgentDef[] = [redditDms, instagramDms, instagramLinkedinBio, linkedinConnect, alignableMessages];
+/** Posts on X or TikTok by the right kind of person, each with the account that posted it. */
+async function postCandidates(ctx: AgentContext, platform: "x" | "tiktok", topic: string): Promise<Candidate[]> {
+  const fromPaste = pasted(await ctx.store.takeInputs([platform], 5, ctx.def.id), platform);
+  const web = (await searchPlatform(ctx, platform, [topic], 10)).map((w) => ({ ...w, author: handleFromPost(platform, w.url) ?? (w.author ? w.author.replace(/^@/, "") : null), promoAllowed: true }));
+  return [...fromPaste, ...web].filter((c) => !!c.author);
+}
+
+/** Outreach on X and TikTok (owner, 2026-10-29): a message about one post of theirs; the link opens their profile, where Message is. */
+function postDmAgent(o: { id: string; name: string; platform: "x" | "tiktok"; hour: number; where: string; register: string; length: string; purpose: string }): AgentDef {
+  return {
+    ...base,
+    id: o.id,
+    name: o.name,
+    schedule: { kind: "daily", hour: o.hour, minute: 0 },
+    dailyUsd: 0.5,
+    purpose: o.purpose,
+    async run(ctx) {
+      return runEngagement(ctx, {
+        platform: o.platform,
+        kind: "dm",
+        action: "dm",
+        ceiling: 8,
+        mustBePro: true,
+        keywordFilter: false,
+        register: o.register,
+        length: o.length,
+        label: (c) => `${o.name} to @${normalizeHandle(o.platform, c.author ?? "").replace(/^@/, "")}`,
+        person: (c) => (c.author ? { platform: o.platform, handle: c.author } : null),
+        async find() {
+          const { who, where } = await nextWhoWhere(ctx);
+          return postCandidates(ctx, o.platform, `recent public ${o.where} by ${who} in ${where} about their work. For author give their @username. No law firms.`);
+        },
+      });
+    },
+  };
+}
+
+export const xOutreach = postDmAgent({ id: "contact-x", name: "X Outreach", platform: "x", hour: 16, where: "posts on X (x.com/<username>/status/ links)", register: "X DM: short and casual, about one post of theirs.", length: "25 to 60 words", purpose: "Finds business owners' recent posts on X and writes each a short message about that post that brings up SwiftCard. The link opens their profile." });
+export const tiktokOutreach = postDmAgent({ id: "contact-tiktok", name: "TikTok Outreach", platform: "tiktok", hour: 17, where: "TikTok videos (tiktok.com/@<username>/video/ links)", register: "TikTok message: warm, quick, about one video of theirs.", length: "25 to 60 words", purpose: "Finds business owners' recent TikTok videos and writes each a short message about that video that brings up SwiftCard. The link opens their profile." });
+
+export const CONTACT: AgentDef[] = [redditDms, xOutreach, instagramDms, instagramLinkedinBio, tiktokOutreach, linkedinConnect, alignableMessages];

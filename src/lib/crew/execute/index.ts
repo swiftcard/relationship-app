@@ -38,7 +38,7 @@ export async function executeApproval(store: CrewStore, a: Approval, by = "owner
     logActivity(store, { agent_id: a.agent_id, platform: a.platform, action, target: a.target_url ?? (a.meta?.slug ? `/blog/${a.meta.slug}` : null), message: a.body, result: r.simulated ? "simulated" : r.ok ? "ok" : "failed", error: r.ok ? null : r.message, row_key: approvalKey(a.id), approved_by: by, simulated: !!r.simulated });
 
   if (dry && PUBLIC_KINDS.includes(a.kind)) {
-    const r: ExecResult = { ok: true, simulated: true, message: "Dry run is on (Controls tab), so this was simulated, not published. Turn Dry run off to publish on Approve." };
+    const r: ExecResult = { ok: true, simulated: true, message: "Dry run is on, so this was simulated, not published." };
     await log(r, a.kind === "blog_post" ? "publish" : "post");
     return r;
   }

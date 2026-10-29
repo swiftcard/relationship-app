@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sheetSync } from "@/lib/crew/agents/sheet-sync";
 import { GoogleHttpError } from "@/lib/crew/google/auth";
 import { workbookRequests } from "@/lib/crew/sheets/bootstrap";
-import { syncSheet } from "@/lib/crew/sheets/sync";
-import { ALL_TABS, WEB_LEADS } from "@/lib/crew/sheets/tabs";
+import { LAYOUT_VERSION, syncSheet } from "@/lib/crew/sheets/sync";
+import { ALL_TABS, REDDIT_REPLY, WEB_LEADS } from "@/lib/crew/sheets/tabs";
 import { MemoryStore } from "@/lib/crew/store-memory";
 import type { Lead } from "@/lib/crew/types";
 import { setup } from "./crew-helpers";
@@ -16,6 +16,10 @@ import { setup } from "./crew-helpers";
 // sync stopped there every 15 minutes, before writing a single row. These
 // tests run the whole sync against a fake Sheets API that refuses what Google
 // refuses.
+//
+// 2026-10-29 (owner): every tab is Name, Message, Link; a row the owner
+// deletes was sent (recorded, never added back); a row that is no longer
+// waiting comes off; the old tabs go once, and nothing on them counts as sent.
 
 type Fake = { sheets: { sheetId: number; title: string }[]; rows: Map<string, unknown[][]>; failProtection: boolean; failValueWrites: boolean; batches: Record<string, unknown>[][] };
 const fake: Fake = { sheets: [], rows: new Map(), failProtection: false, failValueWrites: false, batches: [] };
@@ -53,6 +57,19 @@ vi.mock("@/lib/crew/google/auth", async (orig) => {
         for (const r of requests) {
           const add = r.addSheet as { properties: { title: string } } | undefined;
           if (add) fake.sheets.push({ sheetId: fake.sheets.length + 100, title: add.properties.title });
+          const del = r.deleteSheet as { sheetId: number } | undefined;
+          if (del) {
+            const gone = fake.sheets.find((x) => x.sheetId === del.sheetId);
+            fake.sheets = fake.sheets.filter((x) => x.sheetId !== del.sheetId);
+            if (gone) fake.rows.delete(gone.title);
+          }
+          const dim = r.deleteDimension as { range: { sheetId: number; startIndex: number } } | undefined;
+          if (dim) {
+            const title = fake.sheets.find((x) => x.sheetId === dim.range.sheetId)?.title ?? "";
+            const rows = fake.rows.get(title) ?? [];
+            rows.splice(dim.range.startIndex - 1, 1); // the header is row 1
+            fake.rows.set(title, rows);
+          }
         }
         return json({ replies: [] });
       }
@@ -76,7 +93,7 @@ vi.mock("@/lib/crew/google/auth", async (orig) => {
   };
 });
 
-const lead = (email: string, company: string): Lead => ({ list: "cold", name: null, email, phone: null, company, business_type: "real estate offices", city: "Charlotte", region: "NC", country: "US", source_platform: "web", source_url: `https://${email.split("@")[1]}/contact` });
+const lead = (email: string, company: string): Lead => ({ list: "cold", name: null, email, phone: null, company, business_type: "real estate offices", city: "Charlotte", region: "NC", country: "US", source_platform: "web", source_url: `https://${email.split("@")[1]}/contact`, message: "Subject: your open houses\n\nI built SwiftCard so visitors tap and save you, free to start." });
 
 async function storeWithLeads(n = 3) {
   const store = new MemoryStore();
@@ -84,7 +101,10 @@ async function storeWithLeads(n = 3) {
   return store;
 }
 
-const webLeadEmails = () => (fake.rows.get(WEB_LEADS.name) ?? []).map((r) => r[WEB_LEADS.columns.findIndex((c) => c.key === "email")]);
+const LINK = WEB_LEADS.columns.findIndex((c) => c.key === "link");
+const KEY = WEB_LEADS.columns.findIndex((c) => c.kind === "key");
+/** The address each Web Leads row's link writes to. */
+const webLeadEmails = () => (fake.rows.get(WEB_LEADS.name) ?? []).map((r) => /mailto:([^?"]+)/.exec(String(r[LINK]))?.[1] ?? "");
 
 beforeEach(() => {
   vi.stubEnv("GOOGLE_SHEETS_SA_JSON", "{}");
@@ -102,9 +122,13 @@ describe("the workbook's formatting requests", () => {
 
   it("only ever puts unprotectedRanges on a protection that covers a whole sheet", () => {
     const withHoles = protection.map((r) => (r.addProtectedRange as { protectedRange: { range: Record<string, unknown>; unprotectedRanges?: unknown[] } }).protectedRange).filter((p) => p.unprotectedRanges?.length);
-    expect(withHoles.length).toBeGreaterThan(0); // the Controls tab's Value column
     for (const p of withHoles) expect(Object.keys(p.range)).toEqual(["sheetId"]);
     for (const r of [...headers, ...looks, ...protection]) expect(refusal(r)).toBeNull();
+  });
+
+  it("hides the Key column on every agent tab, so each shows Name, Message, Link", () => {
+    const hidden = looks.filter((r) => (r.updateDimensionProperties as { properties?: { hiddenByUser?: boolean } } | undefined)?.properties?.hiddenByUser === true);
+    expect(hidden.length).toBe(ALL_TABS.filter((t) => t.layout === "rows").length);
   });
 
   it("keeps protections out of the batch that writes the header rows", () => {
@@ -163,6 +187,58 @@ describe("syncSheet", () => {
     const ok = await syncSheet(store, new Date());
     expect(ok.updated).toBe(1);
     expect((await store.getSheetRow(row.row_key))?.agent_hash).not.toBe(row.agent_hash);
+  });
+
+  it("a row the owner deleted is recorded as sent and never comes back", async () => {
+    const store = await storeWithLeads(2);
+    await syncSheet(store, new Date());
+    const rows = fake.rows.get(WEB_LEADS.name)!;
+    const deletedKey = String(rows[0][KEY]);
+    fake.rows.set(WEB_LEADS.name, rows.slice(1)); // the owner sent it and deleted the row
+    const r = await syncSheet(store, new Date());
+    expect(r.sent).toBe(1);
+    expect((await store.getSheetRow(deletedKey))?.status).toBe("Contacted");
+    expect(store.touches.some((t) => t.kind === "emailed")).toBe(true);
+    expect(webLeadEmails()).toHaveLength(1);
+    await syncSheet(store, new Date());
+    expect(webLeadEmails()).toHaveLength(1); // not added back
+  });
+
+  it("a draft that stopped waiting (sent from the admin page) comes off its tab, and isn't counted as sent again", async () => {
+    const store = new MemoryStore();
+    const { ctx } = await setup({ def: { ...(await import("./crew-helpers")).fakeAgent({ id: "replies-reddit" }) } });
+    Object.assign(ctx, { store });
+    const { propose } = await import("@/lib/crew/approvals");
+    const made = await propose(ctx, { kind: "reply", title: "Reddit: cards", summary: "s", body: "I built SwiftCard for this, free to start.", platform: "reddit", targetUrl: "https://www.reddit.com/r/realtors/comments/abc123/x/", meta: { author: "jane" } });
+    if (!made.ok) throw new Error(made.reason);
+    await syncSheet(store, new Date());
+    expect(fake.rows.get(REDDIT_REPLY.name)).toHaveLength(1);
+    const { decide } = await import("@/lib/crew/decide");
+    await decide(store, made.id, { action: "done_by_hand", by: "admin" });
+    const r = await syncSheet(store, new Date());
+    expect(r.removed).toBe(1);
+    expect(r.sent).toBe(0);
+    expect(fake.rows.get(REDDIT_REPLY.name)).toHaveLength(0);
+  });
+
+  it("the new layout replaces the old tabs once, and nothing that was on them counts as sent", async () => {
+    // An older workbook: the old Dashboard and Controls, and a Web Leads tab in the old columns.
+    fake.sheets = [{ sheetId: 1, title: "Dashboard" }, { sheetId: 2, title: "Controls" }, { sheetId: 3, title: WEB_LEADS.name }];
+    const store = await storeWithLeads(2);
+    for (const l of (store as unknown as { leads: (Lead & { id: string })[] }).leads) {
+      await store.upsertSheetRow({ tab: WEB_LEADS.id, row_key: `L-${l.id.replace(/-/g, "").slice(0, 10)}`, entity_kind: "lead", entity_id: l.id, status: "New", owner_cols: {}, shown_status: "New", agent_hash: "old", synced_at: null, owner_edited_at: null });
+    }
+    fake.rows.set(WEB_LEADS.name, [["99", "old layout", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "L-whatever"]]);
+    const r = await syncSheet(store, new Date());
+    expect(r.errors).toEqual([]);
+    expect(fake.sheets.map((x) => x.title)).not.toContain("Dashboard");
+    expect(fake.sheets.map((x) => x.title)).not.toContain("Controls");
+    expect(r.sent).toBe(0);
+    expect(webLeadEmails().sort()).toEqual(["owner0@realty0.com", "owner1@realty1.com"]);
+    expect(await store.kvGet("sheet:layout:test-sheet")).toBe(LAYOUT_VERSION);
+    // Once only.
+    const again = await syncSheet(store, new Date());
+    expect(again.notes.some((n) => n.startsWith("Rebuilt"))).toBe(false);
   });
 
   it("stops before writing when the header rows can't be set up, and reports it", async () => {

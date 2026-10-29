@@ -24,9 +24,8 @@ describe("staff", () => {
 
   it("locked agents are never hired; an agent that is on is never hidden", () => {
     for (const d of AGENTS.filter((a) => a.locked)) expect(notHired(d, { enabled: true }), d.id).toBe(true);
-    const faye = agentById("leads-facebook")!;
-    expect(notHired(faye, { enabled: false })).toBe(true);
-    expect(notHired(faye, { enabled: true })).toBe(false);
+    const locked = ({ ...agentById("replies-reddit")!, id: "locked-example", locked: "Not allowed." });
+    expect(notHired(locked, { enabled: true })).toBe(true);
     expect(notHired(agentById("replies-reddit")!, { enabled: false })).toBe(false);
   });
 
@@ -41,7 +40,7 @@ describe("staff", () => {
     expect(s({}, locked).label).toBe("Locked out");
     expect(s({ next_run_at: "2026-10-21T19:00:00Z" })).toMatchObject({ kind: "break", line: "Next shift 3:00pm." });
     expect(staffStatus({ def: agentById("watchdog-manager")!, state: state(), missing: [], door: locked, now: NOW }).kind).toBe("break");
-    expect(staffStatus({ def: agentById("leads-linkedin")!, state: state(), missing: [], door: open, now: NOW }).kind).toBe("not_hired");
+    expect(staffStatus({ def: ({ ...agentById("replies-reddit")!, id: "locked-example", locked: "Not allowed." }), state: state(), missing: [], door: open, now: NOW }).kind).toBe("not_hired");
   });
 });
 

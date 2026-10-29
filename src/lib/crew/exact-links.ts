@@ -76,12 +76,18 @@ export function exactPostLink(platform: Platform, raw: string | null | undefined
     }
     case "x": {
       const m = /^\/(\w{1,15})\/status\/(\d+)$/.exec(path);
-      return (host === "x.com" || host === "twitter.com") && m ? `https://x.com/${m[1]}/status/${m[2]}` : null;
+      return (host === "x.com" || host === "twitter.com" || host === "mobile.twitter.com") && m ? `https://x.com/${m[1]}/status/${m[2]}` : null;
+    }
+    case "tiktok": {
+      const m = /^\/@([\w.]{2,24})\/(video|photo)\/(\d+)$/.exec(path);
+      return host === "tiktok.com" && m ? `https://www.tiktok.com/@${m[1]}/${m[2]}/${m[3]}` : null;
     }
     default:
       return null;
   }
 }
+
+const X_RESERVED = /^(home|explore|search|i|messages|settings|notifications|compose|login|signup|tos|privacy|hashtag|intent|share)$/i;
 
 const IG_RESERVED = /^(p|reel|reels|explore|stories|accounts|about|developer|legal|direct|tv|tags|locations|web)$/i;
 
@@ -100,6 +106,14 @@ export function exactProfileLink(platform: Platform, raw: string | null | undefi
     case "linkedin": {
       const m = /^\/in\/([\w%.-]+)$/.exec(path);
       return host === "linkedin.com" && m ? `https://www.linkedin.com/in/${m[1]}/` : null;
+    }
+    case "x": {
+      const m = /^\/(\w{1,15})$/.exec(path);
+      return (host === "x.com" || host === "twitter.com" || host === "mobile.twitter.com") && m && !X_RESERVED.test(m[1]) ? `https://x.com/${m[1]}` : null;
+    }
+    case "tiktok": {
+      const m = /^\/@([\w.]{2,24})$/.exec(path);
+      return host === "tiktok.com" && m ? `https://www.tiktok.com/@${m[1]}` : null;
     }
     case "alignable": {
       return host === "alignable.com" && path.split("/").filter(Boolean).length >= 1 && !/^\/(search|biz\/search|forum)/.test(path) ? `https://www.alignable.com${path}` : null;
@@ -122,7 +136,27 @@ export function instagramDmLink(handle: string): string {
   return `https://ig.me/m/${handle}`;
 }
 
-/** Opens Reddit's private-message screen addressed to this user. */
-export function redditMessageLink(username: string): string {
-  return `https://www.reddit.com/message/compose/?to=${encodeURIComponent(username.replace(/^\/?u\//i, ""))}`;
+/** Opens Reddit's private-message screen addressed to this user, with the message already typed in when one is given. */
+export function redditMessageLink(username: string, message?: string): string {
+  const to = encodeURIComponent(username.replace(/^\/?u\//i, ""));
+  return `https://www.reddit.com/message/compose/?to=${to}${message ? `&message=${encodeURIComponent(message)}` : ""}`;
+}
+
+/** The account a post on X or TikTok belongs to, from the post's own link. */
+export function handleFromPost(platform: "x" | "tiktok", raw: string | null | undefined): string | null {
+  const post = exactPostLink(platform, raw);
+  if (!post) return null;
+  const m = platform === "x" ? /^https:\/\/x\.com\/(\w+)\/status\//.exec(post) : /^https:\/\/www\.tiktok\.com\/@([\w.]+)\//.exec(post);
+  return m ? m[1] : null;
+}
+
+/** A new email to this address with the subject and the message already in it (the mail app opens on tap). */
+export function emailComposeLink(email: string, message: string): string | null {
+  const to = email.trim();
+  if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(to)) return null;
+  // Email drafts start with "Subject: …" on their first line.
+  const m = /^subject:[ \t]*(.+)\n+/i.exec(message);
+  const subject = m ? m[1].trim() : "";
+  const body = (m ? message.slice(m[0].length) : message).trim();
+  return `mailto:${to}?${[subject ? `subject=${encodeURIComponent(subject)}` : "", `body=${encodeURIComponent(body)}`].filter(Boolean).join("&")}`;
 }

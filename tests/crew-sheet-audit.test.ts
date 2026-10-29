@@ -7,12 +7,12 @@ import { paged } from "@/lib/crew/paged";
 import { AGENTS } from "@/lib/crew/registry";
 import { runEngagement, type Candidate } from "@/lib/crew/replies/engine";
 import { EVERY_CHOICES, plainSchedule } from "@/lib/crew/schedule";
-import { applyChange, normalizeSuppression } from "@/lib/crew/sheets/apply";
+import { markSent, normalizeSuppression } from "@/lib/crew/sheets/apply";
 import { applyControl, changedStamp, parseScheduleText } from "@/lib/crew/sheets/controls";
 import { NO_LINK, approvalKey, approvalRows, leadRows, type RowSources } from "@/lib/crew/sheets/rows";
 import { ownerEditable, type TabSpec } from "@/lib/crew/sheets/spec";
-import { controlEdits, inboundColumns, ownerChanges, placeRow, statusFixes } from "@/lib/crew/sheets/sync";
-import { ALL_LEADS, QUEUE, REDDIT_REPLY, TOP50 } from "@/lib/crew/sheets/tabs";
+import { inboundColumns, ownerChanges, placeRow } from "@/lib/crew/sheets/sync";
+import { REDDIT_REPLY } from "@/lib/crew/sheets/tabs";
 import { MemoryStore } from "@/lib/crew/store-memory";
 import { runTick } from "@/lib/crew/tick";
 import type { Approval, Schedule, SheetRow } from "@/lib/crew/types";
@@ -37,7 +37,7 @@ vi.mock("@/lib/crew/store-supabase", () => ({
 
 afterEach(() => vi.unstubAllEnvs());
 
-const sources = (over: Partial<RowSources> = {}): RowSources => ({ approvals: [], leads: [], findings: [], people: [], facts: [], geoHistory: [], known: new Map(), blueskyLive: false, ...over });
+const sources = (over: Partial<RowSources> = {}): RowSources => ({ approvals: [], leads: [], known: new Map(), ...over });
 
 function approval(o: Partial<Approval>): Approval {
   return {
@@ -108,17 +108,7 @@ describe("the Sheet keepers", () => {
   });
 });
 
-describe("Controls", () => {
-  it("a value the sync wrote is not a decision, so an admin Stop is not undone by the old Running in the cell", () => {
-    const rows = [
-      ["Reddit Reply: Start / Stop", "Running", "", "", "", "agent:replies-reddit"],
-      ["Dry run", "No", "", "", "", "dry_run"],
-      ["Brand new", "Yes", "", "", "", "agent:not-written-yet"],
-    ];
-    expect(controlEdits(rows, null)).toEqual([]); // before the sync has written the tab once
-    expect(controlEdits(rows, { "agent:replies-reddit": "Running", dry_run: "Yes" })).toEqual([{ i: 1, key: "dry_run", value: "No" }]);
-  });
-
+describe("Controls (set from admin → Agents; the Sheet's Controls tab was removed 2026-10-29)", () => {
   it("a real change is stamped in Last Changed and logged once; the same value again changes nothing", async () => {
     const store = new MemoryStore();
     const r = await applyControl(store, "dry_run", "No", "owner@example.com", new Date("2026-10-27T19:05:00Z"));
@@ -161,7 +151,8 @@ describe("Sent / Posted and Completed record what the owner did; they never run 
     if (!r.ok) throw new Error(r.reason);
     const key = approvalKey(r.id);
     await store.upsertSheetRow({ tab: "blog", row_key: key, entity_kind: "approval", entity_id: r.id, status: "Ready", owner_cols: {}, shown_status: "Ready", agent_hash: "x", synced_at: null, owner_edited_at: null });
-    expect((await applyChange(store, { rowKey: key, column: "status", value: "Completed", by: "owner" })).ok).toBe(true);
+    // Deleting its row is how the owner says it's done now (2026-10-29).
+    expect((await markSent(store, key, "owner")).ok).toBe(true);
     const a = (await store.getApproval(r.id))!;
     expect(a.status).toBe("done");
     expect(a.meta.done_by_hand).toBe(true);
@@ -186,82 +177,57 @@ describe("Sent / Posted and Completed record what the owner did; they never run 
   });
 });
 
-describe("one row, several copies: only a real change counts", () => {
-  it("a copy still showing what the sync wrote is stale, not the owner undoing a decision", () => {
-    // Approved on the admin page since the last sync: both copies still say Ready.
-    const row = known({ status: "Approved", shown_status: "Ready" });
-    const grid = new Map([
-      [REDDIT_REPLY.id, [cells(REDDIT_REPLY, { status: "Ready" })]],
-      [QUEUE.id, [cells(QUEUE, { status: "Ready" })]],
-    ]);
-    expect(ownerChanges([REDDIT_REPLY, QUEUE], grid, new Map([[KEY, row]]), () => undefined)).toEqual([]);
-    // …and the sync puts the agent's tab right.
-    expect(statusFixes([REDDIT_REPLY], grid, new Map([[KEY, row]]))).toEqual([{ range: "'Reddit Reply'!J2", values: [["Approved"]] }]);
-  });
-
-  it("changed in two copies in one sweep, the agent's own tab wins, whatever the order", () => {
-    const grid = new Map([
-      [REDDIT_REPLY.id, [cells(REDDIT_REPLY, { status: "Sent / Posted" })]],
-      [QUEUE.id, [cells(QUEUE, { status: "Skipped" })]],
-    ]);
-    const k = new Map([[KEY, known()]]);
-    for (const order of [[REDDIT_REPLY, QUEUE], [QUEUE, REDDIT_REPLY]]) {
-      const ch = ownerChanges(order, grid, k, () => undefined);
-      expect(ch.map((c) => [c.tab.id, c.col, c.value])).toEqual([[REDDIT_REPLY.id, "status", "Sent / Posted"]]);
-    }
-  });
-
-  it("notes come before the Status, so an Approved uses the option picked in the same sweep", () => {
-    const grid = new Map([[REDDIT_REPLY.id, [cells(REDDIT_REPLY, { status: "Approved", notes: "2" })]]]);
-    const ch = ownerChanges([REDDIT_REPLY], grid, new Map([[KEY, known()]]), () => undefined);
-    expect(ch.map((c) => c.col)).toEqual(["notes", "status"]);
-  });
-
-  it("the computed tabs are copies: only their Status is read; messages and notes are edited on the agent's tab", () => {
-    for (const tab of [QUEUE, TOP50, ALL_LEADS]) {
-      expect(inboundColumns(tab).map((k) => tab.columns[k].kind), tab.name).toEqual(["status"]);
-    }
-    const message = REDDIT_REPLY.columns.find((c) => c.key === "message")!;
-    expect(ownerEditable(REDDIT_REPLY, message)).toBe(true);
-    expect(ownerEditable(QUEUE, QUEUE.columns.find((c) => c.key === "message")!)).toBe(false);
-    const grid = new Map([[QUEUE.id, [cells(QUEUE, { status: "Ready", message: "rewritten in the queue" })]]]);
-    expect(ownerChanges([QUEUE], grid, new Map([[KEY, known()]]), () => "original")).toEqual([]);
+describe("what the sync reads back from a row", () => {
+  it("only a reworded message; the name and the link are the agent's", () => {
+    expect(inboundColumns(REDDIT_REPLY).map((k) => REDDIT_REPLY.columns[k].key)).toEqual(["message"]);
+    expect(ownerEditable(REDDIT_REPLY, REDDIT_REPLY.columns.find((c) => c.key === "message")!)).toBe(true);
+    const grid = new Map([[REDDIT_REPLY.id, [cells(REDDIT_REPLY, { message: "my own words, SwiftCard" })]]]);
+    const ch = ownerChanges([REDDIT_REPLY], grid, new Map([[KEY, known()]]), () => "the agent's words");
+    expect(ch.map((c) => [c.col, c.value])).toEqual([["message", "my own words, SwiftCard"]]);
+    // An unchanged or emptied message is not a rewrite.
+    expect(ownerChanges([REDDIT_REPLY], new Map([[REDDIT_REPLY.id, [cells(REDDIT_REPLY, { message: "" })]]]), new Map([[KEY, known()]]), () => "x")).toEqual([]);
   });
 });
 
-describe("rows the owner deleted stay deleted", () => {
-  it("placed before and gone from its tab: never added again; never placed: added; restored: adopted", () => {
+describe("rows the owner deleted stay deleted (and count as sent, 2026-10-29)", () => {
+  it("placed before and gone from its tab: gone (sent); never placed: added; restored: adopted; rebuilt or moved: added", () => {
     expect(placeRow(undefined, undefined, REDDIT_REPLY.id)).toBe("append");
     expect(placeRow(known(), undefined, REDDIT_REPLY.id)).toBe("gone");
     expect(placeRow(undefined, 7, REDDIT_REPLY.id)).toBe("adopt");
     expect(placeRow(known(), 7, REDDIT_REPLY.id)).toBe("update");
     // An agent whose rows moved to a new tab in a release: they are added there.
     expect(placeRow(known({ tab: "reddit-dms" }), undefined, REDDIT_REPLY.id)).toBe("append");
+    // After the layout rebuild every placed row is marked moved, so it is added again, never read as deleted.
+    expect(placeRow(known({ tab: "moved:" + REDDIT_REPLY.id }), undefined, REDDIT_REPLY.id)).toBe("append");
   });
 });
 
 describe("what reaches the Sheet", () => {
   const lead = { id: "11111111-2222-3333-4444-555555555555", created_at: "2026-10-25T10:00:00Z", source_platform: "web" as const, source_url: "https://acme.com/contact" };
 
+  const message = "Subject: your team's cards\n\nSam, I built SwiftCard for teams like yours.";
+
   it("leads from restricted regions never do", () => {
-    expect(leadRows({ ...lead, list: "cold", email: "hi@acme.co.uk", region_restricted: true }, sources())).toEqual([]);
-    expect(leadRows({ ...lead, list: "office", name: "Sam", region_restricted: true }, sources())).toEqual([]);
-    expect(leadRows({ ...lead, list: "cold", email: "hi@acme.com" }, sources())).toHaveLength(1);
+    expect(leadRows({ ...lead, list: "cold", email: "hi@acme.co.uk", message, region_restricted: true }, sources())).toEqual([]);
+    expect(leadRows({ ...lead, list: "office", name: "Sam", message, region_restricted: true }, sources())).toEqual([]);
+    expect(leadRows({ ...lead, list: "cold", email: "hi@acme.com", message }, sources())).toHaveLength(1);
   });
 
-  it("an office prospect opens an email to them when their site shows one, else their website", () => {
-    const [withEmail] = leadRows({ ...lead, list: "office", name: "Sam", email: "sam@nycteam.com" }, sources());
-    expect(withEmail.cells.open).toBe('=HYPERLINK("mailto:sam@nycteam.com","Email sam@nycteam.com")');
-    const [noEmail] = leadRows({ ...lead, list: "office", name: "Sam" }, sources());
-    expect(noEmail.cells.open).toBe('=HYPERLINK("https://acme.com/contact","Open website")');
+  it("an office prospect opens a new email to them when their site shows one, else their website", () => {
+    const [withEmail] = leadRows({ ...lead, list: "office", name: "Sam", email: "sam@nycteam.com", message }, sources());
+    expect(String(withEmail.cells.link)).toContain("mailto:sam@nycteam.com?subject=");
+    expect(String(withEmail.cells.link)).toContain("&body=Sam%2C%20I%20built%20SwiftCard");
+    const [noEmail] = leadRows({ ...lead, list: "office", name: "Sam", message }, sources());
+    expect(noEmail.cells.link).toBe('=HYPERLINK("https://acme.com/contact","Open their website")');
   });
 
   it("an old draft without an exact link is dropped; one pasted without a link says so", () => {
     expect(approvalRows(approval({ target_url: "https://www.reddit.com/r/realtors/" }), sources())).toEqual([]);
+    // Pasted without a link but with a known author: their profile, so there is still somewhere to go.
     const [reddit] = approvalRows(approval({ target_url: null }), sources());
-    expect(reddit.cells.open).toBe(NO_LINK);
+    expect(reddit.cells.link).toBe('=HYPERLINK("https://www.reddit.com/user/jane_sells/","Open their profile")');
     const [quora] = approvalRows(approval({ agent_id: "replies-quora", platform: "quora", target_url: "paste:abc", meta: { score: 0.8, author: "Jane Doe" } }), sources());
-    expect(quora.cells.open).toBe(NO_LINK);
+    expect(quora.cells.link).toBe(NO_LINK);
   });
 });
 
@@ -274,14 +240,12 @@ describe("opt-outs", () => {
     return "A card with the link page built in is what I ended up using.";
   };
 
-  it("Unsubscribed on someone known only by a display name blocks that name on that platform", async () => {
+  it("someone known only by a display name, once suppressed, is never drafted to on that platform", async () => {
     const { store, ctx } = await setup({ def: fakeAgent({ id: "replies-quora", maxPending: 50 }), script: score });
     await store.setRateLimit("quora", "reply", 100, "2026-01-01");
     const r = await propose(ctx, { kind: "reply", title: "Quora: sharing contact info", summary: "s", body: "A card with the link page built in works.", platform: "quora", targetUrl: "https://www.quora.com/How-do-realtors-share-contact-info", meta: { author: "Jane Doe" } });
     if (!r.ok) throw new Error(r.reason);
-    const key = approvalKey(r.id);
-    await store.upsertSheetRow({ tab: "quora", row_key: key, entity_kind: "approval", entity_id: r.id, status: "Ready", owner_cols: {}, shown_status: "Ready", agent_hash: "x", synced_at: null, owner_edited_at: null });
-    expect((await applyChange(store, { rowKey: key, column: "status", value: "Unsubscribed", by: "owner" })).ok).toBe(true);
+    await store.addSuppression(authorKey("quora", "Jane Doe"), "asked us to stop", { source: "admin", channel: "quora" });
     expect(await store.isSuppressed([authorKey("quora", "jane  DOE")])).toBe(true);
 
     const find = async (): Promise<Candidate[]> => [{ platform: "quora", url: "https://www.quora.com/Whats-the-best-digital-business-card", author: "Jane Doe", title: "Best digital business card?", text: "linktree plus a card app is too much", community: "", promoAllowed: true }];
@@ -313,15 +277,10 @@ describe("the edit hook refuses before it touches the database", () => {
     return (await res.json()) as { ok: boolean; message?: string };
   }
 
-  it("on Controls only the Value column is a switch", async () => {
-    expect(await call({ tab: "Controls", key: "dry_run", header: "Setting", value: "No" })).toMatchObject({ ok: false, message: "Change only the Value column." });
-    expect(await call({ tab: "Controls", key: "dry_run", header: "Allowed Values", value: "No" })).toMatchObject({ ok: false });
-  });
-
-  it("on a computed tab only the Status counts; an agent's own columns are the agent's", async () => {
-    expect((await call({ tab: QUEUE.name, key: KEY, header: "Message / Action", value: "x" })).message).toMatch(/on the agent's own tab/);
-    expect((await call({ tab: REDDIT_REPLY.name, key: KEY, header: "Why It's Relevant", value: "x" })).message).toMatch(/written by the agent/);
-    expect((await call({ tab: REDDIT_REPLY.name, key: "", header: "Status", value: "Approved" })).message).toMatch(/no key/);
+  it("a tab that no longer exists, or a column that is the agent's, is refused", async () => {
+    expect(await call({ tab: "Controls", key: "dry_run", header: "Value", value: "No" })).toMatchObject({ ok: false, message: "unknown tab" });
+    expect((await call({ tab: REDDIT_REPLY.name, key: KEY, header: "Link", value: "x" })).message).toMatch(/written by the agent/);
+    expect((await call({ tab: REDDIT_REPLY.name, key: "", header: "Message", value: "my words" })).message).toMatch(/no key/);
   });
 });
 

@@ -40,43 +40,22 @@ describe("a run the platform cut off is closed, not 'running' forever", () => {
   });
 });
 
-describe("the Sheet shows each agent's LATEST run", () => {
-  // runsSince is oldest first, and the Performance and Dashboard tabs take an
-  // agent's first run in the list as its latest — so a failure fixed days ago
-  // still read "Failed", and a fresh failure read fine.
-  it("runsSince is oldest first (the contract the sync has to sort against)", async () => {
+describe("the Sheet no longer carries run, Controls or Dashboard copies (2026-10-29)", () => {
+  // Three fixes of 2026-10-28 lived in code the Name, Message, Link Sheet
+  // removed: the Performance and Dashboard tabs (they read a week-old run as
+  // each agent's latest), the Controls tab (a failed write could undo a Stop
+  // pressed in the admin) and the Dashboard's "Messages ready" count (it named
+  // a tab that never existed). With those tabs gone none of it can come back.
+  it("runsSince is still oldest first, for anything that reads it", async () => {
     const store = new MemoryStore();
     store.runs.push(run({ id: "a", minsAgo: 30 }), run({ id: "b", minsAgo: 10 }));
     const rows = await store.runsSince(new Date(Date.now() - 3600_000).toISOString());
     expect(rows.map((r) => r.id)).toEqual(["a", "b"]);
   });
 
-  it("the sync sorts them newest first before any tab reads them", () => {
+  it("the sync writes no copies of runs, Controls or the Dashboard any more", () => {
     const sync = read("src/lib/crew/sheets/sync.ts");
-    expect(sync).toContain("store.runsSince(week).then((r) => [...r].sort((a, b) => (a.started_at < b.started_at ? 1 : a.started_at > b.started_at ? -1 : 0)))");
-  });
-});
-
-describe("an admin Stop can't be undone by the Sheet", () => {
-  it("what Controls shows is remembered only after the write landed", () => {
-    const sync = read("src/lib/crew/sheets/sync.ts");
-    const write = sync.indexOf("if (await rewrite(store, id, CONTROLS, controls, report)) {");
-    const remember = sync.indexOf("await store.kvSet(CONTROLS_SHOWN_KEY");
-    expect(write).toBeGreaterThan(-1);
-    expect(remember).toBeGreaterThan(write);
-    // No second, unconditional save of the shown values.
-    expect(sync.split("store.kvSet(CONTROLS_SHOWN_KEY").length - 1).toBe(1);
-  });
-});
-
-describe("the Dashboard's 'Messages ready to send' counts real tabs", () => {
-  it("every tab it adds up exists (it named 'linkedin', which never did)", () => {
-    const derived = read("src/lib/crew/sheets/derived.ts");
-    const list = derived.match(/const messages = ready\.filter\(\(r\) => \[([^\]]+)\]/)?.[1] ?? "";
-    const ids = [...list.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-    expect(ids.length).toBeGreaterThan(3);
-    const real = new Set(ALL_TABS.map((t) => t.id));
-    for (const id of ids) expect(real.has(id), `${id} is not a Sheet tab`).toBe(true);
-    expect(ids).toContain("linkedin-connections");
+    for (const gone of ["runsSince", "CONTROLS_SHOWN_KEY", "dashboardCells", "controlsRows"]) expect(sync, gone).not.toContain(gone);
+    for (const t of ALL_TABS) expect(["Dashboard", "Controls", "Agent Performance"]).not.toContain(t.name);
   });
 });

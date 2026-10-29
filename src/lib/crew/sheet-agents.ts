@@ -11,8 +11,8 @@ import type { AgentState, Settings } from "./types";
 // One row per agent that works into the SwiftCard Leads sheet, named after
 // its tab: what it finds, whether it is going, how many rows it added today,
 // and one button. Start = on and working now (then every 15 minutes until
-// today's ceiling, every day, until Stop). Stop = off at its next step. The
-// Sheet's Controls tab flips the same switch. Server only.
+// today's ceiling, every day, until Stop). Stop = off at its next step.
+// Server only.
 
 export type SheetAgentKind = "running" | "working" | "done_today" | "stopped" | "paused" | "failed" | "setup";
 

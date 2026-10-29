@@ -136,7 +136,7 @@ export const redditReplies: AgentDef = {
   },
 };
 
-function webAgent(o: { id: string; name: string; platform: Platform; purpose: string; ceiling: number; register: string; hour: number }): AgentDef {
+function webAgent(o: { id: string; name: string; platform: Platform; purpose: string; ceiling: number; register: string; hour: number; length?: string; kind?: "reply" | "comment" }): AgentDef {
   return {
     ...base,
     id: o.id,
@@ -147,13 +147,13 @@ function webAgent(o: { id: string; name: string; platform: Platform; purpose: st
     async run(ctx) {
       return runEngagement(ctx, {
         platform: o.platform,
-        kind: "reply",
-        action: "reply",
+        kind: o.kind ?? "reply",
+        action: o.kind ?? "reply",
         ceiling: o.ceiling,
         register: o.register,
-        length: o.platform === "quora" ? "80 to 180 words, a real answer first" : "40 to 120 words",
+        length: o.length ?? (o.platform === "quora" ? "80 to 180 words, a real answer first" : "40 to 120 words"),
         label: (c) => `${o.name.replace(/ (Replies|Answers)$/, "")}: ${c.title.slice(0, 90)}`,
-        person: (c) => (c.author && o.platform === "threads" ? { platform: "threads", handle: normalizeHandle("threads", c.author) } : null),
+        person: (c) => (c.author && (o.platform === "threads" || o.platform === "x" || o.platform === "tiktok") ? { platform: o.platform, handle: normalizeHandle(o.platform, c.author) } : null),
         async find() {
           const pasted = fromInputs(await ctx.store.takeInputs([o.platform], 5, ctx.def.id), o.platform);
           const web = (await searchPlatform(ctx, o.platform, await nextTopics(ctx), 10)).map((w) => ({ ...w, promoAllowed: true }));
@@ -202,7 +202,6 @@ export const blueskyReplies: AgentDef = {
       action: "reply",
       ceiling: 5,
       // Bluesky is quick to block accounts that look like ads.
-      pitchShare: 1 / 3,
       register: "Bluesky: short, warm, conversational, under 300 characters (Bluesky's limit). No hashtags, no emoji.",
       length: "under 300 characters",
       label: (c) => `Bluesky${c.author ? ` @${c.author}` : ""}: ${c.title.slice(0, 90)}`,
@@ -263,7 +262,6 @@ export const instagramComments: AgentDef = {
       kind: "comment",
       action: "comment",
       ceiling: 5,
-      pitchShare: 1 / 3,
       register: "Instagram comment: warm, specific to the post, no hashtags.",
       length: "40 words or less",
       keywordFilter: false,
@@ -309,7 +307,6 @@ export const linkedinComments: AgentDef = {
       kind: "comment",
       action: "comment",
       ceiling: 5,
-      pitchShare: 1 / 3,
       register: "LinkedIn: thoughtful, specific to THIS post, adds a real point of view. First person, no hashtags.",
       length: "25 to 70 words",
       keywordFilter: false,
@@ -342,7 +339,6 @@ export const hackerNewsReplies: AgentDef = {
       kind: "reply",
       action: "reply",
       ceiling: 3,
-      pitchShare: 1 / 4,
       register: "Hacker News: precise, technical where it helps, zero marketing tone, no greeting, no sign-off, plain text only.",
       length: "40 to 120 words",
       label: (c) => `Hacker News: ${c.title.slice(0, 90)}`,
@@ -358,4 +354,10 @@ export const hackerNewsReplies: AgentDef = {
   },
 };
 
-export const REPLIES: AgentDef[] = [redditReplies, threadsReplies, blueskyReplies, facebookReplies, quoraReplies, ihReplies, instagramComments, linkedinComments, hackerNewsReplies];
+// X and TikTok (owner, 2026-10-29): found through web search, free, so a few
+// posts a run rather than hundreds; X's own search API would cost about $200 a
+// month and the owner chose the free way.
+export const xReplies = webAgent({ id: "replies-x", name: "X Replies", platform: "x", ceiling: 8, hour: 11, length: "15 to 45 words, under 280 characters", register: "X: short and punchy, like a real reply under a tweet. No greeting.", purpose: "Finds posts on X about business cards, link in bio pages and following up with leads, and writes a reply that brings up SwiftCard. The link opens the post." });
+export const tiktokComments = webAgent({ id: "replies-tiktok", name: "TikTok Comments", platform: "tiktok", kind: "comment", ceiling: 6, hour: 13, length: "10 to 35 words", register: "TikTok comment: casual, quick, like a real viewer who has something useful to add.", purpose: "Finds TikTok videos about networking, business cards and link in bio pages, and writes a comment that brings up SwiftCard. The link opens the video." });
+
+export const REPLIES: AgentDef[] = [redditReplies, xReplies, threadsReplies, blueskyReplies, facebookReplies, quoraReplies, ihReplies, instagramComments, tiktokComments, linkedinComments, hackerNewsReplies];

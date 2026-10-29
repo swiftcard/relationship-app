@@ -241,38 +241,35 @@ describe("one company, even when two runs save it at the same moment", () => {
   });
 });
 
-describe("the Sheet rows of leads saved before this change are exactly what they were", () => {
+describe("a lead on the Sheet is Name, Message, Link (owner, 2026-10-29)", () => {
   const legacyCold = { list: "cold" as const, id: "11111111-1111-4111-8111-111111111111", created_at: "2026-10-27T14:00:00Z", name: null, email: "info@acmerealty.com", phone: "7045550100", company: "Acme Realty", business_type: "real estate offices", city: "Charlotte", region: "NC", country: "US", source_platform: "web" as const, source_url: "https://acmerealty.com/contact", notes: null };
   const legacyOffice = { ...legacyCold, id: "22222222-2222-4222-8222-222222222222", list: "office" as const, name: "Maria Lopez", title: "Broker/Owner", notes: "Twelve agents." };
 
-  it("Web Leads: blank Score, Why and Hook, Risky email status, the same hash", () => {
-    const [r] = leadRows(legacyCold, sources());
-    expect(r.tab).toBe(WEB_LEADS);
-    // Built by main before this change (fc30db1f), and pinned.
-    expect(r.cells).toEqual({ score: "", name: "", business: "Acme Realty", industry: "real estate offices", city: "Charlotte", state: "NC", email: "info@acmerealty.com", email_status: "Risky", phone: "7045550100", website: '=HYPERLINK("https://acmerealty.com","acmerealty.com")', source_platform: "Web", source_link: '=HYPERLINK("https://acmerealty.com/contact","Source")', why: "", hook: "", date_found: "2026-10-27" });
-    expect(agentHash(WEB_LEADS, r.cells)).toBe("b029be448486d599");
+  it("a lead saved before messages were written has nothing to send, so it isn't a row", () => {
+    expect(leadRows(legacyCold, sources())).toEqual([]);
+    expect(leadRows(legacyOffice, sources())).toEqual([]);
   });
-  it("Office Prospects: the same talking point and an empty message, the same hash", () => {
-    const [r] = leadRows(legacyOffice, sources());
-    expect(r.tab).toBe(OFFICE_PROSPECTS);
-    expect(r.cells).toEqual({ company: "Acme Realty", type: "real estate offices", name: "Maria Lopez", title: "Broker/Owner", phone: "7045550100", email: "info@acmerealty.com", talking_point: "Twelve agents.", message: "", open: '=HYPERLINK("mailto:info@acmerealty.com","Email info@acmerealty.com")', date_found: "2026-10-27" });
-    expect(agentHash(OFFICE_PROSPECTS, r.cells)).toBe("5db914ec0f927b93");
-  });
-  it("a new lead fills the columns", () => {
-    const [w] = leadRows({ ...legacyCold, name: "Jane Park", title: "Owner", email_status: "Domain OK", score: 87, why: "Fourteen agents.", hook: "Second office.", message: "Congrats on the new office." }, sources());
-    expect(w.cells).toMatchObject({ score: 87, name: "Jane Park, Owner", email_status: "Domain OK", why: "Fourteen agents.", hook: "Second office.\n\nOpener: Congrats on the new office." });
-    const [o] = leadRows({ ...legacyOffice, hook: "Park Slope.", message: "Hi Maria." }, sources());
-    expect(o.cells).toMatchObject({ talking_point: "Twelve agents.\n\nDetail to mention: Park Slope.", message: "Hi Maria." });
+
+  it("a lead with a message: the person, the message, and a new email with it already written", () => {
+    const [w] = leadRows({ ...legacyCold, name: "Jane Park", title: "Owner", email_status: "Domain OK", score: 87, why: "Fourteen agents.", hook: "Second office.", message: "Subject: the new office\n\nJane, congrats on the new office. I built SwiftCard for teams like yours." }, sources());
+    expect(w.tab).toBe(WEB_LEADS);
+    expect(w.cells.name).toBe("Jane Park, Owner, Acme Realty");
+    expect(w.cells.message).toContain("I built SwiftCard");
+    expect(String(w.cells.link)).toContain("mailto:info@acmerealty.com?subject=the%20new%20office&body=Jane%2C%20congrats");
+    const [o] = leadRows({ ...legacyOffice, message: "Hi Maria, quick one about your agents' cards." }, sources());
+    expect(o.tab).toBe(OFFICE_PROSPECTS);
+    expect(o.cells.name).toBe("Maria Lopez, Broker/Owner, Acme Realty");
+    expect(agentHash(OFFICE_PROSPECTS, o.cells)).toMatch(/^[a-f0-9]{16}$/);
   });
 });
 
-describe("the workbook's layout is left alone", () => {
+describe("the workbook's layout", () => {
   // Any change to a tab spec (a column, a header note, a colour) changes this
-  // hash, and the next Sheet sync then re-formats the whole workbook: it puts
-  // back the tab order, column widths and filters the owner may have changed
-  // by hand. This PR changes no spec; 31416e891591 is the hash production
-  // stored on 2026-10-28. Change this pin only when that reset is intended.
-  it("the spec hash is the one production already has", () => {
-    expect(specHash()).toBe("31416e891591");
+  // hash, and the next Sheet sync then re-formats the whole workbook. Changed
+  // on purpose 2026-10-29: every tab became Name, Message, Link (owner). Change
+  // this pin only when that reset is intended.
+  it("the spec hash is the Name, Message, Link one", () => {
+    expect(specHash()).toBe("63df4615245f");
   });
 });
+

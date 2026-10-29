@@ -19,7 +19,7 @@ export const sheetSync: AgentDef = {
   id: "sheet-sync",
   name: "Sheet sync",
   schedule: { kind: "every", minutes: 15 },
-  purpose: "Every 15 minutes: reads what you changed in the SwiftCard Leads sheet, writes what the agents found, and rebuilds the Dashboard, Action Queue and stats. No AI.",
+  purpose: "Every 15 minutes: puts what the agents wrote into the SwiftCard Leads sheet as Name, Message, Link, takes off anything already sent, skipped or expired, and counts a row you deleted as sent. No AI.",
   async run(ctx) {
     const { syncSheet } = await import("../sheets/sync");
     const r = await syncSheet(ctx.store, ctx.now());

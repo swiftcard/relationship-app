@@ -8,18 +8,8 @@ import { SupabaseStore } from "@/lib/crew/store-supabase";
 // crew-fix.yml posts back the pull request it opened for an approved card.
 export const dynamic = "force-dynamic";
 
-const SOURCES = new Set(["health", "nightly", "fix", "social"]);
+const SOURCES = new Set(["health", "nightly", "fix"]);
 const MAX_BYTES = 400_000;
-
-/** crew-render.yml reads the spec of the social post it is drawing. */
-export async function GET(req: NextRequest) {
-  if (!process.env.CREW_TICK_SECRET) return NextResponse.json({ error: "not found" }, { status: 404 });
-  if (!tickAuthorized(req.headers.get("authorization"))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const id = req.nextUrl.searchParams.get("social_spec") ?? "";
-  if (!/^[0-9a-z-]{8,40}$/.test(id)) return NextResponse.json({ error: "bad id" }, { status: 400 });
-  const spec = await new SupabaseStore().kvGet(`social:spec:${id}`);
-  return spec ? NextResponse.json(spec) : NextResponse.json({ error: "no such spec" }, { status: 404 });
-}
 
 export async function POST(req: NextRequest) {
   if (!process.env.CREW_TICK_SECRET) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -36,19 +26,6 @@ export async function POST(req: NextRequest) {
   }
   const store = new SupabaseStore();
   if (!(await store.ready())) return NextResponse.json({ ok: false, skipped: "crew not set up" });
-  if (source === "social") {
-    // crew-render.yml: the pictures it drew for a social post, stored in our
-    // own Supabase storage bucket (crew-media). Only those URLs are accepted.
-    const f = json as { spec_id?: string; step?: string; files?: { key?: string; url?: string }[] };
-    const base = `${(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, "")}/storage/v1/object/public/crew-media/social/`;
-    if (!f.spec_id || !/^[0-9a-z-]{8,40}$/.test(f.spec_id) || (f.step !== "options" && f.step !== "final")) return NextResponse.json({ error: "bad spec" }, { status: 400 });
-    const files = (f.files ?? [])
-      .filter((x) => typeof x.key === "string" && /^[a-z0-9-]{1,40}$/.test(x.key) && typeof x.url === "string" && x.url.startsWith(base + f.spec_id + "/"))
-      .slice(0, 80)
-      .map((x) => ({ key: x.key!, url: x.url! }));
-    await store.kvSet(`social:render:${f.spec_id}:${f.step}`, { files, at: new Date().toISOString() });
-    return NextResponse.json({ ok: true, files: files.length });
-  }
   if (source === "fix") {
     const f = json as { approval_id?: string; pr_url?: string | null; run_url?: string };
     const a = f.approval_id ? await store.getApproval(f.approval_id) : null;

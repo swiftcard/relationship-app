@@ -55,6 +55,18 @@ export async function applyChange(store: CrewStore, ch: Change, now = new Date()
   return { ok: false, message: `${col.header} is written by the agent; your change will be put back` };
 }
 
+/**
+ * The owner deleted the row from the Sheet: they sent it (owner, 2026-10-29:
+ * a deleted row counts as sent). The same decision as "I sent it" in the
+ * admin page: a draft becomes done by hand and the person is marked as
+ * contacted; a lead becomes Contacted, with an "emailed" touch.
+ */
+export async function markSent(store: CrewStore, rowKey: string, by: string, now = new Date()): Promise<Applied> {
+  const row = await store.getSheetRow(rowKey);
+  if (!row) return { ok: false, message: `no row ${rowKey}` };
+  return applyStatus(store, row, row.entity_kind === "lead" ? "Contacted" : "Sent / Posted", by, now);
+}
+
 async function applyStatus(store: CrewStore, row: SheetRow, word: string, by: string, now: Date): Promise<Applied> {
   if (!word || word === row.status) return { ok: true, message: "unchanged", status: row.status };
   if (!STATUS_WORDS.has(word)) return { ok: false, message: `"${word}" isn't a status`, status: row.status };
@@ -166,7 +178,7 @@ export async function applySuppressionRow(store: CrewStore, value: string, reaso
 
 /** A row the owner typed into Paste a Post. */
 export async function applyPasteRow(store: CrewStore, r: { platform: string; url: string; kind: string; text: string }): Promise<boolean> {
-  const platforms: Platform[] = ["facebook", "alignable", "instagram", "linkedin", "threads", "bluesky", "quora", "indiehackers", "reddit", "web"];
+  const platforms: Platform[] = ["facebook", "alignable", "instagram", "linkedin", "threads", "bluesky", "quora", "indiehackers", "reddit", "x", "tiktok", "web"];
   const platform = platforms.find((p) => p === r.platform.trim().toLowerCase());
   const kind = (["post", "profile", "page"] as const).find((k) => k === r.kind.trim().toLowerCase()) ?? "post";
   const text = r.text.trim();

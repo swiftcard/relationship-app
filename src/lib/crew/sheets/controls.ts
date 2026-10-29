@@ -54,7 +54,7 @@ export const TIER_PLATFORMS: Platform[] = ["reddit", "x", "linkedin", "instagram
 
 /** Paid services that are off until the owner says yes here (spec §16: $0/day until approved). */
 export const PAID_SERVICES: { key: string; label: string; what: string }[] = [
-  { key: "paid:x_api", label: "X API (pay per use)", what: "Lets the X Replies agent be built. X charges about $0.005 per post read and $0.015 per post written; about 200 reads + 5 replies a day ≈ $1.10/day ≈ $33/month. Needs X API billing on the SwiftCard developer account." },
+  { key: "paid:x_api", label: "X API (pay per use)", what: "X Replies and X Outreach find posts through web search, for free (owner's choice, 2026-10-29). X's own search API would find far more: about $0.005 per post read, roughly $33 a month at 200 reads a day. Needs X API billing on the SwiftCard developer account." },
   { key: "paid:google_places", label: "Google Places beyond the free tier", what: "Text Search (Pro) is free for the first 5,000 calls a month, then $32 per 1,000. The lead engine stops at 4,500 a month unless this is Yes." },
   { key: "paid:licensed_profile_data", label: "Licensed profile data (Instagram bios)", what: "Instagram gives no API to search bios. A licensed data provider could, at roughly $0.10 to $0.30 per enriched profile. Nothing is bought until this is Yes and a provider is chosen." },
   { key: "paid:email_verification", label: "Email verification service", what: "Mailbox-level checks (does the address really exist) cost about $0.005 to $0.01 per address. Free syntax and MX checks run regardless." },

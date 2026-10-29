@@ -70,7 +70,7 @@ describe("status", () => {
       word: "Needs setup",
       line: "Needs the Claude connection before it can run.",
     });
-    expect(agentStatus({ def: agentById("leads-linkedin")!, state: state(), missing: [], door: open, now: NOW, lastRun: null, waiting: 0, schedule: maya.schedule }).word).toBe("Not available");
+    expect(agentStatus({ def: ({ ...agentById("replies-reddit")!, id: "locked-example", locked: "Not allowed." }), state: state(), missing: [], door: open, now: NOW, lastRun: null, waiting: 0, schedule: maya.schedule }).word).toBe("Not available");
   });
 
   it("the last result is one plain sentence, never a raw error", () => {
@@ -127,7 +127,7 @@ describe("your schedule", () => {
   it("an agent that runs on pasted input, or can never run, keeps its own trigger", () => {
     const fb = agentById("replies-facebook")!;
     expect(effectiveSchedule(fb, { [fb.id]: { kind: "every", minutes: 15 } })).toBe(fb.schedule);
-    const li = agentById("leads-linkedin")!;
+    const li = { ...agentById("replies-reddit")!, id: "locked-example", locked: "Not allowed.", continuous: false, schedule: { kind: "daily" as const, hour: 17, minute: 0 } };
     expect(effectiveSchedule(li, { [li.id]: { kind: "every", minutes: 15 } })).toBe(li.schedule);
     // A continuous agent (Start / Stop) runs every clock tick unless you set a schedule; a bad one is ignored.
     const maya = agentById("replies-reddit")!;

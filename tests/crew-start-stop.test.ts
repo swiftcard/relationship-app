@@ -8,7 +8,6 @@ import { AGENTS, agentById } from "@/lib/crew/registry";
 import { QUIET_REST_MINUTES, exactTarget, pairs, rotate, runEngagement, type Candidate } from "@/lib/crew/replies/engine";
 import { effectiveSchedule, minutesToTomorrow } from "@/lib/crew/schedule";
 import { loadSheetAgents, sheetAgentDefs, sheetAgentState } from "@/lib/crew/sheet-agents";
-import { applyChange } from "@/lib/crew/sheets/apply";
 import { AGENT_TABS, tabsForAgent } from "@/lib/crew/sheets/tabs";
 import { toHits } from "@/lib/crew/sources/hackernews";
 import { DEFAULT_SETTINGS } from "@/lib/crew/store";
@@ -140,10 +139,9 @@ describe("one tab per agent, named after it", () => {
 
 describe("continuous: Start and it keeps going", () => {
   it("finders run every tick while on; content agents keep their day; paste agents wait for a paste", () => {
-    for (const id of ["contact-instagram-linkinbio", "contact-instagram", "replies-reddit", "replies-threads", "replies-hackernews", "contact-linkedin", "leads-web", "office-outreach", "partnerships", "events"]) {
+    for (const id of ["contact-instagram-linkinbio", "contact-instagram", "replies-reddit", "replies-x", "replies-tiktok", "contact-x", "contact-tiktok", "replies-threads", "replies-hackernews", "contact-linkedin", "leads-web", "office-outreach"]) {
       expect(effectiveSchedule(agentById(id)!, {}), id).toEqual({ kind: "every", minutes: 15 });
     }
-    expect(effectiveSchedule(agentById("marketing-blog")!, {}).kind).toBe("daily");
     expect(effectiveSchedule(agentById("replies-facebook")!, {}).kind).toBe("on_input");
   });
 
@@ -170,7 +168,7 @@ describe("continuous: Start and it keeps going", () => {
 describe("Start / Stop on the admin page", () => {
   it("lists every Sheet agent once, by its tab name, in the workbook's order", () => {
     const rows = sheetAgentDefs();
-    expect(rows[0]).toMatchObject({ tab: "Instagram LinkedIn Bio" });
+    expect(rows[0]).toMatchObject({ tab: "X Replies" });
     expect(new Set(rows.map((r) => r.def.id)).size).toBe(rows.length);
     expect(rows.some((r) => r.def.team === "watchdog")).toBe(false);
     expect(rows.some((r) => r.def.locked)).toBe(false);
@@ -217,12 +215,12 @@ describe("Start / Stop on the admin page", () => {
 });
 
 describe("the messages sound like a person", () => {
-  it("no dashes of any kind slip through, hyphenated words stay", () => {
+  it("no dashes of any kind slip through, and no hyphenated words either (owner, 2026-10-29)", () => {
     expect(stripEmDashes("Saw your post — nice. Open houses – tough. Busy week - right?")).toBe("Saw your post, nice. Open houses, tough. Busy week, right?");
-    expect(stripEmDashes("A follow-up text works.")).toBe("A follow-up text works.");
+    expect(stripEmDashes("A follow-up text works.")).toBe("A follow up text works.");
     expect(writingProblems("Busy week – right?")).toContain("uses an en dash");
     expect(writingProblems("Busy week - right?")).toContain("uses a hyphen as a dash");
-    expect(HUMAN_VOICE).toMatch(/No dashes of any kind/);
+    expect(HUMAN_VOICE).toMatch(/No hyphens at all/);
     expect(HUMAN_VOICE).toMatch(/Menash/);
   });
 
@@ -255,18 +253,5 @@ describe("the new finders", () => {
       { objectID: "x", author: "bad" },
     ]);
     expect(hits).toEqual([expect.objectContaining({ url: "https://news.ycombinator.com/item?id=50198336", kind: "comment", author: "steve", title: "Re: Where wealth is moving", text: "We'd hand out cards at events.\nNever followed up." })]);
-  });
-});
-
-describe("picking a social option in the Sheet", () => {
-  it("1, 2 or 3 in Notes plus Approved passes the pick through", async () => {
-    const { store, ctx } = await setup({ def: fakeAgent({ id: "marketing-social", team: "marketing", approvalKind: "post" }) });
-    const { propose } = await import("@/lib/crew/approvals");
-    const r = await propose(ctx, { kind: "post", title: "Social: pick", summary: "s", body: "1. A\n2. B\n3. C", platform: "instagram", meta: { step: 1, options: [{ n: 1 }, { n: 2 }, { n: 3 }] } });
-    if (!r.ok) throw new Error(r.reason);
-    await store.upsertSheetRow({ tab: "social", row_key: "A-pick", entity_kind: "approval", entity_id: r.id, status: "Ready", owner_cols: {}, agent_hash: "", synced_at: null, owner_edited_at: null });
-    await applyChange(store, { rowKey: "A-pick", column: "notes", value: "go with 2", by: "owner" });
-    await applyChange(store, { rowKey: "A-pick", column: "status", value: "Approved", by: "owner" });
-    expect((await store.getApproval(r.id))!.meta.choice).toBe("2");
   });
 });

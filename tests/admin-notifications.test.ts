@@ -161,8 +161,8 @@ describe("the agents", () => {
 
   it("a missing connection is named, once per agent and key", async () => {
     const { agentNotifications, summarizeAgents } = await import("@/lib/admin-data/agents-health");
-    const h = summarizeAgents({ killAll: false, settingsUpdatedAt: null, states: [{ id: "leads-reddit", enabled: true, next_run_at: null, status_note: null }], runs: [], sheetRows: [], waiting: 0, missing: (d) => (d.id === "leads-reddit" ? ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"] : []) });
-    expect(agentNotifications(h)).toEqual([expect.objectContaining({ dedupeKey: "agents:setup:leads-reddit:REDDIT_CLIENT_ID,REDDIT_CLIENT_SECRET", body: "It can't run until REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET are set up." })]);
+    const h = summarizeAgents({ killAll: false, settingsUpdatedAt: null, states: [{ id: "replies-reddit", enabled: true, next_run_at: null, status_note: null }], runs: [], sheetRows: [], waiting: 0, missing: (d) => (d.id === "replies-reddit" ? ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"] : []) });
+    expect(agentNotifications(h)).toEqual([expect.objectContaining({ dedupeKey: "agents:setup:replies-reddit:REDDIT_CLIENT_ID,REDDIT_CLIENT_SECRET", body: "It can't run until REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET are set up." })]);
   });
 
   it("Pause all only becomes a notification after a day", async () => {

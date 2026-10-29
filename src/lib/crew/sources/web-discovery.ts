@@ -17,6 +17,8 @@ const DOMAINS: Partial<Record<Platform, string[]>> = {
   indiehackers: ["indiehackers.com"],
   linkedin: ["linkedin.com"],
   instagram: ["instagram.com"],
+  x: ["x.com", "twitter.com"],
+  tiktok: ["tiktok.com"],
 };
 
 /** Live-tested 2026-10-20: asking for free-form JSON with web search came back

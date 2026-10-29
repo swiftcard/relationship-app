@@ -1,6 +1,5 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { factChanges } from "@/lib/crew/agents/competitor-watch";
 import { BLUESKY_QUERIES, blueskyReplies, guessAuthor, interleave, isOwnBlueskyHandle, REPLIES } from "@/lib/crew/agents/replies";
 import { competitorFacts, freshFacts } from "@/lib/crew/facts";
 import { normalizeHandle } from "@/lib/crew/ledger";
@@ -45,13 +44,25 @@ describe("the engagement engine", () => {
     expect(store.approvals[0].summary).toMatch(/post it yourself/);
   });
 
-  it("never pitches where the community bans promotion, even if the model does", async () => {
-    const { ctx, store } = await setup({ def: fakeAgent({ id: "replies-reddit", maxPending: 10 }), script: script("You should try SwiftCard for this.") });
+  it("where the community bans promotion, the post is skipped before any model is asked (2026-10-29: every message promotes SwiftCard)", async () => {
+    const { ctx, store, claude } = await setup({ def: fakeAgent({ id: "replies-reddit", maxPending: 10 }), script: script("You should try SwiftCard for this.") });
     await store.setRateLimit("reddit", "reply", 50, "2026-01-01");
+    const before = claude.calls.length;
     const r = await runEngagement(ctx, { platform: "reddit", kind: "reply", action: "reply", ceiling: 50, register: "", length: "", label: (c) => c.title, find: async () => [post(1, { promoAllowed: false })] });
     expect(store.approvals).toHaveLength(0);
     expect(r.summary).toMatch(/added 0 to the Sheet/);
-    expect(ctx.stats.skipped_pitch_not_allowed).toBe(1);
+    expect(ctx.stats.skipped_promo_banned).toBe(1);
+    // Only the scoring call ran; nothing was drafted for it.
+    expect(claude.calls.filter((c) => c.purpose === "draft")).toHaveLength(0);
+    expect(claude.calls.length).toBeGreaterThanOrEqual(before);
+  });
+
+  it("a draft that leaves SwiftCard out gets one rewrite, and is dropped if it still does", async () => {
+    const { ctx, store } = await setup({ def: fakeAgent({ id: "replies-reddit", maxPending: 10 }), script: script("Just follow up within a day and you'll be fine.") });
+    await store.setRateLimit("reddit", "reply", 50, "2026-01-01");
+    await runEngagement(ctx, { platform: "reddit", kind: "reply", action: "reply", ceiling: 50, register: "", length: "", label: (c) => c.title, find: async () => [post(1)] });
+    expect(store.approvals).toHaveLength(0);
+    expect(ctx.stats.skipped_no_swiftcard).toBe(1);
   });
 
   it("off-topic posts never reach a model; seen posts are not re-read", async () => {
@@ -63,12 +74,11 @@ describe("the engagement engine", () => {
     expect(claude.calls).toHaveLength(0);
   });
 
-  it("comments mention SwiftCard in at most about 1 in 3", async () => {
-    const { ctx, store } = await setup({ def: fakeAgent({ id: "replies-instagram", maxPending: 20, approvalKind: "comment" }), script: script("Great point about open houses. SwiftCard helps with this.") });
+  it("every comment may mention SwiftCard now (the old one in three cap is gone, owner 2026-10-29)", async () => {
+    const { ctx, store } = await setup({ def: fakeAgent({ id: "replies-instagram", maxPending: 20, approvalKind: "comment" }), script: script("Open house sign in sheets get lost so fast. I built SwiftCard so people tap and save you instead.") });
     await store.setRateLimit("instagram", "comment", 6, "2026-01-01");
-    await runEngagement(ctx, { platform: "instagram", kind: "comment", action: "comment", ceiling: 6, pitchShare: 1 / 3, keywordFilter: false, register: "", length: "", label: (c) => c.title, find: async () => [1, 2, 3, 4, 5, 6].map((i) => post(i, { platform: "instagram", url: `https://instagram.com/p/${i}` })) });
-    // Every draft here mentions SwiftCard, so only the pitch budget's worth survive.
-    expect(store.approvals.length).toBe(2);
+    await runEngagement(ctx, { platform: "instagram", kind: "comment", action: "comment", ceiling: 6, keywordFilter: false, register: "", length: "", label: (c) => c.title, find: async () => [1, 2, 3, 4, 5, 6].map((i) => post(i, { platform: "instagram", url: `https://instagram.com/p/${i}` })) });
+    expect(store.approvals.length).toBe(6);
   });
 });
 
@@ -94,20 +104,15 @@ describe("competitor facts", () => {
     expect(block).not.toContain("Popl");
     expect(freshFacts(store.facts, new Date())).toHaveLength(1);
   });
-  it("detects what changed", () => {
-    expect(factChanges([{ fact: "price", value: "$9" }], [{ fact: "price", value: "$12" }, { fact: "trial", value: "7 days" }])).toEqual([
-      { fact: "price", from: "$9", to: "$12" },
-      { fact: "trial", from: null, to: "7 days" },
-    ]);
-  });
 });
 
 describe("registry", () => {
   it("one Replies agent per platform from the spec, all drafting by hand, and no manager", () => {
-    const platforms = ["reddit", "instagram", "threads", "bluesky", "facebook", "quora", "indiehackers", "linkedin"];
+    const platforms = ["reddit", "x", "instagram", "tiktok", "threads", "bluesky", "facebook", "quora", "indiehackers", "linkedin"];
     for (const p of platforms) expect(REPLIES.some((a) => a.id === `replies-${p}`), p).toBe(true);
     expect(AGENTS.some((a) => a.id === "replies-manager")).toBe(false); // retired 2026-10-27: the Sheet replaced its room
-    expect(AGENTS.some((a) => a.id === "competitor-watch" && a.schedule.kind === "daily" && JSON.stringify(a.schedule.days) === "[0,3]")).toBe(true);
+    // Removed 2026-10-29 (owner): nothing on the Sheet came from it.
+    expect(AGENTS.some((a) => a.id === "competitor-watch")).toBe(false);
   });
 });
 
@@ -152,9 +157,9 @@ describe("Bluesky", () => {
     expect(isOwnBlueskyHandle("jane.realtor.bsky.social")).toBe(false);
   });
 
-  it("drafts only; mentions SwiftCard in at most about 1 in 3", () => {
+  it("drafts only, and no agent caps how many messages mention SwiftCard (owner, 2026-10-29)", () => {
     expect(blueskyReplies.approvalKind).toBe("reply");
-    expect(readFileSync("src/lib/crew/agents/replies.ts", "utf8")).toMatch(/id: "replies-bluesky"[\s\S]*?pitchShare: 1 \/ 3/);
+    expect(readFileSync("src/lib/crew/agents/replies.ts", "utf8")).not.toContain("pitchShare");
     expect(readFileSync("src/lib/crew/sources/bluesky.ts", "utf8")).not.toMatch(/createRecord|createSession|method: "POST"/);
   });
 });

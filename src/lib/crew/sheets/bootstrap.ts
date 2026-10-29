@@ -10,12 +10,11 @@ import { ALL_TABS } from "./tabs";
 
 // ── The workbook: created once, kept in shape ───────────────────────────────
 // One workbook, "SwiftCard Leads", in the Shared Drive. Every tab from
-// tabs.ts exists with its header row, frozen, bold, filtered, sized, with
-// dropdowns on Status columns, colours for priorities and scores, wrapping on
-// long columns, and the Controls tab protected except its Value column.
+// tabs.ts exists with its header row, frozen, bold, filtered, sized, wrapped,
+// with the Key column hidden (each tab shows only Name, Message, Link).
 // Idempotent: a hash of the tab specs is kept in crew_kv, so this runs again
-// only when a spec changes, and never removes a tab or a row (a tab that is
-// no longer in tabs.ts is left alone with "(old)" in front of its name).
+// only when a spec changes. Tabs are removed only by retireTabs, when the
+// layout itself changes (sync.ts), and only by the names it is given.
 
 export const WORKBOOK_NAME = "SwiftCard Leads";
 export const DAILY_FOLDER = "Daily";
@@ -68,6 +67,25 @@ export async function shareWorkbook(id: string): Promise<string[]> {
 }
 
 type Req = Record<string, unknown>;
+
+/**
+ * Delete these tabs from the workbook (a layout change: sync.ts makes them
+ * again, clean). Never the last tab: Google refuses that, so Paste a Post is
+ * made first if nothing else would be left. Returns the names removed.
+ */
+export async function retireTabs(id: string, names: Set<string>): Promise<string[]> {
+  const meta = await getSpreadsheet(id);
+  const doomed = meta.sheets.filter((s) => names.has(s.title));
+  if (!doomed.length) return [];
+  const requests: Req[] = [];
+  if (doomed.length === meta.sheets.length) {
+    const keep = ALL_TABS.find((t) => !names.has(t.name)) ?? ALL_TABS[0];
+    requests.push({ addSheet: { properties: { title: keep.name, gridProperties: { rowCount: 1000, columnCount: Math.max(8, keep.columns.length), frozenRowCount: HEADER_ROWS } } } });
+  }
+  for (const s of doomed) requests.push({ deleteSheet: { sheetId: s.sheetId } });
+  await batchUpdate(id, requests);
+  return doomed.map((s) => s.title);
+}
 
 /**
  * Make every tab exist and look right. Returns what it did. Only the tabs and
@@ -181,7 +199,11 @@ export function workbookRequests(sheets: { sheetId: number; title: string }[]): 
       const width = col.width ?? (col.kind === "long" ? 320 : col.kind === "link" ? 140 : 140);
       looks.push({ updateDimensionProperties: { range: { sheetId: s.sheetId, dimension: "COLUMNS", startIndex: k, endIndex: k + 1 }, properties: { pixelSize: width }, fields: "pixelSize" } });
       const format: Record<string, unknown> = { wrapStrategy: col.kind === "long" || col.editable ? "WRAP" : "CLIP", verticalAlignment: "TOP" };
-      if (col.kind === "key") format.textFormat = { foregroundColor: { red: 0.6, green: 0.6, blue: 0.6 }, fontSize: 9 };
+      if (col.kind === "key") {
+        format.textFormat = { foregroundColor: { red: 0.6, green: 0.6, blue: 0.6 }, fontSize: 9 };
+        // The owner asked for three columns: the Key the sync finds rows by is hidden.
+        looks.push({ updateDimensionProperties: { range: { sheetId: s.sheetId, dimension: "COLUMNS", startIndex: k, endIndex: k + 1 }, properties: { hiddenByUser: true }, fields: "hiddenByUser" } });
+      }
       if (col.kind === "number") format.horizontalAlignment = "RIGHT";
       looks.push({ repeatCell: { range: { sheetId: s.sheetId, startRowIndex: HEADER_ROWS, startColumnIndex: k, endColumnIndex: k + 1 }, cell: { userEnteredFormat: format }, fields: "userEnteredFormat(wrapStrategy,verticalAlignment,textFormat,horizontalAlignment)" } });
       // Dropdowns on status columns.

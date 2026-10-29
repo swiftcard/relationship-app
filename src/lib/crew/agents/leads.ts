@@ -5,23 +5,16 @@ import { funnelLine, recordSites, screenSearch, startFunnel } from "../leads/dia
 import { assessSites, type SiteAssessment } from "../leads/assess";
 import { DECISION_ROLE, isGenericEmail, leadScore, namedOnSite, safeText, scoreLeads, withEmailStatus } from "../leads/quality";
 import { cleanEmails, leadsToday, recordLeads } from "../leads/record";
-import { pairs, rotate } from "../replies/engine";
 import { minutesToTomorrow } from "../schedule";
-import { PROFESSIONS, US_METROS } from "../search-plan";
-import { emailsIn } from "../ledger";
-import { redditConfigured, searchSubreddits } from "../sources/reddit";
 import { syncLeadsToSheet } from "../sources/sheets";
-import { searchItems, searchPlatform } from "../sources/web-discovery";
-import type { Lead, Platform } from "../types";
+import { searchItems } from "../sources/web-discovery";
+import type { Lead } from "../types";
 
-// ── Team 3: Email lead scraping (list building only) ────────────────────────
-// No agent here sends anything. They find business people who PUBLICLY share
-// an email for business, record name + email + where + when, and copy new
-// rows to the Google Sheet. The meeting's 2,000 to 3,000 a day is a ceiling;
-// the manager reports the real count. Facebook groups and Alignable can't be
-// read by apps (and their terms forbid scraping), so those two work only from
-// what the owner pastes. LinkedIn scraping breaks LinkedIn's terms, so that
-// agent exists only as a locked placeholder.
+// ── Team 3: Web Leads ───────────────────────────────────────────────────────
+// No agent here sends anything. It finds businesses that PUBLICLY share an
+// email on their own website, scores them, writes the opening email, and the
+// Sheet shows each as Name, Message, Link (a new email with the message in
+// it). The 1,000 a day is a ceiling; the run reports the real count.
 
 export const BUSINESS_TYPES = [
   "real estate offices",
@@ -181,91 +174,8 @@ export const leadsWeb: AgentDef = {
   },
 };
 
-export const leadsReddit: AgentDef = {
-  ...base,
-  id: "leads-reddit",
-  name: "Reddit Leads",
-  continuous: true,
-  schedule: { kind: "daily", hour: 16, minute: 0 },
-  dailyUsd: 0.1,
-  needs: ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "REDDIT_USER_AGENT"],
-  purpose: "Looks for business owners on Reddit who post a business email publicly, and saves them to the lead sheet. No messages.",
-  async run(ctx) {
-    if (!redditConfigured()) return { summary: "Needs the Reddit keys.", status: "skipped" };
-    const subs = ["realtors", "RealEstate", "smallbusiness", "sweatystartup", "WindowCleaning", "landscaping", "Plumbing", "mortgage", "recruiting", "sales"];
-    const leads: Lead[] = [];
-    for (const q of ["\"email me at\"", "\"reach me at\"", "\"contact me at\""]) {
-      for (const p of await searchSubreddits(subs, q, 25)) {
-        for (const email of cleanEmails([p.text])) leads.push({ list: "cold", name: `u/${p.author}`, email, source_platform: "reddit", source_url: p.url, business_type: `r/${p.subreddit}`, country: null });
-      }
-    }
-    ctx.stat("no_llm_needed");
-    const added = await recordLeads(ctx, leads);
-    await syncLeadsToSheet(ctx.store, "cold").catch(() => 0);
-    return { summary: `Saved ${added} new emails from Reddit.` };
-  },
-};
-
-export const leadsQuora: AgentDef = {
-  ...base,
-  id: "leads-quora",
-  name: "Quora Leads",
-  continuous: true,
-  schedule: { kind: "daily", hour: 16, minute: 30 },
-  dailyUsd: 0.3,
-  needs: ["CREW_ANTHROPIC_API_KEY"],
-  purpose: "Looks for business owners on Quora who list a public business email, and saves them to the lead sheet. No messages.",
-  async run(ctx) {
-    const [[who, where]] = await rotate(ctx, "where_i", pairs(PROFESSIONS, US_METROS), 1);
-    const found = await searchPlatform(ctx, "quora", [`profiles or answers by ${who} in ${where} that list a business email address`], 15);
-    const leads = found.flatMap((f) => cleanEmails([f.text]).map((email) => ({ list: "cold" as const, name: f.author, email, source_platform: "quora" as const, source_url: f.url })));
-    const added = await recordLeads(ctx, leads);
-    await syncLeadsToSheet(ctx.store, "cold").catch(() => 0);
-    return { summary: `Read ${found.length} Quora results, saved ${added} new emails.` };
-  },
-};
-
-function pasteLeads(platform: Platform, id: string, name: string, why: string): AgentDef {
-  return {
-    ...base,
-    id,
-    name,
-    schedule: { kind: "every", minutes: 60 },
-    dailyUsd: 0,
-    needs: [],
-    purpose: `Saves any business email in the ${why} you paste into Paste a post. No AI, no messages.`,
-    async run(ctx) {
-      const since = ctx.config<string>("cursor", "1970-01-01T00:00:00Z");
-      const inputs = await ctx.store.listInputsSince([platform], since, 200);
-      if (!inputs.length) {
-        ctx.stat("no_llm_needed");
-        return { summary: "Nothing new pasted." };
-      }
-      const leads = inputs.flatMap((i) => emailsIn(i.text).map((email) => ({ list: "cold" as const, email, name: i.text.split("\n")[0].slice(0, 80), source_platform: platform, source_url: i.url ?? `paste:${i.id}` })));
-      const added = await recordLeads(ctx, leads);
-      await ctx.saveConfig({ cursor: inputs[inputs.length - 1].created_at });
-      await syncLeadsToSheet(ctx.store, "cold").catch(() => 0);
-      ctx.stat("no_llm_needed");
-      return { summary: `Checked ${inputs.length} pasted items, saved ${added} new emails.` };
-    },
-  };
-}
-
-export const leadsFacebook = pasteLeads("facebook", "leads-facebook", "Facebook Group Leads", "Facebook group posts and pages");
-export const leadsAlignable = pasteLeads("alignable", "leads-alignable", "Alignable Leads", "Alignable profiles");
-
-export const leadsLinkedIn: AgentDef = {
-  ...base,
-  id: "leads-linkedin",
-  name: "LinkedIn leads (not allowed)",
-  schedule: { kind: "daily", hour: 17 },
-  dailyUsd: 0,
-  needs: [],
-  purpose: "The meeting listed it once, then dropped it. Collecting emails from LinkedIn breaks LinkedIn's User Agreement, so this stays off.",
-  locked: "Scraping LinkedIn breaks its User Agreement and risks the company account.",
-  async run() {
-    return { summary: "Locked.", status: "skipped" };
-  },
-};
-
-export const LEADS: AgentDef[] = [leadsWeb, leadsReddit, leadsFacebook, leadsAlignable, leadsQuora, leadsLinkedIn];
+// Reddit, Quora, Facebook and Alignable lead lists and the locked LinkedIn
+// placeholder were removed 2026-10-29: in their lifetime they saved no lead,
+// and they wrote no message, so on a Sheet that is only Name, Message, Link
+// (owner, 2026-10-29) they had nothing to put there.
+export const LEADS: AgentDef[] = [leadsWeb];
