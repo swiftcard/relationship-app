@@ -76,6 +76,29 @@ export default function NativeAppBridge() {
     return () => { cancelled = true; remove?.(); };
   }, []);
 
+  // ── Android status-bar icons follow the APP's theme ─────────────────────
+  // Never setting the style leaves Android on the PHONE's dark mode: light
+  // icons on a light screen. SystemBars LIGHT = dark icons (light screen),
+  // DARK = light icons (dark screen). Re-applied when the theme flips.
+  useEffect(() => {
+    if (detectNativePlatform() !== "android") return;
+    let cancelled = false;
+    const root = document.documentElement;
+    const apply = () => {
+      const dark = root.classList.contains("dark") || root.dataset.theme === "dark";
+      import("@capacitor/core")
+        .then(({ SystemBars, SystemBarsStyle }) => {
+          if (cancelled) return;
+          return SystemBars.setStyle({ style: dark ? SystemBarsStyle.Dark : SystemBarsStyle.Light });
+        })
+        .catch(() => { /* older shell without the plugin: the phone's default stands */ });
+    };
+    apply();
+    const watch = new MutationObserver(apply);
+    watch.observe(root, { attributes: true, attributeFilter: ["class", "data-theme"] });
+    return () => { cancelled = true; watch.disconnect(); };
+  }, []);
+
   useEffect(() => {
     if (!detectNativeApp()) return;
 
