@@ -76,6 +76,30 @@ export default function NativeAppBridge() {
     return () => { cancelled = true; remove?.(); };
   }, []);
 
+  // ── Android new-tab links ("View Live Link", "Open Swift Links") ────────
+  //
+  // iOS hands a target="_blank" link to Safari natively (Capacitor's
+  // createWebViewWith → UIApplication.open). Android's WebView has no such
+  // hook, so the link navigated the app itself or did nothing. Hand it to the
+  // default browser through the same plugin as card links.
+  useEffect(() => {
+    if (detectNativePlatform() !== "android") return;
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = e.target instanceof Element ? e.target.closest("a[target='_blank'][href]") : null;
+      if (!a) return;
+      let u: URL;
+      try { u = new URL((a as HTMLAnchorElement).href, window.location.href); } catch { return; }
+      if (u.origin !== window.location.origin) return;
+      e.preventDefault();
+      void import("@/lib/external-purchase").then(({ openLinkInDefaultBrowser }) =>
+        openLinkInDefaultBrowser(u.pathname + u.search + u.hash),
+      ).catch(() => {});
+    };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, []);
+
   useEffect(() => {
     if (!detectNativeApp()) return;
 
