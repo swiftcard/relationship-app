@@ -4,7 +4,7 @@ import type { CrewStore } from "../store";
 import type { SheetRow } from "../types";
 import { logActivity } from "./activity";
 import { applyChange, applyPasteRow, commandFor } from "./apply";
-import { HEADER_ROWS, createWorkbook, ensureWorkbook, retireTabs, shareWorkbook, sheetsHqConfigured, workbookId } from "./bootstrap";
+import { HEADER_ROWS, bodyRowRequests, createWorkbook, ensureWorkbook, retireTabs, shareWorkbook, sheetsHqConfigured, workbookId } from "./bootstrap";
 import { agentHash, buildRows, leadCoverage, type BuiltRow, type LeadCoverage, type RowSources } from "./rows";
 import { ownerEditable, type TabSpec } from "./spec";
 import { AGENT_TABS, ALL_TABS, PASTE, RETIRED_TAB_NAMES } from "./tabs";
@@ -434,13 +434,24 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
     try {
       const mine = (r: BuiltRow) => sources.known.get(r.key)?.owner_cols ?? {};
       const values = rows.map((r) => tab.columns.map((col) => (col.kind === "key" ? r.key : col.editable && mine(r)[col.key] !== undefined ? mine(r)[col.key] : (r.cells[col.key] ?? ""))));
-      await appendRows(id, tab.name, values);
+      const { firstRow } = await appendRows(id, tab.name, values);
       for (const r of rows) {
         const saved = await store.upsertSheetRow({ tab: tab.id, row_key: r.key, entity_kind: r.kind, entity_id: r.entityId, status: r.initialStatus, owner_cols: mine(r), shown_status: r.initialStatus, agent_hash: agentHash(tab, r.cells), synced_at: now.toISOString(), owner_edited_at: sources.known.get(r.key)?.owner_edited_at ?? null });
         sources.known.set(r.key, saved);
       }
       report.appended += rows.length;
       report.restored += rows.filter((r) => restoring.has(r.key)).length;
+      // Google gives inserted rows the format of the row above them, and on a
+      // tab with no rows yet that is the dark header: the new rows get the
+      // body's own colours. Formats only; a failure here is noted, not fatal.
+      const sid = gid.get(tab.name);
+      if (firstRow > 0 && sid !== undefined) {
+        try {
+          await batchUpdate(id, bodyRowRequests(tab, sid, firstRow - 1, firstRow - 1 + rows.length));
+        } catch (e) {
+          report.notes.push(`${tab.name}: the new rows are written, but their colours were not set (${msg(e)}).`);
+        }
+      }
     } catch (e) {
       report.errors.push(`${tab.name}: ${msg(e)}`);
     }

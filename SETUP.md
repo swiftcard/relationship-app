@@ -51,6 +51,10 @@ What's in it (owner, 2026-10-29): one tab per agent, each exactly three
 columns, **Name, Message, Link** (a hidden Key column is how the sync finds a
 row; leave it hidden), plus **Paste a Post**. No dashboard, queues, pipeline,
 stats, Controls or logs; Start, Stop and Pause all are in admin → Agents.
+The header row is locked (only the sync's service account can change it);
+the Key column asks before it lets anyone edit it. Rows are light, alternating
+white and pale grey, with dark text and dark blue links; a Message still
+waiting to be written is amber.
 
 How the rows behave:
 

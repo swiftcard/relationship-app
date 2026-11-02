@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sheetSync } from "@/lib/crew/agents/sheet-sync";
 import { GoogleHttpError } from "@/lib/crew/google/auth";
-import { workbookRequests } from "@/lib/crew/sheets/bootstrap";
+import { SHEET_COLORS, bodyRowRequests, specHash, workbookRequests } from "@/lib/crew/sheets/bootstrap";
 import { leadKey, type BuiltRow } from "@/lib/crew/sheets/rows";
 import { commandFor } from "@/lib/crew/sheets/apply";
 import { LAYOUT_VERSION, ambiguousKeys, syncSheet } from "@/lib/crew/sheets/sync";
@@ -26,15 +26,31 @@ import { setup } from "./crew-helpers";
 // deleted row is put back exactly as it was; "sent" typed over the message is
 // how a row is finished.
 
-type Fake = { sheets: { sheetId: number; title: string }[]; rows: Map<string, unknown[][]>; failProtection: boolean; failValueWrites: boolean; batches: Record<string, unknown>[][]; writes: { range: string; values: unknown[][] }[] };
-const fake: Fake = { sheets: [], rows: new Map(), failProtection: false, failValueWrites: false, batches: [], writes: [] };
+type Fake = {
+  sheets: { sheetId: number; title: string }[];
+  rows: Map<string, unknown[][]>;
+  failProtection: boolean;
+  failValueWrites: boolean;
+  failRowFormat: boolean;
+  batches: Record<string, unknown>[][];
+  writes: { range: string; values: unknown[][] }[];
+  /** Alternating bands and conditional rules on each tab, as Google keeps them. */
+  bands: Map<number, number[]>;
+  rules: Map<number, { backgroundColor?: Record<string, number> }[]>;
+  protections: { protectedRangeId: number; sheetId: number; description?: string; warningOnly?: boolean; editors?: { users: string[] } }[];
+};
+const fake: Fake = { sheets: [], rows: new Map(), failProtection: false, failValueWrites: false, failRowFormat: false, batches: [], writes: [], bands: new Map(), rules: new Map(), protections: [] };
+let nextId = 1;
 
 const tabOf = (range: string) => decodeURIComponent(range).replace(/^'/, "").replace(/'!.*$/, "").replace(/''/g, "'");
 const json = (v: unknown) => new Response(JSON.stringify(v), { status: 200 });
 
 /** What Google says about one spreadsheets.batchUpdate request, or null when it accepts it. */
-function refusal(req: Record<string, unknown>): string | null {
+function refusal(req: Record<string, unknown>, bandsGone: Set<number> = new Set()): string | null {
   const add = req.addProtectedRange as { protectedRange: { range: Record<string, unknown>; unprotectedRanges?: unknown[] } } | undefined;
+  const band = req.addBanding as { bandedRange: { range: { sheetId: number } } } | undefined;
+  if (band && (fake.bands.get(band.bandedRange.range.sheetId) ?? []).some((id) => !bandsGone.has(id))) return "Cannot add alternating background colors to a range that already has alternating background colors.";
+  if (fake.failRowFormat && (req.repeatCell as { range?: { endRowIndex?: number } } | undefined)?.range?.endRowIndex !== undefined) return "Internal error";
   if (!add) return null;
   if (fake.failProtection) return "The caller does not have permission";
   const wholeSheet = Object.keys(add.protectedRange.range).every((k) => k === "sheetId");
@@ -49,24 +65,51 @@ vi.mock("@/lib/crew/google/auth", async (orig) => {
     googleConfigured: () => true,
     googleFetch: async (url: string, init: RequestInit & { what?: string } = {}) => {
       const body = init.body ? JSON.parse(String(init.body)) : {};
-      if (url.includes("fields=sheets.protectedRanges")) return json({ sheets: [] });
+      if (url.includes("fields=sheets.protectedRanges")) return json({ sheets: fake.sheets.map((x) => ({ protectedRanges: fake.protections.filter((p) => p.sheetId === x.sheetId) })) });
+      if (url.includes("fields=sheets(properties.sheetId,bandedRanges")) {
+        // Like Google: a sheetId of 0 and empty lists are left out.
+        return json({ sheets: fake.sheets.map((x) => ({ properties: x.sheetId ? { sheetId: x.sheetId } : {}, bandedRanges: (fake.bands.get(x.sheetId) ?? []).map((bandedRangeId) => ({ bandedRangeId })), conditionalFormats: (fake.rules.get(x.sheetId) ?? []).map((format) => ({ booleanRule: { format } })) })) });
+      }
       if (url.includes("?fields=spreadsheetId")) return json({ spreadsheetId: "test-sheet", spreadsheetUrl: "https://example.test", properties: { title: "SwiftCard Leads" }, sheets: fake.sheets.map((s, index) => ({ properties: { ...s, index } })) });
       if (url.endsWith("/:batchUpdate")) {
         const requests = body.requests as Record<string, unknown>[];
         // Atomic like Google: one bad request and nothing in the batch applies.
+        // In order, like Google: a band deleted earlier in the batch no longer counts.
+        const bandsGone = new Set<number>();
         for (const [i, r] of requests.entries()) {
-          const why = refusal(r);
-          if (why) throw new real.GoogleHttpError(400, JSON.stringify({ error: { code: 400, message: `Invalid requests[${i}].addProtectedRange: ${why}` } }), "spreadsheets.batchUpdate");
+          const gone = r.deleteBanding as { bandedRangeId: number } | undefined;
+          if (gone) bandsGone.add(gone.bandedRangeId);
+          const why = refusal(r, bandsGone);
+          if (why) throw new real.GoogleHttpError(400, JSON.stringify({ error: { code: 400, message: `Invalid requests[${i}]: ${why}` } }), "spreadsheets.batchUpdate");
         }
         fake.batches.push(requests);
         for (const r of requests) {
+          const ab = r.addBanding as { bandedRange: { range: { sheetId: number } } } | undefined;
+          if (ab) fake.bands.set(ab.bandedRange.range.sheetId, [...(fake.bands.get(ab.bandedRange.range.sheetId) ?? []), nextId++]);
+          const db = r.deleteBanding as { bandedRangeId: number } | undefined;
+          if (db) for (const [k, v] of fake.bands) fake.bands.set(k, v.filter((x) => x !== db.bandedRangeId));
+          const ar = r.addConditionalFormatRule as { rule: { ranges: { sheetId: number }[]; booleanRule: { format: { backgroundColor?: Record<string, number> } } }; index: number } | undefined;
+          if (ar) {
+            const list = fake.rules.get(ar.rule.ranges[0].sheetId) ?? [];
+            list.splice(ar.index, 0, { backgroundColor: ar.rule.booleanRule.format.backgroundColor });
+            fake.rules.set(ar.rule.ranges[0].sheetId, list);
+          }
+          const dr = r.deleteConditionalFormatRule as { sheetId: number; index: number } | undefined;
+          if (dr) fake.rules.get(dr.sheetId)?.splice(dr.index, 1);
+          const ap = r.addProtectedRange as { protectedRange: { range: { sheetId: number }; description?: string; warningOnly?: boolean; editors?: { users: string[] } } } | undefined;
+          if (ap) fake.protections.push({ protectedRangeId: nextId++, sheetId: ap.protectedRange.range.sheetId, description: ap.protectedRange.description, warningOnly: ap.protectedRange.warningOnly, editors: ap.protectedRange.editors });
+          const dp = r.deleteProtectedRange as { protectedRangeId: number } | undefined;
+          if (dp) fake.protections = fake.protections.filter((x) => x.protectedRangeId !== dp.protectedRangeId);
           const add = r.addSheet as { properties: { title: string } } | undefined;
-          if (add) fake.sheets.push({ sheetId: fake.sheets.length + 100, title: add.properties.title });
+          if (add) fake.sheets.push({ sheetId: 1000 + nextId++, title: add.properties.title }); // unique, like Google: never reused after a delete
           const del = r.deleteSheet as { sheetId: number } | undefined;
           if (del) {
             const gone = fake.sheets.find((x) => x.sheetId === del.sheetId);
             fake.sheets = fake.sheets.filter((x) => x.sheetId !== del.sheetId);
             if (gone) fake.rows.delete(gone.title);
+            fake.bands.delete(del.sheetId);
+            fake.rules.delete(del.sheetId);
+            fake.protections = fake.protections.filter((x) => x.sheetId !== del.sheetId);
           }
           const dim = r.deleteDimension as { range: { sheetId: number; startIndex: number } } | undefined;
           if (dim) {
@@ -124,7 +167,7 @@ beforeEach(() => {
   vi.stubEnv("CREW_SHEET_ID_TEST", "");
   vi.stubEnv("CREW_SHARED_DRIVE_ID", "");
   vi.stubEnv("CREW_SHEET_SHARE_EMAILS", "");
-  Object.assign(fake, { sheets: [{ sheetId: 0, title: "Sheet1" }], rows: new Map(), failProtection: false, failValueWrites: false, batches: [], writes: [] });
+  Object.assign(fake, { sheets: [{ sheetId: 0, title: "Sheet1" }], rows: new Map(), failProtection: false, failValueWrites: false, failRowFormat: false, batches: [], writes: [], bands: new Map(), rules: new Map(), protections: [] });
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -830,5 +873,207 @@ describe("a Sheet row whose visible cells and Key have come apart", () => {
       expect(r.ambiguous).toBe(0);
       expect((await store.getSheetRow(second))?.status).toBe("Skipped");
     });
+  });
+});
+
+// ── Readable rows, a locked header and Key (2026-11-02) ─────────────────────
+// The owner: dark charcoal rows with dark text, blue links on dark, and the
+// Name header could be edited. Google gives a row it inserts the format of
+// the row above, and the first row on a tab sits under the dark header; the
+// body formatting set the text but never the fill. The header row had no
+// protection at all and the Key's was a warning anyone could click through.
+describe("the workbook's colours and locks", () => {
+  const SA = "sync@swiftcard.iam.gserviceaccount.com";
+  const sheets = ALL_TABS.map((t, i) => ({ sheetId: i + 1, title: t.name }));
+  const rowTabs = ALL_TABS.filter((t) => t.layout !== "free");
+  type Range = { sheetId: number; startRowIndex?: number; endRowIndex?: number; startColumnIndex?: number; endColumnIndex?: number };
+  type Prot = { range: Range; warningOnly: boolean; editors?: { users: string[] }; description: string };
+  const prots = (o: { editor?: string | null } = { editor: SA }) => workbookRequests(sheets, o).protection.map((r) => (r.addProtectedRange as { protectedRange: Prot }).protectedRange);
+  const covers = (r: Range, row: number, col: number) => row >= (r.startRowIndex ?? 0) && (r.endRowIndex === undefined || row < r.endRowIndex) && col >= (r.startColumnIndex ?? 0) && (r.endColumnIndex === undefined || col < r.endColumnIndex);
+
+  it("locks every tab's header row to the service account alone, and warns on every Key", () => {
+    for (const t of rowTabs) {
+      const sid = sheets.find((s) => s.title === t.name)!.sheetId;
+      const mine = prots().filter((p) => p.range.sheetId === sid);
+      for (let col = 0; col < t.columns.length; col++) {
+        const header = mine.filter((p) => covers(p.range, 0, col));
+        expect(header, `${t.name} header col ${col}`).toHaveLength(1);
+        expect(header[0]).toMatchObject({ warningOnly: false, editors: { users: [SA] } });
+      }
+      if (t.columns.at(-1)?.kind === "key") {
+        for (const row of [1, 50, 5000]) {
+          const key = mine.filter((p) => covers(p.range, row, t.columns.length - 1));
+          expect(key).toHaveLength(1);
+          // A warning, so sorting or deleting whole rows still works (SETUP.md).
+          expect(key[0].warningOnly).toBe(true);
+          expect(key[0].editors).toBeUndefined();
+        }
+      }
+      // The next refresh finds each again and replaces it, so they never pile up.
+      for (const p of mine) expect(p.description).toMatch(/backend|Key column/);
+    }
+  });
+
+  it("leaves every Message, Name and Link cell below the header editable", () => {
+    for (const t of rowTabs) {
+      const sid = sheets.find((s) => s.title === t.name)!.sheetId;
+      t.columns.forEach((c, col) => {
+        if (c.kind === "key") return;
+        for (const row of [1, 2, 999]) expect(prots().some((p) => p.range.sheetId === sid && covers(p.range, row, col)), `${t.name} ${c.header} row ${row}`).toBe(false);
+      });
+    }
+  });
+
+  it("falls back to a warning, never a lock nobody can lift, without the service account's address", () => {
+    for (const p of prots({ editor: null })) {
+      expect(p.warningOnly).toBe(true);
+      expect(p.editors).toBeUndefined();
+    }
+  });
+
+  // WCAG 2 contrast.
+  const lum = (c: Record<string, number>) => {
+    const ch = (v: number) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * ch(c.red ?? 0) + 0.7152 * ch(c.green ?? 0) + 0.0722 * ch(c.blue ?? 0);
+  };
+  const contrast = (a: Record<string, number>, b: Record<string, number>) => {
+    const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+    return (x + 0.05) / (y + 0.05);
+  };
+
+  it("reads at WCAG AA or better: white on the dark header, dark text and dark blue links on both light bands", () => {
+    const C = SHEET_COLORS;
+    expect(contrast(C.headerText, C.headerBg)).toBeGreaterThanOrEqual(7);
+    for (const band of [C.band1, C.band2]) {
+      expect(lum(band)).toBeGreaterThan(0.85); // light, never charcoal
+      expect(contrast(C.ink, band)).toBeGreaterThanOrEqual(7);
+      expect(contrast(C.link, band)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(C.key, band)).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(contrast(C.needsText, C.needsBg)).toBeGreaterThanOrEqual(4.5);
+    expect(lum(C.needsBg)).toBeGreaterThan(0.6);
+  });
+
+  it("gives every body cell its own light look: clears any fill, dark text, dark blue underlined links", () => {
+    const reqs = bodyRowRequests(WEB_LEADS, 7, 1);
+    expect(reqs).toHaveLength(WEB_LEADS.columns.length);
+    for (const [k, r] of reqs.entries()) {
+      const rc = r.repeatCell as { range: Range; cell: { userEnteredFormat: { backgroundColor?: unknown; textFormat: { foregroundColor: unknown; underline?: boolean } } }; fields: string };
+      expect(rc.fields).toMatch(/backgroundColor,backgroundColorStyle/);
+      expect(rc.fields).toMatch(/textFormat/);
+      expect(rc.cell.userEnteredFormat.backgroundColor).toBeUndefined();
+      expect(rc.range).toEqual({ sheetId: 7, startRowIndex: 1, startColumnIndex: k, endColumnIndex: k + 1 });
+      const want = WEB_LEADS.columns[k].kind === "link" ? SHEET_COLORS.link : WEB_LEADS.columns[k].kind === "key" ? SHEET_COLORS.key : SHEET_COLORS.ink;
+      expect(rc.cell.userEnteredFormat.textFormat.foregroundColor).toEqual(want);
+      if (WEB_LEADS.columns[k].kind === "link") expect(rc.cell.userEnteredFormat.textFormat.underline).toBe(true);
+    }
+    // Formats only: no value, no note.
+    expect(JSON.stringify(reqs)).not.toMatch(/userEnteredValue|note/);
+  });
+
+  it("keeps the column widths, the wrapping and the hidden Key; bands the rows; marks Needs a message", () => {
+    const sid = sheets.find((s) => s.title === WEB_LEADS.name)!.sheetId;
+    const { looks } = workbookRequests(sheets, { editor: SA });
+    const mine = looks.filter((r) => JSON.stringify(r).includes(`"sheetId":${sid},`));
+    const widths = mine.map((r) => r.updateDimensionProperties as { range: { dimension: string; startIndex: number }; properties: { pixelSize?: number } } | undefined).filter((d) => d?.range.dimension === "COLUMNS" && d.properties.pixelSize).map((d) => d!.properties.pixelSize);
+    expect(widths).toEqual([180, 420, 200, 90]);
+    expect(mine.some((r) => (r.updateDimensionProperties as { properties?: { hiddenByUser?: boolean } } | undefined)?.properties?.hiddenByUser === true)).toBe(true);
+    const wrap = mine.map((r) => (r.repeatCell as { cell: { userEnteredFormat: { wrapStrategy?: string } } } | undefined)?.cell.userEnteredFormat.wrapStrategy).filter(Boolean);
+    expect(wrap).toEqual(["CLIP", "WRAP", "CLIP", "CLIP"]);
+    const bands = mine.filter((r) => "addBanding" in r);
+    expect(bands).toHaveLength(1);
+    expect(JSON.stringify(bands[0])).toContain(`"startRowIndex":1`); // never the header
+    const needs = mine.filter((r) => JSON.stringify(r).includes("TEXT_STARTS_WITH"));
+    expect(needs).toHaveLength(1);
+    expect(JSON.stringify(needs[0])).toContain('"userEnteredValue":"Needs a message"');
+    // No body cell is ever given a fill of its own any more (the old cream tint, or anything dark).
+    for (const r of mine) {
+      const fmt = (r.repeatCell as { cell: { userEnteredFormat: { backgroundColor?: unknown } } } | undefined)?.cell.userEnteredFormat;
+      if (fmt) expect(fmt.backgroundColor).toBeUndefined();
+    }
+  });
+
+  it("an existing workbook gets the new looks and locks once, keeps every cell, and later syncs leave them be", async () => {
+    vi.stubEnv("GOOGLE_SHEETS_SA_JSON", JSON.stringify({ client_email: SA, private_key: "test-only" }));
+    const store = await storeWithLeads(3);
+    await syncSheet(store, new Date());
+    // As production stands today: both hashes are the bare spec hash, one band each was never made.
+    await store.kvSet("sheet:spec-hash:test-sheet", specHash());
+    await store.kvSet("sheet:protect-hash:test-sheet", specHash());
+    fake.bands = new Map();
+    fake.rules = new Map();
+    const before = JSON.stringify([...fake.rows]);
+    const rowsBefore = JSON.stringify(await store.listSheetRows());
+    fake.batches = [];
+    fake.writes = [];
+
+    const r = await syncSheet(store, new Date());
+    expect(r.errors).toEqual([]);
+    expect(r.notes.join(" ")).toMatch(/Workbook set up/);
+    expect(JSON.stringify([...fake.rows])).toBe(before); // not one cell changed
+    expect(fake.writes).toEqual([]);
+    expect(JSON.stringify(await store.listSheetRows())).toBe(rowsBefore);
+    // The only values written were the header cells, as on every setup.
+    for (const r of fake.batches.flat()) {
+      if (!JSON.stringify(r).includes("userEnteredValue")) continue;
+      const cells = r.updateCells as { range: { startRowIndex: number; endRowIndex: number } } | undefined;
+      const rule = r.addConditionalFormatRule ?? r.setDataValidation;
+      expect(rule || (cells && cells.range.startRowIndex === 0 && cells.range.endRowIndex === 1)).toBeTruthy();
+    }
+    const tabsHere = fake.sheets.filter((s) => rowTabs.some((t) => t.name === s.title));
+    for (const s of tabsHere) {
+      expect(fake.bands.get(s.sheetId)).toHaveLength(1);
+      expect(fake.protections.filter((p) => p.sheetId === s.sheetId).length).toBeGreaterThanOrEqual(1);
+    }
+    // The header locked to the sync's own account; the Key a warning.
+    for (const p of fake.protections) expect(p).toMatchObject(/header/.test(p.description ?? "") ? { warningOnly: false, editors: { users: [SA] } } : { warningOnly: true });
+    expect(fake.protections.filter((p) => /header/.test(p.description ?? "")).length).toBe(tabsHere.length);
+    const protCount = fake.protections.length;
+
+    // The next sync: nothing to redo.
+    fake.batches = [];
+    const again = await syncSheet(store, new Date());
+    expect(again.errors).toEqual([]);
+    expect(fake.batches.flat().some((x) => "addBanding" in x || "addProtectedRange" in x)).toBe(false);
+    expect(fake.protections.length).toBe(protCount);
+  });
+
+  it("a forced refresh replaces its own bands, colours and locks instead of piling them up, and keeps the owner's own rule", async () => {
+    vi.stubEnv("GOOGLE_SHEETS_SA_JSON", JSON.stringify({ client_email: SA, private_key: "test-only" }));
+    const store = await storeWithLeads(2);
+    await syncSheet(store, new Date());
+    const web = fake.sheets.find((s) => s.title === WEB_LEADS.name)!.sheetId;
+    const owners = { red: 0.2, green: 0.6, blue: 0.9 };
+    fake.rules.get(web)!.push({ backgroundColor: owners });
+    const counts = () => ({ bands: fake.bands.get(web)!.length, rules: fake.rules.get(web)!.length, prots: fake.protections.filter((p) => p.sheetId === web).length });
+    const first = counts();
+    for (let i = 0; i < 3; i++) {
+      await store.kvSet("sheet:spec-hash:test-sheet", "stale");
+      await store.kvSet("sheet:protect-hash:test-sheet", "stale");
+      const r = await syncSheet(store, new Date());
+      expect(r.errors).toEqual([]);
+      expect(counts()).toEqual(first);
+    }
+    expect(first).toEqual({ bands: 1, rules: 2, prots: 2 });
+    expect(fake.rules.get(web)!.some((x) => x.backgroundColor === owners)).toBe(true);
+  });
+
+  it("new rows on an empty tab get the body's colours, not the dark header's", async () => {
+    const store = await storeWithLeads(2);
+    await syncSheet(store, new Date());
+    const web = fake.sheets.find((s) => s.title === WEB_LEADS.name)!.sheetId;
+    const fmt = fake.batches.flat().filter((x) => (x.repeatCell as { range: Range } | undefined)?.range.endRowIndex !== undefined && (x.repeatCell as { range: Range }).range.sheetId === web);
+    expect(fmt).toHaveLength(WEB_LEADS.columns.length);
+    for (const x of fmt) expect((x.repeatCell as { range: Range }).range).toMatchObject({ startRowIndex: 1, endRowIndex: 3 });
+  });
+
+  it("a refused row colour never loses a row: the rows are written and recorded, and the run says so", async () => {
+    fake.failRowFormat = true;
+    const store = await storeWithLeads(2);
+    const r = await syncSheet(store, new Date());
+    expect(r.errors).toEqual([]);
+    expect(webLeadEmails()).toHaveLength(2);
+    expect((await store.listSheetRows(WEB_LEADS.id)).length).toBe(2);
+    expect(r.notes.join(" ")).toMatch(/Web Leads: the new rows are written, but their colours were not set/);
   });
 });
