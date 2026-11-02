@@ -13,6 +13,7 @@ import { minutesToTomorrow, nyDayStart } from "../schedule";
 import { SHEET_MAX_PENDING } from "./replies";
 import { syncLeadsToSheet } from "../sources/sheets";
 import { searchItems } from "../sources/web-discovery";
+import type { RunRow } from "../store";
 import type { Lead } from "../types";
 import { HUMAN_VOICE } from "../voice";
 
@@ -23,8 +24,26 @@ import { HUMAN_VOICE } from "../voice";
 // (~30 a day) with a one-line talking point. It also drafts a few personal
 // emails for approval and, weekly, suggests partnerships. Nothing is sent.
 
-export const NYC_AREAS = ["Manhattan", "Brooklyn", "Queens", "the Bronx", "Staten Island", "Long Island City", "Williamsburg", "Upper East Side", "Midtown Manhattan", "Park Slope"];
-export const OFFICE_TYPES = ["real estate teams", "real estate brokerages", "mortgage brokerages", "insurance agencies", "staffing agencies", "property management companies", "commercial real estate firms"];
+// The first ten are the original rotation; the neighborhoods after them were
+// added 2026-11-02, when every real estate search on those ten had been run.
+export const NYC_AREAS = [
+  "Manhattan", "Brooklyn", "Queens", "the Bronx", "Staten Island", "Long Island City", "Williamsburg", "Upper East Side", "Midtown Manhattan", "Park Slope",
+  "Upper West Side", "Harlem", "Chelsea", "Tribeca", "West Village", "Lower East Side", "Financial District", "Washington Heights", "Murray Hill", "Gramercy",
+  "Astoria", "Forest Hills", "Flushing", "Bayside", "Jackson Heights", "Sunnyside", "Bay Ridge", "Bushwick", "Bedford-Stuyvesant", "Crown Heights",
+  "Greenpoint", "Cobble Hill", "Fort Greene", "Carroll Gardens", "DUMBO", "Prospect Heights", "Brooklyn Heights", "Ditmas Park", "Sunset Park", "Riverdale",
+];
+/** Searched in every area: their sites name a broker or team leader (73% and 52% of rows did, against 20% for mortgage brokerages). */
+export const PRIORITY_TYPES = ["real estate teams", "real estate brokerages"];
+/** Searched in the original ten areas only, after the real estate rounds. */
+export const OTHER_TYPES = ["mortgage brokerages", "insurance agencies", "staffing agencies", "property management companies", "commercial real estate firms"];
+export const OFFICE_TYPES = [...PRIORITY_TYPES, ...OTHER_TYPES];
+/** Every search, in order: real estate teams in each area, then brokerages in each area, then the other types. */
+export const OFFICE_ROTATION: { area: string; type: string }[] = [
+  ...PRIORITY_TYPES.flatMap((type) => NYC_AREAS.map((area) => ({ area, type }))),
+  ...OTHER_TYPES.flatMap((type) => NYC_AREAS.slice(0, 10).map((area) => ({ area, type }))),
+];
+/** A search run within this many days is skipped: it finds the same offices, already saved. */
+export const RESEARCH_AFTER_DAYS = 90;
 export const ROLE = /\b(owner|founder|co-?founder|principal|broker|managing|manager|director|team lead(er)?|head of sales|sales (manager|director)|vp|vice president|president|ceo|partner)\b/i;
 
 type Site = { name: string; website: string; area: string; type: string; pages: { url: string; html: string }[] };
@@ -32,7 +51,31 @@ type Site = { name: string; website: string; area: string; type: string; pages: 
 type Found = Pick<SiteAssessment, "people" | "talking_point"> & Partial<Omit<SiteAssessment, "people" | "talking_point">>;
 
 export function officeQuery(n: number): { area: string; type: string } {
-  return { area: NYC_AREAS[n % NYC_AREAS.length], type: OFFICE_TYPES[Math.floor(n / NYC_AREAS.length) % OFFICE_TYPES.length] };
+  const len = OFFICE_ROTATION.length;
+  return OFFICE_ROTATION[((n % len) + len) % len];
+}
+
+const key = (type: string, area: string) => `${type}|${area}`.toLowerCase();
+
+/** The searches this agent ran recently, read from its own run summaries ("real estate teams in Park Slope: …"). */
+export function searchedRecently(runs: Pick<RunRow, "summary" | "started_at">[], now: Date, days = RESEARCH_AFTER_DAYS): Set<string> {
+  const since = now.getTime() - days * 86_400_000;
+  const out = new Set<string>();
+  for (const r of runs) {
+    if (new Date(r.started_at).getTime() < since) continue;
+    const m = /^(.+?) in (.+?):/.exec(r.summary ?? "");
+    if (m) out.add(key(m[1], m[2]));
+  }
+  return out;
+}
+
+/** The next search from slot `n` that hasn't been run recently; slot `n` itself if every one has. */
+export function nextOfficeQuery(n: number, searched: Set<string>): { index: number; area: string; type: string } {
+  for (let i = 0; i < OFFICE_ROTATION.length; i++) {
+    const q = officeQuery(n + i);
+    if (!searched.has(key(q.type, q.area))) return { index: n + i, ...q };
+  }
+  return { index: n, ...officeQuery(n) };
 }
 
 /**
@@ -85,7 +128,7 @@ export function officeLeads(site: Site, found: Found | undefined): Lead[] {
 async function findOffices(ctx: AgentContext, type: string, area: string): Promise<{ name: string; website: string }[]> {
   const items = await searchItems<{ name: string; website: string }>(ctx, {
     system: "You find businesses' official websites from web search results.",
-    prompt: `Find ${type} in ${area}, New York City, that have a team of agents or staff (not law firms). For each: name, and website = the URL from the results where this team is presented: its own website if shown, otherwise its team or agent page on its brokerage's site (for example compass.com/agents/..., elliman.com/team/...). Never a directory, listing site or social media. Skip any team with no URL in the results.`,
+    prompt: `Find ${type} in ${area}, New York City, that have a team of agents or staff (not law firms). Prefer ones whose own site names its owner, broker or team leader. For each: name, and website = the URL from the results where this team is presented: its own website if shown, otherwise its team or agent page on its brokerage's site (for example compass.com/agents/..., elliman.com/team/...). Never a directory, listing site or social media. Skip any team with no URL in the results.`,
     fields: ["name", "website"],
     maxUses: 6,
     want: 12,
@@ -96,8 +139,10 @@ async function findOffices(ctx: AgentContext, type: string, area: string): Promi
 /** Listing, review and social sites: never an office's own page. */
 export const OFFICE_DIRECTORIES = /(yelp|facebook|instagram|linkedin|zillow|streeteasy|realtor\.com|google)\./i;
 
+const OFFICE_ID = "office-outreach";
+
 export const officeOutreach: AgentDef = {
-  id: "office-outreach",
+  id: OFFICE_ID,
   name: "Office Prospects",
   team: "office",
   role: "worker",
@@ -116,9 +161,10 @@ export const officeOutreach: AgentDef = {
     if (have >= target) return { summary: `Done for today: ${target} call rows are ready. Back tomorrow.`, restMinutes: minutesToTomorrow(ctx.now()) };
 
     startFunnel(ctx);
-    const n = ctx.config<number>("query_index", 0);
-    const { area, type } = officeQuery(n);
-    await ctx.saveConfig({ query_index: n + 1 });
+    // The rotation slot, moved past any search run in the last 90 days (one read of this agent's own runs).
+    const recent = await ctx.store.recentRuns(OFFICE_ID, 400).catch(() => [] as RunRow[]);
+    const { index, area, type } = nextOfficeQuery(ctx.config<number>("query_index", 0), searchedRecently(recent, ctx.now()));
+    await ctx.saveConfig({ query_index: index + 1 });
     const found = await findOffices(ctx, type, area);
     const offices = found.slice(0, 8);
     const sites: Site[] = [];
