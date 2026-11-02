@@ -19,7 +19,13 @@ const DOMAINS: Partial<Record<Platform, string[]>> = {
   instagram: ["instagram.com"],
   x: ["x.com", "twitter.com"],
   tiktok: ["tiktok.com"],
+  // Public Facebook group posts, when the search engine has them (2026-10-29;
+  // most groups are private, so pasted posts still come first).
+  facebook: ["facebook.com"],
 };
+
+/** Results one search call asks for: 100 messages a day per agent (owner, 2026-10-29) needs full pages, not a handful. */
+export const SEARCH_WANT = 25;
 
 /** Live-tested 2026-10-20: asking for free-form JSON with web search came back
  *  in pieces around the search steps (or as "[]"). A required JSON shape
@@ -64,14 +70,18 @@ export function onDomain(url: string, domains: string[]): boolean {
   }
 }
 
-export async function searchPlatform(ctx: AgentContext, platform: Platform, topics: string[], n = 12): Promise<FoundPost[]> {
+export async function searchPlatform(ctx: AgentContext, platform: Platform, topics: string[], n = SEARCH_WANT, o?: { maxUses?: number }): Promise<FoundPost[]> {
   const domains = DOMAINS[platform];
   if (!domains) return [];
   const items = await searchItems<{ url: string; author: string; title: string; text: string; community: string }>(ctx, {
     system: "You find recent public posts for a small company's staff to read and answer by hand.",
-    prompt: `Search ${domains[0]} for recent public posts or profiles about any of these topics:\n${topics.map((t) => `- ${t}`).join("\n")}\nFor each: url, author (name or handle), title, text (the post's own words from the result, under 400 characters), community (group or subreddit, or empty).`,
+    // The handle matters: a message needs the account it goes to, and a found
+    // post without one is dropped (seen live 2026-10-29: every Instagram
+    // result came back with a display name only, so all of them were lost).
+    prompt: `Search ${domains[0]} for recent public posts or profiles about any of these topics:\n${topics.map((t) => `- ${t}`).join("\n")}\nFor each: url (the exact link as the result shows it), author (the account's @handle exactly as the result shows it, in the link or in a title like "Name (@handle)"; only when no handle shows, their name), title, text (the post's or profile's own words from the result, under 400 characters), community (group or subreddit, or empty).`,
     fields: ["url", "author", "title", "text", "community"],
     domains,
+    maxUses: o?.maxUses ?? 8,
     want: n,
   }).catch((e) => {
     // A site that blocks Anthropic's crawler (Reddit does) fails the whole
@@ -85,6 +95,31 @@ export async function searchPlatform(ctx: AgentContext, platform: Platform, topi
   return items
     .filter((x) => onDomain(x.url, domains))
     .map((x) => ({ platform, url: x.url, author: x.author || null, title: x.title.slice(0, 200), text: x.text.slice(0, 600), community: x.community || null }));
+}
+
+/**
+ * Reddit threads through an open web search (no domain filter: Anthropic's
+ * search refuses reddit.com as a filter, seen live 2026-10-20), for when the
+ * Reddit app keys aren't set. Only real thread links are kept; a search that
+ * returns none costs one call and the agent rests.
+ */
+export async function searchRedditByWeb(ctx: AgentContext, topics: string[], n = SEARCH_WANT): Promise<FoundPost[]> {
+  const items = await searchItems<{ url: string; author: string; title: string; text: string; community: string }>(ctx, {
+    system: "You find recent public Reddit threads for a small company's staff to read and answer by hand.",
+    prompt: `Search the web for recent Reddit threads (links like reddit.com/r/<subreddit>/comments/...) where people talk about any of these:\n${topics.map((t) => `- ${t}`).join("\n")}\nTry searches like: site:reddit.com <topic>. For each thread: url (the reddit.com/r/.../comments/... link exactly as shown), author (the u/ username if shown, else empty), title, text (what the result shows of the post, under 300 characters), community (the subreddit name without r/).`,
+    fields: ["url", "author", "title", "text", "community"],
+    maxUses: 8,
+    want: n,
+  }).catch((e) => {
+    if (blockedDomain(e)) {
+      ctx.log("web search can't read reddit.com; only pasted posts this run");
+      return [];
+    }
+    throw e;
+  });
+  return items
+    .filter((x) => onDomain(x.url, ["reddit.com"]))
+    .map((x) => ({ platform: "reddit" as const, url: x.url, author: x.author.replace(/^\/?u\//i, "") || null, title: x.title.slice(0, 200), text: x.text.slice(0, 600), community: x.community.replace(/^\/?r\//i, "") || null }));
 }
 
 /** "The following domains are not accessible to our user agent" (HTTP 400). */

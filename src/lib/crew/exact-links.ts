@@ -150,6 +150,14 @@ export function handleFromPost(platform: "x" | "tiktok", raw: string | null | un
   return m ? m[1] : null;
 }
 
+/** The account a profile link on X or TikTok is. */
+export function handleFromProfile(platform: "x" | "tiktok", raw: string | null | undefined): string | null {
+  const prof = exactProfileLink(platform, raw);
+  if (!prof) return null;
+  const m = platform === "x" ? /^https:\/\/x\.com\/(\w+)$/.exec(prof) : /^https:\/\/www\.tiktok\.com\/@([\w.]+)$/.exec(prof);
+  return m ? m[1] : null;
+}
+
 /** A new email to this address with the subject and the message already in it (the mail app opens on tap). */
 export function emailComposeLink(email: string, message: string): string | null {
   const to = email.trim();

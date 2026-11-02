@@ -139,10 +139,11 @@ describe("one tab per agent, named after it", () => {
 
 describe("continuous: Start and it keeps going", () => {
   it("finders run every tick while on; content agents keep their day; paste agents wait for a paste", () => {
-    for (const id of ["contact-instagram-linkinbio", "contact-instagram", "replies-reddit", "replies-x", "replies-tiktok", "contact-x", "contact-tiktok", "replies-threads", "replies-hackernews", "contact-linkedin", "leads-web", "office-outreach"]) {
+    // Facebook Groups and Instagram Comments search on their own since 2026-10-29 (100 a day), so they run every tick too.
+    for (const id of ["contact-instagram-linkinbio", "contact-instagram", "replies-reddit", "contact-reddit", "replies-x", "replies-tiktok", "contact-x", "contact-tiktok", "replies-threads", "replies-hackernews", "contact-linkedin", "replies-facebook", "replies-instagram", "leads-web", "office-outreach"]) {
       expect(effectiveSchedule(agentById(id)!, {}), id).toEqual({ kind: "every", minutes: 15 });
     }
-    expect(effectiveSchedule(agentById("replies-facebook")!, {}).kind).toBe("on_input");
+    expect(effectiveSchedule(agentById("contact-alignable")!, {}).kind).toBe("on_input");
   });
 
   it("a run that asks to rest is not woken before then; tomorrow means just after New York midnight", async () => {

@@ -125,8 +125,9 @@ describe("your schedule", () => {
   });
 
   it("an agent that runs on pasted input, or can never run, keeps its own trigger", () => {
-    const fb = agentById("replies-facebook")!;
-    expect(effectiveSchedule(fb, { [fb.id]: { kind: "every", minutes: 15 } })).toBe(fb.schedule);
+    // Alignable (Facebook Groups searches on its own since 2026-10-29).
+    const al = agentById("contact-alignable")!;
+    expect(effectiveSchedule(al, { [al.id]: { kind: "every", minutes: 15 } })).toBe(al.schedule);
     const li = { ...agentById("replies-reddit")!, id: "locked-example", locked: "Not allowed.", continuous: false, schedule: { kind: "daily" as const, hour: 17, minute: 0 } };
     expect(effectiveSchedule(li, { [li.id]: { kind: "every", minutes: 15 } })).toBe(li.schedule);
     // A continuous agent (Start / Stop) runs every clock tick unless you set a schedule; a bad one is ignored.
