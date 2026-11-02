@@ -696,7 +696,7 @@ describe("a Sheet row whose visible cells and Key have come apart", () => {
       expect(fake.writes).toEqual([]);
       fake.rows.set(WEB_LEADS.name, web().slice(1));
       const fixed = await syncSheet(store, new Date());
-      expect(fixed.reconciled).toBe(2);
+      expect(fixed.reconciled).toBe(3); // the two that came apart, and the renamed one, whose Name no longer matches
       expect(web().some((row) => String(row[NAME]) === "Renamed")).toBe(true);
     });
 
