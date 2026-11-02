@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { officeLeads, officeQuery, NYC_AREAS, OFFICE } from "@/lib/crew/agents/office";
+import { nextOfficeQuery, officeLeads, officeQuery, searchedRecently, NYC_AREAS, OFFICE, OFFICE_ROTATION, PRIORITY_TYPES } from "@/lib/crew/agents/office";
 import { AGENTS } from "@/lib/crew/registry";
 
 // Phase 5, Office outreach: decision-makers only, and only the contact
@@ -57,6 +57,35 @@ describe("office leads", () => {
   it("rotates through NYC areas and business types", () => {
     expect(officeQuery(0)).toEqual({ area: NYC_AREAS[0], type: "real estate teams" });
     expect(officeQuery(NYC_AREAS.length).type).toBe("real estate brokerages");
+  });
+  it("searches real estate teams and brokerages in every area before any other type, with no target twice", () => {
+    const re = OFFICE_ROTATION.slice(0, NYC_AREAS.length * PRIORITY_TYPES.length);
+    expect(re.every((q) => PRIORITY_TYPES.includes(q.type))).toBe(true);
+    expect(OFFICE_ROTATION.slice(re.length).some((q) => PRIORITY_TYPES.includes(q.type))).toBe(false);
+    expect(new Set(OFFICE_ROTATION.map((q) => `${q.type}|${q.area}`)).size).toBe(OFFICE_ROTATION.length);
+    expect(new Set(NYC_AREAS).size).toBe(NYC_AREAS.length);
+    expect(NYC_AREAS.length).toBeGreaterThanOrEqual(40);
+    expect(officeQuery(OFFICE_ROTATION.length)).toEqual(officeQuery(0)); // wraps
+  });
+  it("skips a search it ran in the last 90 days, read from its own run summaries", () => {
+    const now = new Date("2026-11-03T15:00:00Z");
+    const runs = [
+      { started_at: "2026-11-02T22:45:07Z", summary: "real estate teams in Upper West Side: 2 new call rows, 0 email drafts. Funnel: search 7" },
+      { started_at: "2026-11-02T22:00:00Z", summary: "real estate teams in Harlem: no readable sites this time. Funnel: search 3" },
+      { started_at: "2026-06-01T00:00:00Z", summary: "real estate teams in Chelsea: 1 new call rows" }, // more than 90 days ago
+      { started_at: "2026-11-02T21:00:00Z", summary: "Done for today: 30 call rows are ready. Back tomorrow." },
+      { started_at: "2026-11-02T20:00:00Z", summary: null },
+    ];
+    const searched = searchedRecently(runs, now);
+    expect([...searched].sort()).toEqual(["real estate teams|harlem", "real estate teams|upper west side"]);
+    const uws = OFFICE_ROTATION.findIndex((q) => q.area === "Upper West Side" && q.type === "real estate teams");
+    // Upper West Side and Harlem were just searched; Chelsea was long enough ago to search again.
+    expect(nextOfficeQuery(uws, searched)).toEqual({ index: uws + 2, area: "Chelsea", type: "real estate teams" });
+    expect(nextOfficeQuery(5, new Set())).toEqual({ index: 5, ...officeQuery(5) });
+  });
+  it("falls back to its own slot when every search was run recently", () => {
+    const all = new Set(OFFICE_ROTATION.map((q) => `${q.type}|${q.area}`.toLowerCase()));
+    expect(nextOfficeQuery(7, all)).toEqual({ index: 7, ...officeQuery(7) });
   });
   it("is registered without a manager, drafting emails as DMs through the ledger", () => {
     expect(OFFICE[0].id).toBe("office-outreach");
