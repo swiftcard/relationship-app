@@ -21,8 +21,9 @@ import { AGENT_TABS, ALL_TABS, PASTE, RETIRED_TAB_NAMES } from "./tabs";
 // 2026-10-29: deleting must never count as outreach); the database is the
 // source of truth. A row that stopped being open (sent, skipped, expired) is
 // taken off the tab. Nothing typed in a row counts unless its Name and Link
-// still belong to its Key; a tab with a row that has no valid Key gets no row
-// put back and none taken off until that's fixed. A sync costs no AI.
+// still belong to its Key and no other row shows the same two. A tab with a row
+// that has no valid Key is left exactly as it is until that's fixed: nothing is
+// added, put back, taken off or acted on. A sync costs no AI.
 
 export const APPROVAL_DAYS = 45;
 
@@ -46,6 +47,10 @@ export type SyncReport = {
   restored: number;
   /** Missing rows not put back, because the tab may still hold them without their Key (a copy would be a duplicate). */
   notRestored: number;
+  /** New rows held back because their tab has a row with no valid Key. */
+  notAdded: number;
+  /** Rows that show the same Name and Link as another row, so nothing typed in them counts. */
+  ambiguous: number;
   /** Rows whose Name or Link no longer belonged to their Key and were rewritten from the database. Nothing typed in them counted. */
   reconciled: number;
   /** Rows the sync won't act on, by tab and row number. */
@@ -58,7 +63,7 @@ export type SyncReport = {
   notes: string[];
 };
 
-export type RowProblem = { tab: string; rows: number[]; problem: "no_key" | "wrong_key" };
+export type RowProblem = { tab: string; rows: number[]; problem: "no_key" | "wrong_key" | "ambiguous" };
 
 const EDITOR = "sheet";
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 200);
@@ -100,6 +105,16 @@ export function rowMatches(tab: TabSpec, cells: CellValue[], r: BuiltRow): boole
   return (shown === name || shown === name.split(" · ")[0]) && (link.startsWith("#") || link === linkLabel(r.cells.link));
 }
 
+/** Keys of rows showing the same Name and Link as another: what's visible can't say which of them a row is. */
+export function ambiguousKeys(rows: Iterable<BuiltRow>): Set<string> {
+  const byLook = new Map<string, string[]>();
+  for (const r of rows) {
+    const look = `${said(r.cells.name)}\u0001${linkLabel(r.cells.link)}`;
+    byLook.set(look, [...(byLook.get(look) ?? []), r.key]);
+  }
+  return new Set([...byLook.values()].filter((keys) => keys.length > 1).flat());
+}
+
 /** One tab's rows by Key (the first of each), and every non-empty row with no valid Key, or repeating one. Sheet row numbers. */
 export function readRows(tab: TabSpec, rows: CellValue[][]): { at: Map<string, number>; unkeyed: number[] } {
   const keyIdx = tab.columns.findIndex((c) => c.kind === "key");
@@ -132,22 +147,24 @@ type PendingChange = { tab: TabSpec; key: string; col: string; value: string; ce
 
 /**
  * The messages the owner reworded in the grid (the agent learns from them) and
- * the status words they typed. Only from a row that's still open, the first
- * with its Key, whose Name and Link still belong to that Key (`open`).
+ * the status words they typed. Only from a row that's still open, whose Name
+ * and Link still belong to its Key (`open`) and to no other row, on a tab where
+ * every row has its own valid Key.
  */
 export function ownerChanges(tabs: TabSpec[], grid: Map<string, CellValue[][]>, known: Map<string, SheetRow>, approvalBody: (id: string) => string | undefined, open: Map<string, BuiltRow>): PendingChange[] {
   const out: PendingChange[] = [];
+  const ambiguous = ambiguousKeys(open.values());
   for (const t of tabs) {
     if (t.layout !== "rows") continue;
     const keyIdx = t.columns.findIndex((c) => c.kind === "key");
     if (keyIdx < 0) continue;
     const cols = inboundColumns(t);
-    const { at } = readRows(t, grid.get(t.id) ?? []);
+    if (readRows(t, grid.get(t.id) ?? []).unkeyed.length) continue;
     (grid.get(t.id) ?? []).forEach((cells, i) => {
       const key = String(cells[keyIdx] ?? "").trim();
       const row = key ? known.get(key) : undefined;
       const built = key ? open.get(key) : undefined;
-      if (!row || !built || at.get(key) !== HEADER_ROWS + 1 + i || !rowMatches(t, cells, built)) return;
+      if (!row || !built || ambiguous.has(key) || !rowMatches(t, cells, built)) return;
       for (const k of cols) {
         const col = t.columns[k];
         // Only a draft's message can be reworded (apply.ts refuses the rest).
@@ -168,7 +185,7 @@ export function ownerChanges(tabs: TabSpec[], grid: Map<string, CellValue[][]>, 
 }
 
 export async function syncSheet(store: CrewStore, now = new Date()): Promise<SyncReport> {
-  const report: SyncReport = { sheetId: null, url: null, tabsRead: 0, changes: 0, refused: 0, updated: 0, appended: 0, restored: 0, notRestored: 0, reconciled: 0, rowProblems: [], removed: 0, leads: null, errors: [], notes: [] };
+  const report: SyncReport = { sheetId: null, url: null, tabsRead: 0, changes: 0, refused: 0, updated: 0, appended: 0, restored: 0, notRestored: 0, notAdded: 0, ambiguous: 0, reconciled: 0, rowProblems: [], removed: 0, leads: null, errors: [], notes: [] };
   if (!(await store.sheetsReady())) return { ...report, errors: ["Run supabase/crew-sheets.sql first."] };
   if (!sheetsHqConfigured()) return { ...report, errors: ["Needs GOOGLE_SHEETS_SA_JSON and CREW_SHEET_ID (or CREW_SHARED_DRIVE_ID to create the workbook)."] };
 
@@ -239,6 +256,8 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
   const rowsByTab = new Map<string, Map<string, number>>();
   /** Tabs with a row the sync can't trust: nothing is put back or taken off there. */
   const heldTabs = new Set<string>();
+  /** Tabs with a row with no valid Key: left exactly as they are. */
+  const frozenTabs = new Set<string>();
   const hold = (t: TabSpec, rows: number[], problem: RowProblem["problem"], says: string) => {
     if (!rows.length) return;
     heldTabs.add(t.id);
@@ -248,7 +267,8 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
   for (const t of tabs.filter((x) => x.layout === "rows")) {
     const { at, unkeyed } = readRows(t, grid.get(t.id) ?? []);
     rowsByTab.set(t.id, at);
-    hold(t, unkeyed, "no_key", "no valid Key. Left as they are; no missing row goes back on this tab until they have one or are deleted.");
+    if (unkeyed.length) frozenTabs.add(t.id);
+    hold(t, unkeyed, "no_key", "no valid Key of their own. Left as they are; nothing on this tab is added, put back, taken off or acted on until they have one or are deleted.");
   }
   const writes: ValueWrite[] = [];
   const openNow = new Map(buildRows(sources).map((r) => [r.key, r]));
@@ -284,7 +304,7 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
   const shownMessage = (r: BuiltRow) => sources.known.get(r.key)?.owner_cols.message ?? String(r.cells.message ?? "");
   const knownMessages = new Set(["", ...built.map((r) => said(shownMessage(r)))]);
   const wrongKey = new Set<string>();
-  for (const t of tabs.filter((x) => x.layout === "rows")) {
+  for (const t of tabs.filter((x) => x.layout === "rows" && !frozenTabs.has(x.id))) {
     const msgIdx = t.columns.findIndex((c) => c.key === "message");
     const untouched: number[] = [];
     const rewritten: number[] = [];
@@ -311,12 +331,38 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
     }
   }
 
+  // Rows that look the same as another row: said on every sync, and a failure
+  // once something was typed in one, since it can't be acted on.
+  const lookAlike = ambiguousKeys(built);
+  for (const t of tabs.filter((x) => x.layout === "rows" && !frozenTabs.has(x.id))) {
+    const msgIdx = t.columns.findIndex((c) => c.key === "message");
+    const rows: number[] = [];
+    const typed: number[] = [];
+    for (const r of built.filter((x) => x.tab.id === t.id && lookAlike.has(x.key) && !wrongKey.has(x.key))) {
+      const rowIndex = rowsByTab.get(t.id)?.get(r.key);
+      if (!rowIndex) continue;
+      rows.push(rowIndex);
+      const shown = said(grid.get(t.id)?.[rowIndex - HEADER_ROWS - 1]?.[msgIdx]);
+      if (shown && shown !== said(shownMessage(r))) typed.push(rowIndex);
+    }
+    if (!rows.length) continue;
+    report.ambiguous += rows.length;
+    report.rowProblems.push({ tab: t.name, rows, problem: "ambiguous" });
+    report.notes.push(`${t.name} row${rows.length > 1 ? "s" : ""} ${rows.join(", ")}: the same Name and Link as another row, so nothing typed in them counts.`);
+    if (typed.length) report.errors.push(`${t.name} row${typed.length > 1 ? "s" : ""} ${typed.join(", ")}: something was typed, but another row has the same Name and Link, so it wasn't acted on and was left as it is.`);
+  }
+
   const appends = new Map<string, { tab: TabSpec; rows: BuiltRow[] }>();
   for (const r of built) {
     const known = sources.known.get(r.key);
     const rowIndex = rowsByTab.get(r.tab.id)?.get(r.key);
     const hash = agentHash(r.tab, r.cells);
     const action = placeRow(known, rowIndex, r.tab.id);
+    if (frozenTabs.has(r.tab.id)) {
+      if (action === "restore") report.notRestored++;
+      if (action === "append") report.notAdded++;
+      continue;
+    }
     if (wrongKey.has(r.key)) continue;
     if (action === "restore" && (keyedAnywhere.has(r.key) || heldTabs.has(r.tab.id))) {
       report.notRestored++;

@@ -72,8 +72,11 @@ How the rows behave:
   nothing typed in that row is acted on: the sync rewrites the row from the
   database, or, when the Message holds your own words, leaves it alone and
   fails with the tab and row number.
-- **A row with no valid Key is never touched.** The sync fails with the tab and
-  row numbers and puts no missing row back on that tab until it's fixed.
+- **A row with no valid Key is never touched, and its tab waits.** The sync
+  fails with the tab and row numbers. Until it's fixed, nothing on that tab is
+  added, put back, taken off or acted on. Other tabs carry on.
+- **Two rows with the same Name and Link can't be told apart**, so nothing typed
+  in them counts: the sync lists them and fails if something was typed in one.
 - **A row that stops waiting comes off by itself:** sent from the admin page,
   skipped, or expired.
 - **Reword a message right in the cell** if you like; the agent learns from

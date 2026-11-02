@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sheetSync } from "@/lib/crew/agents/sheet-sync";
 import { GoogleHttpError } from "@/lib/crew/google/auth";
 import { workbookRequests } from "@/lib/crew/sheets/bootstrap";
-import { leadKey } from "@/lib/crew/sheets/rows";
+import { leadKey, type BuiltRow } from "@/lib/crew/sheets/rows";
 import { commandFor } from "@/lib/crew/sheets/apply";
-import { LAYOUT_VERSION, syncSheet } from "@/lib/crew/sheets/sync";
+import { LAYOUT_VERSION, ambiguousKeys, syncSheet } from "@/lib/crew/sheets/sync";
 import { ALL_TABS, REDDIT_REPLY, WEB_LEADS } from "@/lib/crew/sheets/tabs";
 import { MemoryStore } from "@/lib/crew/store-memory";
 import type { Lead } from "@/lib/crew/types";
@@ -590,16 +590,18 @@ describe("a Sheet row whose visible cells and Key have come apart", () => {
   });
 
   it("\"sent\" counts once: the status and the touch don't repeat while the row is still there", async () => {
-    const store = await storeWithLeads(2);
+    const store = await storeWithLeads(3);
     await syncSheet(store, new Date());
     const key = String(web()[0][KEY]);
     web()[0][MESSAGE] = "sent";
-    web().push(["A row I typed myself", "", "", ""]); // holds the tab, so the sent row stays on it
+    swapVisible(web()[1], web()[2]);
+    web()[1][MESSAGE] = "My own words"; // stays until it's fixed, and holds the sent row on the tab
     for (let i = 0; i < 3; i++) await syncSheet(store, new Date());
     expect((await store.getSheetRow(key))?.status).toBe("Contacted");
     expect(store.touches.filter((t) => t.kind === "emailed")).toHaveLength(1);
     expect(web().some((row) => row[KEY] === key)).toBe(true);
-    web().pop(); // fixed: the row comes off at the next sync
+    web()[1][MESSAGE] = ""; // fixed: the row comes off at the next sync
+    await syncSheet(store, new Date());
     await syncSheet(store, new Date());
     expect(web().some((row) => row[KEY] === key)).toBe(false);
     expect(store.touches.filter((t) => t.kind === "emailed")).toHaveLength(1);
@@ -645,23 +647,75 @@ describe("a Sheet row whose visible cells and Key have come apart", () => {
       await expect(sheetSync.run(ctx)).rejects.toThrow(/Web Leads rows 2, 5: /);
     });
 
-    it("only that tab is held; a brand new lead still lands; deleting the bad row lets the missing one come back, once", async () => {
-      const store = await storeWithLeads(2);
+    it("nothing on that tab moves: no new row, no row back, no status, no repair, your words kept; it all lands once when fixed", async () => {
+      const store = await storeWithLeads(4);
       await syncSheet(store, new Date());
-      const email = webLeadEmails()[0];
+      const [badEmail, sentKey] = [webLeadEmails()[0], String(web()[1][KEY])];
+      const missing = web()[3];
       web()[0][KEY] = "";
+      web()[0][MESSAGE] = "My own note about this one";
+      web()[1][MESSAGE] = "sent"; // a word in a row that's fine, on a tab that isn't
+      web().pop();
       await store.insertLeads([lead("new@fresh.com", "Fresh")]);
+      const frozen = web().map((row) => [...row]);
+      fake.writes = [];
+      fake.batches = [];
       const r = await syncSheet(store, new Date());
-      expect([r.appended, r.restored, r.notRestored]).toEqual([1, 0, 1]);
-      fake.rows.set(WEB_LEADS.name, web().slice(1)); // the owner deletes the row with no Key
+      expect([r.appended, r.restored, r.changes, r.reconciled, r.removed]).toEqual([0, 0, 0, 0, 0]);
+      expect([r.notAdded, r.notRestored]).toEqual([1, 2]); // the lead with no Key on its row, and the deleted row
+      expect(web()).toEqual(frozen);
+      expect(fake.writes.filter((w) => w.range.includes(WEB_LEADS.name))).toEqual([]);
+      expect(fake.batches.flat().some((b) => "deleteDimension" in b)).toBe(false);
+      expect(r.errors[0]).toMatch(/^Web Leads row 2: no valid Key/);
+      await nothingHappened(store);
+      // The owner deletes the row with no Key.
+      fake.rows.set(WEB_LEADS.name, web().slice(1));
       const fixed = await syncSheet(store, new Date());
       expect(fixed.errors).toEqual([]);
-      expect(fixed.restored).toBe(1);
-      expect(webLeadEmails().sort()).toEqual([email, "new@fresh.com", webLeadEmails().find((e) => e !== email && e !== "new@fresh.com")!].sort());
-      expect(webLeadEmails()).toHaveLength(3);
-      expect((await syncSheet(store, new Date())).appended).toBe(0);
-      expect(await store.getSheetRow(keyOfLeadWith(store, email))).toMatchObject({ status: "New" });
-      await nothingHappened(store);
+      expect((await store.getSheetRow(sentKey))?.status).toBe("Contacted");
+      expect(store.touches.filter((t) => t.kind === "emailed")).toHaveLength(1);
+      expect(webLeadEmails()).toContain("new@fresh.com");
+      expect(webLeadEmails()).toContain(badEmail);
+      expect(web().some((row) => row[KEY] === missing[KEY])).toBe(true);
+      expect(new Set(web().map((row) => row[KEY])).size).toBe(web().length);
+      const again = await syncSheet(store, new Date());
+      expect([again.appended, again.restored]).toEqual([0, 0]);
+    });
+
+    it("rows that came apart from their Keys, or whose lead changed, aren't rewritten while the tab is waiting; they are once it's fixed", async () => {
+      const store = await storeWithLeads(4);
+      await syncSheet(store, new Date());
+      web()[0][KEY] = "";
+      swapVisible(web()[1], web()[2]);
+      const frozen = web().map((row) => [...row]);
+      leadsOf(store).find((l) => leadKey(l.id) === web()[3][KEY])!.company = "Renamed";
+      fake.writes = [];
+      const r = await syncSheet(store, new Date());
+      expect([r.reconciled, r.updated]).toEqual([0, 0]);
+      expect(web()).toEqual(frozen);
+      expect(fake.writes).toEqual([]);
+      fake.rows.set(WEB_LEADS.name, web().slice(1));
+      const fixed = await syncSheet(store, new Date());
+      expect(fixed.reconciled).toBe(2);
+      expect(web().some((row) => String(row[NAME]) === "Renamed")).toBe(true);
+    });
+
+    it("another tab carries on: its new rows land and its typed words count", async () => {
+      const store = await storeWithLeads(2);
+      const { ctx } = await setup({ def: (await import("./crew-helpers")).fakeAgent({ id: "replies-reddit" }) });
+      Object.assign(ctx, { store });
+      const { propose } = await import("@/lib/crew/approvals");
+      const made = await propose(ctx, { kind: "reply", title: "Reddit: cards", summary: "s", body: "I built SwiftCard for this, free to start.", platform: "reddit", targetUrl: "https://www.reddit.com/r/realtors/comments/abc123/x/", meta: { author: "jane" } });
+      if (!made.ok) throw new Error(made.reason);
+      await syncSheet(store, new Date());
+      web()[0][KEY] = "";
+      const later = await propose(ctx, { kind: "reply", title: "Reddit: links", summary: "s", body: "SwiftCard does that too, free to start.", platform: "reddit", targetUrl: "https://www.reddit.com/r/realtors/comments/def456/y/", meta: { author: "sam" } });
+      if (!later.ok) throw new Error(later.reason);
+      fake.rows.get(REDDIT_REPLY.name)![0][MESSAGE] = "sent";
+      const r = await syncSheet(store, new Date());
+      expect((await store.getApproval(made.id))?.status).toBe("done");
+      expect(fake.rows.get(REDDIT_REPLY.name)!.some((row) => String(row[NAME]).includes("sam"))).toBe(true);
+      expect(r.rowProblems).toEqual([{ tab: WEB_LEADS.name, rows: [2], problem: "no_key" }]);
     });
 
     it("a whole row copied, Key and all: the copy is reported, nothing is added, and a word in the copy counts for nothing", async () => {
@@ -669,6 +723,7 @@ describe("a Sheet row whose visible cells and Key have come apart", () => {
       await syncSheet(store, new Date());
       web().push([...web()[0]]);
       web()[2][MESSAGE] = "sent";
+      web()[1][MESSAGE] = "not interested"; // a healthy row, on a tab that's waiting
       const r = await syncSheet(store, new Date());
       expect(r.rowProblems).toEqual([{ tab: WEB_LEADS.name, rows: [4], problem: "no_key" }]);
       expect(r.appended).toBe(0);
@@ -682,6 +737,98 @@ describe("a Sheet row whose visible cells and Key have come apart", () => {
       const r = await syncSheet(store, new Date());
       expect(r.errors).toEqual([]);
       expect(r.rowProblems).toEqual([]);
+    });
+  });
+
+  describe("two rows with the same Name and Link", () => {
+    const OFFICE = "Office Prospects";
+    const office = () => fake.rows.get(OFFICE)!;
+    /** Same person, title, company and phone, no email: only the (unreadable) link's address differs. */
+    const twin = (path: string): Lead => ({ list: "office", name: "Sam Lee", title: "Broker", email: null, phone: "2125550100", company: "Lee Group", source_platform: "web", source_url: `https://leegroup.test/${path}`, message: `Hi Sam, this is [your name] from SwiftCard about ${path}.` });
+
+    it("are found whatever the capitals and spaces, and only when both Name and Link match", () => {
+      const row = (key: string, name: string, link: string) => ({ key, cells: { name, link, message: "m" } }) as unknown as BuiltRow;
+      expect([...ambiguousKeys([row("L-1", "Sam  Lee", "Open their website"), row("L-2", "sam lee", '=HYPERLINK("https://b.test","Open their website")'), row("L-3", "Sam Lee", "Email sam@x.test"), row("L-4", "Dana", "Open their website")])].sort()).toEqual(["L-1", "L-2"]);
+    });
+
+    for (const word of ["sent", "not interested", "unsubscribed", "skip"]) {
+      it(`"${word}" in one: no status, no touch, no suppression, the word stays, and the sync fails naming the row`, async () => {
+        const store = new MemoryStore();
+        await store.insertLeads([twin("a"), twin("b")]);
+        await syncSheet(store, new Date());
+        office()[0][MESSAGE] = word;
+        const other = String(office()[1][MESSAGE]);
+        const r = await syncSheet(store, new Date());
+        await nothingHappened(store);
+        expect(r.changes).toBe(0);
+        expect(office()[0][MESSAGE]).toBe(word);
+        expect(office()[1][MESSAGE]).toBe(other);
+        expect(r.ambiguous).toBe(2);
+        expect(r.rowProblems).toEqual([{ tab: OFFICE, rows: [2, 3], problem: "ambiguous" }]);
+        expect(r.errors).toEqual([`${OFFICE} row 2: something was typed, but another row has the same Name and Link, so it wasn't acted on and was left as it is.`]);
+      });
+    }
+
+    it("with nothing typed the run succeeds and says so; the lead records are untouched", async () => {
+      const store = new MemoryStore();
+      await store.insertLeads([twin("a"), twin("b")]);
+      const saved = JSON.stringify(leadsOf(store));
+      await syncSheet(store, new Date());
+      const { ctx } = await setup({ def: sheetSync });
+      Object.assign(ctx, { store });
+      const out = await sheetSync.run(ctx);
+      expect(out.summary).toContain(`${OFFICE} rows 2, 3: the same Name and Link as another row`);
+      expect(ctx.stats.sheet_rows_ambiguous).toBe(2);
+      expect(JSON.stringify(leadsOf(store))).toBe(saved);
+      await nothingHappened(store);
+    });
+
+    it("the same Name with a different email isn't ambiguous: the word counts for that lead alone", async () => {
+      const store = new MemoryStore();
+      await store.insertLeads([{ ...twin("a"), email: "a@leegroup.test" }, { ...twin("b"), email: "b@leegroup.test" }]);
+      await syncSheet(store, new Date());
+      const key = String(office()[0][KEY]);
+      office()[0][MESSAGE] = "sent";
+      const r = await syncSheet(store, new Date());
+      expect(r.ambiguous).toBe(0);
+      expect((await store.getSheetRow(key))?.status).toBe("Contacted");
+      expect(store.touches.filter((t) => t.kind === "emailed")).toHaveLength(1);
+    });
+
+    it("two drafts to one person: neither a status word nor a rewording lands on either", async () => {
+      const store = new MemoryStore();
+      const { ctx } = await setup({ def: (await import("./crew-helpers")).fakeAgent({ id: "replies-reddit" }) });
+      Object.assign(ctx, { store });
+      const { propose } = await import("@/lib/crew/approvals");
+      const ids: string[] = [];
+      for (const n of [1, 2]) {
+        const made = await propose(ctx, { kind: "reply", title: `Reddit ${n}`, summary: "s", body: `Draft ${n}. I built SwiftCard, free to start.`, platform: "reddit", targetUrl: `https://www.reddit.com/r/realtors/comments/abc${n}/x/`, meta: { author: "jane" } });
+        if (!made.ok) throw new Error(made.reason);
+        ids.push(made.id);
+      }
+      await syncSheet(store, new Date());
+      const rows = fake.rows.get(REDDIT_REPLY.name)!;
+      rows[0][MESSAGE] = "sent";
+      rows[1][MESSAGE] = "My own words. SwiftCard, free to start.";
+      const r = await syncSheet(store, new Date());
+      expect(r.changes).toBe(0);
+      expect((await store.getApproval(ids[0]))).toMatchObject({ status: "pending", body: "Draft 1. I built SwiftCard, free to start." });
+      expect((await store.getApproval(ids[1]))).toMatchObject({ status: "pending", body: "Draft 2. I built SwiftCard, free to start." });
+      expect(rows[1][MESSAGE]).toBe("My own words. SwiftCard, free to start.");
+      expect(r.errors[0]).toMatch(/^Reddit Reply rows 2, 3: something was typed/);
+    });
+
+    it("once only one is left open, it can be told apart again", async () => {
+      const store = new MemoryStore();
+      await store.insertLeads([twin("a"), twin("b")]);
+      await syncSheet(store, new Date());
+      const [first, second] = [String(office()[0][KEY]), String(office()[1][KEY])];
+      await store.patchSheetRow(first, { status: "Not Interested" });
+      await syncSheet(store, new Date());
+      office()[0][MESSAGE] = "skip";
+      const r = await syncSheet(store, new Date());
+      expect(r.ambiguous).toBe(0);
+      expect((await store.getSheetRow(second))?.status).toBe("Skipped");
     });
   });
 });
