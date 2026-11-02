@@ -76,6 +76,30 @@ export default function NativeAppBridge() {
     return () => { cancelled = true; remove?.(); };
   }, []);
 
+  // ── Android: a new-tab link leaves for the browser ─────────────────────
+  //
+  // iOS's WKUIDelegate hands a target=_blank link to the plugin natively
+  // (ios/App/App/ExternalPurchase.swift). Android's WebView has no such hook
+  // for an allow-listed host: swiftcard.me is the shell's own origin, so
+  // "View live" / "Open Swift Links" (/api/self-view?...) loaded INSIDE the
+  // app, on a public page with no chrome. Do the hand-off here instead.
+  useEffect(() => {
+    if (detectNativePlatform() !== "android") return;
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0) return;
+      const a = e.target instanceof Element ? e.target.closest<HTMLAnchorElement>("a[target=_blank][href]") : null;
+      if (!a) return;
+      let u: URL;
+      try { u = new URL(a.href, window.location.href); } catch { return; }
+      if (u.protocol !== "https:" || (u.hostname !== "swiftcard.me" && u.hostname !== "www.swiftcard.me")) return;
+      e.preventDefault();
+      const dest = u.pathname + u.search + u.hash;
+      void import("@/lib/external-purchase").then(({ openLinkInDefaultBrowser }) => openLinkInDefaultBrowser(dest)).catch(() => false);
+    };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, []);
+
   useEffect(() => {
     if (!detectNativeApp()) return;
 
