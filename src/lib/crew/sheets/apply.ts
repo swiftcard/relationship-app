@@ -2,7 +2,7 @@ import { authorKey } from "../approvals";
 import { decide } from "../decide";
 import { normalizeHandle, personFor } from "../ledger";
 import type { CrewStore } from "../store";
-import type { Platform, SheetRow } from "../types";
+import type { Platform, SheetEntityKind, SheetRow } from "../types";
 import { logActivity } from "./activity";
 import { applyControl } from "./controls";
 import { PIPELINE_STATUSES, TASK_STATUSES } from "./spec";
@@ -18,10 +18,39 @@ import { tabById } from "./tabs";
 // channel for that person: a suppression entry per identity and an opted_out
 // touch, which the DM rule (crew_claim_dm) already refuses to cross.
 
-export type Change = { rowKey: string; column: string; value: string; by: string };
+/**
+ * `rowVerified`: the sync checked that the row's Name and Link still belong to
+ * its Key. A message cell is acted on only then. `command`: the status word the
+ * sync read in a verified row (commandFor).
+ */
+export type Change = { rowKey: string; column: string; value: string; by: string; rowVerified?: boolean; command?: string | null };
 export type Applied = { ok: boolean; message: string; status?: string };
 
 const STATUS_WORDS = new Set<string>([...TASK_STATUSES, ...PIPELINE_STATUSES]);
+
+/**
+ * The status a word typed over a row's message stands for, or null for
+ * anything else (a reworded message). The whole cell must be the word, so no
+ * real message is ever read as one. A lead that was sent becomes Contacted; a
+ * draft becomes Sent / Posted.
+ */
+export function statusCommand(value: string, kind: SheetEntityKind): string | null {
+  const w = value.trim().toLowerCase().replace(/[\s.!✓✅]+$/u, "");
+  if (/^(sent|done|contacted|called|emailed|posted)$/.test(w)) return kind === "lead" ? "Contacted" : "Sent / Posted";
+  if (/^(skip|skipped)$/.test(w)) return "Skipped";
+  if (w === "not interested") return "Not Interested";
+  if (/^unsubscribed?$/.test(w)) return "Unsubscribed";
+  return null;
+}
+
+/**
+ * A status word typed over a row's message, unless the agent's own message is
+ * that same word: a cell that says what the agent wrote is not an instruction.
+ */
+export function commandFor(value: string, authored: string, kind: SheetEntityKind): string | null {
+  const word = statusCommand(value, kind);
+  return word && word !== statusCommand(authored, kind) ? word : null;
+}
 
 export async function applyChange(store: CrewStore, ch: Change, now = new Date()): Promise<Applied> {
   const row = await store.getSheetRow(ch.rowKey);
@@ -33,6 +62,13 @@ export async function applyChange(store: CrewStore, ch: Change, now = new Date()
   const value = String(ch.value ?? "").trim();
 
   if (col.kind === "status") return applyStatus(store, row, value, ch.by, now);
+
+  // A message cell in a row nobody checked could belong to another person.
+  if (col.editable && !ch.rowVerified) return { ok: false, message: "the sync checks this row first" };
+
+  // "sent", "skip", "not interested" typed over the message: the one way a
+  // row in the three-column Sheet changes what happened with that person.
+  if (col.editable && ch.command) return applyStatus(store, row, ch.command, ch.by, now);
 
   if (col.editable) {
     if (row.entity_kind !== "approval") return { ok: false, message: "not editable" };
@@ -56,10 +92,11 @@ export async function applyChange(store: CrewStore, ch: Change, now = new Date()
 }
 
 /**
- * The owner deleted the row from the Sheet: they sent it (owner, 2026-10-29:
- * a deleted row counts as sent). The same decision as "I sent it" in the
- * admin page: a draft becomes done by hand and the person is marked as
- * contacted; a lead becomes Contacted, with an "emailed" touch.
+ * The owner said they sent it: "sent" typed over the message (statusCommand).
+ * The same decision as "I sent it" in the admin page: a draft becomes done by
+ * hand and the person is marked as contacted; a lead becomes Contacted, with
+ * an "emailed" touch. Deleting a row never comes here (owner, 2026-10-29: a
+ * deleted row must not count as outreach); the sync puts the row back.
  */
 export async function markSent(store: CrewStore, rowKey: string, by: string, now = new Date()): Promise<Applied> {
   const row = await store.getSheetRow(rowKey);

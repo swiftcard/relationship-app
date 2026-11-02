@@ -58,18 +58,35 @@ How the rows behave:
   message goes: the exact post or comment for a reply, the chat itself for an
   Instagram DM, Reddit's message screen with the message already typed, a new
   email with the message already in it.
-- **Then delete the row. A deleted row counts as sent.** The sync records it
-  (the person is marked as contacted, so no agent writes to them again) and
-  never adds it back.
+- **Then type `sent` over the message** (or `skip`, or `not interested`).
+  The sync records it (sent: the person is marked as contacted, so no agent
+  writes to them again) and the row comes off. Only the whole cell being one
+  of those words counts.
+- **Deleting a row records nothing.** The row comes back on the next sync,
+  exactly as it was; the database is the source of truth.
+- **A lead with no message yet is still listed**, its Message cell saying it
+  needs one, so no lead drops off the Sheet. Office Prospects show the phone
+  in the Name cell.
+- **Sort or move whole rows, not just the visible columns.** A row counts only
+  while its Name and Link still belong to its hidden Key. If they don't,
+  nothing typed in that row is acted on: the sync rewrites the row from the
+  database, or, when the Message holds your own words, leaves it alone and
+  fails with the tab and row number.
+- **A row with no valid Key is never touched, and its tab waits.** The sync
+  fails with the tab and row numbers. Until it's fixed, nothing on that tab is
+  added, put back, taken off or acted on. Other tabs carry on.
+- **Two rows with the same Name and Link can't be told apart**, so nothing typed
+  in them counts: the sync lists them and fails if something was typed in one.
 - **A row that stops waiting comes off by itself:** sent from the admin page,
   skipped, or expired.
 - **Reword a message right in the cell** if you like; the agent learns from
   your edits.
 
-## 4. The edit hook (optional, makes a reworded message count in seconds)
+## 4. The edit hook (optional)
 
-Without it, a reworded message is picked up within 15 minutes. With it,
-seconds. Deleting a row is always seen by the 15-minute sync.
+A message cell (a rewording, or `sent`) is applied by the 15-minute sync, with
+or without the hook, because only the sync can check the whole row first. A row
+you deleted is put back by the same sync.
 
 1. Pick any long random string and set it in Vercel as `CREW_SHEET_HOOK_SECRET`.
 2. In the workbook: **Extensions → Apps Script**. Delete the sample code and

@@ -12,8 +12,8 @@
  * What it does: when someone changes a cell in a column the backend reads
  * (Status, Notes, a date, a message, or the Controls Value column), it posts
  * the tab name, the row's Key, the column header and the new value to the
- * backend, which applies it within seconds. The 15-minute sync remains the
- * fallback, so a missed post is never lost. It never reads other rows, never
+ * backend. A message cell is applied by the 15-minute sync, which checks the
+ * whole row first, so a missed post is never lost. It never reads other rows, never
  * sends the whole sheet, and never touches cells itself except to show a
  * short note when the backend refuses a value.
  */

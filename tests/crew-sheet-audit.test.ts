@@ -9,7 +9,7 @@ import { runEngagement, type Candidate } from "@/lib/crew/replies/engine";
 import { EVERY_CHOICES, plainSchedule } from "@/lib/crew/schedule";
 import { markSent, normalizeSuppression } from "@/lib/crew/sheets/apply";
 import { applyControl, changedStamp, parseScheduleText } from "@/lib/crew/sheets/controls";
-import { NO_LINK, approvalKey, approvalRows, leadRows, type RowSources } from "@/lib/crew/sheets/rows";
+import { NO_LINK, approvalKey, approvalRows, leadRows, type BuiltRow, type RowSources } from "@/lib/crew/sheets/rows";
 import { ownerEditable, type TabSpec } from "@/lib/crew/sheets/spec";
 import { inboundColumns, ownerChanges, placeRow } from "@/lib/crew/sheets/sync";
 import { REDDIT_REPLY } from "@/lib/crew/sheets/tabs";
@@ -181,18 +181,22 @@ describe("what the sync reads back from a row", () => {
   it("only a reworded message; the name and the link are the agent's", () => {
     expect(inboundColumns(REDDIT_REPLY).map((k) => REDDIT_REPLY.columns[k].key)).toEqual(["message"]);
     expect(ownerEditable(REDDIT_REPLY, REDDIT_REPLY.columns.find((c) => c.key === "message")!)).toBe(true);
-    const grid = new Map([[REDDIT_REPLY.id, [cells(REDDIT_REPLY, { message: "my own words, SwiftCard" })]]]);
-    const ch = ownerChanges([REDDIT_REPLY], grid, new Map([[KEY, known()]]), () => "the agent's words");
+    const open = new Map([[KEY, { tab: REDDIT_REPLY, key: KEY, kind: "approval", entityId: "e1", cells: { name: "u/jane", message: "the agent's words", link: "Open the post" }, initialStatus: "Ready", rank: 0, agent: "a", createdAt: "" } as BuiltRow]]);
+    const row = (message: string, name = "u/jane") => cells(REDDIT_REPLY, { name, link: "Open the post", message });
+    const grid = new Map([[REDDIT_REPLY.id, [row("my own words, SwiftCard")]]]);
+    const ch = ownerChanges([REDDIT_REPLY], grid, new Map([[KEY, known()]]), () => "the agent's words", open);
     expect(ch.map((c) => [c.col, c.value])).toEqual([["message", "my own words, SwiftCard"]]);
     // An unchanged or emptied message is not a rewrite.
-    expect(ownerChanges([REDDIT_REPLY], new Map([[REDDIT_REPLY.id, [cells(REDDIT_REPLY, { message: "" })]]]), new Map([[KEY, known()]]), () => "x")).toEqual([]);
+    expect(ownerChanges([REDDIT_REPLY], new Map([[REDDIT_REPLY.id, [row("")]]]), new Map([[KEY, known()]]), () => "x", open)).toEqual([]);
+    // Someone else's Name next to this Key: nothing in the row counts.
+    expect(ownerChanges([REDDIT_REPLY], new Map([[REDDIT_REPLY.id, [row("sent", "u/someone_else")]]]), new Map([[KEY, known()]]), () => "x", open)).toEqual([]);
   });
 });
 
-describe("rows the owner deleted stay deleted (and count as sent, 2026-10-29)", () => {
-  it("placed before and gone from its tab: gone (sent); never placed: added; restored: adopted; rebuilt or moved: added", () => {
+describe("a row the owner deleted is put back, and deleting records nothing (owner, 2026-10-29)", () => {
+  it("placed before and gone from its tab: put back; never placed: added; restored: adopted; rebuilt or moved: added", () => {
     expect(placeRow(undefined, undefined, REDDIT_REPLY.id)).toBe("append");
-    expect(placeRow(known(), undefined, REDDIT_REPLY.id)).toBe("gone");
+    expect(placeRow(known(), undefined, REDDIT_REPLY.id)).toBe("restore");
     expect(placeRow(undefined, 7, REDDIT_REPLY.id)).toBe("adopt");
     expect(placeRow(known(), 7, REDDIT_REPLY.id)).toBe("update");
     // An agent whose rows moved to a new tab in a release: they are added there.
@@ -214,9 +218,10 @@ describe("what reaches the Sheet", () => {
   });
 
   it("an office prospect opens a new email to them when their site shows one, else their website", () => {
+    // An Office message is what to say on the call (assess.ts), so it never becomes an email's body.
     const [withEmail] = leadRows({ ...lead, list: "office", name: "Sam", email: "sam@nycteam.com", message }, sources());
-    expect(String(withEmail.cells.link)).toContain("mailto:sam@nycteam.com?subject=");
-    expect(String(withEmail.cells.link)).toContain("&body=Sam%2C%20I%20built%20SwiftCard");
+    expect(String(withEmail.cells.link)).toContain('HYPERLINK("mailto:sam@nycteam.com?body=","Email sam@nycteam.com")');
+    expect(withEmail.cells.message).toBe(message);
     const [noEmail] = leadRows({ ...lead, list: "office", name: "Sam", message }, sources());
     expect(noEmail.cells.link).toBe('=HYPERLINK("https://acme.com/contact","Open their website")');
   });
@@ -280,7 +285,10 @@ describe("the edit hook refuses before it touches the database", () => {
   it("a tab that no longer exists, or a column that is the agent's, is refused", async () => {
     expect(await call({ tab: "Controls", key: "dry_run", header: "Value", value: "No" })).toMatchObject({ ok: false, message: "unknown tab" });
     expect((await call({ tab: REDDIT_REPLY.name, key: KEY, header: "Link", value: "x" })).message).toMatch(/written by the agent/);
-    expect((await call({ tab: REDDIT_REPLY.name, key: "", header: "Message", value: "my words" })).message).toMatch(/no key/);
+  });
+
+  it("a message cell waits for the sync, which checks the whole row: the hook applies neither a rewording nor a status word", async () => {
+    for (const value of ["my words", "sent", "not interested"]) expect(await call({ tab: REDDIT_REPLY.name, key: KEY, header: "Message", value })).toEqual({ ok: true, message: "the next sync applies this after checking the row" });
   });
 });
 

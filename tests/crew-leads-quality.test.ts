@@ -5,7 +5,7 @@ import { assessPrompt, type SiteAssessment } from "@/lib/crew/leads/assess";
 import { EMAIL_STATUS, companyKey, dnsLookup, emailDomainStatus, leadScore, usable, withEmailStatus } from "@/lib/crew/leads/quality";
 import { recordLeads } from "@/lib/crew/leads/record";
 import { specHash } from "@/lib/crew/sheets/bootstrap";
-import { agentHash, leadRows, type RowSources } from "@/lib/crew/sheets/rows";
+import { NEEDS_MESSAGE, agentHash, leadRows, type RowSources } from "@/lib/crew/sheets/rows";
 import { OFFICE_PROSPECTS, WEB_LEADS } from "@/lib/crew/sheets/tabs";
 import type { Lead } from "@/lib/crew/types";
 import { fakeAgent, setup } from "./crew-helpers";
@@ -245,9 +245,12 @@ describe("a lead on the Sheet is Name, Message, Link (owner, 2026-10-29)", () =>
   const legacyCold = { list: "cold" as const, id: "11111111-1111-4111-8111-111111111111", created_at: "2026-10-27T14:00:00Z", name: null, email: "info@acmerealty.com", phone: "7045550100", company: "Acme Realty", business_type: "real estate offices", city: "Charlotte", region: "NC", country: "US", source_platform: "web" as const, source_url: "https://acmerealty.com/contact", notes: null };
   const legacyOffice = { ...legacyCold, id: "22222222-2222-4222-8222-222222222222", list: "office" as const, name: "Maria Lopez", title: "Broker/Owner", notes: "Twelve agents." };
 
-  it("a lead saved before messages were written has nothing to send, so it isn't a row", () => {
-    expect(leadRows(legacyCold, sources())).toEqual([]);
-    expect(leadRows(legacyOffice, sources())).toEqual([]);
+  it("a lead saved before messages were written is still a row, marked as needing a message (2026-10-29: no lead drops off)", () => {
+    const [w] = leadRows(legacyCold, sources());
+    expect(w.cells.message).toBe(NEEDS_MESSAGE);
+    expect(String(w.cells.link)).toContain("mailto:info@acmerealty.com?body=");
+    const [o] = leadRows(legacyOffice, sources());
+    expect(o.cells).toMatchObject({ name: "Maria Lopez, Broker/Owner, Acme Realty · 704 555 0100", message: NEEDS_MESSAGE });
   });
 
   it("a lead with a message: the person, the message, and a new email with it already written", () => {
@@ -258,7 +261,7 @@ describe("a lead on the Sheet is Name, Message, Link (owner, 2026-10-29)", () =>
     expect(String(w.cells.link)).toContain("mailto:info@acmerealty.com?subject=the%20new%20office&body=Jane%2C%20congrats");
     const [o] = leadRows({ ...legacyOffice, message: "Hi Maria, quick one about your agents' cards." }, sources());
     expect(o.tab).toBe(OFFICE_PROSPECTS);
-    expect(o.cells.name).toBe("Maria Lopez, Broker/Owner, Acme Realty");
+    expect(o.cells.name).toBe("Maria Lopez, Broker/Owner, Acme Realty · 704 555 0100");
     expect(agentHash(OFFICE_PROSPECTS, o.cells)).toMatch(/^[a-f0-9]{16}$/);
   });
 });
@@ -266,10 +269,11 @@ describe("a lead on the Sheet is Name, Message, Link (owner, 2026-10-29)", () =>
 describe("the workbook's layout", () => {
   // Any change to a tab spec (a column, a header note, a colour) changes this
   // hash, and the next Sheet sync then re-formats the whole workbook. Changed
-  // on purpose 2026-10-29: every tab became Name, Message, Link (owner). Change
-  // this pin only when that reset is intended.
+  // on purpose 2026-10-29: every tab became Name, Message, Link (owner); then
+  // each tab's note said "type sent", not "delete the row" (same columns, same
+  // tabs). Change this pin only when that reset is intended.
   it("the spec hash is the Name, Message, Link one", () => {
-    expect(specHash()).toBe("63df4615245f");
+    expect(specHash()).toBe("c5907ad92e88");
   });
 });
 
