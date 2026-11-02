@@ -3,7 +3,7 @@ import { a1, appendRows, batchGet, batchUpdate, batchUpdateValues, colLetter, sh
 import type { CrewStore } from "../store";
 import type { SheetRow } from "../types";
 import { logActivity } from "./activity";
-import { applyChange, applyPasteRow, statusCommand } from "./apply";
+import { applyChange, applyPasteRow, commandFor } from "./apply";
 import { HEADER_ROWS, createWorkbook, ensureWorkbook, retireTabs, shareWorkbook, sheetsHqConfigured, workbookId } from "./bootstrap";
 import { agentHash, buildRows, leadCoverage, type BuiltRow, type LeadCoverage, type RowSources } from "./rows";
 import { ownerEditable, type TabSpec } from "./spec";
@@ -20,7 +20,9 @@ import { AGENT_TABS, ALL_TABS, PASTE, RETIRED_TAB_NAMES } from "./tabs";
 // the owner deleted is put back, unchanged, with nothing recorded (owner,
 // 2026-10-29: deleting must never count as outreach); the database is the
 // source of truth. A row that stopped being open (sent, skipped, expired) is
-// taken off the tab. A sync costs no AI.
+// taken off the tab. Nothing typed in a row counts unless its Name and Link
+// still belong to its Key; a tab with a row that has no valid Key gets no row
+// put back and none taken off until that's fixed. A sync costs no AI.
 
 export const APPROVAL_DAYS = 45;
 
@@ -44,6 +46,10 @@ export type SyncReport = {
   restored: number;
   /** Missing rows not put back, because the tab may still hold them without their Key (a copy would be a duplicate). */
   notRestored: number;
+  /** Rows whose Name or Link no longer belonged to their Key and were rewritten from the database. Nothing typed in them counted. */
+  reconciled: number;
+  /** Rows the sync won't act on, by tab and row number. */
+  rowProblems: RowProblem[];
   /** Where every saved lead stands: listed (ready, or needing a message), or why not. */
   leads: LeadCoverage | null;
   /** Rows taken off because they are no longer waiting (sent elsewhere, skipped, expired). */
@@ -51,6 +57,8 @@ export type SyncReport = {
   errors: string[];
   notes: string[];
 };
+
+export type RowProblem = { tab: string; rows: number[]; problem: "no_key" | "wrong_key" };
 
 const EDITOR = "sheet";
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e)).slice(0, 200);
@@ -70,6 +78,41 @@ export function inboundColumns(tab: TabSpec): number[] {
   return tab.columns.flatMap((col, k) => (ownerEditable(tab, col) ? [k] : []));
 }
 
+/** The Keys the sync writes (keys.ts). Anything else in the Key column is not a Key. */
+const VALID_KEY = /^[A-Z]-[0-9a-f]{10}$/;
+
+const blank = (v: CellValue | undefined) => String(v ?? "").trim() === "";
+const said = (v: CellValue | undefined) => String(v ?? "").replace(/^'/, "").replace(/\s+/g, " ").trim().toLowerCase();
+/** What a Link cell shows: read back as its label, written as a HYPERLINK formula. */
+const linkLabel = (v: CellValue | undefined) => said(/^=HYPERLINK\("[\s\S]*","([\s\S]*)"\)$/.exec(String(v ?? ""))?.[1]?.replace(/""/g, '"') ?? v);
+
+/**
+ * Do this row's visible cells still belong to its Key? Sorting only the visible
+ * columns, or pasting over them, leaves a Key next to someone else's Name or
+ * Link. A Name from before the phone was added to Office rows still counts.
+ */
+export function rowMatches(tab: TabSpec, cells: CellValue[], r: BuiltRow): boolean {
+  const at = (key: string) => tab.columns.findIndex((c) => c.key === key);
+  const shown = said(cells[at("name")]);
+  const name = said(r.cells.name);
+  const link = linkLabel(cells[at("link")]);
+  // A link Google couldn't evaluate reads back as an error: it says nothing about whose row this is.
+  return (shown === name || shown === name.split(" · ")[0]) && (link.startsWith("#") || link === linkLabel(r.cells.link));
+}
+
+/** One tab's rows by Key (the first of each), and every non-empty row with no valid Key, or repeating one. Sheet row numbers. */
+export function readRows(tab: TabSpec, rows: CellValue[][]): { at: Map<string, number>; unkeyed: number[] } {
+  const keyIdx = tab.columns.findIndex((c) => c.kind === "key");
+  const at = new Map<string, number>();
+  const unkeyed: number[] = [];
+  rows.forEach((cells, i) => {
+    const key = String(cells[keyIdx] ?? "").trim();
+    if (VALID_KEY.test(key) && !at.has(key)) at.set(key, HEADER_ROWS + 1 + i);
+    else if (cells.some((v) => !blank(v))) unkeyed.push(HEADER_ROWS + 1 + i);
+  });
+  return { at, unkeyed };
+}
+
 export async function loadSources(store: CrewStore, now: Date): Promise<RowSources> {
   const since = new Date(now.getTime() - APPROVAL_DAYS * 86400_000).toISOString();
   const [approvals, cold, office, known] = await Promise.all([
@@ -85,20 +128,26 @@ export async function loadSources(store: CrewStore, now: Date): Promise<RowSourc
   };
 }
 
-type PendingChange = { tab: TabSpec; key: string; col: string; value: string; cell: string; before: string };
+type PendingChange = { tab: TabSpec; key: string; col: string; value: string; cell: string; before: string; command: string | null };
 
-/** The messages the owner reworded in the grid (the agent learns from them). */
-export function ownerChanges(tabs: TabSpec[], grid: Map<string, CellValue[][]>, known: Map<string, SheetRow>, approvalBody: (id: string) => string | undefined): PendingChange[] {
+/**
+ * The messages the owner reworded in the grid (the agent learns from them) and
+ * the status words they typed. Only from a row that's still open, the first
+ * with its Key, whose Name and Link still belong to that Key (`open`).
+ */
+export function ownerChanges(tabs: TabSpec[], grid: Map<string, CellValue[][]>, known: Map<string, SheetRow>, approvalBody: (id: string) => string | undefined, open: Map<string, BuiltRow>): PendingChange[] {
   const out: PendingChange[] = [];
   for (const t of tabs) {
     if (t.layout !== "rows") continue;
     const keyIdx = t.columns.findIndex((c) => c.kind === "key");
     if (keyIdx < 0) continue;
     const cols = inboundColumns(t);
+    const { at } = readRows(t, grid.get(t.id) ?? []);
     (grid.get(t.id) ?? []).forEach((cells, i) => {
       const key = String(cells[keyIdx] ?? "").trim();
       const row = key ? known.get(key) : undefined;
-      if (!row) return;
+      const built = key ? open.get(key) : undefined;
+      if (!row || !built || at.get(key) !== HEADER_ROWS + 1 + i || !rowMatches(t, cells, built)) return;
       for (const k of cols) {
         const col = t.columns[k];
         // Only a draft's message can be reworded (apply.ts refuses the rest).
@@ -106,11 +155,12 @@ export function ownerChanges(tabs: TabSpec[], grid: Map<string, CellValue[][]>, 
         // as an empty cell, blanking five rows (2026-10-29, 18:00 UTC).
         // A lead's message cell is read only for a status word ("sent").
         const value = String(cells[k] ?? "").trim();
-        if (col.editable && row.entity_kind !== "approval" && !statusCommand(value, row.entity_kind)) continue;
+        const command = col.editable ? commandFor(value, String(built.cells[col.key] ?? ""), row.entity_kind) : null;
+        if (col.editable && row.entity_kind !== "approval" && !command) continue;
         const before = (row.owner_cols[col.key] ?? (col.editable && row.entity_kind === "approval" ? (approvalBody(row.entity_id) ?? "") : "")).trim();
         if (value === before) continue;
         if (col.editable && !value) continue; // an emptied message is not a rewrite
-        out.push({ tab: t, key, col: col.key, value, cell: a1(t.name, `${colLetter(k)}${HEADER_ROWS + 1 + i}`), before });
+        out.push({ tab: t, key, col: col.key, value, cell: a1(t.name, `${colLetter(k)}${HEADER_ROWS + 1 + i}`), before, command });
       }
     });
   }
@@ -118,7 +168,7 @@ export function ownerChanges(tabs: TabSpec[], grid: Map<string, CellValue[][]>, 
 }
 
 export async function syncSheet(store: CrewStore, now = new Date()): Promise<SyncReport> {
-  const report: SyncReport = { sheetId: null, url: null, tabsRead: 0, changes: 0, refused: 0, updated: 0, appended: 0, restored: 0, notRestored: 0, removed: 0, leads: null, errors: [], notes: [] };
+  const report: SyncReport = { sheetId: null, url: null, tabsRead: 0, changes: 0, refused: 0, updated: 0, appended: 0, restored: 0, notRestored: 0, reconciled: 0, rowProblems: [], removed: 0, leads: null, errors: [], notes: [] };
   if (!(await store.sheetsReady())) return { ...report, errors: ["Run supabase/crew-sheets.sql first."] };
   if (!sheetsHqConfigured()) return { ...report, errors: ["Needs GOOGLE_SHEETS_SA_JSON and CREW_SHEET_ID (or CREW_SHARED_DRIVE_ID to create the workbook)."] };
 
@@ -187,25 +237,25 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
   let sources = await loadSources(store, now);
   const approvalById = new Map(sources.approvals.map((a) => [a.id, a]));
   const rowsByTab = new Map<string, Map<string, number>>();
-  /** Per tab, the Name of each row that has lost its Key. */
-  const keyless = new Map<string, Set<string>>();
+  /** Tabs with a row the sync can't trust: nothing is put back or taken off there. */
+  const heldTabs = new Set<string>();
+  const hold = (t: TabSpec, rows: number[], problem: RowProblem["problem"], says: string) => {
+    if (!rows.length) return;
+    heldTabs.add(t.id);
+    report.rowProblems.push({ tab: t.name, rows, problem });
+    report.errors.push(`${t.name} row${rows.length > 1 ? "s" : ""} ${rows.join(", ")}: ${says}`);
+  };
   for (const t of tabs.filter((x) => x.layout === "rows")) {
-    const keyIdx = t.columns.findIndex((c) => c.kind === "key");
-    const at = new Map<string, number>();
-    const names = new Set<string>();
-    (grid.get(t.id) ?? []).forEach((cells, i) => {
-      const key = keyIdx >= 0 ? String(cells[keyIdx] ?? "").trim() : "";
-      if (key && !at.has(key)) at.set(key, HEADER_ROWS + 1 + i);
-      if (!key && String(cells[0] ?? "").trim()) names.add(String(cells[0]).trim());
-    });
+    const { at, unkeyed } = readRows(t, grid.get(t.id) ?? []);
     rowsByTab.set(t.id, at);
-    keyless.set(t.id, names);
+    hold(t, unkeyed, "no_key", "no valid Key. Left as they are; no missing row goes back on this tab until they have one or are deleted.");
   }
   const writes: ValueWrite[] = [];
-  for (const ch of ownerChanges(tabs, grid, sources.known, (eid) => approvalById.get(eid)?.body)) {
+  const openNow = new Map(buildRows(sources).map((r) => [r.key, r]));
+  for (const ch of ownerChanges(tabs, grid, sources.known, (eid) => approvalById.get(eid)?.body, openNow)) {
     report.changes++;
     try {
-      const r = await applyChange(store, { rowKey: ch.key, column: ch.col, value: ch.value, by: EDITOR }, now);
+      const r = await applyChange(store, { rowKey: ch.key, column: ch.col, value: ch.value, by: EDITOR, rowVerified: true, command: ch.command }, now);
       if (!r.ok) {
         report.refused++;
         if (ch.before) writes.push({ range: ch.cell, values: [[ch.before]] });
@@ -220,21 +270,58 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
 
   // 4. Outbound: the open items, by Key. A row's hash is recorded only after
   // its cells are actually in the Sheet, so a failed write is retried. A row
-  // missing from its tab is put back, unless its Key sits on another tab or a
-  // row with its Name lost its Key (putting it back would make a duplicate).
+  // missing from its tab is put back, unless its Key sits on another tab or
+  // the tab has a row with no valid Key (it may be this one: a duplicate).
   const built = buildRows(sources);
   report.leads = leadCoverage(sources);
   const restoring = new Set<string>();
   const keyedAnywhere = new Set([...rowsByTab.values()].flatMap((m) => [...m.keys()]));
   const written: { key: string; hash: string }[] = [];
+
+  // A row whose Name or Link no longer belongs to its Key is rewritten from
+  // the database, as long as its Message is one the database knows (or empty);
+  // otherwise it holds the owner's own words and stays as it is.
+  const shownMessage = (r: BuiltRow) => sources.known.get(r.key)?.owner_cols.message ?? String(r.cells.message ?? "");
+  const knownMessages = new Set(["", ...built.map((r) => said(shownMessage(r)))]);
+  const wrongKey = new Set<string>();
+  for (const t of tabs.filter((x) => x.layout === "rows")) {
+    const msgIdx = t.columns.findIndex((c) => c.key === "message");
+    const untouched: number[] = [];
+    const rewritten: number[] = [];
+    for (const r of built.filter((x) => x.tab.id === t.id)) {
+      const rowIndex = rowsByTab.get(t.id)?.get(r.key);
+      const cells = rowIndex ? grid.get(t.id)?.[rowIndex - HEADER_ROWS - 1] : undefined;
+      if (!rowIndex || !cells || rowMatches(t, cells, r)) continue;
+      wrongKey.add(r.key);
+      if (!sources.known.has(r.key) || !knownMessages.has(said(cells[msgIdx]))) {
+        untouched.push(rowIndex);
+        continue;
+      }
+      const values = t.columns.flatMap((col) => (col.kind === "key" ? [] : [col.key === "message" ? shownMessage(r) : (r.cells[col.key] ?? "")]));
+      writes.push({ range: a1(t.name, `A${rowIndex}:${colLetter(values.length - 1)}${rowIndex}`), values: [values] });
+      written.push({ key: r.key, hash: agentHash(r.tab, r.cells) });
+      rewritten.push(rowIndex);
+    }
+    hold(t, untouched, "wrong_key", "the Name or Link doesn't belong to this row's Key and the Message holds words the database doesn't have. Nothing in them was acted on and they were left as they are.");
+    if (rewritten.length) {
+      heldTabs.add(t.id);
+      report.reconciled += rewritten.length;
+      report.rowProblems.push({ tab: t.name, rows: rewritten, problem: "wrong_key" });
+      report.notes.push(`${t.name} row${rewritten.length > 1 ? "s" : ""} ${rewritten.join(", ")}: the Name or Link didn't belong to the row's Key, so nothing in them was acted on and they were rewritten from the database.`);
+    }
+  }
+
   const appends = new Map<string, { tab: TabSpec; rows: BuiltRow[] }>();
   for (const r of built) {
     const known = sources.known.get(r.key);
     const rowIndex = rowsByTab.get(r.tab.id)?.get(r.key);
     const hash = agentHash(r.tab, r.cells);
     const action = placeRow(known, rowIndex, r.tab.id);
-    if (action === "restore" && (keyedAnywhere.has(r.key) || keyless.get(r.tab.id)?.has(String(r.cells.name ?? "").trim()))) {
+    if (wrongKey.has(r.key)) continue;
+    if (action === "restore" && (keyedAnywhere.has(r.key) || heldTabs.has(r.tab.id))) {
       report.notRestored++;
+      const elsewhere = keyedAnywhere.has(r.key) ? tabs.find((t) => rowsByTab.get(t.id)?.has(r.key)) : undefined;
+      if (elsewhere) report.errors.push(`${elsewhere.name} row ${rowsByTab.get(elsewhere.id)?.get(r.key)}: belongs on ${r.tab.name}. Not added there again, so it isn't a duplicate.`);
       continue;
     }
     if (action === "append" || action === "restore") {
@@ -278,7 +365,7 @@ export async function syncSheet(store: CrewStore, now = new Date()): Promise<Syn
   const removals: { sheetId: number; row: number; key: string }[] = [];
   for (const t of tabs.filter((x) => x.layout === "rows")) {
     const sheetId = gid.get(t.name);
-    if (sheetId === undefined) continue;
+    if (sheetId === undefined || heldTabs.has(t.id)) continue;
     for (const [key, row] of rowsByTab.get(t.id) ?? []) if (!open.has(key)) removals.push({ sheetId, row, key });
   }
   if (removals.length) {

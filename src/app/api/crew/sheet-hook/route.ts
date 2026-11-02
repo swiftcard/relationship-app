@@ -8,9 +8,10 @@ import { SupabaseStore } from "@/lib/crew/store-supabase";
 
 // ── The Sheet's edit hook ───────────────────────────────────────────────────
 // apps-script/SwiftCardLeads.gs posts here on every edit the owners make in
-// the workbook (an installable onEdit trigger), so a reworded message takes
-// effect within seconds instead of at the next 15-minute sync. Deleting a
-// row (which means it was sent) is seen by the sync.
+// the workbook (an installable onEdit trigger). It sends one cell and the
+// row's Key, which can't show that the row still belongs to that Key, so a
+// message cell (a rewording, or "sent") is left for the 15-minute sync, which
+// checks the whole row first. Deleting a row records nothing.
 // Bearer CREW_SHEET_HOOK_SECRET, constant-time; a 404 until it exists. The
 // body names the tab, the row's Key and the column header; the change goes
 // through exactly the same code the sync uses (sheets/apply.ts), so the hook
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
   if (!col) return NextResponse.json({ ok: false, message: "unknown column" });
   // The same rule as the sync: on the computed tabs only Status counts; notes and messages are edited on the agent's own tab.
   if (!ownerEditable(tab, col)) return NextResponse.json({ ok: false, message: col.kind === "status" || tab.layout === "rows" ? `${col.header} is written by the agent` : `Edit ${col.header} on the agent's own tab` });
+  if (col.editable) return NextResponse.json({ ok: true, message: "the next sync applies this after checking the row" });
   const key = String(body.key ?? "").trim();
   if (!/^[A-Z]-[a-f0-9]{8,12}$/.test(key)) return NextResponse.json({ ok: false, message: "no key on that row yet; the sync will pick it up" });
   const store = new SupabaseStore();

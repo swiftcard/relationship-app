@@ -18,7 +18,12 @@ import { tabById } from "./tabs";
 // channel for that person: a suppression entry per identity and an opted_out
 // touch, which the DM rule (crew_claim_dm) already refuses to cross.
 
-export type Change = { rowKey: string; column: string; value: string; by: string };
+/**
+ * `rowVerified`: the sync checked that the row's Name and Link still belong to
+ * its Key. A message cell is acted on only then. `command`: the status word the
+ * sync read in a verified row (commandFor).
+ */
+export type Change = { rowKey: string; column: string; value: string; by: string; rowVerified?: boolean; command?: string | null };
 export type Applied = { ok: boolean; message: string; status?: string };
 
 const STATUS_WORDS = new Set<string>([...TASK_STATUSES, ...PIPELINE_STATUSES]);
@@ -38,6 +43,15 @@ export function statusCommand(value: string, kind: SheetEntityKind): string | nu
   return null;
 }
 
+/**
+ * A status word typed over a row's message, unless the agent's own message is
+ * that same word: a cell that says what the agent wrote is not an instruction.
+ */
+export function commandFor(value: string, authored: string, kind: SheetEntityKind): string | null {
+  const word = statusCommand(value, kind);
+  return word && word !== statusCommand(authored, kind) ? word : null;
+}
+
 export async function applyChange(store: CrewStore, ch: Change, now = new Date()): Promise<Applied> {
   const row = await store.getSheetRow(ch.rowKey);
   if (!row) return { ok: false, message: `no row ${ch.rowKey}` };
@@ -49,10 +63,12 @@ export async function applyChange(store: CrewStore, ch: Change, now = new Date()
 
   if (col.kind === "status") return applyStatus(store, row, value, ch.by, now);
 
+  // A message cell in a row nobody checked could belong to another person.
+  if (col.editable && !ch.rowVerified) return { ok: false, message: "the sync checks this row first" };
+
   // "sent", "skip", "not interested" typed over the message: the one way a
   // row in the three-column Sheet changes what happened with that person.
-  const command = col.editable ? statusCommand(value, row.entity_kind) : null;
-  if (command) return applyStatus(store, row, command, ch.by, now);
+  if (col.editable && ch.command) return applyStatus(store, row, ch.command, ch.by, now);
 
   if (col.editable) {
     if (row.entity_kind !== "approval") return { ok: false, message: "not editable" };

@@ -32,11 +32,13 @@ export const sheetSync: AgentDef = {
     ctx.stat("sheet_rows_updated", r.updated);
     ctx.stat("sheet_rows_restored", r.restored);
     ctx.stat("sheet_rows_not_restored", r.notRestored);
+    ctx.stat("sheet_rows_reconciled", r.reconciled);
     for (const n of r.notes) ctx.log(n);
     if (r.errors.length && !r.sheetId) return { summary: r.errors[0], status: "skipped" };
     const parts = [`${r.changes} of your changes applied${r.refused ? ` (${r.refused} put back)` : ""}`, `${r.appended} rows added`, `${r.updated} updated`];
     if (r.restored) parts.push(`${r.restored} deleted rows put back (nothing recorded as sent)`);
-    if (r.notRestored) parts.push(`${r.notRestored} deleted rows not put back because a row on the tab lost its Key`);
+    if (r.notRestored) parts.push(`${r.notRestored} missing rows not put back until the rows below are fixed`);
+    if (r.reconciled) parts.push(`${r.reconciled} rows rewritten because their Name or Link didn't match their Key`);
     if (r.leads) {
       // Where every lead stands, in counts; a lead that can't be listed is logged by id with the reason.
       const l = r.leads;

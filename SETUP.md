@@ -67,15 +67,23 @@ How the rows behave:
 - **A lead with no message yet is still listed**, its Message cell saying it
   needs one, so no lead drops off the Sheet. Office Prospects show the phone
   in the Name cell.
+- **Sort or move whole rows, not just the visible columns.** A row counts only
+  while its Name and Link still belong to its hidden Key. If they don't,
+  nothing typed in that row is acted on: the sync rewrites the row from the
+  database, or, when the Message holds your own words, leaves it alone and
+  fails with the tab and row number.
+- **A row with no valid Key is never touched.** The sync fails with the tab and
+  row numbers and puts no missing row back on that tab until it's fixed.
 - **A row that stops waiting comes off by itself:** sent from the admin page,
   skipped, or expired.
 - **Reword a message right in the cell** if you like; the agent learns from
   your edits.
 
-## 4. The edit hook (optional, makes a reworded message count in seconds)
+## 4. The edit hook (optional)
 
-Without it, a reworded message is picked up within 15 minutes. With it,
-seconds. A row you deleted is put back by the 15-minute sync.
+A message cell (a rewording, or `sent`) is applied by the 15-minute sync, with
+or without the hook, because only the sync can check the whole row first. A row
+you deleted is put back by the same sync.
 
 1. Pick any long random string and set it in Vercel as `CREW_SHEET_HOOK_SECRET`.
 2. In the workbook: **Extensions → Apps Script**. Delete the sample code and

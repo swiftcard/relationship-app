@@ -5,7 +5,7 @@ import { decide } from "@/lib/crew/decide";
 import { PUBLIC_KINDS, tier2Executable } from "@/lib/crew/execute";
 import { link, safeCell, colLetter, a1 } from "@/lib/crew/google/sheets";
 import { AGENTS } from "@/lib/crew/registry";
-import { applyChange, applyPasteRow, markSent } from "@/lib/crew/sheets/apply";
+import { applyChange, applyPasteRow, markSent, statusCommand } from "@/lib/crew/sheets/apply";
 import { specHash } from "@/lib/crew/sheets/bootstrap";
 import { applyControl, controlDefs, parseScheduleText } from "@/lib/crew/sheets/controls";
 import { SHEET_AGENT_IDS, TAB_WORKER_IDS } from "@/lib/crew/sheets/registry";
@@ -220,7 +220,7 @@ describe("what the owner does in the Sheet", () => {
 
   it("\"sent\" typed over the message: the draft is done by hand and the person is marked as contacted; nothing is sent", async () => {
     const { store, ctx, a, key } = await drafted();
-    const r = await applyChange(store, { rowKey: key, column: "message", value: "sent", by: "sheet" });
+    const r = await applyChange(store, { rowKey: key, column: "message", value: "sent", by: "sheet", rowVerified: true, command: statusCommand("sent", "approval") });
     expect(r.ok).toBe(true);
     expect((await store.getApproval(a.id))!.status).toBe("done");
     expect(store.touches.some((t) => t.person_id === a.person_id && t.kind === "dm_sent")).toBe(true);
@@ -236,7 +236,11 @@ describe("what the owner does in the Sheet", () => {
     const id = (store as unknown as { leads: { id: string }[] }).leads[0].id;
     const key = "L-abcdef1234";
     await store.upsertSheetRow({ tab: "web-leads", row_key: key, entity_kind: "lead", entity_id: id, status: "New", owner_cols: {}, agent_hash: "x", synced_at: null, owner_edited_at: null });
-    expect((await applyChange(store, { rowKey: key, column: "message", value: " Sent. ", by: "sheet" })).ok).toBe(true);
+    // Nobody checked this row, so it does nothing.
+    expect((await applyChange(store, { rowKey: key, column: "message", value: "sent", by: "hook" })).ok).toBe(false);
+    expect((await store.getSheetRow(key))!.status).toBe("New");
+    expect(store.touches).toEqual([]);
+    expect((await applyChange(store, { rowKey: key, column: "message", value: " Sent. ", by: "sheet", rowVerified: true, command: statusCommand(" Sent. ", "lead") })).ok).toBe(true);
     expect((await store.getSheetRow(key))!.status).toBe("Contacted");
     // The explicit action the admin page shares is unchanged.
     expect((await markSent(store, key, "sheet")).ok).toBe(true);
@@ -245,7 +249,7 @@ describe("what the owner does in the Sheet", () => {
 
   it("a reworded message is saved, becomes the draft, and is shown to the model as an example; the name and link are the agent's", async () => {
     const { store, a, key } = await drafted();
-    const r = await applyChange(store, { rowKey: key, column: "message", value: "Hey, saw the Linktree post. I built SwiftCard for exactly that, free to try.", by: "owner" });
+    const r = await applyChange(store, { rowKey: key, column: "message", value: "Hey, saw the Linktree post. I built SwiftCard for exactly that, free to try.", by: "owner", rowVerified: true });
     expect(r.ok).toBe(true);
     expect((await store.getApproval(a.id))!.body).toContain("free to try");
     const edits = await store.recentEdits("contact-reddit", "dm", 30);
