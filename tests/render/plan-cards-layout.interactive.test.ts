@@ -209,6 +209,39 @@ for (const native of [false, true]) {
     });
   });
 
+  // Owner, 2026-11-03: the glare that sweeps across Pro was gone from every
+  // plan chooser (see plan-cards-single-source). Measured, not grepped: the
+  // band exists, animates, is clipped by the card, and actually moves.
+  it(`${who}: a glare sweeps across the Pro card`, async () => {
+    const page = await open({ width: 390, native, light: true });
+    try {
+      // `ms`: the sweep's own clock, set directly (paused), so the check never
+      // lands in the band's rest between passes.
+      const at = (ms: number) => page.evaluate((t) => {
+        const pro = [...document.querySelectorAll("div.rounded-\\[28px\\]")].find((d) => d.querySelector("p")?.textContent === "Pro") as HTMLElement;
+        const band = pro.querySelector(".rd-glisten-sweep") as HTMLElement | null;
+        if (!band) return null;
+        const anim = band.getAnimations()[0];
+        if (anim) { anim.pause(); anim.currentTime = t; }
+        const s = getComputedStyle(band);
+        return {
+          animation: s.animationName, position: s.position, opacity: s.opacity, display: s.display,
+          clipped: getComputedStyle(pro).overflow === "hidden",
+          left: band.getBoundingClientRect().left,
+        };
+      }, ms);
+      const a = await at(300);
+      expect(a, "the Pro card has no glare element").not.toBeNull();
+      expect(a!.animation).toBe("rd-glisten-sweep");
+      expect(a!.position).toBe("absolute");
+      expect(a!.display).not.toBe("none");
+      expect(Number(a!.opacity)).toBeGreaterThan(0);
+      expect(a!.clipped).toBe(true);
+      const b = await at(1500);
+      expect(b!.left - a!.left, "the glare is not moving across the card").toBeGreaterThan(50);
+    } finally { await page.context().close(); }
+  });
+
   it(`${who}: the Pro card keeps white ink in the light theme`, async () => {
     const page = await open({ width: 390, native, light: true });
     try {

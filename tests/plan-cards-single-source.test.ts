@@ -147,6 +147,22 @@ describe("the shared cards", () => {
     expect(c).toMatch(/\$\{tierClass\(offTab\)\} sc-dark-sheet relative rounded-\[28px\]/);
   });
 
+  // Owner, 2026-11-03: "on Pro we had a little glare effect that goes over it
+  // … I can't see it." Added to /pricing's Pro card 2026-07-12; the 2026-09-17
+  // marketing redesign deleted the span while clearing glare off the homepage,
+  // and on 2026-09-30 this shared card was lifted from that /pricing, so the
+  // plan step and /upgrade lost theirs too. The CSS stayed, which is why
+  // nothing noticed: a class with no element draws nothing.
+  it("the Pro card carries the glare sweep, clipped to the card", () => {
+    const pro = c.slice(c.indexOf("export function ProPlanCard("), c.indexOf("export function ProWebPrice("));
+    expect(pro).toMatch(/<span className="rd-glisten-sweep" aria-hidden="true" \/>/);
+    // overflow-hidden clips the band to the rounded card; relative anchors it.
+    expect(pro).toMatch(/sc-dark-sheet relative rounded-\[28px\][^"`]*overflow-hidden/);
+    const css = read("src/app/globals.css");
+    expect(css).toMatch(/\.rd-glisten-sweep \{[^}]*position: absolute;[^}]*z-index: 3;[^}]*animation: rd-glisten-sweep /);
+    expect(css).toMatch(/@keyframes rd-glisten-sweep \{/);
+  });
+
   it("scroll-reveal is opt-in: only /pricing mounts ScrollReveal", () => {
     // A data-reveal element on a page without ScrollReveal stays at opacity 0.
     expect(c).not.toMatch(/data-reveal(?!=\{reveal)/);
