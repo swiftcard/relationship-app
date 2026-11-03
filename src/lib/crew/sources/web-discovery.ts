@@ -33,14 +33,15 @@ export const SEARCH_WANT = 25;
  *  agent goes through here. */
 export async function searchItems<T extends Record<string, string>>(
   ctx: AgentContext,
-  o: { system: string; prompt: string; fields: (keyof T & string)[]; domains?: string[]; maxUses?: number; want?: number },
+  o: { system: string; prompt: string; fields: (keyof T & string)[]; domains?: string[]; maxUses?: number; want?: number; reserveUsd?: number; maxTokens?: number },
 ): Promise<T[]> {
   const want = o.want ?? 10;
   const out = await ctx.llm.askJson<{ items: T[] }>("discover", {
     // Medium, not low: at low effort the search gave up after one failed
     // filtering step and answered with nothing.
     effort: "medium",
-    maxTokens: 6000,
+    maxTokens: o.maxTokens ?? 6000,
+    reserveUsd: o.reserveUsd,
     // The search step re-runs queries inside its own filtering code, which
     // uses up searches; 3 often ran out with only a few results (seen live).
     webSearch: { maxUses: o.maxUses ?? 6, ...(o.domains ? { allowedDomains: o.domains } : {}) },

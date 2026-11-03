@@ -80,9 +80,10 @@ export class AnthropicProvider implements ClaudeProvider {
   }
 
   async create(req: LlmRequest): Promise<LlmResponse> {
+    const options = req.timeoutMs === undefined ? undefined : { timeout: req.timeoutMs, maxRetries: 0 };
     const msg = supportsFallback(req.model)
-      ? await this.client.beta.messages.create({ ...params(req), betas: [FALLBACK_BETA], fallbacks: "default" })
-      : await this.client.messages.create(params(req));
+      ? await this.client.beta.messages.create({ ...params(req), betas: [FALLBACK_BETA], fallbacks: "default" }, options)
+      : await this.client.messages.create(params(req), options);
     return {
       text: textOf(msg.content as { type: string; text?: string }[]),
       usage: usageOf(msg.usage),

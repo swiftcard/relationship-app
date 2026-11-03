@@ -134,10 +134,12 @@ export async function safeFetch(
   input: string,
   init: { signal?: AbortSignal; headers?: Record<string, string> } = {},
   maxRedirects = 4,
+  beforeRequest?: (url: URL) => Promise<void>,
 ): Promise<Response> {
   let url = new URL(input);
   for (let i = 0; i <= maxRedirects; i++) {
     await assertSafeUrl(url);
+    await beforeRequest?.(url);
     const res = await undiciFetch(url.toString(), {
       ...init,
       redirect: "manual",

@@ -30,6 +30,8 @@ export const LEAD_RUN_STATS = [
   "contacts_suppressed",
   "leads_added",
   "usable_leads",
+  "cached_candidates",
+  "assessment_skipped_no_contact",
 ] as const;
 export type LeadRunStat = (typeof LEAD_RUN_STATS)[number];
 
