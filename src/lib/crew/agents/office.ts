@@ -134,10 +134,15 @@ export function officeLeads(site: Site, found: Found | undefined): Lead[] {
   ];
 }
 
+// The search sees result snippets, not the sites themselves, so it cannot tell
+// which site names its broker. Asking it to prefer those (added 2026-11-02)
+// preceded the only two empty searches in this agent's history, Bayside and
+// Jackson Heights on 2026-11-03; every earlier search returned offices.
+// Naming the decision-maker is the reading step's job (officeLeads).
 async function findOffices(ctx: AgentContext, type: string, area: string): Promise<{ name: string; website: string }[]> {
   const items = await searchItems<{ name: string; website: string }>(ctx, {
     system: "You find businesses' official websites from web search results.",
-    prompt: `Find ${type} in ${area}, New York City, that have a team of agents or staff (not law firms). Prefer ones whose own site names its owner, broker or team leader. For each: name, and website = the URL from the results where this team is presented: its own website if shown, otherwise its team or agent page on its brokerage's site (for example compass.com/agents/..., elliman.com/team/...). Never a directory, listing site or social media. Skip any team with no URL in the results.`,
+    prompt: `Find ${type} in ${area}, New York City, that have a team of agents or staff (not law firms). For each: name, and website = the URL from the results where this team is presented: its own website if shown, otherwise its team or agent page on its brokerage's site (for example compass.com/agents/..., elliman.com/team/...). Never a directory, listing site or social media. Skip any team with no URL in the results.`,
     fields: ["name", "website"],
     maxUses: 3,
     maxTokens: 2500,
