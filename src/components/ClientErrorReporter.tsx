@@ -20,6 +20,10 @@ const IGNORE = [
   /AbortError/i,                 // intentionally cancelled fetches
   /chrome-extension:\/\//i,      // browser extensions, not our code
   /moz-extension:\/\//i,
+  // Instagram/Facebook in-app browsers inject their own script that reads
+  // window.webkit.messageHandlers, which doesn't exist outside their
+  // WKWebView. Ours is guarded (layout.tsx), so this is never our code.
+  /undefined is not an object \(evaluating 'window\.webkit\.messageHandlers'\)/i,
 ];
 
 export default function ClientErrorReporter() {
