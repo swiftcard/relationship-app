@@ -101,3 +101,15 @@ describe("untrusted URLs", () => {
     expect(src).not.toMatch(/\bawait fetch\(/);
   });
 });
+
+describe("Office search prompt", () => {
+  // 2026-11-03: after "Prefer ones whose own site names its owner…" was added,
+  // both searches returned no websites at all (Bayside, Jackson Heights). The
+  // search only sees snippets; finding the decision-maker is the reading step's job.
+  it("asks the search for offices with a URL, not for something only the site itself can show", () => {
+    const src = readFileSync("src/lib/crew/agents/office.ts", "utf8");
+    const prompt = /async function findOffices[\s\S]*?prompt: `([^`]*)`/.exec(src)?.[1] ?? "";
+    expect(prompt).toContain("Skip any team with no URL in the results");
+    expect(prompt).not.toMatch(/prefer ones whose own site/i);
+  });
+});
