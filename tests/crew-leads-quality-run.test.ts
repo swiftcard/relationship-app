@@ -34,6 +34,7 @@ vi.mock("@/lib/crew/sources/web-discovery", async (orig) => ({
 const assessment = (req: LlmRequest) => {
   const p = JSON.stringify(req);
   if (p.includes("Park Slope Homes")) return JSON.stringify({ sites: [{ i: 0, people: [{ name: "Maria Lopez", title: "Broker/Owner", email: "", phone: "" }], fit: 34, why: "Twelve agents who meet buyers in person.", hook: "Twelve agents in Park Slope.", opener: "Hi Maria, this is [your name] from SwiftCard. How do your twelve agents share their details at showings?", talking_point: "Matching cards and one lead inbox for the team." }] });
+  if (p.includes("SITE #0 Best Roofs")) return JSON.stringify({ sites: [{ i: 0, people: [], fit: 0, why: "A roofing directory page.", hook: "", opener: "", talking_point: "" }] });
   return JSON.stringify({
     sites: [
       { i: 0, people: [{ name: "Jane Park", title: "Owner and Broker", email: "jane@acmerealty.com", phone: "" }], fit: 32, why: "A 14-agent team.", hook: "Second office in Ballantyne.", opener: "Congrats on the Ballantyne office.", talking_point: "" },

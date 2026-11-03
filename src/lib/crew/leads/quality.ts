@@ -11,6 +11,8 @@ import type { Lead } from "../types";
 /** Sites many businesses share: the company is the page on it, not the host. */
 const SHARED_HOSTS = /(^|\.)(compass\.com|elliman\.com|kw\.com|kellerwilliams\.com|remax\.com|coldwellbanker(homes)?\.com|century21\.com|sothebysrealty\.com|bhhs\.com|exprealty\.com|corcoran\.com|bhgre\.com|redfin\.com|zillow\.com|realtor\.com|facebook\.com|instagram\.com|linkedin\.com|yelp\.com|linktr\.ee|wixsite\.com|squarespace\.com|godaddysites\.com|weebly\.com|wordpress\.com|business\.site|sites\.google\.com)$/i;
 
+export function sharedCompanyHost(host: string): boolean { return SHARED_HOSTS.test(host); }
+
 const slug = (s: string | null | undefined) =>
   (s ?? "")
     .toLowerCase()

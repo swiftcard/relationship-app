@@ -36,6 +36,8 @@ export type AskOptions = {
   schema?: Record<string, unknown>;
   webSearch?: LlmRequest["webSearch"];
   tier?: Tier;
+  /** Admission headroom for later enrichment; never sent to the provider. */
+  reserveUsd?: number;
 };
 
 export class Llm {
@@ -140,7 +142,10 @@ THE OWNER'S ORDERS FOR THIS TEAM RIGHT NOW (follow them unless they break a rule
     const claude = this.o.providers.claude;
     if (!claude) throw new BudgetStop("Needs CREW_ANTHROPIC_API_KEY.");
     const req = this.request(o, purpose);
-    await this.guard(estimateUsd(req.system.length + req.prompt.length, req.maxTokens, priceFor("anthropic", req.model), req.webSearch?.maxUses ?? 0));
+    const reserve = Math.max(0, o.reserveUsd ?? 0);
+    // Reserved workflows admit the full output allowance, rather than the
+    // usual half-output estimate, before starting expensive discovery.
+    await this.guard(estimateUsd(req.system.length + req.prompt.length, req.maxTokens * (reserve ? 2 : 1), priceFor("anthropic", req.model), req.webSearch?.maxUses ?? 0) + reserve);
     const res = await claude.create(req);
     await this.record("anthropic", req.model, purpose, res.usage);
     return res;

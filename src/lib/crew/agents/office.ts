@@ -16,6 +16,9 @@ import { searchItems } from "../sources/web-discovery";
 import type { RunRow } from "../store";
 import type { Lead } from "../types";
 import { HUMAN_VOICE } from "../voice";
+import { candidateBatch } from "../leads/candidates";
+import { BudgetStop } from "../budget";
+import { publicPeople, telPhones, verifiedPeople, withPublicRoutes } from "../leads/public-contacts";
 
 // ── E: Office outreach (for Aaron and Manaj to call) ────────────────────────
 // Finds New York City real estate teams and other businesses with a team:
@@ -91,10 +94,10 @@ export function officeLeads(site: Site, found: Found | undefined): Lead[] {
   const text = rawText.toLowerCase();
   const html = site.pages.map((p) => p.html.toLowerCase()).join(" ");
   const host = new URL(site.pages[0].url).hostname;
-  const sitePhone = phonesIn(text)[0] ?? null;
+  const sitePhone = site.pages.flatMap((p) => telPhones(p.html))[0] ?? phonesIn(text)[0] ?? null;
   const company = (site.name || pageTitle(site.pages[0].html) || host).slice(0, 120);
   const onSite = (e: string) => !!e && (text.includes(e.toLowerCase()) || html.includes(e.toLowerCase()));
-  const people = (found?.people ?? []).filter((p) => p.name && ROLE.test(p.title) && namedOnSite(p.name, rawText));
+  const people = verifiedPeople([...(found?.people ?? []), ...publicPeople(site.pages)], site.pages).filter((p) => ROLE.test(p.title));
   const invented = (found?.people ?? []).filter((p) => !namedOnSite(p.name, rawText));
   const lead = people.find((p) => onSite(p.email)) ?? people[0] ?? null;
   const others = people.filter((p) => p !== lead).slice(0, 3).map((p) => `${p.name} (${p.title})`);
@@ -112,6 +115,7 @@ export function officeLeads(site: Site, found: Found | undefined): Lead[] {
     if (email || sitePhone) row = { ...common, name: null, title: "Main office", email, phone: sitePhone };
   }
   if (!row) return [];
+  row.source_url = site.pages.find((p) => row!.email ? (p.html.toLowerCase().includes(row!.email!) || textOf(p.html).toLowerCase().includes(row!.email!)) : !!row!.name && namedOnSite(row!.name!, textOf(p.html)))?.url ?? site.pages[0].url;
   const fit = found?.fit;
   return [
     {
@@ -130,7 +134,9 @@ async function findOffices(ctx: AgentContext, type: string, area: string): Promi
     system: "You find businesses' official websites from web search results.",
     prompt: `Find ${type} in ${area}, New York City, that have a team of agents or staff (not law firms). Prefer ones whose own site names its owner, broker or team leader. For each: name, and website = the URL from the results where this team is presented: its own website if shown, otherwise its team or agent page on its brokerage's site (for example compass.com/agents/..., elliman.com/team/...). Never a directory, listing site or social media. Skip any team with no URL in the results.`,
     fields: ["name", "website"],
-    maxUses: 6,
+    maxUses: 3,
+    maxTokens: 2500,
+    reserveUsd: 0.015,
     want: 12,
   });
   return screenSearch(ctx, items, OFFICE_DIRECTORIES);
@@ -164,20 +170,24 @@ export const officeOutreach: AgentDef = {
     // The rotation slot, moved past any search run in the last 90 days (one read of this agent's own runs).
     const recent = await ctx.store.recentRuns(OFFICE_ID, 400).catch(() => [] as RunRow[]);
     const { index, area, type } = nextOfficeQuery(ctx.config<number>("query_index", 0), searchedRecently(recent, ctx.now()));
-    await ctx.saveConfig({ query_index: index + 1 });
-    const found = await findOffices(ctx, type, area);
-    const offices = found.slice(0, 8);
+    const found = await candidateBatch(ctx, 8, async () => {
+      const results = await findOffices(ctx, type, area);
+      await ctx.saveConfig({ query_index: index + 1 });
+      return results.map((o) => ({ ...o, type, area }));
+    });
+    const offices = found;
+    const summaryQuery = `${ctx.stats.cached_candidates ? "Cached websites: " : ""}${found[0]?.type ?? type} in ${found[0]?.area ?? area}`;
     const sites: Site[] = [];
     const outcomes: SiteOutcome[] = [];
     for (const o of offices) {
-      const r = await readSiteDetailed(o.website);
+      const r = await readSiteDetailed(o.website, { deadline: ctx.deadline });
       outcomes.push(r.outcome);
-      sites.push({ ...o, area, type, pages: r.pages });
+      sites.push({ ...o, pages: r.pages });
     }
     recordSites(ctx, { kept: found.length, outcomes });
     const readable = sites.filter((s) => s.pages.length);
     // Which step came up empty: the search, or reading the sites it found.
-    if (!readable.length) return { summary: `${type} in ${area}: ${offices.length ? "no readable sites this time" : "the search found no office websites"}. Funnel: ${funnelLine(ctx.stats)}.` };
+    if (!readable.length) return { summary: `${summaryQuery}: ${offices.length ? "no readable sites this time" : "the search found no office websites"}. Funnel: ${funnelLine(ctx.stats)}.` };
 
     const assessed = await assessSites(ctx, readable, { office: true }).catch(() => null);
     const fits = new Map<string, number>();
@@ -189,10 +199,18 @@ export const officeOutreach: AgentDef = {
       for (const l of out) if (a) fits.set(l.source_url, a.fit);
       return out;
     });
-    const added = await recordLeads(ctx, scoreLeads(await withEmailStatus(rows), (l) => fits.get(l.source_url) ?? null));
+    const sourced = await Promise.all(rows.map((l) => {
+      const i = readable.findIndex((s) => s.pages.some((p) => p.url === l.source_url));
+      return withPublicRoutes(ctx, l, readable[i]?.pages ?? [], assessed?.find((a) => a.i === i)?.people);
+    }));
+    const added = await recordLeads(ctx, scoreLeads(await withEmailStatus(sourced), (l) => fits.get(l.source_url) ?? null));
     const synced = await syncLeadsToSheet(ctx.store, "office").catch(() => 0);
-    const drafted = await draftEmails(ctx, rows.filter((r) => r.email && r.name).slice(0, 2));
-    return { summary: `${type} in ${area}: ${added} new call rows${synced ? ` (${synced} on the sheet)` : ""}, ${drafted} email drafts. Funnel: ${funnelLine(ctx.stats)}.` };
+    const drafted = added ? await draftEmails(ctx, rows.filter((r) => r.email && r.name).slice(0, 2)).catch((e) => {
+      if (!(e instanceof BudgetStop)) throw e;
+      ctx.log("Saved leads before optional email drafts reached the budget or pause limit.");
+      return 0;
+    }) : 0;
+    return { summary: `${summaryQuery}: ${added} new call rows${synced ? ` (${synced} on the sheet)` : ""}, ${drafted} email drafts. Funnel: ${funnelLine(ctx.stats)}.` };
   },
 };
 

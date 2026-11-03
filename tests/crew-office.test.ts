@@ -30,7 +30,7 @@ describe("office leads", () => {
     });
     // Sam isn't a decision-maker; Dana isn't on the site at all, so the model invented her.
     expect(rows.map((r) => r.name)).toEqual(["Maria Lopez"]);
-    expect(rows[0]).toMatchObject({ list: "office", email: "maria@brownstonerealty.example.com", phone: "7185550142", city: "New York", source_url: "https://brownstonerealty.example.com/" });
+    expect(rows[0]).toMatchObject({ list: "office", email: "maria@brownstonerealty.example.com", phone: "7185550142", city: "New York", source_url: "https://brownstonerealty.example.com/team" });
     expect(rows[0].notes).toMatch(/shared lead inbox/);
     expect(rows[0].notes).not.toMatch(/Dana/);
   });
