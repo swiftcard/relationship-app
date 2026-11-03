@@ -60,9 +60,10 @@ async function rateLimit(url: URL) {
 /** Why a page did or didn't come back. Only the category is kept (run stats), never the address. */
 export type FetchOutcome = "ok" | "http_403" | "http_error" | "timeout" | "unreadable";
 
-async function fetchText(url: string, robotsRequest = false): Promise<{ text: string | null; outcome: FetchOutcome; status?: number; url?: string }> {
+async function fetchText(url: string, robotsRequest = false, scope?: (url: URL) => boolean): Promise<{ text: string | null; outcome: FetchOutcome; status?: number; url?: string }> {
   try {
     const r = await safeFetch(url, { headers: { "User-Agent": CREW_UA, Accept: "text/html,text/plain" }, signal: AbortSignal.timeout(10_000) }, 3, async (target) => {
+      if (scope && !scope(target)) throw new Error("outside company page scope");
       if (restrictedHost(target.hostname) || /\/(?:login|signin|sign-in|account|captcha)(?:\/|$)/i.test(target.pathname)) throw new Error("restricted page");
       if (!robotsRequest && !(await allowedByRobots(target.href))) throw new Error("robots denied redirect");
       await rateLimit(target);
@@ -123,6 +124,7 @@ export async function readSiteDetailed(homeUrl: string, o: { deadline?: number |
   const html = first.text;
   home = new URL(first.url ?? home.href);
   const teamPath = sharedCompanyHost(home.hostname) ? home.pathname.replace(/\/$/, "") : "";
+  const inScope = (u: URL) => u.origin === home.origin && (!teamPath || u.pathname === teamPath || u.pathname.startsWith(`${teamPath}/`));
   pages.push({ url: home.href, html });
   const visited = new Set([home.href]);
   const linksIn = (html: string, base: URL) => [...html.matchAll(/href=["']([^"'#]+)["']/gi)]
@@ -138,7 +140,7 @@ export async function readSiteDetailed(homeUrl: string, o: { deadline?: number |
     .filter((h): h is string => {
       if (!h) return false;
       const u = new URL(h);
-      return u.origin === home.origin && !u.search && (!teamPath || u.pathname.startsWith(`${teamPath}/`)) && /contact|about|team|agents|staff|our-people|leadership/i.test(u.pathname);
+      return inScope(u) && !u.search && /contact|about|team|agents|staff|our-people|leadership/i.test(u.pathname);
     });
   const links = linksIn(html, home);
   for (let i = 0; i < links.length && visited.size < 12 && Date.now() + 10_000 < deadline; i++) {
@@ -146,11 +148,11 @@ export async function readSiteDetailed(homeUrl: string, o: { deadline?: number |
     if (visited.has(l)) continue;
     visited.add(l);
     if (!(await allowedByRobots(l))) continue;
-    const t = await fetchText(l);
+    const t = await fetchText(l, false, inScope);
     if (t.text) {
       const url = t.url ?? l;
       // Redirects to another origin are checked, but never expand the crawl.
-      if (new URL(url).origin !== home.origin) continue;
+      if (!inScope(new URL(url))) continue;
       pages.push({ url, html: t.text });
       links.push(...linksIn(t.text, new URL(url)).filter((h) => !visited.has(h)).slice(0, 24));
     }

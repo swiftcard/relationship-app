@@ -1,5 +1,40 @@
 # Lead discovery cost review — November 2, 2026
 
+## Final QA follow-up
+
+The original PR head `b01f9dd3` passed required CI and Vercel build checks;
+the initial local webpack build limitations described below are historical,
+not a current hosted-build failure. Final QA reproduced and corrected only
+these release blockers:
+
+* A leader could inherit an adjacent agent's email/phone. Verification now
+  stays within the person's card/profile, uses published mailto links, and
+  avoids assigning another person's mailbox as the leader's fallback. Existing
+  legitimate Office company-line fallbacks remain, labeled with their source
+  and distinguished from personal phone verification. Openers addressing a
+  different or unverified person are cleared.
+* Selected cached candidates were dequeued before saving results. They now
+  remain recoverable until processing/persistence succeeds. Unstarted candidates
+  survive deadline stops; completed attempts are removed, and database-saved
+  companies still pass through cross-list deduplication on recovery.
+* Lead model calls could start after the persistence cutoff, with SDK retries
+  extending beyond the run. These two agents now reserve read/enrichment/save
+  time, refuse late paid calls and pass bounded timeouts with no SDK retries to
+  the existing model/reviewer providers. Other agents retain their defaults.
+  Timeout/retry option behavior was checked against the
+  [official OpenAI SDK documentation](https://developers.openai.com/api/reference/typescript).
+* A brokerage subpage redirect could cross into another team's path on the
+  same host. The selected company/team boundary now applies before each
+  redirected page request as well as before retaining its content.
+
+Validation after these fixes: 124 focused tests passed, the full 8,448-test
+suite passed (467 files), source TypeScript passed, changed-file lint passed,
+and repository lint passed with its existing warnings. All external discovery,
+model and reviewer calls in the new regression tests were mocked. No paid
+discovery, production data/Sheets changes, schedules/budget changes or outreach
+were performed. The follow-up commit requires its own hosted checks before
+release; the PR remains draft/unmerged pending those and baseline verification.
+
 Base: deployed PR #143, `8584d7c1`. Review branch only; no production changes,
 database migrations, manual discovery runs, outreach, or new paid services.
 

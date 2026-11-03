@@ -3,14 +3,14 @@ import type { AgentContext } from "../context";
 import { mailtos, pageTitle, phonesIn, readSiteDetailed, textOf } from "../leads/fetch-page";
 import { funnelLine, recordSites, screenSearch, startFunnel } from "../leads/diagnostics";
 import { assessSites, type SiteAssessment } from "../leads/assess";
-import { DECISION_ROLE, isGenericEmail, leadScore, namedOnSite, safeText, scoreLeads, withEmailStatus } from "../leads/quality";
+import { DECISION_ROLE, isGenericEmail, leadScore, safeText, scoreLeads, withEmailStatus } from "../leads/quality";
 import { cleanEmails, leadsToday, recordLeads } from "../leads/record";
 import { minutesToTomorrow } from "../schedule";
 import { syncLeadsToSheet } from "../sources/sheets";
 import { searchItems } from "../sources/web-discovery";
 import type { Lead } from "../types";
-import { candidateBatch } from "../leads/candidates";
-import { publicPeople, telPhones, verifiedPeople, withPublicRoutes } from "../leads/public-contacts";
+import { candidateBatch, completeCandidateBatch } from "../leads/candidates";
+import { emailOnPage, publicPeople, telPhones, verifiedPeople, withPublicRoutes } from "../leads/public-contacts";
 
 // ── Team 3: Web Leads ───────────────────────────────────────────────────────
 // No agent here sends anything. It finds businesses that PUBLICLY share an
@@ -101,17 +101,19 @@ export function leadsFromSite(biz: Biz, pages: { url: string; html: string }[], 
   const emails = cleanEmails(pages.flatMap((p) => [...mailtos(p.html), textOf(p.html)]), host);
   const onSite = (e: string) => !!e && (html.includes(e.toLowerCase()) || text.toLowerCase().includes(e.toLowerCase()));
   const people = verifiedPeople([...(found?.people ?? []), ...publicPeople(pages)], pages).filter((p) => DECISION_ROLE.test(p.title));
-  const invented = (found?.people ?? []).filter((p) => !namedOnSite(p.name, text));
+  const invented = (found?.people ?? []).filter((p) => !people.some((v) => v.name === p.name && v.title === p.title));
   const person = people.find((p) => onSite(p.email)) ?? people[0] ?? null;
   const personal = person && onSite(person.email) ? person.email.toLowerCase() : null;
-  const email = personal ?? emails.find((e) => !isGenericEmail(e)) ?? emails[0] ?? null;
+  const email = personal ?? (person ? emails.find(isGenericEmail) : null) ?? emails.find((e) => !isGenericEmail(e)) ?? emails[0] ?? null;
   if (!email) return [];
-  const phone = pages.flatMap((p) => telPhones(p.html))[0] ?? phonesIn(text)[0] ?? null;
   const company = biz.name || pageTitle(pages[0].html) || host;
-  const where = pages.find((p) => p.html.toLowerCase().includes(email))?.url ?? pages[0].url;
+  const where = pages.find((p) => emailOnPage(email, p))?.url ?? pages[0].url;
   const others = emails.filter((e) => e !== email).slice(0, 3);
-  const name = person?.name.slice(0, 80) ?? null;
-  const title = person?.title.slice(0, 80) ?? null;
+  // Another person's published mailbox cannot stand in for this leader's.
+  const matched = personal || isGenericEmail(email) ? person : null;
+  const name = matched?.name.slice(0, 80) ?? null;
+  const title = matched?.title.slice(0, 80) ?? null;
+  const phone = matched ? matched.phone || null : pages.flatMap((p) => telPhones(p.html))[0] ?? phonesIn(text)[0] ?? null;
   return [
     {
       list: "cold" as const,
@@ -129,7 +131,7 @@ export function leadsFromSite(biz: Biz, pages: { url: string; html: string }[], 
       notes: others.length ? `Other addresses on the site: ${others.join(", ")}` : null,
       why: found?.why.trim().slice(0, 300) || null,
       hook: safeText(found?.hook, invented)?.slice(0, 300) ?? null,
-      message: safeText(found?.opener, invented)?.slice(0, 300) ?? null,
+      message: safeText(found?.opener, [...invented, ...people.filter((p) => p.name !== name)])?.slice(0, 300) ?? null,
       // Scored again once the email's domain is checked (scoreLeads).
       score: found ? leadScore({ fit: found.fit, name, title, email, emailStatus: null, phone, industry: type }) : null,
     },
@@ -161,8 +163,13 @@ export const leadsWeb: AgentDef = {
       await ctx.saveConfig({ query_index: n + 1 });
       return results.map((b) => ({ ...b, type, area: city }));
     });
-    const read = await pool(found, 4, async (b) => ({ biz: b, ...(await readSiteDetailed(b.website, { deadline: ctx.deadline })) }));
-    recordSites(ctx, { kept: found.length, outcomes: read.map((r) => r.outcome) });
+    const readDeadline = ctx.deadline === null ? null : ctx.deadline - 60_000;
+    const read = await pool(found, 4, async (b) => {
+      const attempted = readDeadline === null || Date.now() + 10_000 < readDeadline;
+      const result = attempted ? await readSiteDetailed(b.website, { deadline: readDeadline }) : { pages: [], outcome: "timeout" as const };
+      return { biz: b, attempted, ...result };
+    });
+    recordSites(ctx, { kept: found.length, outcomes: read.filter((r) => r.attempted).map((r) => r.outcome) });
     const readable = read.filter((r) => r.pages.length);
     // One cheap read of every site for the decision-maker, fit, why and hook (null: the pages alone still give the email).
     const assessed = await assessSites(ctx, readable.map((r) => ({ ...r.biz, pages: r.pages })), { office: false }).catch(() => null);
@@ -180,6 +187,7 @@ export const leadsWeb: AgentDef = {
       return withPublicRoutes(ctx, l, readable[i]?.pages ?? [], assessed?.find((a) => a.i === i)?.people);
     }));
     const added = await recordLeads(ctx, scoreLeads(await withEmailStatus(sourced), (l) => fits.get(l.source_url) ?? null));
+    await completeCandidateBatch(ctx, read.filter((r) => r.attempted).map((r) => r.biz.website));
     const synced = await syncLeadsToSheet(ctx.store, "cold").catch((e) => (ctx.log(`sheet: ${e instanceof Error ? e.message : e}`), 0));
     return { summary: `${ctx.stats.cached_candidates ? "Cached websites: " : ""}${found[0]?.type ?? type} in ${found[0]?.area ?? city}: saved ${added} new businesses${synced ? `, ${synced} copied to the sheet` : " (Sheet sync adds them to the Sheet)"}. Funnel: ${funnelLine(ctx.stats)}.` };
   },

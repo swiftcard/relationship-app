@@ -13,6 +13,8 @@ export type LlmRequest = {
   schema?: Record<string, unknown>;
   /** The Claude web_search server tool. */
   webSearch?: { maxUses: number; allowedDomains?: string[] };
+  /** Transport timeout for deadline-bound lead runs; retries are disabled. */
+  timeoutMs?: number;
 };
 
 export type LlmResponse = {
@@ -39,5 +41,5 @@ export interface CriticProvider {
   label: string;
   provider: "openai" | "anthropic";
   model: string;
-  critique(system: string, prompt: string, schema: Record<string, unknown>): Promise<CriticReply>;
+  critique(system: string, prompt: string, schema: Record<string, unknown>, timeoutMs?: number): Promise<CriticReply>;
 }

@@ -2,14 +2,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mailtos, readSiteDetailed, robotsAllows } from "@/lib/crew/leads/fetch-page";
 
 const reads: { url: string; at: number }[] = [];
-const replies = new Map<string, { status?: number; body: string }>();
+const replies = new Map<string, { status?: number; body: string; redirect?: string }>();
 vi.mock("@/lib/safe-fetch", () => ({
   safeFetch: async (url: string, _init: unknown, _redirects: number, before?: (url: URL) => Promise<void>) => {
     await before?.(new URL(url));
     reads.push({ url, at: Date.now() });
     const response = replies.get(url) ?? { status: url.endsWith("robots.txt") ? 404 : 200, body: url.endsWith("robots.txt") ? "" : "Public business page" };
     const status = response.status ?? 200;
-    return { ok: status >= 200 && status < 300, status, url, headers: new Headers({ "content-type": "text/html" }), text: async () => response.body };
+    if (response.redirect) {
+      await before?.(new URL(response.redirect));
+      reads.push({ url: response.redirect, at: Date.now() });
+    }
+    return { ok: status >= 200 && status < 300, status, url: response.redirect ?? url, headers: new Headers({ "content-type": "text/html" }), text: async () => response.body };
   },
 }));
 afterEach(() => { vi.useRealTimers(); reads.length = 0; replies.clear(); });
@@ -71,5 +75,15 @@ describe("bounded public website discovery", () => {
     const pending = readSiteDetailed("https://compass.com/agents/jane/");
     await vi.runAllTimersAsync();
     expect((await pending).pages.map((p) => p.url)).toEqual(["https://compass.com/agents/jane/", "https://compass.com/agents/jane/team"]);
+  });
+
+  it("refuses a team subpage redirecting to a different team before fetching that team's page", async () => {
+    vi.useFakeTimers();
+    replies.set("https://compass.com/agents/alice/", { body: "<a href='/agents/alice/about'>About</a>" });
+    replies.set("https://compass.com/agents/alice/about", { body: "Bob Smith, Owner bob@other.com", redirect: "https://compass.com/agents/bob/" });
+    const pending = readSiteDetailed("https://compass.com/agents/alice/");
+    await vi.runAllTimersAsync();
+    expect((await pending).pages).toHaveLength(1);
+    expect(reads.some((r) => r.url === "https://compass.com/agents/bob/")).toBe(false);
   });
 });

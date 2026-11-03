@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { assessSites, assessPrompt, type SiteForAssess } from "@/lib/crew/leads/assess";
-import { candidateBatch } from "@/lib/crew/leads/candidates";
+import { candidateBatch, completeCandidateBatch } from "@/lib/crew/leads/candidates";
 import { publicPeople, verifiedPeople, withPublicRoutes } from "@/lib/crew/leads/public-contacts";
 import { leadsFromSite, leadsWeb } from "@/lib/crew/agents/leads";
 import { officeOutreach } from "@/lib/crew/agents/office";
@@ -18,6 +18,7 @@ describe("lead cost and quality safeguards", () => {
     const discover = vi.fn(async () => Array.from({ length: 12 }, (_, i) => ({ ...site(i), pages: undefined })));
     const first = await candidateBatch(ctx, 8, discover);
     expect(first).toHaveLength(8);
+    await completeCandidateBatch(ctx, first.map((c) => c.website));
     await store.insertLeads([{ list: "cold", company: "Company 8", company_key: "company8.com", email: "info@company8.com", source_platform: "web", source_url: "https://company8.com" }]);
     const second = await candidateBatch(ctx, 8, discover);
     expect(second.map((s) => s.name)).toEqual(["Company 9", "Company 10", "Company 11"]);

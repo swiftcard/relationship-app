@@ -1,6 +1,6 @@
 import type { SitePerson } from "./assess";
 import { mailtos, phonesIn, textOf } from "./fetch-page";
-import { DECISION_ROLE, namedOnSite } from "./quality";
+import { DECISION_ROLE, isGenericEmail, namedOnSite } from "./quality";
 import { cleanEmails } from "./record";
 import type { AgentContext } from "../context";
 import type { Lead } from "../types";
@@ -8,6 +8,30 @@ import { isRestrictedRegion } from "./region";
 
 type Page = { url: string; html: string };
 export type PublicPerson = SitePerson & { source: string };
+
+function personContext(html: string, name: string): string {
+  // A neighbouring card is not evidence about this person. Prefer the
+  // smallest explicit card, then a heading-delimited profile section.
+  const cards = [...html.matchAll(/<(article|li|section)\b[^>]*>[\s\S]*?<\/\1>/gi)]
+    .map((m) => m[0]).filter((block) => namedOnSite(name, textOf(block)))
+    .sort((a, b) => a.length - b.length);
+  const scoped = cards[0] ?? html;
+  const headings = [...scoped.matchAll(/<h[1-6]\b[^>]*>[\s\S]*?<\/h[1-6]>/gi)];
+  const at = headings.findIndex((h) => namedOnSite(name, textOf(h[0])));
+  if (at >= 0) return scoped.slice(headings[at].index, headings[at + 1]?.index);
+  if (cards.length) return scoped;
+  // Plain profiles: another explicit name/role label ends this record.
+  // Capitalized places such as "Park Slope" are not person boundaries.
+  const text = textOf(html);
+  const start = text.toLowerCase().indexOf(name.toLowerCase());
+  const after = text.slice(start + name.length);
+  const next = [...after.matchAll(/\b[A-Z][a-z]+(?: [A-Z][a-z]+){1,3},\s*(?:Licensed Agent|Sales Associate|Agent|Owner|Founder|Broker|Manager|Director|Managing Partner)\b/g)][0];
+  return text.slice(start, start + name.length + (next?.index ?? Math.min(after.length, 240)));
+}
+
+export function emailOnPage(email: string, page: Page): boolean {
+  return !!email && (mailtos(page.html).includes(email.toLowerCase()) || textOf(page.html).toLowerCase().includes(email.toLowerCase()));
+}
 
 /** A name and a decision role must be evidenced together, not just occur on
  * unrelated pages. An uncorroborated personal route is cleared, never guessed.
@@ -18,11 +42,15 @@ export function verifiedPeople(people: SitePerson[], pages: Page[]): SitePerson[
     for (const p of pages) {
       const text = textOf(p.html).toLowerCase();
       if (!namedOnSite(person.name, text)) continue;
-      const start = text.indexOf(person.name.toLowerCase());
-      const nearby = text.slice(Math.max(0, start - 120), start + person.name.length + 240);
+      const context = personContext(p.html, person.name);
+      const nearby = textOf(context).toLowerCase();
       if (!nearby.includes(person.title.toLowerCase())) continue;
       const email = typeof person.email === "string" ? person.email.toLowerCase() : "";
-      return [{ ...person, email: email && nearby.includes(email) ? email : "", phone: typeof person.phone === "string" ? person.phone : "" }];
+      const phone = typeof person.phone === "string" ? person.phone : "";
+      const digits = phone.replace(/\D/g, "").slice(-10);
+      const phones = [...phonesIn(nearby), ...telPhones(context)];
+      const phonePresent = digits.length === 10 && phones.some((p) => p.replace(/\D/g, "").slice(-10) === digits);
+      return [{ ...person, email: emailOnPage(email, { ...p, html: context }) ? email : "", phone: phonePresent ? phone : phone ? "" : phones[0] ?? "" }];
     }
     return [];
   });
@@ -109,6 +137,6 @@ export async function withPublicRoutes(ctx: AgentContext, lead: Lead, pages: Pag
   }
   // Replace the old unsourced alternate-address note for this new row only.
   const notes = lead.notes?.replace(/Other addresses on the site: .*/, "").trim();
-  const confidence = !lead.name ? "Company contact only; decision-maker unverified." : "";
+  const confidence = !lead.name ? "Company contact only; decision-maker unverified." : lead.email && isGenericEmail(lead.email) ? "Public company inbox; not a verified personal address for the named professional." : "";
   return { ...lead, notes: [notes, confidence, ...routes.slice(0, 8)].filter(Boolean).join("\n") || null };
 }

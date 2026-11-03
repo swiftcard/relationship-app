@@ -32,6 +32,16 @@ export async function candidateBatch(ctx: AgentContext, limit: number, discover:
   }
   const count = Math.max(1, Math.min(12, Math.floor(limit) || 1));
   ctx.stat("sites_not_attempted", Math.max(0, items.length - count));
-  await ctx.store.kvSet(key, { at, items: items.slice(count, count + 24) });
+  // Keep the selected slice until the caller commits its results. A timeout
+  // or persistence failure must not discard already-paid discovery.
+  await ctx.store.kvSet(key, { at, items: items.slice(0, count + 24) });
   return items.slice(0, count);
+}
+
+export async function completeCandidateBatch(ctx: AgentContext, attempted: string[]): Promise<void> {
+  const key = `lead-candidates:v1:${ctx.def.id}`;
+  const pending = await ctx.store.kvGet<Pending>(key);
+  if (!pending) return;
+  const done = new Set(attempted);
+  await ctx.store.kvSet(key, { ...pending, items: pending.items.filter((c) => !done.has(c.website)) });
 }

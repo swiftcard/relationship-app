@@ -16,14 +16,14 @@ export class OpenAiCritic implements CriticProvider {
     this.client = new OpenAI({ apiKey, maxRetries: 2, timeout: 120_000 });
   }
 
-  async critique(system: string, prompt: string, schema: Record<string, unknown>): Promise<CriticReply> {
+  async critique(system: string, prompt: string, schema: Record<string, unknown>, timeoutMs?: number): Promise<CriticReply> {
     const r = await this.client.responses.create({
       model: this.model,
       instructions: system,
       input: prompt,
       max_output_tokens: 1500,
       text: { format: { type: "json_schema", name: "critique", schema, strict: true } },
-    });
+    }, timeoutMs === undefined ? undefined : { timeout: timeoutMs, maxRetries: 0 });
     const cached = r.usage?.input_tokens_details?.cached_tokens ?? 0;
     return {
       text: r.output_text ?? "",

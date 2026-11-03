@@ -51,6 +51,7 @@ export class Llm {
       providers: Providers;
       now: () => Date;
       defaultTier: Tier;
+      deadline?: number;
       /** The manager's standing order for this team, or null. */
       focus?: string | null;
       /**
@@ -146,6 +147,7 @@ THE OWNER'S ORDERS FOR THIS TEAM RIGHT NOW (follow them unless they break a rule
     // Reserved workflows admit the full output allowance, rather than the
     // usual half-output estimate, before starting expensive discovery.
     await this.guard(estimateUsd(req.system.length + req.prompt.length, req.maxTokens * (reserve ? 2 : 1), priceFor("anthropic", req.model), req.webSearch?.maxUses ?? 0) + reserve);
+    req.timeoutMs = this.leadTimeout(purpose);
     const res = await claude.create(req);
     await this.record("anthropic", req.model, purpose, res.usage);
     return res;
@@ -163,12 +165,19 @@ THE OWNER'S ORDERS FOR THIS TEAM RIGHT NOW (follow them unless they break a rule
     const critic = this.o.providers.critic;
     if (critic) {
       await this.guard(estimateUsd(system.length + prompt.length, 1500, priceFor("openai", critic.model, openAiPriceRaw())));
-      const r = await critic.critique(system, prompt, schema);
+      const r = await critic.critique(system, prompt, schema, this.leadTimeout("critique"));
       await this.record("openai", r.model, "critique", r.usage);
       return { ...r, label: critic.label };
     }
     const r = await this.ask("critique", { system, prompt, schema, maxTokens: 1500, effort: "low", tier: "sonnet" });
     return { text: r.text, usage: r.usage, model: r.model, label: "Claude (skeptic; ChatGPT not connected)" };
+  }
+
+  private leadTimeout(purpose: string): number | undefined {
+    if (this.o.deadline === undefined || !["leads-web", "office-outreach"].includes(this.o.def.id)) return undefined;
+    const remaining = this.o.deadline - Date.now() - 20_000;
+    if (remaining < 5000) throw new BudgetStop("Run deadline: preserving time to save lead results.");
+    return Math.min(purpose === "discover" ? 60_000 : 20_000, remaining);
   }
 
   async submitBatch(purpose: string, items: { id: string; o: AskOptions }[]): Promise<string> {
@@ -299,7 +308,7 @@ export async function buildContext(o: {
     store: o.store,
     runId: o.runId,
     now,
-    llm: new Llm({ store: o.store, def: o.def, state, settings, runId: o.runId, providers: o.providers, now, defaultTier: picked.tier, focus: teamFocus, onDemand: o.onDemand }),
+    llm: new Llm({ store: o.store, def: o.def, state, settings, runId: o.runId, providers: o.providers, now, defaultTier: picked.tier, focus: teamFocus, onDemand: o.onDemand, deadline: o.deadline }),
     tier: picked.tier,
     tierWhy: picked.why,
     teamFocus,
