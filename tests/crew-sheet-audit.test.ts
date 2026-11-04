@@ -9,7 +9,7 @@ import { runEngagement, type Candidate } from "@/lib/crew/replies/engine";
 import { EVERY_CHOICES, plainSchedule } from "@/lib/crew/schedule";
 import { markSent, normalizeSuppression } from "@/lib/crew/sheets/apply";
 import { applyControl, changedStamp, parseScheduleText } from "@/lib/crew/sheets/controls";
-import { NO_LINK, approvalKey, approvalRows, leadRows, type BuiltRow, type RowSources } from "@/lib/crew/sheets/rows";
+import { CALL_LABEL, NO_LINK, RESEARCH_LABEL, approvalKey, approvalRows, dialable, leadRows, type BuiltRow, type RowSources } from "@/lib/crew/sheets/rows";
 import { ownerEditable, type TabSpec } from "@/lib/crew/sheets/spec";
 import { inboundColumns, ownerChanges, placeRow } from "@/lib/crew/sheets/sync";
 import { REDDIT_REPLY } from "@/lib/crew/sheets/tabs";
@@ -222,8 +222,22 @@ describe("what reaches the Sheet", () => {
     const [withEmail] = leadRows({ ...lead, list: "office", name: "Sam", email: "sam@nycteam.com", message }, sources());
     expect(String(withEmail.cells.link)).toContain('HYPERLINK("mailto:sam@nycteam.com?body=","Email sam@nycteam.com")');
     expect(withEmail.cells.message).toBe(message);
-    const [noEmail] = leadRows({ ...lead, list: "office", name: "Sam", message }, sources());
-    expect(noEmail.cells.link).toBe('=HYPERLINK("https://acme.com/contact","Open their website")');
+    // No email: the website is where the details came from, not a contact, and the label says so.
+    const [noEmail] = leadRows({ ...lead, list: "office", name: "Sam", phone: "2125550142", message }, sources());
+    expect(noEmail.cells.link).toBe(`=HYPERLINK("https://acme.com/contact","${CALL_LABEL}")`);
+    expect(noEmail.cells.name).toBe("Sam · 212 555 0142");
+    const [nothing] = leadRows({ ...lead, list: "office", name: "Sam", message }, sources());
+    expect(nothing.cells.link).toBe(`=HYPERLINK("https://acme.com/contact","${RESEARCH_LABEL}")`);
+  });
+
+  it("an office prospect's license number is never shown as their phone", () => {
+    // Seen live 2026-11-04: "302 100 0072" on four Office rows was a license number.
+    const [row] = leadRows({ ...lead, list: "office", name: "Sam", phone: "3021000072", message }, sources());
+    expect(row.cells.name).toBe("Sam");
+    expect(row.cells.link).toBe(`=HYPERLINK("https://acme.com/contact","${RESEARCH_LABEL}")`);
+    expect(dialable("3021000072")).toBe(false);
+    expect(dialable("1030126076")).toBe(false);
+    expect(dialable("+1 (718) 555-0142")).toBe(true);
   });
 
   it("an old draft without an exact link is dropped; one pasted without a link says so", () => {
