@@ -233,6 +233,21 @@ describe("the demo emails", () => {
     expect(half.personal).toBe(false);
   });
 
+  it("once they said they'll be there, later reminders thank them instead of asking again", async () => {
+    // Live test 2026-11-04: a halfway reminder still asked "Still good for
+    // you?" after the person had already confirmed on the manage page.
+    const { buildDemoEmail } = await import("@/lib/demo/emails");
+    for (const kind of ["halfway", "night_before"] as const) {
+      const m = buildDemoEmail(kind, booking({ reconfirmed_at: "2026-11-04T06:08:00Z" }) as never)!;
+      expect(m.html, kind).toContain("Thanks for confirming you'll be there.");
+      expect(m.html, kind).not.toContain("Yes, I'll be there");
+      expect(m.html, kind).not.toContain("Still good for you?");
+      expect(m.html, kind).not.toContain("demo/manage?a=confirm#");
+      expect(m.html, kind).toContain("Join with Google Meet");
+      expect(m.html, kind).toContain("demo/manage?a=reschedule#");
+    }
+  });
+
   it("without a Meet link yet, the confirmation says it follows", async () => {
     const { buildDemoEmail } = await import("@/lib/demo/emails");
     const m = buildDemoEmail("confirmation", booking({ meet_url: null, calendar_status: "pending" }) as never)!;

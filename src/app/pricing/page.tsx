@@ -16,6 +16,7 @@ import {
   PLAN_GRID_CLASS, FREE_CTA_CLASS, PRO_CTA_CLASS, PRO_CTA_LINK_CLASS, OFFICE_CTA_CLASS, OFFICE_CTA_LINK_CLASS, PRO_FINE_PRINT_CLASS,
 } from "@/components/PlanTierCards";
 import HomeHeadingReveal from "@/components/site/HomeHeadingReveal";
+import BookDemoButton from "@/components/demo/BookDemoButton";
 import "@/app/home.css";
 
 
@@ -263,6 +264,10 @@ export default function PricingPage() {
               {loading === "enterprise" ? "Loading…" : promoOnOffice ? `Get Office · ${promo.discountLabel} →` : `Get Office · ${officeTotalLabel(annual, seats)} →`}
             </button>
             )}
+            {/* Book a demo (owner, 2026-11-03): the Office card only, under
+                Get Office, never for a team already paying for Office. Lives
+                here, never in the shared PlanTierCards the app also draws. */}
+            {!onPaidOffice && <BookDemoButton seats={seats} />}
             </div>
           </OfficePlanCard>
         </section>

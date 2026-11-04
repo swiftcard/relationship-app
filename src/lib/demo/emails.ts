@@ -100,6 +100,15 @@ function joinBlock(b: DemoBooking): string {
     : p("Your Google Meet link is on its way in a separate email.");
 }
 
+/** The reminders' one-tap "Yes, I'll be there", or, once they already said
+ *  so (from an earlier reminder or the manage page), a thank-you instead of
+ *  asking again. Built at send time, so it reflects the latest answer. */
+function confirmBlock(b: DemoBooking, ask: string | null): string {
+  if (b.reconfirmed_at) return p("Thanks for confirming you'll be there.") + joinBlock(b);
+  return (ask ? p(ask) : "") +
+    btn(manageUrl(b, "confirm"), "Yes, I'll be there") + (b.meet_url ? btn2(b.meet_url, "Join with Google Meet") : "");
+}
+
 function prospect(kind: MessageKind, b: DemoBooking): BuiltEmail | null {
   const tz = b.timezone;
   const s = start(b);
@@ -131,8 +140,7 @@ function prospect(kind: MessageKind, b: DemoBooking): BuiltEmail | null {
           h1("Your demo is coming up") +
           p(`Hi ${name}, a quick reminder: your SwiftCard Office demo is on ${when}.`) +
           prospectDetails(b) +
-          p("Still good for you? One tap lets us know.") +
-          btn(manageUrl(b, "confirm"), "Yes, I'll be there") + (b.meet_url ? btn2(b.meet_url, "Join with Google Meet") : "") +
+          confirmBlock(b, "Still good for you? One tap lets us know.") +
           changeLinks(b),
           `Reminder: ${short}`,
         ),
@@ -145,7 +153,7 @@ function prospect(kind: MessageKind, b: DemoBooking): BuiltEmail | null {
           h1("See you tomorrow") +
           p(`Hi ${name}, your SwiftCard Office demo is tomorrow, ${when}.`) +
           prospectDetails(b) +
-          btn(manageUrl(b, "confirm"), "Yes, I'll be there") + (b.meet_url ? btn2(b.meet_url, "Join with Google Meet") : "") +
+          confirmBlock(b, null) +
           changeLinks(b),
           `Tomorrow at ${fmtTime(s, tz)}`,
         ),
