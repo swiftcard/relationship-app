@@ -154,7 +154,11 @@ for (const engine of ["Chromium", "WebKit"]) {
         expect(saves[0].force).toBeUndefined();
 
         const box = page.locator('[role="alert"]', { hasText: "changed on another device or tab" });
-        await expect(box.isVisible()).resolves.toBe(true);
+        // WAIT for it: the refusal is drawn when the 409 reply has been read,
+        // which a busy CI WebKit took longer than clickButton's 700 ms to do —
+        // an instant isVisible() failed there while every local run passed
+        // (CI render, d8f87705, WebKit · 390px). Same assertion: visible, or fail.
+        await box.waitFor({ state: "visible", timeout: 10_000 });
         // Nothing claims it saved, and the way forward is on screen, inside the screen.
         expect(await page.locator("button:visible", { hasText: "Saved!" }).count()).toBe(0);
         for (const label of ["Reload the latest", "Save mine anyway"]) {
@@ -175,6 +179,8 @@ for (const engine of ["Chromium", "WebKit"]) {
         // The same card went: the second save carries what the first did.
         expect(saves[1].name).toBe(saves[0].name);
         expect(saves[1].customization).toEqual(saves[0].customization);
+        // The same race on the way out: gone once the forced save is answered.
+        await box.waitFor({ state: "detached", timeout: 10_000 });
         expect(await box.count()).toBe(0);
         expect(errors).toEqual([]);
         await page.context().close();
