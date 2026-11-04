@@ -29,6 +29,8 @@ export const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/admin/users", label: "Users", icon: "users" },
       { href: "/admin/analytics", label: "Company Analytics", icon: "analytics" },
       { href: "/admin/website", label: "Website", icon: "website" },
+      // Office demos booked from the pricing page, and the Google Calendar they use (2026-11-03).
+      { href: "/admin/demos", label: "Demos", icon: "calendar" },
     ],
   },
   {

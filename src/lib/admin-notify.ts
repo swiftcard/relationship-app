@@ -12,7 +12,9 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 // Stripe redelivering an event, a second tick seeing the same failure — a
 // no-op instead of a second notification.
 
-export type AdminNotificationKind = "money" | "leaving" | "agents";
+// "demos" (2026-11-03): an Office demo booked, moved or canceled, and the demo
+// calendar needing attention (lib/demo). The demo emails are sent elsewhere.
+export type AdminNotificationKind = "money" | "leaving" | "agents" | "demos";
 export type AdminNotificationSeverity = "urgent" | "important";
 
 export type AdminNotification = {
@@ -30,6 +32,7 @@ export const ADMIN_NOTIFICATION_KINDS: { key: AdminNotificationKind; label: stri
   { key: "money", label: "Money" },
   { key: "leaving", label: "Customers leaving" },
   { key: "agents", label: "Agents" },
+  { key: "demos", label: "Demos" },
 ];
 
 /** One "is cancelling" per subscription per day, whichever writes it first:

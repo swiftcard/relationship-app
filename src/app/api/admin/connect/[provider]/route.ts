@@ -1,23 +1,21 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createHash, randomBytes } from "node:crypto";
 import { requireAdmin } from "@/lib/admin";
-import { deleteConnection, isAgentProvider, providerAppConfigured } from "@/lib/agent-connections";
-import { authorizeUrl, bindCookie, CONNECT_COOKIE, pkceCookie, usesPkce } from "@/lib/agent-connect-oauth";
+import { deleteConnection, isOwnerConnectProvider, providerAppConfigured } from "@/lib/agent-connections";
+import { authorizeUrl, bindCookie, CONNECT_COOKIE, connectReturnUrl, pkceCookie, usesPkce } from "@/lib/agent-connect-oauth";
 import { signState, oauthBindCookieValue } from "@/lib/oauth-state";
 
 export const runtime = "nodejs";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
-const SETTINGS = `${APP_URL}/admin?connect=1`;
-
 // GET /api/admin/connect/<provider> → the platform's consent screen.
 // Owner only: the admin gate is the same one every /api/admin route uses.
+// <provider> is an agent platform, or google_calendar (the demo calendar).
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ provider: string }> }) {
   const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { provider } = await ctx.params;
-  if (!isAgentProvider(provider)) return NextResponse.json({ error: "unknown provider" }, { status: 404 });
-  if (!providerAppConfigured(provider)) return NextResponse.redirect(`${SETTINGS}&connect_error=${encodeURIComponent(`${provider}: app credentials are not set in Vercel yet`)}`);
+  if (!isOwnerConnectProvider(provider)) return NextResponse.json({ error: "unknown provider" }, { status: 404 });
+  if (!providerAppConfigured(provider)) return NextResponse.redirect(connectReturnUrl(provider, { ok: false, msg: `${provider}: app credentials are not set in Vercel yet` }));
 
   const state = signState(user.id);
   let challenge: string | undefined;
@@ -37,7 +35,7 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ provide
   const user = await requireAdmin();
   if (!user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { provider } = await ctx.params;
-  if (!isAgentProvider(provider)) return NextResponse.json({ error: "unknown provider" }, { status: 404 });
+  if (!isOwnerConnectProvider(provider)) return NextResponse.json({ error: "unknown provider" }, { status: 404 });
   try {
     await deleteConnection(provider);
   } catch {

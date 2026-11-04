@@ -27,8 +27,11 @@ export async function proxy(request: NextRequest) {
   // redirects a lapsed owner or removed member to /pricing. Decided here,
   // first, on the same two shell-only signals as "/" below, before any HTML.
   // The website's /pricing skips everything else in this function: no auth
-  // work, same page as before.
-  if (request.nextUrl.pathname === "/pricing") {
+  // work, same page as before. /demo (2026-11-03) is the Office demo booking
+  // page behind the pricing page's Book a demo button: selling too, so the
+  // app is sent away from it the same way. Exact path only: /demo/manage
+  // needs no session and is not in the matcher.
+  if (request.nextUrl.pathname === "/pricing" || request.nextUrl.pathname === "/demo") {
     const shell = (request.headers.get("user-agent") ?? "").includes("SwiftCardApp") ||
       request.cookies.get("sc_shell")?.value === "1";
     return shell ? NextResponse.redirect(new URL("/dashboard", request.url)) : NextResponse.next();
@@ -370,6 +373,9 @@ export const config = {
     // The smart store link: phones are redirected before any HTML (see top).
     "/download",
     // App requests only: redirected to /dashboard before any HTML (see top).
+    // The exact path only, never with :path* after it: public/demo/ holds
+    // static files, and /demo/manage needs no session.
+    "/demo",
     "/pricing",
   ],
 };

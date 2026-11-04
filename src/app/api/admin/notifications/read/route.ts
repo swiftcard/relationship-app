@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin";
 import { getAdminSupabase } from "@/lib/supabase-admin";
-import { safeBack } from "@/app/admin/notifications/tabs";
+import { NOTIFICATION_KINDS, safeBack } from "@/app/admin/notifications/tabs";
 
 // Mark one notification read (id), or every unread one in a tab (all=1, kind).
 // Posted by plain <form method="post">s on /admin/notifications, so it answers
 // with a 303 back to the page it came from; a JSON caller gets JSON.
+//
+// The kinds come from the tabs themselves: a hand-kept list here once lacked a
+// new tab, and "Mark all read" on that tab then marked EVERY kind read.
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const KINDS = new Set(["money", "leaving", "agents"]);
+const KINDS = NOTIFICATION_KINDS;
 
 export async function POST(req: NextRequest) {
   if (!(await requireAdmin())) return NextResponse.json({ error: "unauthorized" }, { status: 403 });

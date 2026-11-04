@@ -1,23 +1,21 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/admin";
-import { isAgentProvider, saveConnection } from "@/lib/agent-connections";
-import { bindCookie, describeAccount, exchangeCode, pkceCookie, usesPkce } from "@/lib/agent-connect-oauth";
+import { isOwnerConnectProvider, saveConnection } from "@/lib/agent-connections";
+import { bindCookie, connectReturnUrl, describeAccount, exchangeCode, pkceCookie, usesPkce } from "@/lib/agent-connect-oauth";
 import { stateBoundToBrowser, verifyState } from "@/lib/oauth-state";
 
 export const runtime = "nodejs";
-
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
-const SETTINGS = `${APP_URL}/admin?connect=1`;
 
 // GET /api/admin/connect/<provider>/callback?code=…&state=…
 // Three gates before a token is stored: the admin session (same browser), the
 // signed state (issued to THIS admin, <15 min old), and the bind cookie (this
 // browser started the connect). Then exchange, name the account, encrypt, save.
+// The demo calendar (google_calendar) returns to /admin/demos, the agents to /admin.
 export async function GET(req: NextRequest, ctx: { params: Promise<{ provider: string }> }) {
   const { provider } = await ctx.params;
-  if (!isAgentProvider(provider)) return NextResponse.json({ error: "unknown provider" }, { status: 404 });
+  if (!isOwnerConnectProvider(provider)) return NextResponse.json({ error: "unknown provider" }, { status: 404 });
   const done = (ok: boolean, msg: string) => {
-    const res = NextResponse.redirect(`${SETTINGS}&${ok ? "connected" : "connect_error"}=${encodeURIComponent(msg)}`);
+    const res = NextResponse.redirect(connectReturnUrl(provider, { ok, msg }));
     res.cookies.set(bindCookie(provider), "", { maxAge: 0, path: "/api/admin/connect" });
     res.cookies.set(pkceCookie(provider), "", { maxAge: 0, path: "/api/admin/connect" });
     return res;

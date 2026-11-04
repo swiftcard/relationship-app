@@ -88,6 +88,26 @@ jobs:
           echo
           [ "$code" = "200" ]
 
+      # Same schedule, same secret: the Office demo clock's backup. pg_cron
+      # runs /api/demo/tick every 5 minutes (supabase/demo-bookings.sql); this
+      # only matters if that stops. Every step there is safe to run twice.
+      # It never fails this workflow: the health check alerts on this job's
+      # failures, and those must mean the pushes above, not a backup pass.
+      - name: Office demo reminders backup
+        if: always()
+        continue-on-error: true
+        env:
+          SECRET: ${{ secrets.PUSH_CATCHUP_SECRET }}
+        run: |
+          body=$(mktemp)
+          code=$(curl -sS --max-time 90 -X POST -o "$body" -w "%{http_code}" \
+            -H "Authorization: Bearer $SECRET" \
+            https://swiftcard.me/api/demo/tick)
+          echo "HTTP $code"
+          cat "$body"
+          echo
+          [ "$code" = "200" ]
+
       # Same schedule, same secret: accounts due for permanent deletion. An
       # account the owner asked to remove completely (_deletion.purgeNow) goes
       # within the hour instead of waiting for the daily run; everything else

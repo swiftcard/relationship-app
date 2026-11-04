@@ -350,6 +350,26 @@ if (process.env.GITHUB_REPOSITORY) {
   });
 }
 
+// Office demo booking (2026-11-03). The demo clock (pg_cron → /api/demo/tick,
+// every 5 minutes) must be sending reminders on time, and the owner's Google
+// Calendar connection must still work (a revoked one means no Meet links).
+// "Not connected yet" is not an outage here: demos still book and every email
+// goes, and the admin bell already says so. Read-only: the status probe sends
+// nothing. Needs the secret from the workflow; skipped anywhere else.
+if (process.env.DEMO_STATUS_SECRET) {
+  CHECKS.push({
+    name: "demo booking: reminders on time, Google Calendar working",
+    run: async () => {
+      const res = await get("/api/demo/tick?status=1", { headers: { Authorization: `Bearer ${process.env.DEMO_STATUS_SECRET}` } });
+      if (res.status !== 200) return { ok: false, detail: `status ${res.status}` };
+      const j = await res.json().catch(() => ({}));
+      const calendarOk = j.calendar === "ok" || j.calendar === "not_connected";
+      const ok = j.ok === true && j.overdue === 0 && calendarOk;
+      return { ok, detail: `calendar=${j.calendar}, overdue=${j.overdue}` };
+    },
+  });
+}
+
 const started = Date.now();
 const results = [];
 for (const c of CHECKS) {

@@ -19,6 +19,19 @@ import { decryptToken, encryptToken } from "@/lib/token-crypto";
 export type AgentProvider = "x" | "meta" | "youtube" | "linkedin" | "pinterest";
 export const AGENT_PROVIDERS: AgentProvider[] = ["x", "meta", "youtube", "linkedin", "pinterest"];
 
+/**
+ * What /api/admin/connect/<p> accepts: the agents' platforms plus the owner's
+ * Google Calendar for demo booking (lib/demo/google-calendar, 2026-11-03).
+ * The calendar is deliberately NOT an AgentProvider, so loadConnections and
+ * the agents' Connections panel never list it; the demo code reads its own row.
+ */
+export type OwnerConnectProvider = AgentProvider | "google_calendar";
+export const OWNER_CONNECT_PROVIDERS: OwnerConnectProvider[] = [...AGENT_PROVIDERS, "google_calendar"];
+
+export function isOwnerConnectProvider(p: string): p is OwnerConnectProvider {
+  return (OWNER_CONNECT_PROVIDERS as string[]).includes(p);
+}
+
 export type AgentConnection = {
   provider: AgentProvider;
   account_label: string | null;
@@ -36,14 +49,17 @@ export type AgentConnection = {
 export type ConnectionMap = Partial<Record<AgentProvider, AgentConnection>>;
 
 /** The platform APP (client id/secret) exists in env — the prerequisite for the Connect button. */
-export function providerAppConfigured(p: AgentProvider): boolean {
+export function providerAppConfigured(p: OwnerConnectProvider): boolean {
   switch (p) {
     case "x": return !!(process.env.X_CLIENT_ID && process.env.X_CLIENT_SECRET);
     case "meta": return !!(process.env.META_APP_ID && process.env.META_APP_SECRET);
     // YouTube has its own OAuth client (a project under the hello@swiftcard.me
     // Workspace, so the consent screen can be Internal and refresh tokens
     // don't die after 7 days). Falls back to the sign-in client if unset.
-    case "youtube": return !!(youtubeClient().id && youtubeClient().secret);
+    // The demo calendar uses the same owner-only client, for the same reason.
+    case "youtube":
+    case "google_calendar":
+      return !!(youtubeClient().id && youtubeClient().secret);
     // The Agent Flow app is a separate LinkedIn app from the profile-photo
     // import one (different Page, different products). Falls back to it.
     case "linkedin": return !!(linkedinClient().id && linkedinClient().secret);
@@ -100,7 +116,7 @@ export async function loadConnections(): Promise<ConnectionMap> {
   return out;
 }
 
-export async function saveConnection(c: Omit<AgentConnection, "connected_at"> & { connected_by?: string | null }): Promise<boolean> {
+export async function saveConnection(c: Omit<AgentConnection, "connected_at" | "provider"> & { provider: OwnerConnectProvider; connected_by?: string | null }): Promise<boolean> {
   const { error } = await getAdminSupabase().from("agent_connections").upsert({
     provider: c.provider,
     account_label: c.account_label, account_id: c.account_id,
@@ -115,7 +131,7 @@ export async function saveConnection(c: Omit<AgentConnection, "connected_at"> & 
 
 // Throws when the row could not be removed, so the panel never reports a
 // disconnect that did not happen (audit F-ADMIN-05).
-export async function deleteConnection(p: AgentProvider): Promise<void> {
+export async function deleteConnection(p: OwnerConnectProvider): Promise<void> {
   const { error } = await getAdminSupabase().from("agent_connections").delete().eq("provider", p);
   if (error) throw new Error(`agent_connections delete failed: ${error.message}`);
 }

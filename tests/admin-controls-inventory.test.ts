@@ -74,6 +74,22 @@ const INVENTORY: Entry[] = [
     ],
   },
   {
+    file: "src/app/admin/demos/DemosView.tsx",
+    controls: [
+      "Resend confirmation", "Cancel demo (a <details> that opens: reason + Yes, cancel and email them)", "Mark no-show",
+      "their hidden fields (action, back ×3)",
+    ],
+    provedBy: [
+      { test: "tests/demo-admin.test.ts", mentions: "Cancel: admin only, same site only, then back to the page with a message" },
+      { test: "tests/demo-admin.test.ts", mentions: "Resend confirmation queues it again; Mark no-show only after the start" },
+    ],
+  },
+  {
+    file: "src/app/admin/demos/CopyLinkButton.tsx",
+    controls: ["Copy reschedule link"],
+    provedBy: [{ test: "tests/demo-invariants.test.ts", mentions: "the token rides after the #" }],
+  },
+  {
     file: "src/app/admin/website/WebsiteAnalyticsClient.tsx",
     controls: ["Include my team's visits (switch)", "Exclude my visits / Count this device again", "Try again"],
     provedBy: [
@@ -100,6 +116,8 @@ const PINNED: Record<string, number> = {
   "src/app/admin/users/[id]/UserDetailClient.tsx": 6,
   "src/app/admin/website/WebsiteAnalyticsClient.tsx": 3,
   "src/app/admin/crew/blog/BlogWriterView.tsx": 11,
+  "src/app/admin/demos/DemosView.tsx": 13,
+  "src/app/admin/demos/CopyLinkButton.tsx": 1,
 };
 
 function controlCount(src: string): number {
@@ -129,6 +147,7 @@ describe("every admin control is listed with the test that proves it", () => {
     const all = [
       "src/app/admin/OverviewClient.tsx", "src/app/admin/users/UsersClient.tsx", "src/app/admin/users/[id]/UserDetailClient.tsx",
       "src/app/admin/website/WebsiteAnalyticsClient.tsx", "src/app/admin/plans/PlansClient.tsx", "src/app/admin/notifications/NotificationsView.tsx",
+      "src/app/admin/demos/DemosView.tsx",
     ];
     for (const f of all) expect(listed.has(f), f).toBe(true);
   });

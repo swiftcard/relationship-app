@@ -44,6 +44,28 @@ export function localDayKey(instant: Date | string, tz: string): string {
   }).format(d);
 }
 
+/** The wall-clock fields of an instant in `tz` (month 1–12, dow 0 = Sunday). */
+export function zonedParts(instant: Date, tz: string): { y: number; m: number; d: number; h: number; min: number; dow: number } {
+  const local = new Date(instant.getTime() + tzOffsetMs(instant, tz));
+  return {
+    y: local.getUTCFullYear(), m: local.getUTCMonth() + 1, d: local.getUTCDate(),
+    h: local.getUTCHours(), min: local.getUTCMinutes(), dow: local.getUTCDay(),
+  };
+}
+
+/**
+ * The UTC instant at which the wall clock in `tz` reads y-m-d h:min (month
+ * 1–12). Corrected twice with the offset AT the target, so a time on the far
+ * side of a DST change lands right. Days and months may overflow (d = 32 is
+ * the 1st of next month), the way Date.UTC does.
+ */
+export function zonedWallTimeToUtc(y: number, m: number, d: number, h: number, min: number, tz: string): Date {
+  const wall = Date.UTC(y, m - 1, d, h, min);
+  let t = wall - tzOffsetMs(new Date(wall), tz);
+  t = wall - tzOffsetMs(new Date(t), tz);
+  return new Date(t);
+}
+
 // The UTC instant of local-midnight, `daysAgo` local days before today, in `tz`.
 // daysAgo=0 → start of today (local); daysAgo=7 → start of the day 7 days ago.
 export function startOfLocalDayUtc(daysAgo: number, tz: string, now: Date = new Date()): Date {

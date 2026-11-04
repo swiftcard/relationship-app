@@ -35,6 +35,11 @@ const TRACK_PREFIXES = [
   "/login", "/cards/new",
 ];
 
+// Tracked as these exact paths only. /demo is the Office demo booking page
+// (2026-11-03); /demo/manage is a booked person's private page and must never
+// be counted, so /demo can't be a prefix above.
+const TRACK_EXACT = ["/demo"];
+
 const SESSION_KEY = "sc_site_session";
 const SESSION_TS_KEY = "sc_site_session_ts";
 const SESSION_GAP_MS = 30 * 60 * 1000; // 30-min inactivity → new session
@@ -83,7 +88,7 @@ function currentSession(): { id: string; landing: boolean } {
 }
 
 function tracked(path: string): boolean {
-  return path === "/" || TRACK_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));
+  return path === "/" || TRACK_EXACT.includes(path) || TRACK_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));
 }
 
 /** What the browser says it is. iPadOS Safari calls itself a Mac, so a "Mac"

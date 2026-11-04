@@ -66,6 +66,9 @@ jobs:
           HEALTH_REAL_CARDS: "aaronlavi-malvecapital,aaronlavi-nadlanhomesllc"
           # Reads push-catchup.yml / trial-notice.yml run history (audit N-21).
           GITHUB_TOKEN: ${{ github.token }}
+          # Office demo booking: /api/demo/tick?status=1 (reminders on time,
+          # Google Calendar working). The route accepts this secret too.
+          DEMO_STATUS_SECRET: ${{ secrets.PUSH_CATCHUP_SECRET }}
         run: |
           set -o pipefail
           node scripts/health-check.mjs > health.json || true

@@ -18,7 +18,7 @@ import { NOTIFICATION_TABS, notificationsBack, type NotificationTab } from "./ta
 export type NotificationRow = {
   id: string;
   created_at: string;
-  kind: "money" | "leaving" | "agents";
+  kind: "money" | "leaving" | "agents" | "demos";
   severity: "urgent" | "important";
   title: string;
   body: string | null;
@@ -27,7 +27,7 @@ export type NotificationRow = {
   read_at: string | null;
 };
 
-const KIND_LABEL: Record<NotificationRow["kind"], string> = { money: "Money", leaving: "Customers leaving", agents: "Agents" };
+const KIND_LABEL: Record<NotificationRow["kind"], string> = { money: "Money", leaving: "Customers leaving", agents: "Agents", demos: "Demos" };
 
 /** Only the admin's own pages and Stripe's dashboard are ever linked. */
 const adminHref = (h: string | null) => (h && /^\/admin(\/|\?|$)/.test(h) ? h : null);
@@ -49,7 +49,7 @@ export default function NotificationsView({ rows, tab, unreadOnly, unread }: {
     <Stack>
       <PageHeader
         title="Notifications"
-        description="Money, customers leaving and the agents: the things worth knowing the day they happen. Only here — no emails, no pushes."
+        description="Money, customers leaving, the agents and Office demos: the things worth knowing the day they happen. No pushes; only demos also email the inbox."
         actions={
           <>
             <nav aria-label="Show" className="inline-flex rounded-full p-0.5" style={{ background: "var(--sc-fill)" }}>

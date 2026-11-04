@@ -19,18 +19,36 @@
 //            then the connection stores the person and the connector holds
 //            posts — see summarizeConnections().
 
-import { type AgentProvider, linkedinClient, youtubeClient } from "@/lib/agent-connections";
+//   google_calendar  (2026-11-03) the owner's hello@swiftcard.me calendar, for
+//            demo booking: create events with a Meet link, read free/busy.
+//            Same owner-only Google client as YouTube; offline + consent for
+//            the refresh token. openid email names the account, and any
+//            account but DEMO_CALENDAR_EMAIL is refused.
+
+import { type OwnerConnectProvider, linkedinClient, youtubeClient } from "@/lib/agent-connections";
+import { DEMO_CALENDAR_EMAIL_DEFAULT } from "@/lib/demo/config";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 export const META_GRAPH = "https://graph.facebook.com/v26.0";
 export const LINKEDIN_VERSION = "202509";
 
-export function connectRedirectUri(p: AgentProvider): string {
+export function connectRedirectUri(p: OwnerConnectProvider): string {
   return `${APP_URL}/api/admin/connect/${p}/callback`;
 }
 
-export function usesPkce(p: AgentProvider): boolean {
+export function usesPkce(p: OwnerConnectProvider): boolean {
   return p === "x";
+}
+
+/** Where the owner lands after a connect: the Demos page for the calendar,
+ *  the admin's Connections panel for everything else. */
+export function connectReturnUrl(p: string, result?: { ok: boolean; msg: string }): string {
+  const base = p === "google_calendar" ? `${APP_URL}/admin/demos?connect=1` : `${APP_URL}/admin?connect=1`;
+  return result ? `${base}&${result.ok ? "connected" : "connect_error"}=${encodeURIComponent(result.msg)}` : base;
+}
+
+function demoCalendarEmail(): string {
+  return (process.env.DEMO_CALENDAR_EMAIL || DEMO_CALENDAR_EMAIL_DEFAULT).trim().toLowerCase();
 }
 
 // Cookies that tie the callback to THIS browser (see lib/oauth-state for why a
@@ -39,7 +57,8 @@ export const bindCookie = (p: string) => `agent_connect_bind_${p}`;
 export const pkceCookie = (p: string) => `agent_connect_pkce_${p}`;
 export const CONNECT_COOKIE = { httpOnly: true, secure: true, sameSite: "lax" as const, maxAge: 15 * 60, path: "/api/admin/connect" };
 
-const SCOPES: Record<AgentProvider, string> = {
+const SCOPES: Record<OwnerConnectProvider, string> = {
+  google_calendar: "openid email https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.freebusy",
   x: "tweet.read tweet.write users.read offline.access",
   // pages_manage_posts publishes to the Page; instagram_content_publish to the
   // linked IG Business account; the rest are what the two need to list + read.
@@ -62,9 +81,13 @@ const SCOPES: Record<AgentProvider, string> = {
     || (process.env.LINKEDIN_AGENT_CLIENT_ID ? "w_organization_social r_organization_admin" : "openid profile w_member_social"),
 };
 
-export function authorizeUrl(p: AgentProvider, state: string, codeChallenge?: string): string {
+export function authorizeUrl(p: OwnerConnectProvider, state: string, codeChallenge?: string): string {
   const redirect_uri = connectRedirectUri(p);
   switch (p) {
+    case "google_calendar": {
+      const q = new URLSearchParams({ client_id: youtubeClient().id!, redirect_uri, response_type: "code", scope: SCOPES.google_calendar, access_type: "offline", prompt: "consent", include_granted_scopes: "true", login_hint: demoCalendarEmail(), state });
+      return `https://accounts.google.com/o/oauth2/v2/auth?${q}`;
+    }
     case "x": {
       const q = new URLSearchParams({ response_type: "code", client_id: process.env.X_CLIENT_ID!, redirect_uri, scope: SCOPES.x, state, code_challenge: codeChallenge ?? "", code_challenge_method: "S256" });
       return `https://x.com/i/oauth2/authorize?${q}`;
@@ -97,9 +120,13 @@ async function form(url: string, body: Record<string, string>, headers: Record<s
   return j;
 }
 
-export async function exchangeCode(p: AgentProvider, code: string, codeVerifier?: string): Promise<TokenSet> {
+export async function exchangeCode(p: OwnerConnectProvider, code: string, codeVerifier?: string): Promise<TokenSet> {
   const redirect_uri = connectRedirectUri(p);
   switch (p) {
+    case "google_calendar": {
+      const j = await form("https://oauth2.googleapis.com/token", { grant_type: "authorization_code", code, redirect_uri, client_id: youtubeClient().id!, client_secret: youtubeClient().secret! });
+      return { access_token: String(j.access_token), refresh_token: (j.refresh_token as string) ?? null, expires_in: Number(j.expires_in ?? 3600), scope: (j.scope as string) ?? null };
+    }
     case "x": {
       const j = await form("https://api.x.com/2/oauth2/token",
         { grant_type: "authorization_code", code, redirect_uri, client_id: process.env.X_CLIENT_ID!, code_verifier: codeVerifier ?? "" },
@@ -155,10 +182,24 @@ async function getJson(url: string, headers: Record<string, string>): Promise<Re
 }
 
 /** Who will be posting. Runs once, right after the code exchange. */
-export async function describeAccount(p: AgentProvider, t: TokenSet): Promise<AccountInfo> {
+export async function describeAccount(p: OwnerConnectProvider, t: TokenSet): Promise<AccountInfo> {
   const expires_at = t.expires_in ? new Date(Date.now() + t.expires_in * 1000).toISOString() : null;
   const bearer = { Authorization: `Bearer ${t.access_token}` };
   switch (p) {
+    case "google_calendar": {
+      const j = (await getJson("https://openidconnect.googleapis.com/v1/userinfo", bearer)) as { email?: string; email_verified?: boolean };
+      const email = (j.email ?? "").toLowerCase();
+      const expected = demoCalendarEmail();
+      // Demos must land in the inbox and calendar the owner reads. Any other
+      // Google account is refused here, before a token is stored.
+      if (!email || email !== expected) throw new Error(`signed in as ${email || "an unknown account"}. Sign in as ${expected} instead`);
+      const granted = t.scope ?? "";
+      if (!granted.includes("calendar.events") || !granted.includes("calendar.freebusy")) {
+        throw new Error("calendar access wasn't allowed. Press Connect again and tick both calendar boxes");
+      }
+      if (!t.refresh_token) throw new Error("Google sent no refresh token. Remove SwiftCard's access at myaccount.google.com/permissions, then connect again");
+      return { account_id: email, account_label: email, access_token: t.access_token, expires_at, meta: { email } };
+    }
     case "x": {
       const j = (await getJson("https://api.x.com/2/users/me", bearer)) as { data?: { id?: string; username?: string; name?: string } };
       return { account_id: j.data?.id ?? null, account_label: j.data?.username ? `@${j.data.username}` : j.data?.name ?? null, access_token: t.access_token, expires_at, meta: {} };

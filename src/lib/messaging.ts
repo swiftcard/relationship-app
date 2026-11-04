@@ -404,6 +404,9 @@ export async function sendRawEmail(opts: {
   /** A HUMAN pressed send just now (shared their card, typed a reply) — not a
    *  scheduler. Omits the List-Unsubscribe headers. See personalHeaders(). */
   personal?: boolean;
+  /** Resend's own duplicate guard (remembered for 24 hours): the same key sent
+   *  twice is one email. The demo outbox passes one per message row. */
+  idempotencyKey?: string;
 }): Promise<SendResult> {
   if (!process.env.RESEND_API_KEY) return "not_configured";
   // Never hand Resend an address that cannot receive mail. The QA harness
@@ -429,7 +432,7 @@ export async function sendRawEmail(opts: {
       // Automated mail carries one-click unsubscribe (RFC 8058). Mail a human
       // just sent by hand does not — see personalHeaders().
       headers: opts.personal ? personalHeaders() : unsubHeaders(opts.to),
-    });
+    }, opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : undefined);
     // The SDK RESOLVES with {data, error} for API-level failures — it does not
     // throw — so ignoring the return value reported "sent" for every rejection
     // (bad key, unverified domain, suppressed address). The reminders route

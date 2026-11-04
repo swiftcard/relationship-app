@@ -43,6 +43,8 @@ export const UNDOCUMENTED_ROUTES: Record<string, string> = {
   "/admin/crew": "Staff console — the internal agents' control panel: Start / Stop for each marketing agent (their work goes to a staff Google Sheet), and the website-health agents with the fixes staff approve, pause/run controls and spend. Never describe it to a customer.",
   "/admin/crew/blog": "Staff console — the Blog Writer: Generate writes two SwiftCard blog posts, staff publish one to swiftcard.me/blog. Never describe it to a customer.",
   "/admin/crew/agent/[id]": "Staff console — one internal AI agent: its status, schedule, this week's activity and raw run records. Never describe it to a customer.",
+  "/admin/demos": "Staff console — the Office demos visitors booked from the pricing page (names, emails, phone numbers, notes) and the Google Calendar connection they run on. Contains other people's details; never describe it to a customer.",
+  "/demo/manage": "A booked visitor's private page, reached only from the link in their own demo emails (the token rides after the #). The reschedule and cancel flow it serves is documented in book-a-demo; there is no reason to send anyone here directly.",
   "/admin/marketing": "Staff console — internal marketing tooling.",
   "/admin/notifications": "Staff console — the staff's notification center: payments, cancellations, closed accounts and agent problems. Contains other customers' details; never describe it to a customer.",
   "/admin/plans": "Staff console — the Sandbox: switch the owner's own account between Free, Pro and Office to test each, with the plan matrix.",

@@ -123,6 +123,21 @@ const PAGES = [
   "src/lib/card-finishes.ts",
   "src/lib/upload-media.ts",
   "src/lib/promo.ts",
+  // Book an Office demo (2026-11-03): the popup, /demo, the manage page, and
+  // the emails and texts it sends
+  "src/app/demo/page.tsx",
+  "src/app/demo/layout.tsx",
+  "src/app/demo/manage/page.tsx",
+  "src/components/demo/BookDemoButton.tsx",
+  "src/components/demo/DemoBookingDialog.tsx",
+  "src/components/demo/DemoBookingFlow.tsx",
+  "src/components/demo/DemoCalendar.tsx",
+  "src/components/demo/DemoTimes.tsx",
+  "src/components/demo/DemoTimePicker.tsx",
+  "src/components/demo/DemoManage.tsx",
+  "src/lib/demo/config.ts",
+  "src/lib/demo/input.ts",
+  "src/lib/demo/emails.ts",
 ];
 const SITE_DIR = "src/components/site";
 const FILES = [
