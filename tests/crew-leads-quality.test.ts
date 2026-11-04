@@ -271,9 +271,11 @@ describe("the workbook's layout", () => {
   // hash, and the next Sheet sync then re-formats the whole workbook. Changed
   // on purpose 2026-10-29: every tab became Name, Message, Link (owner); then
   // each tab's note said "type sent", not "delete the row" (same columns, same
-  // tabs). Change this pin only when that reset is intended.
+  // tabs). 2026-11-04: the Instagram LinkedIn Bio tab's note says it holds
+  // comments on posts now, not DMs (same columns). Change this pin only when
+  // that reset is intended.
   it("the spec hash is the Name, Message, Link one", () => {
-    expect(specHash()).toBe("c5907ad92e88");
+    expect(specHash()).toBe("25a991b9b77e");
   });
 });
 

@@ -65,11 +65,12 @@ describe("helpers", () => {
 });
 
 describe("registry", () => {
-  it("one Contact agent per platform from the spec, plus the LinkedIn-in-bio finder; no manager or head agent", () => {
+  it("one Contact agent per platform from the spec, plus the Instagram conversations finder; no manager or head agent", () => {
     const ids = CONTACT.map((a) => a.id);
     expect(ids).toEqual(["contact-reddit", "contact-x", "contact-instagram", "contact-instagram-linkinbio", "contact-tiktok", "contact-linkedin", "contact-alignable"]);
     expect(AGENTS.some((a) => a.id === "contact-manager")).toBe(false); // retired 2026-10-27: the Sheet replaced its room
     expect(AGENTS.some((a) => a.id === "head" || a.role === "head")).toBe(false);
-    for (const a of CONTACT) expect(["dm", "connect_note"]).toContain(a.approvalKind);
+    // The Instagram LinkedIn Bio agent drafts comments on posts since 2026-11-04; every other Contact agent writes messages.
+    for (const a of CONTACT.filter((x) => x.id !== "contact-instagram-linkinbio")) expect(["dm", "connect_note"]).toContain(a.approvalKind);
   });
 });

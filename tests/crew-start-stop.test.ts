@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { agentName } from "@/lib/crew/agent-status";
-import { bioCandidates } from "@/lib/crew/agents/contact";
+import { toPosts } from "@/lib/crew/agents/instagram-conversations";
 import { applyDisclosure, hasRequiredDisclosure } from "@/lib/crew/disclosure";
 import { exactPostLink, exactProfileLink, instagramDmLink, instagramHandle, redditMessageLink } from "@/lib/crew/exact-links";
 import { AGENTS, agentById } from "@/lib/crew/registry";
@@ -131,9 +131,9 @@ describe("one tab per agent, named after it", () => {
     for (const d of workers) expect(ids, d.id).toContain(d.id);
   });
 
-  it("the Instagram LinkedIn Bio tab belongs to the LinkedIn-in-bio finder", () => {
+  it("the Instagram LinkedIn Bio tab belongs to the Instagram conversations finder, which drafts comments", () => {
     expect(tabsForAgent("contact-instagram-linkinbio")[0].name).toBe("Instagram LinkedIn Bio");
-    expect(agentById("contact-instagram-linkinbio")!.purpose).toMatch(/LinkedIn/);
+    expect(agentById("contact-instagram-linkinbio")!.approvalKind).toBe("comment");
   });
 });
 
@@ -236,16 +236,20 @@ describe("the messages sound like a person", () => {
 });
 
 describe("the new finders", () => {
-  it("Instagram LinkedIn Bio keeps only real profiles whose bio links a real LinkedIn", () => {
-    const out = bioCandidates([
-      { username: "@Jane.Realtor", name: "Jane Doe", occupation: "Realtor", company: "Compass", location: "Austin, TX", linkedin_url: "https://www.linkedin.com/in/janedoe", bio: "Austin realtor. linkedin.com/in/janedoe" },
-      { username: "mike.loans", name: "Mike", occupation: "Loan officer", company: "", location: "", linkedin_url: "", bio: "Loans in Miami. linkedin.com/in/mike-loans-1" },
-      { username: "no.linkedin", name: "Sam", occupation: "Realtor", company: "", location: "", linkedin_url: "", bio: "DM me" },
-      { username: "explore", name: "x", occupation: "", company: "", location: "", linkedin_url: "https://www.linkedin.com/in/x", bio: "" },
+  it("Instagram LinkedIn Bio keeps only exact post links with a caption, and the account that posted them", () => {
+    const out = toPosts(
+      [
+        { url: "https://www.instagram.com/jane.realtor/p/C1abc/", author: "", title: "Jane on Instagram", text: "Ran out of business cards at the broker open tonight. What do you all bring?" },
+        { url: "https://instagram.com/reel/C2xyz", author: "@Mike.Loans", title: "Mike", text: "Three things I do after every realtor networking night to follow up." },
+        { url: "https://www.instagram.com/someprofile/", author: "someprofile", title: "Profile", text: "Realtor in Austin. Helping families find home." },
+        { url: "https://www.instagram.com/p/C3short/", author: "", title: "x", text: "nice" },
+      ],
+      "networking",
+    );
+    expect(out.map((p) => [p.url, p.handle])).toEqual([
+      ["https://www.instagram.com/p/C1abc/", "jane.realtor"],
+      ["https://www.instagram.com/reel/C2xyz/", "mike.loans"],
     ]);
-    expect(out.map((c) => c.url)).toEqual(["https://www.instagram.com/jane.realtor/", "https://www.instagram.com/mike.loans/"]);
-    expect(out[0].extra).toMatchObject({ name: "Jane Doe", occupation: "Realtor", company: "Compass", location: "Austin, TX", linkedin: "https://www.linkedin.com/in/janedoe/" });
-    expect(out[1].extra?.linkedin).toBe("https://www.linkedin.com/in/mike-loans-1/");
   });
 
   it("Hacker News hits link to the exact comment, with the HTML stripped", () => {

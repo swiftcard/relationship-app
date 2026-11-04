@@ -74,7 +74,7 @@ export const FACEBOOK = send({ id: "facebook", name: "Facebook Groups", agent: "
 
 // ── Instagram ───────────────────────────────────────────────────────────────
 export const INSTAGRAM_DMS = send({ id: "instagram-dms", name: "Instagram DMs", agent: "contact-instagram", description: "Business owners on Instagram, each with a message about something they posted. The link opens your chat with them in the Instagram app.", color: "e1306c" });
-export const INSTAGRAM_LINKEDIN_BIO = send({ id: "instagram-linkedin-bio", name: "Instagram LinkedIn Bio", agent: "contact-instagram-linkinbio", description: "Professionals whose Instagram bio links to their LinkedIn, each with a message built on their bio. The link opens your chat with them in the Instagram app.", color: "e1306c" });
+export const INSTAGRAM_LINKEDIN_BIO = send({ id: "instagram-linkedin-bio", name: "Instagram LinkedIn Bio", agent: "contact-instagram-linkinbio", description: "Public Instagram posts about networking, business cards and business events, each with a comment that adds to the conversation. The link opens the post; tap the comment box.", color: "e1306c" });
 export const INSTAGRAM_COMMENTS = send({ id: "instagram-comments", name: "Instagram Comments", agent: "replies-instagram", description: "Comments on business owners' Instagram posts. The link opens the post; tap the comment box.", color: "e1306c" });
 
 // ── TikTok ──────────────────────────────────────────────────────────────────
