@@ -104,7 +104,7 @@ describe("the app's Pro card acts on an applied code", () => {
 
   it("the plan step holds the code where the Pro card can see it", () => {
     const chooser = src.slice(src.indexOf("function NativePlanChooser("), src.indexOf("export function NativeProUpgrade"));
-    expect(chooser).toMatch(/const code = useNativePromo\(onLeftForWebsite\);/);
+    expect(chooser).toMatch(/const code = useNativePromo\(onLeftForWebsite, initialPromo\);/);
     expect(chooser).toMatch(/code=\{code\}/);
   });
 
@@ -127,10 +127,16 @@ describe("the app's Pro card acts on an applied code", () => {
     const iap = read("src/lib/iap.ts");
     expect(iap).toMatch(/https:\/\/apps\.apple\.com\/redeem\?ctx=offercodes&id=\$\{APP_STORE_ID\}&code=\$\{encodeURIComponent\(code\)\}/);
     expect(iap).toMatch(/presentCodeRedemptionSheet\(\)/);
-    // RevenueCat picks the redemption up itself; syncPurchases is observer-mode only.
-    expect(iap).not.toMatch(/syncPurchases\(\)/);
+    // RevenueCat does NOT pick a code redeemed on Apple's page up by itself.
+    // Its guide for this exact flow: "It is important to call syncPurchases
+    // when the user returns back to your app to retrieve their purchase." This
+    // line used to pin the opposite, and a new account that redeemed SWIFTNYC
+    // came back to "Choose your plan" with no Pro and no webhook, ever
+    // (owner, 2026-11-04). See tests/apple-redeem-flow.test.ts.
+    const after = iap.slice(iap.indexOf("export async function syncIapAfterRedeem"));
+    expect(after).toMatch(/w\.P\.syncPurchases\(\)/);
     expect(iap).toMatch(/invalidateCustomerInfoCache\(\)/);
-    expect(src).toMatch(/if \(await syncIapAfterRedeem\(\)\)/);
+    expect(src).toMatch(/const ok = await syncIapAfterRedeem\(\);/);
     // apps.apple.com is on the native plugin's host allow-list.
     expect(read("ios/App/App/ExternalPurchase.swift")).toMatch(/"apps\.apple\.com"/);
   });

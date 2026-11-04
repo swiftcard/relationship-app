@@ -91,7 +91,9 @@ describe("the iPhone app's plan step is the website's layout", () => {
   it("has a promo box that checks the code in the app and uses it on swiftcard.me", () => {
     expect(chooser).toMatch(/\{canLinkOut && <NativePromoCode /);
     const box = src.slice(src.indexOf("function NativePromoCode("));
-    expect(box).toMatch(/usePromoCode\(\{ plan: null, interval: null \}\)/);
+    // Checked for validity only (no plan yet); a code in the link
+    // (/welcome?promo=, the builder's hand-off) is checked on arrival.
+    expect(box).toMatch(/usePromoCode\(\{ plan: null, interval: null, initialCode: initialPromo \}\)/);
     expect(box).toMatch(/openExternalPurchase\(`\/welcome\?promo=\$\{encodeURIComponent\(code\)\}`\)/);
     expect(box).toMatch(/if \(opened\) onLeft\?\.\(\);\s*else setFailed\(true\);/);
     const promoBox = code("src/components/PromoCodeBox.tsx");

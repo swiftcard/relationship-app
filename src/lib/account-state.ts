@@ -68,6 +68,10 @@ export const PERSON_SCOPED_STORAGE_KEYS = [
   "sc_tour_card",
   "sc_admin_tour_running",
   "sc_admin_tour_index",
+  // A promo code this account is redeeming on Apple's page (lib/iap). Read
+  // only for the uid it names, but the code and the account id it carries
+  // are the previous person's business, not the next one's.
+  "sc_apple_redeem",
   // The timezone this ACCOUNT has already reported from this device
   // (TimezoneSync). Quiet hours are stored per profile, so the record of
   // "already told the server" belongs to the person, not the phone: on a shared

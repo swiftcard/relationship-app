@@ -52,7 +52,7 @@ import { SwiftLinkStyleControls, type SwiftLinkStyle } from "@/components/SwiftL
 import { MoreOptions, Switch } from "@/components/ui/DesignControls";
 import { pendingLinkedInPhoto, settleLinkedInPhoto, useLinkedInPhotoPickup } from "@/lib/linkedin-photo-return";
 import SwiftLinkLivePreview from "@/components/SwiftLinkLivePreview";
-import PlanCards from "@/components/PlanCards";
+import PlanCards, { type BeforeAppleRedeem } from "@/components/PlanCards";
 import FreeDesignChoice from "@/components/FreeDesignChoice";
 import GuestGateModal from "@/components/GuestGateModal";
 import ReferralGiftPanel from "@/components/ReferralGiftPanel";
@@ -787,6 +787,35 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
     handleCreate({ plan, annual, seats });
   }
 
+  /**
+   * A promo code's Pro button at the plan gate (native): save the card FIRST,
+   * then Apple's code page opens, then the plan step carries on at /welcome.
+   *
+   * Owner, 2026-11-04: a new account redeemed SWIFTNYC on Apple's page and
+   * came back to "Choose your plan" with NO card — this builder only saved it
+   * after a plan had completed, and the person was in the App Store when that
+   * should have happened. Now it is saved before they leave (as designed,
+   * chosenPlan "pro" — the same as a Stripe Pro pick, which also saves the
+   * card before leaving for checkout; it goes live once the plan is settled).
+   * /welcome is the plan step every new account passes, it finishes the
+   * redemption when they come back (PlanCards useAppleRedeem), and anyone who
+   * drops off is sent there by the dashboard, card in hand — never an empty
+   * "Create your card" dashboard.
+   */
+  const saveCardBeforeApple: BeforeAppleRedeem = (code) =>
+    new Promise((resolve) => {
+      let saved = false;
+      void handleCreate(undefined, undefined, false, true, (slug) => {
+        saved = true;
+        resolve({
+          handoff: () => {
+            const qs = new URLSearchParams({ card: slug, promo: code });
+            router.replace(`/welcome?${qs.toString()}`);
+          },
+        });
+      }).finally(() => { if (!saved) resolve(null); });
+    });
+
   // NATIVE: the plan gate's Office button and a promo code's "Use it on
   // swiftcard.me" open swiftcard.me in the default browser, where they may pay
   // before this card exists. Coming back to the app, ask the server for the
@@ -1252,10 +1281,15 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
     planChoice?: { plan: "pro" | "office"; annual: boolean; seats: number },
     design?: { template: string; templateStyleState: TemplateStyle; linkStyleState: SwiftLinkStyle },
     referralMonth = false,
-    /** Just bought Pro in the app (StoreKit) from this builder's plan gate.
-     *  The server may not have the Apple grant yet, so the card must say Pro
-     *  itself — see chosenPlan below. */
+    /** Just bought Pro in the app (StoreKit) from this builder's plan gate —
+     *  or about to redeem a promo code with Apple (onSaved). The server may
+     *  not have the Apple grant yet, so the card must say Pro itself — see
+     *  chosenPlan below. */
     iapPurchased = false,
+    /** Save only: called with the saved slug instead of moving on (checkout,
+     *  the gift month, or the "card is live" step). The plan gate's promo
+     *  code saves the card this way before Apple's page opens. */
+    onSaved?: (slug: string) => void,
   ) {
     const saveTemplate = design?.template ?? template;
     const saveTemplateStyle = design?.templateStyleState ?? templateStyleState;
@@ -1384,6 +1418,11 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
     // The card exists and is serving — the single most important funnel step.
     track("card_creation_completed");
     track("card_published", { cardId: (data?.card?.id as string | undefined) });
+
+    // Saved, and the caller takes it from here (saveCardBeforeApple).
+    // creatingRef stays set: this card exists, and nothing on this screen may
+    // create it a second time.
+    if (onSaved) { onSaved(savedUsername); return; }
 
     // A logged-in buyer who built this card as part of Get Pro / Get Office still
     // has to pay — take them straight to checkout for that plan (this new card is
@@ -2617,6 +2656,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                 // Native IAP: the entitlement is synced before this fires, so the
                 // server keeps the Pro design; no checkout hop, straight to save.
                 onIapPurchased={() => { setShowPlan(false); handleCreate(undefined, undefined, false, true); }}
+                onBeforeAppleRedeem={saveCardBeforeApple}
                 onLeftForWebsite={() => { leftForWebsite.current = true; }}
                 // onCreateAccountForPro is gone: it only ever existed for a
                 // guest on native, and a guest no longer sees this gate at all.

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { detectNativePlatform, useIsNativeApp } from "@/lib/platform";
-import { redeemAppleOfferCode, syncIapAfterRedeem } from "@/lib/iap";
+import { forgetAppleRedeem, pendingAppleRedeemForSession, redeemAppleOfferCode, restoreIap, syncIapAfterRedeem } from "@/lib/iap";
 import MobilePlanTabs, { type PlanTier } from "@/components/MobilePlanTabs";
 import { PLAN_LIMITS, TRIAL_DAYS } from "@/lib/plan";
 import { PLAN_DESCRIPTIONS } from "@/lib/plan-content";
@@ -57,7 +57,21 @@ type PlanCardsProps = {
    *  promoSeats). The Office card shows it instead of the picker, and orders
    *  exactly that many. */
   lockedSeats?: number | null;
+  /** Native only, the builder's plan gate: runs when a promo code's Pro
+   *  button is pressed, BEFORE Apple's code page opens. The builder saves the
+   *  card here and hands the rest of the plan step to /welcome — nothing may
+   *  depend on a card that only exists on screen while the person is in the
+   *  App Store. */
+  onBeforeAppleRedeem?: BeforeAppleRedeem;
+  /** Native only: a promo code that arrived in the link (/welcome?promo=),
+   *  checked on arrival so the Pro card is already that offer. */
+  initialPromo?: string | null;
 };
+
+/** Save what must survive leaving the app (the builder's card), then say
+ *  where the plan step carries on once Apple's page is up — called with
+ *  whether it really opened. null: it couldn't save, so Apple is not opened. */
+export type BeforeAppleRedeem = (code: string) => Promise<{ handoff: (opened: boolean) => void } | null>;
 
 export default function PlanCards({
   onFree,
@@ -75,6 +89,8 @@ export default function PlanCards({
   initialTier = "pro",
   onLeftForWebsite,
   lockedSeats = null,
+  onBeforeAppleRedeem,
+  initialPromo = null,
 }: PlanCardsProps) {
   const [annual, setAnnual] = useState(false);
   const [pickedSeats, setSeats] = useState<number>(OFFICE_MIN_SEATS);
@@ -116,6 +132,8 @@ export default function PlanCards({
         onIapPurchased={onIapPurchased}
         onCreateAccountForPro={onCreateAccountForPro}
         onLeftForWebsite={onLeftForWebsite}
+        onBeforeAppleRedeem={onBeforeAppleRedeem}
+        initialPromo={initialPromo}
       />
     );
   }
@@ -205,6 +223,8 @@ function NativePlanChooser({
   onIapPurchased,
   onCreateAccountForPro,
   onLeftForWebsite,
+  onBeforeAppleRedeem,
+  initialPromo,
 }: {
   onFree: () => void;
   busy: "free" | PaidPlan | null;
@@ -214,6 +234,8 @@ function NativePlanChooser({
   onIapPurchased?: () => void;
   onCreateAccountForPro?: () => void;
   onLeftForWebsite?: () => void;
+  onBeforeAppleRedeem?: BeforeAppleRedeem;
+  initialPromo?: string | null;
 }) {
   const [mobileTier, setMobileTier] = useState<PlanTier>(initialTier);
   const canLinkOut = useCanLinkOut();
@@ -223,10 +245,17 @@ function NativePlanChooser({
   // the box has to act on it. Owner, 2026-10-02: the box said a two-months-
   // free code applied, the Pro button then opened Apple's plain subscription,
   // and the code was simply gone.
-  const code = useNativePromo(onLeftForWebsite);
+  const code = useNativePromo(onLeftForWebsite, initialPromo);
+  // ONE redemption per plan step: the Pro card's code button, the "finishing
+  // your Apple offer" banner and Restore Purchases all drive this, so two
+  // checks never race. It also finishes a redemption begun before this page
+  // loaded (owner, 2026-11-04: back from Apple to a chooser that had
+  // forgotten).
+  const redeem = useAppleRedeem(onIapPurchased);
 
   return (
     <div>
+      {redeem.origin === "resume" && !code.forPro && <AppleRedeemBanner redeem={redeem} />}
       <MobilePlanTabs active={tier} onChangeAction={setMobileTier} tiers={canLinkOut ? undefined : ["free", "pro"]} />
 
       <div className={canLinkOut ? PLAN_GRID_CLASS : "grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch md:pt-6 max-w-3xl mx-auto"}>
@@ -244,12 +273,15 @@ function NativePlanChooser({
           onPurchased={onIapPurchased}
           onNeedsAccount={onCreateAccountForPro}
           code={code}
+          redeem={redeem}
+          beforeRedeem={onBeforeAppleRedeem}
         />
         <NativeOffice offTab={tier !== "office"} disabled={busy !== null} onLeft={onLeftForWebsite} />
       </div>
 
       {/* Under the plans, where the website's plan step has its box. */}
       {canLinkOut && <NativePromoCode className="max-w-md mx-auto mt-6 text-center" code={code} />}
+      <NativeRestore redeem={redeem} />
     </div>
   );
 }
@@ -290,6 +322,8 @@ function NativePro({
   onNeedsAccount,
   offTab,
   code,
+  redeem,
+  beforeRedeem,
 }: {
   /** The caller's account-level answer (false: already had a free Pro period,
    *  or a friend's free month is on offer instead — WelcomePlan's offerTrial).
@@ -305,6 +339,11 @@ function NativePro({
    *  card into that offer: redeemed by Apple when Apple has the code, used on
    *  swiftcard.me when it doesn't. Never silently dropped. */
   code?: NativePromo;
+  /** The plan step's Apple redemption (NativePlanChooser), which the code
+   *  button drives. Always given together with `code`. */
+  redeem?: AppleRedeem;
+  /** The builder's "save the card first" (PlanCards onBeforeAppleRedeem). */
+  beforeRedeem?: BeforeAppleRedeem;
 }) {
   const offer = useIapOffer();
   const price = offer.monthly;
@@ -347,12 +386,15 @@ function NativePro({
   if (promo && viaApple) {
     return (
       <ProPlanCard offTab={offTab} price={priceBlock}>
-        <AppleOfferCodeButton
-          code={promo.code}
-          className={PRO_CTA_CLASS}
-          label={freeFor ? `Try Pro free for ${freeFor} →` : `Use ${promo.code} with Apple →`}
-          onPurchased={onPurchased}
-        />
+        {redeem && (
+          <AppleOfferCodeButton
+            code={promo.code}
+            className={PRO_CTA_CLASS}
+            label={freeFor ? `Try Pro free for ${freeFor} →` : `Use ${promo.code} with Apple →`}
+            redeem={redeem}
+            beforeRedeem={beforeRedeem}
+          />
+        )}
         <p className={PRO_FINE_PRINT_CLASS}>
           Code {promo.code} · Apple shows your offer before you confirm · renews automatically · cancel anytime in your Apple account
         </p>
@@ -427,8 +469,8 @@ function NativePromoCode({ code, className }: { code: NativePromo; className?: s
 }
 
 /** The plan step's promo code, shared by its box and the Pro card. */
-function useNativePromo(onLeft?: () => void) {
-  const promo = usePromoCode({ plan: null, interval: null });
+function useNativePromo(onLeft?: () => void, initialPromo?: string | null) {
+  const promo = usePromoCode({ plan: null, interval: null, initialCode: initialPromo });
   const [leaving, setLeaving] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -454,57 +496,239 @@ type NativePromo = ReturnType<typeof useNativePromo>;
 /**
  * Redeem a promo code through Apple, from the Pro card. Apple's code page
  * opens with the code filled in and shows the offer ("2 months free, then
- * $4.99/month") before anything is bought. Coming back to the app pulls the
- * new subscription in and carries on exactly as a purchase from the sheet does
- * (onPurchased); "Continue" does the same by hand for anyone who returns
- * without the app noticing (StoreKit's in-app sheet never leaves the app).
+ * $4.99/month") before anything is bought. Coming back to the app hands the
+ * new subscription to RevenueCat and carries on exactly as a purchase from
+ * the sheet does (onPurchased) — see useAppleRedeem.
  */
-function AppleOfferCodeButton({ code, label, className, onPurchased }: { code: string; label: string; className: string; onPurchased?: () => void }) {
-  const [state, setState] = useState<"idle" | "opening" | "waiting" | "checking" | "notyet" | "failed">("idle");
-  const waiting = useRef(false);
+function AppleOfferCodeButton({ code, label, className, redeem, beforeRedeem }: {
+  code: string;
+  label: string;
+  className: string;
+  redeem: AppleRedeem;
+  beforeRedeem?: BeforeAppleRedeem;
+}) {
+  const { phase } = redeem;
+  const busy = phase === "saving" || phase === "opening" || phase === "handedoff" || phase === "confirming" || phase === "restoring";
+  return (
+    <>
+      <button type="button" onClick={() => { void redeem.start(code, beforeRedeem); }} disabled={busy} className={className}>
+        {phase === "saving" ? "Saving your card…"
+          : phase === "opening" || phase === "handedoff" ? "Opening Apple…"
+          : phase === "confirming" ? "Confirming with Apple…"
+          : label}
+      </button>
+      {redeem.origin !== "restore" && <AppleRedeemStatus redeem={redeem} tone="card" />}
+    </>
+  );
+}
+
+type RedeemPhase =
+  | "idle"
+  | "saving" // the builder is saving the card before Apple opens
+  | "opening"
+  | "handedoff" // Apple is open and /welcome carries the plan step on
+  | "waiting" // Apple's page is up; finished when they come back
+  | "confirming"
+  | "notyet"
+  | "failed"
+  | "savefailed"
+  | "restoring"
+  | "norestore";
+/** Which control started it, so the answer shows where they are looking:
+ *  the Pro card, the banner over the plans, or the Restore line under them. */
+type RedeemOrigin = "code" | "resume" | "restore";
+
+/**
+ * The plan step's Apple redemption, start to finish (owner, 2026-11-04: a new
+ * account redeemed SWIFTNYC on Apple's page and came back to "Choose your
+ * plan", with no Pro and no card).
+ *
+ *   • start: (the builder saves the card first, then) Apple's code page opens
+ *     and the redemption is written down on the device (lib/iap).
+ *   • back in the app (visibilitychange, or a page restored from the back /
+ *     forward cache): RevenueCat is handed the purchase (syncPurchases) and
+ *     asked for ~30 s; on Pro the caller carries on (onPurchased).
+ *   • opened on a page that did not start it — the web view reloaded, the app
+ *     was closed and opened again, or the builder handed over to /welcome:
+ *     the written-down redemption is finished here, by itself.
+ *   • nothing yet: "Check again" and "Restore Purchases" (which posts the
+ *     Apple receipt for this account — RevenueCat's own fallback), never a
+ *     dead end.
+ */
+function useAppleRedeem(onPurchased?: () => void) {
+  const [phase, setPhase] = useState<RedeemPhase>("idle");
+  const [origin, setOrigin] = useState<RedeemOrigin>("code");
+  const pending = useRef(false);
+  const running = useRef(false);
   const done = useRef(onPurchased);
   useEffect(() => { done.current = onPurchased; }, [onPurchased]);
 
-  const finish = useCallback(async () => {
-    setState("checking");
-    if (await syncIapAfterRedeem()) {
-      waiting.current = false;
-      if (done.current) done.current();
-      else window.location.reload();
-      return;
-    }
-    // Checked and nothing there yet — say so, rather than a silent no-op.
-    setState("notyet");
+  const succeed = useCallback(() => {
+    pending.current = false;
+    if (done.current) done.current();
+    else window.location.reload();
   }, []);
 
-  useEffect(() => {
-    const onReturn = () => { if (waiting.current && document.visibilityState === "visible") void finish(); };
-    document.addEventListener("visibilitychange", onReturn);
-    return () => document.removeEventListener("visibilitychange", onReturn);
-  }, [finish]);
+  const confirm = useCallback(async () => {
+    if (running.current) return;
+    running.current = true;
+    setPhase("confirming");
+    const ok = await syncIapAfterRedeem();
+    running.current = false;
+    if (ok) { succeed(); return; }
+    // Checked and nothing there yet — say so, with the ways forward.
+    setPhase("notyet");
+  }, [succeed]);
 
-  async function redeem() {
-    setState("opening");
-    if (!(await redeemAppleOfferCode(code))) { setState("failed"); return; }
-    waiting.current = true;
-    setState("waiting");
+  // Back from Apple's page.
+  useEffect(() => {
+    const onReturn = () => { if (pending.current && document.visibilityState === "visible") void confirm(); };
+    const onShow = (e: PageTransitionEvent) => { if (e.persisted) onReturn(); };
+    document.addEventListener("visibilitychange", onReturn);
+    window.addEventListener("pageshow", onShow);
+    return () => {
+      document.removeEventListener("visibilitychange", onReturn);
+      window.removeEventListener("pageshow", onShow);
+    };
+  }, [confirm]);
+
+  // A redemption this page did not start. Only checked while the app is in
+  // front: a page loaded while Apple's page is still up waits for the return
+  // above instead of using its ~30 s up in the background.
+  useEffect(() => {
+    let live = true;
+    void pendingAppleRedeemForSession().then((p) => {
+      if (!live || !p || pending.current || running.current) return;
+      pending.current = true;
+      setOrigin("resume");
+      if (document.visibilityState === "visible") void confirm();
+      else setPhase("waiting");
+    });
+    return () => { live = false; };
+  }, [confirm]);
+
+  async function start(code: string, before?: BeforeAppleRedeem) {
+    setOrigin("code");
+    let handoff: ((opened: boolean) => void) | null = null;
+    if (before) {
+      setPhase("saving");
+      const r = await before(code);
+      if (!r) { setPhase("savefailed"); return; }
+      handoff = r.handoff;
+    }
+    setPhase("opening");
+    const opened = await redeemAppleOfferCode(code);
+    if (handoff) {
+      // The page that carries on (/welcome) finishes the redemption from what
+      // lib/iap wrote down, so this one never checks too.
+      setPhase("handedoff");
+      handoff(opened);
+      return;
+    }
+    if (!opened) { setPhase("failed"); return; }
+    pending.current = true;
+    setPhase("waiting");
   }
 
+  async function restore(from: RedeemOrigin) {
+    setOrigin(from);
+    setPhase("restoring");
+    if (await restoreIap()) { succeed(); return; }
+    setPhase("norestore");
+  }
+
+  return {
+    phase,
+    origin,
+    start,
+    restore: (from: RedeemOrigin) => { void restore(from); },
+    checkAgain: () => { pending.current = true; void confirm(); },
+    /** "Not now" on the banner: stop finishing this redemption on this device. */
+    dismiss: () => { forgetAppleRedeem(); pending.current = false; setPhase("idle"); },
+  };
+}
+type AppleRedeem = ReturnType<typeof useAppleRedeem>;
+
+/** What the redemption is doing, under the control that started it. */
+function AppleRedeemStatus({ redeem, tone }: { redeem: AppleRedeem; tone: "card" | "page" }) {
+  const { phase } = redeem;
+  const text = tone === "card" ? "text-white/85" : "text-gray-400";
+  const btn = tone === "card"
+    ? "rounded-full bg-white/20 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-white/30 disabled:opacity-60"
+    : "rounded-full border border-gray-700 px-3.5 py-1.5 text-xs font-semibold text-gray-200 hover:border-gray-500 hover:text-white disabled:opacity-60";
+  if (phase === "confirming") {
+    return <p role="status" className={`mt-2 text-center text-xs ${text}`}>Getting your offer from Apple. This takes a few seconds.</p>;
+  }
+  if (phase === "waiting") {
+    // StoreKit's own code sheet (a shell without the browser plugin) never
+    // leaves the app, so there is no "coming back" to notice: say how to go on.
+    return (
+      <p className={`mt-2 text-center text-xs ${text}`}>
+        Finish on Apple&apos;s page, then come back here.{" "}
+        <button type="button" onClick={redeem.checkAgain} className="font-semibold underline">Check now</button>
+      </p>
+    );
+  }
+  if (phase === "failed") {
+    return <p role="alert" className={`mt-2 text-center text-xs ${text}`}>Couldn&apos;t open Apple&apos;s code page. Please try again.</p>;
+  }
+  if (phase === "savefailed") {
+    return <p role="alert" className={`mt-2 text-center text-xs ${text}`}>Couldn&apos;t save your card first. Check your connection and try again.</p>;
+  }
+  if (phase !== "notyet" && phase !== "restoring" && phase !== "norestore") return null;
   return (
-    <>
-      <button type="button" onClick={() => { void redeem(); }} disabled={state === "opening" || state === "checking"} className={className}>
-        {state === "opening" ? "Opening Apple…" : state === "checking" ? "Checking your subscription…" : label}
+    <div role="status" className={`mt-3 text-center text-xs ${text}`}>
+      <p className={`font-semibold ${tone === "card" ? "text-white" : "text-gray-200"}`}>
+        {phase === "norestore" ? "No purchase was found for this Apple account." : "Apple hasn't confirmed it yet."}
+      </p>
+      <div className="mt-2 flex flex-wrap justify-center gap-2">
+        <button type="button" onClick={redeem.checkAgain} disabled={phase === "restoring"} className={btn}>Check again</button>
+        <button type="button" onClick={() => redeem.restore(redeem.origin)} disabled={phase === "restoring"} className={btn}>
+          {phase === "restoring" ? "Restoring…" : "Restore Purchases"}
+        </button>
+      </div>
+      {tone === "card" && <p className="mt-2">Didn&apos;t finish on Apple&apos;s page? Tap the button above to open it again.</p>}
+    </div>
+  );
+}
+
+/** Over the plans, for a redemption begun before this page loaded (no code in
+ *  the box to put it under). */
+function AppleRedeemBanner({ redeem }: { redeem: AppleRedeem }) {
+  if (redeem.phase === "idle") return null;
+  const settled = redeem.phase === "notyet" || redeem.phase === "norestore";
+  return (
+    <div className="max-w-md mx-auto mb-6 rounded-xl border border-gray-800 bg-gray-900 px-4 py-3 text-center">
+      <p className="text-sm font-semibold text-white">Finishing your offer from Apple</p>
+      <AppleRedeemStatus redeem={redeem} tone="page" />
+      {settled && (
+        <button type="button" onClick={redeem.dismiss} className="mt-2 text-xs text-gray-500 hover:text-gray-300">Not now</button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * "Restore Purchases" on the app's plan step. Apple asks for it on any screen
+ * that sells a subscription (3.1.2), and it is the way back for anyone whose
+ * Apple subscription the app hasn't connected to this account yet — a code
+ * redeemed on Apple's page with nothing noticing, or Pro bought on another
+ * account (RevenueCat moves it here). Pro found → the caller carries on, as
+ * after a purchase.
+ */
+function NativeRestore({ redeem }: { redeem: AppleRedeem }) {
+  const mine = redeem.origin === "restore";
+  const busy = redeem.phase === "restoring" || redeem.phase === "confirming" || redeem.phase === "saving" || redeem.phase === "opening" || redeem.phase === "handedoff";
+  return (
+    <div className="max-w-md mx-auto mt-5 text-center text-xs text-gray-500">
+      Already subscribed or redeemed a code?{" "}
+      <button type="button" onClick={() => redeem.restore("restore")} disabled={busy} className="font-semibold text-gray-300 underline hover:text-white disabled:opacity-60">
+        {mine && redeem.phase === "restoring" ? "Restoring…" : "Restore Purchases"}
       </button>
-      {(state === "waiting" || state === "notyet") && (
-        <p className="mt-2 text-center text-xs text-white/85" role={state === "notyet" ? "status" : undefined}>
-          {state === "notyet" ? "Pro isn't on yet. Finish redeeming on Apple's page, then tap " : "Redeemed it with Apple? "}
-          <button type="button" onClick={() => { void finish(); }} className="font-semibold underline">Continue</button>
-        </p>
+      {mine && redeem.phase === "norestore" && (
+        <p role="status" className="mt-1.5 text-gray-400">No purchase was found for this Apple account.</p>
       )}
-      {state === "failed" && (
-        <p role="alert" className="mt-2 text-center text-xs text-white/85">Couldn&apos;t open Apple&apos;s code page. Please try again.</p>
-      )}
-    </>
+    </div>
   );
 }
 

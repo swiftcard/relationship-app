@@ -325,6 +325,22 @@ export async function getIapPackages(): Promise<IapPackage[]> {
 export type PurchaseResult = "purchased" | "cancelled" | "failed";
 
 /**
+ * Once StoreKit/RevenueCat says Pro is active, wait for the SERVER to reflect
+ * it, briefly: the sync can come back "skipped" while RevenueCat's REST view
+ * catches up. A few short retries mean the next screen sees Pro instead of
+ * the plan chooser; if it still isn't there the sync has recorded the choice,
+ * so nobody is looped (see api/iap/sync). One copy for every path that ends
+ * in Pro — a purchase, a restore, a redeemed offer code.
+ */
+async function waitForServerGrant(): Promise<void> {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const r = await fetch("/api/iap/sync", { method: "POST" }).then((x) => x.json()).catch(() => null) as { applied?: string } | null;
+    if (r?.applied === "grant") return;
+    await new Promise((ok) => setTimeout(ok, 1500));
+  }
+}
+
+/**
  * Run the StoreKit purchase sheet for a package. On success, nudge the server
  * to reflect the entitlement immediately (api/iap/sync) — the RevenueCat
  * webhook is the durable path, this is the "it unlocks before your thumb
@@ -340,15 +356,7 @@ export async function purchaseIap(identifier: string): Promise<PurchaseResult> {
     const res = await w.P.purchasePackage({ aPackage: pkg });
     const active = !!res.customerInfo?.entitlements?.active?.[IAP_ENTITLEMENT];
     if (!active) return "failed";
-    // Wait for the server to reflect it, briefly: the sync can come back
-    // "skipped" while RevenueCat catches up. A few short retries mean the
-    // dashboard sees Pro instead of the plan chooser; if it still isn't there
-    // the sync has recorded the choice, so nobody is looped (see the route).
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const r = await fetch("/api/iap/sync", { method: "POST" }).then((x) => x.json()).catch(() => null) as { applied?: string } | null;
-      if (r?.applied === "grant") break;
-      await new Promise((ok) => setTimeout(ok, 1500));
-    }
+    await waitForServerGrant();
     return "purchased";
   } catch (e) {
     const err = e as { code?: string; errorCode?: string; message?: string };
@@ -364,9 +372,18 @@ export async function restoreIap(): Promise<boolean> {
   const w = await plugin();
   if (!w) return false;
   try {
+    // Restore is also how a code redeemed on Apple's page reaches RevenueCat
+    // when nothing else got it there (RevenueCat's own fallback for that
+    // flow), so it must be identified as the signed-in account first.
+    await configuredForSession();
     const res = await w.P.restorePurchases();
     const active = !!res.customerInfo?.entitlements?.active?.[IAP_ENTITLEMENT];
-    if (active) await fetch("/api/iap/sync", { method: "POST" }).catch(() => {});
+    if (active) {
+      // The same wait as a purchase: a caller mid-flow (the plan step) goes
+      // straight on to "Your card is live!", so the server must have Pro.
+      await waitForServerGrant();
+      forgetAppleRedeem();
+    }
     return active;
   } catch {
     return false;
@@ -388,6 +405,50 @@ export function appleOfferCodeUrl(code: string): string | null {
   return APP_STORE_ID ? `https://apps.apple.com/redeem?ctx=offercodes&id=${APP_STORE_ID}&code=${encodeURIComponent(code)}` : null;
 }
 
+// ── A redemption in progress, remembered on the device ──────────────────────
+//
+// Apple's page is OUTSIDE the app. While it is up, iOS may reload the web
+// view or the person may close the app, and an in-memory "waiting" flag goes
+// with it: they came back to a plain plan chooser that had forgotten they
+// had just redeemed anything. So the redemption is written down before Apple
+// opens, and whichever plan step is showing when they come back (the same
+// one, a reloaded one, or /welcome after the builder handed over) finishes
+// it. Per account; cleared once Pro is confirmed; a day at most.
+
+const REDEEM_KEY = "sc_apple_redeem";
+const REDEEM_TTL_MS = 24 * 60 * 60 * 1000;
+export type PendingAppleRedeem = { uid: string; code: string; at: number };
+
+function rememberAppleRedeem(uid: string, code: string): void {
+  try { localStorage.setItem(REDEEM_KEY, JSON.stringify({ uid, code, at: Date.now() })); } catch { /* private mode: in-memory only */ }
+}
+
+/** The redemption this account started on this device, if one is open. */
+export function pendingAppleRedeem(uid: string | null): PendingAppleRedeem | null {
+  if (!uid) return null;
+  try {
+    const raw = localStorage.getItem(REDEEM_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as Partial<PendingAppleRedeem> | null;
+    if (!p || typeof p.uid !== "string" || typeof p.code !== "string" || typeof p.at !== "number" || Date.now() - p.at > REDEEM_TTL_MS) {
+      localStorage.removeItem(REDEEM_KEY);
+      return null;
+    }
+    return p.uid === uid ? (p as PendingAppleRedeem) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The same, for whoever is signed in (no network). */
+export async function pendingAppleRedeemForSession(): Promise<PendingAppleRedeem | null> {
+  return pendingAppleRedeem(await sessionUserId());
+}
+
+export function forgetAppleRedeem(): void {
+  try { localStorage.removeItem(REDEEM_KEY); } catch { /* ignore */ }
+}
+
 /**
  * Redeem a code through Apple. Opens Apple's redemption page with the code
  * filled in (the same native plugin as "Manage subscription" — apps.apple.com
@@ -397,7 +458,11 @@ export function appleOfferCodeUrl(code: string): string | null {
  */
 export async function redeemAppleOfferCode(code: string): Promise<boolean> {
   if (!detectNativeApp() || detectNativePlatform() === "android") return false;
-  if (!(await configuredForSession())) return false;
+  const uid = await sessionUserId();
+  if (!uid || !(await ensureIapConfigured(uid))) return false;
+  // Before Apple opens, never after: the app may not be the same page (or
+  // the same process) by the time the person comes back.
+  rememberAppleRedeem(uid, code);
   const url = appleOfferCodeUrl(code);
   const ext = (window as unknown as {
     Capacitor?: { Plugins?: { ExternalPurchase?: { open: (o: { url: string }) => Promise<{ opened?: boolean }> } } };
@@ -411,46 +476,82 @@ export async function redeemAppleOfferCode(code: string): Promise<boolean> {
     }
   }
   const w = await plugin();
-  if (!w) return false;
+  if (!w) { forgetAppleRedeem(); return false; }
   try {
     await w.P.presentCodeRedemptionSheet();
     return true;
   } catch (e) {
     reportIapFailure("offer-code-sheet", e);
+    forgetAppleRedeem();
     return false;
   }
 }
 
+/** How long to keep asking after the person comes back from Apple's page:
+ *  pauses between reads, ~30 s in all. Relative pauses rather than a deadline,
+ *  so a check that iOS suspends in the background picks up where it was
+ *  instead of firing every remaining read at once on return. */
+const REDEEM_CHECK_PAUSES_MS = [0, 2000, 2000, 3000, 4000, 5000, 6000, 8000];
+
 /**
- * After an offer code was redeemed outside the purchase sheet: pull the new
- * transaction in, and if Pro is now active, have the server reflect it (the
- * same /api/iap/sync wait as purchaseIap). True when the account is on Pro.
+ * After a code was redeemed on Apple's page (or StoreKit's code sheet): get
+ * the new subscription to RevenueCat, wait for Pro, then have the server
+ * reflect it (the same /api/iap/sync wait as a purchase). True when the
+ * account is on Pro.
+ *
+ * syncPurchases IS the step. A code redeemed on Apple's page happens outside
+ * the app, and RevenueCat's guide for exactly this flow says "It is important
+ * to call syncPurchases when the user returns back to your app to retrieve
+ * their purchase… If not, the user may need to trigger a restore"
+ * (revenuecat.com/docs → iOS subscription offers → offer codes). This used to
+ * skip it — on the reading that RevenueCat would notice by itself — and only
+ * re-read RevenueCat's cache. RevenueCat never heard of the redemption, so
+ * nothing was ever there to read: a new account redeemed SWIFTNYC, came back
+ * to "Choose your plan", and no webhook ever came (owner, 2026-11-04).
  */
 export async function syncIapAfterRedeem(): Promise<boolean> {
   const w = await plugin();
   if (!w || !(await configuredForSession())) return false;
+  const seen = { active: false, wake: null as null | (() => void) };
+  let listener: string | null = null;
   try {
-    // RevenueCat picks a redeemed code up by itself (StoreKit's transaction
-    // listener) when the app comes back; syncPurchases is for observer mode
-    // only and the SDK warns against it alongside purchasePackage. So: read
-    // fresh, a few times, while that lands.
-    let active = false;
-    for (let attempt = 0; attempt < 3 && !active; attempt++) {
-      if (attempt) await new Promise((ok) => setTimeout(ok, 2000));
+    // RevenueCat calls this the moment its view of the account changes, so a
+    // redemption that lands between two reads is not left waiting for the next.
+    try {
+      listener = await w.P.addCustomerInfoUpdateListener((info) => {
+        if (info?.entitlements?.active?.[IAP_ENTITLEMENT]) { seen.active = true; seen.wake?.(); }
+      });
+    } catch { /* the reads below still find it */ }
+    const sync = () => w.P.syncPurchases().catch((e: unknown) => reportIapFailure("offer-code-sync", e));
+    await sync();
+    let waited = 0;
+    let resynced = false;
+    for (const pause of REDEEM_CHECK_PAUSES_MS) {
+      if (!seen.active && pause) {
+        await new Promise<void>((ok) => {
+          const t = setTimeout(ok, pause);
+          seen.wake = () => { clearTimeout(t); ok(); };
+        });
+        seen.wake = null;
+        waited += pause;
+      }
+      if (seen.active) break;
+      // Apple's transaction can reach the device a few seconds after the app
+      // is back: hand RevenueCat the receipt once more partway through.
+      if (!resynced && waited >= 10_000) { resynced = true; await sync(); }
       await w.P.invalidateCustomerInfoCache().catch(() => {});
       const { customerInfo } = await w.P.getCustomerInfo();
-      active = !!customerInfo?.entitlements?.active?.[IAP_ENTITLEMENT];
+      if (customerInfo?.entitlements?.active?.[IAP_ENTITLEMENT]) seen.active = true;
     }
-    if (!active) return false;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const r = await fetch("/api/iap/sync", { method: "POST" }).then((x) => x.json()).catch(() => null) as { applied?: string } | null;
-      if (r?.applied === "grant") break;
-      await new Promise((ok) => setTimeout(ok, 1500));
-    }
+    if (!seen.active) return false;
+    await waitForServerGrant();
+    forgetAppleRedeem();
     return true;
   } catch (e) {
     reportIapFailure("offer-code-sync", e);
     return false;
+  } finally {
+    if (listener) w.P.removeCustomerInfoUpdateListener({ listenerToRemove: listener }).catch(() => {});
   }
 }
 

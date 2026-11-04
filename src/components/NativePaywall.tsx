@@ -353,7 +353,12 @@ function PaywallSheet({ onClose, onPurchased, period }: { onClose: () => void; o
     const restored = await restoreIap();
     setBusy(null);
     if (restored) {
-      window.location.reload();
+      // The same as a purchase: a caller mid-flow (the card builder's plan
+      // gate, /welcome) carries on to "Your card is live!" — restoreIap has
+      // already waited for the server to have Pro. A reload there dropped the
+      // person back into the builder with the plan step still to do.
+      if (onPurchased) onPurchased();
+      else window.location.reload();
       return;
     }
     setNotice("No previous purchase was found for this Apple account.");

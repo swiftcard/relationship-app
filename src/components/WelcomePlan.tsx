@@ -471,7 +471,7 @@ export default function WelcomePlan({
               </p>
             )}
             {giftPanel}
-            <PlanCards onFree={chooseFree} onPaid={checkout} busy={loading} onIapPurchased={goFree} lockedSeats={promo.appliedSeats} freeLabel="Continue with Free →" trialEligible={offerTrial} initialTier={initialTier} onLeftForWebsite={() => { leftForWebsite.current = true; }} />
+            <PlanCards onFree={chooseFree} onPaid={checkout} busy={loading} onIapPurchased={goFree} lockedSeats={promo.appliedSeats} freeLabel="Continue with Free →" trialEligible={offerTrial} initialTier={initialTier} initialPromo={presetPromo} onLeftForWebsite={() => { leftForWebsite.current = true; }} />
             {/* Under the plans, like /pricing — the code rides along with
                 whichever paid card is pressed. Web only: the app sells
                 through the App Store, where codes are Apple's (3.1.1). */}
