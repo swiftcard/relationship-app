@@ -217,6 +217,9 @@ for (const native of [false, true]) {
     try {
       // `ms`: the sweep's own clock, set directly (paused), so the check never
       // lands in the band's rest between passes.
+      // `onCard`: does any of the band land inside the card? Worked out from
+      // its real transform, row by row, because the band leans: its left edge
+      // at the card's top is not its left edge at the bottom.
       const at = (ms: number) => page.evaluate((t) => {
         const pro = [...document.querySelectorAll("div.rounded-\\[28px\\]")].find((d) => d.querySelector("p")?.textContent === "Pro") as HTMLElement;
         const band = pro.querySelector(".rd-glisten-sweep") as HTMLElement | null;
@@ -224,21 +227,48 @@ for (const native of [false, true]) {
         const anim = band.getAnimations()[0];
         if (anim) { anim.pause(); anim.currentTime = t; }
         const s = getComputedStyle(band);
+        const W = pro.clientWidth, H = pro.clientHeight;
+        const m = new DOMMatrix(s.transform);
+        const x0 = band.offsetLeft, y0 = band.offsetTop, w = band.offsetWidth, h = band.offsetHeight;
+        const ox = x0 + w / 2, oy = y0 + h / 2; // transform-origin: center
+        const tp = (x: number, y: number) => { const p = m.transformPoint(new DOMPoint(x - ox, y - oy)); return [p.x + ox, p.y + oy]; };
+        const tl = tp(x0, y0), bl = tp(x0, y0 + h), tr = tp(x0 + w, y0);
+        const leftAt = (y: number) => tl[0] + (bl[0] - tl[0]) * (y - tl[1]) / (bl[1] - tl[1]);
+        let onCard = false;
+        for (let i = 0; i <= 40; i++) { const y = (H * i) / 40, l = leftAt(y); if (l + (tr[0] - tl[0]) > 1 && l < W - 1) onCard = true; }
         return {
           animation: s.animationName, position: s.position, opacity: s.opacity, display: s.display,
           clipped: getComputedStyle(pro).overflow === "hidden",
-          left: band.getBoundingClientRect().left,
+          // The band reaches past the card's top and bottom (no gap at an end).
+          spans: Math.min(tl[1], tr[1]) <= 0 && bl[1] >= H,
+          onCard, mid: leftAt(H / 2), tall: H / W,
         };
       }, ms);
       const a = await at(300);
       expect(a, "the Pro card has no glare element").not.toBeNull();
-      expect(a!.animation).toBe("rd-glisten-sweep");
+      expect(a!.animation).toBe("rd-glisten-card");
       expect(a!.position).toBe("absolute");
       expect(a!.display).not.toBe("none");
       expect(Number(a!.opacity)).toBeGreaterThan(0);
       expect(a!.clipped).toBe(true);
+      // The card this runs on is the real, tall one (>2× as tall as wide):
+      // the shape that left the old path parked in a corner.
+      expect(a!.tall).toBeGreaterThan(2);
       const b = await at(1500);
-      expect(b!.left - a!.left, "the glare is not moving across the card").toBeGreaterThan(50);
+      expect(b!.mid - a!.mid, "the glare is not moving across the card").toBeGreaterThan(50);
+      expect(b!.onCard && b!.spans, "mid-sweep, the glare is not across the card").toBe(true);
+      // Owner, 2026-11-03: "when it gets to the bottom right, it pauses. I want
+      // it to just completely go all the way through". The old path left the
+      // band in the bottom-right corner through the whole rest, and its
+      // ease-in-out crawled through that corner on the way. Start, end and the
+      // beat between passes: off the card…
+      for (const t of [0, 2800, 3300, 3950]) {
+        expect((await at(t))!.onCard, `the glare sits on the card at ${t}ms of its 4s cycle`).toBe(false);
+      }
+      // …and as fast leaving the bottom-right as it is crossing the middle.
+      const [m1, m2, e1, e2] = [await at(1300), await at(1500), await at(2500), await at(2700)];
+      const middle = m2!.mid - m1!.mid, leaving = e2!.mid - e1!.mid;
+      expect(leaving / middle, "the glare slows down at the bottom-right").toBeGreaterThan(0.95);
     } finally { await page.context().close(); }
   });
 
