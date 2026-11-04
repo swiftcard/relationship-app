@@ -87,6 +87,24 @@ async function pool<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Prom
 }
 
 /**
+ * Why a saved lead has (or hasn't) a written email, as a run stat, so a Sheet
+ * row that says "Needs a message" can be traced to its cause (2026-11-04: 8 of
+ * 9 leads in one run had none and the run couldn't say why):
+ *   message_written                 the lead carries its email
+ *   message_no_assessment           the site read returned nothing for this site
+ *   message_left_empty              the read found nothing specific to say (by design: no invented detail)
+ *   message_dropped_unverified_name the email greeted someone the site doesn't name, so it was dropped
+ */
+export const MESSAGE_STATS = ["message_written", "message_no_assessment", "message_left_empty", "message_dropped_unverified_name"] as const;
+
+export function messageOutcome(found: SiteAssessment | undefined, message: string | null | undefined): (typeof MESSAGE_STATS)[number] {
+  if (message?.trim()) return "message_written";
+  if (!found) return "message_no_assessment";
+  if (!found.opener?.trim()) return "message_left_empty";
+  return "message_dropped_unverified_name";
+}
+
+/**
  * One lead per business: the decision-maker the site names (with their own
  * email when the site shows it), else the site's best address, with the
  * score, why and hook from the site read. Everything the model reports is
@@ -181,6 +199,7 @@ export const leadsWeb: AgentDef = {
       const out = leadsFromSite(r.biz, r.pages, r.biz.type, a);
       if (a && a.fit <= 0) ctx.stat("rejected_poor_fit");
       else if (!out.length) ctx.stat("sites_no_contact");
+      for (const l of out) ctx.stat(messageOutcome(a, l.message));
       for (const l of out) if (a) fits.set(l.source_url, a.fit);
       return out;
     });
