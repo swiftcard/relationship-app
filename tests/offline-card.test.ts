@@ -84,6 +84,41 @@ describe("offline QR screen", () => {
     expect(js).toMatch(/vcard: contact \? buildContactQr\(contact\) : ""/);
   });
 
+  it("retries on its own while it is up, because Wi-Fi with no internet never changes the path", () => {
+    // NWPathMonitor reports a venue network with nothing behind it as
+    // "satisfied" from start to finish, so it never says the connection came
+    // back. The card retries by itself, backing off, and never on top of a
+    // load that is still running (that would restart a slow load forever).
+    const body = code(swift);
+    expect(body).toMatch(/func scheduleRetry\(\)/);
+    expect(body).toMatch(/self\.retryDelay = min\(self\.retryDelay \* 2, 30\)/);
+    expect(body).toMatch(/if self\.webView\?\.isLoading != true \{ self\.retry\(\) \}/);
+    // show() schedules it; hide() stops it.
+    const show = body.slice(body.indexOf("private func show(failedURL"), body.indexOf("private func hide()"));
+    expect(show).toMatch(/scheduleRetry\(\)/);
+    const hide = body.slice(body.indexOf("private func hide()"), body.indexOf("private func scheduleRetry()"));
+    expect(hide).toMatch(/retryTimer\?\.invalidate\(\)/);
+  });
+
+  it("a retry failing again leaves the person's Card link / Contact choice alone", () => {
+    // OfflineCardView.show resets the switch to Contact. With retries every
+    // 10–30 s it may only run when the card first appears, or the code someone
+    // is holding up for a scan would change under them.
+    const body = code(swift);
+    const show = body.slice(body.indexOf("private func show(failedURL"), body.indexOf("private func hide()"));
+    expect(show).toMatch(/if view\.superview == nil \{\s*view\.show\(card: OfflineCardInfo\.load\(\), slow: slow\)\s*\} else \{\s*view\.setStatus\(slow: slow\)/);
+  });
+
+  it("a weak signal shows the card after 12 seconds instead of a blank screen, and steps aside as the page arrives", () => {
+    const body = code(swift);
+    expect(body).toMatch(/Timer\.scheduledTimer\(withTimeInterval: 12, repeats: false\)/);
+    expect(body).toMatch(/self\.show\(failedURL: nil, slow: true\)/);
+    expect(body).toContain('slow ? "Weak signal" : "You\'re offline"');
+    // didCommit: the document is arriving. Never put the slow card up after it.
+    expect(body).toContain("inner?.webView?(webView, didCommit: navigation)");
+    expect(body).toMatch(/self\.hasLoaded = true\s*if self\.showingSlow \{ self\.hide\(\) \}/);
+  });
+
   it("is in the help assistant's knowledge", () => {
     const kb = read("src/lib/knowledge/docs/product.ts");
     expect(kb).toContain('id: "offline"');

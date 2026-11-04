@@ -42,6 +42,7 @@ import CoreImage.CIFilterBuiltins
 final class NavigationOutcomeProxy: NSObject, WKNavigationDelegate {
     weak var inner: WKNavigationDelegate?
     var onLoaded: (() -> Void)?
+    var onCommitted: (() -> Void)?
     var onNetworkFailure: ((URL?) -> Void)?
 
     init(inner: WKNavigationDelegate?) {
@@ -62,6 +63,11 @@ final class NavigationOutcomeProxy: NSObject, WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         inner?.webView?(webView, didFinish: navigation)
         onLoaded?()
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        inner?.webView?(webView, didCommit: navigation)
+        onCommitted?()
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -252,8 +258,9 @@ final class OfflineCardView: UIView {
     }
 
     /// Fill from the saved card, or the plain offline message when there is none.
-    func show(card: OfflineCardInfo?) {
-        statusLabel.text = "You're offline"
+    /// `slow`: the first load is still going on a weak signal, not failed.
+    func show(card: OfflineCardInfo?, slow: Bool = false) {
+        setStatus(slow: slow)
         self.card = card
         if let card, Self.qrImage(for: Self.scanURL(card.url)) != nil {
             nameLabel.text = card.name
@@ -273,6 +280,10 @@ final class OfflineCardView: UIView {
             linkLabel.isHidden = true
             noteLabel.text = "Reconnect to the internet to open SwiftCard."
         }
+    }
+
+    func setStatus(slow: Bool) {
+        statusLabel.text = slow ? "Weak signal" : "You're offline"
     }
 
     /// The code for the chosen mode: the contact itself, or the card link.
@@ -332,15 +343,46 @@ final class OfflineCardController {
     private let monitor = NWPathMonitor()
     private var foregroundObserver: NSObjectProtocol?
 
+    // TIME, FOR WHAT THE PATH MONITOR CANNOT SEE (2026-11-04).
+    // Wi-Fi with no internet behind it (a venue network, a dead router) is a
+    // "satisfied" path from start to finish, so the monitor never says the
+    // connection came back and the card stayed up until someone tapped Try
+    // again. And a weak signal does not fail at all: the first load can run to
+    // the 60-second request timeout, behind the 15-second launch image and
+    // then a blank canvas. So: the card goes up if the first load has not
+    // finished in 12 seconds, and while it is up the app retries on its own
+    // every 10 seconds, easing to 30, never cutting off a load still under way.
+    // The website's twin is the retry check in public/offline.html.
+    private var hasLoaded = false
+    /// Up only because the first load is slow, not because it failed: it steps
+    /// aside as soon as the page starts arriving (didCommit), rather than
+    /// covering a page that is already drawing until its last image lands.
+    private var showingSlow = false
+    private var slowStartTimer: Timer?
+    private var retryTimer: Timer?
+    private var retryDelay: TimeInterval = 10
+
     init(webView: WKWebView, homeURL: URL?) {
         self.webView = webView
         self.homeURL = homeURL
 
         let proxy = NavigationOutcomeProxy(inner: webView.navigationDelegate)
         proxy.onLoaded = { [weak self] in self?.hide() }
+        proxy.onCommitted = { [weak self] in
+            guard let self else { return }
+            // The page is arriving: the slow-start card must not go up now, and
+            // if it already has, it steps aside.
+            self.hasLoaded = true
+            if self.showingSlow { self.hide() }
+        }
         proxy.onNetworkFailure = { [weak self] url in self?.show(failedURL: url) }
         webView.navigationDelegate = proxy
         self.proxy = proxy
+
+        slowStartTimer = Timer.scheduledTimer(withTimeInterval: 12, repeats: false) { [weak self] _ in
+            guard let self, !self.hasLoaded, self.overlay?.superview == nil else { return }
+            self.show(failedURL: nil, slow: true)
+        }
 
         // Connection back while the offline card is up → load straight away.
         monitor.pathUpdateHandler = { [weak self] path in
@@ -358,10 +400,12 @@ final class OfflineCardController {
 
     deinit {
         monitor.cancel()
+        slowStartTimer?.invalidate()
+        retryTimer?.invalidate()
         if let foregroundObserver { NotificationCenter.default.removeObserver(foregroundObserver) }
     }
 
-    private func show(failedURL: URL?) {
+    private func show(failedURL: URL?, slow: Bool = false) {
         guard let webView else { return }
         if let failedURL { lastFailedURL = failedURL }
         let view = overlay ?? {
@@ -371,23 +415,50 @@ final class OfflineCardController {
             overlay = v
             return v
         }()
-        // Re-read every time: the card may have changed since the last show.
-        view.show(card: OfflineCardInfo.load())
+        showingSlow = slow
+        if view.superview == nil {
+            // Re-read every time it appears: the card may have changed since.
+            view.show(card: OfflineCardInfo.load(), slow: slow)
+        } else {
+            // Already up, and this is one of its own retries failing: leave the
+            // card and the person's Card link / Contact choice exactly as they are.
+            view.setStatus(slow: slow)
+        }
         view.frame = webView.bounds
         // Added to the webview (the bridge's root view), above the launch
         // splash, which the SplashScreen plugin also adds there. Without this
         // the card would sit behind the splash until its 15s failsafe.
         webView.addSubview(view)
         webView.bringSubviewToFront(view)
+        scheduleRetry()
     }
 
     private func hide() {
+        hasLoaded = true
+        showingSlow = false
+        slowStartTimer?.invalidate()
+        retryTimer?.invalidate()
+        retryTimer = nil
+        retryDelay = 10
         overlay?.removeFromSuperview()
         lastFailedURL = nil
     }
 
+    /// While the card is up: try again by itself, backing off, and never on
+    /// top of a load that is still going (that would restart a slow load
+    /// forever, and it would never finish).
+    private func scheduleRetry() {
+        retryTimer?.invalidate()
+        retryTimer = Timer.scheduledTimer(withTimeInterval: retryDelay, repeats: false) { [weak self] _ in
+            guard let self, self.overlay?.superview != nil else { return }
+            self.retryDelay = min(self.retryDelay * 2, 30)
+            if self.webView?.isLoading != true { self.retry() }
+            self.scheduleRetry()
+        }
+    }
+
     private func retryIfShowing() {
-        guard overlay?.superview != nil else { return }
+        guard overlay?.superview != nil, webView?.isLoading != true else { return }
         retry()
     }
 
