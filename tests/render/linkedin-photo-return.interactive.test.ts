@@ -128,6 +128,17 @@ type Rig = {
   li: { answer: Record<string, unknown>; asked: string[] };
 };
 
+/**
+ * WebKit reports a fetch that a navigation cancelled as a page error ("Fetch
+ * API cannot load <url> due to access control checks"), even though the app
+ * catches it. Leaving for LinkedIn in this tab cancels the photo-ticket check
+ * if it is in flight, which failed 4 of the 5 render runs that failed between
+ * 2026-10-29 and 2026-11-03. Only that message, for that endpoint, is ignored.
+ */
+export function navigationCancelledPhotoCheck(message: string): boolean {
+  return /\/api\/integrations\/linkedin\/photo\?t=[0-9a-f-]+ due to access control checks\.$/.test(message);
+}
+
 async function rig(engine: string, width: number): Promise<Rig> {
   const ctx = await browsers[engine].newContext({
     viewport: { width, height: 860 },
@@ -135,7 +146,7 @@ async function rig(engine: string, width: number): Promise<Rig> {
   });
   const page = await ctx.newPage();
   const r: Rig = { page, api: [], connects: [], popups: 0, errors: [], logs: [], li: { answer: { pending: true }, asked: [] } };
-  page.on("pageerror", (e) => r.errors.push(e.message.split("\n")[0]));
+  page.on("pageerror", (e) => { const m = e.message.split("\n")[0]; if (!navigationCancelledPhotoCheck(m)) r.errors.push(m); });
   page.on("console", (m) => r.logs.push(`[${m.type()}] ${m.text()}`));
   page.on("requestfailed", (q) => r.logs.push(`[requestfailed] ${q.url().slice(0, 120)} ${q.failure()?.errorText ?? ""}`));
   page.on("popup", () => { r.popups++; });
@@ -229,6 +240,20 @@ const BUILDERS = [
   { product: "swiftlink", trigger: "See how your Swift Links page would look", photoStep: "Name your Swift Links page", stepOf: "Step 1 of 3", forward: 0 },
   { product: "signature", trigger: "See how your Swift Signature would look", photoStep: "Add your photo & logo", stepOf: "Step 3 of", forward: 2 },
 ];
+
+describe("page errors the rig ignores", () => {
+  it("only WebKit's report of a cancelled photo-ticket check, nothing else", () => {
+    const ticket = "883509b9-f8ce-402e-9d9a-bc736330774f";
+    expect(navigationCancelledPhotoCheck(`Fetch API cannot load https://sc.test/api/integrations/linkedin/photo?t=${ticket} due to access control checks.`)).toBe(true);
+    // The same WebKit message for any other request still fails a test.
+    expect(navigationCancelledPhotoCheck("Fetch API cannot load https://elsewhere.test/0b1c2d3e due to access control checks.")).toBe(false);
+    expect(navigationCancelledPhotoCheck("Fetch API cannot load https://sc.test/api/integrations/linkedin/connect?guest=1 due to access control checks.")).toBe(false);
+    // Any other error about the photo check still fails a test.
+    expect(navigationCancelledPhotoCheck(`TypeError: Load failed /api/integrations/linkedin/photo?t=${ticket}`)).toBe(false);
+    expect(navigationCancelledPhotoCheck("EncodingError: refused")).toBe(false);
+    expect(navigationCancelledPhotoCheck("TypeError: undefined is not an object")).toBe(false);
+  });
+});
 
 describe.each(ENGINES)("homepage builders — %s %ipx", (engine, width) => {
   for (const b of BUILDERS) {

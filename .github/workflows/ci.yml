@@ -82,7 +82,10 @@ jobs:
     # If the minutes ever matter more than the signal, move this back to
     # ubuntu-latest and accept that the pixel-exact tests are advisory there.
     runs-on: macos-latest
-    timeout-minutes: 25
+    # The tests alone took 15-23 minutes in late Oct - early Nov 2026, so 25
+    # cut off passing runs on slow runners (63924079, twice, with no failure).
+    # 40 still fits inside wait-for-live's 45-minute window.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
 
