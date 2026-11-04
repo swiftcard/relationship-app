@@ -4,6 +4,7 @@ import { BANNED_PHRASES, HUMAN_VOICE, voiceProblems } from "@/lib/crew/voice";
 import { assessPrompt } from "@/lib/crew/leads/assess";
 import { leadsFromSite } from "@/lib/crew/agents/leads";
 import { emailComposeLink } from "@/lib/crew/exact-links";
+import { leadRows } from "@/lib/crew/sheets/rows";
 
 // Founder-led outreach (owner, 2026-11-04): every message reads like Menash,
 // one of the two founders, wrote it after a minute on their site. One
@@ -25,6 +26,16 @@ describe("the shared voice", () => {
     expect(HUMAN_VOICE).not.toMatch(/free to start/);
     // Kept from before.
     expect(HUMAN_VOICE).toMatch(/No hyphens at all/);
+  });
+  it("personalizes on what connects to their business, never unrelated trivia", () => {
+    expect(HUMAN_VOICE).toMatch(/ONE specific detail about their business[^.]*connects to why SwiftCard could help/);
+    expect(HUMAN_VOICE).toMatch(/Never personal trivia unrelated to that \(hobbies, schools, a past career, family\), even when it's true/);
+  });
+  it("never forces a SwiftCard mention where the instructions forbid one", () => {
+    // The engine tells non-promotional replies "Do NOT mention SwiftCard or any product"; the shared voice must agree.
+    expect(HUMAN_VOICE).not.toMatch(/Every message mentions SwiftCard/);
+    expect(HUMAN_VOICE).toMatch(/When they say not to mention SwiftCard or any product[^.]*don't, and drop the founder offer/);
+    expect(readFileSync("src/lib/crew/replies/engine.ts", "utf8")).toMatch(/Do NOT mention SwiftCard or any product, and include no link/);
   });
   it("turns away the phrases that make it read like a campaign", () => {
     for (const p of ["i hope this email finds you well", "impressive", "revolutionize", "your workflow", "unlock your potential", "quick demo", "10 minute call"]) expect(BANNED_PHRASES).toContain(p);
@@ -70,6 +81,16 @@ describe("Web Leads rows carry the whole email", () => {
     expect(row.message).toBe(email);
     const link = emailComposeLink(row.email!, row.message!)!;
     expect(link).toMatch(/^mailto:dana@acme\.example\.com\?subject=Cards%20for%20the%20Acme%20team&body=Hi%20Dana/);
+  });
+  it("fills the Google Sheets email link: recipient, subject and body", () => {
+    const [lead] = leadsFromSite({ name: "Acme Insurance", website: "https://acme.example.com/" }, pages, "insurance agencies", found);
+    const [row] = leadRows({ ...lead, id: "11111111-2222-3333-4444-555555555555", created_at: "2026-11-04T15:00:00Z" }, { approvals: [], leads: [], known: new Map() });
+    const cell = String(row.cells.link);
+    expect(cell).toMatch(/^=HYPERLINK\("mailto:dana@acme\.example\.com\?subject=Cards%20for%20the%20Acme%20team&body=Hi%20Dana%2C%0A%0AI%20was%20on/);
+    expect(cell).toContain(encodeURIComponent("Want me to send one over?\n\nMenash"));
+    expect(cell).not.toContain(encodeURIComponent("Subject:")); // the subject line isn't repeated in the body
+    expect(cell).toMatch(/"Email dana@acme\.example\.com"\)$/);
+    expect(row.cells.message).toBe(email);
   });
   it("never lets a dash through", () => {
     const [row] = leadsFromSite({ name: "Acme Insurance", website: "https://acme.example.com/" }, pages, "insurance agencies", { ...found, opener: "Subject: Acme cards\n\nHi Dana — quick idea for the team.\n\nMenash" });
