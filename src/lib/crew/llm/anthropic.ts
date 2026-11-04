@@ -90,6 +90,7 @@ export class AnthropicProvider implements ClaudeProvider {
       model: msg.model,
       refused: msg.stop_reason === "refusal",
       truncated: msg.stop_reason === "max_tokens",
+      stopReason: msg.stop_reason ?? null,
     };
   }
 
@@ -113,6 +114,7 @@ export class AnthropicProvider implements ClaudeProvider {
           model: m.model,
           refused: m.stop_reason === "refusal",
           truncated: m.stop_reason === "max_tokens",
+          stopReason: m.stop_reason ?? null,
         };
       } else {
         out[r.custom_id] = null;

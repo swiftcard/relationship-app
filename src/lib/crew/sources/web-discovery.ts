@@ -1,4 +1,4 @@
-import type { AgentContext } from "../context";
+import { parseJson, type AgentContext } from "../context";
 import type { Platform } from "../types";
 
 // ── Finding public posts through web search ─────────────────────────────────
@@ -36,7 +36,7 @@ export async function searchItems<T extends Record<string, string>>(
   o: { system: string; prompt: string; fields: (keyof T & string)[]; domains?: string[]; maxUses?: number; want?: number; reserveUsd?: number; maxTokens?: number },
 ): Promise<T[]> {
   const want = o.want ?? 10;
-  const out = await ctx.llm.askJson<{ items: T[] }>("discover", {
+  const res = await ctx.llm.ask("discover", {
     // Medium, not low: at low effort the search gave up after one failed
     // filtering step and answered with nothing.
     effort: "medium",
@@ -59,6 +59,19 @@ export async function searchItems<T extends Record<string, string>>(
       },
     },
   });
+  const out = res.refused ? null : parseJson<{ items: T[] }>(res.text);
+  // Why a search came back empty, in the run's stats. Office Prospects'
+  // searches returned nothing on 2026-11-03 (three times) with no record of
+  // whether the model answered [], was cut off, paused or refused.
+  if (!out?.items?.length) {
+    ctx.stat("search_empty_answer");
+    if (res.refused) ctx.stat("search_refused");
+    else if (res.truncated) ctx.stat("search_truncated");
+    else if (res.stopReason === "pause_turn") ctx.stat("search_paused");
+    else if (!out) ctx.stat("search_unparsed");
+    ctx.stat("search_answer_chars", res.text.length);
+    ctx.stat("search_web_searches", res.usage.webSearches);
+  }
   return (out?.items ?? []).slice(0, want);
 }
 

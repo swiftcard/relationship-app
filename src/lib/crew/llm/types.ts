@@ -25,6 +25,8 @@ export type LlmResponse = {
   refused: boolean;
   /** Hit max_tokens: the text is cut off. */
   truncated: boolean;
+  /** The API's stop_reason ("end_turn", "pause_turn", ...), when the provider reports one. */
+  stopReason?: string | null;
 };
 
 export interface ClaudeProvider {
