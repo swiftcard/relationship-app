@@ -4,6 +4,8 @@ import {
   AGENT_ID,
   COMMENT_SYSTEM,
   IG_CONVERSATIONS_USD,
+  SEARCH_MAX_USES,
+  SEARCH_RESERVE_USD_PER_USE,
   commentProblems,
   emptyReason,
   instagramLinkedinBio,
@@ -175,6 +177,21 @@ describe("Instagram LinkedIn Bio: money", () => {
     const { claude, out } = await run(script(), { store });
     expect(claude.calls).toHaveLength(0);
     expect(out.status).toBe("budget");
+  });
+
+  it("the search reserves its worst case: with $0.25 already spent it doesn't start (a search can cost ~$0.30)", async () => {
+    const store = new MemoryStore();
+    await store.recordUsage({ run_id: null, agent_id: AGENT_ID, team: "contact", provider: "anthropic", model: "x", purpose: "discover", input_tokens: 0, output_tokens: 0, cache_read: 0, cache_write: 0, web_searches: 0, batch: false, cost_usd: 0.25 });
+    const { claude, out } = await run(script(), { store });
+    expect(claude.calls).toHaveLength(0);
+    expect(out.status).toBe("budget");
+    expect(SEARCH_MAX_USES * SEARCH_RESERVE_USD_PER_USE).toBeGreaterThan(0.2);
+  });
+
+  it("search_max_uses and drafts_per_run limit one run", async () => {
+    const { claude, store } = await run(script(), { config: { search_max_uses: 2, drafts_per_run: 1 } });
+    expect(claude.calls.find((c) => c.webSearch)?.webSearch?.maxUses).toBe(2);
+    expect(store.approvals).toHaveLength(1);
   });
 
   it("a per-agent limit set above the shared $3 still stops at the shared $3", () => {

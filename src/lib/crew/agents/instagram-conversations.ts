@@ -38,8 +38,22 @@ export const AGENT_ID = "contact-instagram-linkinbio";
 /** Its own daily limit (the $0.18 of 2026-11-04 had no cap below the $3 shared one). Admin → Agents → Settings can change it; the shared limit still applies. */
 export const IG_CONVERSATIONS_USD = 0.5;
 
-/** Comments drafted per run at most: a run costs one search, one scoring call and up to this many drafts (about a cent each). */
+/** Comments drafted per run at most: a run costs one search, one scoring call and up to this many drafts (2 to 3 cents each). Agent config drafts_per_run lowers it. */
 export const DRAFTS_PER_RUN = 8;
+
+/** Web searches inside the one search call. Agent config search_max_uses lowers it (1 to 4). */
+export const SEARCH_MAX_USES = 4;
+
+/**
+ * What one web search can cost beyond the $0.01 search fee, at worst: the
+ * results come back as cached input. Measured in crew_usage up to 2026-11-04:
+ * the dearest discover call was $0.377 for 6 searches (108k cache-write and
+ * 126k cache-read tokens on Sonnet), about $0.055 a search beyond the fee.
+ * The budget guard only estimates the prompt and output, so the search call
+ * reserves this per search: it won't start unless the worst case still fits
+ * under the agent's and the shared limit.
+ */
+export const SEARCH_RESERVE_USD_PER_USE = 0.055;
 
 /** Below this the post isn't a real chance to add something. */
 export const MIN_SCORE = 0.6;
@@ -265,6 +279,7 @@ export async function runInstagramConversations(ctx: AgentContext): Promise<RunR
 
   // 1. Find: one web search call, two topics.
   const topics = await rotate(ctx, "topic_i", SEARCH_TOPICS, 2);
+  const maxUses = Math.max(1, Math.min(SEARCH_MAX_USES, Math.floor(ctx.config<number>("search_max_uses", SEARCH_MAX_USES)) || SEARCH_MAX_USES));
   let hits: SearchHit[] = [];
   try {
     hits = await searchItems<SearchHit>(ctx, {
@@ -272,7 +287,8 @@ export async function runInstagramConversations(ctx: AgentContext): Promise<RunR
       prompt: `Search instagram.com for individual public Instagram posts or reels (links like instagram.com/p/<code>/ or instagram.com/reel/<code>/; search engines title them like 'Jane Doe on Instagram: "caption..."') where people talk about any of these:\n${topics.map((t) => `- ${t}`).join("\n")}\nGood searches look like: site:instagram.com/p "networking event" follow up, site:instagram.com/reel realtor "business cards". Skip profile pages, hashtag pages and ads.\nFor each post: url (the exact post or reel link as the result shows it), author (the account's @username if the link, title or caption shows it, else empty), title (the result's title), text (the caption words the result shows, under 400 characters).`,
       fields: ["url", "author", "title", "text"],
       domains: ["instagram.com"],
-      maxUses: 5,
+      maxUses,
+      reserveUsd: maxUses * SEARCH_RESERVE_USD_PER_USE,
       want: 20,
     });
   } catch (e) {
@@ -317,7 +333,8 @@ export async function runInstagramConversations(ctx: AgentContext): Promise<RunR
   });
   ctx.stat("posts_scored", batch.length);
   const qualified = pickPosts(scored?.items ?? [], batch.length, batch.length);
-  const picks = qualified.slice(0, Math.min(DRAFTS_PER_RUN, quota.left));
+  const perRun = Math.max(0, Math.min(DRAFTS_PER_RUN, Math.floor(ctx.config<number>("drafts_per_run", DRAFTS_PER_RUN))));
+  const picks = qualified.slice(0, Math.min(perRun, quota.left));
   ctx.stat("rejected_by_score", batch.length - qualified.length);
   if (qualified.length > picks.length) ctx.stat("qualified_not_drafted", qualified.length - picks.length);
 
