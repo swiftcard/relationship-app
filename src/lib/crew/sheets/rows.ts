@@ -208,6 +208,26 @@ export function phoneText(phone: string | null | undefined): string {
 }
 
 /**
+ * A number someone can dial: 10 digits (or 1 + 10) whose area code and
+ * exchange start with 2-9. Office rows showed "302 100 0072" as a phone; it
+ * was a license number from the page.
+ */
+export function dialable(phone: string | null | undefined): boolean {
+  const d = str(phone).replace(/\D/g, "");
+  const ten = d.length === 11 && d.startsWith("1") ? d.slice(1) : d;
+  return /^[2-9]\d{2}[2-9]\d{6}$/.test(ten);
+}
+
+/**
+ * The link cell for an Office row with no email. A website is where the
+ * details came from, not a way to reach the person, so the label says what
+ * to do: call the number in the Name cell, or research a contact first.
+ * (Google Sheets links can't dial a phone, so the number stays as text.)
+ */
+export const CALL_LABEL = "No email: call the number in Name (opens their site)";
+export const RESEARCH_LABEL = "Research needed: no verified email or phone (opens their site)";
+
+/**
  * One lead's row, or the reason it has none. Every lead nobody has finished is
  * listed: with its message, or marked as needing one (NEEDS_MESSAGE). Web
  * Leads link to a new email with the message in it; Office Prospects are call
@@ -226,11 +246,14 @@ export function leadListing(l: Lead & { id: string; created_at: string }, s: Row
   const site = l.source_url.startsWith("http") ? l.source_url : null;
   const email = l.email && !UNDELIVERABLE.has(str(l.email_status)) ? str(l.email) : "";
   const mail = email ? emailComposeLink(email, office || !written ? "" : written) : null;
-  const cellLink = (mail ? link(mail, `Email ${email}`) : "") || link(site, "Open their website");
+  const callable = office && dialable(l.phone);
+  const siteLabel = !office ? "Open their website" : callable ? CALL_LABEL : RESEARCH_LABEL;
+  const cellLink = (mail ? link(mail, `Email ${email}`) : "") || link(site, siteLabel);
   if (!cellLink) return { reason: "no_link" };
   const tab = office ? OFFICE_PROSPECTS : LEAD_TAB_BY_SOURCE[l.source_platform] ?? WEB_LEADS;
   const who = [str(l.name), str(l.title), str(l.company)].filter(Boolean).join(", ") || (site ? new URL(site).hostname.replace(/^www\./, "") : str(l.email));
-  const phone = office ? phoneText(l.phone) : "";
+  // Only a number that can be dialed is shown as the phone.
+  const phone = callable ? phoneText(l.phone) : "";
   const name = phone ? `${who} · ${phone}` : who;
   return { row: { tab, key, kind: "lead", entityId: l.id, cells: { name, message: written || NEEDS_MESSAGE, link: cellLink }, initialStatus: known?.status ?? "New", rank: 20, agent: tab.name, createdAt: l.created_at } };
 }
