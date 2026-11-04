@@ -1149,6 +1149,33 @@ summary.list-none::-webkit-details-marker { display: none; }
   animation: rd-glisten-sweep 4.2s ease-in-out infinite; }
 @keyframes rd-glisten-sweep { 0% { left: -70%; } 55%, 100% { left: 130%; } }
 
+/* The Pro plan card's glare (components/PlanTierCards). Owner, 2026-11-03:
+   "Glare is too strong and when it gets to the bottom right, it pauses. I
+   want it to just completely go all the way through and then it'll restart
+   again … more of a subtle glare to catch people's attention."
+   - Its path: a band leaning 18° spans an extra 0.325 × the card's height
+     sideways, and the -70% → 130% path above only clears a card up to ~1.5×
+     as tall as it is wide. July's card (9 short features) was about that.
+     Today's (14 longer ones) is ~3×, so the band never left: through the
+     pause it sat parked in the bottom-right corner, then jumped to the
+     top-left. Here the band also slides half the card's height up/down as it
+     travels (22.727% of its own 220% height), which moves its lean out of the
+     way. It starts just off the top-left corner and ends just off the
+     bottom-right at ANY card height.
+   - Its speed: linear. ease-in-out crawled through the bottom-right corner,
+     and that read as the glare stopping there. One even pass, then a short
+     beat with nothing on the card, then the next pass.
+   - Its strength: .25 white at the peak, the soft gloss rd-ll-shine uses on
+     big tiles (it was .55, a flash on a card this size).
+   It moves by transform, not left, so it runs off the main thread and never
+   hitches. The paywall pill keeps the class above. Pinned by
+   tests/plan-cards-single-source.test.ts and
+   tests/render/plan-cards-layout.interactive.test.ts. */
+.rd-glisten-sweep.rd-glisten-card { left: -45%; transform: translate(0, -22.727%) skewX(-18deg);
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.25), transparent);
+  animation: rd-glisten-card 4s linear infinite; }
+@keyframes rd-glisten-card { 0% { transform: translate(0, -22.727%) skewX(-18deg); } 70%, 100% { transform: translate(322.222%, 22.727%) skewX(-18deg); } }
+
 /* App Store badge shine — one specular band sweeping across the pill.
    Narrower and brighter than rd-ll-shine because the badge is small and dark:
    the same 25% white that reads as a soft gloss on a big tile is invisible at

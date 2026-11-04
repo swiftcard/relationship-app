@@ -155,12 +155,45 @@ describe("the shared cards", () => {
   // nothing noticed: a class with no element draws nothing.
   it("the Pro card carries the glare sweep, clipped to the card", () => {
     const pro = c.slice(c.indexOf("export function ProPlanCard("), c.indexOf("export function ProWebPrice("));
-    expect(pro).toMatch(/<span className="rd-glisten-sweep" aria-hidden="true" \/>/);
+    expect(pro).toMatch(/<span className="rd-glisten-sweep rd-glisten-card" aria-hidden="true" \/>/);
     // overflow-hidden clips the band to the rounded card; relative anchors it.
     expect(pro).toMatch(/sc-dark-sheet relative rounded-\[28px\][^"`]*overflow-hidden/);
     const css = read("src/app/globals.css");
     expect(css).toMatch(/\.rd-glisten-sweep \{[^}]*position: absolute;[^}]*z-index: 3;[^}]*animation: rd-glisten-sweep /);
     expect(css).toMatch(/@keyframes rd-glisten-sweep \{/);
+  });
+
+  // Owner, 2026-11-03, once it was back: "a weird pause effect. It's not
+  // consistent and smooth. It's also a very strong glare", then: "when it gets
+  // to the bottom right, it pauses. I want it to just completely go all the
+  // way through and then it'll restart again … more of a subtle glare".
+  // 1. The card had grown from 9 short features to 14 long ones, ~3× taller
+  //    than wide. A band leaning 18° spans 0.325 × the card's height sideways,
+  //    so the fixed -70% → 130% path no longer carried it off: through the
+  //    pause it sat in the bottom-right corner. The card's own path slides the
+  //    band half the card's height (22.727% of its 220% height) as it
+  //    travels, which clears both corners at any height.
+  // 2. ease-in-out crawled through that corner: now linear, one even pass.
+  // 3. .55 white was a flash on a card this size: now .25.
+  // The render test measures all three.
+  it("the Pro card's glare is soft, even, and clears the card at both ends", () => {
+    const css = read("src/app/globals.css");
+    const rule = css.match(/\.rd-glisten-sweep\.rd-glisten-card \{([^}]*)\}/)?.[1] ?? "";
+    expect(rule).toMatch(/left: -45%;/);
+    expect(rule).toMatch(/rgba\(255,255,255,\.25\)/);
+    expect(rule).toMatch(/animation: rd-glisten-card 4s linear infinite;/);
+    const kf = css.match(/@keyframes rd-glisten-card \{(.*)\}\s*$/m)?.[1] ?? "";
+    // From just off the top-left corner (right edge at 0, half a card up)…
+    expect(kf).toMatch(/0% \{ transform: translate\(0, -22\.727%\) skewX\(-18deg\); \}/);
+    // …to just off the bottom-right (left edge at 100%: 145% of the card's
+    // width is 322.222% of the band's 45%, half a card down), then a short
+    // beat with nothing on the card before the next pass.
+    expect(kf).toMatch(/70%, 100% \{ transform: translate\(322\.222%, 22\.727%\) skewX\(-18deg\); \}/);
+    // Same band shape as July's: the width and the lean.
+    const base = css.match(/\.rd-glisten-sweep \{([^}]*)\}/)?.[1] ?? "";
+    expect(base).toMatch(/width: 45%;/);
+    // Reduce Motion still hides it (the !important rule beats the card's).
+    expect(css).toMatch(/\.rd-glisten-sweep \{ animation: none !important; opacity: 0 !important; \}/);
   });
 
   it("scroll-reveal is opt-in: only /pricing mounts ScrollReveal", () => {
