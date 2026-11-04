@@ -148,14 +148,18 @@ export function ProPlanCard({
         </ul>
         {children}
       </div>
-      {/* The glare: a light band sweeping across the card every 4.2s (owner,
-          2026-07-12). It sits over the content (z-2) and under MOST POPULAR
+      {/* The glare: a soft light band sweeping across the card, one even pass
+          every 4s (owner, 2026-07-12; softened 2026-11-03). It sits over the
+          content (z-2) and under MOST POPULAR
           (z-4), and the card's overflow-hidden clips it to the rounded edge.
           The 2026-09-17 marketing redesign dropped it from /pricing while
           clearing glare off the homepage, and when this card was lifted from
           /pricing it came without one — so every plan chooser lost it.
+          rd-glisten-card gives it a path that clears this (now tall) card at
+          both ends, a constant speed, and a soft .25 white, so it never parks
+          or crawls in the bottom-right corner. See globals.css.
           Pinned by tests/plan-cards-single-source.test.ts and the render test. */}
-      <span className="rd-glisten-sweep" aria-hidden="true" />
+      <span className="rd-glisten-sweep rd-glisten-card" aria-hidden="true" />
     </div>
   );
 }
