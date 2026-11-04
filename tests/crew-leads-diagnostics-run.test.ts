@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { leadsWeb } from "@/lib/crew/agents/leads";
+import { MESSAGE_STATS, leadsWeb } from "@/lib/crew/agents/leads";
 import { officeOutreach } from "@/lib/crew/agents/office";
 import { LEAD_RUN_STATS } from "@/lib/crew/leads/diagnostics";
 import type { SiteRead } from "@/lib/crew/leads/fetch-page";
@@ -38,7 +38,7 @@ afterEach(() => {
 
 /** Every value a number, every key a funnel key or one the agents already reported. */
 function countsOnly(stats: Record<string, unknown>) {
-  const known = new Set<string>([...LEAD_RUN_STATS, "leads_web", "leads_none", "emails_drafted", "no_llm_needed", "proposed"]);
+  const known = new Set<string>([...LEAD_RUN_STATS, ...MESSAGE_STATS, "leads_web", "leads_none", "emails_drafted", "no_llm_needed", "proposed"]);
   for (const [k, v] of Object.entries(stats)) {
     expect(known.has(k), `unexpected stat ${k}`).toBe(true);
     expect(typeof v).toBe("number");
