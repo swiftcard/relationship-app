@@ -237,7 +237,8 @@ async function draftEmails(ctx: AgentContext, rows: Lead[]): Promise<number> {
     if (!pid || (await everContacted(ctx.store, pid))) continue;
     const system = `${HUMAN_VOICE}\n\n${productFacts()}`;
     const brief = `${r.name}, ${r.title} at ${r.company} (${r.business_type}, New York). Talking point: ${r.notes ?? "none"}. Source: ${r.source_url}`;
-    const prompt = `Write a short personal email from one of SwiftCard's two founders to this person about the SwiftCard Office Plan (digital business cards and a shared lead inbox for their whole team). First line "Subject: ...". Under 110 words. Specific to their business, no hype, one clear ask: a 10-minute call.\n\n${brief}`;
+    // Founder led (owner, 2026-11-04): an offer to show them a sample with their branding, not a demo request or a price.
+    const prompt = `Write a short personal email from Menash, one of SwiftCard's two founders, to this person, after looking at their business. It's about matching digital business cards for their whole team (SwiftCard's Office Plan; you don't need to name the plan). First line "Subject: ...". 60 to 100 words. Mention one specific detail from the brief, say why it could help their team, offer to put together a sample card with their branding so they can see it, and end with one easy, low pressure question. No pricing, no demo or call request. Sign off "Menash".\n\n${brief}`;
     const first = await ctx.llm.ask("draft", { system, effort: "medium", maxTokens: 1000, prompt });
     if (!first.text) continue;
     const { final, record } = await debate(ctx, {
