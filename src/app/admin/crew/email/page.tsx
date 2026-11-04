@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
 import { LiveGmail } from "@/lib/crew/email/gmail";
-import { emailConfig, emailDrafts, readyLeads } from "@/lib/crew/email/outbox";
+import { checkReplies, emailConfig, emailDrafts, readyLeads } from "@/lib/crew/email/outbox";
 import { SupabaseEmailSends } from "@/lib/crew/email/sends-supabase";
 import { SupabaseStore } from "@/lib/crew/store-supabase";
 import EmailView from "./EmailView";
@@ -24,7 +24,13 @@ export default async function EmailPage({ searchParams }: { searchParams: Promis
   const sends = new SupabaseEmailSends();
   const config = emailConfig();
   const now = clock();
-  const [tableReady, account, drafts] = await Promise.all([sends.ready(), new LiveGmail().account(), emailDrafts(store)]);
+  const gmail = new LiveGmail();
+  const [tableReady, account] = await Promise.all([sends.ready(), gmail.account()]);
+  // Replies, bounces and unsubscribes are picked up whenever this page opens
+  // (headers only, each sent thread at most every 30 minutes), so an opt-out
+  // never waits for a button. A Gmail hiccup changes nothing and the page still loads.
+  if (tableReady && account.ok && account.email === config.mailbox) await checkReplies(store, sends, gmail, config.mailbox, new Date(now), 10).catch(() => null);
+  const drafts = await emailDrafts(store);
   const [leads, recent, used] = await Promise.all([
     readyLeads(store, drafts),
     tableReady ? sends.list(60) : Promise.resolve([]),

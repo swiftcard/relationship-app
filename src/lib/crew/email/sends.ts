@@ -26,7 +26,7 @@ export type EmailSend = {
   thread_id: string | null;
   approved_by: string;
   sent_at: string | null;
-  reply_state: "replied" | "bounced" | null;
+  reply_state: "replied" | "bounced" | "unsubscribed" | null;
   replied_at: string | null;
   last_checked_at: string | null;
 };

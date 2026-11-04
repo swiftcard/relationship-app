@@ -32,7 +32,7 @@ create table if not exists crew_email_sends (
   thread_id          text,
   approved_by        text not null,
   sent_at            timestamptz,
-  reply_state        text check (reply_state in ('replied', 'bounced')),
+  reply_state        text check (reply_state in ('replied', 'bounced', 'unsubscribed')),
   replied_at         timestamptz,
   last_checked_at    timestamptz
 );

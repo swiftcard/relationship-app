@@ -55,6 +55,10 @@ class FakeGmail implements GmailTransport {
   async thread(id: string) {
     return this.threads.get(id) ?? null;
   }
+  inboxMessages: ThreadMessage[] = [];
+  async inbox() {
+    return this.inboxMessages;
+  }
 }
 
 const LIVE: EmailConfig = { live: true, mailbox: "hello@swiftcard.me", fromName: "Menash", dailyCap: 20, postalAddress: "1 Main St, Brooklyn, NY 11201" };
@@ -309,6 +313,7 @@ describe("Web Leads become drafts, never emails", () => {
 describe("replies and follow-ups", () => {
   it("reads a reply, a bounce (and suppresses it), or nothing yet", async () => {
     expect(readThread([{ from: "Menash <hello@swiftcard.me>", labelIds: ["SENT"] }], "hello@swiftcard.me")).toBeNull();
+    expect(readThread([{ from: "hello@swiftcard.me", labelIds: ["SENT"] }, { from: "kevin@x.com", subject: "Automatic reply: matching cards", labelIds: ["INBOX"] }], "hello@swiftcard.me")).toBeNull();
     expect(readThread([{ from: "hello@swiftcard.me", labelIds: ["SENT"] }, { from: "Kevin <kevin@x.com>", labelIds: ["INBOX"] }], "hello@swiftcard.me")).toBe("replied");
     expect(readThread([{ from: "hello@swiftcard.me", labelIds: ["SENT"] }, { from: "Mail Delivery Subsystem <mailer-daemon@googlemail.com>", labelIds: ["INBOX"] }], "hello@swiftcard.me")).toBe("bounced");
 
@@ -316,8 +321,35 @@ describe("replies and follow-ups", () => {
     await t.send();
     t.gmail.threads.set("t1", [{ from: "hello@swiftcard.me", labelIds: ["SENT"] }, { from: "mailer-daemon@googlemail.com", labelIds: ["INBOX"] }]);
     const r = await checkReplies(t.store, t.sends, t.gmail, "hello@swiftcard.me");
-    expect(r).toEqual({ checked: 1, replied: 0, bounced: 1 });
+    expect(r).toEqual({ checked: 1, replied: 0, bounced: 1, unsubscribed: 0 });
     expect(await t.store.isSuppressed(["kevin@baysiderealty.com"])).toBe(true);
+  });
+  it("an unsubscribe, in the thread or as a new email from the List-Unsubscribe button, stops every channel", async () => {
+    expect(readThread([{ from: "hello@swiftcard.me", labelIds: ["SENT"] }, { from: "Kevin <kevin@x.com>", subject: "Re: unsubscribe", labelIds: ["INBOX"] }], "hello@swiftcard.me")).toBe("unsubscribed");
+    const t = await setup();
+    await t.send();
+    t.gmail.threads.set("t1", [{ from: "hello@swiftcard.me", labelIds: ["SENT"] }]);
+    t.gmail.inboxMessages = [
+      { from: "Kevin <KEVIN@baysiderealty.com>", subject: "unsubscribe", labelIds: ["INBOX"] },
+      { from: "Someone <someone@else.com>", subject: "Re: matching cards for your team", labelIds: ["INBOX"] },
+    ];
+    const r = await checkReplies(t.store, t.sends, t.gmail, "hello@swiftcard.me");
+    expect(r.unsubscribed).toBe(1);
+    expect(await t.store.isSuppressed(["kevin@baysiderealty.com"])).toBe(true);
+    expect(await t.store.isSuppressed(["someone@else.com"])).toBe(false);
+    expect(t.store.touches.some((x) => x.kind === "opted_out")).toBe(true);
+    expect(t.sends.rows[0].reply_state).toBe("unsubscribed");
+    // Running it again changes nothing.
+    expect((await checkReplies(t.store, t.sends, t.gmail, "hello@swiftcard.me")).unsubscribed).toBe(0);
+  });
+  it("every email carries the opt-out line, the postal address and a List-Unsubscribe header", async () => {
+    const t = await setup();
+    await t.send();
+    const mime = Buffer.from(t.gmail.sent[0], "base64url").toString();
+    expect(mime).toContain("List-Unsubscribe: <mailto:hello@swiftcard.me?subject=unsubscribe>");
+    const body = Buffer.from(mime.split("\r\n\r\n")[1].replace(/\r\n/g, ""), "base64").toString();
+    expect(body).toContain('reply "no thanks"');
+    expect(body).toContain("SwiftCard, 1 Main St, Brooklyn, NY 11201");
   });
   it("Follow up shows after 4 days with no reply", () => {
     const sent = { status: "sent" as const, reply_state: null, sent_at: "2026-11-01T12:00:00Z" };
@@ -345,8 +377,36 @@ describe("who can send", () => {
     expect(oauth).toContain('google_gmail: ["openid", "email", ...GMAIL_SCOPES].join(" ")');
     expect(oauth).toMatch(/const expected = emailMailbox\(\);[\s\S]*if \(!email \|\| email !== expected\) throw/);
   });
-  it("sending stays off until CREW_EMAIL_LIVE=1", () => {
+  it("sending stays off until CREW_EMAIL_LIVE is exactly 1", async () => {
     expect(read("src/lib/crew/env.ts")).toContain('return env("CREW_EMAIL_LIVE") === "1";');
+    const { emailLive } = await import("@/lib/crew/env");
+    const before = process.env.CREW_EMAIL_LIVE;
+    try {
+      for (const v of [undefined, "", "0", "true", "yes", "live"]) {
+        if (v === undefined) delete process.env.CREW_EMAIL_LIVE;
+        else process.env.CREW_EMAIL_LIVE = v;
+        expect(emailLive(), String(v)).toBe(false);
+      }
+      process.env.CREW_EMAIL_LIVE = "1";
+      expect(emailLive()).toBe(true);
+    } finally {
+      if (before === undefined) delete process.env.CREW_EMAIL_LIVE;
+      else process.env.CREW_EMAIL_LIVE = before;
+    }
+  });
+  it("the migration only adds: one table, its indexes, RLS on; nothing dropped, altered or truncated elsewhere", () => {
+    const sql = read("supabase/crew-email.sql").replace(/--.*$/gm, "");
+    expect(sql.replace(/on delete restrict/gi, "")).not.toMatch(/\b(drop|truncate|delete|update)\b/i);
+    expect(sql.match(/\balter table\s+(\w+)/gi)).toEqual(["alter table crew_email_sends"]);
+    expect(sql.match(/create table if not exists (\w+)/gi)).toEqual(["create table if not exists crew_email_sends"]);
+    expect(sql).toContain("on delete restrict");
+    expect(sql).toContain("enable row level security");
+  });
+  it("no agent, schedule or budget changes: nothing under agents/, schedule or budget is touched by email code", () => {
+    for (const f of ["src/lib/crew/email/outbox.ts", "src/lib/crew/execute/email-send.ts", "src/lib/crew/email/gmail.ts"]) {
+      expect(read(f)).not.toMatch(/from "\.\.?\/(agents|schedule|budget|tick)/);
+      expect(read(f)).not.toMatch(/patchAgentState|updateSettings|setControl|schedule_overrides/);
+    }
   });
 });
 

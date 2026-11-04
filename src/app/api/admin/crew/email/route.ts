@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     const sends = new SupabaseEmailSends();
     if (!(await sends.ready())) return backToTab(req, "email", "Run supabase/crew-email.sql first.", ERR);
     const r = await checkReplies(store, sends, new LiveGmail(), emailConfig().mailbox);
-    return backToTab(req, "email", `Checked ${r.checked} thread${r.checked === 1 ? "" : "s"}: ${r.replied} replied, ${r.bounced} bounced.`);
+    return backToTab(req, "email", `Checked ${r.checked} thread${r.checked === 1 ? "" : "s"}: ${r.replied} replied, ${r.bounced} bounced, ${r.unsubscribed} asked to stop.`);
   }
   if (action === "opt_out") {
     const ok = await optOutAddress(store, field(form, "email"), by);

@@ -144,6 +144,7 @@ function SentRow({ s, now, mailbox }: { s: EmailSend; now: number; mailbox: stri
         <Badge tone={STATUS[s.status].tone}>{STATUS[s.status].label}</Badge>
         {s.reply_state === "replied" && <Badge tone="green">Replied</Badge>}
         {s.reply_state === "bounced" && <Badge tone="red">Bounced (address suppressed)</Badge>}
+        {s.reply_state === "unsubscribed" && <Badge tone="gray">Asked to stop (never contacted again)</Badge>}
         {due && <Badge tone="amber">Follow up</Badge>}
         <span className="text-gray-500 text-xs">{when(s.sent_at ?? s.updated_at)}</span>
       </div>
@@ -222,7 +223,7 @@ export default function EmailView(p: {
             <button className={`${btn} text-gray-300 hover:text-white hover:bg-gray-900`}>Check replies</button>
           </form>
         </div>
-        <p className="text-gray-400 text-xs">Replies and bounces are read from the thread&apos;s headers only. Answer replies in Gmail; Follow up shows after 4 days with no reply.</p>
+        <p className="text-gray-400 text-xs">Replies, bounces and &quot;unsubscribe&quot; emails are read from headers only, each time this page opens and when you press Check replies. Answer replies in Gmail. If someone says no in a reply, press &quot;They said no&quot;. Follow up shows after 4 days with no reply.</p>
         {sent.length === 0 ? <p className="text-gray-400 text-sm">Nothing sent yet.</p> : <ul>{sent.map((s) => <SentRow key={s.id} s={s} now={p.now} mailbox={p.config.mailbox} />)}</ul>}
       </section>
     </main>

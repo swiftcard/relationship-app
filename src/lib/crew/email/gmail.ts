@@ -27,7 +27,7 @@ export type SendOutcome =
   | { ok: true; id: string; threadId: string }
   /** definite: Gmail answered and refused, so nothing went out. Not definite: no answer; it may have gone. */
   | { ok: false; definite: boolean; status: number | null; message: string };
-export type ThreadMessage = { from: string; labelIds: string[] };
+export type ThreadMessage = { from: string; subject?: string; labelIds: string[] };
 
 /** What the sender needs from Gmail. LiveGmail is the real one; the tests pass a fake. */
 export interface GmailTransport {
@@ -41,6 +41,8 @@ export interface GmailTransport {
   findSent(messageIdHeader: string, sinceIso: string): Promise<{ id: string; threadId: string } | null | "unavailable">;
   /** The thread's messages (headers only), or null when it can't be read. */
   thread(threadId: string): Promise<ThreadMessage[] | null>;
+  /** The newest messages in the inbox (headers only), or null when it can't be read. */
+  inbox(limit: number): Promise<ThreadMessage[] | null>;
 }
 
 type ConnRow = { access_token: string; refresh_token: string | null; expires_at: string | null; account_label: string | null };
@@ -105,6 +107,8 @@ type Header = { name?: string; value?: string };
 const header = (m: Record<string, unknown>, name: string) =>
   ((m.payload as { headers?: Header[] } | undefined)?.headers ?? []).find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
 
+const toMessage = (m: Record<string, unknown>): ThreadMessage => ({ from: header(m, "From"), subject: header(m, "Subject"), labelIds: (m.labelIds as string[] | undefined) ?? [] });
+
 export class LiveGmail implements GmailTransport {
   async account(): Promise<GmailAccount> {
     const t = await token();
@@ -159,8 +163,22 @@ export class LiveGmail implements GmailTransport {
   async thread(threadId: string) {
     const t = await token();
     if (!t.ok) return null;
-    const j = await get(t.token, `/threads/${encodeURIComponent(threadId)}?format=metadata&metadataHeaders=From`);
+    const j = await get(t.token, `/threads/${encodeURIComponent(threadId)}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`);
     if (!j) return null;
-    return ((j.messages as Record<string, unknown>[] | undefined) ?? []).map((m) => ({ from: header(m, "From"), labelIds: (m.labelIds as string[] | undefined) ?? [] }));
+    return ((j.messages as Record<string, unknown>[] | undefined) ?? []).map(toMessage);
+  }
+
+  async inbox(limit: number) {
+    const t = await token();
+    if (!t.ok) return null;
+    const list = await get(t.token, `/messages?labelIds=INBOX&maxResults=${Math.min(100, Math.max(1, limit))}`);
+    if (!list) return null;
+    const out: ThreadMessage[] = [];
+    for (const m of (list.messages as { id: string }[] | undefined) ?? []) {
+      const full = await get(t.token, `/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`);
+      if (!full) return null;
+      out.push(toMessage(full));
+    }
+    return out;
   }
 }

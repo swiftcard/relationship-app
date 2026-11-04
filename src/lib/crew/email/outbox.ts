@@ -104,13 +104,18 @@ export async function draftFromLead(store: CrewStore, leadId: string, by: string
 // ── Replies, bounces, follow-ups ────────────────────────────────────────────
 
 const BOUNCER = /mailer-daemon|postmaster|mail delivery (subsystem|system)/i;
-const addrOf = (from: string) => (/<([^>]+)>/.exec(from)?.[1] ?? from).trim().toLowerCase();
+/** A subject that asks to stop: the List-Unsubscribe mailto sends "unsubscribe"; people write "remove me", "stop". */
+export const UNSUBSCRIBE_SUBJECT = /^\s*(re:\s*)*(unsubscribe|remove me|please remove|stop emailing|stop)\b/i;
+const AUTO_REPLY = /^\s*(automatic reply|auto(matic)?[- ]?(reply|response)|out of (the )?office|ooo\b|autoreply|auto:)/i;
+export const addrOf = (from: string) => (/<([^>]+)>/.exec(from)?.[1] ?? from).trim().toLowerCase();
 
-/** What a thread says: someone answered, it bounced, or nothing yet. */
-export function readThread(messages: { from: string; labelIds: string[] }[], mailbox: string): "replied" | "bounced" | null {
-  const theirs = messages.filter((m) => addrOf(m.from) !== mailbox.toLowerCase() && !m.labelIds.includes("SENT"));
+/** What a thread says: they asked to stop, someone answered, it bounced, or nothing yet. */
+export function readThread(messages: { from: string; subject?: string; labelIds: string[] }[], mailbox: string): "replied" | "bounced" | "unsubscribed" | null {
+  // An out-of-office auto reply isn't an answer: the email still needs a follow up.
+  const theirs = messages.filter((m) => addrOf(m.from) !== mailbox.toLowerCase() && !m.labelIds.includes("SENT") && !AUTO_REPLY.test(m.subject ?? ""));
   if (!theirs.length) return null;
-  return theirs.every((m) => BOUNCER.test(m.from)) ? "bounced" : "replied";
+  if (theirs.every((m) => BOUNCER.test(m.from))) return "bounced";
+  return theirs.some((m) => UNSUBSCRIBE_SUBJECT.test(m.subject ?? "")) ? "unsubscribed" : "replied";
 }
 
 /** Days with no answer before a sent email shows as "Follow up". */
@@ -121,14 +126,16 @@ export function followUpDue(s: Pick<EmailSend, "status" | "reply_state" | "sent_
 }
 
 /**
- * Look at the threads of recent sends (headers only) and record a reply or a
- * bounce. A bounce puts the address on the suppression list. At most `limit`
+ * Look at the threads of recent sends (headers only) and record a reply, a
+ * bounce or a request to stop. A bounce puts the address on the suppression
+ * list; "unsubscribe" (in the thread or as a new email) opts them out of
+ * every channel. At most `limit`
  * threads, each checked at most every 30 minutes. Returns what changed.
  */
-export async function checkReplies(store: CrewStore, sends: EmailSendStore, gmail: GmailTransport, mailbox: string, now = new Date(), limit = 20): Promise<{ checked: number; replied: number; bounced: number }> {
+export async function checkReplies(store: CrewStore, sends: EmailSendStore, gmail: GmailTransport, mailbox: string, now = new Date(), limit = 20): Promise<{ checked: number; replied: number; bounced: number; unsubscribed: number }> {
   const since = new Date(now.getTime() - 30 * 86_400_000).toISOString();
   const before = new Date(now.getTime() - 30 * 60_000).toISOString();
-  const out = { checked: 0, replied: 0, bounced: 0 };
+  const out = { checked: 0, replied: 0, bounced: 0, unsubscribed: 0 };
   for (const s of await sends.awaitingReply(since, before, limit)) {
     if (!s.thread_id) continue;
     const msgs = await gmail.thread(s.thread_id);
@@ -139,8 +146,22 @@ export async function checkReplies(store: CrewStore, sends: EmailSendStore, gmai
     if (state === "bounced") {
       out.bounced++;
       await store.addSuppression(s.to_email, "bounced (Gmail)", { source: "email", channel: "email" });
+    } else if (state === "unsubscribed") {
+      out.unsubscribed++;
+      await optOutAddress(store, s.to_email, "their reply");
     } else if (state === "replied") out.replied++;
-    if (state) await logActivity(store, { platform: "email", action: state === "bounced" ? "bounce" : "reply", target: s.to_email, message: s.subject, row_key: null });
+    if (state) await logActivity(store, { platform: "email", action: state === "bounced" ? "bounce" : state === "unsubscribed" ? "unsubscribe" : "reply", target: s.to_email, message: s.subject, row_key: null });
+  }
+  // The List-Unsubscribe button sends a new email ("unsubscribe") outside the
+  // thread: read the newest inbox headers and stop anyone who asked.
+  const inbox = await gmail.inbox(50);
+  for (const m of inbox ?? []) {
+    const from = addrOf(m.from);
+    if (from === mailbox.toLowerCase() || !UNSUBSCRIBE_SUBJECT.test(m.subject ?? "") || !EMAIL_RE.test(from)) continue;
+    if (await store.isSuppressed([from])) continue;
+    await optOutAddress(store, from, "unsubscribe email");
+    out.unsubscribed++;
+    for (const r of await sends.liveForAddress(from)) if (!r.reply_state) await sends.patch(r.id, { reply_state: "unsubscribed", replied_at: now.toISOString() });
   }
   return out;
 }
