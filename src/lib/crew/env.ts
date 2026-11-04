@@ -29,7 +29,28 @@ export const ENV_HELP: Record<EnvKey, string> = {
   CREW_SHEET_HOOK_SECRET: "Any long random string. The same value goes in the Apps Script's Script Properties as HOOK_SECRET, so edits in the Sheet reach the backend within seconds.",
   BLUESKY_HANDLE: "The SwiftCard Bluesky account handle (e.g. swiftcardapp.bsky.social) for approval-triggered replies.",
   BLUESKY_APP_PASSWORD: "An app password for that Bluesky account (Settings → App passwords), never the account password.",
+  CREW_EMAIL_LIVE: "Set to 1 to let an approved email really leave the SwiftCard mailbox. Unset (the default) = dry run: Send only records what would have gone out.",
+  CREW_EMAIL_FROM: "The one mailbox approved emails are sent from. Default hello@swiftcard.me. The Gmail connection is refused for any other account.",
+  CREW_EMAIL_FROM_NAME: "The name people see next to the address, e.g. Menash from SwiftCard. Default Menash.",
+  CREW_EMAIL_DAILY_CAP: "Most approved emails sent in any 24 hours. Default 20, never more than 50.",
+  CREW_EMAIL_POSTAL_ADDRESS: "SwiftCard's postal address for the footer of every outreach email (US law, CAN-SPAM). Live sending refuses to run without it.",
 };
+
+/** The mailbox approved emails go out from (and the only account the Gmail connection accepts). */
+export function emailMailbox(): string {
+  return (env("CREW_EMAIL_FROM") ?? "hello@swiftcard.me").toLowerCase();
+}
+
+/** Real sending is on only when CREW_EMAIL_LIVE=1. Anything else is a dry run. */
+export function emailLive(): boolean {
+  return env("CREW_EMAIL_LIVE") === "1";
+}
+
+/** Sends allowed in any rolling 24 hours: default 20, at most 50. */
+export function emailDailyCap(): number {
+  const n = Number(env("CREW_EMAIL_DAILY_CAP") ?? 20);
+  return Number.isFinite(n) && n >= 1 ? Math.min(50, Math.floor(n)) : 20;
+}
 
 /** The SwiftCard Bluesky account is connected (needed before an approved reply can be posted). */
 export function blueskyConfigured(): boolean {

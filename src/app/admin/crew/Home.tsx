@@ -171,11 +171,25 @@ function BlogWriterCard() {
   );
 }
 
+/** Approved outreach emails go out from the SwiftCard mailbox here, one Send at a time (2026-11-04). */
+function EmailCard() {
+  return (
+    <Link href="/admin/crew/email" className={`${card} flex items-center justify-between gap-3 hover:border-gray-600`} data-email-outbox>
+      <span className="min-w-0">
+        <span className="block text-white font-semibold">Email</span>
+        <span className="block text-sm text-gray-400">Read each prepared email, edit it, and press Send. It goes from the SwiftCard mailbox, and replies show up here.</span>
+      </span>
+      <Chevron className="h-4 w-4 shrink-0 text-gray-400" />
+    </Link>
+  );
+}
+
 export default function Home({ d, edit }: { d: Dashboard; edit?: string }) {
   return (
     <div className="space-y-6">
       <TopBar d={d} />
       <BlogWriterCard />
+      <EmailCard />
       <SheetAgents rows={d.sheetAgents} sheetUrl={d.sheetUrl} />
       <NeedsYou d={d} edit={edit} />
       <Jobs d={d} />

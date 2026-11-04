@@ -6,6 +6,7 @@ import { publishBlogPost } from "./blog-post";
 import { blueskyConfigured } from "../env";
 import { postBlueskyReply } from "./bluesky-reply";
 import { dispatchCodeFix } from "./code-fix";
+export { isEmailDraft, sendApprovedEmail, type EmailConfig, type EmailDeps } from "./email-send";
 
 // ── The outward actions, behind the Approve button ──────────────────────────
 // Imported ONLY by src/lib/crew/decide.ts (pinned by tests/crew-guards).
@@ -17,6 +18,12 @@ import { dispatchCodeFix } from "./code-fix";
 // the public (a blog post, a Bluesky reply) is simulated and logged instead.
 // A code fix only opens a pull request for a person to review, so it runs
 // in dry run too.
+//
+// Email (2026-11-04) is the one draft kind with its own executor and its own
+// lock: an approved email draft is sent from the SwiftCard mailbox only by
+// the admin's "Send" button (decide action "send_email"), never by Approve
+// alone and never from the Sheet. Its dry run is CREW_EMAIL_LIVE, separate
+// from Controls → Dry run, so turning on blog publishing can't start email.
 
 export type ExecResult = { ok: boolean; message: string; result?: Record<string, unknown>; simulated?: boolean };
 

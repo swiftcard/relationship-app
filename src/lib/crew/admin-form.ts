@@ -11,6 +11,14 @@ import { NextResponse, type NextRequest } from "next/server";
 export const ERR = { tone: "err" } as const;
 
 export function backToTab(req: NextRequest, tab: string, msg: string, extra?: Record<string, string>, hash?: string): NextResponse {
+  if (tab === "email") {
+    // The Email page (admin → Agents → Email) has no tabs of its own.
+    const e = new URL("/admin/crew/email", req.url);
+    if (msg) e.searchParams.set("msg", msg.slice(0, 200));
+    for (const [k, v] of Object.entries(extra ?? {})) e.searchParams.set(k, v);
+    if (hash && /^[a-z0-9-]+$/i.test(hash)) e.hash = hash;
+    return NextResponse.redirect(e, 303);
+  }
   const agent = /^agent:([a-z0-9-]+)$/.exec(tab);
   const tasks = /^tasks(?::([a-z]+))?$/.exec(tab);
   const u = new URL(agent ? `/admin/crew/agent/${agent[1]}` : "/admin/crew", req.url);
@@ -27,4 +35,13 @@ export function backToTab(req: NextRequest, tab: string, msg: string, extra?: Re
 export function field(form: FormData, key: string): string {
   const v = form.get(key);
   return typeof v === "string" ? v.trim() : "";
+}
+
+/** The form came from this site (an Origin of "null" or garbage is not this site). */
+export function sameSite(origin: string, host: string): boolean {
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
 }
