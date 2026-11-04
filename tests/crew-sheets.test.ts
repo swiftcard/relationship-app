@@ -136,12 +136,20 @@ describe("rows: Name, Message, Link, and the link is where the message goes", ()
   });
 
   it("an Instagram DM opens the chat in the app, not the profile", () => {
-    const a = approval({ agent_id: "contact-instagram-linkinbio", team: "contact", kind: "dm", platform: "instagram", target_url: "https://www.instagram.com/jane.realtor/", meta: { name: "Jane Realtor", author: "@Jane.Realtor" } });
+    const a = approval({ agent_id: "contact-instagram", team: "contact", kind: "dm", platform: "instagram", target_url: "https://www.instagram.com/jane.realtor/", meta: { name: "Jane Realtor", author: "@Jane.Realtor" } });
     const [row] = approvalRows(a, sources());
-    expect(row.tab.id).toBe("instagram-linkedin-bio");
+    expect(row.tab.id).toBe("instagram-dms");
     expect(row.cells.name).toBe("Jane Realtor, @jane.realtor");
     expect(href(row.cells.link)).toBe("https://ig.me/m/jane.realtor");
     expect(linkedinIn("see https://www.linkedin.com/in/some-one/ for more")).toBe("https://www.linkedin.com/in/some-one/");
+  });
+
+  it("an Instagram LinkedIn Bio comment opens the exact post, never a chat", () => {
+    const a = approval({ agent_id: "contact-instagram-linkinbio", team: "contact", kind: "comment", platform: "instagram", target_url: "https://www.instagram.com/p/C1abc/", meta: { author: "@jane.realtor" } });
+    const [row] = approvalRows(a, sources());
+    expect(row.tab.id).toBe("instagram-linkedin-bio");
+    expect(row.cells.name).toBe("@jane.realtor");
+    expect(href(row.cells.link)).toBe("https://www.instagram.com/p/C1abc/");
   });
 
   it("an X reply opens the post; X and TikTok outreach open the profile", () => {

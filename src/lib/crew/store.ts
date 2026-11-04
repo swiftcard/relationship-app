@@ -154,7 +154,8 @@ export interface CrewStore {
   listReports(limit: number, team?: TeamId): Promise<ReportRow[]>;
 
   addInput(i: { platform: Platform; kind: CrewInput["kind"]; url: string | null; text: string }): Promise<string>;
-  takeInputs(platforms: Platform[], limit: number, agentId: string): Promise<CrewInput[]>;
+  /** Claims up to `limit` new pasted inputs; `accept` leaves the rows it rejects for another agent. */
+  takeInputs(platforms: Platform[], limit: number, agentId: string, accept?: (i: CrewInput) => boolean): Promise<CrewInput[]>;
   countNewInputs(platforms: Platform[]): Promise<number>;
   /** Read-only look at pasted inputs (any status), oldest first. */
   listInputsSince(platforms: Platform[], sinceIso: string, limit: number): Promise<CrewInput[]>;

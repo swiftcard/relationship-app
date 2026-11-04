@@ -46,8 +46,8 @@ export const PASTE: TabSpec = {
   name: "Paste a Post",
   group: "operating",
   layout: "input",
-  agents: ["replies-facebook", "contact-alignable", "replies-instagram"],
-  description: "For places the agents can't search on their own (Facebook groups, Alignable, Instagram): paste a post or a profile here with its link, and the right agent writes the message on its next run. Taken means an agent picked it up.",
+  agents: ["replies-facebook", "contact-alignable", "replies-instagram", "contact-instagram-linkinbio"],
+  description: "For places the agents can't search on their own (Facebook groups, Alignable, Instagram): paste a post or a profile here with its link, and the right agent writes the message on its next run. An Instagram post link (instagram.com/p/ or /reel/) with its caption gets a comment draft in Instagram LinkedIn Bio. Taken means an agent picked it up.",
   columns: [
     c("platform", "Platform", { width: 110, owner: true, note: "facebook, alignable, instagram, linkedin, threads, bluesky, quora, indiehackers, reddit, x, tiktok or web" }),
     c("url", "Link", { width: 220, owner: true }),
@@ -74,7 +74,7 @@ export const FACEBOOK = send({ id: "facebook", name: "Facebook Groups", agent: "
 
 // ── Instagram ───────────────────────────────────────────────────────────────
 export const INSTAGRAM_DMS = send({ id: "instagram-dms", name: "Instagram DMs", agent: "contact-instagram", description: "Business owners on Instagram, each with a message about something they posted. The link opens your chat with them in the Instagram app.", color: "e1306c" });
-export const INSTAGRAM_LINKEDIN_BIO = send({ id: "instagram-linkedin-bio", name: "Instagram LinkedIn Bio", agent: "contact-instagram-linkinbio", description: "Professionals whose Instagram bio links to their LinkedIn, each with a message built on their bio. The link opens your chat with them in the Instagram app.", color: "e1306c" });
+export const INSTAGRAM_LINKEDIN_BIO = send({ id: "instagram-linkedin-bio", name: "Instagram LinkedIn Bio", agent: "contact-instagram-linkinbio", description: "Comments for the Instagram posts you pasted into Paste a Post, each one written to add something to that post. Edit the message here if you like. The link opens the post; tap the comment box.", color: "e1306c" });
 export const INSTAGRAM_COMMENTS = send({ id: "instagram-comments", name: "Instagram Comments", agent: "replies-instagram", description: "Comments on business owners' Instagram posts. The link opens the post; tap the comment box.", color: "e1306c" });
 
 // ── TikTok ──────────────────────────────────────────────────────────────────

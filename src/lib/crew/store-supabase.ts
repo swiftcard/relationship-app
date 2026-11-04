@@ -343,13 +343,15 @@ export class SupabaseStore implements CrewStore {
     const data = must(await this.db.from("crew_inputs").insert(i).select("id").single(), "input");
     return String((data as Row).id);
   }
-  async takeInputs(platforms: Platform[], limit: number, agentId: string) {
+  async takeInputs(platforms: Platform[], limit: number, agentId: string, accept?: (i: CrewInput) => boolean) {
+    // With a filter, look further down the queue: rows meant for another agent stay new for it.
     const rows = must(
-      await this.db.from("crew_inputs").select("*").eq("status", "new").in("platform", platforms).order("created_at").limit(limit),
+      await this.db.from("crew_inputs").select("*").eq("status", "new").in("platform", platforms).order("created_at").limit(accept ? Math.max(limit * 5, 50) : limit),
       "inputs",
     ) as CrewInput[];
     const taken: CrewInput[] = [];
-    for (const r of rows ?? []) {
+    for (const r of (rows ?? []).filter((x) => !accept || accept(x))) {
+      if (taken.length >= limit) break;
       // Claim each row; a parallel run that got there first wins it.
       const { data } = await this.db.from("crew_inputs").update({ status: "used", used_by: agentId }).eq("id", r.id).eq("status", "new").select("id");
       if ((data ?? []).length) taken.push(r);

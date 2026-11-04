@@ -1,12 +1,14 @@
 import type { AgentDef } from "../agent-def";
 import type { AgentContext } from "../context";
 import { normalizeHandle } from "../ledger";
-import { exactProfileLink, handleFromPost, handleFromProfile, instagramHandle } from "../exact-links";
+import { handleFromPost, handleFromProfile, instagramHandle } from "../exact-links";
 import { pairs, rotate, runEngagement, type Candidate } from "../replies/engine";
 import { PROFESSIONS, US_METROS } from "../search-plan";
 import { redditConfigured, searchSubreddits } from "../sources/reddit";
 import { SEARCH_WANT, searchItems, searchPlatform, searchRedditByWeb } from "../sources/web-discovery";
 import type { CrewInput, Platform } from "../types";
+import { instagramLinkedinBio, isPastedPost } from "./instagram-conversations";
+import { PROFILE_SCORE_SYSTEM, unsupportedClaims } from "./instagram-prospects";
 import { DEFAULT_SUBREDDITS, SHEET_AGENT_USD, SHEET_DAILY_TARGET, SHEET_MAX_PENDING, guessAuthor } from "./replies";
 
 // ── Team 2: Contact (the team that DMs) ─────────────────────────────────────
@@ -103,12 +105,19 @@ export const redditDms: AgentDef = {
 };
 
 async function igCandidates(ctx: AgentContext, topic: string): Promise<Candidate[]> {
-  const fromPaste = pasted(await ctx.store.takeInputs(["instagram"], 5, ctx.def.id), "instagram");
+  // A pasted post (a /p/ or /reel/ link) is for Instagram LinkedIn Bio, which drafts a comment on it; profiles stay here.
+  const fromPaste = pasted(await ctx.store.takeInputs(["instagram"], 5, ctx.def.id, (i) => !isPastedPost(i)), "instagram");
   const web = (await searchPlatform(ctx, "instagram", [topic])).map((w) => ({ ...w, author: instagramHandle(w.author) ?? handleFromUrl("instagram", w.url), promoAllowed: true }));
   const out = [...fromPaste, ...web];
   // A post or profile with no @handle can't be messaged (the link opens a chat with that handle).
   ctx.stat("skipped_no_handle", out.filter((c) => !c.author).length);
-  return out.filter((c) => !!c.author);
+  // Not someone another Instagram agent has a draft for that nobody has acted on yet (a comment waiting on
+  // their post): the ledger only counts what was sent, so without this they could get a comment and a DM.
+  const live = await ctx.store.listApprovals({ status: ["pending", "approved"], agentIds: ["contact-instagram", "contact-instagram-linkinbio", "replies-instagram"], limit: 1000 });
+  const busy = new Set(live.map((a) => instagramHandle(String(a.meta?.author ?? "")) ?? instagramHandle(a.target_url)).filter(Boolean));
+  const kept = out.filter((c) => !!c.author && !busy.has(instagramHandle(c.author) ?? ""));
+  ctx.stat("skipped_draft_waiting", out.filter((c) => !!c.author).length - kept.length);
+  return kept;
 }
 
 export const instagramDms: AgentDef = {
@@ -126,7 +135,10 @@ export const instagramDms: AgentDef = {
       ceiling: SHEET_DAILY_TARGET,
       mustBePro: true,
       keywordFilter: false,
-      register: "Instagram DM: warm, brief, about one specific post of theirs (or, when all you have is their profile, one specific thing their bio says).",
+      register: "Instagram DM: warm, brief, about one specific post of theirs (or, when all you have is their profile, one specific thing their bio says). Use only what their bio or post actually says: no guesses about their problems, no numbers or quotes that aren't in it, nothing about their personal life.",
+      // Profiles scored as prospects, and a DM that claims what the profile doesn't say is not used (2026-11-04).
+      scoreSystem: PROFILE_SCORE_SYSTEM,
+      extraChecks: (text, c) => unsupportedClaims(text, c),
       length: "35 to 80 words",
       label: (c) => `Instagram DM to @${normalizeHandle("instagram", c.author ?? "").replace(/^@/, "")}`,
       person: (c) => (c.author ? { platform: "instagram", handle: c.author } : null),
@@ -140,70 +152,8 @@ export const instagramDms: AgentDef = {
   },
 };
 
-/** A professional whose Instagram bio links to their LinkedIn, as web search shows it. */
-type BioHit = { username: string; name: string; occupation: string; company: string; location: string; linkedin_url: string; bio: string };
-
-const LINKEDIN_IN = /linkedin\.com\/in\/[\w%.-]+/i;
-
-/** Keep only real profiles whose bio links a real LinkedIn profile. */
-export function bioCandidates(hits: BioHit[]): Candidate[] {
-  const out: Candidate[] = [];
-  for (const h of hits) {
-    const handle = instagramHandle(h.username);
-    const inBio = LINKEDIN_IN.exec(h.bio)?.[0];
-    const linkedin = exactProfileLink("linkedin", h.linkedin_url) ?? (inBio ? exactProfileLink("linkedin", `https://www.${inBio}`) : null);
-    if (!handle || !linkedin) continue;
-    out.push({
-      platform: "instagram",
-      url: `https://www.instagram.com/${handle}/`,
-      author: handle,
-      title: [h.name, h.occupation].filter(Boolean).join(", ") || `@${handle}`,
-      text: h.bio.slice(0, 600),
-      community: null,
-      promoAllowed: true,
-      extra: { name: h.name.slice(0, 80), occupation: h.occupation.slice(0, 80), company: h.company.slice(0, 120), location: h.location.slice(0, 80), linkedin },
-    });
-  }
-  return out;
-}
-
-export const instagramLinkedinBio: AgentDef = {
-  ...base,
-  id: "contact-instagram-linkinbio",
-  name: "Instagram LinkedIn Bio",
-  schedule: { kind: "daily", hour: 15, minute: 30 },
-  dailyUsd: SHEET_AGENT_USD,
-  purpose: "Finds realtors, insurance agents, loan officers and other professionals whose Instagram bio links to their LinkedIn, and writes each one a short message built on what their bio says. The link opens the chat with them in the Instagram app.",
-  async run(ctx) {
-    return runEngagement(ctx, {
-      platform: "instagram",
-      kind: "dm",
-      action: "dm_linkedin_bio",
-      ceiling: SHEET_DAILY_TARGET,
-      mustBePro: true,
-      keywordFilter: false,
-      linkKind: "profile",
-      register:
-        "Instagram DM: warm, brief, written like a quick text. Open with something specific from their bio or their work (their niche, their area, their brokerage, something they're proud of). They send people from Instagram to LinkedIn, so being easy to find and remembered matters to them; if SwiftCard comes up, connect it to that in your own words (one tap saves their contact with everything, LinkedIn included) without listing features. Ask one easy question.",
-      length: "30 to 70 words",
-      label: (c) => `Instagram DM to @${c.author} (LinkedIn in bio)`,
-      person: (c) => (c.author ? { platform: "instagram", handle: c.author, name: c.extra?.name || null } : null),
-      async find() {
-        const fromPaste = pasted(await ctx.store.takeInputs(["instagram"], 3, ctx.def.id), "instagram").filter((c) => LINKEDIN_IN.test(c.text));
-        const { who, where } = await nextWhoWhere(ctx);
-        const hits = await searchItems<BioHit>(ctx, {
-          system: "You find public Instagram profiles of working professionals from web search results.",
-          prompt: `Find Instagram profiles (instagram.com/<username>) of ${who} in or near ${where} whose Instagram bio contains a link to their LinkedIn profile (linkedin.com/in/...). Search for example: site:instagram.com "linkedin.com/in" ${who} ${where}. For each profile: username (without @), name, occupation, company (brokerage, agency or business, if shown), location, linkedin_url (the linkedin.com/in/ link in the bio, exactly as shown), bio (the bio text as shown, under 400 characters). Skip anyone whose bio has no LinkedIn link. No law firms, no students.`,
-          fields: ["username", "name", "occupation", "company", "location", "linkedin_url", "bio"],
-          domains: ["instagram.com"],
-          maxUses: 8,
-          want: SEARCH_WANT,
-        }).catch(() => [] as BioHit[]);
-        return [...fromPaste, ...bioCandidates(hits)];
-      },
-    });
-  },
-};
+// The Instagram LinkedIn Bio agent (contact-instagram-linkinbio) became the
+// Instagram conversations finder on 2026-11-04: see instagram-conversations.ts.
 
 export const linkedinConnect: AgentDef = {
   ...base,

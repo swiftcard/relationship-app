@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { CONTACT } from "@/lib/crew/agents/contact";
+import { IG_CONVERSATIONS_USD } from "@/lib/crew/agents/instagram-conversations";
 import { REPLIES, SHEET_AGENT_USD, SHEET_DAILY_TARGET, SHEET_MAX_PENDING } from "@/lib/crew/agents/replies";
 import { checkBudget } from "@/lib/crew/budget";
 import { buildContext } from "@/lib/crew/context";
@@ -29,7 +30,8 @@ describe("100 a day from every Sheet agent", () => {
     expect(SHEET_MAX_PENDING).toBeGreaterThanOrEqual(7 * SHEET_DAILY_TARGET);
     expect(sheetAgents.length).toBeGreaterThanOrEqual(15);
     for (const a of sheetAgents) {
-      expect(a.dailyUsd, a.id).toBe(SHEET_AGENT_USD);
+      // The Instagram conversations finder has its own small limit (owner, 2026-11-04: relevance over volume, after $0.18 spent on nothing).
+      expect(a.dailyUsd, a.id).toBe(a.id === "contact-instagram-linkinbio" ? IG_CONVERSATIONS_USD : SHEET_AGENT_USD);
       expect(a.maxPending, a.id).toBe(SHEET_MAX_PENDING);
     }
   });
@@ -41,7 +43,8 @@ describe("100 a day from every Sheet agent", () => {
   });
 
   it("the owner's eight search on their own (none waits only for pasted posts)", () => {
-    for (const id of ["replies-x", "contact-x", "replies-reddit", "contact-reddit", "replies-facebook", "contact-instagram", "contact-instagram-linkinbio", "replies-instagram"]) {
+    // Instagram LinkedIn Bio waits for pasted posts since 2026-11-04: its web search never returned a post in 9 live runs.
+    for (const id of ["replies-x", "contact-x", "replies-reddit", "contact-reddit", "replies-facebook", "contact-instagram", "replies-instagram"]) {
       const a = sheetAgents.find((x) => x.id === id)!;
       expect(a, id).toBeTruthy();
       expect(a.continuous, id).toBe(true);
