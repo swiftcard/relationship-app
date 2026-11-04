@@ -23,10 +23,18 @@ on:
     branches: [main]
   pull_request:
 
-# A newer push to the same branch/PR cancels the older in-flight run.
+# On a PR branch, a newer push cancels the older in-flight run (only the
+# newest commit can be merged). On main it must NOT: these runs are the gate
+# Vercel waits on, and render takes 20 to 30 minutes, so with pushes landing
+# more often than that every run was cancelled before it finished and nothing
+# reached production (Nov 4 2026: b9f898ff, f646b5c8, 976c83d6, b5e02e77 all
+# cancelled while swiftcard.me stayed on 7d993ccd). Now a main run in progress
+# always finishes and that commit goes live; GitHub keeps only the newest
+# waiting run behind it, so the queue never grows and the next run is the
+# latest main.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   verify:
