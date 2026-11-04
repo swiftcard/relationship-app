@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import { PERSON_SCOPED_STORAGE_KEYS } from "@/lib/account-state";
 
 // ── Offline cards on the web (public/sw.js, public/offline.html) ────────────
@@ -95,6 +96,46 @@ describe("the no-signal screen", () => {
 
   it("is self-contained: nothing to fetch with no signal", () => {
     expect(offline).not.toMatch(/<script[^>]+src=|<link[^>]+href=/);
+  });
+});
+
+describe("the no-signal screen inside the iPhone and Android apps", () => {
+  const eol = (s: string) => s.replace(/\r\n/g, "\n");
+
+  it("takes the Android app's launch image down itself, so the QR is not hidden for 15 seconds", () => {
+    // Seen on the emulator 2026-11-04: the screen was ready, behind the launch
+    // image, until the SplashScreen failsafe (capacitor.config.ts) gave up.
+    expect(offline).toMatch(/cap\.Plugins\.SplashScreen/);
+    expect(offline).toMatch(/splash\.hide\(\{ fadeOutDuration: 180 \}\)/);
+  });
+
+  it("retries by itself even when the phone never reports going offline", () => {
+    // "online" never fires on Wi-Fi with no internet behind it. The page checks
+    // the address it stands in for with a HEAD, which the worker never answers
+    // (it only touches GET), and opens it with location.replace: a reload of
+    // the copy the Android app draws itself would just draw that copy again.
+    expect(sw).toMatch(/if \(req\.method !== "GET"\) return;/);
+    expect(offline).toMatch(/fetch\(target, \{ method: "HEAD", cache: "no-store"/);
+    expect(offline).toMatch(/var retry = function \(\) \{ location\.replace\(target\); \};/);
+    expect(offline).toMatch(/addEventListener\("online", retry\)/);
+    expect(offline).toMatch(/getElementById\("retry"\)\.addEventListener\("click", retry\)/);
+    expect(offline).not.toMatch(/location\.reload\(\)/);
+  });
+
+  it("the Android app carries the very same screen, for a phone with no service worker yet", () => {
+    // MainActivity.showOfflineScreen draws this copy when a page fails with no
+    // worker to answer it (a fresh install opened with no signal). A copy that
+    // drifts from the site's is a second offline screen nobody looks at.
+    expect(eol(read("capacitor-shell/www/offline.html"))).toBe(eol(offline));
+  });
+
+  it("phones pick up a changed screen: sw.js carries its fingerprint", () => {
+    // The worker caches offline.html once, at install, and installs again only
+    // when sw.js itself changes. An edit to offline.html alone would never reach
+    // a phone that already has the old one. If this fails, put the new
+    // fingerprint in the comment at the top of public/sw.js.
+    const fp = createHash("sha256").update(eol(offline)).digest("hex").slice(0, 12);
+    expect(read("public/sw.js")).toContain(`offline.html fingerprint: ${fp}`);
   });
 });
 

@@ -333,6 +333,28 @@ describe("the native half is wired up", () => {
       .toMatch(/--sc-inset-top: env\(safe-area-inset-top\)/);
   });
 
+  it("no signal shows the You're offline screen, never WebView's error page, and never for an HTTP error", () => {
+    // A fresh install opened with no signal has no service worker to answer
+    // the failed load, and showed the launch image for 15 seconds, then
+    // "Webpage not available · net::ERR_INTERNET_DISCONNECTED" (emulator,
+    // 2026-11-04). The fallback draws the site's own offline.html from the
+    // copy in the app, under the failed address, on connectivity errors only.
+    const main = code(read("android/app/src/main/java/me/swiftcard/app/MainActivity.java"));
+    expect(main).toMatch(/getBridge\(\)\.setWebViewClient\(new BridgeWebViewClient\(getBridge\(\)\)/);
+    expect(main).toMatch(/super\.onReceivedError\(view, request, error\);/);
+    expect(main).toMatch(/request\.isForMainFrame\(\) && isNoConnection\(/);
+    expect(main).toMatch(/readAsset\("public\/offline\.html"\)/);
+    expect(main).toMatch(/loadDataWithBaseURL\(failedUrl, html, "text\/html", "UTF-8", failedUrl\)/);
+    expect(main).toMatch(/ERR_\(INTERNET_DISCONNECTED/);
+    // A card's 404 must never say "You're offline": no HTTP-error hook, and no
+    // server.errorPath, which Capacitor loads on HTTP errors as well.
+    expect(main).not.toMatch(/onReceivedHttpError/);
+    expect(code(read("capacitor.config.ts"))).not.toMatch(/errorPath/);
+    // The copy the app is built with (cap sync copies webDir into the app).
+    expect(code(read("capacitor.config.ts"))).toMatch(/webDir: "capacitor-shell\/www"/);
+    expect(existsSync(join(ROOT, "capacitor-shell/www/offline.html"))).toBe(true);
+  });
+
   it("other apps are visible, or the browser hand-off silently fails", () => {
     // Android 11+ hides other packages. Without <queries>, resolveActivity()
     // returns null even with Chrome installed, so ExternalPurchasePlugin

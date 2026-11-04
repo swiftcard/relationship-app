@@ -3,14 +3,24 @@ package me.swiftcard.app;
 import android.os.Bundle;
 import android.view.View;
 import android.webkit.CookieManager;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
+import android.webkit.WebViewClient;
 
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.BridgeWebViewClient;
 import com.getcapacitor.WebViewListener;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.regex.Pattern;
 
 /**
  * The Android twin of ios/App/App/MainViewController.swift.
@@ -49,6 +59,78 @@ public class MainActivity extends BridgeActivity {
                 ViewCompat.requestApplyInsets(webView);
             }
         });
+
+        installOfflineScreen();
+    }
+
+    /**
+     * NO SIGNAL → THE "YOU'RE OFFLINE" SCREEN, NEVER CHROME'S ERROR PAGE.
+     *
+     * Once the app has opened with signal, the site's service worker
+     * (public/sw.js) answers a failed page load with public/offline.html: the
+     * owner's QR codes, Contact first. But a phone with no worker yet — a fresh
+     * install opened at a venue with no signal, or app storage cleared — got
+     * the launch image for 15 seconds and then WebView's own "Webpage not
+     * available · net::ERR_INTERNET_DISCONNECTED", black on black (emulator,
+     * 2026-11-04).
+     *
+     * This draws the same offline.html instead, from the copy built into the
+     * app (capacitor-shell/www/offline.html, kept identical to the site's by
+     * tests/offline-web.test.ts), under the address that failed. Same origin
+     * as the site, so the page reads the owner's saved codes and retries that
+     * address by itself when the connection is back.
+     *
+     * Connectivity failures only. NOT server.errorPath: Capacitor loads that on
+     * every HTTP error too, so a card's 404 would have said "You're offline".
+     * The iPhone twin is ios/App/App/OfflineCard.swift.
+     */
+    private void installOfflineScreen() {
+        getBridge().setWebViewClient(new BridgeWebViewClient(getBridge()) {
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                super.onReceivedError(view, request, error);
+                if (request.isForMainFrame() && isNoConnection(error.getErrorCode(), String.valueOf(error.getDescription()))) {
+                    showOfflineScreen(view, request.getUrl().toString());
+                }
+            }
+        });
+    }
+
+    /** "The network isn't there" — never a cancelled load, a bad certificate or an HTTP status. */
+    static boolean isNoConnection(int code, String description) {
+        switch (code) {
+            case WebViewClient.ERROR_HOST_LOOKUP:
+            case WebViewClient.ERROR_CONNECT:
+            case WebViewClient.ERROR_TIMEOUT:
+            case WebViewClient.ERROR_IO:
+                return true;
+            default:
+                return description != null && NO_CONNECTION.matcher(description).find();
+        }
+    }
+
+    private static final Pattern NO_CONNECTION = Pattern.compile(
+            "ERR_(INTERNET_DISCONNECTED|NAME_NOT_RESOLVED|NAME_RESOLUTION_FAILED|ADDRESS_UNREACHABLE"
+                    + "|NETWORK_CHANGED|NETWORK_ACCESS_DENIED|TIMED_OUT|PROXY_CONNECTION_FAILED"
+                    + "|CONNECTION_(REFUSED|RESET|CLOSED|TIMED_OUT|FAILED|ABORTED))\\b");
+
+    private void showOfflineScreen(WebView view, String failedUrl) {
+        if (failedUrl == null || !failedUrl.startsWith("https://")) return;
+        String html = readAsset("public/offline.html");
+        // No copy in this build: WebView's own error page is still better than nothing.
+        if (html == null) return;
+        view.loadDataWithBaseURL(failedUrl, html, "text/html", "UTF-8", failedUrl);
+    }
+
+    private String readAsset(String path) {
+        try (InputStream in = getAssets().open(path); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
+            return out.toString(StandardCharsets.UTF_8.name());
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     /**

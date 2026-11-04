@@ -19,6 +19,11 @@
 // It touches nothing else. Only GET requests are looked at: forms, logins,
 // payments and every POST go straight to the network, as do all /api calls
 // except the contact file.
+//
+// The no-signal screen is cached once, at install, and a phone installs this
+// worker again only when this file changes. So this file carries the screen's
+// fingerprint, and tests/offline-web.test.ts fails until it is updated:
+// offline.html fingerprint: c774851e3995
 
 const CARDS = "sc-cards-v1";   // saved pages, their contact files, the index
 const STATIC = "sc-static-v1"; // what saved pages need to run: scripts, styles, fonts, pictures

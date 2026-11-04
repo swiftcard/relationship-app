@@ -293,6 +293,39 @@ for (const [engine, type] of [["chromium", chromium], ["webkit", webkit]] as con
         await ctx.close();
       }, 60_000);
 
+      it("comes back by itself once the page answers, even when the phone never said it was offline", async () => {
+        // Wi-Fi with no internet behind it never fires "online": navigator.onLine
+        // stays true throughout, exactly as it does in this browser. The screen
+        // used to wait for that event and sat there until someone tapped Try again.
+        const ctx = await freshContext();
+        const page = await openAndSave(ctx);
+        signal(false);
+        await page.goto(`${origin}/dashboard`);
+        await expect(page.textContent("body")).resolves.toContain("You're offline");
+        expect(await page.evaluate(() => navigator.onLine)).toBe(true);
+        signal(true);
+        await page.waitForSelector("h1:has-text('Dashboard')", { timeout: 15_000 });
+        expect(new URL(page.url()).pathname).toBe("/dashboard");
+        await ctx.close();
+      }, 60_000);
+
+      it("inside the app, takes the launch image down at once instead of after its 15-second failsafe", async () => {
+        // The Android app holds its launch image until a page says it has painted.
+        // This page has none of the app's code, so it has to say so itself.
+        const ctx = await freshContext();
+        await ctx.addInitScript(() => {
+          const w = window as unknown as { Capacitor: unknown; __splashHidden?: unknown };
+          w.Capacitor = { Plugins: { SplashScreen: { hide: (o: unknown) => { w.__splashHidden = o ?? true; return Promise.resolve(); } } } };
+        });
+        const page = await openAndSave(ctx);
+        signal(false);
+        await page.goto(`${origin}/dashboard`);
+        await expect(page.textContent("body")).resolves.toContain("You're offline");
+        await expect.poll(() => page.evaluate(() => (window as unknown as { __splashHidden?: unknown }).__splashHidden ?? null), { timeout: 5_000 })
+          .toEqual({ fadeOutDuration: 180 });
+        await ctx.close();
+      }, 60_000);
+
       it("fits a phone: no sideways scroll at 390px", async () => {
         const ctx = await freshContext();
         const page = await openAndSave(ctx);

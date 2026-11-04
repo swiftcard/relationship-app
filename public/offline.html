@@ -195,8 +195,47 @@
     });
   }
 
-  document.getElementById("retry").addEventListener("click", function () { location.reload(); });
-  window.addEventListener("online", function () { location.reload(); });
+  // ── Inside the app: take the launch image down now ─────────────────────────
+  // The Android app keeps its launch image up until a page says it has
+  // painted, and this page carries none of the app's code, so the owner's QR
+  // sat hidden behind the launch image for its whole 15-second failsafe
+  // (seen on the emulator, 2026-11-04). The app puts window.Capacitor on every
+  // swiftcard.me page, this one included; a browser has none and skips this.
+  try {
+    var cap = window.Capacitor, splash = cap && cap.Plugins && cap.Plugins.SplashScreen;
+    if (splash && typeof splash.hide === "function") Promise.resolve(splash.hide({ fadeOutDuration: 180 })).catch(function () {});
+  } catch (e) { /* not in the app */ }
+
+  // ── Back online: open the page this screen stands in for ───────────────────
+  // "online" only fires when the phone itself noticed it was offline. Wi-Fi
+  // with no internet behind it (a venue network, a dead router) never trips
+  // it, and neither does a connection that comes back while nothing is
+  // listening, so the page also checks for itself: does the page it stands in
+  // for answer yet? A HEAD request, which the service worker never touches;
+  // only while the screen is on; every 5 seconds, easing off to every 30.
+  // location.replace, not reload: inside the Android app this screen can be
+  // drawn from the app's own copy (MainActivity.showOfflineScreen), and a
+  // reload would only draw that copy again.
+  var target = location.href.split("#")[0];
+  var retry = function () { location.replace(target); };
+  var delay = 5000, busy = false, timer = 0;
+  function later() { clearTimeout(timer); timer = setTimeout(check, delay); delay = Math.min(delay * 2, 30000); }
+  function check() {
+    if (busy || document.visibilityState === "hidden") return;
+    busy = true;
+    var ctl = typeof AbortController === "function" ? new AbortController() : null;
+    var stop = setTimeout(function () { if (ctl) ctl.abort(); }, 8000);
+    fetch(target, { method: "HEAD", cache: "no-store", credentials: "same-origin", signal: ctl ? ctl.signal : undefined })
+      .then(function (r) { return r.status < 500; }, function () { return false; })
+      .then(function (up) { clearTimeout(stop); busy = false; if (up) retry(); else later(); });
+  }
+  later();
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") { delay = 5000; check(); }
+  });
+
+  document.getElementById("retry").addEventListener("click", retry);
+  window.addEventListener("online", retry);
 })();
 </script>
 </body>
