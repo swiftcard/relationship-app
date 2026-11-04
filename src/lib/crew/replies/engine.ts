@@ -232,10 +232,10 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
       `Write a ${o.kind === "reply" ? "reply" : o.kind === "comment" ? "comment" : o.kind === "dm" ? "private message" : "connection note"} on ${o.platform}. Length: ${o.length}. ${o.register}`,
       mayPitch
         ? [
-            "This message has one goal: get THIS person to try SwiftCard, and it must never read like that is the goal.",
-            "Open on their exact situation from the post, then the small cost they live with now, then SwiftCard by name as the obvious fix for exactly that, in their terms (what changes for them, not a feature list).",
-            "Say plainly that you built it, inside the sentence (\"I built SwiftCard for this\", \"we made SwiftCard because…\"). Never pretend to be a customer. Mention that it's free to start.",
-            message ? "No link in a first message. End with one easy question they would actually want to answer." : s.asks_for_tools ? `They asked for a tool, so a link is fine: use exactly ${link}.` : o.platform === "reddit" ? "No link." : "No link; saying swiftcard.me in plain text is fine.",
+            "Write it as Menash, one of SwiftCard's two founders, who just looked at this person's post or profile and had an idea that could help them. It should feel like an offer, not a pitch.",
+            "Open on one specific thing from their post or bio, then say in a sentence or two why SwiftCard could be useful to them in particular. Never invent a problem they didn't mention. No pricing, no feature list.",
+            "Say plainly that you're one of the founders, inside a normal sentence. Never pretend to be a customer.",
+            message ? "No link in a first message. Where it fits, offer to make them a sample card so they can see what theirs would look like. End with one easy, low pressure question." : s.asks_for_tools ? `They asked for a tool, so a link is fine: use exactly ${link}.` : o.platform === "reddit" ? "No link." : "No link; saying swiftcard.me in plain text is fine.",
           ].join(" ")
         : "Do NOT mention SwiftCard or any product, and include no link. Just be genuinely helpful or insightful about their post.",
       facts,
