@@ -43,7 +43,8 @@ describe("100 a day from every Sheet agent", () => {
   });
 
   it("the owner's eight search on their own (none waits only for pasted posts)", () => {
-    for (const id of ["replies-x", "contact-x", "replies-reddit", "contact-reddit", "replies-facebook", "contact-instagram", "contact-instagram-linkinbio", "replies-instagram"]) {
+    // Instagram LinkedIn Bio waits for pasted posts since 2026-11-04: its web search never returned a post in 9 live runs.
+    for (const id of ["replies-x", "contact-x", "replies-reddit", "contact-reddit", "replies-facebook", "contact-instagram", "replies-instagram"]) {
       const a = sheetAgents.find((x) => x.id === id)!;
       expect(a, id).toBeTruthy();
       expect(a.continuous, id).toBe(true);

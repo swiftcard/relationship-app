@@ -1,10 +1,15 @@
 // One controlled real-world run of the Instagram LinkedIn Bio agent (manual,
-// never in `npm test` or CI): real web search, real Claude, an in-memory
-// store, so nothing reaches Supabase, the Sheet or Instagram, and nothing is
-// posted or sent. Run with:
-//   K=<crew anthropic key> OUT=ig-live.json npx vitest run --config vitest.live.crew.ts tests/live/crew-ig-conversations.live.ts
+// never in `npm test` or CI): real Claude, an in-memory store, so nothing
+// reaches Supabase, the Sheet or Instagram, and nothing is posted or sent.
+// Paste mode (default): PASTES=<json file of [{url, text}]> real public posts
+// copied from the Instagram app. IG_SEARCH=1 runs the web search instead
+// (2026-11-04: it returned no posts). Run with:
+//   K=<crew anthropic key> PASTES=posts.json OUT=ig-live.json npx vitest run --config vitest.live.crew.ts tests/live/crew-ig-conversations.live.ts
 //
-// Spending, worst case (owner authorised $0.50, 2026-11-04):
+// Paste mode, worst case: one Haiku scoring call (under $0.01) and at most 3
+// drafts with one rewrite each (~$0.03 a call): about $0.20.
+//
+// Search mode (IG_SEARCH=1), worst case (owner authorised $0.50, 2026-11-04):
 // - one run, one search call with at most 2 web searches; the search reserves
 //   its measured worst case ($0.055 a search beyond the fee) before it starts
 // - at most 3 drafts, each with at most one rewrite (800 output tokens each)
@@ -13,7 +18,7 @@
 //   refuses any call once $0.35 has been spent
 // Worst case: about $0.38 (search ~$0.19, or twice that if the server-side
 // refusal fallback re-runs it; drafts stop at $0.35 plus the call in flight).
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { AGENT_ID, instagramLinkedinBio } from "@/lib/crew/agents/instagram-conversations";
 import { BudgetStop } from "@/lib/crew/budget";
@@ -44,7 +49,12 @@ it("finds real Instagram conversations and drafts comments, within $0.50", async
   };
 
   await store.updateSettings({ daily_usd_cap: LIMIT, economy: true, second_opinion: false });
-  await store.patchAgentState(AGENT_ID, { enabled: true, daily_usd_cap: LIMIT, config: { search_max_uses: 2, drafts_per_run: 3 } });
+  const search = process.env.IG_SEARCH === "1";
+  if (!search) {
+    const posts = JSON.parse(readFileSync(process.env.PASTES ?? "", "utf8")) as { url: string; text: string }[];
+    for (const p of posts.slice(0, 5)) await store.addInput({ platform: "instagram", kind: "post", url: p.url, text: p.text });
+  }
+  await store.patchAgentState(AGENT_ID, { enabled: true, daily_usd_cap: LIMIT, config: { web_search: search, search_max_uses: 2, drafts_per_run: 3 } });
   const out = await runAgent({ def: instagramLinkedinBio, store, providers: { claude, critic: null } });
   const [run] = await store.recentRuns(AGENT_ID, 1);
 

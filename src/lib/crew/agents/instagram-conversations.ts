@@ -7,7 +7,7 @@ import { remainingToday } from "../rate-limit";
 import { emptyRest, rotate } from "../replies/engine";
 import { minutesToTomorrow, nyDayStart } from "../schedule";
 import { blockedDomain, onDomain, searchItems } from "../sources/web-discovery";
-import type { RunResult } from "../types";
+import type { CrewInput, RunResult } from "../types";
 import { BANNED_PHRASES } from "../voice";
 import { writingProblems } from "../writing-check";
 import { SHEET_DAILY_TARGET, SHEET_MAX_PENDING } from "./replies";
@@ -88,7 +88,28 @@ export const SEARCH_TOPICS = [
 export const ON_TOPIC =
   /network|business cards?|contact (info|card|details)|vcard|qr code|\bnfc\b|digital card|follow(ing)?[ -]?up|referr|realtor|real estate|open house|brokerage|mortgage|loan officer|lender|insurance|\bsales\b|prospect|entrepreneur|small business|business owner|founder|conference|trade ?show|\bexpo\b|summit|chamber|\bbni\b|meetup|mixer|first impression|relationship|introduc|word of mouth/i;
 
-export type IgPost = { url: string; handle: string | null; title: string; text: string; topic: string };
+export type IgPost = { url: string; handle: string | null; title: string; text: string; topic: string; pasted?: boolean };
+
+/** Pasted posts drafted per run; the rest stay in Paste a Post for the next run. */
+export const PASTES_PER_RUN = 5;
+
+/** A pasted post is drafted unless scoring calls it an ad or giveaway or scores it below this: the owner already chose it. */
+export const PASTE_MIN_SCORE = 0.25;
+
+/** A Paste a Post row this agent owns: an Instagram post or reel link. Profiles stay for Instagram DMs. */
+export function isPastedPost(i: CrewInput): boolean {
+  return i.platform === "instagram" && !!exactPostLink("instagram", i.url);
+}
+
+/** A pasted row as a post: the link, the account (from the link or an @handle in the text) and the caption or notes pasted with it. */
+export function fromPaste(i: CrewInput): IgPost | null {
+  const url = exactPostLink("instagram", i.url);
+  if (!url) return null;
+  const inUrl = /instagram\.com\/([\w.]{1,30})\/(?:p|reels?)\//i.exec(i.url ?? "")?.[1];
+  const inText = /(?:^|\s)@([\w.]{2,30})/.exec(i.text)?.[1];
+  const text = i.text.trim();
+  return { url, handle: instagramHandle(inUrl) ?? instagramHandle(inText), title: text.split("\n")[0].slice(0, 200), text: text.slice(0, 1500), topic: "pasted", pasted: true };
+}
 
 type SearchHit = { url: string; author: string; title: string; text: string };
 
@@ -161,11 +182,21 @@ For each post:
 - angle: the one concrete thing a comment could add (a practical idea, a question about their specific situation, a relevant observation). Never "compliment them".
 - mention_ok: true ONLY if the post itself asks for a tool, app or way to share contact info or replace paper business cards. Otherwise false.`;
 
-/** The free part of choosing: drop what scoring said no to, best first. */
-export function pickPosts(scored: Scored[], n: number, batch: number): Scored[] {
+/** Why scoring turned a post down, or null when it may be drafted. Pasted posts only need to be real and on the page's subject. */
+export function rejectReason(s: Scored | undefined, pasted: boolean): string | null {
+  if (!s) return "not scored";
+  if (s.post_kind === "ad_or_promo" || s.post_kind === "giveaway") return "ad or giveaway";
+  if (pasted) return s.score >= PASTE_MIN_SCORE ? null : "low relevance";
+  if (s.score < MIN_SCORE) return "low relevance";
+  if (!s.professional) return "not a professional";
+  return null;
+}
+
+/** The free part of choosing: drop what scoring said no to, best first (pasted posts first). */
+export function pickPosts(scored: Scored[], n: number, batch: number, pasted: (i: number) => boolean = () => false): Scored[] {
   return scored
-    .filter((s) => s.i >= 0 && s.i < batch && s.score >= MIN_SCORE && s.professional && s.post_kind !== "ad_or_promo" && s.post_kind !== "giveaway")
-    .sort((a, b) => b.score - a.score)
+    .filter((s) => s.i >= 0 && s.i < batch && !rejectReason(s, pasted(s.i)))
+    .sort((a, b) => Number(pasted(b.i)) - Number(pasted(a.i)) || b.score - a.score)
     .slice(0, n);
 }
 
@@ -251,6 +282,19 @@ const RECENT = `recent-comments:${AGENT_ID}`;
 export function emptyReason(s: Record<string, number>, topics: string[]): string {
   const where = topics.map((t) => t.split(":")[0]).join(" and ");
   const hits = s.search_results ?? 0;
+  if (s.pasted_inputs && !topics.length) {
+    const parts = [
+      ["dropped_already_answered", "already had a draft"],
+      ["rejected_ad_or_giveaway", "looked like an ad or giveaway"],
+      ["rejected_low_relevance", "weren't about networking, cards, events or business relationships"],
+      ["rejected_not_scored", "couldn't be scored"],
+      ["drafts_failed_checks", "got drafts that failed the writing check twice"],
+      ["draft_empty", "got no draft back"],
+    ]
+      .filter(([k]) => (s[k] ?? 0) > 0)
+      .map(([k, w]) => `${s[k]} ${w}`);
+    return `Read ${s.pasted_inputs} pasted post${s.pasted_inputs === 1 ? "" : "s"}, no comment drafted: ${parts.join(", ") || "none qualified"}.`;
+  }
   if (s.search_blocked) return `Web search can't read instagram.com right now; nothing searched (${where}).`;
   if (!hits) return `The search engine returned no Instagram posts for ${where}${s.search_web_searches ? ` after ${s.search_web_searches} searches` : ""}. Trying other topics next run.`;
   const parts = [
@@ -260,12 +304,19 @@ export function emptyReason(s: Record<string, number>, topics: string[]): string
     ["dropped_already_answered", "already have a draft"],
     ["dropped_recent_person", "were from accounts drafted for in the last 30 days"],
     ["dropped_off_topic", "were off topic"],
-    ["rejected_by_score", "weren't a real chance to add something"],
+    ["rejected_low_relevance", "scored too low to be worth a comment"],
+    ["rejected_not_a_professional", "weren't by a professional or business"],
+    ["rejected_ad_or_giveaway", "were ads or giveaways"],
     ["drafts_failed_checks", "got drafts that failed the writing check twice"],
   ]
     .filter(([k]) => (s[k] ?? 0) > 0)
     .map(([k, w]) => `${s[k]} ${w}`);
   return `Found ${hits} Instagram results for ${where}; ${parts.join(", ") || "none qualified"}.`;
+}
+
+/** The run summary plus what happened to pasted posts, so the owner sees why a paste got no comment. */
+function withNotes(summary: string, notes: string[]): string {
+  return [summary, ...notes.slice(0, 4)].join(" ").slice(0, 900);
 }
 
 export async function runInstagramConversations(ctx: AgentContext): Promise<RunResult> {
@@ -277,29 +328,42 @@ export async function runInstagramConversations(ctx: AgentContext): Promise<RunR
     return { summary: `Done for today: the Controls limit of ${replyCap} Instagram messages is reached.`, restMinutes: minutesToTomorrow(ctx.now()) };
   }
 
-  // 1. Find: one web search call, two topics.
-  const topics = await rotate(ctx, "topic_i", SEARCH_TOPICS, 2);
-  const maxUses = Math.max(1, Math.min(SEARCH_MAX_USES, Math.floor(ctx.config<number>("search_max_uses", SEARCH_MAX_USES)) || SEARCH_MAX_USES));
+  // 1. Find. Pasted posts first: a person found them in the Instagram app,
+  // which is the one source that reliably has real posts. The web search is
+  // off unless switched on (agent config web_search: true): in 9 live runs it
+  // never returned a single post, only profiles (2026-11-04).
+  const pastes = await ctx.store.takeInputs(["instagram"], PASTES_PER_RUN, ctx.def.id, isPastedPost);
+  ctx.stat("pasted_inputs", pastes.length);
+  const pasted = pastes.map(fromPaste).filter((p): p is IgPost => !!p);
+  const searchOn = ctx.config<boolean>("web_search", false) === true;
+  const topics = searchOn ? await rotate(ctx, "topic_i", SEARCH_TOPICS, 2) : [];
   let hits: SearchHit[] = [];
-  try {
-    hits = await searchItems<SearchHit>(ctx, {
-      system: "You find recent public Instagram posts for a small company's staff to read and comment on by hand.",
-      prompt: `Search instagram.com for individual public Instagram posts or reels (links like instagram.com/p/<code>/ or instagram.com/reel/<code>/; search engines title them like 'Jane Doe on Instagram: "caption..."') where people talk about any of these:\n${topics.map((t) => `- ${t}`).join("\n")}\nGood searches look like: site:instagram.com/p "networking event" follow up, site:instagram.com/reel realtor "business cards". Skip profile pages, hashtag pages and ads.\nFor each post: url (the exact post or reel link as the result shows it), author (the account's @username if the link, title or caption shows it, else empty), title (the result's title), text (the caption words the result shows, under 400 characters).`,
-      fields: ["url", "author", "title", "text"],
-      domains: ["instagram.com"],
-      maxUses,
-      reserveUsd: maxUses * SEARCH_RESERVE_USD_PER_USE,
-      want: 20,
-    });
-  } catch (e) {
-    if (blockedDomain(e)) ctx.stat("search_blocked");
-    else throw e;
+  if (searchOn) {
+    const maxUses = Math.max(1, Math.min(SEARCH_MAX_USES, Math.floor(ctx.config<number>("search_max_uses", SEARCH_MAX_USES)) || SEARCH_MAX_USES));
+    try {
+      hits = await searchItems<SearchHit>(ctx, {
+        system: "You find recent public Instagram posts for a small company's staff to read and comment on by hand.",
+        prompt: `Search instagram.com for individual public Instagram posts or reels (links like instagram.com/p/<code>/ or instagram.com/reel/<code>/; search engines title them like 'Jane Doe on Instagram: "caption..."') where people talk about any of these:\n${topics.map((t) => `- ${t}`).join("\n")}\nGood searches look like: site:instagram.com/p "networking event" follow up, site:instagram.com/reel realtor "business cards". Skip profile pages, hashtag pages and ads.\nFor each post: url (the exact post or reel link as the result shows it), author (the account's @username if the link, title or caption shows it, else empty), title (the result's title), text (the caption words the result shows, under 400 characters).`,
+        fields: ["url", "author", "title", "text"],
+        domains: ["instagram.com"],
+        maxUses,
+        reserveUsd: maxUses * SEARCH_RESERVE_USD_PER_USE,
+        want: 20,
+      });
+    } catch (e) {
+      if (blockedDomain(e)) ctx.stat("search_blocked");
+      else throw e;
+    }
+    ctx.stat("search_results", hits.length);
   }
-  ctx.stat("search_results", hits.length);
-  ctx.stat("posts_read", hits.length);
-  const posts = toPosts(hits, topics.join(" | "), (k, n) => ctx.stat(k, n));
+  ctx.stat("posts_read", pasted.length + hits.length);
+  if (!pasted.length && !searchOn) {
+    return { summary: "Nothing pasted. Paste an Instagram post's link and its caption into Paste a Post (platform instagram) and I'll draft a comment.", status: "skipped" };
+  }
+  const posts = [...pasted, ...toPosts(hits, topics.join(" | "), (k, n) => ctx.stat(k, n))];
 
   // 2. Never twice: not a post it has seen, not a post any Instagram agent drafted for, not an account drafted for lately.
+  // A pasted post skips the topic and account filters (a person chose it) but never the duplicate check.
   const seen = new Set((await ctx.store.kvGet<string[]>(SEEN)) ?? []);
   const since = new Date(ctx.now().getTime() - PERSON_COOLDOWN_DAYS * 86400_000).toISOString();
   const earlier = await ctx.store.listApprovals({ agentIds: IG_AGENTS, sinceIso: since, limit: 1000 });
@@ -307,19 +371,20 @@ export async function runInstagramConversations(ctx: AgentContext): Promise<RunR
   const recentPeople = new Set(earlier.map((a) => instagramHandle(String(a.meta?.author ?? "")) ?? "").filter(Boolean));
   const fresh: IgPost[] = [];
   for (const p of new Map(posts.map((p) => [p.url, p])).values()) {
-    if (seen.has(p.url)) ctx.stat("dropped_seen");
-    else if (answered.has(p.url)) ctx.stat("dropped_already_answered");
-    else if (p.handle && recentPeople.has(p.handle)) ctx.stat("dropped_recent_person");
-    else if (p.handle && fresh.some((f) => f.handle === p.handle)) ctx.stat("dropped_recent_person");
+    if (answered.has(p.url)) {
+      ctx.stat("dropped_already_answered");
+      if (p.pasted) ctx.log(`pasted ${p.url}: already has a draft`);
+    } else if (p.pasted) fresh.push(p);
+    else if (seen.has(p.url)) ctx.stat("dropped_seen");
+    else if (p.handle && (recentPeople.has(p.handle) || fresh.some((f) => f.handle === p.handle))) ctx.stat("dropped_recent_person");
     else if (!ON_TOPIC.test(`${p.title} ${p.text}`)) ctx.stat("dropped_off_topic");
     else fresh.push(p);
   }
   await ctx.store.kvSet(SEEN, [...new Set([...posts.map((p) => p.url), ...seen])].slice(0, 3000));
   ctx.stat("posts_relevant", fresh.length);
   if (!fresh.length) {
-    const summary = emptyReason(ctx.stats, topics);
-    ctx.log(summary);
-    return { summary, restMinutes: await emptyRest(ctx) };
+    const summary = withNotes(emptyReason(ctx.stats, topics), ctx.notes);
+    return { summary, ...(searchOn ? { restMinutes: await emptyRest(ctx) } : {}) };
   }
 
   // 3. Score: one call for the batch.
@@ -329,13 +394,21 @@ export async function runInstagramConversations(ctx: AgentContext): Promise<RunR
     maxTokens: 3000,
     schema: SCORE_SCHEMA as unknown as Record<string, unknown>,
     system: SCORE_SYSTEM,
-    prompt: batch.map((p, i) => `#${i} ${p.handle ? `@${p.handle}` : "(account not shown)"}: ${p.title}\n${p.text}`).join("\n\n"),
+    prompt: batch.map((p, i) => `#${i} ${p.handle ? `@${p.handle}` : "(account not shown)"}${p.pasted ? " (pasted by the owner)" : ""}: ${p.title}\n${p.text}`).join("\n\n"),
   });
   ctx.stat("posts_scored", batch.length);
-  const qualified = pickPosts(scored?.items ?? [], batch.length, batch.length);
+  if (!scored?.items?.length) ctx.stat("score_failed");
+  const byIndex = new Map((scored?.items ?? []).map((x) => [x.i, x]));
+  batch.forEach((p, i) => {
+    const why = rejectReason(byIndex.get(i), !!p.pasted);
+    if (!why) return;
+    ctx.stat(`rejected_${why.replace(/\s+/g, "_")}`);
+    ctx.stat("rejected_by_score");
+    if (p.pasted) ctx.log(`pasted ${p.url}: no comment (${why}${byIndex.get(i)?.why_selected ? `: ${byIndex.get(i)!.why_selected}` : ""})`);
+  });
+  const qualified = pickPosts(scored?.items ?? [], batch.length, batch.length, (i) => !!batch[i]?.pasted);
   const perRun = Math.max(0, Math.min(DRAFTS_PER_RUN, Math.floor(ctx.config<number>("drafts_per_run", DRAFTS_PER_RUN))));
   const picks = qualified.slice(0, Math.min(perRun, quota.left));
-  ctx.stat("rejected_by_score", batch.length - qualified.length);
   if (qualified.length > picks.length) ctx.stat("qualified_not_drafted", qualified.length - picks.length);
 
   // 4. Draft, check, keep.
@@ -366,6 +439,7 @@ export async function runInstagramConversations(ctx: AgentContext): Promise<RunR
     let draft: { reply: string; reply_fit: string } | null = null;
     try {
       draft = await ctx.llm.askJson<{ reply: string; reply_fit: string }>("draft", { system: COMMENT_SYSTEM, effort: "medium", maxTokens: 800, schema: DRAFT_SCHEMA as unknown as Record<string, unknown>, prompt: instructions });
+      if (!draft?.reply) ctx.stat("draft_empty");
       let problems = draft?.reply ? commentProblems(draft.reply, { mentionOk, recent }) : ["empty"];
       if (draft?.reply && problems.length) {
         ctx.stat("rewritten_for_style");
@@ -381,7 +455,8 @@ export async function runInstagramConversations(ctx: AgentContext): Promise<RunR
       }
       if (!draft?.reply || problems.length) {
         ctx.stat("drafts_failed_checks");
-        ctx.log(`skipped ${p.url}: ${problems.join(", ")}`);
+        for (const pr of problems) ctx.stat(`check_${pr.replace(/^(only|\d+) .*words.*$/, "length").replace(/[^a-z]+/gi, "_").slice(0, 40)}`);
+        ctx.log(`${p.pasted ? "pasted " : ""}${p.url}: no comment (the draft failed the writing check twice: ${problems.join(", ")})`);
         continue;
       }
     } catch (e) {
@@ -411,8 +486,8 @@ export async function runInstagramConversations(ctx: AgentContext): Promise<RunR
         author: p.handle ? `@${p.handle}` : null,
         post_title: p.title,
         excerpt: p.text.slice(0, 500),
-        search_topic: p.topic,
-        source: "web_search",
+        search_topic: p.pasted ? null : p.topic,
+        source: p.pasted ? "paste" : "web_search",
       },
     });
     if (r.ok) {
@@ -426,10 +501,11 @@ export async function runInstagramConversations(ctx: AgentContext): Promise<RunR
   if (made > 0 && ctx.config<number>("empty_runs", 0) > 0) await ctx.saveConfig({ empty_runs: 0 });
   if (stoppedFor) return { summary: `Drafted ${made}, then stopped: ${stoppedFor}`, restMinutes: minutesToTomorrow(ctx.now()) };
   if (!made) {
-    const summary = emptyReason(ctx.stats, topics);
-    return { summary, restMinutes: await emptyRest(ctx) };
+    const summary = withNotes(emptyReason(ctx.stats, topics), ctx.notes);
+    return { summary, ...(searchOn ? { restMinutes: await emptyRest(ctx) } : {}) };
   }
-  return { summary: `Found ${hits.length} Instagram results, ${fresh.length} new and on topic, ${picks.length} worth a comment; added ${made} to the Sheet.` };
+  const from = [pasted.length ? `${pasted.length} pasted` : "", searchOn ? `${hits.length} from search` : ""].filter(Boolean).join(" and ");
+  return { summary: withNotes(`Read ${from} Instagram posts, ${fresh.length} new, ${picks.length} worth a comment; added ${made} to the Sheet.`, ctx.notes) };
 }
 
 export const instagramLinkedinBio: AgentDef = {
@@ -442,10 +518,13 @@ export const instagramLinkedinBio: AgentDef = {
   needs: ["CREW_ANTHROPIC_API_KEY"],
   maxPending: SHEET_MAX_PENDING,
   approvalKind: "comment",
-  continuous: true,
-  schedule: { kind: "daily", hour: 15, minute: 30 },
+  // Runs when an Instagram post is pasted (2026-11-04): web search never
+  // returned a post, so it no longer searches on a clock. Agent config
+  // web_search: true brings the search back for a test.
+  continuous: false,
+  schedule: { kind: "on_input", platforms: ["instagram"] },
   dailyUsd: IG_CONVERSATIONS_USD,
   purpose:
-    "Finds public Instagram posts about networking, business cards, events and relationship building by realtors, loan officers, insurance and sales pros and business owners, and drafts a comment that adds something to each one (SwiftCard only when the post asks for a tool). Drafts only: the link opens the post and you post it yourself. Its search can't see the link in an Instagram bio, so it no longer looks for LinkedIn links.",
+    "Drafts a comment for each Instagram post you paste into Paste a Post (the post's link and its caption): it checks the post is about networking, business cards, events or business relationships, then writes a short comment that adds something (SwiftCard only when the post asks for a tool). Drafts only: edit it in the Sheet, tap the link to open the post, post it yourself.",
   run: runInstagramConversations,
 };

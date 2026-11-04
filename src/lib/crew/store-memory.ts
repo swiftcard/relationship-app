@@ -282,8 +282,8 @@ export class MemoryStore implements CrewStore {
     this.inputs.push({ ...i, id, created_at: this.now(), status: "new" });
     return id;
   }
-  async takeInputs(platforms: Platform[], limit: number) {
-    const picked = this.inputs.filter((i) => i.status === "new" && platforms.includes(i.platform)).slice(0, limit);
+  async takeInputs(platforms: Platform[], limit: number, _agentId?: string, accept?: (i: CrewInput) => boolean) {
+    const picked = this.inputs.filter((i) => i.status === "new" && platforms.includes(i.platform) && (!accept || accept({ ...i }))).slice(0, limit);
     for (const p of picked) p.status = "used";
     return picked.map((p) => ({ ...p }));
   }

@@ -8,6 +8,8 @@ import {
   SEARCH_RESERVE_USD_PER_USE,
   commentProblems,
   emptyReason,
+  fromPaste,
+  isPastedPost,
   instagramLinkedinBio,
   pickPosts,
   type Scored,
@@ -71,7 +73,8 @@ function script(o: { search?: unknown[]; draft?: (handle: string, req: LlmReques
 
 async function run(s: Script, o: { store?: MemoryStore; config?: Record<string, unknown> } = {}) {
   const store = o.store ?? new MemoryStore();
-  await store.patchAgentState(AGENT_ID, { enabled: true, ...(o.config ? { config: o.config } : {}) });
+  // These runs exercise the (opt-in) web search; the paste tests below run without it.
+  await store.patchAgentState(AGENT_ID, { enabled: true, config: { web_search: true, ...(o.config ?? {}) } });
   const claude = new FakeClaude(s);
   const out = await runAgent({ def: instagramLinkedinBio, store, providers: { claude, critic: null } });
   const runs = await store.recentRuns(AGENT_ID, 1);
@@ -167,6 +170,128 @@ describe("Instagram LinkedIn Bio: the comments", () => {
     expect(emptyReason({ search_results: 6, dropped_not_a_post: 4, dropped_seen: 2 }, ["networking events: x", "business cards: y"])).toBe(
       "Found 6 Instagram results for networking events and business cards; 4 were profiles or pages, not posts, 2 were already seen.",
     );
+  });
+});
+
+// ── Paste a Post: the way real posts reach it ──────────────────────────────
+// Realistic rows as the owner would paste them from the Instagram app: the
+// post's link and its caption (copied with the account's name).
+
+const PASTES = {
+  openHouse: {
+    url: "https://www.instagram.com/p/DAbc123OpenH/?igsh=MWx0eHZ5",
+    text: "@kayla.homes.denver Sunday open house recap: 31 groups through the door, 19 signed the sheet, and I could read maybe 12 of the phone numbers. Realtors, what do you use for sign in that people actually fill out?",
+  },
+  bni: {
+    url: "https://www.instagram.com/reel/DXyz789BNIrc/",
+    text: "Our BNI chapter hit 40 members this week. My rule for every new referral partner: coffee within 7 days of meeting, or the connection goes cold. Insurance has taught me the follow up is the whole job. #bni #insuranceagent",
+  },
+  giveaway: {
+    url: "https://www.instagram.com/p/DGive555away/",
+    text: "GIVEAWAY TIME! Win 1,000 premium business cards. Follow us, like this post and tag 3 business owners. Ends Friday!",
+  },
+  profile: { url: "https://www.instagram.com/denver.lender.mike/", text: "Mike Ruiz, mortgage loan officer in Denver. NMLS 123456. Helping first time buyers since 2014." },
+};
+
+const PASTE_COMMENTS: Record<string, string> = {
+  "kayla.homes.denver": "A QR code on the sign in table that opens a short form usually beats paper for legibility, and you can ask one question there like timeline. Did the 12 you could read include most of the serious buyers?",
+  bni: "Coffee within 7 days is a good rule, and putting the date on the calendar before you leave the meeting makes it stick. Do you track which BNI partners actually send referrals back?",
+};
+
+function pasteScript(o: { draft?: (key: string) => string } = {}): Script {
+  return (req) => {
+    if (req.webSearch) throw new Error("no web search in paste mode");
+    const schema = JSON.stringify(req.schema ?? {});
+    if (schema.includes("post_kind")) {
+      const blocks = req.prompt.split("\n\n");
+      return JSON.stringify({
+        items: blocks.map((b, i) => {
+          const give = /GIVEAWAY/.test(b);
+          return { i, score: give ? 0.2 : 0.8, post_kind: give ? "giveaway" : /open house/.test(b) ? "question" : "tip_or_advice", professional: !give, why_selected: give ? "a print shop's giveaway" : /open house/.test(b) ? "A realtor asking how others handle open house sign in" : "An insurance agent sharing a referral follow up rule", angle: "a practical idea and a question", mention_ok: false };
+        }),
+      });
+    }
+    if (schema.includes("reply_fit")) {
+      const key = /INSTAGRAM POST by @kayla/.test(req.prompt) ? "kayla.homes.denver" : "bni";
+      return JSON.stringify({ reply: o.draft ? o.draft(key) : PASTE_COMMENTS[key], reply_fit: "Adds a concrete idea tied to their post and asks about their situation." });
+    }
+    return "";
+  };
+}
+
+async function runPaste(store: MemoryStore, s: Script = pasteScript()) {
+  await store.patchAgentState(AGENT_ID, { enabled: true });
+  const claude = new FakeClaude(s);
+  const out = await runAgent({ def: instagramLinkedinBio, store, providers: { claude, critic: null } });
+  const [r] = await store.recentRuns(AGENT_ID, 1);
+  return { claude, out, run: r };
+}
+
+describe("Instagram LinkedIn Bio: Paste a Post", () => {
+  it("is woken by a pasted Instagram post, and doesn't search on a clock", () => {
+    expect(instagramLinkedinBio.schedule).toEqual({ kind: "on_input", platforms: ["instagram"] });
+    expect(instagramLinkedinBio.continuous).toBe(false);
+  });
+
+  it("nothing pasted: no model call, no spend, says how to paste", async () => {
+    const store = new MemoryStore();
+    const { claude, run: r } = await runPaste(store);
+    expect(claude.calls).toHaveLength(0);
+    expect(r.status).toBe("skipped");
+    expect(r.summary).toMatch(/Paste a Post/);
+  });
+
+  it("drafts a grounded comment per pasted post, turns the giveaway down with a reason, and leaves the profile for Instagram DMs", async () => {
+    const store = new MemoryStore();
+    for (const p of Object.values(PASTES)) await store.addInput({ platform: "instagram", kind: p.url.includes("/p/") || p.url.includes("/reel/") ? "post" : "profile", url: p.url, text: p.text });
+    const { claude, run: r } = await runPaste(store);
+
+    expect(claude.calls.some((c) => c.webSearch)).toBe(false);
+    const drafts = store.approvals;
+    expect(drafts.map((a) => a.target_url).sort()).toEqual(["https://www.instagram.com/p/DAbc123OpenH/", "https://www.instagram.com/reel/DXyz789BNIrc/"]);
+    const kayla = drafts.find((a) => a.target_url!.includes("DAbc123"))!;
+    expect(kayla).toMatchObject({ kind: "comment", status: "pending", body: PASTE_COMMENTS["kayla.homes.denver"] });
+    expect(kayla.meta).toMatchObject({ author: "@kayla.homes.denver", source: "paste", why: expect.stringMatching(/open house/), reply_fit: expect.any(String), excerpt: expect.stringContaining("19 signed the sheet") });
+    // The Sheet row: who, the comment (editable there), and a link that opens the exact post.
+    const [row] = approvalRows(kayla, { known: new Map() } as unknown as Parameters<typeof approvalRows>[1]);
+    expect(row.tab.id).toBe("instagram-linkedin-bio");
+    expect(row.cells.name).toBe("@kayla.homes.denver");
+    expect(row.cells.message).toBe(PASTE_COMMENTS["kayla.homes.denver"]);
+    expect(String(row.cells.link)).toContain("https://www.instagram.com/p/DAbc123OpenH/");
+
+    expect(r.stats).toMatchObject({ pasted_inputs: 3, posts_scored: 3, rejected_ad_or_giveaway: 1, drafts_made: 2 });
+    expect(r.summary).toMatch(/DGive555away.*ad or giveaway/);
+    // The profile wasn't taken: it's still waiting for Instagram DMs.
+    expect(store.inputs.find((i) => i.url === PASTES.profile.url)?.status).toBe("new");
+  });
+
+  it("the same post pasted again gets no second draft, and says so", async () => {
+    const store = new MemoryStore();
+    await store.addInput({ platform: "instagram", kind: "post", url: PASTES.openHouse.url, text: PASTES.openHouse.text });
+    await runPaste(store);
+    await store.addInput({ platform: "instagram", kind: "post", url: "https://instagram.com/p/DAbc123OpenH", text: PASTES.openHouse.text });
+    const { run: r, claude } = await runPaste(store);
+    expect(store.approvals).toHaveLength(1);
+    expect(claude.calls).toHaveLength(0);
+    expect(r.summary).toMatch(/already had a draft/);
+  });
+
+  it("a draft that keeps failing the writing check is reported as a drafting failure, not a discovery one", async () => {
+    const store = new MemoryStore();
+    await store.addInput({ platform: "instagram", kind: "post", url: PASTES.bni.url, text: PASTES.bni.text });
+    const { run: r } = await runPaste(store, pasteScript({ draft: () => "Love this! 🙌 So true." }));
+    expect(store.approvals).toHaveLength(0);
+    expect(r.stats).toMatchObject({ pasted_inputs: 1, posts_scored: 1, drafts_failed_checks: 1 });
+    expect(r.stats.check_has_an_emoji).toBe(1);
+    expect(r.summary).toMatch(/failed the writing check twice/);
+  });
+
+  it("Instagram DMs no longer take pasted posts: only profiles", () => {
+    const i = (url: string) => ({ id: "x", created_at: "", platform: "instagram" as const, kind: "post" as const, url, text: "t", status: "new" as const });
+    expect(isPastedPost(i(PASTES.openHouse.url))).toBe(true);
+    expect(isPastedPost(i(PASTES.bni.url))).toBe(true);
+    expect(isPastedPost(i(PASTES.profile.url))).toBe(false);
+    expect(fromPaste(i("https://www.instagram.com/kayla.homes.denver/p/DAbc123OpenH/"))?.handle).toBe("kayla.homes.denver");
   });
 });
 

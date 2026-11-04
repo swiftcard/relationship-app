@@ -7,7 +7,8 @@ import { PROFESSIONS, US_METROS } from "../search-plan";
 import { redditConfigured, searchSubreddits } from "../sources/reddit";
 import { SEARCH_WANT, searchItems, searchPlatform, searchRedditByWeb } from "../sources/web-discovery";
 import type { CrewInput, Platform } from "../types";
-import { instagramLinkedinBio } from "./instagram-conversations";
+import { instagramLinkedinBio, isPastedPost } from "./instagram-conversations";
+import { PROFILE_SCORE_SYSTEM, unsupportedClaims } from "./instagram-prospects";
 import { DEFAULT_SUBREDDITS, SHEET_AGENT_USD, SHEET_DAILY_TARGET, SHEET_MAX_PENDING, guessAuthor } from "./replies";
 
 // ── Team 2: Contact (the team that DMs) ─────────────────────────────────────
@@ -104,12 +105,19 @@ export const redditDms: AgentDef = {
 };
 
 async function igCandidates(ctx: AgentContext, topic: string): Promise<Candidate[]> {
-  const fromPaste = pasted(await ctx.store.takeInputs(["instagram"], 5, ctx.def.id), "instagram");
+  // A pasted post (a /p/ or /reel/ link) is for Instagram LinkedIn Bio, which drafts a comment on it; profiles stay here.
+  const fromPaste = pasted(await ctx.store.takeInputs(["instagram"], 5, ctx.def.id, (i) => !isPastedPost(i)), "instagram");
   const web = (await searchPlatform(ctx, "instagram", [topic])).map((w) => ({ ...w, author: instagramHandle(w.author) ?? handleFromUrl("instagram", w.url), promoAllowed: true }));
   const out = [...fromPaste, ...web];
   // A post or profile with no @handle can't be messaged (the link opens a chat with that handle).
   ctx.stat("skipped_no_handle", out.filter((c) => !c.author).length);
-  return out.filter((c) => !!c.author);
+  // Not someone another Instagram agent has a draft for that nobody has acted on yet (a comment waiting on
+  // their post): the ledger only counts what was sent, so without this they could get a comment and a DM.
+  const live = await ctx.store.listApprovals({ status: ["pending", "approved"], agentIds: ["contact-instagram", "contact-instagram-linkinbio", "replies-instagram"], limit: 1000 });
+  const busy = new Set(live.map((a) => instagramHandle(String(a.meta?.author ?? "")) ?? instagramHandle(a.target_url)).filter(Boolean));
+  const kept = out.filter((c) => !!c.author && !busy.has(instagramHandle(c.author) ?? ""));
+  ctx.stat("skipped_draft_waiting", out.filter((c) => !!c.author).length - kept.length);
+  return kept;
 }
 
 export const instagramDms: AgentDef = {
@@ -127,7 +135,10 @@ export const instagramDms: AgentDef = {
       ceiling: SHEET_DAILY_TARGET,
       mustBePro: true,
       keywordFilter: false,
-      register: "Instagram DM: warm, brief, about one specific post of theirs (or, when all you have is their profile, one specific thing their bio says).",
+      register: "Instagram DM: warm, brief, about one specific post of theirs (or, when all you have is their profile, one specific thing their bio says). Use only what their bio or post actually says: no guesses about their problems, no numbers or quotes that aren't in it, nothing about their personal life.",
+      // Profiles scored as prospects, and a DM that claims what the profile doesn't say is not used (2026-11-04).
+      scoreSystem: PROFILE_SCORE_SYSTEM,
+      extraChecks: (text, c) => unsupportedClaims(text, c),
       length: "35 to 80 words",
       label: (c) => `Instagram DM to @${normalizeHandle("instagram", c.author ?? "").replace(/^@/, "")}`,
       person: (c) => (c.author ? { platform: "instagram", handle: c.author } : null),

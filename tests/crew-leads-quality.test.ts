@@ -272,10 +272,11 @@ describe("the workbook's layout", () => {
   // on purpose 2026-10-29: every tab became Name, Message, Link (owner); then
   // each tab's note said "type sent", not "delete the row" (same columns, same
   // tabs). 2026-11-04: the Instagram LinkedIn Bio tab's note says it holds
-  // comments on posts now, not DMs (same columns). Change this pin only when
+  // comments on pasted posts now, not DMs, and Paste a Post says where an
+  // Instagram post goes (same columns). Change this pin only when
   // that reset is intended.
   it("the spec hash is the Name, Message, Link one", () => {
-    expect(specHash()).toBe("25a991b9b77e");
+    expect(specHash()).toBe("4d520f357378");
   });
 });
 

@@ -76,6 +76,10 @@ export type EngageOptions = {
   keywordFilter?: boolean;
   /** What a found item's link must be: the exact post (default), the person's own profile, or either (a message to them: their post or their profile both say who). */
   linkKind?: "post" | "profile" | "either";
+  /** A scoring rubric of its own (same JSON shape), for an agent whose finds aren't posts asking for a tool. */
+  scoreSystem?: string;
+  /** Problems of its own to rewrite for, on top of the writing check (e.g. a claim the profile doesn't support). */
+  extraChecks?: (text: string, c: Candidate) => string[];
 };
 
 /** A found item's link, made exact, or null (the item is dropped). Pasted items keep what was pasted. */
@@ -174,7 +178,7 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
     effort: "low",
     maxTokens: 4000,
     schema: SCORE_SCHEMA as unknown as Record<string, unknown>,
-    system: SCORE_SYSTEM,
+    system: o.scoreSystem ?? SCORE_SYSTEM,
     prompt: batch.map((c, i) => `#${i} [${c.platform}${c.community ? ` / ${c.community}` : ""}] ${c.title}${c.extra ? `\n(${Object.entries(c.extra).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join("; ")})` : ""}\n${c.text.slice(0, 700)}`).join("\n\n"),
   });
   const picks = (scored?.items ?? [])
@@ -268,15 +272,23 @@ export async function runEngagement(ctx: AgentContext, o: EngageOptions): Promis
     }
     // The writing check: one rewrite when a draft trips it; a second failure
     // reaches the Sheet as Needs Review (propose() marks it) rather than vanishing.
-    let problems = writingProblems(final, { kind: o.kind, platform: o.platform });
+    const check = (t: string) => [...writingProblems(t, { kind: o.kind, platform: o.platform }), ...(o.extraChecks?.(t, c) ?? [])];
+    let problems = check(final);
     if (problems.length) {
       ctx.stat("rewritten_for_style");
       const again = await ctx.llm.ask("revise", { system, effort: "medium", maxTokens: 1200, prompt: `${instructions}\n\nYOUR DRAFT:\n${final}\n\nRewrite it without these problems and return only the new text:\n- ${problems.join("\n- ")}` });
-      if (again.text && !writingProblems(again.text, { kind: o.kind, platform: o.platform }).length) {
+      if (again.text && !check(again.text).length) {
         final = again.text;
         record = { ...record, line: `${record.line} Rewritten once for style.` };
       }
-      problems = writingProblems(final, { kind: o.kind, platform: o.platform });
+      problems = check(final);
+    }
+    // An agent's own checks guard facts, not style: a draft still failing them is not used.
+    const unsupported = o.extraChecks?.(final, c) ?? [];
+    if (unsupported.length) {
+      ctx.stat("skipped_failed_own_check");
+      ctx.log(`no draft for ${c.url}: ${unsupported.join(", ")}`);
+      continue;
     }
     const r = await propose(ctx, {
       kind: o.kind,
