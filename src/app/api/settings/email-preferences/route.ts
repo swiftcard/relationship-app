@@ -9,14 +9,22 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json();
   const admin = getAdminSupabase();
+  const marketing = body.marketing_emails ?? true;
 
+  // BOTH opt-out flags, every time (supabase/email-preference-center.sql).
+  // canSendMarketing treats either one as "off", so writing only
+  // marketing_emails left anyone who had gone quiet in the delete flow or
+  // unsubscribed from an email still opted out after switching marketing back
+  // on here — the switch read "on" and nothing arrived.
   const { error } = await admin
     .from("email_preferences")
     .upsert(
       {
         user_id: user.id,
-        marketing_emails: body.marketing_emails ?? true,
+        marketing_emails: marketing,
+        marketing_opt_out: !marketing,
         receipt_emails: body.receipt_emails ?? true,
+        updated_at: new Date().toISOString(),
       },
       { onConflict: "user_id" }
     );

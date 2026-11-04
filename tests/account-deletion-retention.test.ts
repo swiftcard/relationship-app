@@ -19,6 +19,8 @@ import {
   type AccountFacts,
   type Eligibility,
 } from "@/lib/retention";
+import { eligibilityOf, planOf, sourceOf, type RetentionRecord } from "@/lib/retention-eligibility";
+import { reopenPatch } from "@/lib/account-reopen";
 
 // ── Deleting an account is a conversation, not a switch ──────────────────────
 //
@@ -243,8 +245,12 @@ describe("the cost of deleting is stated in the account's own numbers", () => {
   });
 });
 
+// The route gathers the facts; lib/retention-eligibility decides. Both are the
+// server, so the source pins below read them together.
+const SERVER = () => read("src/app/api/account/retention/route.ts") + "\n" + read("src/lib/retention-eligibility.ts");
+
 describe("the server is what decides eligibility", () => {
-  const api = read("src/app/api/account/retention/route.ts");
+  const api = SERVER();
 
   it("each offer can only ever be taken once per account", () => {
     expect(api).toMatch(/!rec\.grantedAt/);
@@ -294,8 +300,13 @@ describe("the server is what decides eligibility", () => {
     expect(api).toMatch(/@\/app\/api\/account\/downgrade\/route/);
   });
 
-  it("going quiet never silences a paying customer's receipts", () => {
-    expect(api).toMatch(/plan === "free" \? \{ receipt_emails: false \}/);
+  it("going quiet sets BOTH opt-out flags, and never touches receipts", () => {
+    // email-preference-center.sql: every write path sets both. And a Free
+    // account that went quiet and later subscribed must still get receipts.
+    const block = api.slice(api.indexOf("// ── Go quiet"), api.indexOf('await saved("quiet")'));
+    const write = block.slice(block.indexOf(".upsert("), block.indexOf("{ onConflict"));
+    expect(write).toMatch(/marketing_emails: false, marketing_opt_out: true/);
+    expect(write).not.toMatch(/receipt_emails/);
   });
 
   it("the answers are stored even when the account is saved", () => {
@@ -305,7 +316,7 @@ describe("the server is what decides eligibility", () => {
 });
 
 describe("each promotion is once per PERSON, and billing honours it (owner, 2026-09-30)", () => {
-  const api = read("src/app/api/account/retention/route.ts");
+  const api = SERVER();
   const discount = read("src/app/api/stripe/subscription/discount/route.ts");
   const checkout = read("src/app/api/stripe/checkout/route.ts");
   const webhook = read("src/app/api/stripe/webhook/route.ts");
@@ -466,5 +477,275 @@ describe("the owner hears about it, and can read the answers", () => {
     expect(tabs).toMatch(/key: "retention"/);
     const old = readFileSync(join(process.cwd(), "src/app/admin/retention/page.tsx"), "utf8");
     expect(old).toContain('redirect("/admin/analytics?tab=retention")');
+  });
+});
+
+// ── Every account type, end to end (review 2026-11-04) ──────────────────────
+//
+// What each kind of account is offered and told, decided by the SAME pure
+// functions the server (lib/retention-eligibility) and the dialog
+// (lib/retention + ManageAccount's keep context) use — on the web and inside
+// the iPhone app. The owner asked for the whole flow to be checked for every
+// account type; this table is that check, kept.
+describe("every account type walks the flow it should, on web and in the app", () => {
+  const DAY = 86_400_000;
+  const NOW = Date.parse("2026-11-04T12:00:00Z");
+  const OLD = new Date(NOW - 40 * DAY).toISOString();
+  const NEW = new Date(NOW - 3 * DAY).toISOString();
+  const TRIAL_START = NOW - 7 * DAY;
+  const extension = {
+    until: new Date(TRIAL_START + 30 * DAY).toISOString(),
+    untilUnix: Math.floor((TRIAL_START + 30 * DAY) / 1000),
+    currentEnd: new Date(TRIAL_START + 14 * DAY).toISOString(),
+    extraDays: 16,
+    chargeCents: 499,
+    chargeInterval: "month" as const,
+  };
+
+  type Account = {
+    rawPlan: string | null;
+    cust?: Record<string, unknown>;
+    subId?: string | null;
+    planExpiresAt?: string | null;
+    created?: string;
+    hadTrial?: boolean;
+    grantLedgerUsed?: boolean;
+    discountLedgerUsed?: boolean;
+    /** The live-subscription answer the GET would get from Stripe. */
+    discountOk?: boolean | null;
+    extension?: typeof extension | null;
+    /** What Settings passes the dialog. */
+    officeOwner?: boolean;
+    billedBy?: "stripe" | "apple" | null;
+  };
+
+  function walk(a: Account, native: boolean) {
+    const cust = a.cust ?? {};
+    const plan = planOf(a.rawPlan);
+    const source = sourceOf(a.rawPlan, cust, a.subId ?? null, a.planExpiresAt ?? null);
+    const trialEndsAt = typeof cust._trialEndsAt === "string" ? (cust._trialEndsAt as string) : null;
+    const e = eligibilityOf({
+      plan,
+      rawPlan: a.rawPlan,
+      source,
+      rec: (cust._retention as RetentionRecord | undefined) ?? {},
+      planExpiresAt: a.planExpiresAt ?? null,
+      subId: a.subId ?? null,
+      retentionUsed: cust._retentionUsed,
+      hadTrial: a.hadTrial,
+      grantLedgerUsed: a.grantLedgerUsed,
+      discountLedgerUsed: a.discountLedgerUsed,
+      trialing: !!trialEndsAt,
+      accountCreatedAt: a.created ?? OLD,
+      discountOk: a.discountOk ?? null,
+      extension: a.extension ?? null,
+      trialEndsAt,
+      nowMs: NOW,
+    });
+    // Exactly what ManageAccount hands keepStep once the server has answered.
+    const keep = keepStep(plan, e, source, source === "grant" ? a.planExpiresAt ?? null : null, {
+      officeOwner: !!a.officeOwner,
+      unbilled: plan === "pro" && (a.billedBy ?? null) === null && source === null,
+      native,
+    });
+    const offer = offerStep(plan, e, native);
+    return { e, source, steps: stepsFor(plan, e, native).length, keep, offer };
+  }
+
+  type Expect = [steps: number, keepTitle: string, offerTitle: RegExp | null];
+  const TYPES: { name: string; a: Account; web: Expect; app: Expect }[] = [
+    { name: "Free, two weeks or older", a: { rawPlan: "free" },
+      web: [6, "Or just make it go quiet", /^Try Pro free for 30 days/], app: [6, "Or just make it go quiet", /^Try Pro free for 30 days/] },
+    { name: "Free, after a Pro trial", a: { rawPlan: "free", hadTrial: true },
+      web: [6, "Or just make it go quiet", /^Try Pro free for 16 days/], app: [6, "Or just make it go quiet", /^Try Pro free for 16 days/] },
+    { name: "Free, brand new (under 14 days)", a: { rawPlan: "free", created: NEW },
+      web: [5, "Or just make it go quiet", null], app: [5, "Or just make it go quiet", null] },
+    { name: "Pro, Stripe monthly, paying", a: { rawPlan: "pro", subId: "sub_1", discountOk: true, billedBy: "stripe", cust: { _planSource: "stripe" } },
+      web: [6, "Switch to Free instead of deleting", /50% off/], app: [5, "Switch to Free instead of deleting", null] },
+    { name: "Pro, Stripe yearly (the coupon can't apply)", a: { rawPlan: "pro", subId: "sub_1", discountOk: false, billedBy: "stripe" },
+      web: [5, "Switch to Free instead of deleting", null], app: [5, "Switch to Free instead of deleting", null] },
+    { name: "Pro, Stripe card trial", a: { rawPlan: "pro", subId: "sub_1", billedBy: "stripe", extension, cust: { _trialEndsAt: extension.currentEnd } },
+      web: [6, "Cancel your trial instead of deleting", /^Keep your free trial going until/], app: [6, "Cancel your trial instead of deleting", /^Keep your free trial going until/] },
+    { name: "Pro, billed by Apple", a: { rawPlan: "pro", billedBy: "apple", cust: { _planSource: "apple" } },
+      web: [5, "You can stop paying without losing anything", null], app: [5, "You can stop paying without losing anything", null] },
+    { name: "Free Pro time (gift or referral month)", a: { rawPlan: "pro", planExpiresAt: new Date(NOW + 10 * DAY).toISOString() },
+      web: [5, "Your free Pro ends on its own", null], app: [5, "Your free Pro ends on its own", null] },
+    { name: "Office owner, paying", a: { rawPlan: "enterprise", subId: "sub_team", discountOk: true, billedBy: "stripe", officeOwner: true },
+      web: [5, "Cancel Office instead of deleting", null], app: [5, "Cancel Office instead of deleting", null] },
+    { name: "Pro with nothing billing it (comped)", a: { rawPlan: "pro" },
+      web: [5, "Nothing is being charged", null], app: [5, "Nothing is being charged", null] },
+  ];
+
+  for (const t of TYPES) {
+    it(t.name, () => {
+      const runs: [boolean, Expect][] = [[false, t.web], [true, t.app]];
+      for (const [native, [steps, keepTitle, offerTitle]] of runs) {
+        const r = walk(t.a, native);
+        const where = `${t.name} (${native ? "app" : "web"})`;
+        expect(r.steps, where).toBe(steps);
+        expect(r.keep.title, where).toBe(keepTitle);
+        if (offerTitle) expect(r.offer?.title, where).toMatch(offerTitle);
+        else expect(r.offer, where).toBeNull();
+        // Never a price or a billing pointer inside the app (3.1.1), and every
+        // keep step has a way onward (5.1.1).
+        if (native) {
+          expect(JSON.stringify(r.offer ?? {}), where).not.toMatch(/\$/);
+          expect(JSON.stringify(r.keep), where).not.toMatch(/\$|Plan and billing/);
+        }
+        expect(r.keep.decline, where).toBeTruthy();
+      }
+    });
+  }
+
+  it("Office and team plans are never discounted or self-cancelled from here", () => {
+    const owner = walk({ rawPlan: "enterprise", subId: "sub_team", discountOk: true, billedBy: "stripe", officeOwner: true }, false).e;
+    expect(owner.discount).toBe(false);
+    expect(owner.downgrade).toBe(false);
+    expect(owner.extend).toBe(false);
+    // A team member's seat: nothing billed to them, nothing offered.
+    const member = walk({ rawPlan: "enterprise" }, false);
+    expect(member.source).toBeNull();
+    expect(member.e).toMatchObject({ grant: false, discount: false, downgrade: false, extend: false });
+  });
+
+  it("team members never see the section; the delete API refuses them too", () => {
+    const page = read("src/app/settings/flows/page.tsx");
+    expect(page).toMatch(/\.\.\.\(isOfficeSubUser \? \[\] : \[\{\s*id: "advanced"/);
+    expect(read("src/app/api/account/delete/route.ts")).toMatch(/officeSubUserBlockMessage\(user\.id/);
+  });
+
+  it("ONE promotion per person: whoever had 50% off is never offered the free month (owner, 2026-11-04)", () => {
+    const free = (over: Partial<Account>) => walk({ rawPlan: "free", ...over }, false).e.grant;
+    expect(free({})).toBe(true);
+    // Took 50% here, then moved to Free and came back to Delete.
+    expect(free({ cust: { _retention: { discountedAt: "2026-10-01T00:00:00Z" } } })).toBe(false);
+    // Took it in Billing's cancel flow.
+    expect(free({ cust: { _retentionUsed: true } })).toBe(false);
+    // Took it on an older account under the same email.
+    expect(free({ discountLedgerUsed: true })).toBe(false);
+    // Someone who simply cancelled (no promotion taken) is still offered it.
+    expect(free({ cust: { _retention: { savedBy: "downgrade" } } })).toBe(true);
+  });
+
+  it("the route asks the ledger about the 50% offer, and GET and POST decide through one function", () => {
+    const route = read("src/app/api/account/retention/route.ts");
+    expect(route).toMatch(/ledgerHas\("email_retention_discount", email\)/);
+    expect(route).toMatch(/from "@\/lib\/retention-eligibility"/);
+    expect(route.match(/eligibilityOf\(\{/g)).toHaveLength(2);
+  });
+
+  it("a failed look-up never tells a payer 'nothing is being charged'", () => {
+    const ui = read("src/components/ManageAccount.tsx");
+    expect(ui).toMatch(/unbilled: retPlan === "pro" && billedBy === null && facts !== null && source === null/);
+  });
+});
+
+describe("the dialog's own words match the account (review 2026-11-04)", () => {
+  const ui = read("src/components/ManageAccount.tsx");
+  const page = read("src/app/settings/flows/page.tsx");
+
+  it("inside the app, cancelling Pro never points at the Plan-and-billing section it doesn't have", () => {
+    expect(ui).toMatch(/saved === "downgrade" && !elig\.trialEndsAt && !native && " Changed your mind\? Keep Subscription is in Settings → Plan and billing\."/);
+    expect(ui).toMatch(/saved === "downgrade" && elig\.trialEndsAt && !native && " Changed your mind\?/);
+    // Those two lines are the only places it is said.
+    expect(ui.match(/Keep Subscription is in Settings → Plan and billing/g)).toHaveLength(2);
+  });
+
+  it("'Just want to stop paying?' is for people who pay, and names who stops it", () => {
+    expect(ui).toMatch(/\{billedBy === "stripe" && !native && \(/);
+    expect(ui).toMatch(/\{billedBy === "apple" && \(/);
+    expect(ui).not.toMatch(/\{isPro && !native && \(/);
+    // Settings derives it from the account: Apple, SwiftCard's Stripe, or nobody.
+    expect(page).toMatch(/_planSource === "apple"\s*\?\s*"apple"\s*:\s*profile\.stripe_subscription_id\s*\?\s*"stripe"\s*:\s*null/);
+    expect(page).toMatch(/billedBy=\{billedBy\}/);
+  });
+});
+
+describe("reopening gives back what the account is still owed (review 2026-11-04)", () => {
+  const DAY = 86_400_000;
+  const NOW = Date.parse("2026-11-04T12:00:00Z");
+  const deleted = (plan: string, extra: Record<string, unknown> = {}) => ({
+    _deleted: true,
+    _deletion: { reason: "x", comment: "", plan, at: new Date(NOW - 2 * DAY).toISOString() },
+    _retention: { grantedAt: "2026-10-01T00:00:00Z" },
+    ...extra,
+  });
+
+  it("an App Store subscriber Apple is still billing gets Pro back", () => {
+    const r = reopenPatch({ customization: deleted("pro", { _planSource: "apple" }), planExpiresAt: null, hasSubscription: false, appleActive: true, nowMs: NOW });
+    expect(r.restored).toBe("apple");
+    expect(r.columns).toEqual({ plan: "pro", plan_expires_at: null });
+    expect(r.customization._planSource).toBe("apple");
+  });
+
+  it("an Apple subscription that lapsed, or that RevenueCat can't confirm, stays on Free", () => {
+    for (const appleActive of [false, null]) {
+      const r = reopenPatch({ customization: deleted("pro", { _planSource: "apple" }), planExpiresAt: null, hasSubscription: false, appleActive, nowMs: NOW });
+      expect(r.restored).toBeNull();
+      expect(r.columns).toEqual({});
+    }
+  });
+
+  it("free Pro days still left come back; days that ran out don't", () => {
+    const left = reopenPatch({ customization: deleted("pro"), planExpiresAt: new Date(NOW + 9 * DAY).toISOString(), hasSubscription: false, appleActive: null, nowMs: NOW });
+    expect(left.restored).toBe("grant");
+    expect(left.columns).toEqual({ plan: "pro" });
+    const gone = reopenPatch({ customization: deleted("pro"), planExpiresAt: new Date(NOW - DAY).toISOString(), hasSubscription: false, appleActive: null, nowMs: NOW });
+    expect(gone.restored).toBeNull();
+    expect(gone.columns).toEqual({});
+  });
+
+  it("a subscription whose cancellation failed is still being paid for, so the plan comes back", () => {
+    const r = reopenPatch({ customization: deleted("pro", { _planSource: "stripe" }), planExpiresAt: null, hasSubscription: true, appleActive: null, nowMs: NOW });
+    expect(r.restored).toBe("subscription");
+    expect(r.columns).toEqual({ plan: "pro" });
+  });
+
+  it("a website subscription cancelled at deletion comes back on Free with nothing stale left", () => {
+    const r = reopenPatch({
+      customization: deleted("pro", { _planSource: "stripe", _trialEndsAt: "2026-11-10T00:00:00Z", _cancelAtPeriodEnd: true, _cancelAt: "2026-11-10T00:00:00Z", _cancelReason: "x" }),
+      planExpiresAt: null, hasSubscription: false, appleActive: null, nowMs: NOW,
+    });
+    expect(r.restored).toBeNull();
+    expect(r.columns).toEqual({});
+    for (const k of ["_deleted", "_deletion", "_trialEndsAt", "_cancelAtPeriodEnd", "_cancelAt", "_cancelReason"]) expect(r.customization).not.toHaveProperty(k);
+    // Like every Pro that ends: choose which card stays live.
+    expect(r.customization._proEndedChoicePending).toBe(true);
+  });
+
+  it("a former Office owner comes back on Free, without Pro's panel", () => {
+    const r = reopenPatch({ customization: deleted("enterprise", { _planSource: "stripe" }), planExpiresAt: null, hasSubscription: false, appleActive: null, nowMs: NOW });
+    expect(r.columns).toEqual({});
+    expect(r.customization).not.toHaveProperty("_proEndedChoicePending");
+  });
+
+  it("a Free account comes back exactly as it was, and its promotion record stays", () => {
+    const r = reopenPatch({ customization: deleted("free"), planExpiresAt: null, hasSubscription: false, appleActive: null, nowMs: NOW });
+    expect(r.columns).toEqual({});
+    expect(r.customization).toEqual({ _retention: { grantedAt: "2026-10-01T00:00:00Z" } });
+  });
+
+  it("the route uses it, asks RevenueCat only for Apple, and writes only what changed", () => {
+    const route = read("src/app/api/account/reopen/route.ts");
+    expect(route).toMatch(/reopenPatch\(\{/);
+    expect(route).toMatch(/isApplePaid\(customization\) && isPaidPlan\(deletedPlanOf\(customization\)\) \? await rcProActive\(user\.id\) : null/);
+    expect(route).toMatch(/writeCustomizationChanges\(user\.id, customization, patch\.customization\)/);
+    expect(route).not.toMatch(/update\(\{ customization: restored \}\)/);
+  });
+});
+
+describe("no second, unguarded coupon route (review 2026-11-04)", () => {
+  it("/api/account/retain is gone: nothing called it, and it skipped every once-per-person check", () => {
+    expect(() => read("src/app/api/account/retain/route.ts")).toThrow();
+  });
+});
+
+describe("the email switches agree with what is sent (review 2026-11-04)", () => {
+  it("Settings writes both opt-out flags and shows 'off' when either is off", () => {
+    const route = read("src/app/api/settings/email-preferences/route.ts");
+    expect(route).toMatch(/marketing_emails: marketing,\s*marketing_opt_out: !marketing,/);
+    const page = read("src/app/settings/flows/page.tsx");
+    expect(page).toMatch(/initialMarketing=\{emailPrefs\?\.marketing_emails !== false && emailPrefs\?\.marketing_opt_out !== true\}/);
+    expect(page).toMatch(/select\("marketing_emails, marketing_opt_out, receipt_emails"\)/);
   });
 });

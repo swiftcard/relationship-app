@@ -213,7 +213,7 @@ describe("the delete flow after a trial gives the rest of 30 days, once", () => 
   });
 
   it("the grant is once per person via the purge-proof ledger, and no discount mid-trial", () => {
-    const c = read("src/app/api/account/retention/route.ts");
+    const c = read("src/app/api/account/retention/route.ts") + read("src/lib/retention-eligibility.ts");
     expect(c).toContain("!opts.grantLedgerUsed");
     expect(c).toContain('ledgerAdd("email_retention", user.email)');
     expect(c).toContain("!opts.trialing");

@@ -101,7 +101,7 @@ export default async function FlowSettingsPage({
       .select("id, username, name, title, label, is_offline")
       .eq("user_id", authedUserId)
       .order("created_at", { ascending: true }),
-    admin.from("email_preferences").select("marketing_emails, receipt_emails").eq("user_id", authedUserId).maybeSingle(),
+    admin.from("email_preferences").select("marketing_emails, marketing_opt_out, receipt_emails").eq("user_id", authedUserId).maybeSingle(),
     getReferralProgress(authedUserId),
   ]);
   if (!user) redirect(loginNext);
@@ -153,6 +153,16 @@ export default async function FlowSettingsPage({
   // trimmed personal-sub view for them (personalSubOnly), never the org's plan
   // manager, so showing the section cannot expose team billing.
   const showBilling = canSeeBilling(officeCtx, profile.stripe_subscription_id as string | null, (profile.customization as { _planSource?: unknown } | null)?._planSource);
+  // Who takes the money, for Delete account's "Just want to stop paying?" line:
+  // Apple (cancelled in Apple's settings), SwiftCard's Stripe (Plan and
+  // billing), or nobody — free Pro time has nothing to stop.
+  const billedBy: "stripe" | "apple" | null = !isPro
+    ? null
+    : (profile.customization as { _planSource?: unknown } | null)?._planSource === "apple"
+      ? "apple"
+      : profile.stripe_subscription_id
+        ? "stripe"
+        : null;
 
   const googleIntegration = integrations?.find((i) => i.provider === "google");
   const hubspotIntegration = integrations?.find((i) => i.provider === "hubspot");
@@ -384,7 +394,8 @@ export default async function FlowSettingsPage({
           {/* Which emails we may send: marketing + payment receipts. Lives here
               (not only on the legacy /profile page) so it's actually findable. */}
           <EmailPreferencesForm
-            initialMarketing={emailPrefs?.marketing_emails ?? true}
+            // Either flag means off (lib/marketing-consent) — the switch shows what is actually sent.
+            initialMarketing={emailPrefs?.marketing_emails !== false && emailPrefs?.marketing_opt_out !== true}
             initialReceipts={emailPrefs?.receipt_emails ?? true}
             showReceipts={showBilling}
           />
@@ -559,7 +570,9 @@ export default async function FlowSettingsPage({
       // white siblings (owner call 2026-08-11 — every row looks the same).
       content: (
         <div data-tour="settings-account">
-          <ManageAccount isPro={isPro} plan={profile.plan ?? "free"} email={user.email ?? ""} isOfficeOwner={!!officeCtx?.isOwner} />
+          {/* An office row outlives its subscription, so a former owner now on
+              Free is not warned about a team that has already been released. */}
+          <ManageAccount isPro={isPro} plan={profile.plan ?? "free"} email={user.email ?? ""} isOfficeOwner={!!officeCtx?.isOwner && profile.plan === "enterprise"} billedBy={billedBy} />
           <p className="mt-6">
             <Link href="/privacy" className="text-gray-600 hover:text-gray-400 text-[0.6875rem] underline">Privacy Policy</Link>
           </p>

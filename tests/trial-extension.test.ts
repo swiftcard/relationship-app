@@ -118,7 +118,7 @@ describe("the offer, on the web and in the app", () => {
 describe("one free month per person — pinned at source", () => {
   const route = read("src/app/api/stripe/subscription/extend-trial/route.ts");
   const server = read("src/lib/trial-extension-server.ts");
-  const retention = read("src/app/api/account/retention/route.ts");
+  const retention = read("src/app/api/account/retention/route.ts") + read("src/lib/retention-eligibility.ts");
 
   it("the apply route moves trial_end once, idempotently, and records it after Stripe accepts", () => {
     expect(route).toMatch(/trial_end: offer\.untilUnix/);

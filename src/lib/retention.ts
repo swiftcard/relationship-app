@@ -361,7 +361,20 @@ export function trialExtensionOffer(
  * destroyed. Pro on Apple: same idea, but auto-renew is turned off in the
  * App Store, which is the ONLY place we may point them (3.1.1).
  */
-export function keepStep(plan: RetentionPlan, elig: Eligibility, source: PlanSource, proEndsAt?: string | null): OfferCopy {
+export function keepStep(
+  plan: RetentionPlan,
+  elig: Eligibility,
+  source: PlanSource,
+  proEndsAt?: string | null,
+  ctx: {
+    /** Owns a team on a live Office plan (Settings passes this). */
+    officeOwner?: boolean;
+    /** Known for certain that nothing bills this account (no Stripe, no Apple). */
+    unbilled?: boolean;
+    /** Inside the iOS shell: no Plan-and-billing pointer (that section is hidden there). */
+    native?: boolean;
+  } = {},
+): OfferCopy {
   if (plan === "free") {
     return {
       title: "Or just make it go quiet",
@@ -388,6 +401,33 @@ export function keepStep(plan: RetentionPlan, elig: Eligibility, source: PlanSou
     return {
       title: "You can stop paying without losing anything",
       body: "Turning off auto-renew in your Apple subscription settings stops the charges and keeps your account, your cards and every contact you've collected. Deleting the account here does not manage the subscription for you — and it does destroy the data.",
+      accept: null,
+      action: null,
+      decline: "Continue with deletion",
+    };
+  }
+  // Pro (or a team plan) with nothing billing it at all — a comped account, a
+  // free Office. "Your subscription can be cancelled" was untrue: there is no
+  // subscription, and nothing to stop.
+  if (ctx.unbilled) {
+    return {
+      title: "Nothing is being charged",
+      body: "There's no subscription on this account, so there's no payment to stop and nothing to cancel — you don't need to delete your account for that. Keep it, and your card, your link and your contacts stay exactly where they are.",
+      accept: null,
+      action: null,
+      decline: "Continue with deletion",
+    };
+  }
+  // An Office owner. Their subscription is the team's, cancelled in Plan and
+  // billing (never from here — a seat-billed plan can't be self-cancelled by
+  // the personal downgrade route), and cancelling releases the team at the end
+  // of the period instead of cutting everyone off today.
+  if (ctx.officeOwner) {
+    return {
+      title: "Cancel Office instead of deleting",
+      body: ctx.native
+        ? "Cancelling Office stops the charges and deletes nothing: your team keeps Office until the end of the period you've paid for, then everyone keeps their first card without the company branding — and your own card, link and contacts stay in your account."
+        : "Cancel Office in Settings → Plan and billing instead. It stops the charges and deletes nothing: your team keeps Office until the end of the period you've paid for, then everyone keeps their first card without the company branding — and your own card, link and contacts stay in your account.",
       accept: null,
       action: null,
       decline: "Continue with deletion",

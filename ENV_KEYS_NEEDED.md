@@ -118,7 +118,6 @@ See **`STRIPE_TWILIO_SETUP.md`** for the full dashboard walkthrough (products, p
 | `NEXT_PUBLIC_STRIPE_ENTERPRISE_PRICE_ID` | Stripe → Product catalog → your Office (per-seat) monthly price → copy Price ID. Must be $3.99/mo per seat. |
 | `NEXT_PUBLIC_STRIPE_ENTERPRISE_ANNUAL_PRICE_ID` | Stripe → Product catalog → your Office (per-seat) annual price → copy Price ID. Must be $43.09/yr per seat. |
 | `STRIPE_PRICE_ID` | Optional legacy fallback for `NEXT_PUBLIC_STRIPE_MONTHLY_PRICE_ID`. Leave unset if the monthly price ID above is set. |
-| `STRIPE_RETENTION_COUPON_ID` | Optional. A Stripe Coupon ID applied on the account-cancellation "retain" offer. |
 
 Test/live mode are **completely separate catalogs** in Stripe — a test Price ID will not work with a live secret key. When you're ready to go live, recreate the Products/Prices in live mode (same amounts) and swap every Stripe value above for its live-mode equivalent. `src/app/api/stripe/checkout/route.ts` fetches the real Stripe price at checkout time and rejects the request if its amount doesn't match `PLAN_PRICES` in `src/lib/plan.ts` — keep that file in sync if you ever change a displayed price.
 
@@ -197,8 +196,7 @@ the feature behind it degrades quietly when unset.
 |---|---|
 | `ALERT_WEBHOOK_URL` | Production error alerts (`lib/report-error.ts`). Unset = errors are logged but nothing is pushed anywhere. |
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | Shared rate-limit store (`lib/rate-limit.ts`). Unset = limits fall back to per-instance memory, so they reset on every cold start. |
-| `STRIPE_RETENTION_COUPON_ID` | Coupon offered in the account-DELETION retention flow (`/api/account/retain`). |
-| `STRIPE_RETENTION_DISCOUNT_COUPON_ID` | Separate coupon offered in the subscription CANCEL flow (`/api/stripe/subscription/discount`). Note: two different coupons — easy to confuse. |
+| `STRIPE_RETENTION_DISCOUNT_COUPON_ID` | Optional override for the 50%-off-3-months coupon (`/api/stripe/subscription/discount`). ONE coupon serves both doors — the delete-account flow and the Billing cancel flow. Unset = the route creates and reuses its own. (`STRIPE_RETENTION_COUPON_ID` and `/api/account/retain` were removed 2026-11-04 — nothing read them.) |
 | `APPLE_PUSH_KEY_ID` / `APPLE_PUSH_PRIVATE_KEY` / `APPLE_PUSH_TOPIC` / `APPLE_PUSH_SANDBOX` | Native iOS push. Unset = push is skipped; in-app bell notifications still work. |
 | `APPLE_SIGN_IN_CLIENT_ID` / `APPLE_SIGN_IN_KEY_ID` / `APPLE_SIGN_IN_PRIVATE_KEY` | Sign in with Apple (also see `docs/ios-review/SHELL-RUNBOOK.md`). |
 | `APP_STORE_ID` / `APP_STORE_COUNTRY` | App Store links in the native shell / marketing surfaces. |

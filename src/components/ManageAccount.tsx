@@ -38,7 +38,21 @@ import {
 // and no step can trap someone. Apple 3.1.1: inside the shell there are no
 // prices, no checkout and no links out — the copy for that comes from
 // retention.ts, which is handed `native`.
-export default function ManageAccount({ isPro, plan = "free", email = "", isOfficeOwner = false }: { isPro: boolean; plan?: string; email?: string; isOfficeOwner?: boolean }) {
+export default function ManageAccount({
+  isPro,
+  plan = "free",
+  email = "",
+  isOfficeOwner = false,
+  billedBy = null,
+}: {
+  isPro: boolean;
+  plan?: string;
+  email?: string;
+  /** Owns a team on a LIVE Office plan — a former owner on Free is not. */
+  isOfficeOwner?: boolean;
+  /** Who takes the money: SwiftCard's Stripe, Apple, or nobody (free Pro time). */
+  billedBy?: "stripe" | "apple" | null;
+}) {
   const native = useIsNativeApp();
   const [expanded, setExpanded] = useState(false);
   const [modal, setModal] = useState(false);
@@ -84,7 +98,13 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
   const quietEntry = retPlan === "free";
   const steps = stepsFor(retPlan, elig, native);
   const offer = offerStep(retPlan, elig, native);
-  const keep = keepStep(retPlan, elig, source, facts?.proEndsAt ?? null);
+  const keep = keepStep(retPlan, elig, source, facts?.proEndsAt ?? null, {
+    officeOwner: isOfficeOwner,
+    // Only once the server has answered (facts) AND the page says nobody bills
+    // it — a failed look-up must never tell a payer "nothing is being charged".
+    unbilled: retPlan === "pro" && billedBy === null && facts !== null && source === null,
+    native,
+  });
   const picked = reasonById(retPlan, reason);
 
   const supabase = createBrowserClient(
@@ -281,10 +301,19 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
           </p>
           {/* Native (App Store 5.1.1 + 3.1.1): the Plan-and-billing section is
               hidden inside the Capacitor shell, so this pointer would be a dead
-              anchor referencing subscription management — web only. */}
-          {isPro && !native && (
+              anchor referencing subscription management — web only. And only
+              for a subscription SwiftCard actually bills: free Pro time has
+              nothing to stop, and Plan and billing can't cancel Apple's. */}
+          {billedBy === "stripe" && !native && (
             <p className="text-gray-500 text-[0.6875rem] mb-3 leading-relaxed">
               Just want to stop paying? You can <a href="#billing" className="text-blue-400 hover:text-blue-300 underline">cancel or switch to Free in Plan and billing</a> and keep your account.
+            </p>
+          )}
+          {/* Apple bills it, so Apple's settings are the only place it stops —
+              true in the app as well as on the web (the keep step says the same). */}
+          {billedBy === "apple" && (
+            <p className="text-gray-500 text-[0.6875rem] mb-3 leading-relaxed">
+              Just want to stop paying? Turn off auto-renew in your Apple subscription settings and keep your account — deleting it here doesn&apos;t stop the App Store charge.
             </p>
           )}
           <button
@@ -321,7 +350,11 @@ export default function ManageAccount({ isPro, plan = "free", email = "", isOffi
                       bills from the day the gift ends, so saying so is true. */}
                   {saved === "grant" && !native && savedUntil && ` Want to keep Pro after that? Subscribe any time — you won't be charged until ${dayLabel(savedUntil)}.`}
                   {saved === "discount" && "It comes off your next invoices automatically. Nothing else changes — same account, same card, same everything."}
-                  {saved === "downgrade" && !elig.trialEndsAt && "You won't be charged again. Pro stays on until the end of the period you've paid for, then you move to Free and choose which card stays live. Every contact you've collected stays here. Changed your mind? Keep Subscription is in Settings → Plan and billing."}
+                  {saved === "downgrade" && !elig.trialEndsAt && "You won't be charged again. Pro stays on until the end of the period you've paid for, then you move to Free and choose which card stays live. Every contact you've collected stays here."}
+                  {/* Web only: Plan and billing (and its Keep Subscription
+                      button) is hidden inside the app — the same rule as the
+                      trial version below. */}
+                  {saved === "downgrade" && !elig.trialEndsAt && !native && " Changed your mind? Keep Subscription is in Settings → Plan and billing."}
                   {/* A card trial: nothing was paid, so "the period you've paid
                       for" would be untrue. The Plan-and-billing pointer is web
                       only (3.1.1) — that section is hidden inside the app. */}

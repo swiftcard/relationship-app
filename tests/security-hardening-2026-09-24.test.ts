@@ -193,7 +193,7 @@ describe("personal data stops being public when it should", () => {
 describe("free Pro can't be minted on a new account", () => {
   it("the retention month needs an account at least two weeks old", () => {
     const s = read("src/app/api/account/retention/route.ts");
-    expect(s).toContain("accountOldEnough(opts.accountCreatedAt)");
+    expect(read("src/lib/retention-eligibility.ts")).toContain("accountOldEnough(opts.accountCreatedAt, opts.nowMs)");
     expect(s.match(/accountCreatedAt: user\.created_at \?\? null,/g)?.length).toBe(2);
   });
   it("a late App Store grant asks RevenueCat first", () => {

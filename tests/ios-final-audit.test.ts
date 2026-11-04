@@ -133,7 +133,9 @@ describe("5.1.1 — deletion dialog disclosures", () => {
     expect(s).toMatch(/cancels your team&apos;s subscription immediately/);
   });
   it("settings passes the real office-owner flag", () => {
-    expect(read("src/app/settings/flows/page.tsx")).toMatch(/isOfficeOwner=\{!!officeCtx\?\.isOwner\}/);
+    // Only a LIVE Office owner: an offices row outlives the subscription, and a
+    // former owner on Free must not be warned about a team already released.
+    expect(read("src/app/settings/flows/page.tsx")).toMatch(/<ManageAccount [^>]*isOfficeOwner=\{!!officeCtx\?\.isOwner && profile\.plan === "enterprise"\}/);
   });
   it("email-reuse copy is window-scoped (matches the actual purge behavior)", () => {
     expect(read("src/components/ManageAccount.tsx")).toMatch(/while the account is held/);

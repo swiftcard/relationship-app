@@ -138,8 +138,10 @@ const GUARDS: Guard[] = [
   { file: "src/components/AddSeatButton.tsx", patterns: [/if \(native\) return null/] },
   // Account deletion stays fully reachable on native (5.1.1), but its
   // "cancel in Plan and billing" pointer targets a section hidden on native —
-  // web only.
-  { file: "src/components/ManageAccount.tsx", patterns: [/isPro && !native && \(/] },
+  // web only (and only for a subscription SwiftCard bills — review 2026-11-04).
+  // The cancel-Pro result's "Keep Subscription is in Settings → Plan and
+  // billing" line is web only for the same reason.
+  { file: "src/components/ManageAccount.tsx", patterns: [/billedBy === "stripe" && !native && \(/, /saved === "downgrade" && !elig\.trialEndsAt && !native && " Changed your mind\?/] },
   // Raw marketing "See pricing"/"Pricing" links wrapped in NativeHidden.
   // The homepage's "See pricing" button is GONE (owner, 2026-09-11) — the
   // closing CTA is one button now. There is nothing left to wrap, so the rule

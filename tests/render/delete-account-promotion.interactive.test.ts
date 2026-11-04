@@ -61,10 +61,10 @@ beforeAll(async () => {
     import { createRoot } from "react-dom/client";
     import { createElement as h } from "react";
     import ManageAccount from "@/components/ManageAccount";
-    (window as any).mount = (plan: string) => {
+    (window as any).mount = (plan: string, extra?: Record<string, unknown>) => {
       createRoot(document.getElementById("root")!).render(
         h("main", { className: "sc-app min-h-screen bg-gray-950 p-4" },
-          h(ManageAccount, { isPro: plan !== "free", plan, email: "dana@example.com" })),
+          h(ManageAccount, { isPro: plan !== "free", plan, email: "dana@example.com", ...(extra ?? {}) })),
       );
     };
   `);
@@ -79,7 +79,13 @@ beforeAll(async () => {
 }, 240_000);
 afterAll(async () => { await browser?.close(); if (tmp) rmSync(tmp, { recursive: true, force: true }); });
 
-type Opts = { width?: number; theme?: "light" | "dark"; native?: boolean; elig: Elig; source?: string | null; plan?: string; getDelayMs?: number };
+type Opts = {
+  width?: number; theme?: "light" | "dark"; native?: boolean; elig: Elig; source?: string | null; plan?: string; getDelayMs?: number;
+  /** Extra ManageAccount props, as Settings passes them (billedBy, isOfficeOwner). */
+  props?: Record<string, unknown>;
+  /** The retention look-up fails (the dialog must still run, offering nothing). */
+  getFails?: boolean;
+};
 
 async function open(o: Opts): Promise<{ page: Page; posts: Record<string, unknown>[] }> {
   const ctx = await browser.newContext({ viewport: { width: o.width ?? 390, height: 844 } });
@@ -89,6 +95,7 @@ async function open(o: Opts): Promise<{ page: Page; posts: Record<string, unknow
   await page.route(`${ORIGIN}/api/account/retention`, async (r) => {
     if (r.request().method() === "GET") {
       if (o.getDelayMs) await new Promise((res) => setTimeout(res, o.getDelayMs));
+      if (o.getFails) return r.fulfill({ status: 500, contentType: "application/json", body: "{}" });
       return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ plan: o.plan === "free" || !o.plan ? "free" : "pro", source: o.source ?? null, eligibility: o.elig, facts }) });
     }
     const body = JSON.parse(r.request().postData() || "{}");
@@ -106,7 +113,7 @@ async function open(o: Opts): Promise<{ page: Page; posts: Record<string, unknow
   }));
   if (o.native) await page.addInitScript(() => { (window as unknown as { webkit: unknown }).webkit = { messageHandlers: { bridge: {} } }; });
   await page.goto(`${ORIGIN}/`);
-  await page.evaluate((p) => (window as unknown as { mount: (x: string) => void }).mount(p), o.plan ?? "free");
+  await page.evaluate(([p, extra]) => (window as unknown as { mount: (x: string, e?: Record<string, unknown>) => void }).mount(p as string, extra as Record<string, unknown> | undefined), [o.plan ?? "free", o.props] as const);
   await page.getByRole("button", { name: "Account ownership and deletion" }).click();
   await page.getByRole("button", { name: "Delete account", exact: true }).click();
   return { page, posts };
@@ -369,6 +376,123 @@ describe("Pro trial: stretched to a full month, the last thing before DELETE —
       await walkToPromotion(page);
       await page.getByText("Type DELETE to confirm").waitFor();
       expect(await label(page).innerText()).toMatch(/step 5 of 5/i);
+    } finally { await page.context().close(); }
+  });
+});
+
+// ── Every other account type, walked (review 2026-11-04) ────────────────────
+const NONE: Elig = { grant: false, discount: false, downgrade: false };
+
+/** why → detail → the keep step. */
+async function walkToKeep(page: Page) {
+  await page.getByRole("button", { name: "Continue", exact: true }).waitFor();
+  await page.locator('input[type="radio"]').first().check();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+}
+
+describe("what each account is told matches how it is billed", () => {
+  for (const native of [false, true]) {
+    it(`${native ? "app" : "web"}: cancelling Pro instead of deleting${native ? " never points at Plan and billing (not in the app)" : " says how to undo it"}`, async () => {
+      const { page, posts } = await open({ elig: PRO_ELIG, plan: "pro", source: "stripe", native, props: { billedBy: "stripe" } });
+      try {
+        await walkToKeep(page);
+        await page.getByText("Switch to Free instead of deleting").waitFor();
+        await page.getByRole("button", { name: "Cancel Pro, keep my account" }).click();
+        await page.getByText("Pro is cancelled — nothing was deleted").waitFor();
+        expect(posts.map((p) => p.action)).toEqual(["survey", "downgrade"]);
+        const text = await modal(page).innerText();
+        expect(text).toMatch(/You won't be charged again\./);
+        if (native) expect(text, "a pointer to a section the app doesn't have").not.toMatch(/Keep Subscription|Plan and billing/);
+        else expect(text).toMatch(/Keep Subscription is in Settings → Plan and billing\./);
+      } finally { await page.context().close(); }
+    });
+  }
+
+  it("'Just want to stop paying?' appears only for someone who pays, and says where it stops", async () => {
+    const cases: { props: Record<string, unknown>; native?: boolean; plan: string; source: string | null; expect: RegExp | null }[] = [
+      { props: { billedBy: "stripe" }, plan: "pro", source: "stripe", expect: /cancel or switch to Free in Plan and billing/ },
+      { props: { billedBy: "stripe" }, native: true, plan: "pro", source: "stripe", expect: null },
+      { props: { billedBy: "apple" }, plan: "pro", source: "apple", expect: /Turn off auto-renew in your Apple subscription settings/ },
+      { props: { billedBy: "apple" }, native: true, plan: "pro", source: "apple", expect: /Turn off auto-renew in your Apple subscription settings/ },
+      { props: { billedBy: null }, plan: "pro", source: "grant", expect: null },
+    ];
+    for (const c of cases) {
+      const { page } = await open({ elig: NONE, plan: c.plan, source: c.source, native: c.native, props: c.props });
+      try {
+        const where = `${JSON.stringify(c.props)} ${c.native ? "app" : "web"}`;
+        const panel = page.getByText(/^Just want to stop paying\?/);
+        if (c.expect) expect(await panel.innerText(), where).toMatch(c.expect);
+        else expect(await panel.count(), where).toBe(0);
+      } finally { await page.context().close(); }
+    }
+  });
+
+  it("an App Store subscriber: five steps, told twice that deleting doesn't stop Apple billing", async () => {
+    const { page } = await open({ elig: NONE, plan: "pro", source: "apple", props: { billedBy: "apple" } });
+    try {
+      await walkToKeep(page);
+      await page.getByText("You can stop paying without losing anything").waitFor();
+      expect(await modal(page).innerText()).toMatch(/auto-renew in your Apple subscription settings/);
+      await page.getByRole("button", { name: "Continue with deletion" }).click();
+      await page.getByText("Here's what goes").waitFor();
+      await page.getByRole("button", { name: "Continue", exact: true }).click();
+      await page.getByText("Type DELETE to confirm").waitFor();
+      expect(await label(page).innerText()).toMatch(/step 5 of 5/i);
+      expect(await modal(page).innerText()).toMatch(/Your App Store subscription is NOT cancelled by this/);
+    } finally { await page.context().close(); }
+  });
+
+  for (const native of [false, true]) {
+    it(`${native ? "app" : "web"}: an Office owner is told to cancel Office, then warned about the team`, async () => {
+      const { page } = await open({ elig: NONE, plan: "enterprise", source: "stripe", native, props: { isOfficeOwner: true, billedBy: "stripe" } });
+      try {
+        await walkToKeep(page);
+        await page.getByText("Cancel Office instead of deleting").waitFor();
+        const keep = await modal(page).innerText();
+        expect(keep).toMatch(/your team keeps Office until the end of the period you've paid for/);
+        if (native) expect(keep).not.toMatch(/Plan and billing/);
+        else expect(keep).toMatch(/Cancel Office in Settings → Plan and billing instead\./);
+        expect(keep, "no 'Switch to Free' promise for a team plan").not.toMatch(/Switch to Free/);
+        await page.getByRole("button", { name: "Continue with deletion" }).click();
+        await page.getByText("Here's what goes").waitFor();
+        expect(await modal(page).innerText()).toMatch(/team's subscription is cancelled immediately/);
+        await page.getByRole("button", { name: "Continue", exact: true }).click();
+        await page.getByText("Type DELETE to confirm").waitFor();
+        expect(await label(page).innerText()).toMatch(/step 5 of 5/i);
+        expect(await modal(page).innerText()).toMatch(/You own a team:/);
+      } finally { await page.context().close(); }
+    });
+  }
+
+  it("a former Office owner now on Free hears nothing about a team", async () => {
+    const { page } = await open({ elig: NONE, plan: "free", props: { isOfficeOwner: false } });
+    try {
+      await walkToPromotion(page);
+      await page.getByText("Type DELETE to confirm").waitFor();
+      expect(await modal(page).innerText()).not.toMatch(/team/i);
+    } finally { await page.context().close(); }
+  });
+
+  it("Pro with nothing billing it is told plainly that nothing is charged", async () => {
+    const { page } = await open({ elig: NONE, plan: "pro", source: null, props: { billedBy: null } });
+    try {
+      await walkToKeep(page);
+      await page.getByText("Nothing is being charged").waitFor();
+      expect(await modal(page).innerText()).not.toMatch(/subscription can be cancelled/);
+    } finally { await page.context().close(); }
+  });
+
+  it("when the look-up fails, a payer is never told 'nothing is being charged' — and can still delete", async () => {
+    const { page } = await open({ elig: NONE, plan: "pro", getFails: true, props: { billedBy: null } });
+    try {
+      await walkToKeep(page);
+      await page.getByText("Switch to Free instead of deleting").waitFor();
+      expect(await page.getByText("Nothing is being charged").count()).toBe(0);
+      await page.getByRole("button", { name: "No thanks, keep deleting" }).click();
+      await page.getByText("Here's what goes").waitFor();
+      await page.getByRole("button", { name: "Continue", exact: true }).click();
+      await page.getByText("Type DELETE to confirm").waitFor();
     } finally { await page.context().close(); }
   });
 });

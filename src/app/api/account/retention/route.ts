@@ -3,8 +3,6 @@ import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { getOwnerUsernames, publicCardSlug } from "@/lib/owner-usernames";
 import { isRateLimited } from "@/lib/rate-limit";
-import { isPaidPlan } from "@/lib/plan";
-import { isApplePaid } from "@/lib/iap-entitlement";
 import { reportError } from "@/lib/report-error";
 import { alertRetention } from "@/lib/retention-alert";
 import { ledgerAdd, ledgerHas, trialHistoryFor } from "@/lib/trial-ledger";
@@ -14,14 +12,11 @@ import { discountRefusalFor, retentionDiscountTakenBy } from "@/lib/retention-di
 import { trialExtensionOfferFor, type TrialExtensionOffer } from "@/lib/trial-extension-server";
 import {
   RETENTION_GRANT_DAYS,
-  RETENTION_GRANT_DAYS_AFTER_TRIAL,
   RETENTION_DISCOUNT_MONTHS,
   RETENTION_DISCOUNT_PERCENT,
   type AccountFacts,
-  type Eligibility,
-  type PlanSource,
-  type RetentionPlan,
 } from "@/lib/retention";
+import { eligibilityOf, planOf, retentionOf, sourceOf, type Cust } from "@/lib/retention-eligibility";
 
 // ── The save sequence behind "Delete account" ────────────────────────────────
 //
@@ -40,136 +35,28 @@ import {
 //
 // The survey is stored whether or not the account is ever deleted — a person
 // who takes an offer and stays has told us the most valuable thing in here.
+//
+// WHO may be offered WHAT is decided in lib/retention-eligibility (pure, and
+// tested per account type); this route only gathers the facts it needs.
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
-type Cust = Record<string, unknown>;
-type RetentionRecord = {
-  /** Every survey answer, newest last. */
-  surveys?: { reason: string; comment: string; plan: string; at: string }[];
-  /** ISO timestamp of the one grant/discount this account has taken. */
-  grantedAt?: string;
-  discountedAt?: string;
-  /** ISO timestamp the card trial was stretched (api/stripe/subscription/extend-trial). */
-  trialExtendedAt?: string;
-  /** What the account chose in the end, for the admin funnel. */
-  savedBy?: string;
-  savedAt?: string;
-};
-
-function retentionOf(cust: Cust): RetentionRecord {
-  return (cust._retention as RetentionRecord | undefined) ?? {};
-}
-
 // Trial history for the grant rules: whether this person has had a Pro trial
 // (account marker or email ledger), whether their email already took the grant
-// on any account, and whether a card-backed trial is running now.
+// — or the 50% offer — on any account, and whether a card-backed trial is
+// running now.
 async function trialFactsFor(userId: string, email: string | null | undefined, cust: Cust) {
   const history = await trialHistoryFor(userId, email);
-  const [trialByEmail, grantLedgerUsed] = await Promise.all([
+  const [trialByEmail, grantLedgerUsed, discountLedgerUsed] = await Promise.all([
     ledgerHas("email_trial", email),
     ledgerHas("email_retention", email),
+    ledgerHas("email_retention_discount", email),
   ]);
   return {
     hadTrial: !!history.proTrialStartedAt || trialByEmail,
     grantLedgerUsed,
+    discountLedgerUsed,
     trialing: typeof cust[TRIAL_ENDS_KEY] === "string",
-  };
-}
-
-function planOf(plan: string | null | undefined): RetentionPlan {
-  return isPaidPlan(plan) ? "pro" : "free";
-}
-
-function sourceOf(plan: string | null | undefined, cust: Cust, subId: string | null, planExpiresAt: string | null): PlanSource {
-  if (!isPaidPlan(plan)) return null;
-  if (isApplePaid(cust)) return "apple";
-  if (subId) return "stripe";
-  // Free Pro with an end date and nothing billing it (this flow's gift, a
-  // referral month). Office grants keep the generic wording — "your free Pro"
-  // would be the wrong plan's name.
-  return plan === "pro" && planExpiresAt ? "grant" : null;
-}
-
-const GRANT_MIN_ACCOUNT_AGE_MS = 14 * 24 * 60 * 60 * 1000;
-
-function accountOldEnough(createdAt: string | null | undefined): boolean {
-  const t = createdAt ? Date.parse(createdAt) : NaN;
-  return Number.isFinite(t) && Date.now() - t >= GRANT_MIN_ACCOUNT_AGE_MS;
-}
-
-function eligibilityOf(opts: {
-  plan: RetentionPlan;
-  /** The stored plan string — "pro" and "enterprise" are NOT interchangeable here. */
-  rawPlan: string | null;
-  source: PlanSource;
-  rec: RetentionRecord;
-  planExpiresAt: string | null;
-  subId: string | null;
-  /** customization._retentionUsed — set by the Billing cancel-flow offer. */
-  retentionUsed: unknown;
-  /** This account or email has had a Pro trial (Stripe or Apple). */
-  hadTrial?: boolean;
-  /** This email already took the grant on some account (purge-proof ledger). */
-  grantLedgerUsed?: boolean;
-  /** A card-backed trial is running right now (mirrored trial end). */
-  trialing?: boolean;
-  /** auth.users.created_at — the free month is a save for real customers. */
-  accountCreatedAt?: string | null;
-  /**
-   * The 50% offer checked against the live subscription and the person:
-   * null = not looked up (not an individual Stripe Pro), which offers nothing.
-   * See lib/retention-discount.
-   */
-  discountOk?: boolean | null;
-  /**
-   * The trial stretch this account could take (lib/trial-extension-server),
-   * checked against the live subscription: null = none, or not looked up.
-   */
-  extension?: TrialExtensionOffer | null;
-  /** POST only: the extend-trial route makes the live checks itself (see discountOk). */
-  extendOk?: boolean | null;
-  /** When the card-backed trial ends now, for the keep step's wording. */
-  trialEndsAt?: string | null;
-}): Eligibility {
-  const { plan, rawPlan, source, rec, planExpiresAt, subId, retentionUsed } = opts;
-  // An Office/enterprise subscription is a seat-billed team plan: its price is
-  // recomputed from the seat count by office-billing-sync, and /account/downgrade
-  // refuses it outright. Discounting or self-cancelling one from a personal
-  // delete dialog would either be undone by the next seat sync or strand a team,
-  // so the money offers are for an INDIVIDUAL Pro subscription only.
-  const individualPro = plan === "pro" && rawPlan === "pro" && source === "stripe" && !!subId;
-  return {
-    // A Free account that has never taken retention time and is not already
-    // sitting on a grant (an unexpired trial/free month) — handing 30 days to
-    // someone who already has 20 left reads as a trick.
-    // Not on a brand-new account: sign up, POST {action:"grant"}, and a month
-    // of Pro (with its paid AI features) came free with no card, once per
-    // throwaway email (security audit 2026-09-24). Someone who has used
-    // SwiftCard for two weeks is the customer this offer is for.
-    grant: plan === "free" && !rec.grantedAt && !rec.trialExtendedAt && !planExpiresAt && !opts.grantLedgerUsed && accountOldEnough(opts.accountCreatedAt),
-    // Someone who has had a 14-day trial gets the rest of 30, not 30 more.
-    grantDays: opts.hadTrial ? RETENTION_GRANT_DAYS_AFTER_TRIAL : RETENTION_GRANT_DAYS,
-    // Only a real Stripe subscription can be discounted. Apple bills Apple.
-    // `_retentionUsed` is the SHARED once-per-customer flag: the same 50%/3mo
-    // offer is made when cancelling a subscription in Billing, and taking it
-    // there must close it here too.
-    // Not during a free trial: there is no invoice yet to take 50% off, and
-    // cancelling the trial (downgrade) is the honest save there.
-    // And only where the coupon does what the offer says, for a person who has
-    // never had it on any account: active + monthly + no discount already on
-    // the subscription + not in the ledger (`discountOk`, fails closed).
-    discount: individualPro && !rec.discountedAt && retentionUsed !== true && !opts.trialing && opts.discountOk === true,
-    downgrade: individualPro,
-    // A card trial stretched to a month from its start. Its own once-only
-    // record on the account, plus the free-time ledger it shares with
-    // `grant` — one free month per person, whichever door it came through.
-    extend: individualPro && (!!opts.extension || opts.extendOk === true) && !rec.grantedAt && !rec.trialExtendedAt,
-    extendUntil: opts.extension?.until ?? null,
-    extendDays: opts.extension?.extraDays,
-    trialEndsAt: individualPro ? opts.trialEndsAt ?? null : null,
-    chargeCents: opts.extension?.chargeCents ?? null,
-    chargeInterval: opts.extension?.chargeInterval ?? null,
   };
 }
 
@@ -504,13 +391,19 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Go quiet: every SwiftCard email off, account untouched ────────────────
-  // Receipts are switched off only for an account that isn't being charged.
-  // Silencing a paying subscriber's payment receipts is not a kindness — it is
+  // BOTH opt-out flags (supabase/email-preference-center.sql: every write path
+  // sets both — older senders read marketing_emails, newer ones
+  // marketing_opt_out, and an opt-out that lands in only one of them is one we
+  // fail to honour).
+  // Receipts are left alone. A Free account is never charged, so switching
+  // them off silenced nothing today — but the flag outlived the moment, and
+  // the receipts of someone who later subscribed were skipped without a word
+  // (the webhook honours receipt_emails). Silencing a payer's receipts is
   // hiding their own money from them.
   const { error } = await admin
     .from("email_preferences")
     .upsert(
-      { user_id: user.id, marketing_emails: false, ...(plan === "free" ? { receipt_emails: false } : {}) },
+      { user_id: user.id, marketing_emails: false, marketing_opt_out: true, updated_at: new Date().toISOString() },
       { onConflict: "user_id" },
     );
   if (error) return NextResponse.json({ error: "Couldn't update your email settings. Please try again." }, { status: 500 });
