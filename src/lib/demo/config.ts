@@ -19,8 +19,11 @@ export const DEMO_RULES = {
   startHour: 10,
   /** Every demo is over by this hour, New York time (the last one starts 4:30). */
   endHour: 17,
-  /** The earliest a demo can be booked, from now. */
-  minNoticeMs: 4 * 60 * 60 * 1000,
+  /** Owner, 2026-11-04: never the same day. The first bookable day is this
+   *  many days after today's New York date, so the earliest demo is 10 AM
+   *  tomorrow (a Friday or weekend booking starts Monday). It gives the owner a
+   *  night to prepare and lets the night-before and morning-of reminders run. */
+  minDaysAhead: 1,
   /** How far ahead the calendar opens. */
   horizonDays: 30,
 } as const;

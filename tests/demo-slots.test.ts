@@ -7,7 +7,8 @@ import { teamSizeFor } from "@/lib/demo/config";
 
 // Owner, 2026-11-03: demos Monday to Friday, 10 AM to 5 PM New York time, 30
 // minutes each; reminders halfway, the night before and the day of, in the
-// prospect's own time zone. These pin both.
+// prospect's own time zone. These pin both. Owner, 2026-11-04: never the same
+// day; the earliest demo is tomorrow (New York date).
 
 const NY = "America/New_York";
 const ny = (y: number, m: number, d: number, h: number, min = 0) => zonedWallTimeToUtc(y, m, d, h, min, NY);
@@ -35,10 +36,19 @@ describe("open demo times", () => {
     expect(slots.some((s) => dayKey(s, NY) === "2026-11-15")).toBe(false); // Sunday
   });
 
-  it("start at least 4 hours from now", () => {
+  it("never the same day: the earliest is 10 AM tomorrow, New York time", () => {
     const slots = openDemoSlots(now);
-    expect(slots[0].getTime()).toBe(ny(2026, 11, 9, 12).getTime());
-    for (const s of slots) expect(s.getTime() - now.getTime()).toBeGreaterThanOrEqual(4 * HOUR);
+    expect(slots[0].getTime()).toBe(ny(2026, 11, 10, 10).getTime());
+    expect(slots.some((s) => dayKey(s, NY) === "2026-11-09")).toBe(false);
+    // Still true with a whole working day left today.
+    expect(openDemoSlots(ny(2026, 11, 9, 0, 5))[0].getTime()).toBe(ny(2026, 11, 10, 10).getTime());
+  });
+
+  it("late at night, tomorrow morning is open; on a Friday or a weekend, Monday is first", () => {
+    expect(openDemoSlots(ny(2026, 11, 10, 23, 30))[0].getTime()).toBe(ny(2026, 11, 11, 10).getTime());
+    expect(openDemoSlots(ny(2026, 11, 13, 9))[0].getTime()).toBe(ny(2026, 11, 16, 10).getTime()); // Friday
+    expect(openDemoSlots(ny(2026, 11, 14, 12))[0].getTime()).toBe(ny(2026, 11, 16, 10).getTime()); // Saturday
+    expect(openDemoSlots(ny(2026, 11, 15, 12))[0].getTime()).toBe(ny(2026, 11, 16, 10).getTime()); // Sunday
   });
 
   it("stop 30 days out", () => {
@@ -68,6 +78,7 @@ describe("open demo times", () => {
     expect(isOpenDemoSlot(ny(2026, 11, 10, 9, 30), now)).toBe(false);
     expect(isOpenDemoSlot(ny(2026, 11, 10, 17), now)).toBe(false);
     expect(isOpenDemoSlot(ny(2026, 11, 9, 10), now)).toBe(false);
+    expect(isOpenDemoSlot(ny(2026, 11, 9, 15), now)).toBe(false); // later today: the booking API refuses it too
     expect(isOpenDemoSlot(new Date("nonsense"), now)).toBe(false);
   });
 
@@ -76,8 +87,9 @@ describe("open demo times", () => {
     const slots = openDemoSlots(before);
     const fri = slots.find((s) => dayKey(s, NY) === "2027-03-12");
     const mon = slots.find((s) => dayKey(s, NY) === "2027-03-15");
-    expect(fri?.toISOString()).toBe("2027-03-12T18:00:00.000Z"); // 1:00 PM EST = 18:00Z (first after 4h notice)
+    expect(fri).toBeUndefined(); // the same day: never offered
     expect(mon?.toISOString()).toBe("2027-03-15T14:00:00.000Z"); // 10:00 AM EDT = 14:00Z
+    expect(slots[0].toISOString()).toBe("2027-03-15T14:00:00.000Z");
   });
 });
 

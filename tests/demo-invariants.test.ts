@@ -129,3 +129,25 @@ describe("the pre-hydration rule (AGENTS.md)", () => {
     expect(dialogTag).not.toMatch(/transition|animate-/);
   });
 });
+
+describe("never the same day (owner, 2026-11-04)", () => {
+  // "If I went on to book a demo, I can't book a demo for today. The only
+  // options are for tomorrow and on." The server starts at tomorrow's New York
+  // date (tests/demo-slots.test.ts); booking and rescheduling both go through
+  // isOpenDemoSlot, so a same-day time is refused, not just hidden.
+  it("the rule is one setting, read by the slot list", () => {
+    expect(code("src/lib/demo/config.ts")).toContain("minDaysAhead: 1,");
+    expect(code("src/lib/demo/slots.ts")).toContain("for (let i = DEMO_RULES.minDaysAhead; i <= DEMO_RULES.horizonDays; i++) {");
+    expect(code("src/lib/demo/service.ts").match(/isOpenDemoSlot\(/g)?.length).toBe(4); // book (2) + reschedule (2)
+  });
+  it("the picker also hides the visitor's own today, in whatever zone they chose", () => {
+    const p = code("src/components/demo/DemoTimePicker.tsx");
+    expect(p).toContain("if (k <= today) continue;");
+    expect(p.indexOf("const today = dayKey(new Date(), timeZone);")).toBeLessThan(p.indexOf("if (k <= today) continue;"));
+  });
+  it("the popup and the sales chat say so", () => {
+    expect(read("src/components/demo/DemoBookingFlow.tsx")).toContain("Demos run Monday to Friday and can be booked from tomorrow on.");
+    const kb = read("src/lib/knowledge/docs/marketing-site.ts");
+    expect(kb.slice(kb.indexOf('id: "book-a-demo"'))).toContain("Demos can't be booked for the same day: the earliest is tomorrow");
+  });
+});

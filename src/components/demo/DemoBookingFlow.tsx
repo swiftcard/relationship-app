@@ -335,7 +335,7 @@ export default function DemoBookingFlow({ variant, seats, onClose, headingId = "
         {step === "time" && (
           <div>
             <h3 ref={stepHeading} tabIndex={-1} className="text-slate-900 font-bold text-[1rem] mb-1 outline-none">Pick a time</h3>
-            <p className="text-slate-500 text-[0.8125rem] mb-4">Demos run Monday to Friday. Every time shown is open.</p>
+            <p className="text-slate-500 text-[0.8125rem] mb-4">Demos run Monday to Friday and can be booked from tomorrow on. Every time shown is open.</p>
             <DemoTimePicker slots={slots} timeZone={tz} onTimeZone={setTz} selected={slot} onSelect={setSlot} onRetry={slots.reload} />
           </div>
         )}

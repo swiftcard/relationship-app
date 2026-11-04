@@ -4,9 +4,10 @@ import { zonedParts, zonedWallTimeToUtc } from "@/lib/tz-days";
 // ── Which demo times are open ───────────────────────────────────────────────
 // Pure: the API, the popup's tests and the booking check all call the same
 // function. A time is open when it is on the 30-minute grid inside the weekday
-// hours (New York time), at least the minimum notice away, inside the booking
-// horizon, and overlaps nothing busy: no confirmed demo and nothing marked busy
-// on the owner's Google Calendar.
+// hours (New York time), on a later New York day than today (never the same
+// day, owner 2026-11-04), inside the booking horizon, and overlaps nothing
+// busy: no confirmed demo and nothing marked busy on the owner's Google
+// Calendar.
 
 export type Busy = { start: number; end: number };
 
@@ -18,11 +19,12 @@ export function overlaps(aStart: number, aEnd: number, busy: Busy[]): boolean {
 
 /** Every open start time from `now` to the end of the horizon, earliest first. */
 export function openDemoSlots(now: Date, busy: Busy[] = []): Date[] {
-  const earliest = now.getTime() + DEMO_RULES.minNoticeMs;
+  const earliest = now.getTime();
   const latest = now.getTime() + DEMO_RULES.horizonDays * DAY_MS;
   const today = zonedParts(now, DEMO_TIME_ZONE);
   const out: Date[] = [];
-  for (let i = 0; i <= DEMO_RULES.horizonDays; i++) {
+  // Day 0 is today in New York: never offered.
+  for (let i = DEMO_RULES.minDaysAhead; i <= DEMO_RULES.horizonDays; i++) {
     // Calendar arithmetic on the New York date, independent of any offset.
     const day = new Date(Date.UTC(today.y, today.m - 1, today.d + i));
     if (!DEMO_RULES.weekdays.includes(day.getUTCDay())) continue;

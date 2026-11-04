@@ -18,15 +18,20 @@ export default function DemoTimePicker({ slots, timeZone, onTimeZone, selected, 
   onSelect: (iso: string | null) => void;
   onRetry: () => void;
 }) {
+  const today = dayKey(new Date(), timeZone);
   const byDay = useMemo(() => {
     const m = new Map<string, string[]>();
     for (const iso of slots.slots) {
       const k = dayKey(new Date(iso), timeZone);
+      // Never the same day (owner, 2026-11-04). The server already starts at
+      // tomorrow in New York; this also keeps a visitor ahead of New York
+      // (London after 7 PM New York) from seeing their own today.
+      if (k <= today) continue;
       const list = m.get(k);
       if (list) list.push(iso); else m.set(k, [iso]);
     }
     return m;
-  }, [slots.slots, timeZone]);
+  }, [slots.slots, timeZone, today]);
   const openDays = useMemo(() => new Set(byDay.keys()), [byDay]);
   const firstDay = useMemo(() => [...openDays].sort()[0] ?? null, [openDays]);
 
@@ -47,7 +52,6 @@ export default function DemoTimePicker({ slots, timeZone, onTimeZone, selected, 
     if (!list.includes(timeZone)) list.unshift(timeZone);
     return list;
   }, [timeZone]);
-  const today = dayKey(new Date(), timeZone);
 
   return (
     <div>
@@ -78,7 +82,7 @@ export default function DemoTimePicker({ slots, timeZone, onTimeZone, selected, 
             {Array.from({ length: 6 }, (_, i) => <div key={i} className="h-11 rounded-xl bg-slate-100 animate-pulse" />)}
           </div>
         </div>
-      ) : !slots.slots.length ? (
+      ) : !openDays.size ? (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-center">
           <p className="text-slate-700 text-sm font-semibold">Every demo time in the next 30 days is taken.</p>
           <p className="text-slate-500 text-[0.8125rem] mt-1">Email <a className="text-blue-700 underline" href="mailto:hello@swiftcard.me">hello@swiftcard.me</a> and we&apos;ll find a time that works.</p>
