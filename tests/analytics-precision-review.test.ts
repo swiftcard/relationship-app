@@ -18,7 +18,8 @@ describe("a copied link is the plain card link, never how one visit came", () =>
   const clean = read("src/components/CleanShareUrl.tsx");
 
   it("?source=, ?save= and ?shared= leave the address bar once the page has read them", () => {
-    expect(clean).toContain('const ONE_VISIT_PARAMS = ["source", "save", "shared"] as const;');
+    // + vv, the desktop Scan to save QR's visit (2026-11-05).
+    expect(clean).toContain('const ONE_VISIT_PARAMS = ["source", "save", "shared", "vv"] as const;');
     expect(clean).toContain("window.history.replaceState(");
   });
 

@@ -15,7 +15,8 @@ describe("the bell (web, phone web, and the iPhone app's list)", () => {
   it("every reader goes through redactForPlan: Free never gets the device or network", () => {
     expect(read("src/app/api/notifications/route.ts")).toMatch(/redactForPlan\(/);
     expect(read("src/app/dashboard/page.tsx")).toContain("bellNotifications = redactForPlan(bellNotifications ?? [], isPro);");
-    expect(read("src/lib/notification-privacy.ts")).toContain("const free = withoutDetail(body);");
+    // …and which link they tapped (2026-11-05, TAPS_MARK): "They tapped a link."
+    expect(read("src/lib/notification-privacy.ts")).toContain("const free = withoutDetail(resolveTaps(body, false));");
   });
   it("the iPhone app swaps only billing copy — a view row reads the same as on the web", () => {
     const remap = read("src/lib/native-notification-copy.ts");

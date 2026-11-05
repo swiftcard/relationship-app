@@ -85,8 +85,10 @@ describe("Activity & Messages says only what happened", () => {
   });
   it("honours wrong-person and hand-offs, never shows another contact's stamped events", () => {
     expect(get).toContain("!bd.superseded_at && !bd.wrong_at");
-    expect(get).toContain("const notAnotherContact = leadId ? `lead_id.is.null,lead_id.eq.${leadId}` : null;");
-    expect(get).toMatch(/\.eq\("visitor_id", bd\.visitor_id as string\)\.or\(notAnotherContact!\)/);
+    // Another PERSON's: the same person's other contact rows are theirs
+    // (2026-11-05, known-contact samePersonLeadIds).
+    expect(get).toContain("const notAnotherContact = `lead_id.is.null,lead_id.in.(${theirLeadIds.join(\",\")})`;");
+    expect(get).toMatch(/\.eq\("visitor_id", bd\.visitor_id as string\)\.or\(notAnotherContact\)/);
   });
   it("the arrival line is what really happened — shared, added by you, or the sample", () => {
     const s = read("src/components/ContactsClient.tsx");

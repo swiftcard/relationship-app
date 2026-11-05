@@ -3,8 +3,9 @@ import { PlanBadge, PlanGate } from "@/components/PlanGate";
 import { RECENT_VISITS_SHOWN, type RecentVisit } from "@/lib/recent-visits";
 
 // "Recent visits" — under the Traffic chart on the dashboard (owner's pick,
-// 2026-10-18). Every open of the card or Swift Links in the chart's window,
-// newest first: who (when the owner knows them), what it was opened on, where
+// 2026-10-18). Every open of the card or Swift Links in the last 30 days —
+// whichever tab the chart is on (2026-11-05: Today emptied it every midnight)
+// — newest first: who (when the owner knows them), what it was opened on, where
 // it was tapped, how long it stayed, where it came from and what they did.
 //
 // A SERVER component. "Show more" is a native <details>, so it opens before
@@ -71,8 +72,14 @@ export default function RecentVisits({ visits, paid }: { visits: RecentVisitRow[
   const first = shown.slice(0, FIRST);
   const rest = shown.slice(FIRST);
   return (
-    <div data-testid="recent-visits" className="mt-4 pt-3 border-t border-gray-800/70">
-      <p className="text-gray-500 text-[0.6875rem] mb-2">Recent visits</p>
+    // id: a stranger's bell row opens here (NotificationBell visitHref).
+    // scroll-mt clears the sticky header when the browser jumps to it.
+    <div id="recent-visits" data-testid="recent-visits" className="mt-4 pt-3 border-t border-gray-800/70 scroll-mt-20">
+      {/* The list is the last 30 days whatever tab is chosen (owner,
+          2026-11-05): Today used to empty it at midnight, which read as
+          visits and taps "going away". The tab still sets the counts and
+          the chart above. */}
+      <p className="text-gray-500 text-[0.6875rem] mb-2">Recent visits · last 30 days</p>
       <ul className="space-y-2">
         {first.map((v) => <Row key={v.id} v={v} />)}
       </ul>

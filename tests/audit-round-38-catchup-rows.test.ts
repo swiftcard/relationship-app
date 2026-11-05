@@ -67,7 +67,15 @@ describe("wired into the catch-up", () => {
     expect(route).toContain("heldCategory(r)");
     expect(route).not.toMatch(/CATEGORY_FOR_TYPE/);
     // title is what tells the forwarded note apart
-    expect(route).toMatch(/\.select\("type, title, body, card_owner, created_at, lead_id"\)/);
+    // (+ id: the morning push marks its row read; + visit_key: when the visit
+    // began, so one announced before quiet hours is not announced again.)
+    expect(route).toMatch(/\.select\("id, type, title, body, card_owner, created_at, lead_id, visit_key"\)/);
+  });
+
+  it("a visit that began before quiet hours is not announced again in the morning (2026-11-05)", () => {
+    expect(route).toContain("visitKeyBucket(String(x.row.visit_key ?? \"\"))");
+    expect(route).toContain("return began == null || began + VIEW_VISIT_WINDOW_MS > nightStart || UNCAPPED.includes(x.category);");
+    expect(route).toContain("notificationId: !top.team && top.row.id ? String(top.row.id) : null,");
   });
   it("filters every silenceable row, not only returns", () => {
     expect(route).toContain("CONTACT_RULE_CATEGORIES.includes(x.category) && !!x.row.lead_id");

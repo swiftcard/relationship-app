@@ -51,9 +51,13 @@ describe("every action that writes to the panel refreshes it", () => {
     expect(ui()).toMatch(/leadId=\{selected\.id\}/);
     const btn = read("src/components/ShareMyInfoButton.tsx");
     expect(btn).toMatch(/onSent\?\.\(\)/);
-    // Still exactly one server call in the whole component: the "both" path.
-    expect(btn.match(/fetch\(/g) ?? []).toHaveLength(1);
+    // Two server calls in the whole component: the "both" path, which writes
+    // to the thread (and refreshes it), and — since 2026-11-05 — the read of
+    // the contact's own card link when Share opens, which writes nothing to
+    // the thread.
+    expect(btn.match(/fetch\(/g) ?? []).toHaveLength(2);
     expect(btn).toMatch(/fetch\("\/api\/leads\/share-card"/);
+    expect(btn).toContain("fetch(`/api/leads/${encodeURIComponent(leadId)}/card-link`");
   });
 
 });

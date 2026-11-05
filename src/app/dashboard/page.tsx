@@ -27,7 +27,8 @@ import AppTopNav from "@/components/AppTopNav";
 import ShareCardCapture from "@/components/ShareCardCapture";
 import TrafficChart from "@/components/TrafficChart";
 import RecentVisits, { type RecentVisitRow } from "@/components/dashboard/RecentVisits";
-import { loadRecentVisits } from "@/lib/recent-visits";
+import LiveRefresh from "@/components/dashboard/LiveRefresh";
+import { loadRecentVisits, RECENT_VISITS_DAYS, visitWhen } from "@/lib/recent-visits";
 import TimezoneCookie from "@/components/TimezoneCookie";
 import ThemeToggle from "@/components/ThemeToggle";
 import AppStorePopup from "@/components/AppStorePopup";
@@ -574,9 +575,12 @@ export default async function DashboardPage({
     // "Recent visits" under the chart (lib/recent-visits.ts): the same window,
     // both surfaces, details withheld server-side on Free. Not read for the
     // Locations tab, which doesn't show it. Never throws.
+    // The last 30 days whichever of Today / Week / Month is chosen (owner,
+    // 2026-11-05): read off the Today window, the list emptied at midnight and
+    // yesterday's visits and taps looked like they had gone away.
     viewsRange === "locations"
       ? Promise.resolve([])
-      : loadRecentVisits(getAdminSupabase(), { slug: analyticsUsername, sinceIso: viewsCutoff, paid: isPro, ownerId: user.id }),
+      : loadRecentVisits(getAdminSupabase(), { slug: analyticsUsername, sinceIso: new Date(tzNow.getTime() - RECENT_VISITS_DAYS * 86_400_000).toISOString(), paid: isPro, ownerId: user.id }),
   ]);
 
   // If a notifications column migration (card_owner, lead_id) hasn't run yet,
@@ -696,17 +700,11 @@ export default async function DashboardPage({
   // drill-down will want; 2000 is far beyond any real window today.
   const linkTaps = typeof linkTapRows === "number" ? linkTapRows : 0;
 
-  // Each visit's time on the owner's own clock: the time alone for today, the
-  // date with it for anything earlier in the window.
-  const todayKey = localDayKey(tzNow.toISOString(), ownerTz);
-  const recentVisits: RecentVisitRow[] = recentVisitsRaw.map((v) => {
-    const d = new Date(v.at);
-    const time = new Intl.DateTimeFormat("en-US", { timeZone: ownerTz, hour: "numeric", minute: "2-digit" }).format(d);
-    const day = localDayKey(v.at, ownerTz) === todayKey
-      ? ""
-      : `${new Intl.DateTimeFormat("en-US", { timeZone: ownerTz, month: "short", day: "numeric" }).format(d)}, `;
-    return { ...v, when: `${day}${time}` };
-  });
+  // Each visit's time on the owner's own clock, always with its day — the
+  // list runs 30 days back whichever tab is chosen, so "9:41 PM" alone could
+  // be any of them: "Today 9:41 PM", "Yesterday 9:41 PM", "Mon, Nov 3 9:41 PM"
+  // (lib/recent-visits visitWhen).
+  const recentVisits: RecentVisitRow[] = recentVisitsRaw.map((v) => ({ ...v, when: visitWhen(v.at, tzNow, ownerTz) }));
 
   // Locations view (on-demand): top places your card + links are viewed from,
   // with the SwiftCard vs Swift Links split per location. All-time totals.
@@ -1331,6 +1329,8 @@ export default async function DashboardPage({
                     {/* Every visit in the same window, newest first (owner,
                         2026-10-18). Nothing renders until there is one. */}
                     <RecentVisits visits={recentVisits} paid={isPro} />
+                    {/* Redraws the box when the owner comes back to the app. */}
+                    <LiveRefresh />
                   </div>
                 )}
                 {/* Link taps (every plan) — the box's one footer stat. Contacts
@@ -1344,7 +1344,10 @@ export default async function DashboardPage({
                     was really today's taps. */}
                 {linkTaps > 0 && viewsRange !== "locations" && (
                   <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-800/70 text-[0.6875rem]">
-                    <span className="text-gray-500">Link taps <span className="text-gray-200 font-semibold tabular-nums">{linkTaps.toLocaleString("en-US")}</span></span>
+                    {/* Says its window (2026-11-05): the list above runs 30
+                        days on every tab, so a bare "Link taps 3" read as
+                        theirs. Phone, email and text taps count too. */}
+                    <span className="text-gray-500">Link taps {viewsRange === "today" ? "today" : viewsRange === "week" ? "· last 7 days" : "· last 30 days"} <span className="text-gray-200 font-semibold tabular-nums">{linkTaps.toLocaleString("en-US")}</span></span>
                   </div>
                 )}
             </div>

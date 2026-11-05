@@ -98,8 +98,11 @@ describe("the same activity the teammate sees — the rules agree", () => {
   }
 
   it("never takes an event already stamped as ANOTHER contact's", () => {
-    expect(member).toContain("`lead_id.is.null,lead_id.eq.${leadId}`");
-    expect(lib).toContain("`lead_id.is.null,lead_id.eq.${contactId}`");
+    // Another PERSON's: the same person's other contact rows (they shared
+    // twice — same email or phone) are theirs (2026-11-05, samePersonLeadIds).
+    expect(member).toContain("`lead_id.is.null,lead_id.in.(${theirLeadIds.join(\",\")})`");
+    expect(lib).toContain("`lead_id.is.null,lead_id.in.(${theirIds.join(\",\")})`");
+    expect(member).toContain("const theirLeadIds = [leadId, ...samePerson];");
   });
 });
 

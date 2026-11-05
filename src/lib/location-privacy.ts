@@ -72,9 +72,30 @@ export function withoutDetail(text: string): string {
   return text.split(DETAIL_MARK).filter((_, i) => i % 2 === 0).join("");
 }
 
+/**
+ * U+206D ACTIVATE ARABIC FORM SHAPING (a deprecated format character nobody
+ * types) — wraps the bell's sentence about what a visitor TAPPED, in two
+ * halves: ⟦Pro⟧⟦Free⟧ (lib/visit-taps tapSentence).
+ *
+ * Which link someone pressed is a Pro detail, like the place and the device;
+ * THAT they pressed one is not (owner, 2026-11-05). So unlike the device the
+ * sentence is never simply dropped on Free: Pro reads "They tapped your
+ * Instagram and Website.", Free reads "They tapped 2 links." Every surface
+ * resolves it — stripLocationMarks as the paid reader, resolveTaps(…, false)
+ * on the Free paths — so no surface can ever print both halves.
+ */
+export const TAPS_MARK = "⁭";
+const TAPS_BLOCK = new RegExp(`${TAPS_MARK}([^${TAPS_MARK}]*)${TAPS_MARK}([^${TAPS_MARK}]*)${TAPS_MARK}`, "g");
+
+/** The tap sentence as the reader's plan reads it. */
+export function resolveTaps(text: string, paid: boolean): string {
+  if (!text.includes(TAPS_MARK)) return text;
+  return text.replace(TAPS_BLOCK, (_, pro: string, free: string) => (paid ? pro : free)).split(TAPS_MARK).join("");
+}
+
 /** Plain text, for every surface that is not the app's own notification list. */
 export function stripLocationMarks(text: string): string {
-  return text.split(PHRASE_MARK).join("").split(PLACE_MARK).join("").split(DETAIL_MARK).join("");
+  return resolveTaps(text, true).split(PHRASE_MARK).join("").split(PLACE_MARK).join("").split(DETAIL_MARK).join("");
 }
 
 /**
@@ -85,7 +106,9 @@ export function stripLocationMarks(text: string): string {
  * "viewed your card ." or "viewed your  card".
  */
 export function withoutLocation(text: string): string {
-  const parts = text.split(PHRASE_MARK);
+  // Free: the tap sentence's Free half, before the plain-text pass below would
+  // read it as the paid one.
+  const parts = resolveTaps(text, false).split(PHRASE_MARK);
   // Even indexes are outside the marks, odd indexes are the fragment(s).
   const kept = parts.filter((_, i) => i % 2 === 0).join("");
   return stripLocationMarks(kept).replace(/\s+([.!?,])/g, "$1").replace(/\s{2,}/g, " ").trim();
@@ -104,7 +127,8 @@ export function withoutLocation(text: string): string {
 export const TEASED_PLACE = " in ▒▒▒▒▒, ▒▒";
 
 export function teaseLocation(text: string): string {
-  const parts = text.split(PHRASE_MARK);
+  // The Free lock screen: "They tapped a link.", never the link's name.
+  const parts = resolveTaps(text, false).split(PHRASE_MARK);
   const out = parts.map((p, i) => (i % 2 === 1 ? TEASED_PLACE : p)).join("");
   return stripLocationMarks(out).replace(/\s+([.!?,])/g, "$1").replace(/\s{2,}/g, " ").trim();
 }

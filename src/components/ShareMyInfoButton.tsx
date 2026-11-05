@@ -146,6 +146,28 @@ export default function ShareMyInfoButton({ firstName, phone, email, cardOwner, 
   // The server enforces the same thing independently (one share per contact
   // per minute) — this stops the request, that stops the send.
   const sending = useRef(false);
+  // THIS CONTACT'S OWN LINK (api/leads/[id]/card-link, 2026-11-05): the browser
+  // they open it in is recognised as them from then on, so their visits land in
+  // their Activity & Messages — the only way a contact the owner typed in or
+  // scanned can ever be recognised. Asked for when Share opens, never on the
+  // tap: Messages and Mail must open on the tap itself. Until it arrives (or if
+  // it can't), the plain link, exactly as before.
+  const [personalUrl, setPersonalUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open || !leadId || personalUrl) return;
+    let live = true;
+    fetch(`/api/leads/${encodeURIComponent(leadId)}/card-link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channel: phone ? "sms" : "email" }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { url?: unknown } | null) => {
+        if (live && typeof d?.url === "string" && d.url.startsWith(APP_URL)) setPersonalUrl(d.url);
+      })
+      .catch(() => { /* the plain link */ });
+    return () => { live = false; };
+  }, [open, leadId, personalUrl, phone]);
 
   // Close the picker on outside click / Escape.
   useEffect(() => {
@@ -175,7 +197,7 @@ export default function ShareMyInfoButton({ firstName, phone, email, cardOwner, 
   // The link carries ?shared=1: the owner pressed Share on a contact they
   // already HAVE, so the card page tells the recipient their info has already
   // been shared instead of asking them to fill the share-back form.
-  const cardUrl = cardOwner ? `${APP_URL}/${cardOwner}?shared=1` : null;
+  const cardUrl = cardOwner ? (personalUrl ?? `${APP_URL}/${cardOwner}?shared=1`) : null;
   const ownerName = signer?.name?.trim() || "SwiftCard user";
 
   // ── A dark card must never leave the building ─────────────────────────────

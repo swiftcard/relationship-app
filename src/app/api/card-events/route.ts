@@ -8,7 +8,7 @@ import { getOwnerUsernames } from "@/lib/owner-usernames";
 import { isCardActive } from "@/lib/card-active";
 import { isRateLimited } from "@/lib/rate-limit";
 import { isOwnerActivity, resolveOwnerId } from "@/lib/self-traffic";
-import { attachVisitIdentity, deviceKeyFor, resolveVisitIdentity } from "@/lib/visit-identity";
+import { attachVisitIdentity, deviceKeyFor, isVisitorId, resolveVisitIdentity } from "@/lib/visit-identity";
 import { authoritativeEventIdentity, corroboratedContact, resolveSessionViewer } from "@/lib/viewer-identity";
 import { clientIp } from "@/lib/client-ip";
 import { isLikelyBot, botFamily } from "@/lib/bot-detection";
@@ -18,7 +18,7 @@ import { stripLocationMarks } from "@/lib/location-privacy";
 import { stripNameMarks } from "@/lib/contact-privacy";
 import { VIEW_VISIT_WINDOW_MS } from "@/lib/view-window";
 import { recordView } from "@/lib/record-view";
-import { isOwnersOwnDetails, ownerContactKeys, resolveKnownContact, touchContactDevice } from "@/lib/known-contact";
+import { isOwnersOwnDetails, ownerContactKeys, resolveKnownContact, samePersonLeadIds, touchContactDevice } from "@/lib/known-contact";
 import { bindViaLink, isContactToken } from "@/lib/contact-links";
 import { contactReturnNotice, isLockedContact, isReturnVisit } from "@/lib/contact-return-notify";
 
@@ -26,7 +26,7 @@ import { isPaidProfile } from "@/lib/effective-plan";
 import { isAdminEmail } from "@/lib/admin";
 import { isLockedLead } from "@/lib/lead-access";
 import { isPaidUser } from "@/lib/notification-privacy";
-import { notifyVisit, visitKey } from "@/lib/visit-notify";
+import { notifyVisit, refreshVisitTaps, visitKey } from "@/lib/visit-notify";
 import { milestoneCountSentence } from "@/lib/milestones";
 import { cleanModelHint, cleanOsHint, describeDevice, deviceSentence, openedIn, visitDetailFields } from "@/lib/visit-device";
 import { DEFAULT_TIMEZONE, readPushPrefs, type PushCategory } from "@/lib/push-policy";
@@ -127,6 +127,10 @@ export async function POST(req: NextRequest) {
     // A per-contact link token (?ct=, lib/contact-links.ts). The tracker only
     // sends it AFTER the human gate, and only on a view.
     const contact_token = isContactToken(body?.contact_token) ? (body.contact_token as string) : null;
+    // The computer's visit a desktop "Scan to save" QR came from (?vv=, a save
+    // only). Proven below — a view of THIS card by that visitor in this visit —
+    // or ignored.
+    const join_visit = event_type === "downloaded_vcard" && isVisitorId(body?.join_visit) ? (body.join_visit as string) : null;
 
     if (!card_owner_username || !event_type || !EVENT_TYPES.has(event_type)) {
       // Nothing to log: with no slug there is no entity to attribute a decision
@@ -231,6 +235,8 @@ export async function POST(req: NextRequest) {
     // Set well above any real crowd — a trade-show Wi-Fi is hundreds of genuine
     // first-time visitors on one IP (A-08), each counted; a returning visitor
     // carries the cookie and is never held to it.
+    // (A tap is held to it too, but only when it would record the visit's
+    // view — below, where that is known.)
     if (identityUnproven && (event_type === "viewed_card" || event_type === "downloaded_vcard")
       && await isRateLimited(`views-unproven-day:${ip}:${card_owner_username}`, UNPROVEN_VIEWS_PER_DAY, UNPROVEN_VIEWS_WINDOW_MS)) {
       return decided("rate_limited", { rateLimited: true });
@@ -318,6 +324,29 @@ export async function POST(req: NextRequest) {
       }
     }
     const contact = await resolveKnownContact(admin, { ownerId, visitorId: visitor_id });
+
+    // ── ONE PERSON, TWO SCREENS (2026-11-05) ──────────────────────────────────
+    // The desktop "Scan to save" QR hands the contact to the visitor's PHONE —
+    // a different browser, so its download read as a second person: a second
+    // bell row, a second buzz, and a second visit in Recent visits. When the QR
+    // names the computer's visit and that visit is real (a view of this card by
+    // that visitor inside the visit window), the download is filed as THAT
+    // visit's: under its visitor, joining its notification, with no second
+    // view recorded for the phone.
+    let joinedVisitor: string | null = null;
+    if (join_visit && join_visit !== visitor_id) {
+      const { data: desk } = await admin
+        .from("card_views")
+        .select("id")
+        .in("username", [card_owner_username, `${card_owner_username}__links`])
+        .eq("visitor_id", join_visit)
+        .gte("viewed_at", new Date((replayAt ?? Date.now()) - VIEW_VISIT_WINDOW_MS).toISOString())
+        .limit(1)
+        .maybeSingle();
+      if (desk) joinedVisitor = join_visit;
+    }
+    // Whose visit this event belongs to: the phone's own, or the computer's it joined.
+    const eventVisitor = joinedVisitor ?? visitor_id;
     const knownLeadId = contact.kind === "known" ? contact.leadId : null;
 
     // VIEWS: record the card_views row (chart, counters, locations) HERE,
@@ -333,16 +362,20 @@ export async function POST(req: NextRequest) {
     // the card_views row and the card_events row can never disagree about where
     // the visit came from OR about how confident that answer is.
     let viewGeo: GeoResult | null = null;
-    // A save that turned out to be the visit's first sign of life records the
-    // visit's view (below) — and then its viewed_card event too.
+    // A save or a tap that turned out to be the visit's first sign of life
+    // records the visit's view (below) — and then its viewed_card event too.
     let companionView = false;
+    // This visitor's view of this card was already accepted in this visit.
+    let visitAccepted = false;
     // The milestone this view crossed, if any. recordView DETECTS it and writes
     // nothing (lib/milestones.ts); folding it into the visit's one notification
     // below is what stopped one view producing two bell rows.
     let milestone: Awaited<ReturnType<typeof recordView>>["milestone"] = null;
     if (event_type === "viewed_card") {
       const viewsKey = surface === "links" ? `${card_owner_username}__links` : card_owner_username;
-      const { outcome, geo: recordedGeo, milestone: crossed } = await recordView({
+      const { outcome, geo: recordedGeo, milestone: crossed } = joinedVisitor
+        ? { outcome: "deduped" as const, geo: null, milestone: null }
+        : await recordView({
         req,
         username: viewsKey,
         visitorId: visitor_id,
@@ -373,17 +406,43 @@ export async function POST(req: NextRequest) {
       }
       viewOutcome = "recorded";
       viewGeo = recordedGeo ?? null;
-    } else if (event_type === "downloaded_vcard") {
-      // A SAVE IS ALSO A VIEW (2026-10-06). Scanning the desktop QR (?save=1)
-      // hands the phone the vCard at ~0.7s, the "Add to Contacts" sheet hides
-      // the page, and the tracker's 2.5s visible dwell never completes — so the
-      // owner saw "saved your contact" with no view behind it, and saves could
-      // outnumber views. Anyone who saved the contact opened the page. Same
-      // recorder, same surface key, same dedupe: if the tracker already counted
-      // this visit it is a no-op. It never notifies on its own — the save's
-      // notification below is this visit's one buzz.
+    } else {
+      // A SAVE IS ALSO A VIEW (2026-10-06) — AND SO IS A TAP (2026-11-05).
+      // Scanning the desktop QR (?save=1) hands the phone the vCard at ~0.7s,
+      // the "Add to Contacts" sheet hides the page, and the tracker's 2.5s
+      // visible dwell never completes — so the owner saw "saved your contact"
+      // with no view behind it. The same was true of a TAP: open the card, tap
+      // Instagram at once, the app takes over the screen, and the visit was a
+      // tap with no view — counted in "Link taps", missing from the views, the
+      // chart, the bell and Recent visits (owner: "sometimes it shows…
+      // sometimes it doesn't"). Anyone who pressed something on the page
+      // opened it. Same recorder, same surface key, same dedupe: if the
+      // tracker already counted this visit on this page it is a no-op.
+      //
+      // ONE DATACENTER VERDICT PER VISIT. A view of this card by this visitor
+      // already accepted in this visit (either page) settles it: the tap or
+      // save is not refused as "hosting" because a second network lookup came
+      // back differently (lib/record-view visitAccepted).
       const viewsKey = surface === "links" ? `${card_owner_username}__links` : card_owner_username;
-      const { outcome, geo: recordedGeo } = await recordView({
+      // A save that joined the computer's visit already HAS its view (proven
+      // above): nothing to record, and no second verdict to make.
+      const { data: acceptedView } = joinedVisitor ? { data: { id: "joined" } } : await admin
+        .from("card_views")
+        .select("id")
+        .in("username", [card_owner_username, `${card_owner_username}__links`])
+        .eq("visitor_id", visitor_id)
+        .gte("viewed_at", new Date((replayAt ?? Date.now()) - VIEW_VISIT_WINDOW_MS).toISOString())
+        .limit(1)
+        .maybeSingle();
+      visitAccepted = !!acceptedView;
+      // A cookieless tap with no view behind it is about to record one, so it
+      // is held to the same daily ceiling as a cookieless view (A-09): a
+      // forged tap must not be a way around the cap on forged views.
+      if (event_type === "clicked_link" && identityUnproven && !visitAccepted
+        && await isRateLimited(`views-unproven-day:${ip}:${card_owner_username}`, UNPROVEN_VIEWS_PER_DAY, UNPROVEN_VIEWS_WINDOW_MS)) {
+        return decided("rate_limited", { rateLimited: true });
+      }
+      const { outcome, geo: recordedGeo, milestone: crossed } = await recordView({
         req,
         username: viewsKey,
         visitorId: visitor_id,
@@ -394,12 +453,15 @@ export async function POST(req: NextRequest) {
         source,
         ip,
         crmDetail,
+        visitAccepted,
       });
-      // Datacenter egress: recordView refused it as hosting — the save is
-      // refused for the same reason just below. Its geo is reused only when
-      // the view was recorded.
+      // Datacenter egress with no accepted view behind it: recordView refused
+      // it as hosting — the tap or save is refused for the same reason just
+      // below. Its geo is reused only when the view was recorded.
       if (recordedGeo) viewGeo = outcome === "recorded" ? recordedGeo : null;
       companionView = outcome === "recorded";
+      // The view this event recorded can cross a milestone like any other.
+      if (companionView) milestone = crossed ?? null;
     }
 
     // ONE VISIT = ONE EVENT. The same visitor re-touching
@@ -431,7 +493,7 @@ export async function POST(req: NextRequest) {
         .from("card_events")
         .select("id")
         .eq("card_owner_username", card_owner_username)
-        .eq("visitor_id", visitor_id)
+        .eq("visitor_id", eventVisitor)
         .eq("event_type", event_type)
         .gte("created_at", windowStart);
       // Typed .eq()/.is() rather than an .or() filter STRING: these are
@@ -505,7 +567,8 @@ export async function POST(req: NextRequest) {
     // recordView has always refused cloud-hosting egress for views; a link tap
     // or a vCard download from the same render farm still recorded, and a save
     // sends the owner a "saved your contact" push. Same gate, same reason.
-    if (!viewGeo && liveGeo.isHosting) {
+    // Not for a visit whose view was already accepted: one verdict per visit.
+    if (!viewGeo && liveGeo.isHosting && !visitAccepted) {
       return decided("hosting", { hosting: true }, {
         geoAccuracy: geo.accuracy,
         geoSource: geo.source,
@@ -516,7 +579,7 @@ export async function POST(req: NextRequest) {
 
     const row = {
       card_owner_username,
-      visitor_id,
+      visitor_id: eventVisitor,
       event_type,
       source: source || "direct_link",
       visitor_name: identity.visitor_name,
@@ -649,7 +712,15 @@ export async function POST(req: NextRequest) {
       // (the chart and the contact timeline are true) but never notifies.
       if (staleReplay) notified = "suppressed";
       if (owner?.id && !staleReplay) {
-        const isView = event_type === "viewed_card";
+        // A tap that opened the visit (its companion view was just recorded)
+        // is announced as the VIEW it proved — the visit's one buzz, "Someone
+        // viewed your card", with the tap in the same row a moment later
+        // (refreshVisitTaps below). Any other tap writes no notification of
+        // its own: it only adds to the visit's row, silently.
+        const asView = event_type === "viewed_card" || (event_type === "clicked_link" && companionView);
+        const noticeEvent: "viewed_card" | "downloaded_vcard" | "clicked_link" =
+          asView ? "viewed_card" : (event_type as "downloaded_vcard" | "clicked_link");
+        const isView = asView;
 
         // Is this the very first view this card has ever had?
         //
@@ -683,9 +754,9 @@ export async function POST(req: NextRequest) {
         // download in the same visit upgrades the same row.
         const returning =
           contact.kind === "known" && isReturnVisit(contact) && (!isLockedContact(contact) || isPaidProfile(owner)) ? contact : null;
-        const visitWho = returning ? `lead:${returning.leadId}` : visitor_id;
+        const visitWho = returning ? `lead:${returning.leadId}` : eventVisitor;
         let returnNotice: ReturnType<typeof contactReturnNotice> = null;
-        if (returning) {
+        if (returning && noticeEvent !== "clicked_link") {
           // "3rd visit this week": distinct visits, all of their browsers — the
           // card_views rows this contact's lead_id is stamped on.
           //
@@ -717,15 +788,20 @@ export async function POST(req: NextRequest) {
             // share-back after a download proves the download.
             admin.from("leads").select("source").eq("id", returning.leadId).maybeSingle(),
           ]);
-          const count = new Set(
-            (visitRows ?? []).map((r) => Math.floor(new Date(r.viewed_at as string).getTime() / VIEW_VISIT_WINDOW_MS)),
-          ).size;
+          // A SITTING, NOT A CLOCK BUCKET (2026-11-05): rows less than one
+          // visit window apart are one visit, so a sitting that crossed :00 or
+          // :30 no longer counted twice.
+          const count = (visitRows ?? [])
+            .map((r) => new Date(r.viewed_at as string).getTime())
+            .sort((a, b) => a - b)
+            .reduce<number[]>((starts, t) => (starts.length && t - starts[starts.length - 1] < VIEW_VISIT_WINDOW_MS ? starts : [...starts, t]), [])
+            .length;
           const leadSource = (leadRow?.source as string | null | undefined) ?? null;
           const addedByOwner = leadSource === "manual" || leadSource === "scanner" || leadSource === "imported";
           const sharedOnThisPage = !addedByOwner && (surface === "links" ? leadSource === "swift_connect" : leadSource !== "swift_connect");
           returnNotice = contactReturnNotice({
             contact: returning,
-            eventType: event_type as "viewed_card" | "downloaded_vcard" | "clicked_link",
+            eventType: noticeEvent,
             surface,
             linkName: target_label ?? target,
             visitsThisWeek: visitsErr ? 1 : Math.max(count ?? 1, 1),
@@ -741,7 +817,7 @@ export async function POST(req: NextRequest) {
         // identity, not the raw client field — the notification must name the
         // person who ACTUALLY viewed, never a stale cached identity.
         const notice = returnNotice ?? cardEventNotice({
-          eventType: event_type,
+          eventType: noticeEvent,
           visitorName: identity.visitor_name,
           source,
           surface,
@@ -765,33 +841,6 @@ export async function POST(req: NextRequest) {
             ? await countRecentVisits(admin, card_owner_username, visitor_id, surface)
             : undefined,
         });
-
-        // Flood backstop: the dedup keys on the client-supplied visitor_id, so
-        // a caller rotating ids could still ring the owner's phone once per
-        // request. One IP can only reach an owner's lock screen a few times an
-        // hour — events above the cap still record, they just don't buzz.
-        //
-        // THE BUZZ, not the record (audit N-08). This cap used to skip the
-        // bell row, the CRM event and the milestone too, and every event
-        // counted against it, link taps that can never notify included. Six
-        // taps from venue Wi-Fi, an office or iCloud Private Relay (one IP for
-        // many real people) and the next person's contact download left no
-        // trace in the bell or the CRM. Now only events that would notify are
-        // counted; over six an hour they stop BUZZING and still land in the
-        // bell and the CRM. A far wider ceiling (sixty an hour from one IP on
-        // one card) still bounds the record itself, so a caller rotating
-        // visitor ids cannot fill the bell with fabricated rows.
-        // Per PERSON when the visitor carries our cookie (audit A-08): from the
-        // seventh phone on one venue Wi-Fi the owner used to hear nothing. A
-        // cookieless request stays pooled by IP — the cap that stops a looped
-        // username from buzzing an owner's phone all night.
-        const notifyWho = identityUnproven ? ip : `v:${visitIdentity.visitorId}`;
-        const flooded = notice
-          ? await isRateLimited(`notify-ip:${card_owner_username}:${notifyWho}`, 6, 60 * 60 * 1000)
-          : false;
-        const recordFlooded = notice && flooded
-          ? await isRateLimited(`notify-ip-row:${card_owner_username}:${ip}`, 60, 60 * 60 * 1000)
-          : false;
 
         // EVERY view is a candidate to buzz; the throttles decide which ones do.
         //
@@ -817,6 +866,36 @@ export async function POST(req: NextRequest) {
             : event_type === "downloaded_vcard"
               ? "contact_saved"
               : undefined;
+
+        // Flood backstop: the dedup keys on the client-supplied visitor_id, so
+        // a caller rotating ids could still ring the owner's phone once per
+        // request. One IP can only reach an owner's lock screen a few times an
+        // hour — events above the cap still record, they just don't buzz.
+        //
+        // THE BUZZ, not the record (audit N-08). This cap used to skip the
+        // bell row, the CRM event and the milestone too, and every event
+        // counted against it, link taps that can never notify included. Six
+        // taps from venue Wi-Fi, an office or iCloud Private Relay (one IP for
+        // many real people) and the next person's contact download left no
+        // trace in the bell or the CRM. Now only events that would notify are
+        // counted; over six an hour they stop BUZZING and still land in the
+        // bell and the CRM. A far wider ceiling (sixty an hour from one IP on
+        // one card) still bounds the record itself, so a caller rotating
+        // visitor ids cannot fill the bell with fabricated rows.
+        // Per PERSON when the visitor carries our cookie (audit A-08): from the
+        // seventh phone on one venue Wi-Fi the owner used to hear nothing. A
+        // cookieless request stays pooled by IP — the cap that stops a looped
+        // username from buzzing an owner's phone all night.
+        const notifyWho = identityUnproven ? ip : `v:${visitIdentity.visitorId}`;
+        // Only a notice that would BUZZ counts toward the buzz cap: a bell-only
+        // row (a forwarded link, a silenced contact) never could, and counting
+        // it held the next real alert back (2026-11-05).
+        const flooded = notice && pushCategory
+          ? await isRateLimited(`notify-ip:${card_owner_username}:${notifyWho}`, 6, 60 * 60 * 1000)
+          : false;
+        const recordFlooded = notice && flooded
+          ? await isRateLimited(`notify-ip-row:${card_owner_username}:${ip}`, 60, 60 * 60 * 1000)
+          : false;
 
         // How sure we are WHO this was. A session is proof; a name that came
         // from the visitor's own earlier share is an association, not an
@@ -902,14 +981,14 @@ export async function POST(req: NextRequest) {
           // still useful (it carries the event, source and location).
           // A link tap never produced a CRM notification before a contact
           // could be recognised by one; it still doesn't.
-          const crmContact = event_type === "clicked_link" ? null : await corroboratedContact({
+          const crmContact = noticeEvent === "clicked_link" ? null : await corroboratedContact({
             admin,
             cardOwner: card_owner_username,
             visitorId: visitor_id,
             sessionViewer,
             identity,
           });
-          if (event_type !== "clicked_link") await dispatchCrmEvent(card_owner_username, {
+          if (noticeEvent !== "clicked_link") await dispatchCrmEvent(card_owner_username, {
             type: "conversation.notification",
             event: isView ? "card_viewed" : "contact_saved",
             title: stripNameMarks(notice.title),
@@ -975,6 +1054,23 @@ export async function POST(req: NextRequest) {
               },
             });
           }
+        }
+
+        // ── What they TAPPED, in the visit's one row ─────────────────────────
+        // Owner, 2026-11-05: a stranger's taps "just tell me in my
+        // notification center" — and a saved contact's too, beside their
+        // Activity & Messages. Every tap of the visit is listed in the row the
+        // visit already has, silently (lib/visit-notify refreshVisitTaps):
+        // after a tap, and after any notice above, whose upgrade rewrote the
+        // body the list lives in.
+        if (!recordFlooded && (notice || event_type === "clicked_link")) {
+          await refreshVisitTaps({
+            userId: owner.id,
+            cardOwner: card_owner_username,
+            visitorId: visitWho,
+            ip,
+            taps: returning ? { leadId: returning.leadId } : { visitorId: eventVisitor },
+          });
         }
       }
     }
@@ -1068,11 +1164,34 @@ export async function GET(req: NextRequest) {
     const LEAD_IN_MS = 2 * 60 * 60 * 1000;
     const since = (iso: string | null | undefined, leadIn: boolean) =>
       iso ? new Date(new Date(iso).getTime() - (leadIn ? LEAD_IN_MS : 0)).toISOString() : null;
-    const notAnotherContact = leadId ? `lead_id.is.null,lead_id.eq.${leadId}` : null;
+    // The SAME PERSON's other contact rows (they shared twice): their events
+    // are stamped with the newest row, and are this person's all the same.
+    const samePerson = leadContact
+      ? await samePersonLeadIds(admin, { leadId, cardSlugs: usernames, email: leadContact.email, phone: leadContact.phone })
+      : [];
+    const theirLeadIds = [leadId, ...samePerson];
+    // Ids are validated UUIDs (the lead_id check above, and rows read back).
+    const notAnotherContact = `lead_id.is.null,lead_id.in.(${theirLeadIds.join(",")})`;
+
+    // Newest first and paged, like every list that must not stop at
+    // PostgREST's 1000-row cap without saying so; sorted oldest-first below.
+    const PAGE = 1000;
+    const MAX_PAGES = 5;
+    const paged = async <Q extends { range: (a: number, b: number) => PromiseLike<{ data: unknown; error: unknown }> }>(q: Q) => {
+      const all: unknown[] = [];
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const { data, error } = await q.range(page * PAGE, page * PAGE + PAGE - 1);
+        if (error) break;
+        const rows = (data ?? []) as unknown[];
+        all.push(...rows);
+        if (rows.length < PAGE) break;
+      }
+      return { data: all };
+    };
 
     const lookups: PromiseLike<{ data: unknown }>[] = [];
     if (leadId) {
-      lookups.push(admin.from("card_events").select(cols).in("card_owner_username", usernames).eq("lead_id", leadId));
+      lookups.push(paged(admin.from("card_events").select(cols).in("card_owner_username", usernames).in("lead_id", theirLeadIds).order("created_at", { ascending: false })));
 
       const { data: bindings } = await admin
         .from("contact_devices")
@@ -1092,7 +1211,7 @@ export async function GET(req: NextRequest) {
         const boundAt = (bd.bound_at as string | null) ?? leadCreatedAt;
         const from = since((bd.bound_at as string | null) ?? leadCreatedAt, bd.bound_via !== "link");
         let q = admin.from("card_events").select(cols).in("card_owner_username", usernames)
-          .eq("visitor_id", bd.visitor_id as string).or(notAnotherContact!);
+          .eq("visitor_id", bd.visitor_id as string).or(notAnotherContact);
         if (from) q = q.gte("created_at", from);
         // A BROWSER ONLY THIS CONTACT EVER SHARED FROM IS THEIRS, FOR GOOD.
         // Their return visit days later — the open, the Instagram tap, the
@@ -1112,7 +1231,7 @@ export async function GET(req: NextRequest) {
           .filter((o) => o.bound_at && boundAt && Date.parse(o.bound_at) < Date.parse(boundAt))
           .map((o) => new Date(o.bound_at as string).getTime() + VIEW_VISIT_WINDOW_MS);
         if (prior.length) q = q.gte("created_at", new Date(Math.max(...prior)).toISOString());
-        lookups.push(q);
+        lookups.push(paged(q.order("created_at", { ascending: false })));
       }
       // A contact from before bindings: the browser they shared from — unless
       // that browser is bound to ANY of this owner's contacts (this one
@@ -1125,10 +1244,10 @@ export async function GET(req: NextRequest) {
       const ownersOwn = !browserBound && !!leadContact && isOwnersOwnDetails(leadContact, await ownerContactKeys(admin, user.id));
       if (visitorId && !browserBound && !ownersOwn) {
         let q = admin.from("card_events").select(cols).in("card_owner_username", usernames)
-          .eq("visitor_id", visitorId).or(notAnotherContact!);
+          .eq("visitor_id", visitorId).or(notAnotherContact);
         const from = since(leadCreatedAt, true);
         if (from) q = q.gte("created_at", from);
-        lookups.push(q);
+        lookups.push(paged(q.order("created_at", { ascending: false })));
       }
     }
 

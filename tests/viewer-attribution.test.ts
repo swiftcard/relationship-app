@@ -116,7 +116,8 @@ describe("wiring — the ingest route actually enforces this server-side", () =>
     // Contact details forwarded there are now re-derived server-side from the
     // lead the visitor actually submitted to THIS owner — see
     // corroboratedContact and tests/crm-contact-corroboration.test.ts.
-    expect(route).toMatch(/const crmContact = event_type === "clicked_link" \? null : await corroboratedContact\(/);
+    // noticeEvent: a tap that opened the visit is announced as its view (2026-11-05).
+    expect(route).toMatch(/const crmContact = noticeEvent === "clicked_link" \? null : await corroboratedContact\(/);
     expect(
       /contact:\s*\{\s*name:\s*identity\./.test(route),
       "the CRM is being handed the client-supplied identity again",

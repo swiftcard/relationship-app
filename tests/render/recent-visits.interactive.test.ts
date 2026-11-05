@@ -28,6 +28,9 @@ const events: VisitEventRow[] = [];
 // row the product can draw: a long contact name, a long place, a tap label.
 events.push({ id: "tap", created_at: T(1), event_type: "clicked_link", surface: "card", visitor_id: "visitor-0000", target: "calendly.com", target_label: "Book a strategy call" });
 events.push({ id: "save", created_at: T(1.5), event_type: "downloaded_vcard", surface: "card", visitor_id: "visitor-0000" });
+// …and went on to the Swift Links page in the same visit: still ONE row
+// (2026-11-05), saying so.
+events.push({ id: "links0", created_at: T(1.8), event_type: "viewed_card", surface: "links", visitor_id: "visitor-0000" });
 for (let i = 0; i < 7; i++) {
   events.push({
     id: `v${i}`, created_at: T(2 + i * 40), event_type: "viewed_card", surface: i % 2 ? "links" : "card",
@@ -41,7 +44,9 @@ for (let i = 0; i < 7; i++) {
 const leads = [{ id: "lead-long", name: "Christopher Fairweather-Blenkinsop", tags: [] }];
 const history = events.filter((e) => e.event_type === "viewed_card").map((e) => ({ visitor_id: e.visitor_id, surface: e.surface, created_at: e.created_at }));
 const rows = (paid: boolean) =>
-  buildRecentVisits({ events, history, leads, paid, limit: 25 }).map((v, i) => ({ ...v, when: i ? `Oct ${10 + i}, 11:0${i} AM` : "12:59 PM" }));
+  // The LONGEST times the list can print (lib/recent-visits visitWhen): every
+  // row has its day now, so the time is what has to keep its line.
+  buildRecentVisits({ events, history, leads, paid, limit: 25 }).map((v, i) => ({ ...v, when: i ? "Wed, Sep 30 12:59 PM" : "Yesterday 12:59 PM" }));
 
 let browser: Browser;
 let bundle = "";
@@ -135,6 +140,8 @@ describe("Pro: every detail, and it fits at every width", () => {
         expect(text).toContain("iPhone 18 Pro Max · iOS 27 · Instagram · 1m 35s");
         expect(text).toContain("On the Memorial Sloan Kettering Cancer Center network");
         expect(text).toContain("Downloaded your contact card");
+        expect(text).toContain("Opened your Swift Links");
+        expect(text).toContain("Recent visits · last 30 days");
         expect(text).toContain("Tapped Book a strategy call");
         expect(text).toContain("Windows PC · Edge · from LinkedIn");
         expect(text).not.toContain("Upgrade");

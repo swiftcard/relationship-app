@@ -50,8 +50,24 @@ function contactHref(n: Notification): string {
 // since 2026-10-07, with the billing wording swapped (NATIVE_BODY_REMAP).
 const REFERRAL_ROW_TYPES = new Set(["referral_claim", "referral_progress"]);
 
+// A visit by someone who is NOT a contact (a view, a download, a milestone
+// crossed by a stranger) opens the dashboard's Recent visits for that card —
+// the one place that visit is described in full (device, place, what they
+// tapped). It used to open Contacts, where that person does not exist, while
+// the push for the same visit opened the dashboard (2026-11-05 review).
+const VISIT_TYPES = new Set(["card_viewed", "contact_saved"]);
+
+function visitHref(n: Notification): string {
+  return `/dashboard${n.card_owner ? `?card=${encodeURIComponent(n.card_owner)}` : ""}#recent-visits`;
+}
+
 /** Where tapping this row goes, or null for a row that is just information. */
 function rowHref(n: Notification): string | null {
+  // A row about a known contact opens THEM — their Activity & Messages holds
+  // every open and tap — whatever the row's type (a milestone their visit
+  // crossed included).
+  if (n.lead_id && (CONTACT_TYPES.has(n.type) || n.type.startsWith("milestone_"))) return contactHref(n);
+  if (VISIT_TYPES.has(n.type) || n.type.startsWith("milestone_")) return visitHref(n);
   if (CONTACT_TYPES.has(n.type)) return contactHref(n);
   if (REFERRAL_ROW_TYPES.has(n.type)) return "/grow#refer";
   return null;

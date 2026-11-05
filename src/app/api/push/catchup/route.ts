@@ -4,8 +4,10 @@ import { sendPushToUser } from "@/lib/push";
 import { isPaidProfile, PLAN_COLUMNS, type PlanRow } from "@/lib/effective-plan";
 import { unlockedLeadBody } from "@/lib/notification-privacy";
 import {
-  localHour, quietWindowStart, readPushPrefs, QUIET_END_HOUR, QUIET_WINDOW_MS, DEFAULT_TIMEZONE, type PushCategory,
+  localHour, quietWindowStart, readPushPrefs, QUIET_END_HOUR, QUIET_WINDOW_MS, DEFAULT_TIMEZONE, UNCAPPED, type PushCategory,
 } from "@/lib/push-policy";
+import { visitKeyBucket } from "@/lib/visit-notify";
+import { VIEW_VISIT_WINDOW_MS } from "@/lib/view-window";
 import { contactMayPush } from "@/lib/contact-return-notify";
 import { heldCategory, CONTACT_RULE_CATEGORIES } from "@/lib/catchup-category";
 import { hasMarkedName } from "@/lib/contact-privacy";
@@ -239,7 +241,7 @@ export async function GET(req: NextRequest) {
       // does not need to be told again at 8.
       const { data: rows } = await admin
         .from("notifications")
-        .select("type, title, body, card_owner, created_at, lead_id")
+        .select("id, type, title, body, card_owner, created_at, lead_id, visit_key")
         .eq("user_id", userId)
         .eq("read", false)
         // The real 10pm boundary in their zone, not `now − 10h`: a cron that
@@ -253,12 +255,25 @@ export async function GET(req: NextRequest) {
         .limit(50);
 
       type Held = { row: Row; category: PushCategory; team?: TeamRow };
+      const nightStart = quietWindowStart(now, tz);
       let held: Held[] = (rows ?? [])
         .map((r) => ({ row: r as Row, category: heldCategory(r) }))
         .filter((x): x is Held =>
           // A category switched OFF is a decision the person made; the morning
           // must not be a way around it.
-          x.category !== undefined && prefs[x.category] !== false);
+          x.category !== undefined && prefs[x.category] !== false)
+        // A VISIT THAT BEGAN BEFORE QUIET HOURS WAS ANNOUNCED WHEN IT BEGAN
+        // (2026-11-05). Its row can sit in the night only because a download,
+        // a milestone or a tap upgraded it after 22:00 and moved its time — a
+        // visit pushed at 21:50 was announced again at 8am. The visit key says
+        // when the visit began (lib/visit-notify visitKeyBucket). Only an
+        // UNCAPPED upgrade (a new contact, a reply) re-pushes, and that push
+        // could have been held, so those are still announced.
+        .filter((x) => {
+          const bucket = visitKeyBucket(String(x.row.visit_key ?? ""));
+          const began = bucket != null ? bucket * VIEW_VISIT_WINDOW_MS : null;
+          return began == null || began + VIEW_VISIT_WINDOW_MS > nightStart || UNCAPPED.includes(x.category);
+        });
 
       // Their team's held news, under the Team alerts switch.
       if (prefs.team_alert !== false) {
@@ -370,6 +385,11 @@ export async function GET(req: NextRequest) {
         // stacking a second one beside it.
         tag: "catchup",
         catchup: true,
+        // The row it announces, so a tap on the lock screen marks it read
+        // (audit N-01; it never rode on the morning push). Not the contact's
+        // id: the one-per-contact cap must not be able to swallow a morning
+        // that stands for the whole night.
+        notificationId: !top.team && top.row.id ? String(top.row.id) : null,
       });
       counts.sent++;
     } catch (e) {

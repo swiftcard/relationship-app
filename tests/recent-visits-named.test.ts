@@ -39,9 +39,12 @@ describe("the visit in which they shared is theirs", () => {
     expect(buildRecentVisits({ events: old, history: [], leads: [priya], bindings, paid: true, limit: 5 })[0].who).toBe("Someone");
   });
 
-  it("a share on the Swift Links page belongs to the Swift Links visit, not the card's", () => {
+  // 2026-11-05: one visit is one person on one card — the card AND its Swift
+  // Links page — so a share made on Swift Links in the same sitting is this
+  // visit's, like the bell has always counted it.
+  it("a share on the Swift Links page in the same sitting belongs to the visit", () => {
     const [v] = buildRecentVisits({ events, history: [], leads: [priya], bindings, shares: [{ ...shares[0], surface: "links" }], paid: true, limit: 5 });
-    expect(v.actions).not.toContain("Shared their details");
+    expect(v.actions).toContain("Shared their details");
   });
 
   it("Free: an unlocked contact is named as everywhere else on Free; a locked one is not", () => {

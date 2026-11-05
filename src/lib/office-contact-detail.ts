@@ -2,7 +2,7 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { resolveOfficeContactScope, scopedOfficeLeads } from "@/lib/office-leads";
 import { followUpState, type FollowUpStep } from "@/lib/lead-followup";
 import { CRON_HOUR_UTC } from "@/lib/cron-schedule";
-import { isOwnersOwnDetails, ownerContactKeys } from "@/lib/known-contact";
+import { isOwnersOwnDetails, ownerContactKeys, samePersonLeadIds } from "@/lib/known-contact";
 import { VIEW_VISIT_WINDOW_MS } from "@/lib/view-window";
 import type {
   ContactTimelineEvent,
@@ -154,11 +154,16 @@ async function contactEvents(
   const LEAD_IN_MS = 2 * 60 * 60 * 1000;
   const since = (iso: string | null | undefined, leadIn: boolean) =>
     iso ? new Date(new Date(iso).getTime() - (leadIn ? LEAD_IN_MS : 0)).toISOString() : null;
-  // contactId is a validated UUID (CONTACT_ID) before it reaches this string.
-  const notAnotherContact = `lead_id.is.null,lead_id.eq.${contactId}`;
+  // The same person's other contact rows on these cards (they shared twice):
+  // events are stamped with the newest, and are this person's all the same
+  // (lib/known-contact samePersonLeadIds, the member's route too).
+  const theirIds = [contactId, ...(await samePersonLeadIds(admin, { leadId: contactId, cardSlugs: slugs, email: contact.email, phone: contact.phone }))];
+  // contactId is a validated UUID (CONTACT_ID) before it reaches this string,
+  // and the others are ids read back from the database.
+  const notAnotherContact = `lead_id.is.null,lead_id.in.(${theirIds.join(",")})`;
 
   const lookups: PromiseLike<{ data: unknown }>[] = [];
-  lookups.push(admin.from("card_events").select(cols).in("card_owner_username", slugs).eq("lead_id", contactId));
+  lookups.push(admin.from("card_events").select(cols).in("card_owner_username", slugs).in("lead_id", theirIds).order("created_at", { ascending: false }).limit(1000));
 
   const { data: bindings } = await admin
     .from("contact_devices")

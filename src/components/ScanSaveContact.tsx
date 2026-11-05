@@ -26,6 +26,7 @@ import { SCAN_SAVED_EVENT } from "@/lib/scan-saved-event";
 export default function ScanSaveContact({
   username,
   source,
+  joinVisit = null,
   suppressTracking = false,
 }: {
   username: string;
@@ -37,6 +38,9 @@ export default function ScanSaveContact({
    * owner's notification, which is precisely what happened to swift_links once.
    */
   source: string;
+  /** The computer's visit the desktop "Scan to save" QR came from (?vv=): the
+   *  download joins it instead of starting a second visit (api/card-events). */
+  joinVisit?: string | null;
   /** Owner previewing their own card — deliver the contact, record nothing. */
   suppressTracking?: boolean;
 }) {
@@ -150,6 +154,7 @@ export default function ScanSaveContact({
             // shares a dedup slot with a links-page save in the same visit.
             surface: "card",
             source,
+            ...(joinVisit ? { join_visit: joinVisit } : {}),
           }),
         }).catch(() => {});
       })();
@@ -162,7 +167,7 @@ export default function ScanSaveContact({
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("focus", onFocus);
     };
-  }, [username, source, suppressTracking]);
+  }, [username, source, joinVisit, suppressTracking]);
 
   return null;
 }

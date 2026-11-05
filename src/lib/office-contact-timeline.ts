@@ -14,6 +14,7 @@
 // member's own timeline.
 
 import { getSourceLabel } from "@/lib/source-labels";
+import { tapPhrase } from "@/lib/visit-taps";
 import type { FollowUpState } from "@/lib/lead-followup";
 
 export type ContactTimelineEvent = {
@@ -160,9 +161,8 @@ function eventPhrase(ev: ContactTimelineEvent, P: string): string | null {
       // contacts sheet is something no app can see.
       return `downloaded ${P} contact card`;
     case "clicked_link":
-      if (ev.target_label) return `tapped ${P} ${ev.target_label} link`;
-      if (ev.target) return `tapped ${P} ${ev.target} link`;
-      return P === "the" ? "tapped one of the links" : `tapped one of ${P} links`;
+      // "tapped her phone number", "tapped the Listings link" (lib/visit-taps).
+      return tapPhrase(ev, P);
     default:
       // shared_info is the arrival line's job; clicked_save_contact always
       // fired alongside downloaded_vcard and was retired. Anything unknown is

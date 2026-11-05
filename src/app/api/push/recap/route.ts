@@ -233,8 +233,11 @@ export async function GET(req: NextRequest) {
       if (!copy) continue;
       await markRecap(admin, userId, plan);
       // The bell row carries the marked place: blurred for Free, like any view.
-      await insertNotification({ user_id: userId, type: "weekly_recap", title: copy.title, body: copy.body });
-      await sendPushToUser(userId, { category: "weekly_recap", title: copy.title, body: copy.body, url: `${APP_URL}/dashboard`, tag: "weekly-recap" });
+      // The push only with its bell row (2026-11-05): a recap the bell does not
+      // hold opened a dashboard with nothing to read, and a false here is also
+      // the notify layer's "the same words just went out" retry guard.
+      const written = await insertNotification({ user_id: userId, type: "weekly_recap", title: copy.title, body: copy.body });
+      if (written) await sendPushToUser(userId, { category: "weekly_recap", title: copy.title, body: copy.body, url: `${APP_URL}/dashboard`, tag: "weekly-recap" });
       counts.recapsPersonal++;
     } catch (e) {
       console.error("[push] recap failed for a user:", e instanceof Error ? e.message : e);

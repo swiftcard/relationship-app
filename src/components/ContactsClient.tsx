@@ -14,6 +14,7 @@ import { autoTextable } from "@/lib/sms-number";
 import AddContactModal from "@/components/AddContactModal";
 import ContactQuickActions from "@/components/ContactQuickActions";
 import ShareMyInfoButton, { type CardSigner } from "@/components/ShareMyInfoButton";
+import { tapPhrase } from "@/lib/visit-taps";
 import { PlanGate } from "@/components/PlanGate";
 import { AiDraftTag } from "@/components/AiConsentGate";
 import { openFileViaSystemBrowser } from "@/lib/native-file";
@@ -94,8 +95,9 @@ function activityPhrase(e: { event_type: string; surface?: string | null; target
   // link" is the answer a Swift Links owner is actually looking for.
   // The owner's own name for the link beats its host: two zillow.com links
   // are "Listings" and "Open house", not the same thing twice.
-  if (e.event_type === "clicked_link" && e.target_label) return `tapped your ${e.target_label} link`;
-  if (e.event_type === "clicked_link" && e.target) return `tapped your ${e.target} link`;
+  // A phone, email or text tap names the button, never a "link" (lib/visit-taps
+  // — the same words the bell and Recent visits use).
+  if (e.event_type === "clicked_link") return tapPhrase(e);
   return ACTIVITY_PHRASES[e.event_type];
 }
 

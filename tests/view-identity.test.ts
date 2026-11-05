@@ -576,8 +576,9 @@ describe("the pipeline is wired the way the tests assume", () => {
     // dedupe. The same-person check (2026-10-06) is card + phone only — no
     // visitor id at all, so neither a minted id nor another device gets a
     // second contact through.
-    const knownQuery = leadsSrc.slice(leadsSrc.indexOf("const { data: knownRows }"), leadsSrc.indexOf("const known = knownRows"));
-    expect(knownQuery).toMatch(/\.eq\("phone", phone\)/);
+    // The same NUMBER however it was typed (2026-11-05), compared on its last ten digits.
+    const knownQuery = leadsSrc.slice(leadsSrc.indexOf("const typed = normalizePhone(phone);"), leadsSrc.indexOf("const known = knownRows"));
+    expect(knownQuery).toContain("normalizePhone(l.phone) === typed");
     // Never FILTERED by it. (It is read back since audit SEC-01, to decide
     // whether this browser may change the contact — not whether it matches.)
     expect(knownQuery).not.toMatch(/\.(eq|is|in|or)\("visitor_id"/);

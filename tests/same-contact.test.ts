@@ -40,12 +40,15 @@ describe("what a repeat share adds to the contact", () => {
 
 describe("api/leads: same phone to the same card is the contact they already are", () => {
   const route = code("src/app/api/leads/route.ts");
-  const known = route.indexOf("const known = knownRows?.[0];");
+  const known = route.indexOf("const known = knownRows[0];");
 
   it("matches on card + phone at any time, never the sample contact", () => {
-    const q = route.slice(route.indexOf("const { data: knownRows }"), known);
+    const q = route.slice(route.indexOf("const typed = normalizePhone(phone);"), known);
     expect(q).toMatch(/\.eq\("card_owner", card_owner\)/);
-    expect(q).toMatch(/\.eq\("phone", phone\)/);
+    // The same NUMBER however it was typed (2026-11-05): narrowed by its last
+    // four digits, compared on the last ten — no second contact for one person.
+    expect(q).toContain('.ilike("phone", `%${typed.slice(-4)}%`)');
+    expect(q).toContain("normalizePhone(l.phone) === typed");
     expect(q).toMatch(/\.not\("tags", "cs", "\{demo\}"\)/);
     // No time window: a visit next month is the same person.
     expect(q).not.toMatch(/\.(gte|gt)\("created_at"/);

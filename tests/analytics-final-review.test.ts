@@ -85,7 +85,9 @@ describe("the office console agrees with the office APIs about a lapsed owner", 
 
 describe("counting precision", () => {
   it("datacenter traffic is refused for link taps and saves, not just views", () => {
-    expect(route()).toMatch(/if \(!viewGeo && liveGeo\.isHosting\) \{\s*return decided\("hosting"/);
+    // …unless a view of this card by this visitor was already accepted in this
+    // visit: one datacenter verdict per visit (2026-11-05).
+    expect(route()).toMatch(/if \(!viewGeo && liveGeo\.isHosting && !visitAccepted\) \{\s*return decided\("hosting"/);
   });
 
   it("each event kind has its own rate budget, so taps can't starve views on shared Wi-Fi", () => {
@@ -99,19 +101,22 @@ describe("counting precision", () => {
     expect(sql).toMatch(/DROP INDEX IF EXISTS uq_card_events_visitor_surface_bucket;/);
   });
 
-  it("a contact save also records the view (the desktop QR loses the dwell)", () => {
+  it("a contact save — and a tap — also records the view (the dwell is lost to the hand-off)", () => {
     const s = route();
-    // A TAP deliberately does not (2026-10-23): with a link that opens in a new
-    // tab the page's own view follows and would be deduped against it, losing
-    // the visit's one alert. A tap-only visit is listed by Recent visits instead.
-    const at = s.indexOf('} else if (event_type === "downloaded_vcard") {');
+    // 2026-11-05: a TAP does too now. The worry of 2026-10-23 — the page's own
+    // view following and being deduped, losing the visit's one alert — is met
+    // by announcing the companion view AS the view (asView): the tap's request
+    // is the one that buzzes, and the deduped page view stays quiet.
+    const at = s.indexOf("// A SAVE IS ALSO A VIEW (2026-10-06) — AND SO IS A TAP (2026-11-05).");
     expect(at).toBeGreaterThan(-1);
     const branch = s.slice(at);
-    expect(branch.slice(0, 2000)).toMatch(/await recordView\(\{/);
+    expect(branch.slice(0, 4000)).toMatch(/await recordView\(\{/);
+    expect(s).toMatch(/const asView = event_type === "viewed_card" \|\| \(event_type === "clicked_link" && companionView\);/);
   });
 
-  it("'Nth visit this week' counts visit buckets, not rows", () => {
-    expect(route()).toMatch(/new Set\(\s*\(visitRows \?\? \[\]\)\.map\(\(r\) => Math\.floor\(new Date\(r\.viewed_at as string\)\.getTime\(\) \/ VIEW_VISIT_WINDOW_MS\)\)/);
+  it("'Nth visit this week' counts sittings, not rows or clock buckets", () => {
+    // 2026-11-05: buckets split a sitting that crossed :00 or :30 in two.
+    expect(route()).toContain(".reduce<number[]>((starts, t) => (starts.length && t - starts[starts.length - 1] < VIEW_VISIT_WINDOW_MS ? starts : [...starts, t]), [])");
   });
 
   it("the milestone copy names what the number counts", () => {

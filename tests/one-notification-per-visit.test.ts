@@ -147,7 +147,10 @@ describe("every notifier goes through the visit ledger", () => {
     // CONTACT, so their phone and laptop in one half hour are one visit
     // (warm-lead plan §2.4).
     expect(src).toMatch(/cardOwner: card_owner_username,\s*\n\s*visitorId: visitWho,\s*\n\s*ip,/);
-    expect(src).toMatch(/const visitWho = returning \? `lead:\$\{returning\.leadId\}` : visitor_id;/);
+    // eventVisitor: the browser, or the computer's visit a desktop Scan to save
+    // QR handed to the phone (2026-11-05) — one person, two screens, one visit.
+    expect(src).toMatch(/const visitWho = returning \? `lead:\$\{returning\.leadId\}` : eventVisitor;/);
+    expect(src).toContain("const eventVisitor = joinedVisitor ?? visitor_id;");
   });
 
   it("card-events no longer pushes on its own", () => {

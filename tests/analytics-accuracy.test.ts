@@ -367,11 +367,17 @@ describe("outbound link taps are finally counted — and counted honestly", () =
     expect(linkTarget("https://instagram.com/alex")).toBe("instagram.com");
   });
 
-  it("refuses anything that isn't a web link", () => {
-    // A mailto:/tel: tap is a contact action, not a link click; inventing a host
-    // for it would be worse than recording nothing.
-    expect(linkTarget("mailto:a@b.com")).toBe(null);
-    expect(linkTarget("tel:+15551234567")).toBe(null);
+  it("records a phone, email or text tap as the BUTTON — never the number or address", () => {
+    // Owner, 2026-11-05: every tap on the card counts, and the phone and email
+    // rows are the most-pressed things on it. The target names the action;
+    // the number and the address stay out of the analytics row.
+    expect(linkTarget("tel:+15551234567")).toBe("phone");
+    expect(linkTarget("mailto:a@b.com")).toBe("email");
+    expect(linkTarget("sms:+15551234567")).toBe("text");
+    expect(linkTarget("TEL:5551234567")).toBe("phone");
+  });
+
+  it("refuses anything that isn't a web link or a contact action", () => {
     expect(linkTarget("javascript:alert(1)")).toBe(null);
     expect(linkTarget("not a url at all")).toBe(null);
     expect(linkTarget("ftp://files.example.com")).toBe(null);
@@ -462,7 +468,7 @@ describe("outbound link taps are finally counted — and counted honestly", () =
     // tracking would read as "nobody taps my links".
     // Not on Locations, which is all time while the count is the window's.
     expect(dash).toMatch(/\{linkTaps > 0 && viewsRange !== "locations" && \(/);
-    // And the contact's timeline names the link.
-    expect(read("src/components/ContactsClient.tsx")).toMatch(/tapped your \$\{e\.target\} link/);
+    // And the contact's timeline names the link (lib/visit-taps tapPhrase).
+    expect(read("src/components/ContactsClient.tsx")).toContain("return tapPhrase(e);");
   });
 });

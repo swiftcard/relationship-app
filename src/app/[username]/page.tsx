@@ -125,12 +125,17 @@ export default async function CardPage({
   searchParams,
 }: {
   params: Promise<{ username: string }>;
-  searchParams: Promise<{ source?: string | string[]; embed?: string; shared?: string; save?: string; [key: string]: string | string[] | undefined }>;
+  searchParams: Promise<{ source?: string | string[]; embed?: string; shared?: string; save?: string; vv?: string | string[]; [key: string]: string | string[] | undefined }>;
 }) {
   const { username: rawUsername } = await params;
   const username = rawUsername.toLowerCase();
   const query = await searchParams;
   const { source: rawSource, embed, shared, save } = query;
+  // The computer's visit a "Scan to save" QR came from (SaveContactButton):
+  // the phone's download joins that visit — one bell row, one buzz, one row in
+  // Recent visits — instead of reading as a second person. Shape-checked here,
+  // proven on the server (a view of THIS card by that visitor, this visit).
+  const joinVisit = typeof query.vv === "string" && /^[A-Za-z0-9_.:-]{8,64}$/.test(query.vv) ? query.vv : null;
   // A repeated query param (?source=a&source=b) arrives as an array — passing
   // that through used to reach the card_views insert as a non-text value and
   // fail the whole row. First value wins; bounded like the API's own cap.
@@ -414,7 +419,7 @@ export default async function CardPage({
       )}
       {/* Scanned the desktop QR: deliver the contact over this page. */}
       {autoSave && !isEmbed && (
-        <ScanSaveContact username={profile.username} source={source} suppressTracking={isOwnerView} />
+        <ScanSaveContact username={profile.username} source={source} joinVisit={joinVisit} suppressTracking={isOwnerView} />
       )}
       {!isEmbed && !isOwnerView && <SignupNudgeHost cardUsername={profile.username} />}
 

@@ -176,13 +176,29 @@ export function decideKnownContact(
   };
 }
 
-/** Who is this browser to this owner? */
+/**
+ * Who is this browser to this owner?
+ *
+ * A FAILED LOOKUP IS NOT "NOBODY" (2026-11-05). Every event is stamped with
+ * the contact this returns, and a saved contact's return visit is found in
+ * their Activity & Messages by that stamp — so a timeout here used to file
+ * their open and their taps as a stranger's for good. A failed read is now
+ * tried once more; only a real answer of "no binding" is anonymous at once.
+ */
 export async function resolveKnownContact(
   admin: Admin,
   opts: { ownerId: string | null | undefined; visitorId: string | null | undefined },
 ): Promise<ContactResolution> {
   const { ownerId, visitorId } = opts;
   if (!ownerId || !visitorId) return ANONYMOUS;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const r = await resolveOnce(admin, ownerId, visitorId);
+    if (r !== "failed") return r;
+  }
+  return ANONYMOUS;
+}
+
+async function resolveOnce(admin: Admin, ownerId: string, visitorId: string): Promise<ContactResolution | "failed"> {
   try {
     const { data: bindings, error } = await admin
       .from("contact_devices")
@@ -191,14 +207,16 @@ export async function resolveKnownContact(
       .eq("visitor_id", visitorId)
       .is("superseded_at", null)
       .is("wrong_at", null);
-    if (error || !bindings?.length) return ANONYMOUS;
+    if (error) return "failed";
+    if (!bindings?.length) return ANONYMOUS;
 
     const leadIds = [...new Set(bindings.map((b) => b.lead_id as string))];
     const { data: leads, error: leadsErr } = await admin
       .from("leads")
       .select("id, name, email, phone, card_owner, created_at, status, tags, where_met")
       .in("id", leadIds);
-    if (leadsErr || !leads?.length) return ANONYMOUS;
+    if (leadsErr) return "failed";
+    if (!leads?.length) return ANONYMOUS;
 
     const owner = await ownerContactKeys(admin, ownerId);
     return decideKnownContact(
@@ -207,7 +225,39 @@ export async function resolveKnownContact(
       owner,
     );
   } catch {
-    return ANONYMOUS;
+    return "failed";
+  }
+}
+
+/**
+ * The other contacts on these cards that are the SAME PERSON as this one —
+ * the same email or the same phone number (rule 2's test) — for the contact's
+ * Activity & Messages. Someone who shared twice is two contact rows, and every
+ * event is stamped with the NEWEST of them (decideKnownContact), so the older
+ * row's history stopped at the second share. Never includes `leadId` itself;
+ * empty on any failure, which is the old behaviour.
+ */
+export async function samePersonLeadIds(
+  admin: Admin,
+  opts: { leadId: string; cardSlugs: string[]; email: unknown; phone: unknown },
+): Promise<string[]> {
+  const email = normalizeEmail(opts.email);
+  const phone = normalizePhone(opts.phone);
+  if ((!email && !phone) || !opts.cardSlugs.length) return [];
+  try {
+    const reads: PromiseLike<{ data: unknown }>[] = [];
+    // ilike for case; the exact comparison is made below, so a "_" read as a
+    // wildcard can only ever find a candidate, never a match.
+    if (email) reads.push(admin.from("leads").select("id, email, phone").in("card_owner", opts.cardSlugs).not("tags", "cs", "{demo}").ilike("email", email).limit(50));
+    // Narrowed by the last four digits, compared on the last ten below — the
+    // way "+1 (917) 905-7335" and "9179057335" are one number.
+    if (phone) reads.push(admin.from("leads").select("id, email, phone").in("card_owner", opts.cardSlugs).not("tags", "cs", "{demo}").ilike("phone", `%${phone.slice(-4)}%`).limit(200));
+    const rows = (await Promise.all(reads)).flatMap((r) => ((r.data ?? []) as { id: string; email: unknown; phone: unknown }[]));
+    const same = rows.filter((l) => l.id !== opts.leadId && (
+      (!!email && normalizeEmail(l.email) === email) || (!!phone && normalizePhone(l.phone) === phone)));
+    return [...new Set(same.map((l) => l.id))];
+  } catch {
+    return [];
   }
 }
 

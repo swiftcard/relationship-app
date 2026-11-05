@@ -56,7 +56,7 @@ describe("the 8am catch-up honours the contacts the owner silenced", () => {
   });
 
   it("re-reads the contact behind a held return alert and applies closed status", () => {
-    expect(route).toMatch(/\.select\("type, title, body, card_owner, created_at, lead_id"\)/);
+    expect(route).toMatch(/\.select\("id, type, title, body, card_owner, created_at, lead_id, visit_key"\)/);
     expect(route).toMatch(/if \(!contactMayPush\(\{ status: l\.status as string \| null \}\)\) return false;/);
     // Only rows that name a contact (returns and downloads, CONTACT_RULE_CATEGORIES)
     // are re-checked; a lead or a view is untouched (audit NM-02).

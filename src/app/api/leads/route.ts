@@ -22,7 +22,7 @@ import { announceFirstLeadIfTeammate } from "@/lib/team-alerts";
 import { isLikelyBot } from "@/lib/bot-detection";
 import { resolveGeo } from "@/lib/request-geo";
 import { attachVisitIdentity, resolveVisitIdentity } from "@/lib/visit-identity";
-import { bindFormDevice } from "@/lib/known-contact";
+import { bindFormDevice, normalizePhone } from "@/lib/known-contact";
 import { isOwnerRequest } from "@/lib/self-traffic";
 import { markName } from "@/lib/contact-privacy";
 import { activeEvent } from "@/lib/event-tag";
@@ -251,15 +251,31 @@ export async function POST(req: NextRequest) {
     // changes the contact only from a browser already known as that contact
     // (bound by its first share), and the answer is the same as a new share's,
     // so it reveals nothing about who is already in whose contacts.
-    const { data: knownRows } = await admin
-      .from("leads")
-      .select("id, email, company, message, visitor_id")
-      .eq("card_owner", card_owner)
-      .eq("phone", phone)
-      .not("tags", "cs", "{demo}")
-      .order("created_at", { ascending: true })
-      .limit(1);
-    const known = knownRows?.[0];
+    // THE SAME NUMBER HOWEVER IT WAS TYPED (2026-11-05). The match was on the
+    // exact string, so "(917) 905-7335" then "917-905-7335" made a second
+    // contact for one person — and their visits from then on were stamped on
+    // the new row, splitting their Activity & Messages in two. Narrowed by the
+    // last four digits, compared on the last ten (known-contact normalizePhone).
+    const typed = normalizePhone(phone);
+    const { data: candidateRows } = typed
+      ? await admin
+          .from("leads")
+          .select("id, email, company, message, visitor_id, phone")
+          .eq("card_owner", card_owner)
+          .ilike("phone", `%${typed.slice(-4)}%`)
+          .not("tags", "cs", "{demo}")
+          .order("created_at", { ascending: true })
+          .limit(50)
+      : await admin
+          .from("leads")
+          .select("id, email, company, message, visitor_id, phone")
+          .eq("card_owner", card_owner)
+          .eq("phone", phone)
+          .not("tags", "cs", "{demo}")
+          .order("created_at", { ascending: true })
+          .limit(1);
+    const knownRows = (candidateRows ?? []).filter((l) => !typed || normalizePhone(l.phone) === typed);
+    const known = knownRows[0];
     if (known) {
       const sameBrowser = await isKnownBrowserOf(admin, known as { id: string; visitor_id?: string | null }, visitor_id);
       const fill = sameBrowser ? sameContactFill(known, { email, company, message }) : null;

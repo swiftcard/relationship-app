@@ -104,7 +104,8 @@ describe("the client tracker fires once per visit, not once per JS context", () 
     // share them — it had none of them and recorded a contact download for
     // anything that merely loaded a ?save=1 URL. The tracker now asks the gate;
     // the gate is what has to contain the rules.
-    expect(tracker).toMatch(/waitForHuman\(\(\) => cancelled\)/);
+    // (passOnGesture, 2026-11-05: a real tap passes at once — after the same checks.)
+    expect(tracker).toMatch(/waitForHuman\(\(\) => cancelled, \{ passOnGesture: true \}\)/);
     const gate = read("src/lib/human-gate.ts");
     expect(gate).toMatch(/doc\.prerendering/);
     expect(gate).toMatch(/prerenderingchange/);

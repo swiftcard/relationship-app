@@ -46,6 +46,20 @@ export type HumanGateOptions = {
    * into a hidden surface and never comes forward, so it can't reach this.
    */
   acceptBackgroundedAfterVisible?: boolean;
+  /**
+   * A REAL TAP OR KEY PRESS ON THE VISIBLE PAGE IS A PERSON — pass at once.
+   *
+   * The dwell exists to tell a person from a preview renderer, and nothing
+   * tells them apart better than a trusted pointer or key event: a renderer
+   * does not press anything, and a script's synthetic events carry
+   * isTrusted=false. Without this, the visitor who opened the card and tapped
+   * Instagram inside 2.5 seconds — the hand-off to the app hides the page —
+   * never counted as a view at all: the tap was recorded with no visit behind
+   * it, no notification, and no row in Recent visits (owner, 2026-11-05:
+   * "sometimes it shows… sometimes it doesn't"). webdriver, visibility and
+   * the prerender wait still apply before it.
+   */
+  passOnGesture?: boolean;
 };
 
 /**
@@ -95,12 +109,33 @@ export async function waitForHuman(
   let leftWhileVisible = false;
   const onHide = () => { if (document.hidden) leftWhileVisible = true; };
   document.addEventListener("visibilitychange", onHide);
+  // A trusted gesture on the visible page ends the dwell early (passOnGesture).
+  // Capture phase on the document, so it is seen before the link's own
+  // handler can take the page away.
+  let gestured = false;
+  let wake: (() => void) | null = null;
+  const onGesture = (e: Event) => {
+    if (!e.isTrusted || document.visibilityState !== "visible") return;
+    gestured = true;
+    wake?.();
+  };
+  const GESTURES = ["pointerdown", "touchstart", "keydown"] as const;
+  if (options.passOnGesture) {
+    for (const g of GESTURES) document.addEventListener(g, onGesture, { capture: true, passive: true });
+  }
   try {
-    await new Promise((r) => setTimeout(r, dwellMs));
+    await new Promise<void>((r) => {
+      const t = setTimeout(r, dwellMs);
+      wake = () => { clearTimeout(t); r(); };
+    });
     if (isCancelled()) return false;
+    if (gestured) return true;
     if (document.visibilityState === "visible") return true;
     return !!options.acceptBackgroundedAfterVisible && leftWhileVisible;
   } finally {
     document.removeEventListener("visibilitychange", onHide);
+    if (options.passOnGesture) {
+      for (const g of GESTURES) document.removeEventListener(g, onGesture, { capture: true });
+    }
   }
 }

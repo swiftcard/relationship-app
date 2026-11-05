@@ -6,6 +6,7 @@ import { whenIdentityReconciled } from "@/lib/account-state";
 import { VIEW_VISIT_WINDOW_MS } from "@/lib/view-window";
 import { waitForHuman } from "@/lib/human-gate";
 import { outbox } from "@/lib/offline-outbox";
+import { trackLinkClick } from "@/lib/track-link-click";
 
 // Fire-at-most-once-per-visit guard, per (username+surface). A Map of last-fire
 // times, not a Set: the old Set was never cleared, so in a long-lived SPA tab
@@ -159,7 +160,10 @@ export default function CardEventTracker({
       // MOVED TO lib/human-gate.ts, unchanged, because it lived only here: the
       // QR save path (ScanSaveContact) fired a contact-download event with no
       // gate at all, so one surface was protected and the other wasn't.
-      if (!(await waitForHuman(() => cancelled))) return;
+      // passOnGesture (2026-11-05): a real tap on the page is a person at once,
+      // so someone who opens the card and taps Instagram inside the dwell still
+      // counts as a visit (lib/human-gate.ts).
+      if (!(await waitForHuman(() => cancelled, { passOnGesture: true }))) return;
 
       // After an account switch, AccountIsolationGuard wipes the previous
       // person's visitor id + identity blob asynchronously — reading them
@@ -202,6 +206,11 @@ export default function CardEventTracker({
       outbox.fetch("/api/card-events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // keepalive: a view the visitor's own tap released (passOnGesture) is
+        // often sent as that tap takes the page away — an app hand-off, a link
+        // in the same tab. The browser finishes a keepalive request after the
+        // page is gone; an ordinary one is cancelled with it.
+        keepalive: true,
         body: JSON.stringify({
           card_owner_username: username,
           visitor_id: visitorId,
@@ -238,6 +247,29 @@ export default function CardEventTracker({
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", flush);
     };
+  }, [username, source, viewSurface]);
+
+  // ── Taps on the card itself: phone, email, website ────────────────────────
+  // The card face's contact rows (card-templates/shared.tsx, the one
+  // [data-contact-block] every template uses) are plain anchors — tel:,
+  // mailto: and the website — and were the one part of the page no tap was
+  // recorded for (owner, 2026-11-05: every tap on the card). One listener here
+  // rather than a handler on each anchor: the templates also render in the
+  // editor, the card capture and the Wallet pass, none of which may track,
+  // and this tracker is only ever mounted on the public card for a visitor
+  // (never the owner, never the preview frame). Capture phase, so it is seen
+  // before the browser follows the link; trackLinkClick never delays it.
+  useEffect(() => {
+    if (viewSurface !== "card") return;
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as Element | null)?.closest?.("[data-contact-block] a[href]") as HTMLAnchorElement | null;
+      if (!a) return;
+      const href = a.getAttribute("href") ?? "";
+      const label = /^tel:/i.test(href) ? "Phone" : /^mailto:/i.test(href) ? "Email" : /^sms:/i.test(href) ? "Text" : "Website";
+      trackLinkClick({ username, surface: "card", url: href, source, label });
+    };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
   }, [username, source, viewSurface]);
 
   return null;

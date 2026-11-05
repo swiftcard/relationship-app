@@ -3,6 +3,7 @@ import { sendPushToUser } from "@/lib/push";
 import { VIEW_VISIT_WINDOW_MS } from "@/lib/view-window";
 import { UNCAPPED, type PushCategory } from "@/lib/push-policy";
 import { reportError } from "@/lib/report-error";
+import { tapNames, tapSentence, withTapSentence, type TapRow } from "@/lib/visit-taps";
 
 // ONE NOTIFICATION PER PERSON, PER CARD, PER VISIT.
 //
@@ -380,4 +381,85 @@ async function upgrade(
     return !retryError;
   }
   return false;
+}
+
+/** The 30-minute bucket a visit key was opened in ("slug:who:BUCKET", maybe "#user"). */
+export function visitKeyBucket(key: string): number | null {
+  const bare = key.split("#")[0];
+  const n = Number(bare.slice(bare.lastIndexOf(":") + 1));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+export type TapRefreshResult = "updated" | "unchanged" | "no_visit" | "failed";
+
+/**
+ * Say what this visit TAPPED in the visit's one notification (owner,
+ * 2026-11-05: a stranger's taps "just tell me in my notification center").
+ *
+ * The bell row the visit already has — whatever it says (viewed, downloaded,
+ * re-opened, a milestone, a new contact) — carries one sentence listing every
+ * link and button this person pressed in the visit, rewritten as they press
+ * more (lib/visit-taps). NEVER A PUSH and never a new row: one person's visit
+ * is one buzz, and a tap is not worth a second. Never moves the row's time
+ * either, so the morning catch-up cannot mistake an evening visit for
+ * overnight news. Unread again when the list grew, so the bell shows it.
+ *
+ * Called after every notifyVisit (an upgrade rewrites the body, and the taps
+ * must survive it) and after every recorded tap. `visitorId` is the SAME
+ * visit identity notifyVisit was given (the browser, or `lead:<id>` for a
+ * contact the owner knows); `taps` says whose taps to read — by contact for a
+ * known contact on any of their devices, by browser for everyone else.
+ */
+export async function refreshVisitTaps(opts: {
+  userId: string;
+  cardOwner: string;
+  visitorId: string;
+  ip?: string | null;
+  taps: { leadId: string } | { visitorId: string };
+  now?: number;
+}): Promise<TapRefreshResult> {
+  try {
+    const admin = getAdminSupabase();
+    const now = opts.now ?? Date.now();
+    const keys = visitKeys({ cardOwner: opts.cardOwner, visitorId: opts.visitorId, ip: opts.ip, now });
+    const { data: rows } = await admin
+      .from("notifications")
+      .select("id, body, visit_key, created_at")
+      .eq("user_id", opts.userId)
+      .in("visit_key", [keys.current, keys.previous, ownVisitKey(keys.current, opts.userId), ownVisitKey(keys.previous, opts.userId)])
+      .gte("created_at", new Date(now - VIEW_VISIT_WINDOW_MS).toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const open = rows?.[0];
+    if (!open) return "no_visit";
+    // Every event of the visit happened in or after the bucket its row was
+    // opened in — so that is where its taps start.
+    const bucket = visitKeyBucket(String(open.visit_key ?? ""));
+    const since = bucket != null ? bucket * VIEW_VISIT_WINDOW_MS : now - VIEW_VISIT_WINDOW_MS;
+
+    const base = admin
+      .from("card_events")
+      .select("target, target_label, created_at")
+      .eq("card_owner_username", opts.cardOwner)
+      .eq("event_type", "clicked_link")
+      .gte("created_at", new Date(since).toISOString());
+    const { data: taps, error } = await ("leadId" in opts.taps ? base.eq("lead_id", opts.taps.leadId) : base.eq("visitor_id", opts.taps.visitorId))
+      .order("created_at", { ascending: true })
+      .limit(100);
+    if (error) return "failed";
+    const names = tapNames((taps ?? []) as TapRow[]);
+    if (!names.length) return "unchanged";
+
+    const before = String(open.body ?? "");
+    const after = withTapSentence(before, tapSentence(names));
+    if (after === before) return "unchanged";
+    const { error: upErr } = await admin
+      .from("notifications")
+      .update({ body: after, read: false })
+      .eq("id", open.id as string)
+      .eq("user_id", opts.userId);
+    return upErr ? "failed" : "updated";
+  } catch {
+    return "failed";
+  }
 }

@@ -16,7 +16,9 @@ import { useEffect } from "react";
 // Rendered for the owner too: their own visit isn't counted, but their copy of
 // the address is exactly what gets passed on. Everything else in the query
 // (?embed=, ?ct= — CardEventTracker takes that one) is left alone.
-const ONE_VISIT_PARAMS = ["source", "save", "shared"] as const;
+// vv: the desktop visit a "Scan to save" QR hands to the phone (2026-11-05) —
+// one scan's, never a forwarded link's.
+const ONE_VISIT_PARAMS = ["source", "save", "shared", "vv"] as const;
 
 export default function CleanShareUrl() {
   useEffect(() => {

@@ -24,11 +24,11 @@ describe("link taps carry the link's label", () => {
     expect(src).toMatch(/\.\.\.\(target_label \? \{ target_label \} : \{\}\)/);
   });
 
-  it("the timeline prefers the owner's name for the link over its host", () => {
-    const src = read("src/components/ContactsClient.tsx");
-    const byLabel = src.indexOf("e.target_label) return `tapped your ${e.target_label} link`");
-    const byHost = src.indexOf("e.target) return `tapped your ${e.target} link`");
-    expect(byLabel).toBeGreaterThan(-1);
-    expect(byLabel).toBeLessThan(byHost);
+  it("the timeline prefers the owner's name for the link over its host", async () => {
+    // One wording for every surface since 2026-11-05 (lib/visit-taps).
+    const { tapPhrase } = await import("@/lib/visit-taps");
+    expect(tapPhrase({ target: "zillow.com", target_label: "Listings" })).toBe("tapped your Listings link");
+    expect(tapPhrase({ target: "zillow.com", target_label: null })).toBe("tapped your zillow.com link");
+    expect(read("src/components/ContactsClient.tsx")).toContain('if (e.event_type === "clicked_link") return tapPhrase(e);');
   });
 });

@@ -4,7 +4,9 @@ import { locationLabel } from "@/lib/location-display";
 import type { GeoAccuracy } from "@/lib/request-geo";
 import { sourcePhrase } from "@/lib/source-labels";
 import { VIEW_VISIT_WINDOW_MS } from "@/lib/view-window";
+import { localDayKey } from "@/lib/tz-days";
 import { describeDevice, formatDuration, openedIn, referrerName } from "@/lib/visit-device";
+import { tapAction } from "@/lib/visit-taps";
 
 // ── "Recent visits" on the dashboard ─────────────────────────────────────────
 //
@@ -123,8 +125,12 @@ const LEAD_IN_EVENT_MS = 60_000;
 const SITTING_MS = 2 * 60 * 60 * 1000;
 
 type StartRow = { visitor_id?: string | null; surface?: string | null; created_at: string; event_type?: string };
-const sameVisitorOn = (a: StartRow, b: StartRow) =>
-  !!a.visitor_id && a.visitor_id === b.visitor_id && surfaceOf(a) === surfaceOf(b);
+// ONE VISIT IS ONE PERSON ON ONE CARD — the card AND its Swift Links page
+// (2026-11-05). Opening the card, tapping "View my Swift Links" and tapping
+// Instagram there was two rows, and the Instagram tap belonged to neither when
+// the Swift Links view hadn't counted yet. The bell has always called that one
+// visit (lib/visit-notify: one row per person per card); now this list does too.
+const sameVisitor = (a: StartRow, b: StartRow) => !!a.visitor_id && a.visitor_id === b.visitor_id;
 
 /**
  * Which rows START a visit: every view, and every contact download that no
@@ -146,11 +152,20 @@ const sameVisitorOn = (a: StartRow, b: StartRow) =>
  */
 export function visitStarts<T extends StartRow>(rows: T[]): T[] {
   const isView = (r: StartRow) => (r.event_type ?? "viewed_card") === "viewed_card";
-  const views = rows.filter(isView);
-  const opens = (r: StartRow, by: StartRow[], reach: number) => by.some((v) => sameVisitorOn(v, r)
+  // A view of the OTHER page inside a visit already open is that visit going
+  // on, not a new one: the card at 9:00 and its Swift Links at 9:04 are one
+  // visit. (The same page cannot record a second view inside one visit
+  // window — the server dedupes it — so this only ever joins the two pages,
+  // and the pre-dedupe rows of July–August 2026 minutes apart.)
+  const views: T[] = [];
+  for (const v of rows.filter(isView).sort((a, b) => ms(a.created_at) - ms(b.created_at))) {
+    if (!views.some((w) => sameVisitor(w, v) && ms(v.created_at) - ms(w.created_at) < VIEW_VISIT_WINDOW_MS)) views.push(v);
+  }
+  const opens = (r: StartRow, by: StartRow[], reach: number) => by.some((v) => sameVisitor(v, r)
     && ms(v.created_at) <= ms(r.created_at) + LEAD_IN_EVENT_MS
     && ms(r.created_at) - ms(v.created_at) < reach);
-  const saves = rows.filter((r) => r.event_type === "downloaded_vcard" && !opens(r, views, VIEW_VISIT_WINDOW_MS));
+  const allViews = rows.filter(isView);
+  const saves = rows.filter((r) => r.event_type === "downloaded_vcard" && !opens(r, allViews, VIEW_VISIT_WINDOW_MS));
   // A tap belongs to any visit still open — a sitting lasts up to SITTING_MS,
   // the same reach buildRecentVisits gives a visit's taps.
   const tapStarts: T[] = [];
@@ -187,7 +202,6 @@ export function buildRecentVisits(input: {
   const { events, paid, limit } = input;
   const historyComplete = input.historyComplete !== false;
   const leadById = new Map(input.leads.map((l) => [l.id, l]));
-  const sameVisitor = sameVisitorOn;
 
   const starts = visitStarts(events);
 
@@ -198,7 +212,7 @@ export function buildRecentVisits(input: {
     // EVERY EVENT BELONGS TO EXACTLY ONE VISIT (2026-10-18 review). A visit
     // takes what happened from a minute before it started (a tap or save can
     // land just ahead of the view the human gate records) until a minute
-    // before the same visitor's next visit on this page — or, with no next
+    // before the same visitor's next visit to this card — or, with no next
     // visit, for as long as one sitting can last (a tab kept open past the
     // visit window still taps links, and those taps are this visit's).
     const next = starts
@@ -214,20 +228,27 @@ export function buildRecentVisits(input: {
     // that turns an anonymous visit into a named one.
     const sharedHere = start.visitor_id
       ? (input.shares ?? []).filter((sh) =>
-          sh.visitor_id === start.visitor_id && sh.surface === surface && ms(sh.created_at) >= t0 - LEAD_IN_EVENT_MS && ms(sh.created_at) < end)
+          sh.visitor_id === start.visitor_id && ms(sh.created_at) >= t0 - LEAD_IN_EVENT_MS && ms(sh.created_at) < end)
       : [];
     if (sharedHere.length) actions.push("Shared their details");
+    // The visit went on to the card's other page.
+    const other = surface === "links" ? "card" : "links";
+    if (inVisit.some((e) => (e.event_type ?? "viewed_card") === "viewed_card" && surfaceOf(e) === other)) {
+      actions.push(other === "links" ? "Opened your Swift Links" : "Opened your card");
+    }
     if (start.event_type === "downloaded_vcard" || inVisit.some((e) => e.event_type === "downloaded_vcard")) {
       actions.push("Downloaded your contact card");
     }
+    // Each thing tapped once, in order, named the way the bell and the
+    // contact's history name it (lib/visit-taps). A visit started by a tap
+    // (see visitStarts) lists that tap first.
     const tapped = new Set<string>();
-    // A visit started by a tap (see visitStarts) lists that tap first.
     for (const e of [...inVisit].reverse().concat(start.event_type === "clicked_link" ? [start] : []).sort((a, b) => ms(a.created_at) - ms(b.created_at))) {
       if (e.event_type !== "clicked_link") continue;
-      const name = (e.target_label || e.target || "").trim();
-      if (name) tapped.add(name);
+      const action = tapAction(e);
+      if (action) tapped.add(action);
     }
-    for (const name of tapped) actions.push(`Tapped ${name}`);
+    actions.push(...tapped);
 
     // WHO. A contact this owner knows, from the stamp on the event — never a
     // forwarded link's opener (the notifications don't name them either).
@@ -260,7 +281,7 @@ export function buildRecentVisits(input: {
     const visitNumber = start.visitor_id && historyComplete
       ? Math.max(
           1,
-          visitStarts(input.history.filter((h) => h.visitor_id === start.visitor_id && surfaceOf(h) === surface))
+          visitStarts(input.history.filter((h) => h.visitor_id === start.visitor_id))
             .map((h) => ms(h.created_at))
             .filter((t) => t <= t0)
             .sort((a, b) => a - b)
@@ -313,6 +334,23 @@ export function buildRecentVisits(input: {
 
 /** How many visits the dashboard lists; past it, the list says it stopped. */
 export const RECENT_VISITS_SHOWN = 100;
+/** How far back the list reads — the same whichever tab the chart is on. */
+export const RECENT_VISITS_DAYS = 30;
+
+/**
+ * When a visit happened, always with its day, on the owner's clock: "Today
+ * 9:41 PM", "Yesterday 9:41 PM", "Mon, Nov 3 9:41 PM". The list spans 30 days
+ * on every tab, so a bare time could have been any of them.
+ */
+export function visitWhen(atIso: string, now: Date, tz: string): string {
+  const at = new Date(atIso);
+  const time = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" }).format(at);
+  const day = localDayKey(at, tz);
+  if (day === localDayKey(now, tz)) return `Today ${time}`;
+  if (day === localDayKey(new Date(now.getTime() - 86_400_000), tz)) return `Yesterday ${time}`;
+  const date = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric" }).format(at);
+  return `${date} ${time}`;
+}
 /** One card's views, saves and taps in a 30-day window — far above any real month. */
 const EVENT_READ_CAP = 3000;
 const HISTORY_READ_CAP = 5000;

@@ -52,6 +52,14 @@ export async function recordView(opts: {
   /** The visit's device / app / referrer as Zapier fields (lib/visit-device
    *  visitDetailFields), from the caller's request. Optional. */
   crmDetail?: Record<string, string>;
+  /**
+   * This visitor already has a view of this card ACCEPTED in this visit (either
+   * page). The datacenter verdict was made then, and is not made again: the
+   * network lookup behind it can time out on one request and answer on the
+   * next, which counted a view and then refused its tap as "hosting" — or the
+   * other way round (2026-11-05). One visit, one verdict.
+   */
+  visitAccepted?: boolean;
 }): Promise<{
   outcome: RecordViewOutcome;
   location: string | null;
@@ -101,7 +109,7 @@ export async function recordView(opts: {
   // see the two patterns in request-geo.ts for why those are now separable and
   // what evidence turned this from a downgrade into an exclusion. iCloud
   // Private Relay and VPN traffic is unaffected and still counts.
-  if (geo.isHosting) return { outcome: "hosting", location, geo };
+  if (geo.isHosting && !opts.visitAccepted) return { outcome: "hosting", location, geo };
 
   // ── Dedupe within ONE VISIT (see view-window.ts) ───────────────────────────
   // A reload, a double-fire, a back-navigation or a retry inside the window is

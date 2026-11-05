@@ -110,7 +110,12 @@ export default function SocialLinkIntercept({
   function handleClick(e?: React.MouseEvent<HTMLAnchorElement>) {
     const href = e?.currentTarget?.getAttribute("href");
     if (href) {
-      trackLinkClick({ username: cardOwner, surface: "card", url: href, source: trackSource, suppress: suppressTracking });
+      // The link's own name ("Instagram", "Website"), found from the href so
+      // every anchor stays a bare onClick: without it the bell and the
+      // contact's history said "instagram.com" while Recent visits said
+      // "Instagram" for the same tap.
+      const label = links.find((s) => s.href === href)?.label ?? null;
+      trackLinkClick({ username: cardOwner, surface: "card", url: href, source: trackSource, label, suppress: suppressTracking });
     }
     triggerSignupNudge("link_button");
   }

@@ -38,11 +38,19 @@ import { enqueue } from "@/lib/offline-outbox";
  *
  * Never the full URL: that is where tracking parameters, tokens and campaign
  * ids live, and none of that belongs in an analytics row. Returns null for
- * anything unparseable or non-http — a mailto: or tel: tap is a contact action,
- * not a link click, and inventing a host for it would be worse than no row.
+ * anything unparseable.
+ *
+ * A tel:, mailto: or sms: tap is a CONTACT ACTION and records as one — the
+ * target "phone", "email" or "text" (lib/visit-taps), never the number or the
+ * address. Untracked until 2026-11-05, when the owner asked for every tap on
+ * the card: the phone and email rows are the most-pressed things on a
+ * business card. It says the button was pressed, nothing more: whether a call
+ * or an email followed happens in another app no web page can see.
  */
 export function linkTarget(url: string): string | null {
   const raw = (url || "").trim();
+  const scheme = /^(tel|mailto|sms):/i.exec(raw)?.[1]?.toLowerCase();
+  if (scheme) return scheme === "tel" ? "phone" : scheme === "mailto" ? "email" : "text";
   // ABSOLUTE ONLY, with no base URL. Resolving against window.location would
   // turn a malformed or relative value ("not a url", "#", "/about") into OUR
   // hostname — so a broken link would be recorded as a tap on swiftcard.me,
@@ -82,6 +90,11 @@ export function trackLinkClick(opts: {
   const target = linkTarget(opts.url);
   if (!username || !target) return;
   if (typeof window === "undefined") return;
+  // An automation framework is not a person (lib/human-gate's first rule). A
+  // tap can record the visit's view since 2026-11-05, so a scripted browser's
+  // tap must not do what its view never could. The QA rigs that drive real
+  // visits switch webdriver off, exactly as they do for views.
+  if ((navigator as Navigator & { webdriver?: boolean }).webdriver) return;
 
   const payload = JSON.stringify({
     card_owner_username: username,
@@ -91,6 +104,9 @@ export function trackLinkClick(opts: {
     target,
     ...(opts.label?.trim() ? { target_label: opts.label.trim().slice(0, 60) } : {}),
     source: opts.source,
+    // Where the visit came from: a tap can be what records the visit's view
+    // (api/card-events, 2026-11-05), and that view says "from LinkedIn" too.
+    referrer_url: document.referrer || null,
   });
 
   // No signal: a beacon would be accepted and then silently lost. Keep it on

@@ -205,7 +205,9 @@ describe("N-08: the per-IP cap stops the buzz, not the record", () => {
   const route = read("src/app/api/card-events/route.ts");
 
   it("only events that would notify are counted", () => {
-    expect(route).toMatch(/const flooded = notice\s*\?\s*await isRateLimited\(`notify-ip:\$\{card_owner_username\}:\$\{notifyWho\}`, 6, 60 \* 60 \* 1000\)\s*:\s*false;/);
+    // …that would BUZZ (2026-11-05): a bell-only notice can't, so it no
+    // longer holds the next real alert back.
+    expect(route).toMatch(/const flooded = notice && pushCategory\s*\?\s*await isRateLimited\(`notify-ip:\$\{card_owner_username\}:\$\{notifyWho\}`, 6, 60 \* 60 \* 1000\)\s*:\s*false;/);
   });
 
   it("over the cap the row and the CRM event are still written, without the buzz", () => {
