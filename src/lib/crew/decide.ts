@@ -1,6 +1,7 @@
 import { DISCLOSE_KINDS, TEXT_KINDS } from "./approvals";
 import { applyDisclosure } from "./disclosure";
-import { executeApproval, EXECUTED_KINDS, tier2Executable } from "./execute";
+import { executeApproval, EXECUTED_KINDS, isEmailDraft, sendApprovedEmail, tier2Executable, type EmailDeps } from "./execute";
+import { leadKey } from "./sheets/keys";
 import type { CrewStore } from "./store";
 import type { Approval, Platform, TouchKind } from "./types";
 import { stripEmDashes } from "./voice";
@@ -20,7 +21,13 @@ export type Decision =
   | { action: "posted"; by: string }
   /** The owner did it themselves (the Sheet's Sent / Posted, Completed): recorded as done, and nothing is ever run or sent. */
   | { action: "done_by_hand"; by: string }
-  | { action: "edit"; body: string; by: string };
+  | { action: "edit"; body: string; by: string }
+  /**
+   * Approve (if still waiting) and send from the SwiftCard mailbox. Only the
+   * admin's Approve route passes this, with the email deps; the Sheet never
+   * does (tests/crew-email-send pins it).
+   */
+  | { action: "send_email"; body?: string; by: string };
 
 const POSTED_TOUCH: Partial<Record<Approval["kind"], TouchKind>> = {
   reply: "replied",
@@ -29,7 +36,7 @@ const POSTED_TOUCH: Partial<Record<Approval["kind"], TouchKind>> = {
   connect_note: "connect_sent",
 };
 
-export async function decide(store: CrewStore, id: string, d: Decision, now = new Date()): Promise<{ ok: boolean; message: string }> {
+export async function decide(store: CrewStore, id: string, d: Decision, now = new Date(), deps: { email?: EmailDeps } = {}): Promise<{ ok: boolean; message: string; simulated?: boolean }> {
   const a = await store.getApproval(id);
   if (!a) return { ok: false, message: "Not found." };
   const settings = await store.getSettings();
@@ -42,6 +49,42 @@ export async function decide(store: CrewStore, id: string, d: Decision, now = ne
     if (a.status !== "pending") return { ok: false, message: "Only waiting items can be edited." };
     await store.updateApproval(id, { body: clean(d.body) });
     return { ok: true, message: "Saved." };
+  }
+
+  if (d.action === "send_email") {
+    if (!isEmailDraft(a)) return { ok: false, message: "Only an email draft with an address can be sent." };
+    if (!deps.email) return { ok: false, message: "Email sending isn't set up here." };
+    if (a.status !== "pending" && a.status !== "approved") return { ok: a.status === "done", message: a.status === "done" ? "Already sent." : "Already decided." };
+    // The text that goes is the text the owner just looked at (edited or not).
+    const body = d.body !== undefined ? clean(d.body) : a.body;
+    if (a.status === "pending" || body !== a.body) {
+      if (a.status === "pending" && body !== a.body) await store.addEdit({ agent_id: a.agent_id, kind: a.kind, approval_id: a.id, before: a.body, after: body });
+      await store.updateApproval(id, { status: "approved", body, ...(a.status === "pending" ? { decided_at: now.toISOString() } : {}) });
+    }
+    const approved: Approval = { ...a, body, status: "approved" };
+    const r = await sendApprovedEmail(store, deps.email, approved, d.by, now);
+    // send_error, not error: meta.error marks a row Failed and takes it off
+    // the Sheet, and a refused send (today's cap, a dry run) must not hide a
+    // draft that is still waiting.
+    if (!r.ok) {
+      await store.updateApproval(id, { meta: { ...a.meta, send_error: r.message.slice(0, 300) } });
+      return { ok: false, message: r.message };
+    }
+    if (r.simulated) {
+      await store.updateApproval(id, { meta: { ...a.meta, send_error: null, simulated_at: now.toISOString() } });
+      return { ok: true, simulated: true, message: r.message };
+    }
+    // Sent: the draft is done, the person is contacted, the lead leaves the Sheet.
+    await store.updateApproval(id, { status: "done", done_at: now.toISOString(), meta: { ...a.meta, send_error: null, sent_via: "gmail", result: r.result } });
+    if (a.person_id) {
+      await store.releaseDmClaim(id);
+      await store.addTouch(a.person_id, "email", "emailed", id);
+    }
+    if (typeof a.meta?.lead_id === "string") {
+      const key = leadKey(a.meta.lead_id);
+      if (await store.getSheetRow(key)) await store.patchSheetRow(key, { status: "Contacted" });
+    }
+    return { ok: true, message: r.message };
   }
 
   if (d.action === "reject") {

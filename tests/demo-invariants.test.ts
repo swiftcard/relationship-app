@@ -107,7 +107,7 @@ describe("the calendar lands on the right account", () => {
   it("the calendar stays out of the agents' connections", () => {
     const c = code("src/lib/agent-connections.ts");
     expect(c).toContain('export const AGENT_PROVIDERS: AgentProvider[] = ["x", "meta", "youtube", "linkedin", "pinterest"];');
-    expect(c).toContain('export type OwnerConnectProvider = AgentProvider | "google_calendar";');
+    expect(c).toContain('export type OwnerConnectProvider = AgentProvider | "google_calendar" | "google_gmail";');
   });
   it("Google sends the real invitation, with a Meet link, and a retry can't make a second event", () => {
     const g = code("src/lib/demo/google-calendar.ts");

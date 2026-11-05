@@ -24,9 +24,19 @@
 //            Same owner-only Google client as YouTube; offline + consent for
 //            the refresh token. openid email names the account, and any
 //            account but DEMO_CALENDAR_EMAIL is refused.
+//   google_gmail  (2026-11-04) the SwiftCard mailbox approved outreach emails
+//            are sent from (lib/crew/email). gmail.send + gmail.metadata only:
+//            it can send, and read headers to see replies and bounces, never a
+//            message body. Its OWN Workspace-Internal OAuth client
+//            (CREW_GMAIL_CLIENT_ID/SECRET), never the customer sign-in app,
+//            which is External: restricted scopes there need Google's
+//            verification. Any account but
+//            CREW_EMAIL_FROM (default hello@swiftcard.me) is refused.
 
 import { type OwnerConnectProvider, linkedinClient, youtubeClient } from "@/lib/agent-connections";
 import { DEMO_CALENDAR_EMAIL_DEFAULT } from "@/lib/demo/config";
+import { GMAIL_SCOPES } from "@/lib/crew/email/scopes";
+import { emailMailbox, gmailClient } from "@/lib/crew/env";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 export const META_GRAPH = "https://graph.facebook.com/v26.0";
@@ -43,7 +53,7 @@ export function usesPkce(p: OwnerConnectProvider): boolean {
 /** Where the owner lands after a connect: the Demos page for the calendar,
  *  the admin's Connections panel for everything else. */
 export function connectReturnUrl(p: string, result?: { ok: boolean; msg: string }): string {
-  const base = p === "google_calendar" ? `${APP_URL}/admin/demos?connect=1` : `${APP_URL}/admin?connect=1`;
+  const base = p === "google_calendar" ? `${APP_URL}/admin/demos?connect=1` : p === "google_gmail" ? `${APP_URL}/admin/crew/email?connect=1` : `${APP_URL}/admin?connect=1`;
   return result ? `${base}&${result.ok ? "connected" : "connect_error"}=${encodeURIComponent(result.msg)}` : base;
 }
 
@@ -59,6 +69,7 @@ export const CONNECT_COOKIE = { httpOnly: true, secure: true, sameSite: "lax" as
 
 const SCOPES: Record<OwnerConnectProvider, string> = {
   google_calendar: "openid email https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.freebusy",
+  google_gmail: ["openid", "email", ...GMAIL_SCOPES].join(" "),
   x: "tweet.read tweet.write users.read offline.access",
   // pages_manage_posts publishes to the Page; instagram_content_publish to the
   // linked IG Business account; the rest are what the two need to list + read.
@@ -86,6 +97,11 @@ export function authorizeUrl(p: OwnerConnectProvider, state: string, codeChallen
   switch (p) {
     case "google_calendar": {
       const q = new URLSearchParams({ client_id: youtubeClient().id!, redirect_uri, response_type: "code", scope: SCOPES.google_calendar, access_type: "offline", prompt: "consent", include_granted_scopes: "true", login_hint: demoCalendarEmail(), state });
+      return `https://accounts.google.com/o/oauth2/v2/auth?${q}`;
+    }
+    case "google_gmail": {
+      // No include_granted_scopes: this token must carry these scopes and nothing the client was granted elsewhere.
+      const q = new URLSearchParams({ client_id: gmailClient().id!, redirect_uri, response_type: "code", scope: SCOPES.google_gmail, access_type: "offline", prompt: "consent", login_hint: emailMailbox(), state });
       return `https://accounts.google.com/o/oauth2/v2/auth?${q}`;
     }
     case "x": {
@@ -123,8 +139,10 @@ async function form(url: string, body: Record<string, string>, headers: Record<s
 export async function exchangeCode(p: OwnerConnectProvider, code: string, codeVerifier?: string): Promise<TokenSet> {
   const redirect_uri = connectRedirectUri(p);
   switch (p) {
-    case "google_calendar": {
-      const j = await form("https://oauth2.googleapis.com/token", { grant_type: "authorization_code", code, redirect_uri, client_id: youtubeClient().id!, client_secret: youtubeClient().secret! });
+    case "google_calendar":
+    case "google_gmail": {
+      const c = p === "google_gmail" ? gmailClient() : youtubeClient();
+      const j = await form("https://oauth2.googleapis.com/token", { grant_type: "authorization_code", code, redirect_uri, client_id: c.id!, client_secret: c.secret! });
       return { access_token: String(j.access_token), refresh_token: (j.refresh_token as string) ?? null, expires_in: Number(j.expires_in ?? 3600), scope: (j.scope as string) ?? null };
     }
     case "x": {
@@ -199,6 +217,17 @@ export async function describeAccount(p: OwnerConnectProvider, t: TokenSet): Pro
       }
       if (!t.refresh_token) throw new Error("Google sent no refresh token. Remove SwiftCard's access at myaccount.google.com/permissions, then connect again");
       return { account_id: email, account_label: email, access_token: t.access_token, expires_at, meta: { email } };
+    }
+    case "google_gmail": {
+      const j = (await getJson("https://openidconnect.googleapis.com/v1/userinfo", bearer)) as { email?: string };
+      const email = (j.email ?? "").toLowerCase();
+      const expected = emailMailbox();
+      // Outreach goes out from the one SwiftCard mailbox. Any other account is refused before a token is stored.
+      if (!email || email !== expected) throw new Error(`signed in as ${email || "an unknown account"}. Sign in as ${expected} instead`);
+      const granted = t.scope ?? "";
+      if (!GMAIL_SCOPES.every((s) => granted.includes(s))) throw new Error("Gmail access wasn't allowed. Press Connect again and tick both Gmail boxes");
+      if (!t.refresh_token) throw new Error("Google sent no refresh token. Remove SwiftCard's access at myaccount.google.com/permissions, then connect again");
+      return { account_id: email, account_label: email, access_token: t.access_token, expires_at, meta: { email, scopes: granted } };
     }
     case "x": {
       const j = (await getJson("https://api.x.com/2/users/me", bearer)) as { data?: { id?: string; username?: string; name?: string } };
