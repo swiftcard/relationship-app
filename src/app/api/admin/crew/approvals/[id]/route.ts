@@ -1,16 +1,23 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/admin";
-import { ERR, backToTab, field } from "@/lib/crew/admin-form";
+import { ERR, backToTab, field, sameSite } from "@/lib/crew/admin-form";
 import { scrub } from "@/lib/crew/agent-status";
 import { decide } from "@/lib/crew/decide";
+import { LiveGmail } from "@/lib/crew/email/gmail";
+import { emailConfig } from "@/lib/crew/email/outbox";
+import { SupabaseEmailSends } from "@/lib/crew/email/sends-supabase";
 import { SupabaseStore } from "@/lib/crew/store-supabase";
 
-// Approve / Reject / Edit / "I posted it" on one inbox card.
+// Approve / Reject / Edit / "I posted it" on one inbox card, and Send on an
+// email draft (admin → Agents → Email): the only way an email leaves the
+// SwiftCard mailbox. Refused from another site, like the Blog Writer's buttons.
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const origin = req.headers.get("origin");
+  if (origin && !sameSite(origin, req.nextUrl.host)) return NextResponse.json({ error: "cross-site" }, { status: 403 });
   const { id } = await ctx.params;
   const form = await req.formData();
   const action = field(form, "action");
@@ -21,6 +28,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   else if (action === "reject") r = await decide(store, id, { action: "reject", reason: field(form, "reason") || "no reason given", by });
   else if (action === "posted") r = await decide(store, id, { action: "posted", by });
   else if (action === "edit") r = await decide(store, id, { action: "edit", body: field(form, "body"), by });
+  else if (action === "send_email")
+    r = await decide(store, id, { action: "send_email", body: form.has("body") ? field(form, "body") : undefined, by }, new Date(), { email: { sends: new SupabaseEmailSends(), gmail: new LiveGmail(), config: emailConfig() } });
   else r = { ok: false, message: "Unknown button." };
   const tab = field(form, "tab") || "lobby";
   return backToTab(req, tab, scrub(r.message), r.ok ? undefined : ERR, tab.includes(":") ? undefined : "waiting");

@@ -71,7 +71,15 @@ export type EnvKey =
   | "CREW_SHEET_SHARE_EMAILS"
   | "CREW_SHEET_HOOK_SECRET"
   | "BLUESKY_HANDLE"
-  | "BLUESKY_APP_PASSWORD";
+  | "BLUESKY_APP_PASSWORD"
+  // Approved emails from the SwiftCard mailbox (src/lib/crew/email).
+  | "CREW_EMAIL_LIVE"
+  | "CREW_EMAIL_FROM"
+  | "CREW_EMAIL_FROM_NAME"
+  | "CREW_EMAIL_DAILY_CAP"
+  | "CREW_EMAIL_POSTAL_ADDRESS"
+  | "CREW_GMAIL_CLIENT_ID"
+  | "CREW_GMAIL_CLIENT_SECRET";
 
 export type Schedule =
   | { kind: "every"; minutes: number }

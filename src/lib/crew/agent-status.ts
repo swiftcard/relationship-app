@@ -80,6 +80,13 @@ const NEEDS: Record<EnvKey, string> = {
   CREW_SHEET_HOOK_SECRET: "the Google Sheets connection",
   BLUESKY_HANDLE: "the Bluesky connection",
   BLUESKY_APP_PASSWORD: "the Bluesky connection",
+  CREW_EMAIL_LIVE: "the email connection",
+  CREW_EMAIL_FROM: "the email connection",
+  CREW_EMAIL_FROM_NAME: "the email connection",
+  CREW_EMAIL_DAILY_CAP: "the email connection",
+  CREW_EMAIL_POSTAL_ADDRESS: "the email connection",
+  CREW_GMAIL_CLIENT_ID: "the email connection",
+  CREW_GMAIL_CLIENT_SECRET: "the email connection",
 };
 
 /** Missing settings, as words: "the Stripe connection", "the Reddit connection and the Claude connection". */

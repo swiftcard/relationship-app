@@ -15,6 +15,7 @@
 
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { decryptToken, encryptToken } from "@/lib/token-crypto";
+import { gmailClient } from "@/lib/crew/env";
 
 export type AgentProvider = "x" | "meta" | "youtube" | "linkedin" | "pinterest";
 export const AGENT_PROVIDERS: AgentProvider[] = ["x", "meta", "youtube", "linkedin", "pinterest"];
@@ -25,8 +26,9 @@ export const AGENT_PROVIDERS: AgentProvider[] = ["x", "meta", "youtube", "linked
  * The calendar is deliberately NOT an AgentProvider, so loadConnections and
  * the agents' Connections panel never list it; the demo code reads its own row.
  */
-export type OwnerConnectProvider = AgentProvider | "google_calendar";
-export const OWNER_CONNECT_PROVIDERS: OwnerConnectProvider[] = [...AGENT_PROVIDERS, "google_calendar"];
+export type OwnerConnectProvider = AgentProvider | "google_calendar" | "google_gmail";
+/** google_gmail (2026-11-04): the SwiftCard mailbox that approved outreach emails are sent from (lib/crew/email). Not an AgentProvider either. */
+export const OWNER_CONNECT_PROVIDERS: OwnerConnectProvider[] = [...AGENT_PROVIDERS, "google_calendar", "google_gmail"];
 
 export function isOwnerConnectProvider(p: string): p is OwnerConnectProvider {
   return (OWNER_CONNECT_PROVIDERS as string[]).includes(p);
@@ -57,6 +59,9 @@ export function providerAppConfigured(p: OwnerConnectProvider): boolean {
     // Workspace, so the consent screen can be Internal and refresh tokens
     // don't die after 7 days). Falls back to the sign-in client if unset.
     // The demo calendar uses the same owner-only client, for the same reason.
+    case "google_gmail":
+      // Its own Internal client (CREW_GMAIL_CLIENT_*), never the YouTube/sign-in one.
+      return !!(gmailClient().id && gmailClient().secret);
     case "youtube":
     case "google_calendar":
       return !!(youtubeClient().id && youtubeClient().secret);
