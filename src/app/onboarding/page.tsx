@@ -20,7 +20,7 @@ function accountHandle(email: string | undefined, userId: string): string {
 export default async function OnboardingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; intent?: string }>;
+  searchParams: Promise<{ next?: string }>;
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -28,36 +28,30 @@ export default async function OnboardingPage({
 
   // Only honour a same-origin relative redirect (no open-redirect). Used to send
   // a brand-new signup back to the guest editor so their pending draft is claimed.
-  const { next, intent } = await searchParams;
+  const { next } = await searchParams;
   const safeNext = safeNextPath(next);
 
   const { data: profile } = await supabase.from("profiles").select("id").eq("id", user.id).single();
 
   if (!profile) {
-    // Task 4: they tried to SIGN IN (intent=signin, set by the Google button on
-    // the Sign-in tab) but have no SwiftCard account yet. Don't silently create
-    // one — sign them out and bounce to Create-account with a clear message. Any
-    // other path (create-account, a claimed guest draft, an office-team invite,
-    // an email-confirmation link) has no signin intent and provisions normally.
-    // …unless a TEAM INVITE is waiting for this address: the invitee who
-    // installs the app and taps "Continue with Google/Apple" on the Sign-in tab
-    // has no account yet by design (their admin only invited them). Turning
-    // them away sent them in a loop; provision and take them to Join instead
-    // (inviteLanding below). (2026-09-16 journey audit.)
-    if (intent === "signin" && !(await findPendingInviteForEmail(user.email, user.id))) {
-      try { await supabase.auth.signOut(); } catch { /* best-effort */ }
-      // Preserve a same-origin continuation (e.g. a guest's card-draft claim) so
-      // it survives the bounce and resumes once they create the account.
-      redirect(`/login?error=no_account${safeNext ? `&next=${encodeURIComponent(safeNext)}` : ""}`);
-    }
+    // A brand-new person who tapped "Continue with Google/Apple" on the SIGN-IN
+    // tab is provisioned like any other new account and goes on to build their
+    // card (below). Owner, 2026-11-04: they used to be signed out here and told
+    // "You don't have an account yet" (Task 4, 2026-07-24). Sign in is the tab
+    // the app opens on, so that is where new people tap Google — 8 of the 15
+    // real sign-ups from 2026-10-02 to 11-04 were bounced, all in the Android
+    // app, and none of the 8 ever finished a card. The sign-out could not even
+    // clear the session cookie (a Server Component cannot write cookies), so it
+    // left a dead login behind on the phone for up to an hour. The `intent`
+    // the sign-in buttons still send is deliberately not read here any more.
+    // Pinned by tests/get-started-review.test.ts.
 
     const admin = getAdminSupabase();
 
     // SwiftCard is open to everyone — anyone who authenticates (email/password
     // OR Google/Apple) and has no profile yet gets one provisioned here. There is
-    // NO signup invite code / invite-only gate. (The Task-4 "you don't have an
-    // account" check runs earlier, in the auth callback, only for a SIGN-IN
-    // attempt — a genuine Create-account flow always provisions.)
+    // NO signup invite code / invite-only gate, and no "you don't have an
+    // account" bounce for a sign-in tap either (see above).
     // Card slugs and profile handles share ONE public namespace (/<slug>
     // resolves against both), and getOwnerUsernames treats a profile's handle as
     // an owned slug. Minting this handle without checking the cards table meant a

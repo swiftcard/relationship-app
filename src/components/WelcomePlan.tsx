@@ -82,7 +82,11 @@ export default function WelcomePlan({
   const android = useIsAndroidApp();
   // undefined = not read yet (avoids a hydration flash); null = no stored choice.
   const [intent, setIntent] = useState<PlanIntent | null | undefined>(undefined);
-  const [loading, setLoading] = useState<"free" | PaidPlan | null>(null);
+  // "gift" is the friend's free month starting — its own value, so the Pro
+  // card ("Loading…") and the checkout button ("Redirecting to checkout…")
+  // don't claim a checkout is under way while it starts, and the gift button
+  // doesn't say "Starting…" while a Pro checkout is.
+  const [loading, setLoading] = useState<"free" | PaidPlan | "gift" | null>(null);
   const [error, setError] = useState("");
   // Asked only when there is something to lose; see chooseFree.
   const [pendingFreeConfirm, setPendingFreeConfirm] = useState(false);
@@ -199,7 +203,7 @@ export default function WelcomePlan({
   // "Start my free month of Pro" — the referral gift. No payment: the server
   // verifies the gift is still pending and starts the month.
   async function startGiftMonth() {
-    setLoading("pro");
+    setLoading("gift");
     setError("");
     try {
       const res = await fetch("/api/account/choose-plan", {
@@ -233,7 +237,7 @@ export default function WelcomePlan({
   const offerTrial = trialEligible && !referralGift;
 
   const giftPanel = referralGift ? (
-    <ReferralGiftPanel onStart={startGiftMonth} busy={loading !== null} starting={loading === "pro"} />
+    <ReferralGiftPanel onStart={startGiftMonth} busy={loading !== null} starting={loading === "gift"} />
   ) : null;
 
   const paidIntent = intent && (intent.plan === "pro" || intent.plan === "office") ? intent : null;
@@ -397,6 +401,12 @@ export default function WelcomePlan({
                 Checkout was cancelled and nothing was charged. Your selection is saved — continue whenever you&apos;re ready.
               </p>
             )}
+            {/* A friend's free month stays on offer here too. Backing out of
+                Stripe lands on this panel (the cancel URL carries plan=), and
+                it used to drop the gift: the referred person was shown full
+                price with no trial, and "start on the free plan instead" then
+                spent the gift for good (2026-11-04 review). */}
+            {giftPanel}
             <h2 className="text-white font-bold text-xl">Complete your {planName} subscription</h2>
             {/* The 14-day trial is the offer /pricing sold them. It used to show
                 only in the fine print, under "Pay securely with Stripe to
@@ -413,7 +423,9 @@ export default function WelcomePlan({
               className="sc-dark-sheet mt-5 w-full py-3.5 rounded-full text-sm font-bold text-white transition-colors disabled:opacity-50"
               style={{ background: "var(--rd-aurora)" }}
             >
-              {loading ? "Redirecting to checkout…" : `Continue to secure checkout →`}
+              {/* Only a checkout says it is redirecting — not Free saving
+                  ("Actually, start on the free plan instead") or the gift. */}
+              {loading === "pro" || loading === "office" ? "Redirecting to checkout…" : `Continue to secure checkout →`}
             </button>
             <p className="mt-3 text-[0.6875rem] leading-relaxed text-gray-500">
               {paidIntent.plan === "pro" && trialEligible ? `${TRIAL_DAYS} days free for new customers · card required · renews automatically. ` : ""}
@@ -451,6 +463,14 @@ export default function WelcomePlan({
               onIapPurchased={goFree}
               busy={loading !== null}
             />
+            {/* "Keep my card exactly like this" buys Pro with whatever code is
+                applied. A code that doesn't fit (Office only, annual only) is
+                refused by checkout INTO this box, and without the box on
+                screen the button just stopped, silently (2026-11-04 review).
+                Web only and only with a code in play, like the chooser's. */}
+            {!native && promo.state.status !== "none" && (
+              <PromoCodeBox className="mt-5 text-center" promo={promo} busy={loading !== null} onContinueWithoutCode={continueWithoutCode} />
+            )}
             {/* No "← Back" (owner, 2026-09-18). Once Free is picked on a card
                 that uses Pro design there are two ways on, and only two: keep
                 the card exactly as built (the trial), or continue with Free

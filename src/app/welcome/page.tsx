@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase-server";
 import { getAdminSupabase } from "@/lib/supabase-admin";
-import { isPaidPlan, describeFreeDesignChanges, proLinkFeaturesInUse, PLAN_LIMITS } from "@/lib/plan";
+import { describeFreeDesignChanges, proLinkFeaturesInUse, PLAN_LIMITS } from "@/lib/plan";
+import { isPaidProfile, PLAN_COLUMNS } from "@/lib/effective-plan";
 import type { PlanIntent } from "@/lib/plan-intent";
 import type { CardLink } from "@/components/card-templates/types";
 import WelcomePlan from "@/components/WelcomePlan";
@@ -45,24 +46,30 @@ export default async function WelcomePage({
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("plan, customization")
+    .select(PLAN_COLUMNS)
     .eq("id", user.id)
     .single();
+  // The plan RIGHT NOW (an expired timed grant is Free), exactly as
+  // /dashboard reads it. With the raw `plan` here, an account whose free month
+  // had run out before the daily cron caught it, and that had never chosen a
+  // plan, bounced forever: /dashboard said Free → /welcome, and /welcome said
+  // "pro" → /dashboard (2026-11-04 review).
+  const paid = isPaidProfile(profile);
 
   // A team member never chooses a plan — their seat IS the plan. Someone with
   // an open invite for this address who built a card first (the app's "Get
   // Started") goes to Join, not to "choose your plan". (2026-09-16 audit.)
-  if (!isPaidPlan(profile?.plan)) {
+  if (!paid) {
     const invite = await findPendingInviteForEmail(user.email, user.id);
     if (invite) redirect(`/join/${encodeURIComponent(invite.token)}`);
   }
 
   // Back from paying: the "card is live" setup step (notifications, the app),
   // then on to their plan's home. Anyone else already paid skips this page.
-  const setupFor = sp.step === "setup" && isPaidPlan(profile?.plan) ? (sp.for === "office" ? "office" : "pro") : null;
+  const setupFor = sp.step === "setup" && paid ? (sp.for === "office" ? "office" : "pro") : null;
   // tour=1 only (not welcome=1): welcome=1 re-opened the "Your account is
   // ready, get the app" popup for accounts that had already seen it.
-  if (isPaidPlan(profile?.plan) && !setupFor) redirect("/dashboard?tour=1");
+  if (paid && !setupFor) redirect("/dashboard?tour=1");
 
   // Free, and the plan is already chosen: the choice is made. Pressing Back
   // from the dashboard landed here and offered "Choose your plan" all over
@@ -71,7 +78,7 @@ export default async function WelcomePage({
   // coming back from a cancelled checkout (canceled=1). Upgrading otherwise
   // lives on /upgrade.
   const planChosen = !!(profile?.customization as { _planChosen?: unknown } | null)?._planChosen;
-  if (!isPaidPlan(profile?.plan) && planChosen && !officeTier && sp.canceled !== "1" && !sp.plan) redirect("/dashboard");
+  if (!paid && planChosen && !officeTier && sp.canceled !== "1" && !sp.plan) redirect("/dashboard");
 
   // WHAT FREE WOULD COST THEM, worked out server-side so the choice can be
   // honest at the moment it is made.

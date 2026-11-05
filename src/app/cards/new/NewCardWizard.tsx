@@ -1093,27 +1093,34 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
   // the homepage (which wiped the draft on load) but dropped a visitor into
   // step 3 of an old card from /pricing or /blog. Now no entry point wipes and
   // none resumes silently: the builder asks, once, whenever real work exists.
-  function restoreDraft(draft: GuestDraft) {
+  // `entryWins`: the ?name= (homepage hero box) and ?template= ("Apply this
+  // design") this page was opened with beat the draft ONLY on a fresh entry —
+  // "Continue your card", answered seconds after clicking that link. On a
+  // silent resume (reload, Back, the login return, the LinkedIn photo return)
+  // the same params are still in the URL, and letting them win put the name
+  // and template back to what was typed on the homepage over everything the
+  // person had changed since (2026-11-04 review).
+  function restoreDraft(draft: GuestDraft, entryWins = false) {
     const p = (draft.payload ?? {}) as Record<string, unknown>;
     const cust = (p.customization ?? {}) as Record<string, unknown>;
       const s = (v: unknown) => (typeof v === "string" ? v : "");
-      setName(heroName || s(p.name));
+      setName(entryWins ? (heroName || s(p.name)) : (s(p.name) || heroName));
       setCompany(s(p.company));
       setTitle(s(p.title));
       setEmail(s(p.email));
       setWebsite(s(p.website));
       // `label` is the nickname the user typed; `username` is derived from
       // name+company, so it rebuilds itself and must not be restored.
-      setNickname(s(p.label) === s(p.name) ? "" : s(p.label));
+      setNickname(typeof p.nickname === "string" ? p.nickname : s(p.label) === s(p.name) ? "" : s(p.label));
       setSocials({
         linkedin: s(p.linkedin), instagram: s(p.instagram), tiktok: s(p.tiktok),
         twitter: s(p.twitter), facebook: s(cust.facebook), snapchat: s(cust.snapchat),
         youtube: s(cust.youtube),
       });
-      // A ?template= from "Apply this design" is an explicit choice made
-      // seconds ago, so it beats whatever design a resumed draft happens to
-      // carry. Everything else in the draft is still restored.
-      if (typeof p.template === "string" && !validPresetTemplate && !(!customDesignAvailable && p.template === "custom")) setTemplate(p.template);
+      // On a fresh entry, a ?template= from "Apply this design" is an explicit
+      // choice made seconds ago, so it beats whatever design the draft
+      // carries. Everything else in the draft is still restored.
+      if (typeof p.template === "string" && p.template && !(entryWins && validPresetTemplate) && !(!customDesignAvailable && p.template === "custom")) setTemplate(p.template);
       setBio(s(cust.bio));
       setFax(s(cust.fax));
       if (Array.isArray(cust.links)) setLinks(cust.links as CardLink[]);
@@ -1156,7 +1163,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
 
   function continueDraft() {
     if (!resumeChoice) return;
-    restoreDraft(resumeChoice);
+    restoreDraft(resumeChoice, true);
     // They chose the card they already had; a sketch from the homepage builders
     // would overwrite it, so it is dropped rather than mixed in.
     heldPrefillRef.current = null;
@@ -1232,10 +1239,23 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
     // Step 5 is "Your card is live!" — the card exists. Saving here would put
     // the finished card straight back as an "unfinished" one.
     if (step >= 5) return;
+    // Same once the card has been CREATED but the step never moves: the paths
+    // that leave for checkout or /welcome right after creating (Get Pro / Get
+    // Office, the first-card plan gate, the referral month) stay on step 4
+    // while the navigation runs. This effect re-runs on every render
+    // (cleanPhones is rebuilt each time), so it wrote the live card back under
+    // a NEW draft id seconds after drafts.clear() — and the next "+ Add card"
+    // offered "Continue your card", which made a second copy (2026-11-04
+    // review).
+    if (createdUsername) return;
     drafts.save({
       step,
       payload: {
-        username, label: cardLabel, name, company, title,
+        // `nickname` is what was typed in the box. `label` (nickname, else the
+        // name) is what the claim stores, and it cannot tell "left blank" from
+        // "typed the name itself", so a nickname equal to the name came back
+        // empty and "Create card" bounced to step 1. The claim ignores it.
+        username, label: cardLabel, nickname, name, company, title,
         phone: primaryPhone, email, website,
         linkedin: normalizeSocial(socials.linkedin, "linkedin"),
         instagram: normalizeSocial(socials.instagram, "instagram"),
@@ -1265,9 +1285,9 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
         ...(headshotUrl ? { photo: headshotUrl } : {}),
       },
     });
-  }, [guest, keepsDraft, drafts, step, username, cardLabel, name, company, title, primaryPhone, email, website,
+  }, [guest, keepsDraft, drafts, step, createdUsername, username, cardLabel, name, company, title, primaryPhone, email, website,
       socials, template, bio, links, address, cleanPhones, fax, templateStyleState,
-      linkStyleState, customLayout, logoUrl, headshotUrl, showCardLinkBtn, logoShape]);
+      linkStyleState, customLayout, logoUrl, headshotUrl, showCardLinkBtn, logoShape, nickname]);
 
   /**
    * `design` overrides the design state for THIS save.

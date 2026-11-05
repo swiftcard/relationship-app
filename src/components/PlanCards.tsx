@@ -42,7 +42,9 @@ type PlanCardsProps = {
   trialEligible?: boolean;
   onFree: () => void;
   onPaid: (plan: PaidPlan, annual: boolean, seats: number) => void;
-  busy?: "free" | PaidPlan | null;
+  /** What is in flight. "gift" (a friend's free month, starting) names no
+   *  card, so it only disables them — it must not read as a Pro checkout. */
+  busy?: "free" | PaidPlan | "gift" | null;
   freeLabel?: string;
   /** Native only: continue the caller's flow after an In-App Purchase
    *  succeeds (entitlement already synced). Default reloads the page. */
@@ -227,7 +229,7 @@ function NativePlanChooser({
   initialPromo,
 }: {
   onFree: () => void;
-  busy: "free" | PaidPlan | null;
+  busy: "free" | PaidPlan | "gift" | null;
   freeLabel: string;
   trialEligible: boolean;
   initialTier: PlanTier;

@@ -63,8 +63,11 @@ describe("/welcome after the plan is chosen", () => {
   const p = code("src/app/welcome/page.tsx");
 
   it("a Free account that already chose goes to its dashboard — Back offered the chooser again", () => {
-    expect(p).toMatch(/\.select\("plan, customization"\)/);
-    expect(p).toMatch(/if \(!isPaidPlan\(profile\?\.plan\) && planChosen && !officeTier && sp\.canceled !== "1" && !sp\.plan\) redirect\("\/dashboard"\)/);
+    // PLAN_COLUMNS carries customization (where _planChosen lives) and the
+    // columns the effective plan needs (2026-11-04: same read as /dashboard).
+    expect(p).toMatch(/\.select\(PLAN_COLUMNS\)/);
+    expect(p).toContain("const paid = isPaidProfile(profile);");
+    expect(p).toMatch(/if \(!paid && planChosen && !officeTier && sp\.canceled !== "1" && !sp\.plan\) redirect\("\/dashboard"\)/);
   });
 
   it("the choice itself never reloads the page, so \"Your card is live!\" still shows", () => {

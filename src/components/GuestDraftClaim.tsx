@@ -180,10 +180,23 @@ export default function GuestDraftClaim() {
           >
             Try again
           </button>
-          {/* Leaves the draft exactly where it is; /cards/new restores it. */}
+          {/* Leaves the draft exactly where it is; /cards/new restores it.
+              Keeps the rest of the builder URL (a plan, interval, seats and
+              promo picked on /pricing) and drops only claim=1, which is what
+              stops this screen coming straight back. A bare /cards/new made a
+              /pricing buyer choose the plan again and lost their code. */}
           <button
             type="button"
-            onClick={() => { setPhase("hidden"); router.replace("/cards/new"); }}
+            onClick={() => {
+              setPhase("hidden");
+              // Only the builder's own URL carries a plan; this screen also
+              // runs on /dashboard and a card's edit page.
+              const onBuilder = window.location.pathname === "/cards/new";
+              const keep = new URLSearchParams(onBuilder ? window.location.search : "");
+              keep.delete("claim");
+              const qs = keep.toString();
+              router.replace(`/cards/new${qs ? `?${qs}` : ""}`);
+            }}
             className="mt-3 w-full text-gray-400 hover:text-white text-xs font-medium py-2 transition-colors"
           >
             Back to my card

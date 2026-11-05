@@ -145,7 +145,11 @@ describe("office invite App Store badge", () => {
 
   it("the paths that make the app door safe are in place", () => {
     const read = (f: string) => readFileSync(join(process.cwd(), f), "utf8");
-    expect(read("src/app/onboarding/page.tsx")).toContain('intent === "signin" && !(await findPendingInviteForEmail(user.email, user.id))');
+    // A brand-new invitee who taps Google/Apple on the app's Sign in tab is
+    // provisioned (no "no account" bounce since 2026-11-04) and sent to Join.
+    const onboarding = read("src/app/onboarding/page.tsx");
+    expect(onboarding).not.toContain("error=no_account");
+    expect(onboarding).toContain("(await inviteLanding(user.email, user.id)) ?? \"/cards/new?add=1\"");
     expect(read("src/app/welcome/page.tsx")).toContain("if (invite) redirect(`/join/${encodeURIComponent(invite.token)}`)");
     expect(read("src/components/JoinSignIn.tsx")).toContain("if (native) {");
     expect(read("src/components/JoinButton.tsx")).toContain("/cards/${json.firstCardId}/edit?joined=1");

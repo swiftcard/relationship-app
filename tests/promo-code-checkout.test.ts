@@ -119,9 +119,11 @@ describe("wiring", () => {
     // /welcome: a new account paying here had nowhere to type a code. The
     // box is in BOTH places a purchase starts — the "Complete your Pro
     // subscription" panel and under the plan cards — and the applied code
-    // is what the checkout request carries.
+    // is what the checkout request carries. The third is "Before you go
+    // Free", whose "Keep my card exactly like this" is a Pro checkout too: a
+    // code refused there must show why (2026-11-04, get-started-review).
     const welcome = read("src/components/WelcomePlan.tsx");
-    expect(welcome.match(/<PromoCodeBox/g)?.length).toBe(2);
+    expect(welcome.match(/<PromoCodeBox/g)?.length).toBe(3);
     expect(welcome).toContain("...(code ? { promoCode: code } : {})");
     expect(welcome).toContain("const code = opts?.withoutPromo ? undefined : promo.appliedCode;");
     // A refusal at checkout is shown, never a silent full price.
