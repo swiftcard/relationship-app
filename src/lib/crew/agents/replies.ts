@@ -289,11 +289,12 @@ export const instagramComments: AgentDef = {
       label: (c) => `Instagram comment${c.author ? ` on @${c.author}` : ""}: ${c.title.slice(0, 70)}`,
       person: (c) => (c.author ? { platform: "instagram", handle: c.author } : null),
       async find() {
-        const pasted = fromInputs(await ctx.store.takeInputs(["instagram"], 10, ctx.def.id), "instagram");
-        // Since 2026-10-29 it searches too (it only had pasted posts, and so wrote almost nothing).
+        // Paste a Post's Instagram rows belong to Instagram LinkedIn Bio (post
+        // links) and Instagram DMs (profiles) since 2026-11-04; taking them here
+        // as well would race them for the same rows (2026-11-05). It searches.
         const [[who, where]] = await rotate(ctx, "where_i", pairs(PROFESSIONS, US_METROS), 1);
         const web = (await searchPlatform(ctx, "instagram", [`recent public Instagram posts (instagram.com/p/ or /reel/ links) by ${who} in ${where} about their work. No law firms.`])).map((w) => ({ ...w, author: w.author ? w.author.replace(/^@/, "") : null, promoAllowed: true }));
-        return [...pasted, ...web];
+        return web;
       },
     });
     return { summary: `${r.summary}${follow ? ` ${follow}` : ""}` };
