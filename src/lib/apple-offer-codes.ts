@@ -44,6 +44,30 @@ export { appleOfferPlan, appleCodeStatus, appleWebOnlyReason, type AppleOfferPla
 // inline price ids must be written "${local-id}", and the redemption count
 // has bounds. Both are pinned in tests/apple-offer-codes-asc.test.ts.
 
+// ── The offer's name, and reading it back ───────────────────────────────────
+//
+// Each Apple offer is named "SwiftCard <CODE>" (its reference name in App Store
+// Connect). The customer types the CUSTOM code, but what a redemption reports
+// back — RevenueCat's offer_code — is the OFFER's name. Seen live 2026-11-04:
+// the owner redeemed SWIFTNYC and the webhook looked up "SWIFTCARD SWIFTNYC",
+// found no such code, and counted nothing. Every Apple redemption since
+// 2026-10-08 went uncounted that way: no per-person row, no use against a cap.
+// Both directions live here so the name and its reading can't drift apart.
+const OFFER_NAME_PREFIX = "SwiftCard ";
+
+/** The App Store Connect reference name of a SwiftCard code's Apple offer. */
+export function appleOfferName(code: string | null | undefined): string {
+  return `${OFFER_NAME_PREFIX}${code ?? ""}`.slice(0, 64);
+}
+
+/** The SwiftCard code an Apple redemption names: the offer's name
+ *  ("SwiftCard SWIFTNYC") or, should Apple ever send it, the custom code. */
+export function promoCodeFromAppleOffer(raw: string): string {
+  const s = raw.trim().toUpperCase();
+  const prefix = OFFER_NAME_PREFIX.toUpperCase();
+  return s.startsWith(prefix) ? s.slice(prefix.length).trim() : s;
+}
+
 const API = "https://api.appstoreconnect.apple.com/v1";
 const APP_ID = process.env.ASC_APP_ID?.trim() || process.env.NEXT_PUBLIC_APP_STORE_ID?.trim() || "6798875872";
 
@@ -124,7 +148,7 @@ export async function mirrorPromoToApple(promo: PromoForApple): Promise<{ ok: bo
   // otherwise hand out uses the website no longer has.
   if (promoUsedUp(promo)) return { ok: false, error: "This code has no redemptions left." };
   const admin = getAdminSupabase();
-  const name = `SwiftCard ${promo.code}`.slice(0, 64);
+  const name = appleOfferName(promo.code);
   try {
     const subId = await subscriptionId(plan.productId);
     // FIND before CREATE. A run that made the offer but failed on its custom
@@ -235,7 +259,8 @@ export async function recordAppleRedemption(
   admin: SupabaseClient,
   input: { code: string; userId: string },
 ): Promise<"counted" | "already_counted" | "unknown_code" | "cap_reached"> {
-  const code = input.code.toUpperCase().trim();
+  // RevenueCat sends the offer's NAME ("SwiftCard SWIFTNYC"), not the code.
+  const code = promoCodeFromAppleOffer(input.code);
   const { data: promo } = await admin
     .from("promo_codes")
     .select("id, code, max_uses, uses_count, apple_offer_code_id")

@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { appleOfferPlan } from "@/lib/apple-offer-codes";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { appleOfferName, appleOfferPlan, promoCodeFromAppleOffer, recordAppleRedemption } from "@/lib/apple-offer-codes";
 
 // Owner, 2026-10-02: a new account in the iPhone app typed a "two months free"
 // code (DEMISHA), the box said it applied, the Pro button opened Apple's plain
@@ -237,5 +238,76 @@ describe("redemptions are one count across the website and Apple", () => {
   it("the app is never offered Apple for a code with nothing left", () => {
     const lib = read("src/lib/apple-offer-codes.ts");
     expect(lib).toMatch(/export function appleRedeemable[\s\S]*!promoUsedUp\(promo\)/);
+  });
+});
+
+// Owner, 2026-11-04: SWIFTNYC redeemed through Apple, Pro granted — and the
+// webhook looked up the code "SWIFTCARD SWIFTNYC". RevenueCat's offer_code is
+// the Apple OFFER's name ("SwiftCard <CODE>", set by mirrorPromoToApple), not
+// the custom code typed. Nothing matched, so no Apple redemption since
+// 2026-10-08 was counted: no per-person row, no use against a cap.
+describe("an Apple redemption is counted against the code it names", () => {
+  interface FakeQuery {
+    select(cols?: string): FakeQuery | Promise<{ data: { id: string }[] }>;
+    eq(col: string, val: unknown): FakeQuery;
+    is(col: string, val: unknown): FakeQuery;
+    maybeSingle(): Promise<{ data: Record<string, unknown> | null }>;
+    insert(row: Record<string, unknown>): Promise<{ error: null }>;
+    update(patch: Record<string, unknown>): FakeQuery;
+  }
+  function fakeAdmin(promos: Record<string, unknown>[]) {
+    const lookedUp: string[] = [];
+    const rows: Record<string, unknown>[] = [];
+    const counted: Record<string, unknown>[] = [];
+    const admin = {
+      from(table: string): FakeQuery {
+        const filters: Array<[string, unknown]> = [];
+        let patch: Record<string, unknown> | null = null;
+        const q: FakeQuery = {
+          select: () => (patch ? (counted.push(patch), Promise.resolve({ data: [{ id: "won" }] })) : q),
+          eq: (col, val) => {
+            if (table === "promo_codes" && col === "code") lookedUp.push(String(val));
+            filters.push([col, val]);
+            return q;
+          },
+          is: (col, val) => (filters.push([col, val]), q),
+          maybeSingle: async () => ({ data: promos.find((p) => filters.every(([c, v]) => p[c] === v)) ?? null }),
+          insert: async (row) => (rows.push({ table, ...row }), { error: null }),
+          update: (p) => ((patch = p), q),
+        };
+        return q;
+      },
+    };
+    return { admin: admin as unknown as SupabaseClient, lookedUp, rows, counted };
+  }
+
+  it("reads the offer's name back to the SwiftCard code, and the code itself unchanged", () => {
+    expect(promoCodeFromAppleOffer("SwiftCard SWIFTNYC")).toBe("SWIFTNYC");
+    expect(promoCodeFromAppleOffer("SWIFTCARD SWIFTNYC")).toBe("SWIFTNYC");
+    expect(promoCodeFromAppleOffer(" swiftcard demisha ")).toBe("DEMISHA");
+    expect(promoCodeFromAppleOffer("SWIFTNYC")).toBe("SWIFTNYC");
+    // A code that itself starts with SWIFTCARD keeps it.
+    expect(promoCodeFromAppleOffer("SwiftCard SWIFTCARDWALLET")).toBe("SWIFTCARDWALLET");
+    expect(promoCodeFromAppleOffer("SWIFTCARDWALLET")).toBe("SWIFTCARDWALLET");
+    for (const code of ["SWIFTNYC", "DEMISHA", "ALIGNABLE", "SWIFTCARDWALLET", "TEST"]) {
+      expect(promoCodeFromAppleOffer(appleOfferName(code))).toBe(code);
+    }
+  });
+
+  it("the offer is created under the same name the redemption is read back from", () => {
+    const lib = read("src/lib/apple-offer-codes.ts");
+    expect(lib).toContain("const name = appleOfferName(promo.code);");
+    expect(lib).not.toMatch(/`SwiftCard \$\{promo\.code\}`/);
+    const fn = lib.slice(lib.indexOf("export async function recordAppleRedemption"), lib.indexOf("export async function mirrorPendingPromosToApple"));
+    expect(fn).toContain("promoCodeFromAppleOffer(input.code)");
+  });
+
+  it("the webhook's offer_code 'SwiftCard SWIFTNYC' records one redemption and claims one use of SWIFTNYC", async () => {
+    const SWIFTNYC = { id: "promo-nyc", code: "SWIFTNYC", max_uses: null, uses_count: 0, apple_offer_code_id: "offer-nyc" };
+    const fake = fakeAdmin([SWIFTNYC]);
+    await expect(recordAppleRedemption(fake.admin, { code: "SwiftCard SWIFTNYC", userId: "u1" })).resolves.toBe("counted");
+    expect(fake.lookedUp).toEqual(["SWIFTNYC"]);
+    expect(fake.rows).toEqual([expect.objectContaining({ table: "promo_code_redemptions", code_id: "promo-nyc", user_id: "u1" })]);
+    expect(fake.counted).toEqual([{ uses_count: 1 }]);
   });
 });
