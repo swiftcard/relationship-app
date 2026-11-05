@@ -51,7 +51,7 @@ jobs:
       BASE: https://swiftcard.me
       HEALTH_BASE_URL: https://swiftcard.me
       # The owner's personal card (see uptime.yml — same list, same reason).
-      HEALTH_REAL_CARDS: "aaronlavi-2"
+      HEALTH_REAL_CARDS: "aaronlavi"
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

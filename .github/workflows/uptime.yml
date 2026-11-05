@@ -63,10 +63,13 @@ jobs:
           # generic shell) for an unknown slug, so only the vCard endpoint tells
           # the truth:  curl -s -o /dev/null -w '%{http_code}\n' \
           #               https://swiftcard.me/api/card/<slug>/vcard   # 200 = real
-          # 2026-11-04: the owner's personal card. The two before it
+          # 2026-11-05: the owner's personal card. The two before it
           # (aaronlavi-malvecapital, aaronlavi-nadlanhomesllc) were on an
-          # account the owner deleted and had wiped; vcard verified 200.
-          HEALTH_REAL_CARDS: "aaronlavi-2"
+          # account the owner deleted and had wiped; the new card was then
+          # moved from aaronlavi-2 to aaronlavi (old address redirects).
+          # vcard verified 200. The vcard check matches the CURRENT address
+          # only, so if this card's URL ever changes, change it here too.
+          HEALTH_REAL_CARDS: "aaronlavi"
           # Reads push-catchup.yml / trial-notice.yml run history (audit N-21).
           GITHUB_TOKEN: ${{ github.token }}
           # Office demo booking: /api/demo/tick?status=1 (reminders on time,

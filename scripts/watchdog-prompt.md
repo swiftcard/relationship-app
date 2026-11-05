@@ -27,7 +27,7 @@ to edit the schedule.
 Run exactly this:
 
 ```bash
-HEALTH_REAL_CARDS=aaronlavi-2 node scripts/health-check.mjs
+HEALTH_REAL_CARDS=aaronlavi node scripts/health-check.mjs
 ```
 
 It prints JSON with `healthy`, `failedCount` and a `results` array. It is
