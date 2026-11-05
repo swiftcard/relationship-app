@@ -134,6 +134,21 @@ export class LiveGmail implements GmailTransport {
     return t.ok ? { ok: true, email: t.email } : t;
   }
 
+  /**
+   * Proof the stored connection works, not just that a row exists: refreshes
+   * the access token when it is due (so a dead refresh token shows here) and
+   * asks Gmail which mailbox it is (users.getProfile, allowed by
+   * gmail.metadata; reads no message). Sends nothing.
+   */
+  async verify(): Promise<GmailAccount> {
+    const t = await token();
+    if (!t.ok) return t;
+    const p = await get(t.token, "/profile");
+    if (!p) return { ok: false, reason: "unavailable", detail: "Gmail didn't answer the mailbox check" };
+    const email = String(p.emailAddress ?? "").toLowerCase();
+    return email ? { ok: true, email } : { ok: false, reason: "unavailable", detail: "Gmail named no mailbox" };
+  }
+
   async send(raw: string): Promise<SendOutcome> {
     const t = await token();
     if (!t.ok) return { ok: false, definite: true, status: null, message: `the mailbox isn't connected (${t.reason})` };

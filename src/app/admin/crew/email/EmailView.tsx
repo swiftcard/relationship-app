@@ -8,7 +8,7 @@ import { Badge, btn, card, input } from "../ui";
 
 // ── The Email page ──────────────────────────────────────────────────────────
 // Top to bottom: is the mailbox ready, emails waiting for you (read, edit,
-// Send), Web Leads that have an email written (Review as email), and what was
+// Send), Web Leads ready to email (Review as email), and what was
 // sent with what came back. Every button is a plain form post, so it works
 // before hydration and nothing lands in a URL.
 
@@ -36,7 +36,7 @@ function Setup({ config, account, tableReady, used }: { config: Config; account:
     { ok: config.app !== false, text: config.app !== false ? "Mailbox app (Internal Google client) is set." : "Set CREW_GMAIL_CLIENT_ID and CREW_GMAIL_CLIENT_SECRET in Vercel (the Internal Google Cloud project's OAuth client)." },
     {
       ok: connected,
-      text: connected ? `Mailbox connected: ${config.mailbox}.` : account.ok ? `Connected as ${account.email}, which isn't ${config.mailbox}. Connect again as ${config.mailbox}.` : `Connect ${config.mailbox} (${account.reason === "not_connected" ? "not connected yet" : `needs attention: ${account.reason}`}).`,
+      text: connected ? `Mailbox connected and answering: Gmail confirmed ${config.mailbox} just now.` : account.ok ? `Connected as ${account.email}, which isn't ${config.mailbox}. Connect again as ${config.mailbox}.` : `Connect ${config.mailbox} (${account.reason === "not_connected" ? "not connected yet" : `needs attention: ${account.reason}${account.detail ? `, ${account.detail}` : ""}`}).`,
     },
     { ok: config.postal, text: config.postal ? "Postal address set for the footer." : "Set CREW_EMAIL_POSTAL_ADDRESS in Vercel (US law wants it in outreach email)." },
     { ok: config.live, text: config.live ? "Live: Send really sends." : "Dry run: Send records what would go and sends nothing. CREW_EMAIL_LIVE=1 turns sending on." },
@@ -79,6 +79,7 @@ function DraftCard({ a, send, config }: { a: Approval; send?: EmailSend; config:
         {a.status === "approved" && <Badge tone="green">Approved</Badge>}
         {send && <Badge tone={STATUS[send.status].tone}>{STATUS[send.status].label}</Badge>}
         {problems.length > 0 && <Badge tone="amber">Needs a look</Badge>}
+        {a.meta?.starter === true && <Badge tone="amber">Starter: make it yours</Badge>}
       </div>
       <div>
         <p className="text-white font-semibold text-[0.9375rem] break-words">{scrub(a.title)}</p>
@@ -124,7 +125,7 @@ function LeadCard({ l }: { l: LeadRow }) {
       <div className="min-w-0">
         <p className="text-white text-sm font-medium break-words">{[l.name, l.company].filter(Boolean).join(", ") || l.email}</p>
         <p className="text-gray-400 text-xs break-words">
-          {l.email} · {subject}
+          {l.email} · {subject || "starter email around the detail from their site"}
         </p>
       </div>
       <form method="post" action={FORM}>
@@ -208,7 +209,7 @@ export default function EmailView(p: {
 
       <section className={`${card} space-y-2`} aria-labelledby="email-leads">
         <h2 id="email-leads" className="text-white font-semibold">
-          Web Leads with an email written ({p.leads.length})
+          Web Leads ready to email ({p.leads.length})
         </h2>
         <p className="text-gray-400 text-xs">Review as email makes a draft you can read and edit. Nothing is sent until you press Send on it.</p>
         {p.leads.length === 0 ? <p className="text-gray-400 text-sm">None right now.</p> : <ul>{p.leads.map((l) => <LeadCard key={l.id} l={l} />)}</ul>}

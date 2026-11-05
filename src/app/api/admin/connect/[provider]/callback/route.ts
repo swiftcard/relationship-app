@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/admin";
-import { isOwnerConnectProvider, saveConnection } from "@/lib/agent-connections";
+import { isOwnerConnectProvider, justConnected, saveConnection } from "@/lib/agent-connections";
 import { bindCookie, connectReturnUrl, describeAccount, exchangeCode, pkceCookie, usesPkce } from "@/lib/agent-connect-oauth";
 import { stateBoundToBrowser, verifyState } from "@/lib/oauth-state";
 
@@ -48,6 +48,14 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ provider: s
     if (!ok) return done(false, `${provider}: connected, but saving failed — run supabase/agent-connections.sql`);
     return done(true, `${provider}:${acct.account_label ?? "connected"}`);
   } catch (e) {
+    // The same code delivered twice (the browser repeats the callback request):
+    // the first request already exchanged it and saved the connection, and
+    // Google answers the second with invalid_grant. Report what actually
+    // happened: connected, if this admin's connection was saved moments ago.
+    if (/invalid_grant/.test(String(e))) {
+      const just = await justConnected(provider, user.email ?? null);
+      if (just) return done(true, `${provider}:${just}`);
+    }
     console.warn(`[agent-connect/${provider}] failed:`, String(e).slice(0, 300));
     return done(false, `${provider}: ${String(e instanceof Error ? e.message : e).slice(0, 160)}`);
   }

@@ -305,8 +305,40 @@ describe("Web Leads become drafts, never emails", () => {
     expect((await draftFromLead(s1.store, s1.lead.id, "o")).ok).toBe(false);
     const s2 = await withLead({ email_status: "No Mail Server" });
     expect((await draftFromLead(s2.store, s2.lead.id, "o")).ok).toBe(false);
-    const s3 = await withLead({ message: "Hi Ana, quick question about your team." });
+    const s3 = await withLead({ message: "" });
     expect((await draftFromLead(s3.store, s3.lead.id, "o")).ok).toBe(false);
+    const s4 = await withLead({ message: "Nice site." });
+    expect((await draftFromLead(s4.store, s4.lead.id, "o")).ok).toBe(false);
+  });
+  it("a lead with only an opener line becomes a starter draft around it, flagged for the owner to make their own", async () => {
+    const opener = "Your 4.9-rated San Diego cleaning company with over 1,000 Google reviews stood out to me.";
+    const { store, lead } = await withLead({ message: opener });
+    expect(await readyLeads(store, [])).toHaveLength(1);
+    const r = await draftFromLead(store, lead.id, "owner");
+    expect(r.ok).toBe(true);
+    const [d] = await emailDrafts(store);
+    expect(d.meta).toMatchObject({ starter: true, lead_id: lead.id });
+    expect(d.body.startsWith("Subject: Cards for Clean Co\n\nHi Ana,\n\n" + opener)).toBe(true);
+    expect(d.body).toMatch(/sample card with your branding/);
+    expect(d.body.trim().endsWith("Menash")).toBe(true);
+    expect(d.body).not.toMatch(/[\u2013\u2014]/);
+    expect(draftProblems(d.body, "ana@cleanco.com")).toEqual([]);
+  });
+  it("an older whole short note keeps its own words: greeting on its own line, signed, no second pitch", async () => {
+    const note = "Hi Dora, I saw Service Star has managed Phoenix rentals since 2011. We give each of your managers a branded digital card owners and tenants can save. Could I show you?";
+    const { store, lead } = await withLead({ message: note });
+    await draftFromLead(store, lead.id, "owner");
+    const [d] = await emailDrafts(store);
+    expect(d.body).toBe("Subject: Cards for Clean Co\n\nHi Dora,\n\nI saw Service Star has managed Phoenix rentals since 2011. We give each of your managers a branded digital card owners and tenants can save. Could I show you?\n\nMenash");
+    expect(d.meta.starter).toBe(true);
+    expect(draftProblems(d.body, "ana@cleanco.com")).toEqual([]);
+  });
+  it("a whole written email is used exactly as written, not wrapped", async () => {
+    const { store, lead } = await withLead();
+    await draftFromLead(store, lead.id, "owner");
+    const [d] = await emailDrafts(store);
+    expect(d.body).toBe(BODY);
+    expect(d.meta.starter).toBeUndefined();
   });
 });
 
@@ -440,6 +472,28 @@ describe("who can send", () => {
       expect(read(f)).not.toMatch(/from "\.\.?\/(agents|schedule|budget|tick)/);
       expect(read(f)).not.toMatch(/patchAgentState|updateSettings|setControl|schedule_overrides/);
     }
+  });
+});
+
+describe("the connection is proven, and a repeated callback isn't an error", () => {
+  const read = (p: string) => readFileSync(p, "utf8");
+  it("the Email page asks Gmail itself (verify → users.getProfile), not just the stored row", () => {
+    expect(read("src/app/admin/crew/email/page.tsx")).toMatch(/gmail\.verify\(\)/);
+    const g = read("src/lib/crew/email/gmail.ts");
+    expect(g).toMatch(/async verify\(\)[\s\S]*?await token\(\)[\s\S]*?"\/profile"/);
+  });
+  it("invalid_grant after this admin's connection was saved seconds ago reads as connected; anything else stays an error", () => {
+    const cb = read("src/app/api/admin/connect/[provider]/callback/route.ts");
+    expect(cb).toMatch(/invalid_grant[\s\S]*?justConnected\(provider, user\.email/);
+    // the three gates still come first
+    expect(cb.indexOf("verifyState(state)")).toBeLessThan(cb.indexOf("justConnected("));
+    const ac = read("src/lib/agent-connections.ts");
+    expect(ac).toMatch(/connected_by !== by\) return null/);
+    expect(ac).toMatch(/age < 120_000/);
+    expect(/justConnected[\s\S]*?select\("account_label, connected_by, connected_at"\)/.test(ac)).toBe(true);
+  });
+  it("a Web Leads email is not cut at 400 characters (a 100-word email is longer)", () => {
+    expect(read("src/lib/crew/leads/assess.ts")).toMatch(/a\.opener\.slice\(0, o\.office \? 400 : 1500\)/);
   });
 });
 

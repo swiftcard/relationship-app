@@ -106,7 +106,7 @@ export async function assessSites(ctx: AgentContext, sites: SiteForAssess[], o: 
       used.add(a.i);
       const words = (s: unknown) => typeof s === "string" ? s.slice(0, 400) : "";
       const people = a.people.filter((p) => p && typeof p.name === "string" && typeof p.title === "string").slice(0, 4).map((p) => ({ name: words(p.name), title: words(p.title), email: words(p.email), phone: words(p.phone) }));
-      result.push({ i: batch[a.i].i, fit: Math.max(0, Math.min(40, a.fit)), people, why: words(a.why), hook: words(a.hook), opener: words(a.opener), talking_point: words(a.talking_point) });
+      result.push({ i: batch[a.i].i, fit: Math.max(0, Math.min(40, a.fit)), people, why: words(a.why), hook: words(a.hook), opener: typeof a.opener === "string" ? a.opener.slice(0, o.office ? 400 : 1500) : "", talking_point: words(a.talking_point) });
     }
   }
   return result;
