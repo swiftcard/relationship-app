@@ -727,11 +727,15 @@ export default function SaveContactButton({
                 to Contacts" screen with every field filled AND dismissing it
                 leaves the visitor on the full SwiftCard, free to keep
                 scrolling. Pointing straight at the .vcf gave them the
-                contact and then a blank page. */}
+                contact and then a blank page.
+                It carries THIS visit's source, not "qr_code": the person
+                came by your signature or a link and moved to their phone —
+                they never scanned a QR you showed or printed, and "QR code
+                scan" (and the Office "scans" column) said they had. */}
             <div className="flex justify-center">
               <MiniQR
                 size={196}
-                url={`${typeof window !== "undefined" ? window.location.origin : "https://swiftcard.me"}/${encodeURIComponent(username ?? cardOwner ?? "")}?save=1&source=qr_code`}
+                url={`${typeof window !== "undefined" ? window.location.origin : "https://swiftcard.me"}/${encodeURIComponent(username ?? cardOwner ?? "")}?save=1&source=${encodeURIComponent(source)}`}
               />
             </div>
 

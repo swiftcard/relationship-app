@@ -132,10 +132,11 @@ export function cardEventNotice(input: {
 
   if (eventType === "viewed_card") {
     // Swift Links and the card are different surfaces and an owner shares them
-    // for different reasons, so the notification says which one was opened.
-    // source === "swift_links" kept for events from clients that predate the
-    // explicit surface field.
-    const isLinks = input.surface === "links" || source === "swift_links";
+    // for different reasons, so the notification says which one was opened —
+    // from the SURFACE only. The source names where the visitor came from: a
+    // card visit tapped through from Swift Links carries source "swift_links"
+    // and is a CARD view (the old source fallback would have said otherwise).
+    const isLinks = input.surface === "links";
     const surfaceLabel = isLinks ? "your Swift Links" : "your card";
     // Both fit the 40-character lock-screen title budget (push-policy.ts), so
     // neither gets trimmed mid-word.

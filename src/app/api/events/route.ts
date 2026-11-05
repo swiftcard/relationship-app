@@ -4,6 +4,7 @@ import { clientIp } from "@/lib/client-ip";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { createClient } from "@/lib/supabase-server";
 import { isAdminEmail } from "@/lib/admin";
+import { isTestMailbox } from "@/lib/test-mailbox";
 import { EVENTS, type EventName } from "@/lib/events";
 import { isLikelyBot } from "@/lib/bot-detection";
 
@@ -104,7 +105,10 @@ export async function POST(req: NextRequest) {
         const supabase = await createClient();
         const { data: { user } } = await supabase.auth.getUser();
         const email = user?.email?.toLowerCase() ?? "";
-        if (email && (isAdminEmail(email) || email === "demo@swiftcard.me")) isInternal = true;
+        // …or a QA throwaway mailbox, exactly as the server sink labels it
+        // (lib/server-events). Without it the nightly QA accounts' browser
+        // events counted as real people on the admin funnel.
+        if (email && (isAdminEmail(email) || email === "demo@swiftcard.me" || isTestMailbox(email))) isInternal = true;
       } catch {
         // No session, or auth unreachable: treat as ordinary traffic. Failing
         // open here mislabels at worst one event as real; failing closed would

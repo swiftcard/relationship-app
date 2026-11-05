@@ -160,12 +160,22 @@ export async function POST(req: NextRequest) {
     // and cross-checked against a second IP database, so two sources that
     // disagree on the town report the state they share instead.
     //
-    // resolveGeo, not resolveLocation: it returns the same label PLUS how much
+    // resolveGeo returns the label PLUS how much
     // of it is real, so the contact panel can say "Near Great Neck, NY" or
     // "New York (approximate)" instead of printing a state-level guess under a
     // map pin next to a phone number the person actually typed in.
     const geo = await resolveGeo(req, ip);
-    const location = geo.label;
+    // ── A share the offline outbox kept and is only now delivering ──────────
+    // lib/offline-outbox.ts stamps when it really happened, exactly as for a
+    // view (api/card-events — same trust rule: in the outbox's 7-day life,
+    // never in the future). Filed at that time, with no place: the network it
+    // arrives on is wherever the phone was hours later. Without this the
+    // contact said "shared at 6pm" for a 2pm share, their capture visit fell
+    // outside their history, and the place was the drive home.
+    const queuedAt = Number(req.headers.get("x-sc-queued-at"));
+    const replayAt = Number.isFinite(queuedAt) && queuedAt > 0 && queuedAt < Date.now() - 5000 && Date.now() - queuedAt <= 7 * 24 * 3600 * 1000
+      ? queuedAt : null;
+    const location = replayAt ? null : geo.label;
 
     const admin = getAdminSupabase();
 
@@ -254,24 +264,53 @@ export async function POST(req: NextRequest) {
       const sameBrowser = await isKnownBrowserOf(admin, known as { id: string; visitor_id?: string | null }, visitor_id);
       const fill = sameBrowser ? sameContactFill(known, { email, company, message }) : null;
       if (fill) {
-        await admin.from("leads").update(fill).eq("id", known.id);
+        // A NEW MESSAGE IS ITS OWN LINE IN THE CONVERSATION, at the time it was
+        // sent. Appended to leads.message it showed inside the first share's
+        // bubble, under the first share's date — a note written today dated
+        // last week. Kept in leads.message only if the thread can't take it.
+        const { message: _merged, ...fieldFill } = fill;
+        const newNote = "message" in fill && typeof message === "string" ? message.trim() : "";
+        let noteForCrm: string | null = null;
+        if (newNote) {
+          const { data: sentBefore } = await admin.from("lead_messages").select("id")
+            .eq("lead_id", known.id).eq("direction", "in").eq("body", newNote).limit(1);
+          if (!sentBefore?.length) {
+            const { error: noteErr } = await admin.from("lead_messages").insert({
+              lead_id: known.id,
+              card_owner,
+              direction: "in",
+              channel: "form",
+              body: newNote,
+              created_at: new Date(replayAt ?? Date.now()).toISOString(),
+            });
+            if (noteErr) (fieldFill as Record<string, string>).message = _merged as string;
+            else noteForCrm = newNote;
+          }
+        }
+        if (Object.keys(fieldFill).length) await admin.from("leads").update(fieldFill).eq("id", known.id);
         // What they just added belongs in the CRM too — it only ever reached
         // SwiftCard's own row. Update mode against the record their first
         // share created, filling blanks only (changedFields is left unset, so
         // nothing a salesperson typed in the CRM is overwritten). Same paid
-        // gate as a new capture, inside syncLeadToAllCrms.
+        // gate as a new capture, inside syncLeadToAllCrms. The note attached is
+        // the NEW message, not the first share's again.
         const knownId = known.id as string;
-        after(async () => {
-          const loaded = await loadCrmLead(knownId).catch(() => null);
-          if (loaded) await syncLeadToAllCrms(loaded.lead, loaded.capturedBy, { mode: "update", attachNote: "message" in fill });
-        });
+        const addsNote = !!noteForCrm || "message" in fieldFill;
+        if (addsNote || Object.keys(fieldFill).length) {
+          after(async () => {
+            const loaded = await loadCrmLead(knownId).catch(() => null);
+            if (!loaded) return;
+            const lead = noteForCrm ? { ...loaded.lead, message: noteForCrm } : loaded.lead;
+            await syncLeadToAllCrms(lead, loaded.capturedBy, { mode: "update", attachNote: addsNote });
+          });
+        }
       }
       // Refreshes the binding of a browser that is already theirs. A NEW
       // browser is never bound from a typed phone number: that is the device
       // identity a stranger could otherwise take over.
       if (sameBrowser && !(await isOwnerRequest(admin, card_owner).catch(() => false))) {
         after(
-          bindFormDevice(admin, { leadId: known.id as string, ownerId: ownerProfile.id as string, visitorId: visitor_id, email, phone })
+          bindFormDevice(admin, { leadId: known.id as string, ownerId: ownerProfile.id as string, visitorId: visitor_id, email, phone, at: replayAt })
             .catch((e) => reportError("leads.bindFormDevice", e)),
         );
       }
@@ -312,7 +351,8 @@ export async function POST(req: NextRequest) {
         location: location || null,
         // Added by supabase/analytics-accuracy.sql; the insert below degrades
         // without it so a lead is never lost to an unapplied migration.
-        geo_accuracy: geo.accuracy,
+        geo_accuracy: replayAt ? null : geo.accuracy,
+        ...(replayAt ? { created_at: new Date(replayAt).toISOString() } : {}),
         card_owner,
         // New reach-outs arrive unread; over the free monthly cap they're also
         // tagged locked so the dashboard blurs them behind Pro. NO sms-ok /
@@ -361,7 +401,7 @@ export async function POST(req: NextRequest) {
       const leadId = insertedLead.id as string;
       const ownerId = ownerProfile.id as string;
       after(
-        bindFormDevice(admin, { leadId, ownerId, visitorId: visitor_id, email, phone })
+        bindFormDevice(admin, { leadId, ownerId, visitorId: visitor_id, email, phone, at: replayAt })
           .catch((e) => reportError("leads.bindFormDevice", e)),
       );
     }

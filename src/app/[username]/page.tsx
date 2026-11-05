@@ -12,6 +12,7 @@ import LeadCaptureForm from "@/components/LeadCaptureForm";
 import CardEventTracker from "@/components/CardEventTracker";
 import OfflineCardSaver from "@/components/OfflineCardSaver";
 import ScanSaveContact from "@/components/ScanSaveContact";
+import CleanShareUrl from "@/components/CleanShareUrl";
 import ShareButton from "@/components/ShareButton";
 import SocialLinkIntercept from "@/components/SocialLinkIntercept";
 import CardActionLinks from "@/components/CardActionLinks";
@@ -400,6 +401,9 @@ export default async function CardPage({
           ),
         }}
       />
+      {/* After the props above have read them: ?source=/save/shared leave the
+          address bar, so a copied link is the plain card link. */}
+      <CleanShareUrl />
       {!isEmbed && !isOwnerView && <CardEventTracker username={profile.username} source={source} />}
       {/* Keeps this card on the phone so it opens again with no signal (public/sw.js). */}
       {!isEmbed && (
@@ -487,8 +491,10 @@ export default async function CardPage({
               cardPageTheme keeps the accent dark enough for white text, so it
               is just as readable as text on white. */}
           <div className="flex mb-3">
+            {/* Tagged, so the Swift Links visit says it came from this card
+                (and the address bar drops the tag on arrival, CleanShareUrl). */}
             <a
-              href={`/links/${profile.username}`}
+              href={`/links/${profile.username}?source=swift_card`}
               className="inline-flex items-center gap-1 rounded-full border bg-white px-3.5 py-[7px] text-xs font-semibold transition-colors hover:bg-[color-mix(in_srgb,var(--sc-accent,#1D4ED8)_8%,#fff)]"
               style={{ borderColor: "var(--sc-accent, #1D4ED8)", color: "var(--sc-accent, #1D4ED8)" }}
             >

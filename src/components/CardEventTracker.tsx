@@ -110,13 +110,38 @@ export default function CardEventTracker({
     let visibleSince: number | null = document.visibilityState === "visible" ? performance.now() : null;
     let viewKnown = false;
     let lastSent = 0;
+    // ONE VISIT, SEVERAL PAGE LOADS. A reload, or coming back to the card in
+    // the same tab, inside the visit is the SAME view on the server — and the
+    // route only raises the stored time, so 2 minutes then 3 read "3m". The
+    // visit's time so far rides in sessionStorage (this tab only, so two open
+    // tabs never double it) and each load adds its own to it — only while the
+    // visit's view is surely still the one the server holds.
+    const carryKey = `sc_dwell:${viewSurface === "links" ? `${username}__links` : username}`;
+    let carryMs = 0;
+    let visitViewAt: number | null = null;
+    try {
+      const prev = JSON.parse(sessionStorage.getItem(carryKey) ?? "null") as { viewAt?: unknown; ms?: unknown } | null;
+      if (prev && typeof prev.viewAt === "number" && typeof prev.ms === "number" && Date.now() - prev.viewAt < VIEW_VISIT_WINDOW_MS - 60_000) {
+        carryMs = prev.ms;
+        visitViewAt = prev.viewAt;
+      }
+    } catch {
+      /* no storage: each load reports its own time, as before */
+    }
     const flush = () => {
       if (visibleSince != null) {
         visibleMs += performance.now() - visibleSince;
         visibleSince = null;
       }
-      const seconds = Math.round(visibleMs / 1000);
-      if (!viewKnown || seconds < 1 || seconds <= lastSent) return;
+      if (!viewKnown) return;
+      const totalMs = carryMs + visibleMs;
+      try {
+        sessionStorage.setItem(carryKey, JSON.stringify({ viewAt: visitViewAt ?? Date.now(), ms: totalMs }));
+      } catch {
+        /* nothing to carry */
+      }
+      const seconds = Math.round(totalMs / 1000);
+      if (seconds < 1 || seconds <= lastSent) return;
       lastSent = seconds;
       sendDwell({ card_owner_username: username, surface: viewSurface, seconds });
     };
@@ -160,6 +185,7 @@ export default function CardEventTracker({
         // Already recorded in this visit (a remount, a back-navigation): the
         // view exists, so this page's time on screen still belongs to it.
         viewKnown = true;
+        if (visitViewAt == null) visitViewAt = last;
         return;
       }
       lastFired.set(viewsKey, Date.now());
@@ -194,8 +220,11 @@ export default function CardEventTracker({
         }),
       }).catch(() => {});
       viewKnown = true;
+      // A carry older than this visit's window was dropped above, so a view
+      // posted now with no carry starts a fresh visit clock.
+      if (visitViewAt == null) visitViewAt = Date.now();
 
-      // No second POST to /api/views: the event route records the card_views
+      // One POST: the event route records the card_views
       // row itself (lib/record-view.ts) so the chart and the notification are
       // decided by ONE request with ONE dedupe key.
     };

@@ -1295,13 +1295,15 @@ export default async function DashboardPage({
                         trend line was removed at the owner's request; the counts
                         themselves are unchanged, and so is everything below. */}
                     <div className="grid grid-cols-2 gap-3">
+                      {/* A head count comes back null only when the read failed:
+                          "—", never a confident 0 the card didn't earn. */}
                       {[
-                        { label: "SwiftCard views", value: swiftCardViews ?? 0 },
-                        { label: "Swift Links views", value: swiftLinkViews ?? 0 },
+                        { label: "SwiftCard views", value: swiftCardViews },
+                        { label: "Swift Links views", value: swiftLinkViews },
                       ].map((m) => (
                         <div key={m.label} className="bg-gray-800/40 border border-gray-800 rounded-xl px-4 py-3.5 min-w-0">
                           <p className="text-gray-400 text-xs font-medium truncate">{m.label}</p>
-                          <p className="text-2xl font-bold text-white tabular-nums mt-0.5">{m.value.toLocaleString("en-US")}</p>
+                          <p className="text-2xl font-bold text-white tabular-nums mt-0.5">{m.value == null ? "—" : m.value.toLocaleString("en-US")}</p>
                         </div>
                       ))}
                     </div>
@@ -1337,7 +1339,10 @@ export default async function DashboardPage({
                     a tap: no empty strip at the bottom of the box, and nothing
                     claims a confident zero for a card whose links predate
                     tracking. */}
-                {linkTaps > 0 && (
+                {/* Not on Locations: that tab is all time and the tap count
+                    is the Today/Week/Month window's, so "3" under "all time"
+                    was really today's taps. */}
+                {linkTaps > 0 && viewsRange !== "locations" && (
                   <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-800/70 text-[0.6875rem]">
                     <span className="text-gray-500">Link taps <span className="text-gray-200 font-semibold tabular-nums">{linkTaps.toLocaleString("en-US")}</span></span>
                   </div>

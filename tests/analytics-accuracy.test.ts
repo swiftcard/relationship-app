@@ -194,7 +194,8 @@ describe("the confidence actually reaches storage and the screen", () => {
     expect(read("src/app/api/card-events/route.ts")).toMatch(/geo_accuracy: geo\.accuracy/);
     // A lead's location is the one inferred line on a panel of things the
     // contact typed in themselves.
-    expect(read("src/app/api/leads/route.ts")).toMatch(/geo_accuracy: geo\.accuracy/);
+    // (Null for an offline-outbox replay, which records no place at all.)
+    expect(read("src/app/api/leads/route.ts")).toMatch(/geo_accuracy: replayAt \? null : geo\.accuracy/);
   });
 
   it("an unmigrated column loses the qualifier, never the row", () => {
@@ -263,9 +264,8 @@ describe("a Swift Links event stops being erased by the card event beside it", (
 
   it("the conversation timeline names the surface it reads", () => {
     const contacts = read("src/components/ContactsClient.tsx");
-    expect(contacts).toMatch(/"Viewed your Swift Links"/);
-    expect(contacts).toMatch(/viewed your Swift Links/);
-    expect(route).toMatch(/let cols = `\$\{WANT\}, surface, target`/);
+    expect(contacts).toMatch(/"viewed your Swift Links"/);
+    expect(route).toContain('const cols = "id, event_type, source, created_at, surface, target, target_label, lead_confidence, card_owner_username";');
   });
 });
 
@@ -460,7 +460,8 @@ describe("outbound link taps are finally counted — and counted honestly", () =
     expect(dash).toMatch(/\.eq\("event_type", "clicked_link"\)/);
     // Omitted until there IS one: a confident zero on a card whose links predate
     // tracking would read as "nobody taps my links".
-    expect(dash).toMatch(/\{linkTaps > 0 && \(/);
+    // Not on Locations, which is all time while the count is the window's.
+    expect(dash).toMatch(/\{linkTaps > 0 && viewsRange !== "locations" && \(/);
     // And the contact's timeline names the link.
     expect(read("src/components/ContactsClient.tsx")).toMatch(/tapped your \$\{e\.target\} link/);
   });

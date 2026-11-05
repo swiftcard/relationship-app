@@ -186,7 +186,6 @@ async function view(opts: {
       deviceKey: deviceKeyFor({ ip, userAgent: ua, username: SLUG }),
       source: opts.source ?? "direct_link",
       ip,
-      identityFromCookie: opts.fromCookie ?? false,
       identityMinted: opts.minted ?? opts.visitorId === null,
     });
   } finally {
@@ -323,12 +322,16 @@ describe("one page visit that fires several tracking calls", () => {
     expect(viewRows()[0].device_key).toMatch(/^[0-9a-f]{32}$/);
   });
 
-  it("upgrades the source in place rather than adding a row, when the scan arrives second", async () => {
+  // 2026-10-23: a visit keeps the way it ARRIVED. The old "upgrade" turned a
+  // card-link visit into "Swift Signature" (or "QR code scan") when the same
+  // person opened a tagged link inside the window — card_views said one thing
+  // and the visit's card_events row another.
+  it("keeps the arrival source when a tagged link arrives second, and adds no row", async () => {
     await view({ visitorId: "visitor-alpha", source: "direct_link" });
-    const { outcome } = await view({ visitorId: "visitor-alpha", source: "qr_scan" });
+    const { outcome } = await view({ visitorId: "visitor-alpha", source: "email_signature" });
     expect(outcome).toBe("deduped");
     expect(viewRows()).toHaveLength(1);
-    expect(viewRows()[0].source).toBe("qr_scan");
+    expect(viewRows()[0].source).toBe("direct_link");
   });
 });
 
@@ -527,7 +530,6 @@ describe("the pipeline is wired the way the tests assume", () => {
   const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
   const recordSrc = read("src/lib/record-view.ts");
   const eventsSrc = read("src/app/api/card-events/route.ts");
-  const viewsSrc = read("src/app/api/views/[username]/route.ts");
   const identitySrc = read("src/lib/visit-identity.ts");
 
   it("the ingest route that records resolves the identity server-side and sets the cookie", () => {
@@ -541,6 +543,7 @@ describe("the pipeline is wired the way the tests assume", () => {
   // spot and a way to fabricate views at any public slug (the browser-side
   // human gate cannot apply to a direct POST). It must stay inert.
   it("the retired /api/views records nothing and logs that it was called", () => {
+    const viewsSrc = read("src/app/api/views/[username]/route.ts");
     expect(viewsSrc).not.toMatch(/recordView\(/);
     expect(viewsSrc).toMatch(/logIngest\(/);
     expect(viewsSrc).toMatch(/retired_endpoint/);
@@ -601,7 +604,6 @@ describe("the pipeline is wired the way the tests assume", () => {
     expect(recordSrc).toMatch(/if \(!recent && deviceKey && identityMinted\) recent = await recentBy\("device_key", deviceKey\);/);
     expect(recordSrc).toMatch(/identityMinted = false/);
     expect(eventsSrc).toMatch(/identityMinted: visitIdentity\.minted/);
-    expect(eventsSrc).toMatch(/identityFromCookie: !visitIdentity\.setCookie/);
     expect(recordSrc).toMatch(/device_key: identityMinted \? deviceKey : null/);
   });
 

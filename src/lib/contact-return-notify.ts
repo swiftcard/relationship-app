@@ -66,13 +66,23 @@ function firstName(full: string): string {
   return (full.trim().split(/\s+/)[0] || "Your contact").slice(0, 24);
 }
 
-/** "met at RE/MAX Summit" when the owner said where; otherwise the day. */
-export function metContext(contact: Pick<KnownContact, "whereMet" | "capturedAt">): string | null {
+/**
+ * "met at RE/MAX Summit" when the owner said where; otherwise the day — on the
+ * OWNER's calendar. In UTC, a contact met at 8:30 PM in New York read "met
+ * Oct 21" while their history said Oct 20.
+ */
+export function metContext(contact: Pick<KnownContact, "whereMet" | "capturedAt">, timeZone?: string | null): string | null {
   const where = (contact.whereMet ?? "").trim();
   if (where) return `met at ${where.slice(0, 40)}`;
   const at = new Date(contact.capturedAt);
   if (Number.isNaN(at.getTime())) return null;
-  return `met ${at.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`;
+  let zone = "UTC";
+  try {
+    zone = timeZone ? new Intl.DateTimeFormat("en-US", { timeZone }).resolvedOptions().timeZone : "UTC";
+  } catch {
+    /* an unknown zone: UTC, as before */
+  }
+  return `met ${at.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: zone })}`;
 }
 
 export function contactReturnNotice(input: {
@@ -84,8 +94,17 @@ export function contactReturnNotice(input: {
   /** Distinct visits by this contact in the last 7 days, this one included. */
   visitsThisWeek: number;
   paid: boolean;
+  /** They had opened THIS page before this visit. False for a contact the
+   *  owner typed in who opens the link they were sent for the first time —
+   *  "re-opened" would claim a visit that never happened. */
+  openedBefore?: boolean;
+  /** They had downloaded the contact card before ("…again"). */
+  downloadedBefore?: boolean;
+  /** The owner's timezone, for the "met Oct 20" date. */
+  timeZone?: string | null;
 }): ContactReturnNotice | null {
   const { contact, eventType, surface, visitsThisWeek, paid } = input;
+  const opened = input.openedBefore === false ? "opened" : "re-opened";
   const full = contact.name || "Your contact";
   const first = markName(firstName(full));
   const fullMarked = markName(full);
@@ -103,7 +122,7 @@ export function contactReturnNotice(input: {
     };
   }
 
-  const context = metContext(contact);
+  const context = metContext(contact, input.timeZone);
   const visits = visitsThisWeek >= 2 ? `${ordinal(visitsThisWeek)} visit this week` : null;
 
   if (eventType === "viewed_card") {
@@ -113,8 +132,8 @@ export function contactReturnNotice(input: {
     ].filter(Boolean).join(" · ");
     return {
       type: "contact_returned",
-      title: `${first} re-opened your ${page}`,
-      body: `${fullMarked}${context ? ` (${context})` : ""} re-opened your ${page}${visits ? ` — ${visits}` : ""}.`,
+      title: `${first} ${opened} your ${page}`,
+      body: `${fullMarked}${context ? ` (${context})` : ""} ${opened} your ${page}${visits ? ` — ${visits}` : ""}.`,
       // Pro: who, from where you met, how often. Free: the fact, and a reason
       // to open the app — never a price, never "upgrade" (iOS shell rule).
       pushBody: paid ? lock || "Tap to see their activity" : "Open SwiftCard to see who",
@@ -128,7 +147,7 @@ export function contactReturnNotice(input: {
     return {
       type: "contact_engaged",
       title: `${first} tapped your ${link} link`,
-      body: `${fullMarked}${context ? ` (${context})` : ""} re-opened your ${page} and tapped your ${link} link.`,
+      body: `${fullMarked}${context ? ` (${context})` : ""} ${opened} your ${page} and tapped your ${link} link.`,
     };
   }
 
@@ -137,7 +156,7 @@ export function contactReturnNotice(input: {
   return {
     type: "contact_saved",
     title: `${first} downloaded your contact card`,
-    body: `${fullMarked} downloaded your contact card again.`,
+    body: `${fullMarked} downloaded your contact card${input.downloadedBefore === false ? "" : " again"}.`,
     ...(mayPush ? { pushCategory: "contact_saved" as const } : {}),
   };
 }

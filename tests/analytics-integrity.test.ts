@@ -98,10 +98,8 @@ describe("a recorded view is a real visit", () => {
     // The second opinion is looked up by IP and nothing else — a confidence
     // level must never come from something the client said.
     expect(geo).not.toMatch(/body\?\.(geo|location|accuracy)/);
-    // Only the ROUTE parses the body; the recorder receives already-validated fields.
-    const routeOnly = read("src/app/api/views/[username]/route.ts");
-    const body = routeOnly.slice(routeOnly.indexOf("const body ="), routeOnly.indexOf("recordView({"));
-    expect(body, "location must not be read off the request body").not.toMatch(/location/);
+    // The recorder never takes a place from the request body either.
+    expect(read("src/lib/record-view.ts"), "location must not be read off the request body").not.toMatch(/body\??\.location/);
   });
 
   it("does not store the visitor's IP with the view", () => {

@@ -866,8 +866,10 @@ export default function SwiftLinkProfile({
               the Social design step (hideCardLink in customization). */}
           {showCardLink && (
             <div className="flex justify-center mt-10">
+              {/* Tagged: the card visit came from Swift Links, not a plain
+                  card link. */}
               <a
-                href={`/${username}`}
+                href={`/${username}?source=swift_links`}
                 className={`inline-block px-4 py-2 text-xs rounded-lg transition-colors ${"" /* hover well must be visible on BOTH modes */}${light ? "hover:bg-black/[0.06]" : "hover:bg-white/10"}`}
                 style={{ color: textColor, opacity: 0.5 }}
               >

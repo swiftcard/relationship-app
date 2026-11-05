@@ -37,7 +37,8 @@ describe("Wrong person?", () => {
   });
 
   it("takes the contact off that visit's events, so their history and score stop counting it", () => {
-    expect(src).toMatch(/from\("card_events"\)\.update\(\{ lead_id: null, lead_confidence: null \}\)/);
+    // The name stamped on them goes too, or Recent visits kept naming the visit.
+    expect(src).toMatch(/from\("card_events"\)\.update\(\{ lead_id: null, lead_confidence: null, visitor_name: null, visitor_email: null, visitor_phone: null \}\)/);
     expect(src).toMatch(/from\("card_views"\)\.update\(\{ lead_id: null \}\)/);
   });
 

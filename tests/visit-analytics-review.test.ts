@@ -20,7 +20,7 @@ describe("1. a visit that was only a contact download is counted", () => {
 
   it("the later view is the 2nd visit, not another 1st", () => {
     const [later, saveOnly] = buildRecentVisits({ events, history, leads: [], paid: true, limit: 5 });
-    expect(saveOnly).toMatchObject({ id: "save", visitNumber: 1, actions: ["Saved your contact"] });
+    expect(saveOnly).toMatchObject({ id: "save", visitNumber: 1, actions: ["Downloaded your contact card"] });
     expect(later).toMatchObject({ id: "view", visitNumber: 2, actions: [] });
   });
 

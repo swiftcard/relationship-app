@@ -30,6 +30,8 @@ function table(name: string) {
     neq(c: string, v: unknown) { filters.push((r) => r[c] !== v); return q; },
     is(c: string, v: unknown) { filters.push((r) => (r[c] ?? null) === v); return q; },
     in(c: string, vs: unknown[]) { filters.push((r) => vs.includes(r[c])); return q; },
+    gte(c: string, v: unknown) { filters.push((r) => String(r[c]) >= String(v)); return q; },
+    lte(c: string, v: unknown) { filters.push((r) => String(r[c]) <= String(v)); return q; },
     update(p: Row) { op = "update"; patch = p; return q; },
     upsert(row: Row, opts: { onConflict: string }) {
       op = "upsert";
@@ -63,7 +65,9 @@ beforeEach(() => {
     contact_devices: [],
     leads: [],
     profiles: [{ id: OWNER, email: "owner@example.com", phone: "+1 (917) 555-0100" }],
-    cards: [{ user_id: OWNER, email: "dana@acme.com", phone: "917-555-0199" }],
+    cards: [{ user_id: OWNER, username: "dana-lee", email: "dana@acme.com", phone: "917-555-0199" }],
+    card_events: [],
+    card_views: [],
   };
 });
 
@@ -170,6 +174,48 @@ describe("binding the browser that submitted the form", () => {
     expect(await resolveKnownContact(admin, { ownerId: OWNER, visitorId: "ipad" })).toMatchObject({ kind: "known", leadId: "sam" });
   });
 
+  // 2026-10-23: the visit they shared in becomes THEIR data, not a window
+  // recomputed at read time that a re-share or a second person could move.
+  const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
+  const event = (id: string, at: string, extra: Row = {}) =>
+    db.card_events.push({ id, card_owner_username: "dana-lee", visitor_id: "ipad", event_type: "viewed_card", created_at: at, lead_id: null, ...extra });
+
+  it("stamps the visit that led to the share with the new contact", async () => {
+    lead("priya", { email: "priya@example.com" });
+    event("before", ago(20));
+    event("long-ago", ago(180));
+    event("someone-else", ago(10), { visitor_id: "other-phone" });
+    db.card_views.push({ id: "cv", username: "dana-lee__links", visitor_id: "ipad", viewed_at: ago(15), lead_id: null });
+    await bindFormDevice(admin, { leadId: "priya", ownerId: OWNER, visitorId: "ipad", email: "priya@example.com", phone: null });
+    const byId = Object.fromEntries(db.card_events.map((e) => [e.id, e]));
+    expect(byId.before).toMatchObject({ lead_id: "priya", lead_confidence: "form" });
+    expect(byId["long-ago"].lead_id).toBeNull();
+    expect(byId["someone-else"].lead_id).toBeNull();
+    expect(db.card_views[0].lead_id).toBe("priya");
+  });
+
+  it("a second person sharing on the same device takes the visit before THEIR share, never the first person's capture visit", async () => {
+    lead("priya", { email: "priya@example.com" });
+    lead("sam", { email: "sam@example.com" });
+    // Priya shared 70 minutes ago; her capture view is hers.
+    bind("priya", "ipad", "form", { bound_at: ago(70) });
+    event("priya-capture", ago(72), { lead_id: "priya", lead_confidence: "form" });
+    // Sam opened the card 5 minutes ago — the resolver called him Priya.
+    event("sam-view", ago(5), { lead_id: "priya", lead_confidence: "form" });
+    await bindFormDevice(admin, { leadId: "sam", ownerId: OWNER, visitorId: "ipad", email: "sam@example.com", phone: null });
+    const byId = Object.fromEntries(db.card_events.map((e) => [e.id, e]));
+    expect(byId["sam-view"].lead_id).toBe("sam");
+    expect(byId["priya-capture"].lead_id).toBe("priya");
+  });
+
+  it("a one-tap re-share keeps the original binding time", async () => {
+    lead("priya", { email: "priya@example.com" });
+    bind("priya", "ipad", "form", { bound_at: "2026-10-01T15:00:00.000Z" });
+    await bindFormDevice(admin, { leadId: "priya", ownerId: OWNER, visitorId: "ipad", email: "priya@example.com", phone: null });
+    expect(db.contact_devices).toHaveLength(1);
+    expect(db.contact_devices[0].bound_at).toBe("2026-10-01T15:00:00.000Z");
+  });
+
   it("the same person re-submitting does not supersede themselves", async () => {
     lead("priya-1", { email: "priya@example.com" });
     lead("priya-2", { email: "priya@example.com" });
@@ -197,7 +243,8 @@ describe("the routes use it the way the rules assume", () => {
   });
 
   it("the lead route binds the RESOLVED visitor id, after the response", () => {
-    expect(leads).toMatch(/bindFormDevice\(admin, \{ leadId, ownerId, visitorId: visitor_id, email, phone \}\)/);
+    // …at the time the share really happened when the offline outbox replays it.
+    expect(leads).toMatch(/bindFormDevice\(admin, \{ leadId, ownerId, visitorId: visitor_id, email, phone, at: replayAt \}\)/);
     expect(leads).toMatch(/after\(\s*\n\s*bindFormDevice/);
   });
 

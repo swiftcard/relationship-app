@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { effectivePlan, isPaidProfile } from "@/lib/effective-plan";
 import { forwardQuery } from "@/lib/forward-query";
+import { milestoneCountSentence } from "@/lib/milestones";
 import { reconcileDetailed, type GeoGuess } from "@/lib/request-geo";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -60,8 +61,10 @@ describe("Free never receives a place — the remaining paths", () => {
     expect(s).toMatch(/redactPlaceLabel\(/);
   });
 
-  it("the old visitor-id path honours the Free contact lock like the lead_id path", () => {
-    expect(route()).toMatch(/else if \(visitorId && !\(await isPaidUser\(user\.id\)\)\)/);
+  it("the history is read by contact only (the bare visitor-id path is gone), under the Free lock", () => {
+    const get = route().slice(route().indexOf("export async function GET"));
+    expect(get).not.toContain('params.get("visitor_id")');
+    expect(get).toContain("if (isLockedLead(lead) && !(await isPaidUser(user.id))) {");
   });
 
   it("native CRM sync re-checks the plan itself, so no future caller can stream a Free account's places", () => {
@@ -98,7 +101,12 @@ describe("counting precision", () => {
 
   it("a contact save also records the view (the desktop QR loses the dwell)", () => {
     const s = route();
-    const branch = s.slice(s.indexOf('} else if (event_type === "downloaded_vcard") {'));
+    // A TAP deliberately does not (2026-10-23): with a link that opens in a new
+    // tab the page's own view follows and would be deduped against it, losing
+    // the visit's one alert. A tap-only visit is listed by Recent visits instead.
+    const at = s.indexOf('} else if (event_type === "downloaded_vcard") {');
+    expect(at).toBeGreaterThan(-1);
+    const branch = s.slice(at);
     expect(branch.slice(0, 2000)).toMatch(/await recordView\(\{/);
   });
 
@@ -107,7 +115,10 @@ describe("counting precision", () => {
   });
 
   it("the milestone copy names what the number counts", () => {
-    expect(route()).toMatch(/views across your card and Swift Links\. \$\{milestone\.body\}/);
+    expect(route()).toContain("${milestoneCountSentence(milestone.reached, milestone.total)} ${milestone.body}");
+    expect(milestoneCountSentence(100, 100)).toBe("That's 100 views across your card and Swift Links.");
+    // 2026-10-15: "That's 100 views" on view 112. The real total, always.
+    expect(milestoneCountSentence(100, 112)).toBe("You've passed 100 views — 112 across your card and Swift Links.");
   });
 
   it("slugs are lowercased on the event path like recordView does", () => {

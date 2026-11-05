@@ -35,6 +35,9 @@ export type IngestReason =
   | "deduped"
   /** The owner looking at their own card. */
   | "self"
+  /** SwiftCard's own staff (an ADMIN_EMAILS session) opening a customer's
+   *  card — from /admin, a support check, a demo account. Not a visitor. */
+  | "staff"
   /** The slug doesn't serve: deleted, taken offline, or past a plan limit. */
   | "inactive"
   /** Cloud/datacenter egress that is not a consumer privacy relay — a crawler

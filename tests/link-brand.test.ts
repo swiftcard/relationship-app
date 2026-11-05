@@ -238,7 +238,7 @@ describe("public card page copy and controls", () => {
     // Text, arrow and border take the same colour as Save Contact (--sc-accent
     // on the page and the mockups; the persona's accent in HeroShowcase).
     const page = code(PAGE);
-    const btn = page.slice(page.indexOf("href={`/links/${profile.username}`}"), page.indexOf("View my Swift Links page →"));
+    const btn = page.slice(page.indexOf("href={`/links/${profile.username}?source=swift_card`}"), page.indexOf("View my Swift Links page →"));
     expect(btn).toMatch(/borderColor: "var\(--sc-accent, #1D4ED8\)", color: "var\(--sc-accent, #1D4ED8\)"/);
     expect(btn, "the button grew back to primary size").toMatch(/text-xs/);
     expect(btn, "the dark filled pill is back").not.toMatch(/bg-slate-900|text-white/);

@@ -39,10 +39,6 @@ export async function recordView(opts: {
    *  minted — the only case where the (shared-by-design) device key may dedupe.
    *  Defaults false: a caller that does not know must never drop a real visit. */
   identityMinted?: boolean;
-  /** True when the request carried a valid sc_vid cookie (visit-identity's
-   *  setCookie === false). Informational since 2026-10-06: the device key is
-   *  now stored for minted identities only (see viewRow.device_key). */
-  identityFromCookie?: boolean;
   /** The known contact this browser is bound to (lib/known-contact.ts), or
    *  null. Stamped as card_views.lead_id — never inferred here. */
   leadId?: string | null;
@@ -84,7 +80,7 @@ export async function recordView(opts: {
   // reload hits the per-IP cache) so the value returned is always the one a
   // recorded row would carry.
   //
-  // resolveGeo, not resolveLocation: the same work, but it also hands back HOW
+  // resolveGeo hands back the label AND HOW
   // MUCH of the answer is real (city / city_approx / region / country). That
   // used to be computed and thrown away, which is why a state-level guess and a
   // confirmed town were indistinguishable once stored — see request-geo.ts and
@@ -152,10 +148,13 @@ export async function recordView(opts: {
   if (!recent && deviceKey && identityMinted) recent = await recentBy("device_key", deviceKey);
 
   if (recent) {
-    // Same visit, more specific source (a QR scan after a plain open):
-    // upgrade in place so the scan isn't lost from attribution.
-    const isGeneric = (s: string | null) => !s || s === "direct_link";
-    if (source && !isGeneric(source) && isGeneric(recent.source as string | null)) {
+    // A visit keeps the way it ARRIVED. This used to "upgrade" a card-link
+    // visit to whatever tagged link the same person opened inside the next
+    // half hour — open the texted link, then click the email signature, and
+    // the view read "Swift Signature" in card_views while its card_events row
+    // (never rewritten) still said "Card link". Only a row with no source at
+    // all is filled in, which loses nothing and claims nothing new.
+    if (source && !recent.source) {
       await supabase.from("card_views").update({ source }).eq("id", recent.id);
     }
     return { outcome: "deduped", location, geo };

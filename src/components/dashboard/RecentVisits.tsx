@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PlanBadge, PlanGate } from "@/components/PlanGate";
-import type { RecentVisit } from "@/lib/recent-visits";
+import { RECENT_VISITS_SHOWN, type RecentVisit } from "@/lib/recent-visits";
 
 // "Recent visits" — under the Traffic chart on the dashboard (owner's pick,
 // 2026-10-18). Every open of the card or Swift Links in the chart's window,
@@ -64,8 +64,12 @@ function Row({ v }: { v: RecentVisitRow }) {
 
 export default function RecentVisits({ visits, paid }: { visits: RecentVisitRow[]; paid: boolean }) {
   if (!visits.length) return null;
-  const first = visits.slice(0, FIRST);
-  const rest = visits.slice(FIRST);
+  // The loader reads one visit past the cap: when it is there, the list says
+  // where it stops rather than passing for every visit in the window.
+  const cut = visits.length > RECENT_VISITS_SHOWN;
+  const shown = visits.slice(0, RECENT_VISITS_SHOWN);
+  const first = shown.slice(0, FIRST);
+  const rest = shown.slice(FIRST);
   return (
     <div data-testid="recent-visits" className="mt-4 pt-3 border-t border-gray-800/70">
       <p className="text-gray-500 text-[0.6875rem] mb-2">Recent visits</p>
@@ -81,6 +85,7 @@ export default function RecentVisits({ visits, paid }: { visits: RecentVisitRow[
           <ul className="space-y-2">
             {rest.map((v) => <Row key={v.id} v={v} />)}
           </ul>
+          {cut && <p className="text-gray-500 text-[0.6875rem] pt-2.5">Showing the latest {RECENT_VISITS_SHOWN} visits.</p>}
         </details>
       )}
       {!paid && (

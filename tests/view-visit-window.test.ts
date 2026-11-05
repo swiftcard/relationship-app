@@ -18,7 +18,8 @@ const root = process.cwd();
 const read = (p: string) => readFileSync(join(root, p), "utf8");
 
 // The recording itself lives in lib/record-view.ts (shared with /api/card-events).
-const viewsRoute = read("src/app/api/views/[username]/route.ts") + "\n" + read("src/lib/record-view.ts");
+// (The retired /api/views route records nothing — tests/view-identity.test.ts.)
+const viewsRoute = read("src/lib/record-view.ts");
 const eventsRoute = read("src/app/api/card-events/route.ts");
 const tracker = read("src/components/CardEventTracker.tsx");
 const migration = read("supabase/view-visit-window.sql");

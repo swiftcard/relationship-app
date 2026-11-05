@@ -1,5 +1,10 @@
-import { markPhrase, markPlace } from "@/lib/location-privacy";
+import { markPhrase, markPlace, PHRASE_MARK } from "@/lib/location-privacy";
 import { localHour } from "@/lib/push-policy";
+import { groupAccuracy, locationPhrase } from "@/lib/location-display";
+import type { GeoAccuracy } from "@/lib/request-geo";
+
+/** A place and how sure the data is of it (lib/location-display). */
+export type RecapPlace = { label: string; accuracy: GeoAccuracy | null };
 
 // ── The Monday recap — the one digest allowed on a phone ────────────────────
 //
@@ -27,20 +32,43 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString
 export function personalRecapCopy(input: {
   views: number;
   contacts: number;
-  /** Place labels, most views first. */
-  places: string[];
+  /** Places, most views first — with their accuracy (rankRecapPlaces), or a
+   *  bare label for a row from before accuracy was stored. */
+  places: Array<string | RecapPlace>;
+  /** Of `contacts`, how many shared their details themselves (not typed in,
+   *  scanned or imported by the owner). Defaults to all of them. */
+  sharedContacts?: number;
 }): { title: string; body: string } | null {
   if (input.views <= 0 && input.contacts <= 0) return null;
   const title = `Your week: ${plural(input.views, "view")}${input.contacts ? ` · ${plural(input.contacts, "contact")}` : ""}`;
   const top = input.places[0];
-  const body = top
-    // The place COUNT sits inside the location phrase: it is location data too,
-    // and outside the phrase a Free account read "· 4 places in all" in the
-    // bell and on the lock screen. Paid reads it exactly as before.
-    ? `Top spot${markPhrase(` in ${markPlace(top)}${input.places.length > 1 ? ` · ${input.places.length} places in all` : ""}`)}.`
-    : input.contacts
-      ? `${plural(input.contacts, "person", "people")} shared their details with you.`
-      : "Open SwiftCard to see the week.";
+  const count = input.places.length > 1 ? ` · ${input.places.length} places in all` : "";
+  const shared = input.sharedContacts ?? input.contacts;
+  // The place COUNT sits inside the location phrase: it is location data too,
+  // and outside the phrase a Free account read "· 4 places in all" in the
+  // bell and on the lock screen.
+  //
+  // THE PLACE SAYS HOW SURE IT IS (2026-10-23). Every recap for two weeks read
+  // "Top spot in New York, US" — 75 of the 93 views behind it were somewhere in
+  // New York STATE, and that sentence reads as the city. The view alerts have
+  // said "in the New York area" since 2026-09; the recap now uses the same words.
+  let placePhrase = "";
+  if (top && typeof top !== "string" && top.accuracy) {
+    const marked = locationPhrase(top.label, top.accuracy, { mark: true });
+    placePhrase = marked ? `${marked.slice(0, -PHRASE_MARK.length)}${count}${PHRASE_MARK}` : "";
+  } else if (top) {
+    const label = typeof top === "string" ? top : top.label;
+    placePhrase = markPhrase(` in ${markPlace(label)}${count}`);
+  }
+  const body = placePhrase
+    ? `Top spot${placePhrase}.`
+    : shared
+      // Only the people who handed over their details: a contact the owner
+      // typed in or scanned "shared" nothing.
+      ? `${plural(shared, "person", "people")} shared their details with you.`
+      : input.contacts
+        ? `${plural(input.contacts, "new contact")} this week.`
+        : "Open SwiftCard to see the week.";
   return { title, body };
 }
 
@@ -126,6 +154,27 @@ export function noticeGivenToday(rows: { created_at?: unknown }[] | null | undef
 export function isTeamRecapBellHour(now: number, timezone: string | null | undefined): boolean {
   if (!isTeamCheckHour(now, timezone)) return false;
   return weekdayIn(now, timezone || FALLBACK_ZONE) === "Mon";
+}
+
+/**
+ * Most-viewed places first, each with the accuracy its rows can stand behind
+ * together — the least precise wins (lib/location-display groupAccuracy), so a
+ * label reached both as a town and as "somewhere in the state" never reads as
+ * the town.
+ */
+export function rankRecapPlaces(rows: Array<{ location?: string | null; geo_accuracy?: string | null }>): RecapPlace[] {
+  const groups = new Map<string, { n: number; acc: (GeoAccuracy | null)[] }>();
+  for (const r of rows) {
+    const k = (r.location ?? "").trim();
+    if (!k) continue;
+    const g = groups.get(k) ?? { n: 0, acc: [] };
+    g.n++;
+    g.acc.push((r.geo_accuracy as GeoAccuracy | null | undefined) ?? null);
+    groups.set(k, g);
+  }
+  return [...groups.entries()]
+    .sort((a, b) => b[1].n - a[1].n)
+    .map(([label, g]) => ({ label, accuracy: groupAccuracy(g.acc) }));
 }
 
 /** Most frequent labels first. */

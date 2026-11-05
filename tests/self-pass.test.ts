@@ -87,7 +87,6 @@ async function view(username = SLUG) {
     deviceKey: deviceKeyFor({ ip, userAgent: ua, username }),
     source: "direct_link",
     ip,
-    identityFromCookie: false,
   });
 }
 

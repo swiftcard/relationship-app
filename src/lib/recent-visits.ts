@@ -45,7 +45,7 @@ export type RecentVisit = {
   duration: string | null;
   /** 1 for a first visit; null when the browser kept no identity to count by. */
   visitNumber: number | null;
-  /** "Saved your contact", "Tapped Instagram". */
+  /** "Downloaded your contact card", "Tapped Instagram". */
   actions: string[];
 };
 
@@ -137,17 +137,28 @@ const sameVisitorOn = (a: StartRow, b: StartRow) =>
  * records the visit's view itself — api/card-events), so that case is a real
  * return. Nothing is ever dropped by this rule. A row with no event_type is a
  * view.
+ *
+ * A LINK TAP with nothing like that around it is a visit too (2026-10-23): a
+ * link that opens in the same tab takes the page away before the tracker's
+ * 2.5s gate can count the view, so the tap was recorded with no visit behind
+ * it and Recent visits never listed it. Several taps in one such sitting are
+ * one visit, started by the first.
  */
 export function visitStarts<T extends StartRow>(rows: T[]): T[] {
   const isView = (r: StartRow) => (r.event_type ?? "viewed_card") === "viewed_card";
   const views = rows.filter(isView);
-  return rows.filter((r) => {
-    if (isView(r)) return true;
-    if (r.event_type !== "downloaded_vcard") return false;
-    return !views.some((v) => sameVisitorOn(v, r)
-      && ms(v.created_at) <= ms(r.created_at) + LEAD_IN_EVENT_MS
-      && ms(r.created_at) - ms(v.created_at) < VIEW_VISIT_WINDOW_MS);
-  });
+  const opens = (r: StartRow, by: StartRow[], reach: number) => by.some((v) => sameVisitorOn(v, r)
+    && ms(v.created_at) <= ms(r.created_at) + LEAD_IN_EVENT_MS
+    && ms(r.created_at) - ms(v.created_at) < reach);
+  const saves = rows.filter((r) => r.event_type === "downloaded_vcard" && !opens(r, views, VIEW_VISIT_WINDOW_MS));
+  // A tap belongs to any visit still open — a sitting lasts up to SITTING_MS,
+  // the same reach buildRecentVisits gives a visit's taps.
+  const tapStarts: T[] = [];
+  for (const r of [...rows].filter((x) => x.event_type === "clicked_link").sort((a, b) => ms(a.created_at) - ms(b.created_at))) {
+    if (!opens(r, [...views, ...saves, ...tapStarts], SITTING_MS)) tapStarts.push(r);
+  }
+  const keep = new Set<T>([...views, ...saves, ...tapStarts]);
+  return rows.filter((r) => keep.has(r));
 }
 
 /**
@@ -167,8 +178,14 @@ export function buildRecentVisits(input: {
   shares?: VisitShare[];
   paid: boolean;
   limit: number;
+  /** The card's slug, to recognise a visit that came from its own other page. */
+  slug?: string;
+  /** False when the all-time history could not be read in full: the visit
+   *  number is then left off rather than every row claiming "1st visit". */
+  historyComplete?: boolean;
 }): RecentVisit[] {
   const { events, paid, limit } = input;
+  const historyComplete = input.historyComplete !== false;
   const leadById = new Map(input.leads.map((l) => [l.id, l]));
   const sameVisitor = sameVisitorOn;
 
@@ -201,10 +218,11 @@ export function buildRecentVisits(input: {
       : [];
     if (sharedHere.length) actions.push("Shared their details");
     if (start.event_type === "downloaded_vcard" || inVisit.some((e) => e.event_type === "downloaded_vcard")) {
-      actions.push("Saved your contact");
+      actions.push("Downloaded your contact card");
     }
     const tapped = new Set<string>();
-    for (const e of [...inVisit].reverse()) {
+    // A visit started by a tap (see visitStarts) lists that tap first.
+    for (const e of [...inVisit].reverse().concat(start.event_type === "clicked_link" ? [start] : []).sort((a, b) => ms(a.created_at) - ms(b.created_at))) {
       if (e.event_type !== "clicked_link") continue;
       const name = (e.target_label || e.target || "").trim();
       if (name) tapped.add(name);
@@ -227,16 +245,27 @@ export function buildRecentVisits(input: {
       lead = onePerson(bound);
     }
     if (lead?.name?.trim()) who = isLockedLead(lead) && !paid ? null : lead.name.trim();
-    else if (!start.lead_id && start.visitor_name?.trim()) who = start.visitor_name.trim();
+    // The stored name is a signed-in SwiftCard member's only when the event was
+    // never a contact's. A contact's event that lost its lead_id ("Wrong
+    // person?", or the contact deleted — the FK sets it null) still carries
+    // lead_confidence, and its old name must not keep naming the visit.
+    else if (!start.lead_id && !start.lead_confidence && start.visitor_name?.trim()) who = start.visitor_name.trim();
 
     // Which visit this is, all time, counted by the SAME rule that decides what
     // a visit is above — so a visit that was only a contact download counts,
     // and the view after it is the 2nd visit, not another 1st.
-    const visitNumber = start.visitor_id
+    // Rows from before views were deduped (July-August 2026) can sit minutes
+    // apart for one sitting: a start inside the visit window of the previous
+    // counted one is the same visit and never raises the number.
+    const visitNumber = start.visitor_id && historyComplete
       ? Math.max(
           1,
           visitStarts(input.history.filter((h) => h.visitor_id === start.visitor_id && surfaceOf(h) === surface))
-            .filter((h) => ms(h.created_at) <= t0).length,
+            .map((h) => ms(h.created_at))
+            .filter((t) => t <= t0)
+            .sort((a, b) => a - b)
+            .reduce<number[]>((kept, t) => (kept.length && t - kept[kept.length - 1] < VIEW_VISIT_WINDOW_MS ? kept : [...kept, t]), [])
+            .length,
         )
       : null;
 
@@ -257,7 +286,12 @@ export function buildRecentVisits(input: {
     // stamps "swift_links" on its OWN events, which is the page itself, not
     // where it was opened from.
     const viaSource = surface === "links" && start.source === "swift_links" ? "" : sourcePhrase(start.source).trim();
-    const from = ref && ref !== app?.name ? `from ${ref}` : viaSource || null;
+    // FROM ITS OWN OTHER PAGE. referrerName drops swiftcard.me (a visitor's
+    // own navigation is not a referral), so a Swift Links visit that came from
+    // this card's button said nothing at all — rows from before the button was
+    // tagged (?source=swift_card, 2026-10-23) are recognised by the referrer.
+    const ownPage = input.slug ? fromOwnPage(start.referrer_url, input.slug, surface) : null;
+    const from = ref && ref !== app?.name ? `from ${ref}` : viaSource || ownPage;
     visits.push({
       id: start.id,
       at: start.created_at,
@@ -277,6 +311,28 @@ export function buildRecentVisits(input: {
   return visits;
 }
 
+/** How many visits the dashboard lists; past it, the list says it stopped. */
+export const RECENT_VISITS_SHOWN = 100;
+/** One card's views, saves and taps in a 30-day window — far above any real month. */
+const EVENT_READ_CAP = 3000;
+const HISTORY_READ_CAP = 5000;
+
+/** "from your SwiftCard" / "from your Swift Links" when the referrer is this
+ *  card's own other page on swiftcard.me; null otherwise. */
+function fromOwnPage(referrer: string | null | undefined, slug: string, surface: "card" | "links"): string | null {
+  try {
+    const u = new URL(referrer ?? "");
+    if (!/(^|\.)swiftcard\.me$/i.test(u.hostname)) return null;
+    const path = u.pathname.replace(/\/+$/, "").toLowerCase();
+    const s = slug.toLowerCase();
+    if (surface === "links" && path === `/${s}`) return "from your SwiftCard";
+    if (surface === "card" && path === `/links/${s}`) return "from your Swift Links";
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 const BASE_COLS =
   "id, created_at, event_type, surface, visitor_id, location, geo_accuracy, source, referrer_url, device_info, target, target_label, lead_id, lead_confidence, visitor_name";
 
@@ -289,7 +345,9 @@ export async function loadRecentVisits(
   /** ownerId: the card owner's user id — contact_devices bindings are theirs. */
   opts: { slug: string; sinceIso: string; paid: boolean; ownerId?: string | null; limit?: number },
 ): Promise<RecentVisit[]> {
-  const limit = opts.limit ?? 25;
+  // One row past the cap, so the list can say it stops there instead of
+  // implying it is every visit (components/dashboard/RecentVisits).
+  const limit = (opts.limit ?? RECENT_VISITS_SHOWN) + 1;
   try {
     const read = (cols: string) =>
       admin
@@ -299,7 +357,7 @@ export async function loadRecentVisits(
         .in("event_type", ["viewed_card", "downloaded_vcard", "clicked_link"])
         .gte("created_at", opts.sinceIso)
         .order("created_at", { ascending: false })
-        .limit(600);
+        .limit(EVENT_READ_CAP);
     // visit-details.sql adds the last four; until it is applied, read without.
     let { data, error } = await read(`${BASE_COLS}, device_model, device_os, duration_s, network_org`);
     if (error && (error.code === "42703" || error.code === "PGRST204")) ({ data, error } = await read(BASE_COLS));
@@ -318,13 +376,15 @@ export async function loadRecentVisits(
       visitorIds.length
         ? admin
             .from("card_events")
-            // Views AND saves: a visit that was only a contact download is a
-            // visit too, and the numbering must count it (visitStarts).
+            // Views, saves AND taps: a visit that was only a contact download,
+            // or only a link tap, is a visit too, and the numbering must count
+            // it (visitStarts).
             .select("visitor_id, surface, created_at, event_type")
             .eq("card_owner_username", opts.slug)
-            .in("event_type", ["viewed_card", "downloaded_vcard"])
+            .in("event_type", ["viewed_card", "downloaded_vcard", "clicked_link"])
             .in("visitor_id", visitorIds)
-            .limit(5000)
+            .order("created_at", { ascending: true })
+            .limit(HISTORY_READ_CAP)
         : none<VisitEventRow>(),
       // Every binding of these browsers, superseded and wrong ones included:
       // a browser with ANY binding never falls back to the share rule below.
@@ -356,7 +416,12 @@ export async function loadRecentVisits(
       // The visit that led to sharing starts before the share; a link is
       // evidence only from the moment it was opened.
       const lead = b.bound_via === "link" ? 0 : LEAD_IN_MS;
-      bindings.push({ visitor_id: b.visitor_id, lead_id: b.lead_id, from: new Date(ms(b.bound_at) - lead).toISOString() });
+      // Never back into another contact's turn on the same browser — it ends
+      // one visit window after their binding (the contact's timeline, same rule).
+      const priorTurn = bindingRows
+        .filter((o) => o.visitor_id === b.visitor_id && o.lead_id !== b.lead_id && o.bound_at && ms(o.bound_at) < ms(b.bound_at!))
+        .reduce((max, o) => Math.max(max, ms(o.bound_at!) + VIEW_VISIT_WINDOW_MS), -Infinity);
+      bindings.push({ visitor_id: b.visitor_id, lead_id: b.lead_id, from: new Date(Math.max(ms(b.bound_at) - lead, priorTurn)).toISOString() });
     }
     const everBound = new Set(bindingRows.map((b) => b.visitor_id));
     for (const sh of shareRows) {
@@ -371,6 +436,8 @@ export async function loadRecentVisits(
     return buildRecentVisits({
       events,
       history: (historyRes.data ?? []) as VisitEventRow[],
+      // A failed or cut-off history would number a 5th visit "1st".
+      historyComplete: !historyRes.error && (historyRes.data?.length ?? 0) < HISTORY_READ_CAP,
       leads: (leadsRes.data ?? []) as VisitLead[],
       bindings,
       shares: shareRows
@@ -380,6 +447,7 @@ export async function loadRecentVisits(
         .map((sh) => ({ visitor_id: sh.visitor_id, created_at: sh.created_at, surface: sh.source === "swift_connect" ? "links" as const : "card" as const })),
       paid: opts.paid,
       limit,
+      slug: opts.slug,
     });
   } catch {
     return [];

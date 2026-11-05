@@ -19,6 +19,10 @@ export const SOURCE_LABELS: Record<string, string> = {
   // records (links/[username]/page.tsx). Without an entry here that fell through
   // to the raw-slug fallback and printed a lowercase "swift links" to real users.
   swift_links: "Swift Links",
+  // The card page's "View my Swift Links page" button: a Swift Links visit
+  // that came from the card itself. Untagged, it read as a plain open of the
+  // Swift Links link — not where the visitor actually came from.
+  swift_card: "SwiftCard page",
   // Opened from something the owner linked on the Links page's Create + side
   // (a pasted signature or a picture) — every click on it, and the share link
   // it pastes into texts, carry this (src/app/[username]/p/[id]).
@@ -30,7 +34,38 @@ export const SOURCE_LABELS: Record<string, string> = {
   // The iPhone home-screen widget opens (and its QR encodes) the card with
   // ?source=widget (NativeAppBridge). It had no label, so it printed "widget".
   widget: "Home-screen widget",
+  // July-August 2026 rows, from before ?source= was checked against this list
+  // (audit A-02). Labelled so twelve old views don't print a raw "share".
+  share: "Shared link",
+  // How a CONTACT arrived (leads.source), written by the two buttons that
+  // collect details: Connect on Swift Links (ConnectButton) and the share-back
+  // ask after Save Contact (SaveContactButton). Without labels the contact list
+  // printed "swift connect" and "save contact conversion".
+  swift_connect: "Swift Links Connect",
+  save_contact_conversion: "After downloading your contact",
 };
+
+/**
+ * The tags SwiftCard itself puts on the links it hands out — the ONLY values a
+ * URL may set. SOURCE_LABELS also names how a contact was ADDED (manual,
+ * imported, scanner), old rows (share), and tags nothing produces any more
+ * (instagram_bio, snapchat, tiktok, linkedin, text_message): a link typed with
+ * ?source=manual read "downloaded your contact card from Added by hand", and a
+ * hand-typed ?source=text_message was stored as a channel SwiftCard never used.
+ */
+const URL_SOURCES = new Set([
+  "qr_code",          // every QR of the card (lib/share-source qrScanUrl)
+  "nfc_card",         // NFCWriter
+  "direct_link",      // the plain link
+  "email_signature",  // the Swift Signature (share/page.tsx)
+  "apple_wallet",     // the Apple Wallet pass barcode
+  "google_wallet",    // the Google Wallet pass barcode
+  "contact_qr",       // the card link inside the no-signal Contact QR
+  "swift_links",      // the Swift Links page, and its "View SwiftCard" link
+  "swift_card",       // the card page's "View my Swift Links page" link
+  "create_link",      // Create + (lib/create-link)
+  "widget",           // the iPhone home-screen widget
+]);
 
 /**
  * The source to STORE for a visit: a key SwiftCard itself puts on links, or a
@@ -40,7 +75,7 @@ export const SOURCE_LABELS: Record<string, string> = {
  * Traffic chart.
  */
 export function storedSource(raw: unknown, fallback = "direct_link"): string {
-  return typeof raw === "string" && Object.prototype.hasOwnProperty.call(SOURCE_LABELS, raw) ? raw : fallback;
+  return typeof raw === "string" && URL_SOURCES.has(raw) ? raw : fallback;
 }
 
 /**
@@ -57,8 +92,11 @@ const SOURCE_PHRASES: Record<string, string> = {
   nfc_card: "from an NFC tap",
   email_signature: "from your Swift Signature",
   swift_links: "from your Swift Links",
-  apple_wallet: "from Apple Wallet",
-  google_wallet: "from Google Wallet",
+  swift_card: "from your SwiftCard",
+  // YOUR pass's QR — "from Apple Wallet" read as the visitor's own Wallet.
+  apple_wallet: "from your Apple Wallet pass",
+  google_wallet: "from your Google Wallet pass",
+  widget: "from the QR on your home-screen widget",
   contact_qr: "from the contact they saved",
   text_message: "from a text message",
   instagram_bio: "from your Instagram bio",

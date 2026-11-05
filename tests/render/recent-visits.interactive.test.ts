@@ -134,7 +134,7 @@ describe("Pro: every detail, and it fits at every width", () => {
         const text = await page.locator('[data-testid="recent-visits"]').innerText();
         expect(text).toContain("iPhone 18 Pro Max · iOS 27 · Instagram · 1m 35s");
         expect(text).toContain("On the Memorial Sloan Kettering Cancer Center network");
-        expect(text).toContain("Saved your contact");
+        expect(text).toContain("Downloaded your contact card");
         expect(text).toContain("Tapped Book a strategy call");
         expect(text).toContain("Windows PC · Edge · from LinkedIn");
         expect(text).not.toContain("Upgrade");

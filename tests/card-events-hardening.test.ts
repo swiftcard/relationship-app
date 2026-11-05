@@ -35,7 +35,9 @@ describe("input hardening", () => {
     // The Client Hints that ride with a view are shape-checked, not trusted.
     expect(route).toContain("cleanModelHint(body?.device_model)");
     expect(route).toContain("cleanOsHint(body?.device_os)");
-    for (const field of ["card_owner_username", "event_type", "visitor_name", "visitor_email", "visitor_phone"]) {
+    // (visitor_name/email/phone are no longer read from the body at all.)
+    expect(route).not.toMatch(/body\?\.visitor_(name|email|phone)/);
+    for (const field of ["card_owner_username", "event_type"]) {
       expect(route).toMatch(new RegExp(`const ${field} = (\\(?)str\\(body\\?\\.${field}`));
     }
     // source: through str() first, then only a key SwiftCard itself puts on
@@ -67,10 +69,11 @@ describe("one visit → one event → one notification", () => {
     expect(route).not.toMatch(/view-notify:/);
   });
 
-  it("a no-visitor-id caller is capped to one event per IP per window", () => {
-    // The target is in the key so a visitor with no browser id can still tap
-    // more than one link in half an hour.
-    expect(route).toMatch(/events-anon:\$\{ip\}:\$\{card_owner_username\}:\$\{event_type\}:\$\{target \?\? ""\}:\$\{target_label \?\? ""\}`, 1, VIEW_VISIT_WINDOW_MS/);
+  it("every event has a visitor id to dedupe on (the no-id branch was unreachable and is gone)", () => {
+    // resolveVisitIdentity never returns null — cookie, adopted page id, or minted.
+    expect(read("src/lib/visit-identity.ts")).toContain("return { visitorId: newVisitorId(), setCookie: true, minted: true };");
+    expect(route).toContain("const visitor_id = visitIdentity.visitorId;");
+    expect(route).not.toContain("events-anon:");
   });
 
   it("a failed insert means NO notification — the row and the push must never disagree", () => {
@@ -176,11 +179,12 @@ describe("cardEventNotice — surface + location copy", () => {
       .toBe("Someone viewed your card.");
   });
 
-  it("the explicit surface field decides the wording; legacy source=swift_links still works", () => {
+  it("the surface field alone decides the wording — source=swift_links on the CARD is a card view", () => {
     expect(body({ eventType: "viewed_card", surface: "links", source: "qr_code" }))
       .toBe("Someone viewed your Swift Links.");
-    expect(body({ eventType: "viewed_card", source: "swift_links" }))
-      .toBe("Someone viewed your Swift Links.");
+    // Tapped "View SwiftCard" on the Swift Links page (2026-10-23 tag).
+    expect(body({ eventType: "viewed_card", surface: "card", source: "swift_links" }))
+      .toBe("Someone viewed your card.");
   });
 
   it("a save keeps its source label and gains the location", () => {

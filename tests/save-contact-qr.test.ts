@@ -27,7 +27,7 @@ describe("scanning saves the contact AND leaves them on the card", () => {
     // the visitor on a blank page — the card they scanned is gone. The card
     // page has to be what loads, so it's underneath the contact sheet.
     const block = qrCallBlock();
-    expect(block, "QR no longer lands on the card page").toMatch(/save=1&source=qr_code/);
+    expect(block, "QR no longer lands on the card page").toMatch(/save=1&source=/);
     expect(block, "QR points straight at the raw vCard again — that strands the visitor").not.toMatch(/\/api\/card\//);
   });
 
@@ -59,8 +59,12 @@ describe("scanning saves the contact AND leaves them on the card", () => {
     expect(deliver).toMatch(/createElement\("iframe"\)/);
   });
 
-  it("the QR carries source=qr_code so the whole visit is attributed to the scan", () => {
-    expect(qrCallBlock()).toMatch(/source=qr_code/);
+  it("the QR carries THIS visit's source, never a made-up QR scan (2026-10-23)", () => {
+    // The person arrived by a signature or a link and moved to their phone.
+    // Hardcoded qr_code said they scanned a QR the owner showed or printed —
+    // "QR code scan" in Traffic, a "from a QR code" alert, +1 Office scan.
+    expect(qrCallBlock()).toContain("source=${encodeURIComponent(source)}");
+    expect(qrCallBlock()).not.toMatch(/source=qr_code/);
   });
 });
 

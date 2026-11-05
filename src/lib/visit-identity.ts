@@ -59,7 +59,7 @@ export const VISITOR_COOKIE = "sc_vid";
 /** Two years: long enough that "a repeat visitor" survives a real-world gap. */
 export const VISITOR_COOKIE_MAX_AGE = 60 * 60 * 24 * 730;
 
-/** The same length cap /api/views and /api/card-events already apply to the
+/** The same length cap /api/card-events already applies to the
  *  client-supplied id, so an adopted value can never exceed the column's
  *  expectations or the cookie's sane size. */
 const MAX_ID_LEN = 64;

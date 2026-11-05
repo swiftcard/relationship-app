@@ -59,7 +59,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .is("wrong_at", null);
     // Those events were about someone else: take the contact off them, so the
     // contact's history and score stop counting them.
-    await admin.from("card_events").update({ lead_id: null, lead_confidence: null })
+    // The name stamped on them is the contact's too (card-events names a
+    // known contact from the owner's own record) — left behind, Recent visits
+    // kept naming the visit after the owner was told it was anonymous.
+    await admin.from("card_events").update({ lead_id: null, lead_confidence: null, visitor_name: null, visitor_email: null, visitor_phone: null })
       .eq("lead_id", leadId).in("visitor_id", visitorIds)
       .gte("created_at", new Date(at - VIEW_VISIT_WINDOW_MS).toISOString());
     await admin.from("card_views").update({ lead_id: null })

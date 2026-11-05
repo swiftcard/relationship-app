@@ -14,6 +14,7 @@ import { cardIsOffline } from "@/lib/card-active";
 import { getCardPageData } from "@/lib/card-page-data";
 import { cardHeadshot } from "@/lib/card-media";
 import CardEventTracker from "@/components/CardEventTracker";
+import CleanShareUrl from "@/components/CleanShareUrl";
 import OfflineCardSaver from "@/components/OfflineCardSaver";
 import SignupNudgeHost from "@/components/SignupNudgeHost";
 import SwiftLinkProfile from "@/components/SwiftLinkProfile";
@@ -297,6 +298,7 @@ export default async function SwiftLinksPage({ params, searchParams }: { params:
       />
       {/* The RESOLVED slug, not the raw route param — a case/alias divergence
           would otherwise record rows under a key the dashboard never reads. */}
+      <CleanShareUrl />
       {!isEmbed && !isOwnerView && <CardEventTracker username={(cardOrLegacy.username as string) || username} source={source} viewSurface="links" />}
       {!isEmbed && !isOwnerView && <SignupNudgeHost cardUsername={(cardOrLegacy.username as string) || username} variant="links" />}
       {/* Keeps this page on the phone so it opens again with no signal (public/sw.js). */}

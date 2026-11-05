@@ -51,7 +51,9 @@ describe("heldCategory", () => {
     expect(heldCategory({ type: "new_lead" })).toBe("new_lead");
     expect(heldCategory({ type: "payment_failed" })).toBe("billing_problem");
     expect(heldCategory({ type: "lead_cap_reached" })).toBeUndefined();
-    expect(heldCategory({ type: "weekly_recap" })).toBeUndefined();
+    // The Monday recap CAN be held: due until Monday ends, quiet from 10pm
+    // (2026-10-19, an 11:58pm run reached no phone). The morning says it.
+    expect(heldCategory({ type: "weekly_recap" })).toBe("weekly_recap");
   });
 
   it("the closed-contact rule covers a returning contact's download too", () => {

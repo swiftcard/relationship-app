@@ -114,7 +114,8 @@ describe("the sample contact is never a team lead", () => {
     ["src/lib/office-leads.ts", 1],
     ["src/lib/office-team.ts", 1],
     ["src/lib/team-alerts.ts", 1],
-    ["src/app/api/push/recap/route.ts", 4],
+    // +1 (2026-10-23): the personal recap counts the contacts the owner added.
+    ["src/app/api/push/recap/route.ts", 5],
   ];
   for (const [f, n] of files) {
     it(`${f} excludes it from every leads query`, () => {

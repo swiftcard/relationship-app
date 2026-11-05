@@ -258,7 +258,7 @@ describe("a milestone is a bell row and a headline, never a push of its own", ()
     // drops the useful half. The body keeps the view sentence and appends the
     // count; the title carries the celebration.
     expect(cardEvents()).toMatch(/title: milestone\.title,/);
-    expect(cardEvents()).toMatch(/body: `\$\{notice\.body\} That's \$\{milestone\.reached/);
+    expect(cardEvents()).toContain("body: `${notice.body} ${milestoneCountSentence(milestone.reached, milestone.total)} ${milestone.body}`,");
   });
 
   it("the once-ever ledger is a column an upgrade cannot erase", () => {

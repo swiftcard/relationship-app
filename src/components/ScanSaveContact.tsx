@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { getVisitorId, markSavedContact } from "@/lib/visitor";
 import { waitForHuman } from "@/lib/human-gate";
+import { outbox } from "@/lib/offline-outbox";
 import { SCAN_SAVED_EVENT } from "@/lib/scan-saved-event";
 
 // ── The QR-scan landing behaviour ────────────────────────────────────────────
@@ -134,8 +135,10 @@ export default function ScanSaveContact({
         // anything different here would fork the flow. (Both used to ALSO post a
         // "contact_save" row to analytics_events; that table has no reader
         // anywhere, so it was a duplicate recording of one real action and is
-        // gone from both.)
-        fetch("/api/card-events", {
+        // gone from both.) Through the offline outbox like the button's, so a
+        // scan that lands with no signal is reported once there is — a plain
+        // fetch dropped it while the button's identical save was kept.
+        outbox.fetch("/api/card-events", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

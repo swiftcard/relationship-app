@@ -1,4 +1,5 @@
 import type { getAdminSupabase } from "@/lib/supabase-admin";
+import { VIEW_VISIT_WINDOW_MS } from "@/lib/view-window";
 
 // ── Is this visitor someone the owner already knows? ─────────────────────────
 //
@@ -223,6 +224,8 @@ export async function bindFormDevice(
     visitorId: string;
     email: string | null | undefined;
     phone: string | null | undefined;
+    /** When the share really happened — an offline outbox replay's time. */
+    at?: number | null;
   },
 ): Promise<"bound" | "owner" | "skipped"> {
   const { leadId, ownerId, visitorId, email, phone } = opts;
@@ -236,11 +239,12 @@ export async function bindFormDevice(
     // treats their leads as one person and names the newest.
     const { data: others } = await admin
       .from("contact_devices")
-      .select("id, lead_id")
+      .select("id, lead_id, bound_at")
       .eq("owner_id", ownerId)
       .eq("visitor_id", visitorId)
       .is("superseded_at", null)
       .neq("lead_id", leadId);
+    const nowMs = opts.at ?? Date.now();
     if (others?.length) {
       const { data: otherLeads } = await admin
         .from("leads")
@@ -255,7 +259,45 @@ export async function bindFormDevice(
       const toSupersede = others.filter((o) => differentPeople.has(o.lead_id as string)).map((o) => o.id as string);
       if (toSupersede.length) {
         await admin.from("contact_devices").update({ superseded_at: new Date().toISOString() }).in("id", toSupersede);
+        // The visit that led to THIS share is this person's, even though the
+        // resolver stamped it as the previous person's while their binding
+        // was the only one ("A re-opened your card" was B on the family iPad).
+        // Only the last visit window, and never the earlier person's own
+        // capture sitting (their first window after binding).
+        const slugs = await ownerSlugs(admin, ownerId);
+        for (const o of others.filter((x) => differentPeople.has(x.lead_id as string))) {
+          const theirsUntil = o.bound_at ? new Date(o.bound_at as string).getTime() + VIEW_VISIT_WINDOW_MS : 0;
+          const fromIso = new Date(Math.max(nowMs - VIEW_VISIT_WINDOW_MS, theirsUntil)).toISOString();
+          // lead_confidence stays: an event that WAS a contact's never falls back
+          // to the name stamped on it (lib/recent-visits).
+          await admin.from("card_events").update({ lead_id: null })
+            .eq("lead_id", o.lead_id as string).eq("visitor_id", visitorId)
+            .in("card_owner_username", slugs).gte("created_at", fromIso);
+          await admin.from("card_views").update({ lead_id: null })
+            .eq("lead_id", o.lead_id as string).eq("visitor_id", visitorId)
+            .in("username", slugs.flatMap((s) => [s, `${s}__links`])).gte("viewed_at", fromIso);
+        }
       }
+    }
+
+    // The SAME person sharing again from the same browser: clear the marks and
+    // keep bound_at. Moving it to now moved the contact's history window with
+    // it, and the visit they were first captured in (read from shortly before
+    // bound_at) vanished from their timeline on a one-tap re-share.
+    const { data: existing } = await admin
+      .from("contact_devices")
+      .select("id, bound_via, bound_at")
+      .eq("lead_id", leadId)
+      .eq("visitor_id", visitorId)
+      .maybeSingle();
+    if (existing && existing.bound_via === "form" && existing.bound_at) {
+      const { error } = await admin
+        .from("contact_devices")
+        .update({ superseded_at: null, wrong_at: null })
+        .eq("id", existing.id as string);
+      if (error) return "skipped";
+      await stampShareVisit(admin, { leadId, ownerId, visitorId, nowMs });
+      return "bound";
     }
 
     // A fresh submission is the strongest evidence there is, so it clears an
@@ -266,15 +308,74 @@ export async function bindFormDevice(
         owner_id: ownerId,
         visitor_id: visitorId,
         bound_via: "form",
-        bound_at: new Date().toISOString(),
+        bound_at: new Date(nowMs).toISOString(),
         superseded_at: null,
         wrong_at: null,
       },
       { onConflict: "lead_id,visitor_id" },
     );
-    return error ? "skipped" : "bound";
+    if (error) return "skipped";
+    await stampShareVisit(admin, { leadId, ownerId, visitorId, nowMs });
+    return "bound";
   } catch {
     return "skipped";
+  }
+}
+
+/** Every slug this owner's events are filed under (lib/owner-usernames, on
+ *  the client this module was handed). */
+async function ownerSlugs(admin: Admin, ownerId: string): Promise<string[]> {
+  const [{ data: profile }, { data: cards }] = await Promise.all([
+    admin.from("profiles").select("username").eq("id", ownerId).maybeSingle(),
+    admin.from("cards").select("username").eq("user_id", ownerId),
+  ]);
+  const names = [profile?.username, ...(cards ?? []).map((c) => c.username)].filter((n): n is string => typeof n === "string" && !!n);
+  return names.length ? names : ["__none__"];
+}
+
+/** The visit that leads up to a share — the window the contact's history has
+ *  always credited to them (card-events GET: two hours before the binding). */
+const SHARE_LEAD_IN_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * Stamp the visit they shared in with their id, so it is THEIR data rather
+ * than a window recomputed at read time. Recomputed, it moved: a one-tap
+ * re-share shifted bound_at and the capture visit vanished from their history;
+ * another person sharing on the same device later pulled it into theirs; and
+ * "3rd visit this week" (stamped card_views) never counted it.
+ *
+ * Only events nobody was named for, from this browser, on this owner's cards,
+ * and never earlier than the last time ANOTHER contact's binding on this
+ * browser could still have been theirs. Best effort: a failure leaves the
+ * read-time window doing what it always did.
+ */
+async function stampShareVisit(
+  admin: Admin,
+  opts: { leadId: string; ownerId: string; visitorId: string; nowMs: number },
+): Promise<void> {
+  try {
+    const { leadId, ownerId, visitorId, nowMs } = opts;
+    const { data: otherBindings } = await admin
+      .from("contact_devices")
+      .select("bound_at")
+      .eq("owner_id", ownerId)
+      .eq("visitor_id", visitorId)
+      .neq("lead_id", leadId);
+    const floor = (otherBindings ?? [])
+      .map((b) => (b.bound_at ? new Date(b.bound_at as string).getTime() + VIEW_VISIT_WINDOW_MS : 0))
+      .filter((t) => t <= nowMs)
+      .reduce((max, t) => Math.max(max, t), nowMs - SHARE_LEAD_IN_MS);
+    const fromIso = new Date(floor).toISOString();
+    const untilIso = new Date(nowMs + 60_000).toISOString();
+    const slugs = await ownerSlugs(admin, ownerId);
+    await admin.from("card_events").update({ lead_id: leadId, lead_confidence: "form" })
+      .eq("visitor_id", visitorId).is("lead_id", null)
+      .in("card_owner_username", slugs).gte("created_at", fromIso).lte("created_at", untilIso);
+    await admin.from("card_views").update({ lead_id: leadId })
+      .eq("visitor_id", visitorId).is("lead_id", null)
+      .in("username", slugs.flatMap((s) => [s, `${s}__links`])).gte("viewed_at", fromIso).lte("viewed_at", untilIso);
+  } catch {
+    /* the read-time window still credits the visit */
   }
 }
 

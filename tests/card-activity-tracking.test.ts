@@ -22,9 +22,12 @@ describe("what the owner is told", () => {
     }
   });
 
-  it("distinguishes a Swift Links view from a card view", () => {
-    expect(cardEventNotice({ eventType: "viewed_card", visitorName: "Aaron", nameConfirmed: true, source: "swift_links" })!.body)
+  it("distinguishes a Swift Links view from a card view — by the page, not the source", () => {
+    expect(cardEventNotice({ eventType: "viewed_card", visitorName: "Aaron", nameConfirmed: true, surface: "links", source: "swift_links" })!.body)
       .toBe("Aaron viewed your Swift Links.");
+    // Tapped through from Swift Links to the card: a CARD view.
+    expect(cardEventNotice({ eventType: "viewed_card", visitorName: "Aaron", nameConfirmed: true, surface: "card", source: "swift_links" })!.body)
+      .toBe("Aaron viewed your card.");
     expect(cardEventNotice({ eventType: "viewed_card", visitorName: "Aaron", nameConfirmed: true, source: "qr_code" })!.body)
       .toBe("Aaron viewed your card.");
   });

@@ -494,7 +494,12 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
   // shown regardless. A failed write says so, and the next tap tries again.
   function copy() {
     if (copyState === "copying" || copyState === "generating") return;
-    const text = () => new Blob([`${name}\n${cardUrl}`], { type: "text/plain" });
+    // The plain-text copy is what lands when this is pasted into a text, a DM
+    // or a note — not an email signature. It carries the PLAIN card link:
+    // with ?source=email_signature on it, everyone who opened that text was
+    // recorded "from your Swift Signature". Only the HTML (the signature that
+    // goes into mail) keeps the tag.
+    const text = () => new Blob([`${name}\n${cardUrl.split("?")[0]}`], { type: "text/plain" });
     const html = (img: string) => new Blob([buildSignatureHtml(name, company, cardUrl, img)], { type: "text/html" });
     const fresh = isFresh() ? lastUrlRef.current : null;
     setCopyState(fresh ? "copying" : "generating");

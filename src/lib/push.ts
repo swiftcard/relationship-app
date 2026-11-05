@@ -4,6 +4,7 @@ import { isApnsEndpoint, sendApnsBadge, sendApnsDetailed } from "@/lib/apns";
 import { isFcmEndpoint, sendFcmDetailed } from "@/lib/fcm";
 import { reportError as reportServerError } from "@/lib/report-error";
 import { assertSafeUrl } from "@/lib/safe-fetch";
+import { SEEDED_VISITOR_PREFIX } from "@/lib/seeded-views";
 import { isPaidProfile, PLAN_COLUMNS } from "@/lib/effective-plan";
 import { stripLocationMarks, teaseLocation } from "@/lib/location-privacy";
 import { genericNames, stripNameMarks } from "@/lib/contact-privacy";
@@ -159,13 +160,17 @@ export async function sendPushToUser(userId: string, payload: {
       // "sent" alone can no longer answer these questions: a silent update logs
       // "rollup" and a held-back one logs "batched", and both are views that
       // happened. Still a closed list — a "no_subscription" row is not a view.
-      .in("outcome", ["sent", "rollup", "batched"])
+      // "catchup_sent" is the 8am catch-up (below): it counts toward the caps
+      // like any alert, and is never the hour's view alert.
+      .in("outcome", ["sent", "catchup_sent", "rollup", "batched"])
       .gte("created_at", since)
       .order("created_at", { ascending: false })
       .limit(500);
     for (const row of recent ?? []) {
       const cat = row.category as PushCategory;
-      const outcome = row.outcome as string;
+      const raw = row.outcome as string;
+      // The morning catch-up is a sent alert for every cap…
+      const outcome = raw === "catchup_sent" ? "sent" : raw;
       const at = Date.parse(row.created_at as string);
       // The cap counts real interruptions only — never a silent update, never
       // something that was suppressed.
@@ -173,7 +178,9 @@ export async function sendPushToUser(userId: string, payload: {
       if (outcome === "sent" && cat === "contact_return") contactReturnSentToday++;
       if (outcome === "sent" && cat === "team_alert") teamAlertSentToday++;
       if (outcome === "sent" && SOFT_CAP_CATEGORIES.includes(cat)) softSentToday++;
-      if (cat !== "card_view") continue;
+      // …but not a view. Its top item can be a view, and counting it made the
+      // first real view after it arrive silently as "2 views in the last hour".
+      if (cat !== "card_view" || raw === "catchup_sent") continue;
       if (outcome === "sent" && (!lastViewPushAt || at > lastViewPushAt)) lastViewPushAt = at;
       if (outcome === "rollup" && (!lastViewUpdateAt || at > lastViewUpdateAt)) lastViewUpdateAt = at;
       viewAttemptsSinceAlert.push(at);
@@ -217,9 +224,26 @@ export async function sendPushToUser(userId: string, payload: {
   // with a view count would be a downgrade.
   const isUpdate = verdict.mode === "update";
   const alertAt = lastViewPushAt;
-  const viewsThisHour = alertAt
+  // THE NUMBER IS THE CARD'S VIEWS, not this account's push attempts
+  // (2026-10-23). Attempts were counted across every card while the banner
+  // named one ("2 views" under "Card: Work" when Work had one), and missed the
+  // views that never asked to push (a known contact's, one over the flood cap,
+  // a visitor's second page). card_views for the tagged card since the hour's
+  // alert is exactly what its chart shows; attempts only when that can't be read.
+  let viewsThisHour = alertAt
     ? viewAttemptsSinceAlert.filter((at) => at >= alertAt).length + 1
     : 1;
+  if (isUpdate && alertAt && payload.cardOwner) {
+    try {
+      const { count, error } = await admin
+        .from("card_views")
+        .select("id", { count: "exact", head: true })
+        .in("username", [payload.cardOwner, `${payload.cardOwner}__links`])
+        .gte("viewed_at", new Date(alertAt).toISOString())
+        .or(`visitor_id.is.null,visitor_id.not.like.${SEEDED_VISITOR_PREFIX}%`);
+      if (!error && typeof count === "number" && count > 0) viewsThisHour = count;
+    } catch { /* the attempt count stands */ }
+  }
 
   const { data: subs } = await admin
     .from("push_subscriptions")
@@ -254,7 +278,7 @@ export async function sendPushToUser(userId: string, payload: {
   payload = { ...payload, body: withDeviceIfItFits(payload.body, paid, plainBody) };
   payload = {
     ...payload,
-    title: fitBody(isUpdate ? `${viewsThisHour} views in the last hour` : plainBody(payload.title), MAX_TITLE_CHARS),
+    title: fitBody(isUpdate ? `${viewsThisHour} ${viewsThisHour === 1 ? "view" : "views"} in the last hour` : plainBody(payload.title), MAX_TITLE_CHARS),
     // The place survives the trim: it ends the sentence, and on Pro it is the
     // point of the notification (lib/push-policy fitBodyKeepingPlace).
     body: fitBodyKeepingPlace(payload.body, plainBody),
@@ -409,7 +433,7 @@ export async function sendPushToUser(userId: string, payload: {
   // the window forever and the owner would never hear the next real alert.
   // A rollup that reached nobody logs "failed" like anything else, so the
   // throttle doesn't hold back the next attempt on the strength of a no-op.
-  await log(delivered ? (isUpdate ? "rollup" : "sent") : "failed", delivered);
+  await log(delivered ? (isUpdate ? "rollup" : payload.catchup ? "catchup_sent" : "sent") : "failed", delivered);
   return results;
 }
 

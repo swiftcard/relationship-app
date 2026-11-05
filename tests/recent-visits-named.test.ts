@@ -31,7 +31,7 @@ describe("the visit in which they shared is theirs", () => {
   it("named, with 'Shared their details' first among what they did", () => {
     const [v] = buildRecentVisits({ events, history: [], leads: [priya], bindings, shares, paid: true, limit: 5 });
     expect(v.who).toBe("Priya Shah");
-    expect(v.actions).toEqual(["Shared their details", "Saved your contact"]);
+    expect(v.actions).toEqual(["Shared their details", "Downloaded your contact card"]);
   });
 
   it("a visit from BEFORE the binding's lead-in stays anonymous", () => {

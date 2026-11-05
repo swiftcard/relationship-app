@@ -11,7 +11,7 @@ import {
 } from "@/lib/team-alerts";
 import { displayLabelFrom } from "@/lib/office-notify";
 import { officeNotificationPath } from "@/lib/office-notification-links";
-import { isRecapHour, isTeamCheckHour, isTeamRecapBellHour, noticeGivenToday, personalRecapCopy, rankPlaces, teamRecapCopy } from "@/lib/weekly-recap";
+import { isRecapHour, isTeamCheckHour, isTeamRecapBellHour, noticeGivenToday, personalRecapCopy, rankRecapPlaces, teamRecapCopy } from "@/lib/weekly-recap";
 
 // ── The hourly notification sweep: Monday recaps + the daily team check ─────
 //
@@ -213,18 +213,22 @@ export async function GET(req: NextRequest) {
       const slugs = (await slugsFor(admin, [userId])).get(userId) ?? [];
       if (!slugs.length) continue;
       const since = new Date(now - 7 * DAY).toISOString();
-      const [{ data: views }, { count: contacts }, { count: viewCount }] = await Promise.all([
+      const [{ data: views }, { count: contacts }, { count: viewCount }, { count: addedByOwner }] = await Promise.all([
         // Rows give the places (the top few are all the copy needs); the COUNT
         // comes from an exact count below — rows stop at PostgREST's 1000 cap,
         // so "Your week: N views" could never say more than 1,000.
-        admin.from("card_views").select("location").in("username", viewKeys(slugs)).gte("viewed_at", since).limit(1000),
+        admin.from("card_views").select("location, geo_accuracy").in("username", viewKeys(slugs)).gte("viewed_at", since).limit(1000),
         admin.from("leads").select("id", { count: "exact", head: true }).in("card_owner", slugs).not("tags", "cs", "{demo}").gte("created_at", since),
         admin.from("card_views").select("id", { count: "exact", head: true }).in("username", viewKeys(slugs)).gte("viewed_at", since),
+        // The contacts the owner put in themselves — never "shared their details".
+        admin.from("leads").select("id", { count: "exact", head: true }).in("card_owner", slugs).not("tags", "cs", "{demo}")
+          .in("source", ["manual", "scanner", "imported"]).gte("created_at", since),
       ]);
       const copy = personalRecapCopy({
         views: viewCount ?? views?.length ?? 0,
         contacts: contacts ?? 0,
-        places: rankPlaces((views ?? []).map((v) => v.location as string | null)),
+        sharedContacts: Math.max(0, (contacts ?? 0) - (addedByOwner ?? 0)),
+        places: rankRecapPlaces((views ?? []) as { location: string | null; geo_accuracy: string | null }[]),
       });
       if (!copy) continue;
       await markRecap(admin, userId, plan);

@@ -2,6 +2,8 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { resolveOfficeContactScope, scopedOfficeLeads } from "@/lib/office-leads";
 import { followUpState, type FollowUpStep } from "@/lib/lead-followup";
 import { CRON_HOUR_UTC } from "@/lib/cron-schedule";
+import { isOwnersOwnDetails, ownerContactKeys } from "@/lib/known-contact";
+import { VIEW_VISIT_WINDOW_MS } from "@/lib/view-window";
 import type {
   ContactTimelineEvent,
   ContactTimelineMessage,
@@ -127,6 +129,10 @@ async function contactEvents(
   visitorId: string | null,
   createdAt: string,
   slugs: string[],
+  /** The teammate whose contact this is (null once they've left), and the
+   *  contact's own details — rule 3's two extra limits. */
+  ownerUserId: string | null,
+  contact: { email: unknown; phone: unknown },
 ): Promise<ContactTimelineEvent[]> {
   if (!slugs.length) return [];
   const admin = getAdminSupabase();
@@ -161,14 +167,36 @@ async function contactEvents(
   const active = (bindings ?? []).filter((bd) =>
     !bd.superseded_at && !bd.wrong_at &&
     !(bd.bound_via === "link" && ((bd.link_device_index as number | null) ?? 1) > 1));
+  // Never back into another contact's turn on the same browser (member route).
+  const { data: sharedDevice } = active.length && ownerUserId
+    ? await admin.from("contact_devices").select("visitor_id, bound_at")
+      .eq("owner_id", ownerUserId).neq("lead_id", contactId).in("visitor_id", active.map((bd) => bd.visitor_id as string))
+    : { data: [] as { visitor_id: string; bound_at: string | null }[] };
   for (const bd of active) {
+    const boundAt = (bd.bound_at as string | null) ?? createdAt;
     const from = since((bd.bound_at as string | null) ?? createdAt, bd.bound_via !== "link");
     let q = admin.from("card_events").select(cols).in("card_owner_username", slugs)
       .eq("visitor_id", bd.visitor_id as string).or(notAnotherContact);
     if (from) q = q.gte("created_at", from);
+    // A browser only this contact was ever bound to stays theirs for good —
+    // return visits included. Once someone else was bound to it too, only the
+    // visit that led to the binding: an unstamped event after it is one the
+    // resolver refused to name (see the member's route).
+    const others = (sharedDevice ?? []).filter((o) => o.visitor_id === bd.visitor_id);
+    if (others.length && boundAt) q = q.lte("created_at", new Date(new Date(boundAt).getTime() + VIEW_VISIT_WINDOW_MS).toISOString());
+    const prior = others
+      .filter((o) => o.bound_at && boundAt && Date.parse(o.bound_at) < Date.parse(boundAt))
+      .map((o) => new Date(o.bound_at as string).getTime() + VIEW_VISIT_WINDOW_MS);
+    if (prior.length) q = q.gte("created_at", new Date(Math.max(...prior)).toISOString());
     lookups.push(q);
   }
-  if (visitorId && !(bindings ?? []).some((bd) => bd.visitor_id === visitorId)) {
+  // Rule 3 only for a browser bound to none of the teammate's contacts, and
+  // never for the teammate's own details (a test of their own form).
+  const browserBound = visitorId && !(bindings ?? []).some((bd) => bd.visitor_id === visitorId)
+    ? !ownerUserId || ((await admin.from("contact_devices").select("id").eq("owner_id", ownerUserId).eq("visitor_id", visitorId).limit(1)).data ?? []).length > 0
+    : true;
+  const ownersOwn = !browserBound && !!ownerUserId && isOwnersOwnDetails(contact, await ownerContactKeys(admin, ownerUserId));
+  if (visitorId && !browserBound && !ownersOwn) {
     let q = admin.from("card_events").select(cols).in("card_owner_username", slugs)
       .eq("visitor_id", visitorId).or(notAnotherContact);
     const from = since(createdAt, true);
@@ -268,7 +296,7 @@ export async function getOfficeContactDetail(opts: {
   const needsArrival = source === "swift_connect" || source === "save_contact_conversion";
   const [events, messageRows] = await Promise.all([
     window || needsArrival
-      ? contactEvents(contactId, (row.visitor_id as string | null) ?? null, createdAt, ownerSlugs)
+      ? contactEvents(contactId, (row.visitor_id as string | null) ?? null, createdAt, ownerSlugs, owner.userId, { email: row.email, phone: row.phone })
       : Promise.resolve([] as ContactTimelineEvent[]),
     window
       ? (() => {

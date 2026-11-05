@@ -24,6 +24,8 @@ type Row = Record<string, unknown>;
 let profile: Row = { plan: "free", customization: {} };
 let subscriptions: Row[] = [{ endpoint: "apns:tok-1", p256dh: "apns", auth: "apns" }];
 let pushLog: Row[] = [];
+// card_views for the tagged card since the hour's alert (the rollup's number).
+let cardViewCount: number | null = null;
 const inserted: Row[] = [];
 const apnsSent: Row[] = [];
 
@@ -68,6 +70,12 @@ vi.mock("@/lib/supabase-admin", () => ({
           insert: async (row: Row) => { inserted.push(row); return {}; },
           select: () => logQuery(),
         };
+      }
+      if (table === "card_views") {
+        return { select: () => ({ in: () => ({ gte: () => ({ or: async () => ({ count: cardViewCount, error: null }) }) }) }) };
+      }
+      if (table === "cards") {
+        return { select: () => ({ eq: async () => ({ data: [] }) }) };
       }
       throw new Error("unexpected table " + table);
     },
@@ -254,6 +262,33 @@ describe("card views are batched to one an hour", () => {
     ];
     await view();
     expect(apnsSent[0].title).toBe("4 views in the last hour");
+  });
+
+  // 2026-10-23: the number is the CARD's views since the alert — what its chart
+  // shows — not this account's push attempts across every card.
+  it("counts the tagged card's real views, not the account's push attempts", async () => {
+    pushLog = [
+      { category: "card_view", outcome: "sent", created_at: "2026-09-06T13:30:00.000Z" },
+      { category: "card_view", outcome: "batched", created_at: "2026-09-06T13:40:00.000Z" },
+    ];
+    cardViewCount = 5;
+    await sendPushToUser("u1", { category: "card_view", title: "Card viewed", body: "Someone viewed your card.", url: "/x", tag: "visit-abc", cardOwner: "dana-acme" });
+    expect(apnsSent[0].title).toBe("5 views in the last hour");
+    cardViewCount = null;
+  });
+
+  it("the 8am catch-up is never the hour's view alert", async () => {
+    // Its top item was a view; the first real view after it is an ALERT, not a
+    // silent "2 views in the last hour".
+    pushLog = [{ category: "card_view", outcome: "catchup_sent", created_at: "2026-09-06T13:30:00.000Z" }];
+    await view();
+    expect(apnsSent[0]).toMatchObject({ title: "Card viewed" });
+    expect(apnsSent[0].silent).toBeFalsy();
+  });
+
+  it("logs the catch-up as catchup_sent", () => {
+    expect(readFileSync(join(process.cwd(), "src/lib/push.ts"), "utf8"))
+      .toContain('await log(delivered ? (isUpdate ? "rollup" : payload.catchup ? "catchup_sent" : "sent") : "failed", delivered);');
   });
 
   it("holds the update itself to one every five minutes", async () => {

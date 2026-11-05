@@ -64,23 +64,6 @@ export function edgeGeo(req: NextRequest): GeoGuess {
   return { city, regionCode, regionName: regionCode ? US_STATES[regionCode] ?? null : null, country, org: null };
 }
 
-/**
- * Edge headers only — the synchronous form. Kept for callers that have no IP
- * to cross-check with; everything that records an event uses resolveLocation.
- */
-export function requestLocation(req: NextRequest): string | null {
-  return formatLocation(edgeGeo(req));
-}
-
-/**
- * Edge headers cross-checked against a second database. Never throws, never
- * slower than the timeout, falls back to the edge answer on any failure.
- */
-export async function resolveLocation(req: NextRequest, ip: string): Promise<string | null> {
-  const edge = edgeGeo(req);
-  const second = await secondOpinion(ip);
-  return reconcile(edge, second);
-}
 
 // ── How much of the answer is actually known ─────────────────────────────────
 //
@@ -114,7 +97,7 @@ export type GeoAccuracy =
   | "country";
 
 export type GeoResult = {
-  /** Exactly what resolveLocation() has always returned — the stored label. */
+  /** The stored label: edge headers cross-checked against a second database. */
   label: string | null;
   /** Null only when there is no label at all. */
   accuracy: GeoAccuracy | null;
@@ -139,11 +122,10 @@ export type GeoResult = {
 };
 
 /**
- * The full geo answer for one request: the same label as resolveLocation, plus
- * how much of it is real.
+ * The full geo answer for one request: the label, plus how much of it is real.
  *
- * Same cost as resolveLocation — one cached second-opinion lookup — so the
- * ingest path pays nothing extra for the honesty.
+ * One cached second-opinion lookup — the ingest path pays nothing extra for
+ * the honesty.
  */
 export async function resolveGeo(req: NextRequest, ip: string): Promise<GeoResult> {
   const edge = edgeGeo(req);
@@ -188,11 +170,8 @@ export async function resolveGeo(req: NextRequest, ip: string): Promise<GeoResul
  * Kept returning a bare string so every existing caller and test is untouched;
  * reconcileDetailed is the same decision with the confidence attached.
  */
-export function reconcile(edge: GeoGuess, second: GeoGuess | null): string | null {
-  return reconcileDetailed(edge, second).label;
-}
-
-/** reconcile(), plus which rung of the confidence ladder the answer came off. */
+/** The label two databases support, plus which rung of the confidence ladder
+ *  it came off. Everything that records uses it through resolveGeo. */
 export function reconcileDetailed(
   edge: GeoGuess,
   second: GeoGuess | null,
@@ -408,8 +387,14 @@ async function lookup(ip: string): Promise<GeoGuess | null> {
 const PRIVACY_RELAY =
   /\b(akamai|cloudflare|fastly|nordvpn|expressvpn|surfshark|mullvad|private internet access|proton|ipvanish|cyberghost|windscribe|tunnelbear)\b/i;
 
+// Facebook / Meta Platforms (AS32934): the link checker Facebook sends when a
+// card link is posted runs JavaScript with a desktop browser User-Agent, so it
+// passed the bot gate and was counted as a person "on the Facebook network"
+// (2026-10-19, Chrome/74 on Windows, 8 s on the page). Same rule as Google and
+// Microsoft above it: their own address space is machines far more than
+// readers.
 const CLOUD_HOSTING =
-  /\b(amazon|aws|amazon technologies|google cloud|google llc|microsoft|azure|digitalocean|linode|ovh|hetzner|vultr|contabo|m247|datacamp|leaseweb|choopa|quadranet|hostinger|godaddy|namecheap|oracle cloud|oracle corporation|alibaba|tencent cloud|scaleway|upcloud|packet|equinix|zenlayer|vercel|fly\.io|ovhcloud|colocrossing|psychz|limestone networks|hosting|datacenter|data center|colocation)\b/i;
+  /\b(amazon|aws|amazon technologies|google cloud|google llc|microsoft|azure|digitalocean|linode|ovh|hetzner|vultr|contabo|m247|datacamp|leaseweb|choopa|quadranet|hostinger|godaddy|namecheap|oracle cloud|oracle corporation|alibaba|tencent cloud|scaleway|upcloud|packet|equinix|zenlayer|vercel|fly\.io|facebook|meta platforms|ovhcloud|colocrossing|psychz|limestone networks|hosting|datacenter|data center|colocation)\b/i;
 
 /** Either family: the IP belongs to infrastructure, so a town derived from it
  *  is the infrastructure's town. Drives the accuracy downgrade only — unchanged

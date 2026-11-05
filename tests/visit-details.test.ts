@@ -189,11 +189,11 @@ describe("Recent visits", () => {
       id: "v2", who: "Someone", surface: "card", locked: false,
       device: "iPhone 16 Pro · iOS 18", openedIn: "Instagram", from: null, // Instagram's own shim isn't news
       place: "Near Brooklyn, NY", duration: "1m 40s", visitNumber: 2,
-      actions: ["Saved your contact", "Tapped Book a call"],
+      actions: ["Downloaded your contact card", "Tapped Book a call"],
     });
     expect(b).toMatchObject({ who: "Priya Shah", device: "Windows PC", openedIn: "Chrome", from: "from LinkedIn", place: "New York (approximate)", visitNumber: 1 });
     // A save with no view event behind it is still a visit, not a gap.
-    expect(c).toMatchObject({ id: "saveonly", from: "from a QR code", actions: ["Saved your contact"], device: "iPhone · iOS 27" });
+    expect(c).toMatchObject({ id: "saveonly", from: "from a QR code", actions: ["Downloaded your contact card"], device: "iPhone · iOS 27" });
   });
 
   it("Free: the visit is there, the details never leave the server", () => {

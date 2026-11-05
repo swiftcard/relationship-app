@@ -61,10 +61,10 @@ const RANK: Record<PushCategory, number> = {
   contact_saved: 3,
   card_view: 1,
   meeting_booked: 2,
-  // Never held overnight in practice (the recap and the team check are due
-  // from 9am, other team alerts go at send time), and neither writes a
-  // personal bell row this reads — listed so the ranking is total.
+  // Team news is read from office_notifications (below), not the bell.
   team_alert: 2.5,
+  // The Monday recap, when a late-Monday run met quiet hours
+  // (lib/catchup-category). Lowest: any real news that night leads.
   weekly_recap: 0.5,
   // Push-only, sent 10am–7pm local; writes no bell row, so never held.
   getting_started: 0.25,

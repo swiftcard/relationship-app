@@ -83,11 +83,28 @@ export type MilestoneNotice = {
   title: string;
   /** The authored celebration line, without any card-scope suffix. */
   body: string;
-  /** The number reached, so the caller can state it in its own sentence. */
+  /** The milestone threshold crossed (50, 100…). */
   reached: number;
+  /** The real total right now — above `reached` when an earlier view's
+   *  announcement was skipped, so the sentence never states the threshold as
+   *  if it were the count. */
+  total: number;
   /** The card slug this milestone belongs to (the "__links" suffix stripped). */
   slug: string;
 };
+
+/**
+ * "That's 100 views across your card and Swift Links." — or, when the count has
+ * already gone past the milestone (its announcement was skipped on the view
+ * that crossed it), "You've passed 100 views — 112 across your card and Swift
+ * Links." On 2026-10-15 the old sentence said "That's 100 views" on view 112.
+ */
+export function milestoneCountSentence(reached: number, total: number): string {
+  const r = reached.toLocaleString("en-US");
+  return total > reached
+    ? `You've passed ${r} views — ${total.toLocaleString("en-US")} across your card and Swift Links.`
+    : `That's ${r} views across your card and Swift Links.`;
+}
 
 /** The milestone this view crossed, for the caller to announce, else null. */
 export async function checkViewMilestone(rawUsername: string): Promise<MilestoneNotice | null> {
@@ -161,7 +178,7 @@ export async function checkViewMilestone(rawUsername: string): Promise<Milestone
     // NO PUSH, ever, on any path. A view count is a statistic — the product
     // cheering, not news to act on — and push-policy.ts deliberately has no
     // category that could carry one.
-    return { type, title: m.title, body: m.body, reached, slug: base };
+    return { type, title: m.title, body: m.body, reached, total: count ?? reached, slug: base };
   } catch {
     /* achievements are best-effort — never block view tracking */
     return null;

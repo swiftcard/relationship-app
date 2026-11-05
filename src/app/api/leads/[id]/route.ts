@@ -235,6 +235,15 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const usernames = await getOwnerUsernames(user.id);
   const admin = getAdminSupabase();
 
+  // The FK on card_events.lead_id only nulls the id: the contact's name stays
+  // on every event it was stamped on, and Recent visits went on naming a
+  // contact the owner had deleted. Take it off first, scoped to this owner's
+  // cards so a foreign id can't scrub anyone else's events.
+  await admin.from("card_events")
+    .update({ visitor_name: null, visitor_email: null, visitor_phone: null })
+    .eq("lead_id", id)
+    .in("card_owner_username", usernames);
+
   const { error } = await admin
     .from("leads")
     .delete()

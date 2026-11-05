@@ -25,6 +25,10 @@ const CATEGORY_FOR_TYPE: Record<string, PushCategory> = {
   new_lead: "new_lead",
   lead_reply: "lead_reply",
   payment_failed: "billing_problem",
+  // The Monday recap is due until Monday ends, and quiet hours start at 10pm:
+  // a run at 11:58pm (2026-10-19, four accounts) wrote the bell row, had its
+  // push held, and the morning never said it — "Your week" reached no phone.
+  weekly_recap: "weekly_recap",
 };
 
 export type HeldRow = { type?: unknown; title?: unknown; lead_id?: unknown };

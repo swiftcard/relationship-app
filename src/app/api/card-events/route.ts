@@ -18,16 +18,18 @@ import { stripLocationMarks } from "@/lib/location-privacy";
 import { stripNameMarks } from "@/lib/contact-privacy";
 import { VIEW_VISIT_WINDOW_MS } from "@/lib/view-window";
 import { recordView } from "@/lib/record-view";
-import { resolveKnownContact, touchContactDevice } from "@/lib/known-contact";
+import { isOwnersOwnDetails, ownerContactKeys, resolveKnownContact, touchContactDevice } from "@/lib/known-contact";
 import { bindViaLink, isContactToken } from "@/lib/contact-links";
 import { contactReturnNotice, isLockedContact, isReturnVisit } from "@/lib/contact-return-notify";
 
 import { isPaidProfile } from "@/lib/effective-plan";
+import { isAdminEmail } from "@/lib/admin";
 import { isLockedLead } from "@/lib/lead-access";
 import { isPaidUser } from "@/lib/notification-privacy";
 import { notifyVisit, visitKey } from "@/lib/visit-notify";
+import { milestoneCountSentence } from "@/lib/milestones";
 import { cleanModelHint, cleanOsHint, describeDevice, deviceSentence, openedIn, visitDetailFields } from "@/lib/visit-device";
-import type { PushCategory } from "@/lib/push-policy";
+import { DEFAULT_TIMEZONE, readPushPrefs, type PushCategory } from "@/lib/push-policy";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
@@ -96,9 +98,9 @@ export async function POST(req: NextRequest) {
     const rawSource = str(body?.source, 48);
     const source = rawSource ? storedSource(rawSource) : null;
     const surface: "card" | "links" = body?.surface === "links" ? "links" : "card";
-    const visitor_name = str(body?.visitor_name, 120);
-    const visitor_email = str(body?.visitor_email, 200);
-    const visitor_phone = str(body?.visitor_phone, 40);
+    // No name, email or phone is read from the body: who a visitor is to this
+    // owner is decided on the server (see "WHO viewed" below), and no client
+    // sends them any more.
     // Query strings carry tokens/session ids on referring sites — keep only
     // origin+path, same privacy stance as site-view's host-only referrers.
     const referrer_url = (str(body?.referrer_url, 300) ?? "").split(/[?#]/)[0] || null;
@@ -243,16 +245,15 @@ export async function POST(req: NextRequest) {
       return decided("bot", { bot: true }, { classification: botFamily(ua), classificationReason: "user_agent" });
     }
 
-    // Speculative loads (prefetch/prerender/link preview) are not people —
-    // same guard as /api/views, so the two tables can't disagree about them.
+    // Speculative loads (prefetch/prerender/link preview) are not people.
     const purpose = `${req.headers.get("sec-purpose") ?? ""} ${req.headers.get("purpose") ?? ""} ${req.headers.get("x-purpose") ?? ""}`.toLowerCase();
     if (/prefetch|prerender|preview/.test(purpose)) {
       return decided("prefetch", { prefetch: true }, { classificationReason: "purpose_header" });
     }
 
-    // Only record events for cards that actually serve — /api/views has always
-    // enforced this; this route not doing so meant deleted/deactivated slugs
-    // still generated events, notifications, and CRM traffic.
+    // Only record events for cards that actually serve — without this,
+    // deleted/deactivated slugs still generated events, notifications, and
+    // CRM traffic.
     if (!(await isCardActive(card_owner_username))) {
       return decided("inactive"); // response says nothing: don't reveal which slugs exist
     }
@@ -284,6 +285,16 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // SwiftCard staff are not visitors either. The site admin opening a
+    // customer's card from /admin (or a demo account, or a support check) was
+    // recorded as a view and pushed to that customer as "Swift Card Inc.
+    // viewed your card" — the 5-view milestone on /demo-realty was one. The
+    // session decides, exactly as for the owner; an Office admin viewing a
+    // teammate's card is still counted (self-traffic.ts, deliberately).
+    if (sessionViewer && isAdminEmail(sessionViewer.email)) {
+      return decided("staff", { staff: true }, { identityLevel: "confirmed", classificationReason: "site_admin" });
+    }
+
     // ── Is this someone the owner already KNOWS? ───────────────────────────────
     // Only from a binding the owner earned (they shared their details from this
     // browser, or opened a link the owner sent them) — never from the name the
@@ -310,7 +321,7 @@ export async function POST(req: NextRequest) {
     const knownLeadId = contact.kind === "known" ? contact.leadId : null;
 
     // VIEWS: record the card_views row (chart, counters, locations) HERE,
-    // through the same function /api/views uses, and only carry on to the
+    // through lib/record-view (the one recorder), and only carry on to the
     // notification when it was genuinely recorded. Keyed on the SURFACE
     // ("<slug>__links" for Swift Links), so a card view and a links view by
     // the same visitor are two BARS on the chart. They are still only one
@@ -322,6 +333,9 @@ export async function POST(req: NextRequest) {
     // the card_views row and the card_events row can never disagree about where
     // the visit came from OR about how confident that answer is.
     let viewGeo: GeoResult | null = null;
+    // A save that turned out to be the visit's first sign of life records the
+    // visit's view (below) — and then its viewed_card event too.
+    let companionView = false;
     // The milestone this view crossed, if any. recordView DETECTS it and writes
     // nothing (lib/milestones.ts); folding it into the visit's one notification
     // below is what stopped one view producing two bell rows.
@@ -340,9 +354,6 @@ export async function POST(req: NextRequest) {
         // Only a browser that could keep no identity at all may be deduped on
         // the (shared-by-design) device key — see record-view.ts.
         identityMinted: visitIdentity.minted,
-        // The cookie arrived with the request: a proven identity, so its row
-        // carries no device key and can never be merged with someone else's.
-        identityFromCookie: !visitIdentity.setCookie,
         leadId: knownLeadId,
         replayAt,
         source,
@@ -378,7 +389,6 @@ export async function POST(req: NextRequest) {
         visitorId: visitor_id,
         deviceKey: deviceKeyFor({ ip, userAgent: req.headers.get("user-agent"), username: viewsKey }),
         identityMinted: visitIdentity.minted,
-        identityFromCookie: !visitIdentity.setCookie,
         leadId: knownLeadId,
         replayAt,
         source,
@@ -386,8 +396,10 @@ export async function POST(req: NextRequest) {
         crmDetail,
       });
       // Datacenter egress: recordView refused it as hosting — the save is
-      // refused for the same reason just below; reuse its geo either way.
+      // refused for the same reason just below. Its geo is reused only when
+      // the view was recorded.
       if (recordedGeo) viewGeo = outcome === "recorded" ? recordedGeo : null;
+      companionView = outcome === "recorded";
     }
 
     // ONE VISIT = ONE EVENT. The same visitor re-touching
@@ -396,12 +408,16 @@ export async function POST(req: NextRequest) {
     // and records — and notifies — again. Checked against the DATABASE, not an
     // in-memory throttle: serverless instances don't share memory, which is
     // how one visit used to produce duplicate pushes. Uses the same window as
-    // /api/views (view-window.ts) so the dashboard, the contact timeline, and
+    // the card_views dedupe (view-window.ts) so the dashboard, the contact timeline, and
     // the push notification always agree on whether a view happened.
     const windowStart = new Date((replayAt ?? Date.now()) - VIEW_VISIT_WINDOW_MS).toISOString();
     if (viewOutcome === "recorded") {
       // Already deduped against card_views above (surface-aware).
-    } else if (visitor_id) {
+    } else {
+      // Every request has a visitor id here: resolveVisitIdentity takes the
+      // cookie, adopts the page's id, or mints one — never null. (A branch for
+      // "no visitor id" was unreachable and removed 2026-10-23.)
+      //
       // SURFACE-AWARE, like the card_views dedup. Without the surface term this
       // query answered "has this visitor done this event on this card" and so
       // treated a Swift Links view and a card view as the same event — which is
@@ -449,14 +465,6 @@ export async function POST(req: NextRequest) {
       } else if (dup) {
         return decided("deduped", { deduped: true }, { classificationReason: "event_window" });
       }
-    } else {
-      // No visitor id → nothing to dedupe rows on; hold this path to one event
-      // per (IP, card, type) per window so a stripped-down client can't spam.
-      // The target is part of the key so a visitor with no id can still tap more
-      // than one link in half an hour.
-      if (await isRateLimited(`events-anon:${ip}:${card_owner_username}:${event_type}:${target ?? ""}:${target_label ?? ""}`, 1, VIEW_VISIT_WINDOW_MS)) {
-        return decided("deduped", { deduped: true }, { classificationReason: "no_visitor_id_ip_window" });
-      }
     }
 
     // WHO viewed: the session decides when there is one. The client-supplied
@@ -473,7 +481,6 @@ export async function POST(req: NextRequest) {
     // a visitor this owner knows (lib/known-contact.ts) is named from the
     // owner's OWN record of them, and everyone else is "Someone".
     const ownersOwnContact = contact.kind === "known" && contact.confidence !== "forwarded" ? contact : null;
-    void visitor_name; void visitor_email; void visitor_phone;
     const identity = authoritativeEventIdentity(sessionViewer, {
       visitor_name: ownersOwnContact ? ownersOwnContact.name || null : null,
       visitor_email: null,
@@ -601,6 +608,22 @@ export async function POST(req: NextRequest) {
       return decided("error", {}, geoFields);
     }
 
+    // ONE VIEW = ONE card_views ROW + ONE viewed_card EVENT. When the save
+    // above is what recorded the visit's view, its event is written here
+    // (a millisecond earlier, so it sorts first) — otherwise the chart counted
+    // a view that the contact's history, Recent visits and time on page never
+    // saw. It never notifies: the save's notification is the visit's one buzz.
+    if (companionView) {
+      const { target: _ct, target_label: _ctl, ...viewRow } = row as typeof row & { target_label?: string };
+      void _ct; void _ctl;
+      await admin.from("card_events").insert({
+        ...viewRow, ...hints,
+        event_type: "viewed_card",
+        target: null,
+        created_at: new Date(new Date(row.created_at).getTime() - 1).toISOString(),
+      });
+    }
+
     // What the notification layer did with this event, for the decision log:
     // the one question the audit could not answer was "this view recorded — did
     // the owner hear about it, and if not, why?".
@@ -670,15 +693,36 @@ export async function POST(req: NextRequest) {
           // Links page in one sitting writes two rows (one per surface), which
           // read as "2nd visit". Rows in the same 30-minute visit bucket — the
           // same bucket card_view_bucket() uses — are one visit.
-          const { data: visitRows, error: visitsErr } = await admin
-            .from("card_views")
-            .select("viewed_at")
-            .eq("lead_id", returning.leadId)
-            .gte("viewed_at", new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString())
-            .limit(500);
+          //
+          // THIS CARD ONLY (2026-10-23): the alert is tagged with one card, and
+          // visits to the owner's other cards made "3rd visit" a number this
+          // card's dashboard could not show.
+          const thisCard = [card_owner_username, `${card_owner_username}__links`];
+          const pageKey = surface === "links" ? `${card_owner_username}__links` : card_owner_username;
+          const before = new Date((replayAt ?? Date.now()) - VIEW_VISIT_WINDOW_MS).toISOString();
+          const [{ data: visitRows, error: visitsErr }, { count: viewsBefore }, { count: savesBefore }, { data: leadRow }] = await Promise.all([
+            admin.from("card_views").select("viewed_at")
+              .eq("lead_id", returning.leadId).in("username", thisCard)
+              .gte("viewed_at", new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString())
+              .limit(500),
+            // "re-opened" only when they HAD opened this page: a contact the
+            // owner typed in, opening the link they were texted, is opening
+            // it for the first time.
+            admin.from("card_views").select("id", { count: "exact", head: true })
+              .eq("lead_id", returning.leadId).eq("username", pageKey).lt("viewed_at", before),
+            admin.from("card_events").select("id", { count: "exact", head: true })
+              .eq("lead_id", returning.leadId).eq("event_type", "downloaded_vcard").lt("created_at", before),
+            // Sharing their details is itself proof of a visit: the form is on
+            // the card (Swift Links' is Connect, "swift_connect"), and the
+            // share-back after a download proves the download.
+            admin.from("leads").select("source").eq("id", returning.leadId).maybeSingle(),
+          ]);
           const count = new Set(
             (visitRows ?? []).map((r) => Math.floor(new Date(r.viewed_at as string).getTime() / VIEW_VISIT_WINDOW_MS)),
           ).size;
+          const leadSource = (leadRow?.source as string | null | undefined) ?? null;
+          const addedByOwner = leadSource === "manual" || leadSource === "scanner" || leadSource === "imported";
+          const sharedOnThisPage = !addedByOwner && (surface === "links" ? leadSource === "swift_connect" : leadSource !== "swift_connect");
           returnNotice = contactReturnNotice({
             contact: returning,
             eventType: event_type as "viewed_card" | "downloaded_vcard" | "clicked_link",
@@ -686,6 +730,11 @@ export async function POST(req: NextRequest) {
             linkName: target_label ?? target,
             visitsThisWeek: visitsErr ? 1 : Math.max(count ?? 1, 1),
             paid: isPaidProfile(owner),
+            openedBefore: sharedOnThisPage || (viewsBefore ?? 0) > 0,
+            downloadedBefore: leadSource === "save_contact_conversion" || (savesBefore ?? 0) > 0,
+            // The zone the app learned for quiet hours; New York until it has
+            // (push-policy DEFAULT_TIMEZONE, the same fallback quiet hours use).
+            timeZone: readPushPrefs(owner.customization).timezone ?? DEFAULT_TIMEZONE,
           });
         }
 
@@ -921,7 +970,7 @@ export async function POST(req: NextRequest) {
                 // number counts (lib/milestones.ts sums both surfaces) — the
                 // dashboard shows them split, so "views on /slug" named a total
                 // the owner could find nowhere (2026-10-06 final review).
-                body: `${notice.body} That's ${milestone.reached.toLocaleString("en-US")} views across your card and Swift Links. ${milestone.body}`,
+                body: `${notice.body} ${milestoneCountSentence(milestone.reached, milestone.total)} ${milestone.body}`,
                 url: `${APP_URL}/dashboard?card=${encodeURIComponent(card_owner_username)}`,
               },
             });
@@ -956,22 +1005,21 @@ export async function GET(req: NextRequest) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const params = req.nextUrl.searchParams;
+    // By contact only. The old ?visitor_id= form (a bare browser id, no
+    // binding rules at all) had no caller left and was removed 2026-10-23.
     const leadId = params.get("lead_id");
-    const visitorIdParam = params.get("visitor_id");
-    if (!leadId && !visitorIdParam) return NextResponse.json([], { status: 200 });
+    if (!leadId || !/^[0-9a-f-]{36}$/i.test(leadId)) return NextResponse.json([], { status: 200 });
 
     // All the user's card slugs (profile + every card) — a multi-card account
     // must see the visitor's activity on ANY of its cards, not just the primary.
     const usernames = await getOwnerUsernames(user.id);
     const admin = getAdminSupabase();
 
-    // Identity to match on. `lead_id` is the good path: the contact's details
-    // stay server-side and we can match on more than one of them. `visitor_id`
-    // remains accepted so an older client keeps working.
-    let visitorId = visitorIdParam;
+    // The contact's details stay server-side; the browser only names the id.
+    let visitorId: string | null = null;
     let leadCreatedAt: string | null = null;
-    if (leadId) {
-      if (!/^[0-9a-f-]{36}$/i.test(leadId)) return NextResponse.json([], { status: 200 });
+    let leadContact: { email: unknown; phone: unknown } | null = null;
+    {
       const { data: lead } = await admin
         .from("leads")
         .select("visitor_id, email, phone, card_owner, tags, created_at")
@@ -989,17 +1037,7 @@ export async function GET(req: NextRequest) {
       }
       visitorId = (lead.visitor_id as string | null) ?? null;
       leadCreatedAt = (lead.created_at as string | null) ?? null;
-    } else if (visitorId && !(await isPaidUser(user.id))) {
-      // The older visitor-id path gets the SAME lock (2026-10-06): a Free
-      // account asking by browser id must not read the activity of a contact
-      // it can't see on the lead_id path.
-      const { data: sameBrowser } = await admin
-        .from("leads")
-        .select("tags")
-        .in("card_owner", usernames)
-        .eq("visitor_id", visitorId)
-        .limit(20);
-      if ((sameBrowser ?? []).some((l) => isLockedLead(l))) return NextResponse.json([], { status: 200 });
+      leadContact = { email: lead.email, phone: lead.phone };
     }
 
     // WHAT COUNTS AS THIS CONTACT'S ACTIVITY (2026-09-23 audit: the section
@@ -1019,20 +1057,13 @@ export async function GET(req: NextRequest) {
     //
     // `surface` tells the conversation timeline whether a view was the card or
     // the Swift Links page — without it every links view read "Viewed your
-    // card" while the owner's notification said "Swift Links viewed". Requested
-    // defensively: selecting a column that isn't migrated yet fails the whole
-    // query, and an empty conversation is worse than an unlabelled one.
-    const WANT = "id, event_type, source, visitor_name, visitor_email, created_at";
-    let cols = `${WANT}, surface, target`;
-    {
-      const probe = await admin.from("card_events").select("surface").limit(1);
-      if (probe.error && (probe.error.code === "42703" || probe.error.code === "PGRST204")) cols = WANT;
-    }
-    // lead_confidence arrives with warm-lead-alerts.sql; probed the same way.
-    if (cols !== WANT) {
-      const probe = await admin.from("card_events").select("lead_confidence").limit(1);
-      if (!probe.error) cols = `${cols}, lead_confidence, target_label`;
-    }
+    // card" while the owner's notification said "Swift Links viewed".
+    // card_owner_username names the card on an account with several.
+    // Nothing the timeline doesn't print: visitor_name and visitor_email used
+    // to ride along to the browser unread (37 old rows still hold an email).
+    // Every column here is migrated in production, so the two probes that cost
+    // a query each on every contact opened are gone.
+    const cols = "id, event_type, source, created_at, surface, target, target_label, lead_confidence, card_owner_username";
     // The visit that led to sharing starts before the share itself.
     const LEAD_IN_MS = 2 * 60 * 60 * 1000;
     const since = (iso: string | null | undefined, leadIn: boolean) =>
@@ -1050,32 +1081,60 @@ export async function GET(req: NextRequest) {
       const active = (bindings ?? []).filter((bd) =>
         !bd.superseded_at && !bd.wrong_at &&
         !(bd.bound_via === "link" && ((bd.link_device_index as number | null) ?? 1) > 1));
+      // Another contact bound to the same browser before this one: their turn
+      // on the device ends one visit window after their binding, and this
+      // contact's lead-in never reaches back into it (the family iPad).
+      const { data: sharedDevice } = active.length
+        ? await admin.from("contact_devices").select("visitor_id, bound_at")
+          .eq("owner_id", user.id).neq("lead_id", leadId).in("visitor_id", active.map((bd) => bd.visitor_id as string))
+        : { data: [] as { visitor_id: string; bound_at: string | null }[] };
       for (const bd of active) {
+        const boundAt = (bd.bound_at as string | null) ?? leadCreatedAt;
         const from = since((bd.bound_at as string | null) ?? leadCreatedAt, bd.bound_via !== "link");
         let q = admin.from("card_events").select(cols).in("card_owner_username", usernames)
           .eq("visitor_id", bd.visitor_id as string).or(notAnotherContact!);
         if (from) q = q.gte("created_at", from);
+        // A BROWSER ONLY THIS CONTACT EVER SHARED FROM IS THEIRS, FOR GOOD.
+        // Their return visit days later — the open, the Instagram tap, the
+        // phone tap — belongs in their Activity & Messages (owner, 2026-11-05),
+        // and an event the resolver failed to stamp (an error, a timeout) is
+        // still theirs: nobody else was ever bound to that browser.
+        //
+        // A SHARED browser is different. Once someone else has also been bound
+        // to it, an unstamped event after the binding is one the resolver
+        // refused to name (two people, one device), so only the visit that led
+        // to the binding is read (plus a visit window for the binding to
+        // land) — or both people's timelines showed the same views the bell had
+        // honestly called "Someone".
+        const others = (sharedDevice ?? []).filter((o) => o.visitor_id === bd.visitor_id);
+        if (others.length && boundAt) q = q.lte("created_at", new Date(new Date(boundAt).getTime() + VIEW_VISIT_WINDOW_MS).toISOString());
+        const prior = others
+          .filter((o) => o.bound_at && boundAt && Date.parse(o.bound_at) < Date.parse(boundAt))
+          .map((o) => new Date(o.bound_at as string).getTime() + VIEW_VISIT_WINDOW_MS);
+        if (prior.length) q = q.gte("created_at", new Date(Math.max(...prior)).toISOString());
         lookups.push(q);
       }
       // A contact from before bindings: the browser they shared from — unless
-      // a binding for it exists and was superseded or marked wrong.
-      if (visitorId && !(bindings ?? []).some((bd) => bd.visitor_id === visitorId)) {
+      // that browser is bound to ANY of this owner's contacts (this one
+      // superseded or marked wrong, or someone else's now), or the details are
+      // the owner's own (a test of their own form: every later anonymous visit
+      // from that browser is the owner's).
+      const browserBound = visitorId && !(bindings ?? []).some((bd) => bd.visitor_id === visitorId)
+        ? ((await admin.from("contact_devices").select("id").eq("owner_id", user.id).eq("visitor_id", visitorId).limit(1)).data ?? []).length > 0
+        : true;
+      const ownersOwn = !browserBound && !!leadContact && isOwnersOwnDetails(leadContact, await ownerContactKeys(admin, user.id));
+      if (visitorId && !browserBound && !ownersOwn) {
         let q = admin.from("card_events").select(cols).in("card_owner_username", usernames)
           .eq("visitor_id", visitorId).or(notAnotherContact!);
         const from = since(leadCreatedAt, true);
         if (from) q = q.gte("created_at", from);
         lookups.push(q);
       }
-    } else if (visitorId) {
-      // Older clients asking by visitor id only.
-      lookups.push(admin.from("card_events").select(cols).in("card_owner_username", usernames).eq("visitor_id", visitorId));
     }
 
     const results = await Promise.all(lookups);
     const byId = new Map<string, Record<string, unknown>>();
-    // `cols` is built at runtime (the surface probe above), so PostgREST can no
-    // longer infer a row type from it — rows are read as the plain records this
-    // route already serialised them as.
+    // Rows are read as the plain records this route serialises them as.
     for (const r of results) {
       for (const row of (r.data ?? []) as unknown as Record<string, unknown>[]) {
         byId.set(row.id as string, row);

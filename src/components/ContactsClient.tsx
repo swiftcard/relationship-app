@@ -60,17 +60,9 @@ type CardEvent = {
   /** For clicked_link: the link's own name ("Listings"), when recorded. */
   target_label?: string | null;
   source: string | null;
-  visitor_name: string | null;
-  visitor_email: string | null;
+  /** Which card it happened on — named on the line when there is more than one. */
+  card_owner_username?: string | null;
   created_at: string;
-};
-
-const EVENT_LABELS: Record<string, { label: string; icon: string }> = {
-  viewed_card:           { label: "Viewed your card",           icon: "·" },
-  clicked_save_contact:  { label: "Clicked Save Contact",       icon: "·" },
-  downloaded_vcard:      { label: "Downloaded your contact card", icon: "·" },
-  clicked_link:          { label: "Tapped one of your links",  icon: "·" },
-  shared_info:           { label: "Shared their info",          icon: "✓" },
 };
 
 // Natural-language phrases for the read-only conversation/activity log,
@@ -82,25 +74,20 @@ const EVENT_LABELS: Record<string, { label: string; icon: string }> = {
 // or native API reports back — so whether they tapped Add, edited it, or
 // cancelled is genuinely unknown. The download is the part we performed and can
 // therefore state.
+//
+// Only the three things /api/card-events records. Anything else is left out
+// rather than printed as a raw event name (the Office drawer's rule, lib/
+// office-contact-timeline); "shared their info" is the arrival line's job.
 const ACTIVITY_PHRASES: Record<string, string> = {
   viewed_card:           "viewed your card",
-  clicked_save_contact:  "tapped Save Contact",
   downloaded_vcard:      "downloaded your contact card",
   clicked_link:          "tapped one of your links",
-  shared_info:           "shared their info with you",
 };
 
 // A view carries WHICH PAGE was opened (card_events.surface). Without it every
 // Swift Links view in this timeline read "Viewed your card" — the owner's
 // notification already said "Swift Links viewed", so the bell and the
 // conversation described the same event differently.
-function eventLabel(e: { event_type: string; surface?: string | null }): { label: string; icon: string } {
-  if (e.event_type === "viewed_card" && e.surface === "links") {
-    return { label: "Viewed your Swift Links", icon: "·" };
-  }
-  return EVENT_LABELS[e.event_type] ?? { label: e.event_type, icon: "·" };
-}
-
 function activityPhrase(e: { event_type: string; surface?: string | null; target?: string | null; target_label?: string | null }): string | undefined {
   if (e.event_type === "viewed_card" && e.surface === "links") return "viewed your Swift Links";
   // Name the link when the row knows which one — "tapped your calendly.com
@@ -1863,32 +1850,44 @@ export default function ContactsClient({
                 <p className="text-gray-600 text-sm">Loading activity…</p>
               ) : (() => {
                 const fname = selected.name.split(" ")[0] || "They";
-                const items: { at: string; key: string; kind: "event" | "in" | "out"; icon?: string; text?: string; source?: string | null; body?: string; channel?: string | null; status?: string | null }[] = [];
+                const items: { at: string; key: string; kind: "event" | "in" | "out"; icon?: string; text?: string; source?: string | null; card?: string | null; body?: string; channel?: string | null; status?: string | null }[] = [];
                 for (const ev of events) {
-                  // "clicked_save_contact" always fired alongside "downloaded_vcard"
-                  // (same tap) — we stopped emitting it, and we hide the historical
-                  // ones so old conversations show one "saved your contact" line too.
-                  if (ev.event_type === "clicked_save_contact") continue;
                   // A link the owner sent to this contact, opened on a device
                   // that isn't theirs (forwarded): it says WHO did WHAT — a view,
                   // a tap, a download are different things, not three copies of
                   // "was opened".
-                  const phrase = activityPhrase(ev) ?? ev.event_type.replace(/_/g, " ");
+                  const phrase = activityPhrase(ev);
+                  if (!phrase) continue;
                   const text = ev.lead_confidence === "forwarded"
                     ? (ev.event_type === "viewed_card" ? `Your link to ${fname} was opened on another device` : `Someone with your link to ${fname} ${phrase}`)
                     : `${fname} ${phrase}`;
-                  items.push({ at: ev.created_at, key: `ev-${ev.id}`, kind: "event", icon: eventLabel(ev).icon, text, source: ev.source });
+                  // WHICH CARD, when there is more than one: "viewed your card"
+                  // alone didn't say whether it was the Realty or the Mortgage one.
+                  const onCard = userCards.length > 1 && ev.card_owner_username
+                    ? (userCards.find((c) => c.username === ev.card_owner_username)?.name?.trim() || `/${ev.card_owner_username}`)
+                    : null;
+                  items.push({ at: ev.created_at, key: `ev-${ev.id}`, kind: "event", icon: "·", text, source: ev.source, card: onCard });
                 }
                 // How this contact ARRIVED — only what really happened. It used
                 // to say "{name} shared their info with you" on EVERY contact,
                 // including ones the owner typed in or scanned, and the sample.
                 const isSample = (selected.tags ?? []).includes("demo");
-                const addedByOwner = selected.source === "manual";
+                // Typed in, scanned or imported by the owner — never "shared".
+                const addedByOwner = selected.source === "manual" || selected.source === "scanner" || selected.source === "imported";
+                // Two sources name the BUTTON they used, not a channel: say what
+                // they did (the Office drawer's wording, lib/office-contact-
+                // timeline), never "via swift connect".
+                const sharedText = selected.source === "swift_connect"
+                  ? `${fname} tapped Connect on your Swift Links and shared their info`
+                  : selected.source === "save_contact_conversion"
+                    ? `${fname} downloaded your contact card, then shared their info`
+                    : `${fname} shared their info with you`;
+                const sharedVia = selected.source === "swift_connect" || selected.source === "save_contact_conversion" ? null : selected.source;
                 items.push(isSample
                   ? { at: selected.created_at, key: "shared", kind: "event", icon: "✦", text: `Sample contact — ${fname} isn't a real person. It's here to show how a shared contact looks.`, source: null }
                   : addedByOwner
                     ? { at: selected.created_at, key: "shared", kind: "event", icon: "+", text: `You added ${fname} to your contacts`, source: null }
-                    : { at: selected.created_at, key: "shared", kind: "event", icon: "✓", text: `${fname} shared their info with you`, source: selected.source });
+                    : { at: selected.created_at, key: "shared", kind: "event", icon: "✓", text: sharedText, source: sharedVia });
                 // The note they typed when they shared — theirs, so it is only
                 // shown as coming from them when they did share.
                 if (selected.message && !addedByOwner) items.push({ at: selected.created_at, key: "note", kind: "in", body: selected.message });
@@ -1963,6 +1962,9 @@ export default function ContactsClient({
                                 makes a spaceless string wrap. */}
                             <p className="text-gray-300 text-[0.8125rem] leading-snug break-words">
                               {it.text}
+                              {it.card && (
+                                <span className="text-[0.625rem] text-gray-500 whitespace-nowrap"> · {it.card}</span>
+                              )}
                               {it.source && it.source !== "direct_link" && (
                                 <span className="text-[0.625rem] text-blue-400 whitespace-nowrap"> · via {getSourceLabel(it.source)}</span>
                               )}

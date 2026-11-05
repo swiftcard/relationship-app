@@ -117,13 +117,20 @@ export function selfViewTarget(to: string | null | undefined): string | null {
 export function ownLiveHref(userId: string | null | undefined, url: string, appUrl: string): string {
   if (!userId) return url;
   let path: string;
+  let untagged: string;
   try {
-    path = new URL(url, appUrl).pathname;
+    const parsed = new URL(url, appUrl);
+    path = parsed.pathname;
+    // The fallback is still the OWNER's click: never with a source tag on it
+    // (the signature preview's ?source=email_signature would be counted, and
+    // labelled, as a reader of their signature).
+    parsed.searchParams.delete("source");
+    untagged = parsed.toString();
   } catch {
     return url;
   }
   const target = selfViewTarget(path);
   const token = target ? signSelfLink(userId) : null;
-  if (!target || !token) return url;
+  if (!target || !token) return untagged;
   return `${appUrl.replace(/\/+$/, "")}/api/self-view?to=${encodeURIComponent(target)}&t=${encodeURIComponent(token)}`;
 }

@@ -1,6 +1,9 @@
 import { afterEach, describe, it, expect } from "vitest";
 import type { NextRequest } from "next/server";
-import { requestLocation } from "@/lib/request-geo";
+import { edgeGeo as edgeGeoOf, formatLocation as formatOf } from "@/lib/request-geo";
+// The edge-only label, as resolveGeo composes it (the old requestLocation
+// wrapper had no caller left and was removed 2026-10-23).
+const requestLocation = (req: Parameters<typeof edgeGeoOf>[0]) => formatOf(edgeGeoOf(req));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LOCATION IS THIS REQUEST'S OWN EDGE GEO, HONESTLY DEGRADED.
@@ -63,7 +66,11 @@ describe("requestLocation", () => {
 // and then the only honest label is the level they still agree on.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { edgeGeo, formatLocation, locationAliases, reconcile, resolveLocation, type GeoGuess } from "@/lib/request-geo";
+import { edgeGeo, formatLocation, locationAliases, reconcileDetailed, resolveGeo, type GeoGuess } from "@/lib/request-geo";
+// The label of each decision — what resolveGeo stores (the reconcile and
+// resolveLocation wrappers were test-only and removed 2026-10-23).
+const reconcile = (edge: GeoGuess, second: GeoGuess | null) => reconcileDetailed(edge, second).label;
+const resolveLocation = async (req: Parameters<typeof resolveGeo>[0], ip: string) => (await resolveGeo(req, ip)).label;
 
 const g = (p: Partial<GeoGuess>): GeoGuess => ({ city: null, regionCode: null, regionName: null, country: null, org: null, ...p });
 const NY_EDGE = g({ city: "Bolton Landing", regionCode: "NY", regionName: "New York", country: "US" });
