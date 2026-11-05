@@ -46,8 +46,8 @@ export const PASTE: TabSpec = {
   name: "Paste a Post",
   group: "operating",
   layout: "input",
-  agents: ["replies-facebook", "contact-alignable", "replies-instagram", "contact-instagram-linkinbio"],
-  description: "For places the agents can't search on their own (Facebook groups, Alignable, Instagram): paste a post or a profile here with its link, and the right agent writes the message on its next run. An Instagram post link (instagram.com/p/ or /reel/) with its caption gets a comment draft in Instagram LinkedIn Bio. Taken means an agent picked it up.",
+  agents: ["replies-facebook", "contact-alignable", "contact-instagram", "contact-instagram-linkinbio"],
+  description: "For places the agents can't search on their own (Facebook groups, Alignable, Instagram): paste a post or a profile here with its link, and the right agent writes the message on its next run. An Instagram post link (instagram.com/p/ or /reel/) with its caption gets a comment draft in Instagram LinkedIn Bio if the post is about meeting people, contact details, leads or business relationships; write comment anyway in The Text to override. Taken means an agent picked it up.",
   columns: [
     c("platform", "Platform", { width: 110, owner: true, note: "facebook, alignable, instagram, linkedin, threads, bluesky, quora, indiehackers, reddit, x, tiktok or web" }),
     c("url", "Link", { width: 220, owner: true }),

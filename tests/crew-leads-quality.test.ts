@@ -273,10 +273,11 @@ describe("the workbook's layout", () => {
   // each tab's note said "type sent", not "delete the row" (same columns, same
   // tabs). 2026-11-04: the Instagram LinkedIn Bio tab's note says it holds
   // comments on pasted posts now, not DMs, and Paste a Post says where an
-  // Instagram post goes (same columns). Change this pin only when
-  // that reset is intended.
+  // Instagram post goes (same columns). 2026-11-05: Paste a Post says a post
+  // must be on topic and how to override, and lists the agents that read it
+  // (same columns). Change this pin only when that reset is intended.
   it("the spec hash is the Name, Message, Link one", () => {
-    expect(specHash()).toBe("4d520f357378");
+    expect(specHash()).toBe("1c1852f51e47");
   });
 });
 

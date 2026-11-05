@@ -88,13 +88,25 @@ export const SEARCH_TOPICS = [
 export const ON_TOPIC =
   /network|business cards?|contact (info|card|details)|vcard|qr code|\bnfc\b|digital card|follow(ing)?[ -]?up|referr|realtor|real estate|open house|brokerage|mortgage|loan officer|lender|insurance|\bsales\b|prospect|entrepreneur|small business|business owner|founder|conference|trade ?show|\bexpo\b|summit|chamber|\bbni\b|meetup|mixer|first impression|relationship|introduc|word of mouth/i;
 
-export type IgPost = { url: string; handle: string | null; title: string; text: string; topic: string; pasted?: boolean };
+export type IgPost = { url: string; handle: string | null; title: string; text: string; topic: string; pasted?: boolean; override?: boolean };
 
 /** Pasted posts drafted per run; the rest stay in Paste a Post for the next run. */
 export const PASTES_PER_RUN = 5;
 
-/** A pasted post is drafted unless scoring calls it an ad or giveaway or scores it below this: the owner already chose it. */
-export const PASTE_MIN_SCORE = 0.25;
+/**
+ * A pasted post needs this score to get a comment. 0.25 until 2026-11-05, when
+ * the first live paste (a realtor's "two phones, 15 conversations" joke) scored
+ * 0.35 and still got a comment: a person choosing a post is no reason to talk
+ * in a conversation that isn't about meeting people or keeping in touch. 0.5
+ * is the scorer's "on topic, but thin" line; search finds need 0.6 and a pro.
+ */
+export const PASTE_MIN_SCORE = 0.5;
+
+/** With "comment anyway" in the pasted text the owner overrides the score, down to this floor (ads and giveaways never pass). */
+export const PASTE_OVERRIDE_MIN_SCORE = 0.25;
+
+/** The owner's override: the words "comment anyway" anywhere in Paste a Post's text. They are taken out before scoring and drafting. */
+export const COMMENT_ANYWAY = /\bcomment anyway\b\.?/i;
 
 /** A Paste a Post row this agent owns: an Instagram post or reel link. Profiles stay for Instagram DMs. */
 export function isPastedPost(i: CrewInput): boolean {
@@ -107,8 +119,9 @@ export function fromPaste(i: CrewInput): IgPost | null {
   if (!url) return null;
   const inUrl = /instagram\.com\/([\w.]{1,30})\/(?:p|reels?)\//i.exec(i.url ?? "")?.[1];
   const inText = /(?:^|\s)@([\w.]{2,30})/.exec(i.text)?.[1];
-  const text = i.text.trim();
-  return { url, handle: instagramHandle(inUrl) ?? instagramHandle(inText), title: text.split("\n")[0].slice(0, 200), text: text.slice(0, 1500), topic: "pasted", pasted: true };
+  const override = COMMENT_ANYWAY.test(i.text);
+  const text = i.text.replace(new RegExp(COMMENT_ANYWAY.source, "gi"), "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  return { url, handle: instagramHandle(inUrl) ?? instagramHandle(inText), title: text.split("\n")[0].slice(0, 200), text: text.slice(0, 1500), topic: "pasted", pasted: true, ...(override ? { override } : {}) };
 }
 
 type SearchHit = { url: string; author: string; title: string; text: string };
@@ -172,30 +185,34 @@ const SCORE_SCHEMA = {
 
 export type Scored = { i: number; score: number; post_kind: (typeof POST_KINDS)[number]; professional: boolean; why_selected: string; angle: string; mention_ok: boolean };
 
-const SCORE_SYSTEM = `You pick public Instagram posts where a thoughtful comment from a real person would add something to the conversation. The commenter works on a small company that makes digital business cards, but the comment is NOT an ad: the goal is to be interesting and useful in conversations about networking, exchanging contact info, business cards, business events and relationship building, so people who read it get curious about who wrote it.
-Topics that matter: networking and exchanging contact information; business cards and digital business cards; entrepreneurs and small business owners; sales, real estate, insurance and mortgage professionals; business events, conferences and relationship building.
+const SCORE_SYSTEM = `You pick public Instagram posts where a thoughtful comment from a real person would add something to the conversation. The commenter works on a small company that makes digital business cards, but the comment is NOT an ad: the goal is a useful conversation with a professional who could one day be a customer, in a thread about how they meet people, swap contact details, capture leads or keep business relationships going.
+What the POST itself must be about, best first: meeting people and exchanging contact information (events, open houses, mixers, trade shows, business cards, QR codes); capturing and following up with leads; referral partners and keeping in touch with clients; networking and relationship building in sales, real estate, insurance, mortgage and small business. A professional who is merely busy, or a post that is merely about their job, is not enough.
 For each post:
-- score 0 to 1. High (0.7+) when the post is on those topics, written by a working professional, business owner or event organizer, and a specific comment could add a real idea, answer a question, or ask a sharp follow up question. Low (under 0.4) for ads, giveaways, contests, listings with no discussion, motivational quotes with nothing to add, memes, students, law firms, anything off topic, or a caption too thin to say anything specific about.
+- score 0 to 1. 0.75 and up: the caption itself is about one of those subjects, by a working professional, business owner or organizer, and a specific comment could add a real idea, answer their question, or ask about their situation. 0.5 to 0.7: on one of those subjects but thin, or by a professional touching it in passing. Under 0.5: everything where the comment would have to steer the talk there, such as jokes or vents about being busy, listings, sold or closing announcements, motivational quotes, personal life. Under 0.3: ads, giveaways, contests, memes, students, law firms, anything off topic, or a caption too thin to say anything specific about.
 - post_kind: what the post is.
 - professional: true only if the author is clearly a working professional, business owner or organizer.
 - why_selected: one sentence, specific to this post, on why it's worth a comment.
-- angle: the one concrete thing a comment could add (a practical idea, a question about their specific situation, a relevant observation). Never "compliment them".
+- angle: the one concrete thing a comment could add, taken from what the post says (a practical idea, a question about their specific situation, a relevant observation). Never "compliment them", never "ask what they think", never an angle that drags in networking or contact sharing the post doesn't raise.
 - mention_ok: true ONLY if the post itself asks for a tool, app or way to share contact info or replace paper business cards. Otherwise false.`;
 
-/** Why scoring turned a post down, or null when it may be drafted. Pasted posts only need to be real and on the page's subject. */
-export function rejectReason(s: Scored | undefined, pasted: boolean): string | null {
+/**
+ * Why scoring turned a post down, or null when it may be drafted. A pasted
+ * post skips the "professional" test (a person chose it) but not relevance;
+ * "comment anyway" lowers the bar to PASTE_OVERRIDE_MIN_SCORE.
+ */
+export function rejectReason(s: Scored | undefined, pasted: boolean, override = false): string | null {
   if (!s) return "not scored";
   if (s.post_kind === "ad_or_promo" || s.post_kind === "giveaway") return "ad or giveaway";
-  if (pasted) return s.score >= PASTE_MIN_SCORE ? null : "low relevance";
+  if (pasted) return s.score >= (override ? PASTE_OVERRIDE_MIN_SCORE : PASTE_MIN_SCORE) ? null : "low relevance";
   if (s.score < MIN_SCORE) return "low relevance";
   if (!s.professional) return "not a professional";
   return null;
 }
 
 /** The free part of choosing: drop what scoring said no to, best first (pasted posts first). */
-export function pickPosts(scored: Scored[], n: number, batch: number, pasted: (i: number) => boolean = () => false): Scored[] {
+export function pickPosts(scored: Scored[], n: number, batch: number, pasted: (i: number) => boolean = () => false, override: (i: number) => boolean = () => false): Scored[] {
   return scored
-    .filter((s) => s.i >= 0 && s.i < batch && !rejectReason(s, pasted(s.i)))
+    .filter((s) => s.i >= 0 && s.i < batch && !rejectReason(s, pasted(s.i), override(s.i)))
     .sort((a, b) => Number(pasted(b.i)) - Number(pasted(a.i)) || b.score - a.score)
     .slice(0, n);
 }
@@ -213,10 +230,11 @@ export const COMMENT_SYSTEM = `You write one Instagram comment, for a real perso
 
 Rules:
 - Ground every word in the post you are given. Refer to something specific in it. If you could paste the comment under a different post, rewrite it.
-- Add something: a practical idea, a concrete detail, a real question. No generic praise ("great post", "love this", "so true", "well said", "this is so important", "amazing"), and never open with a compliment.
+- Add something: a practical idea, a concrete detail, a real question. When the post is about meeting people, swapping contact details, capturing leads or keeping in touch with clients, build on exactly that. When it isn't, stay on what it is about; never steer the talk toward networking or contact sharing. No generic praise ("great post", "love this", "so true", "well said", "this is so important", "amazing"), and never open with a compliment.
 - Never invent personal experience, clients, a job, a past, results, numbers or a relationship with them. Don't write "when I was...", "my clients", "in my experience", "I've seen". You may share an idea or ask a question.
 - No emoji, no hashtags, no exclamation points, no em dashes, en dashes or hyphenated words, no links, no @mentions.
-- No corporate or marketing language. Plain words, contractions, like a person typing on their phone. 12 to 40 words. At most one question.
+- A question must be one you would genuinely want answered, about their specific situation, that only this post could prompt. Never engagement bait: no "what do you think", "thoughts", "anyone else", "who else", "how do you do it all", "what's your secret", "drop your", "tag someone", "let me know in the comments". A useful statement beats a weak question.
+- No corporate or marketing language. Plain words, contractions, like a person typing on their phone. 12 to 40 words. At most one question mark in the whole comment.
 - Do not mention SwiftCard, digital business cards as a product, or any product or company, unless the instructions say a mention is allowed. When it is allowed, at most one plain sentence, only because they asked, and say you work on it.
 - Never use these phrases: ${BANNED_PHRASES.join(", ")}.
 
@@ -226,6 +244,8 @@ const EMOJI = /\p{Extended_Pictographic}/u;
 const GENERIC_OPENER = /^(great|love|loved|awesome|amazing|nice|beautiful|so true|this is (so )?(great|true|important|awesome)|well said|totally agree|congrats|congratulations|wow|yes)\b/i;
 const INVENTED = /\b(when i was|my clients?|my team|my broker|my agents?|in my experience|i(?:'ve| have) (seen|found|been|worked|done)|i used to|back when i|years? (in|of) (real estate|sales|insurance|the business))\b/i;
 const PRODUCT = /swift ?card|swiftcard\.me|our app|my app|our product|digital business card app/i;
+/** Questions that fit under any post: they ask for engagement, not about this person. */
+const ENGAGEMENT_BAIT = /\b(what do you (all |guys )?think|(any )?thoughts\s*\?|anyone else|who else|am i (right|wrong)|agree\s*\?|how do you do it all|what'?s your secret|drop (a|an|your)\b|tag (someone|a friend)|let me know (in the comments|below)|comment below|sound familiar\s*\?|can you relate|who can relate|relatable)/i;
 
 /**
  * What's wrong with a comment, in words the rewrite can act on. Empty means
@@ -244,6 +264,7 @@ export function commentProblems(text: string, o: { mentionOk: boolean; recent?: 
   if (/https?:\/\/|www\./i.test(t)) out.add("has a link");
   if (/(^|\s)@[\w.]{2,}/.test(t)) out.add("tags someone");
   if (GENERIC_OPENER.test(t)) out.add("opens with a generic compliment");
+  if (ENGAGEMENT_BAIT.test(t)) out.add("asks a generic engagement question; ask about their situation or say something useful");
   if (INVENTED.test(t)) out.add("claims a personal experience or client we can't back up");
   if (!o.mentionOk && PRODUCT.test(t)) out.add("mentions SwiftCard or a product where the post didn't ask for one");
   for (const r of o.recent ?? []) {
@@ -277,6 +298,29 @@ function overlap(a: string, b: string): number {
 
 const SEEN = `seen:${AGENT_ID}`;
 const RECENT = `recent-comments:${AGENT_ID}`;
+
+/**
+ * What it turned down and why, newest first, for the admin Agents page
+ * (Marketing agents → its card → "Turned down lately"). Not the Sheet: a turned-down
+ * draft is not something to post. Holds only the public post link, the
+ * account, the score and our own draft text, never the caption.
+ */
+export const TURNED_DOWN_KEY = (agentId: string) => `turned-down:${agentId}`;
+/** The agents that keep that list (the admin page reads only these). */
+export const TURNED_DOWN_AGENTS = [AGENT_ID];
+export const TURNED_DOWN_KEEP = 30;
+export type TurnedDown = { at: string; url: string; author: string | null; stage: "score" | "writing check"; reason: string; score: number | null; drafts?: string[] };
+
+async function noteTurnedDown(ctx: AgentContext, t: Omit<TurnedDown, "at">): Promise<void> {
+  try {
+    const key = TURNED_DOWN_KEY(ctx.def.id);
+    const list = (await ctx.store.kvGet<TurnedDown[]>(key)) ?? [];
+    const entry: TurnedDown = { at: ctx.now().toISOString(), ...t, ...(t.drafts ? { drafts: t.drafts.map((d) => d.slice(0, 400)) } : {}) };
+    await ctx.store.kvSet(key, [entry, ...list].slice(0, TURNED_DOWN_KEEP));
+  } catch {
+    /* a diagnostic must never stop the run */
+  }
+}
 
 /** Why a run ended with nothing, in one sentence for the admin page. */
 export function emptyReason(s: Record<string, number>, topics: string[]): string {
@@ -399,14 +443,18 @@ export async function runInstagramConversations(ctx: AgentContext): Promise<RunR
   ctx.stat("posts_scored", batch.length);
   if (!scored?.items?.length) ctx.stat("score_failed");
   const byIndex = new Map((scored?.items ?? []).map((x) => [x.i, x]));
-  batch.forEach((p, i) => {
-    const why = rejectReason(byIndex.get(i), !!p.pasted);
-    if (!why) return;
+  for (const [i, p] of batch.entries()) {
+    const s = byIndex.get(i);
+    const why = rejectReason(s, !!p.pasted, !!p.override);
+    if (!why) continue;
     ctx.stat(`rejected_${why.replace(/\s+/g, "_")}`);
     ctx.stat("rejected_by_score");
-    if (p.pasted) ctx.log(`pasted ${p.url}: no comment (${why}${byIndex.get(i)?.why_selected ? `: ${byIndex.get(i)!.why_selected}` : ""})`);
-  });
-  const qualified = pickPosts(scored?.items ?? [], batch.length, batch.length, (i) => !!batch[i]?.pasted);
+    if (!p.pasted) continue;
+    const hint = why === "low relevance" ? ` Add "comment anyway" to its text in Paste a Post to override.` : "";
+    ctx.log(`pasted ${p.url}: no comment (${why}${s ? `, score ${s.score}` : ""}${s?.why_selected ? `: ${s.why_selected}` : ""}).${hint}`);
+    await noteTurnedDown(ctx, { url: p.url, author: p.handle ? `@${p.handle}` : null, stage: "score", reason: `${why}${s?.why_selected ? `: ${s.why_selected}` : ""}`, score: s?.score ?? null });
+  }
+  const qualified = pickPosts(scored?.items ?? [], batch.length, batch.length, (i) => !!batch[i]?.pasted, (i) => !!batch[i]?.override);
   const perRun = Math.max(0, Math.min(DRAFTS_PER_RUN, Math.floor(ctx.config<number>("drafts_per_run", DRAFTS_PER_RUN))));
   const picks = qualified.slice(0, Math.min(perRun, quota.left));
   if (qualified.length > picks.length) ctx.stat("qualified_not_drafted", qualified.length - picks.length);
@@ -441,6 +489,7 @@ export async function runInstagramConversations(ctx: AgentContext): Promise<RunR
       draft = await ctx.llm.askJson<{ reply: string; reply_fit: string }>("draft", { system: COMMENT_SYSTEM, effort: "medium", maxTokens: 800, schema: DRAFT_SCHEMA as unknown as Record<string, unknown>, prompt: instructions });
       if (!draft?.reply) ctx.stat("draft_empty");
       let problems = draft?.reply ? commentProblems(draft.reply, { mentionOk, recent }) : ["empty"];
+      const tried = draft?.reply ? [draft.reply] : [];
       if (draft?.reply && problems.length) {
         ctx.stat("rewritten_for_style");
         const again = await ctx.llm.askJson<{ reply: string; reply_fit: string }>("revise", {
@@ -450,13 +499,17 @@ export async function runInstagramConversations(ctx: AgentContext): Promise<RunR
           schema: DRAFT_SCHEMA as unknown as Record<string, unknown>,
           prompt: `${instructions}\n\nYOUR DRAFT:\n${draft.reply}\n\nRewrite it without these problems:\n- ${problems.join("\n- ")}`,
         });
-        if (again?.reply) draft = again;
+        if (again?.reply) {
+          draft = again;
+          tried.push(again.reply);
+        }
         problems = draft?.reply ? commentProblems(draft.reply, { mentionOk, recent }) : ["empty"];
       }
       if (!draft?.reply || problems.length) {
         ctx.stat("drafts_failed_checks");
         for (const pr of problems) ctx.stat(`check_${pr.replace(/^(only|\d+) .*words.*$/, "length").replace(/[^a-z]+/gi, "_").slice(0, 40)}`);
         ctx.log(`${p.pasted ? "pasted " : ""}${p.url}: no comment (the draft failed the writing check twice: ${problems.join(", ")})`);
+        await noteTurnedDown(ctx, { url: p.url, author: p.handle ? `@${p.handle}` : null, stage: "writing check", reason: problems.join(", "), score: s.score, drafts: tried });
         continue;
       }
     } catch (e) {
@@ -525,6 +578,6 @@ export const instagramLinkedinBio: AgentDef = {
   schedule: { kind: "on_input", platforms: ["instagram"] },
   dailyUsd: IG_CONVERSATIONS_USD,
   purpose:
-    "Drafts a comment for each Instagram post you paste into Paste a Post (the post's link and its caption): it checks the post is about networking, business cards, events or business relationships, then writes a short comment that adds something (SwiftCard only when the post asks for a tool). Drafts only: edit it in the Sheet, tap the link to open the post, post it yourself.",
+    "Drafts a comment for each Instagram post you paste into Paste a Post (the post's link and its caption): it checks the post is about meeting people, swapping contact details, capturing leads or keeping business relationships going (write comment anyway in the text to override), then writes a short comment that adds something (SwiftCard only when the post asks for a tool). Drafts only: edit it in the Sheet, tap the link to open the post, post it yourself.",
   run: runInstagramConversations,
 };

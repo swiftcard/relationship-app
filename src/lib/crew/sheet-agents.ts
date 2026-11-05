@@ -1,5 +1,6 @@
 import type { AgentDef } from "./agent-def";
 import { plainNeeds, type Tone } from "./agent-status";
+import { TURNED_DOWN_AGENTS, TURNED_DOWN_KEY, type TurnedDown } from "./agents/instagram-conversations";
 import { missingEnv } from "./env";
 import { AGENTS } from "./registry";
 import { effectiveSchedule, nyDayStart, plainSchedule, type ScheduleOverrides } from "./schedule";
@@ -31,6 +32,8 @@ export type SheetAgentRow = {
   tabUrl: string | null;
   running: boolean;
   canStart: boolean;
+  /** What it read and turned down lately, and why (with any rejected drafts). Only agents that keep this list; never in the Sheet. */
+  turnedDown: TurnedDown[];
 };
 
 const WORD: Record<SheetAgentKind, { word: string; tone: Tone }> = {
@@ -66,11 +69,12 @@ export async function loadSheetAgents(store: CrewStore, o: { now: Date; settings
   const defs = sheetAgentDefs();
   const day = nyDayStart(o.now).toISOString();
   // Each agent's own last run (one small read each): a shared "latest 300 runs" would be all continuous finders.
-  const [approvals, coldToday, officeToday, lastRuns] = await Promise.all([
+  const [approvals, coldToday, officeToday, lastRuns, turnedDown] = await Promise.all([
     store.listApprovals({ sinceIso: day, agentIds: defs.map((d) => d.def.id), limit: 5000 }),
     store.countLeadsSince(day, "cold"),
     store.countLeadsSince(day, "office"),
     Promise.all(defs.map((d) => store.recentRuns(d.def.id, 1).then((r) => r[0] ?? null))),
+    Promise.all(defs.map((d) => (TURNED_DOWN_AGENTS.includes(d.def.id) ? store.kvGet<TurnedDown[]>(TURNED_DOWN_KEY(d.def.id)).catch(() => null) : null))),
   ]);
   const byState = new Map(o.states.map((s) => [s.id, s]));
   const leadSource = Object.fromEntries(Object.entries(LEAD_TAB_BY_SOURCE).map(([src, t]) => [t.agents[0], src]));
@@ -94,6 +98,7 @@ export async function loadSheetAgents(store: CrewStore, o: { now: Date; settings
       tabUrl: o.sheetId ? `https://docs.google.com/spreadsheets/d/${o.sheetId}/edit${gid !== undefined ? `#gid=${gid}` : ""}` : null,
       running: !!byState.get(def.id)?.enabled,
       canStart: kind !== "setup",
+      turnedDown: Array.isArray(turnedDown[i]) ? turnedDown[i]! : [],
     };
   });
 }

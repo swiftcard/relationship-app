@@ -41,6 +41,33 @@ export default function SheetAgents({ rows, sheetUrl, back = "lobby" }: { rows: 
             <p className="text-gray-400 text-xs">
               {r.line} {r.addedToday ? <span className="text-gray-200">{r.addedToday} added today.</span> : null}
             </p>
+            {r.turnedDown.length > 0 && (
+              <details className="text-xs text-gray-400" data-turned-down={r.id}>
+                <summary className="cursor-pointer min-h-10 flex items-center text-gray-300">Turned down lately ({r.turnedDown.length})</summary>
+                <p className="mb-1">Posts it read and didn&apos;t comment on, and why. Nothing here was posted or added to the Sheet.</p>
+                <ul className="space-y-2">
+                  {r.turnedDown.map((t) => (
+                    <li key={`${t.at}-${t.url}`} className="border-t border-gray-800 pt-1.5 break-words">
+                      <p>
+                        {new Date(t.at).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} · {t.author ?? "account not shown"}
+                        {t.score !== null ? ` · score ${t.score}` : ""} ·{" "}
+                        <a href={t.url} target="_blank" rel="noopener noreferrer" className="text-blue-300 hover:underline break-all">
+                          open post
+                        </a>
+                      </p>
+                      <p className="text-gray-300">
+                        {t.stage === "score" ? "Not drafted" : "Draft failed the writing check"}: {t.reason}
+                      </p>
+                      {(t.drafts ?? []).map((d, j) => (
+                        <p key={j}>
+                          {j === 0 ? "Draft" : "Rewrite"}: {d}
+                        </p>
+                      ))}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
             <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
               <form method="post" action={`/api/admin/crew/agents/${r.id}`}>
                 <input type="hidden" name="tab" value={back} />
