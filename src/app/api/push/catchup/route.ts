@@ -112,8 +112,10 @@ export async function GET(req: NextRequest) {
   // GitHub's scheduler, which is free and has no such limit.
   //
   // CRON_SECRET stays accepted so the job can move back onto a Vercel cron the
-  // day the plan allows it, with no code change.
-  const accepted = [process.env.PUSH_CATCHUP_SECRET, process.env.CRON_SECRET]
+  // day the plan allows it, with no code change. CLOCK_SECRET is the Supabase
+  // clock's own key (pg_cron push-catchup → clock_call, Vault clock_secret),
+  // which runs this on the hour; GitHub's schedule only fires a few times a day.
+  const accepted = [process.env.CLOCK_SECRET, process.env.PUSH_CATCHUP_SECRET, process.env.CRON_SECRET]
     .filter((s): s is string => Boolean(s))
     .map((s) => `Bearer ${s}`);
   // A secret that is unset must never authorize: `Bearer undefined` would

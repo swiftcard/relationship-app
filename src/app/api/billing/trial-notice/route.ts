@@ -21,8 +21,10 @@ export async function GET(req: NextRequest) {
   const auth = req.headers.get("authorization");
   // PUSH_CATCHUP_SECRET is accepted so this can run on the GitHub secret that
   // already exists, and CRON_SECRET so the job can move onto a Vercel cron the
-  // day the plan allows it — neither needs a code change.
-  const accepted = [process.env.TRIAL_NOTICE_SECRET, process.env.PUSH_CATCHUP_SECRET, process.env.CRON_SECRET]
+  // day the plan allows it — neither needs a code change. CLOCK_SECRET is the
+  // Supabase clock's key (pg_cron trial-notice → clock_call, Vault clock_secret),
+  // which runs this hourly; GitHub's schedule only fires a few times a day.
+  const accepted = [process.env.CLOCK_SECRET, process.env.TRIAL_NOTICE_SECRET, process.env.PUSH_CATCHUP_SECRET, process.env.CRON_SECRET]
     .filter((s): s is string => Boolean(s))
     .map((s) => `Bearer ${s}`);
   // An unset secret must never authorize — `Bearer undefined` would otherwise

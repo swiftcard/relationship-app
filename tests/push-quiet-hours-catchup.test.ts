@@ -225,9 +225,20 @@ describe("who the 8am catch-up is for", () => {
     delete process.env.PUSH_CATCHUP_SECRET;
   });
 
+  // 2026-11-04: the Supabase clock (pg_cron push-catchup) had been failing
+  // every hour on a Vault secret nobody could create; it now has its own key.
+  it("accepts the database clock's own secret (CLOCK_SECRET = Vault clock_secret)", async () => {
+    process.env.CLOCK_SECRET = "database-clock-secret";
+    const res = await run("database-clock-secret");
+    expect(res.status).toBe(200);
+    expect(pushes).toHaveLength(1);
+    delete process.env.CLOCK_SECRET;
+  });
+
   it("authorizes nobody when both secrets are unset", async () => {
     delete process.env.CRON_SECRET;
     delete process.env.PUSH_CATCHUP_SECRET;
+    delete process.env.CLOCK_SECRET;
     const res = await run("undefined");
     expect(res.status).toBe(401);
     expect(pushes).toHaveLength(0);

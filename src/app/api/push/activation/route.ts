@@ -25,7 +25,8 @@ const PAGE = 1000;
 
 function authorized(req: NextRequest): boolean {
   const auth = req.headers.get("authorization");
-  const accepted = [process.env.PUSH_CATCHUP_SECRET, process.env.CRON_SECRET]
+  // CLOCK_SECRET: the Supabase clock (pg_cron push-catchup, Vault clock_secret).
+  const accepted = [process.env.CLOCK_SECRET, process.env.PUSH_CATCHUP_SECRET, process.env.CRON_SECRET]
     .filter((s): s is string => Boolean(s))
     .map((s) => `Bearer ${s}`);
   // An unset secret must never authorize (`Bearer undefined`).
