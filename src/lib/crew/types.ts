@@ -77,7 +77,9 @@ export type EnvKey =
   | "CREW_EMAIL_FROM"
   | "CREW_EMAIL_FROM_NAME"
   | "CREW_EMAIL_DAILY_CAP"
-  | "CREW_EMAIL_POSTAL_ADDRESS";
+  | "CREW_EMAIL_POSTAL_ADDRESS"
+  | "CREW_GMAIL_CLIENT_ID"
+  | "CREW_GMAIL_CLIENT_SECRET";
 
 export type Schedule =
   | { kind: "every"; minutes: number }

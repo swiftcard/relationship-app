@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/admin";
 import { LiveGmail } from "@/lib/crew/email/gmail";
 import { checkReplies, emailConfig, emailDrafts, readyLeads } from "@/lib/crew/email/outbox";
 import { SupabaseEmailSends } from "@/lib/crew/email/sends-supabase";
+import { gmailClient } from "@/lib/crew/env";
 import { SupabaseStore } from "@/lib/crew/store-supabase";
 import EmailView from "./EmailView";
 
@@ -39,7 +40,7 @@ export default async function EmailPage({ searchParams }: { searchParams: Promis
   const byApproval = Object.fromEntries(recent.map((s) => [s.approval_id, s]));
   return (
     <EmailView
-      config={{ live: config.live, mailbox: config.mailbox, dailyCap: config.dailyCap, postal: !!config.postalAddress }}
+      config={{ live: config.live, mailbox: config.mailbox, dailyCap: config.dailyCap, postal: !!config.postalAddress, app: !!(gmailClient().id && gmailClient().secret) }}
       account={account}
       tableReady={tableReady}
       drafts={drafts}

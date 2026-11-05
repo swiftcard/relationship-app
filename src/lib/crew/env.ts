@@ -34,7 +34,18 @@ export const ENV_HELP: Record<EnvKey, string> = {
   CREW_EMAIL_FROM_NAME: "The name people see next to the address, e.g. Menash from SwiftCard. Default Menash.",
   CREW_EMAIL_DAILY_CAP: "Most approved emails sent in any 24 hours. Default 20, never more than 50.",
   CREW_EMAIL_POSTAL_ADDRESS: "SwiftCard's postal address for the footer of every outreach email (US law, CAN-SPAM). Live sending refuses to run without it.",
+  CREW_GMAIL_CLIENT_ID: "OAuth client id from the SwiftCard Workspace-INTERNAL Google Cloud project used only for the outreach mailbox. Never the customer sign-in app (Kontact).",
+  CREW_GMAIL_CLIENT_SECRET: "The secret of that same Internal OAuth client.",
 };
+
+/**
+ * The OAuth client the mailbox connects through: its own Workspace-Internal
+ * project, never the customer-facing sign-in app (External, so restricted
+ * Gmail scopes there would need Google's verification). No fallback on purpose.
+ */
+export function gmailClient(): { id: string | undefined; secret: string | undefined } {
+  return { id: env("CREW_GMAIL_CLIENT_ID"), secret: env("CREW_GMAIL_CLIENT_SECRET") };
+}
 
 /** The mailbox approved emails go out from (and the only account the Gmail connection accepts). */
 export function emailMailbox(): string {

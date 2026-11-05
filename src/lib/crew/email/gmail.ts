@@ -1,11 +1,13 @@
-import { youtubeClient } from "@/lib/agent-connections";
 import { getAdminSupabase } from "@/lib/supabase-admin";
+import { gmailClient } from "../env";
 import { decryptToken, encryptToken } from "@/lib/token-crypto";
 
 // ── The SwiftCard mailbox, through the Gmail API ────────────────────────────
 // The owner connects the mailbox once (admin → Agents → Email → Connect,
-// /api/admin/connect/google_gmail): the same owner-only, Workspace-internal
-// Google client as the demo calendar, OAuth with exactly two Gmail scopes:
+// /api/admin/connect/google_gmail) through its OWN OAuth client in a
+// Workspace-Internal Google Cloud project (CREW_GMAIL_CLIENT_ID/SECRET), never
+// the customer sign-in app (External; restricted scopes there would need
+// Google's verification). Exactly two Gmail scopes:
 //   gmail.send      send a message (cannot read, list or delete anything)
 //   gmail.metadata  headers and labels only, never a message body: enough to
 //                   see that a thread got a reply or a bounce, and to find a
@@ -27,7 +29,16 @@ export type SendOutcome =
   | { ok: true; id: string; threadId: string }
   /** definite: Gmail answered and refused, so nothing went out. Not definite: no answer; it may have gone. */
   | { ok: false; definite: boolean; status: number | null; message: string };
-export type ThreadMessage = { from: string; subject?: string; labelIds: string[] };
+export type ThreadMessage = {
+  from: string;
+  subject?: string;
+  labelIds: string[];
+  /** In-Reply-To and References: the Message-IDs this message answers (a reply that left our thread still names ours). */
+  inReplyTo?: string;
+  references?: string;
+  /** X-Failed-Recipients: the addresses a bounce is about (Gmail's own bounces and most mail servers set it). */
+  failedRecipients?: string;
+};
 
 /** What the sender needs from Gmail. LiveGmail is the real one; the tests pass a fake. */
 export interface GmailTransport {
@@ -70,7 +81,7 @@ async function token(): Promise<{ ok: true; token: string; email: string } | Exc
   }
   if (row.expires_at && new Date(row.expires_at).getTime() - Date.now() > SKEW_MS) return { ok: true, token: access, email };
   if (!refresh) return { ok: false, reason: "revoked", detail: "no refresh token" };
-  const { id, secret } = youtubeClient();
+  const { id, secret } = gmailClient();
   let res: Response;
   try {
     res = await fetch("https://oauth2.googleapis.com/token", {
@@ -107,7 +118,15 @@ type Header = { name?: string; value?: string };
 const header = (m: Record<string, unknown>, name: string) =>
   ((m.payload as { headers?: Header[] } | undefined)?.headers ?? []).find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
 
-const toMessage = (m: Record<string, unknown>): ThreadMessage => ({ from: header(m, "From"), subject: header(m, "Subject"), labelIds: (m.labelIds as string[] | undefined) ?? [] });
+const toMessage = (m: Record<string, unknown>): ThreadMessage => ({
+  from: header(m, "From"),
+  subject: header(m, "Subject"),
+  labelIds: (m.labelIds as string[] | undefined) ?? [],
+  inReplyTo: header(m, "In-Reply-To"),
+  references: header(m, "References"),
+  failedRecipients: header(m, "X-Failed-Recipients"),
+});
+const HEADERS = ["From", "Subject", "In-Reply-To", "References", "X-Failed-Recipients"].map((h) => `metadataHeaders=${h}`).join("&");
 
 export class LiveGmail implements GmailTransport {
   async account(): Promise<GmailAccount> {
@@ -163,7 +182,7 @@ export class LiveGmail implements GmailTransport {
   async thread(threadId: string) {
     const t = await token();
     if (!t.ok) return null;
-    const j = await get(t.token, `/threads/${encodeURIComponent(threadId)}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`);
+    const j = await get(t.token, `/threads/${encodeURIComponent(threadId)}?format=metadata&${HEADERS}`);
     if (!j) return null;
     return ((j.messages as Record<string, unknown>[] | undefined) ?? []).map(toMessage);
   }
@@ -175,7 +194,7 @@ export class LiveGmail implements GmailTransport {
     if (!list) return null;
     const out: ThreadMessage[] = [];
     for (const m of (list.messages as { id: string }[] | undefined) ?? []) {
-      const full = await get(t.token, `/messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`);
+      const full = await get(t.token, `/messages/${m.id}?format=metadata&${HEADERS}`);
       if (!full) return null;
       out.push(toMessage(full));
     }

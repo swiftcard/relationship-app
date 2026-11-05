@@ -16,7 +16,7 @@ const SEND = (id: string) => `/api/admin/crew/approvals/${id}`;
 const FORM = "/api/admin/crew/email";
 const CONNECT = "/api/admin/connect/google_gmail";
 
-type Config = { live: boolean; mailbox: string; dailyCap: number; postal: boolean };
+type Config = { live: boolean; mailbox: string; dailyCap: number; postal: boolean; app?: boolean };
 
 const when = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
@@ -33,6 +33,7 @@ function Setup({ config, account, tableReady, used }: { config: Config; account:
   const connected = account.ok && account.email === config.mailbox;
   const steps: { ok: boolean; text: string }[] = [
     { ok: tableReady, text: tableReady ? "Send records are ready." : "Run supabase/crew-email.sql in Supabase (one table)." },
+    { ok: config.app !== false, text: config.app !== false ? "Mailbox app (Internal Google client) is set." : "Set CREW_GMAIL_CLIENT_ID and CREW_GMAIL_CLIENT_SECRET in Vercel (the Internal Google Cloud project's OAuth client)." },
     {
       ok: connected,
       text: connected ? `Mailbox connected: ${config.mailbox}.` : account.ok ? `Connected as ${account.email}, which isn't ${config.mailbox}. Connect again as ${config.mailbox}.` : `Connect ${config.mailbox} (${account.reason === "not_connected" ? "not connected yet" : `needs attention: ${account.reason}`}).`,
@@ -58,7 +59,7 @@ function Setup({ config, account, tableReady, used }: { config: Config; account:
       <p className="text-gray-400 text-xs">
         {used} of {config.dailyCap} sent in the last 24 hours. One email per company a day, and never twice to the same address.
       </p>
-      {!connected && (
+      {!connected && config.app !== false && (
         <a href={CONNECT} className={`${btn} bg-blue-600 text-white hover:bg-blue-500`}>
           Connect {config.mailbox}
         </a>

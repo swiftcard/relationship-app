@@ -27,13 +27,16 @@
 //   google_gmail  (2026-11-04) the SwiftCard mailbox approved outreach emails
 //            are sent from (lib/crew/email). gmail.send + gmail.metadata only:
 //            it can send, and read headers to see replies and bounces, never a
-//            message body. Same owner-only client; any account but
+//            message body. Its OWN Workspace-Internal OAuth client
+//            (CREW_GMAIL_CLIENT_ID/SECRET), never the customer sign-in app,
+//            which is External: restricted scopes there need Google's
+//            verification. Any account but
 //            CREW_EMAIL_FROM (default hello@swiftcard.me) is refused.
 
 import { type OwnerConnectProvider, linkedinClient, youtubeClient } from "@/lib/agent-connections";
 import { DEMO_CALENDAR_EMAIL_DEFAULT } from "@/lib/demo/config";
 import { GMAIL_SCOPES } from "@/lib/crew/email/scopes";
-import { emailMailbox } from "@/lib/crew/env";
+import { emailMailbox, gmailClient } from "@/lib/crew/env";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 export const META_GRAPH = "https://graph.facebook.com/v26.0";
@@ -98,7 +101,7 @@ export function authorizeUrl(p: OwnerConnectProvider, state: string, codeChallen
     }
     case "google_gmail": {
       // No include_granted_scopes: this token must carry these scopes and nothing the client was granted elsewhere.
-      const q = new URLSearchParams({ client_id: youtubeClient().id!, redirect_uri, response_type: "code", scope: SCOPES.google_gmail, access_type: "offline", prompt: "consent", login_hint: emailMailbox(), state });
+      const q = new URLSearchParams({ client_id: gmailClient().id!, redirect_uri, response_type: "code", scope: SCOPES.google_gmail, access_type: "offline", prompt: "consent", login_hint: emailMailbox(), state });
       return `https://accounts.google.com/o/oauth2/v2/auth?${q}`;
     }
     case "x": {
@@ -138,7 +141,8 @@ export async function exchangeCode(p: OwnerConnectProvider, code: string, codeVe
   switch (p) {
     case "google_calendar":
     case "google_gmail": {
-      const j = await form("https://oauth2.googleapis.com/token", { grant_type: "authorization_code", code, redirect_uri, client_id: youtubeClient().id!, client_secret: youtubeClient().secret! });
+      const c = p === "google_gmail" ? gmailClient() : youtubeClient();
+      const j = await form("https://oauth2.googleapis.com/token", { grant_type: "authorization_code", code, redirect_uri, client_id: c.id!, client_secret: c.secret! });
       return { access_token: String(j.access_token), refresh_token: (j.refresh_token as string) ?? null, expires_in: Number(j.expires_in ?? 3600), scope: (j.scope as string) ?? null };
     }
     case "x": {

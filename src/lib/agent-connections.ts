@@ -15,6 +15,7 @@
 
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { decryptToken, encryptToken } from "@/lib/token-crypto";
+import { gmailClient } from "@/lib/crew/env";
 
 export type AgentProvider = "x" | "meta" | "youtube" | "linkedin" | "pinterest";
 export const AGENT_PROVIDERS: AgentProvider[] = ["x", "meta", "youtube", "linkedin", "pinterest"];
@@ -58,9 +59,11 @@ export function providerAppConfigured(p: OwnerConnectProvider): boolean {
     // Workspace, so the consent screen can be Internal and refresh tokens
     // don't die after 7 days). Falls back to the sign-in client if unset.
     // The demo calendar uses the same owner-only client, for the same reason.
+    case "google_gmail":
+      // Its own Internal client (CREW_GMAIL_CLIENT_*), never the YouTube/sign-in one.
+      return !!(gmailClient().id && gmailClient().secret);
     case "youtube":
     case "google_calendar":
-    case "google_gmail":
       return !!(youtubeClient().id && youtubeClient().secret);
     // The Agent Flow app is a separate LinkedIn app from the profile-photo
     // import one (different Page, different products). Falls back to it.

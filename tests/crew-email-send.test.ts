@@ -342,6 +342,27 @@ describe("replies and follow-ups", () => {
     // Running it again changes nothing.
     expect((await checkReplies(t.store, t.sends, t.gmail, "hello@swiftcard.me")).unsubscribed).toBe(0);
   });
+  it("a reply that left our thread, and a bounce from another mail server, are found by their headers", async () => {
+    const t = await setup();
+    await t.send();
+    const mid = t.sends.rows[0].message_id_header;
+    t.gmail.threads.set("t1", [{ from: "hello@swiftcard.me", labelIds: ["SENT"] }]);
+    t.gmail.inboxMessages = [{ from: "Kevin <kevin@baysiderealty.com>", subject: "different subject", labelIds: ["INBOX"], inReplyTo: mid }];
+    expect((await checkReplies(t.store, t.sends, t.gmail, "hello@swiftcard.me")).replied).toBe(1);
+    expect(t.sends.rows[0].reply_state).toBe("replied");
+
+    const b = await setup({ email: "gone@deadco.com" });
+    await b.send();
+    b.gmail.threads.set("t1", [{ from: "hello@swiftcard.me", labelIds: ["SENT"] }]);
+    b.gmail.inboxMessages = [{ from: "postmaster@mx.deadco.com", subject: "Undeliverable: matching cards", labelIds: ["INBOX"], failedRecipients: "gone@deadco.com" }];
+    expect((await checkReplies(b.store, b.sends, b.gmail, "hello@swiftcard.me")).bounced).toBe(1);
+    expect(b.sends.rows[0].reply_state).toBe("bounced");
+    expect(await b.store.isSuppressed(["gone@deadco.com"])).toBe(true);
+    // An address we never emailed is left alone.
+    b.gmail.inboxMessages = [{ from: "postmaster@x.com", subject: "Undeliverable", labelIds: ["INBOX"], failedRecipients: "stranger@x.com" }];
+    await checkReplies(b.store, b.sends, b.gmail, "hello@swiftcard.me");
+    expect(await b.store.isSuppressed(["stranger@x.com"])).toBe(false);
+  });
   it("every email carries the opt-out line, the postal address and a List-Unsubscribe header", async () => {
     const t = await setup();
     await t.send();
@@ -376,6 +397,18 @@ describe("who can send", () => {
     const oauth = read("src/lib/agent-connect-oauth.ts");
     expect(oauth).toContain('google_gmail: ["openid", "email", ...GMAIL_SCOPES].join(" ")');
     expect(oauth).toMatch(/const expected = emailMailbox\(\);[\s\S]*if \(!email \|\| email !== expected\) throw/);
+  });
+  it("the mailbox connects only through its own Internal OAuth client, never the customer sign-in (YouTube/Kontact) client", () => {
+    const oauth = read("src/lib/agent-connect-oauth.ts");
+    const gmailCase = oauth.slice(oauth.indexOf('case "google_gmail": {'), oauth.indexOf('return `https://accounts.google.com/o/oauth2/v2/auth?${q}`;', oauth.indexOf('case "google_gmail": {')));
+    expect(gmailCase).toContain("client_id: gmailClient().id!");
+    expect(gmailCase).not.toContain("youtubeClient");
+    expect(oauth).toContain('const c = p === "google_gmail" ? gmailClient() : youtubeClient();');
+    const g = read("src/lib/crew/email/gmail.ts");
+    expect(g).toContain("const { id, secret } = gmailClient();");
+    expect(g).not.toContain("youtubeClient");
+    expect(read("src/lib/crew/env.ts")).toContain('return { id: env("CREW_GMAIL_CLIENT_ID"), secret: env("CREW_GMAIL_CLIENT_SECRET") };');
+    expect(read("src/lib/agent-connections.ts")).toMatch(/case "google_gmail":\s*\/\/[^\n]*\n\s*return !!\(gmailClient\(\)\.id && gmailClient\(\)\.secret\);/);
   });
   it("sending stays off until CREW_EMAIL_LIVE is exactly 1", async () => {
     expect(read("src/lib/crew/env.ts")).toContain('return env("CREW_EMAIL_LIVE") === "1";');

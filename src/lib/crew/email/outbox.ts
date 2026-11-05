@@ -152,16 +152,43 @@ export async function checkReplies(store: CrewStore, sends: EmailSendStore, gmai
     } else if (state === "replied") out.replied++;
     if (state) await logActivity(store, { platform: "email", action: state === "bounced" ? "bounce" : state === "unsubscribed" ? "unsubscribe" : "reply", target: s.to_email, message: s.subject, row_key: null });
   }
-  // The List-Unsubscribe button sends a new email ("unsubscribe") outside the
-  // thread: read the newest inbox headers and stop anyone who asked.
+  // The inbox, headers only, for what lands outside a thread:
+  //   • "unsubscribe" as a new email (the List-Unsubscribe button)
+  //   • a bounce from another mail server (X-Failed-Recipients names the address)
+  //   • a reply whose In-Reply-To / References names one of our Message-IDs
   const inbox = await gmail.inbox(50);
-  for (const m of inbox ?? []) {
-    const from = addrOf(m.from);
-    if (from === mailbox.toLowerCase() || !UNSUBSCRIBE_SUBJECT.test(m.subject ?? "") || !EMAIL_RE.test(from)) continue;
-    if (await store.isSuppressed([from])) continue;
-    await optOutAddress(store, from, "unsubscribe email");
-    out.unsubscribed++;
-    for (const r of await sends.liveForAddress(from)) if (!r.reply_state) await sends.patch(r.id, { reply_state: "unsubscribed", replied_at: now.toISOString() });
+  if (inbox?.length) {
+    const sent = (await sends.list(300)).filter((r) => r.status === "sent");
+    const byMid = new Map(sent.map((r) => [r.message_id_header.trim(), r]));
+    for (const m of inbox) {
+      const from = addrOf(m.from);
+      if (from === mailbox.toLowerCase()) continue;
+      for (const bad of (m.failedRecipients ?? "").split(/[,\s]+/).map((x) => addrOf(x)).filter((x) => EMAIL_RE.test(x))) {
+        const rows = sent.filter((r) => r.to_email.toLowerCase() === bad && r.reply_state !== "bounced");
+        if (!rows.length) continue;
+        await store.addSuppression(bad, "bounced (Gmail)", { source: "email", channel: "email" });
+        for (const r of rows) await sends.patch(r.id, { reply_state: "bounced", replied_at: now.toISOString() });
+        out.bounced++;
+        await logActivity(store, { platform: "email", action: "bounce", target: bad, message: m.subject ?? null });
+      }
+      if (UNSUBSCRIBE_SUBJECT.test(m.subject ?? "") && EMAIL_RE.test(from) && !(await store.isSuppressed([from]))) {
+        await optOutAddress(store, from, "unsubscribe email");
+        out.unsubscribed++;
+        for (const r of await sends.liveForAddress(from)) if (!r.reply_state || r.reply_state === "replied") await sends.patch(r.id, { reply_state: "unsubscribed", replied_at: now.toISOString() });
+        continue;
+      }
+      if (BOUNCER.test(m.from) || AUTO_REPLY.test(m.subject ?? "")) continue;
+      const ids = `${m.inReplyTo ?? ""} ${m.references ?? ""}`.match(/<[^>]+>/g) ?? [];
+      for (const id of ids) {
+        const r = byMid.get(id.trim());
+        if (r && !r.reply_state) {
+          await sends.patch(r.id, { reply_state: "replied", replied_at: now.toISOString() });
+          r.reply_state = "replied";
+          out.replied++;
+          await logActivity(store, { platform: "email", action: "reply", target: r.to_email, message: r.subject, row_key: null });
+        }
+      }
+    }
   }
   return out;
 }
