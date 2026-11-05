@@ -102,6 +102,39 @@ describe("Paste a Post: relevance before a comment", () => {
     expect(rejectReason(s(0.65), false)).toBe("not a professional");
   });
 
+  it('"comment anyway" never gets past duplicate outreach, the suppression list or the writing check', async () => {
+    const OVERRIDE = `${LIVE.text}\ncomment anyway`;
+    // 1. The same post already has a draft.
+    let store = new MemoryStore();
+    await store.addInput({ platform: "instagram", kind: "post", url: LIVE.url, text: OVERRIDE });
+    await runPaste(store);
+    await store.addInput({ platform: "instagram", kind: "post", url: LIVE.url, text: OVERRIDE });
+    let r = await runPaste(store);
+    expect(store.approvals).toHaveLength(1);
+    expect(r.claude.calls).toHaveLength(0);
+    // 2. Another post by an account Instagram DMs wrote to this month (a DM row with no author, only the profile link).
+    store = new MemoryStore();
+    await store.insertApproval({ agent_id: "contact-instagram", team: "contact", kind: "dm", title: "DM", summary: "", body: "hi", platform: "instagram", target_url: "https://www.instagram.com/hollyhoustonrealtor/", person_id: null, debate: null, model_used: null, meta: {} });
+    await store.addInput({ platform: "instagram", kind: "post", url: LIVE.url, text: OVERRIDE });
+    r = await runPaste(store);
+    expect(store.approvals.filter((a) => a.kind === "comment")).toHaveLength(0);
+    expect(r.claude.calls).toHaveLength(0);
+    expect(r.run.summary).toMatch(/@hollyhoustonrealtor already has an Instagram draft or comment/);
+    // 3. An account on the suppression list.
+    store = new MemoryStore();
+    await store.addSuppression("instagram:@hollyhoustonrealtor", "asked not to be contacted");
+    await store.addInput({ platform: "instagram", kind: "post", url: LIVE.url, text: OVERRIDE });
+    r = await runPaste(store);
+    expect(store.approvals).toHaveLength(0);
+    expect(r.run.stats).toMatchObject({ skipped_suppressed: 1 });
+    // 4. A draft with a link, a tag or a pitch still fails, twice, and nothing is kept.
+    store = new MemoryStore();
+    await store.addInput({ platform: "instagram", kind: "post", url: LIVE.url, text: OVERRIDE });
+    r = await runPaste(store, script({ draft: () => "Two phones is a lot, @hollyhoustonrealtor, try SwiftCard at https://swiftcard.me for your showings." }));
+    expect(store.approvals).toHaveLength(0);
+    expect(r.run.stats).toMatchObject({ drafts_failed_checks: 1 });
+  });
+
   it("reads the override wherever it is written, and keeps the caption intact", () => {
     const i = (text: string): CrewInput => ({ id: "x", created_at: "", platform: "instagram", kind: "post", url: LIVE.url, text, status: "new" });
     expect(fromPaste(i(`${LIVE.text} comment anyway.`))).toMatchObject({ override: true, text: LIVE.text, handle: "hollyhoustonrealtor" });
@@ -133,7 +166,7 @@ describe("Paste a Post: what it turned down can be reviewed", () => {
 
   it("keeps the newest 30", async () => {
     const store = new MemoryStore();
-    for (let n = 0; n < 32; n++) await store.addInput({ platform: "instagram", kind: "post", url: `https://www.instagram.com/p/DLow${String(n).padStart(4, "0")}x/`, text: LIVE.text });
+    for (let n = 0; n < 32; n++) await store.addInput({ platform: "instagram", kind: "post", url: `https://www.instagram.com/p/DLow${String(n).padStart(4, "0")}x/`, text: LIVE.text.replace("@hollyhoustonrealtor", `@realtor.${n}`) });
     for (let n = 0; n < 7; n++) await runPaste(store);
     expect((await store.kvGet<TurnedDown[]>(TURNED_DOWN_KEY(AGENT_ID)))!).toHaveLength(30);
   });

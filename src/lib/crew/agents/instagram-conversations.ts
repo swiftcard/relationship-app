@@ -329,6 +329,7 @@ export function emptyReason(s: Record<string, number>, topics: string[]): string
   if (s.pasted_inputs && !topics.length) {
     const parts = [
       ["dropped_already_answered", "already had a draft"],
+      ["dropped_recent_person", "were from accounts drafted for in the last 30 days"],
       ["rejected_ad_or_giveaway", "looked like an ad or giveaway"],
       ["rejected_low_relevance", "weren't about networking, cards, events or business relationships"],
       ["rejected_not_scored", "couldn't be scored"],
@@ -407,20 +408,26 @@ export async function runInstagramConversations(ctx: AgentContext): Promise<RunR
   const posts = [...pasted, ...toPosts(hits, topics.join(" | "), (k, n) => ctx.stat(k, n))];
 
   // 2. Never twice: not a post it has seen, not a post any Instagram agent drafted for, not an account drafted for lately.
-  // A pasted post skips the topic and account filters (a person chose it) but never the duplicate check.
+  // A pasted post skips the topic filter (a person chose it) but never the
+  // duplicate checks: not a post already drafted for, not an account any
+  // Instagram agent drafted for in the last 30 days (2026-11-05: "comment
+  // anyway" overrides relevance only, never this).
   const seen = new Set((await ctx.store.kvGet<string[]>(SEEN)) ?? []);
   const since = new Date(ctx.now().getTime() - PERSON_COOLDOWN_DAYS * 86400_000).toISOString();
   const earlier = await ctx.store.listApprovals({ agentIds: IG_AGENTS, sinceIso: since, limit: 1000 });
   const answered = new Set(earlier.map((a) => exactPostLink("instagram", a.target_url) ?? a.target_url ?? ""));
-  const recentPeople = new Set(earlier.map((a) => instagramHandle(String(a.meta?.author ?? "")) ?? "").filter(Boolean));
+  // The account from the draft's author, or from a profile link (some DMs carry no author).
+  const recentPeople = new Set(earlier.map((a) => instagramHandle(String(a.meta?.author ?? "")) ?? (exactPostLink("instagram", a.target_url) ? null : instagramHandle(a.target_url)) ?? "").filter(Boolean));
   const fresh: IgPost[] = [];
   for (const p of new Map(posts.map((p) => [p.url, p])).values()) {
     if (answered.has(p.url)) {
       ctx.stat("dropped_already_answered");
       if (p.pasted) ctx.log(`pasted ${p.url}: already has a draft`);
+    } else if (p.handle && (recentPeople.has(p.handle) || fresh.some((f) => f.handle === p.handle))) {
+      ctx.stat("dropped_recent_person");
+      if (p.pasted) ctx.log(`pasted ${p.url}: no comment (@${p.handle} already has an Instagram draft or comment from the last ${PERSON_COOLDOWN_DAYS} days)`);
     } else if (p.pasted) fresh.push(p);
     else if (seen.has(p.url)) ctx.stat("dropped_seen");
-    else if (p.handle && (recentPeople.has(p.handle) || fresh.some((f) => f.handle === p.handle))) ctx.stat("dropped_recent_person");
     else if (!ON_TOPIC.test(`${p.title} ${p.text}`)) ctx.stat("dropped_off_topic");
     else fresh.push(p);
   }
