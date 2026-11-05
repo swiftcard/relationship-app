@@ -134,6 +134,24 @@ export async function saveConnection(c: Omit<AgentConnection, "connected_at" | "
   return !error;
 }
 
+/**
+ * The account label of a connection this admin saved in the last two minutes,
+ * else null. Lets a repeated OAuth callback (same code, already exchanged)
+ * say "connected" instead of a false invalid_grant error. Reads no token.
+ */
+export async function justConnected(p: OwnerConnectProvider, by: string | null, now = Date.now()): Promise<string | null> {
+  if (!by) return null;
+  try {
+    const { data } = await getAdminSupabase().from("agent_connections").select("account_label, connected_by, connected_at").eq("provider", p).maybeSingle();
+    const r = data as { account_label: string | null; connected_by: string | null; connected_at: string | null } | null;
+    if (!r?.connected_at || r.connected_by !== by) return null;
+    const age = now - new Date(r.connected_at).getTime();
+    return age >= 0 && age < 120_000 ? r.account_label ?? "connected" : null;
+  } catch {
+    return null;
+  }
+}
+
 // Throws when the row could not be removed, so the panel never reports a
 // disconnect that did not happen (audit F-ADMIN-05).
 export async function deleteConnection(p: OwnerConnectProvider): Promise<void> {

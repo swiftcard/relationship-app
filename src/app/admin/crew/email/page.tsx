@@ -26,7 +26,9 @@ export default async function EmailPage({ searchParams }: { searchParams: Promis
   const config = emailConfig();
   const now = clock();
   const gmail = new LiveGmail();
-  const [tableReady, account] = await Promise.all([sends.ready(), gmail.account()]);
+  // verify(), not account(): the checklist says "connected" only after Gmail
+  // itself answered for this mailbox with the stored token.
+  const [tableReady, account] = await Promise.all([sends.ready(), gmail.verify()]);
   // Replies, bounces and unsubscribes are picked up whenever this page opens
   // (headers only, each sent thread at most every 30 minutes), so an opt-out
   // never waits for a button. A Gmail hiccup changes nothing and the page still loads.

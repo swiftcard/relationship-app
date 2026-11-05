@@ -151,7 +151,7 @@ export function leadsFromSite(biz: Biz, pages: { url: string; html: string }[], 
       why: found?.why.trim().slice(0, 300) || null,
       hook: safeText(found?.hook, invented)?.slice(0, 300) ?? null,
       // A whole short email now (assess.ts), so up to ~1,000 characters, and never a dash (voice.ts).
-      message: ((m) => (m ? stripEmDashes(m).slice(0, 1000) : null))(safeText(found?.opener, [...invented, ...people.filter((p) => p.name !== name)])),
+      message: ((m) => (m ? stripEmDashes(m).slice(0, 1500) : null))(safeText(found?.opener, [...invented, ...people.filter((p) => p.name !== name)])),
       // Scored again once the email's domain is checked (scoreLeads).
       score: found ? leadScore({ fit: found.fit, name, title, email, emailStatus: null, phone, industry: type }) : null,
     },

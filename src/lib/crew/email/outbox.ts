@@ -34,9 +34,48 @@ export function emailConfig() {
 /** Email statuses whose domain can't take mail (leads/quality.ts). */
 const UNDELIVERABLE = new Set(["No MX Record", "No Mail Server"]);
 
-/** A lead whose own message is a whole email ("Subject: …") to an address that can take mail. */
+/** A lead with an address that can take mail and something specific to say: a whole email ("Subject: …"), or the one-line opener older runs wrote. */
 export function leadEmailReady(l: LeadRow): boolean {
-  return !!l.email && EMAIL_RE.test(l.email.trim()) && !UNDELIVERABLE.has(String(l.email_status ?? "")) && !l.region_restricted && !!parseDraft(String(l.message ?? ""));
+  return !!l.email && EMAIL_RE.test(l.email.trim()) && !UNDELIVERABLE.has(String(l.email_status ?? "")) && !l.region_restricted && !!leadEmailBody(l);
+}
+
+/** True when the lead carries only an opener line and the email around it is the starter below. */
+export function isStarter(l: Pick<LeadRow, "message">): boolean {
+  return !parseDraft(String(l.message ?? "")) && !!String(l.message ?? "").trim();
+}
+
+/**
+ * The email a lead becomes. A whole email written from their site is used as
+ * it is. A lead from before 2026-11-04 carries only one opener sentence (a
+ * checked, specific detail from their site); it goes inside a short starter
+ * in the founder voice, which the owner reads and edits before Send. No AI
+ * call, no invented detail: the only specific line is the one the site backed.
+ */
+export function leadEmailBody(l: Pick<LeadRow, "message" | "name" | "company">): string | null {
+  const msg = String(l.message ?? "").trim();
+  if (!msg) return null;
+  if (parseDraft(msg)) return stripEmDashes(msg);
+  const opener = stripEmDashes(msg.replace(/\s+/g, " "));
+  if (opener.split(" ").length < 5) return null;
+  const first = String(l.name ?? "").trim().split(/\s+/)[0] ?? "";
+  const company = String(l.company ?? "").trim();
+  const subject = `Subject: ${company ? `Cards for ${company}` : "Cards for your team"}`;
+  // Older runs wrote a whole short note ("Hi Dora, I saw … Could I show you?"):
+  // keep it as written, greeting on its own line, signed.
+  const note = /^(hi|hello|hey)\b[^,]{0,40},\s*/i.exec(opener);
+  if (note) return [subject, "", note[0].trim(), "", opener.slice(note[0].length).trim(), "", "Menash"].join("\n");
+  return [
+    subject,
+    "",
+    ...(first ? [`Hi ${first},`, ""] : []),
+    opener,
+    "",
+    "I'm Menash, one of the two founders of SwiftCard. We make digital business cards your team can share with a tap or a QR code, and the people you meet can save your contact and leave their details for you in one place.",
+    "",
+    "If it helps, I'd be happy to put together a sample card with your branding so you can see how it looks. Want me to send one over?",
+    "",
+    "Menash",
+  ].join("\n");
 }
 
 /** Pending or approved email drafts, newest first. */
@@ -66,7 +105,7 @@ export type DraftResult = { ok: true; id: string; existed?: boolean } | { ok: fa
 export async function draftFromLead(store: CrewStore, leadId: string, by: string): Promise<DraftResult> {
   const l = await store.getLead(leadId);
   if (!l) return { ok: false, message: "That lead is gone." };
-  if (!leadEmailReady(l)) return { ok: false, message: "This lead has no email to send (no address that takes mail, or no written email with a subject)." };
+  if (!leadEmailReady(l)) return { ok: false, message: "This lead has no email to send (no address that takes mail, or nothing specific from their site to write from)." };
   const existing = (await emailDrafts(store, 300)).find((a) => a.meta?.lead_id === l.id);
   if (existing) return { ok: true, id: existing.id, existed: true };
   const row = await store.getSheetRow(leadKey(l.id));
@@ -77,7 +116,7 @@ export async function draftFromLead(store: CrewStore, leadId: string, by: string
   if (!personId) return { ok: false, message: "That address can't be used." };
   if (await everContacted(store, personId)) return { ok: false, message: "This person was already contacted." };
 
-  const body = stripEmDashes(String(l.message).trim());
+  const body = leadEmailBody(l)!;
   const problems = writingProblems(body, { kind: "cold_email", platform: "email" });
   const who = [l.name, l.company].filter(Boolean).join(", ") || email;
   const ins = await store.insertApproval({
@@ -85,12 +124,12 @@ export async function draftFromLead(store: CrewStore, leadId: string, by: string
     team: "leads",
     kind: "dm",
     title: `Email to ${who}`,
-    summary: `${l.business_type ?? "Business"}${l.city ? ` in ${l.city}` : ""}. Read it, edit if you like, then Send.`,
+    summary: `${l.business_type ?? "Business"}${l.city ? ` in ${l.city}` : ""}. ${isStarter(l) ? "A starter around the one detail from their site: make it sound like you, then Send." : "Read it, edit if you like, then Send."}`,
     body,
     platform: "email",
     target_url: l.source_url,
     person_id: personId,
-    meta: { email, name: l.name ?? null, company: l.company ?? null, lead_id: l.id, source_url: l.source_url, business_type: l.business_type ?? null, ...(problems.length ? { needs_review: true, writing_problems: problems } : {}) },
+    meta: { email, name: l.name ?? null, company: l.company ?? null, lead_id: l.id, source_url: l.source_url, business_type: l.business_type ?? null, ...(isStarter(l) ? { starter: true } : {}), ...(problems.length ? { needs_review: true, writing_problems: problems } : {}) },
   });
   if ("conflict" in ins) return { ok: false, message: "There's already a draft for this lead." };
   if (!(await store.claimDm(personId, ins.id))) {
