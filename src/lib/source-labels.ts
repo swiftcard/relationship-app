@@ -20,8 +20,9 @@ export const SOURCE_LABELS: Record<string, string> = {
   // to the raw-slug fallback and printed a lowercase "swift links" to real users.
   swift_links: "Swift Links",
   // The card page's "View my Swift Links page" button: a Swift Links visit
-  // that came from the card itself. Untagged, it read as a plain open of the
-  // Swift Links link — not where the visitor actually came from.
+  // that came from the card itself. The button was removed on 2026-11-06 (owner);
+  // the label stays so older visits, and card pages a phone still holds
+  // offline (public/sw.js), keep reading "from your SwiftCard".
   swift_card: "SwiftCard page",
   // Opened from something the owner linked on the Links page's Create + side
   // (a pasted signature or a picture) — every click on it, and the share link
@@ -62,7 +63,7 @@ const URL_SOURCES = new Set([
   "google_wallet",    // the Google Wallet pass barcode
   "contact_qr",       // the card link inside the no-signal Contact QR
   "swift_links",      // the Swift Links page, and its "View SwiftCard" link
-  "swift_card",       // the card page's "View my Swift Links page" link
+  "swift_card",       // the card page's old "View my Swift Links page" link (removed 2026-11-06; offline copies still carry it)
   "create_link",      // Create + (lib/create-link)
   "widget",           // the iPhone home-screen widget
 ]);

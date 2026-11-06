@@ -202,9 +202,11 @@ describe("a URL may only carry the tags SwiftCard itself puts on links", () => {
     expect(sourcePhrase("widget")).toBe(" from the QR on your home-screen widget");
     expect(sourcePhrase("swift_card")).toBe(" from your SwiftCard");
   });
-  it("the card and Swift Links link to each other tagged", () => {
-    expect(read("src/app/[username]/page.tsx")).toContain("href={`/links/${profile.username}?source=swift_card`}");
+  it("Swift Links links to the card tagged; the card no longer links to Swift Links (owner 2026-11-06)", () => {
     expect(read("src/components/SwiftLinkProfile.tsx")).toContain("href={`/${username}?source=swift_links`}");
+    // The card page's "View my Swift Links page" button is gone. swift_card stays
+    // a known source above, so older visits keep their "from your SwiftCard".
+    expect(read("src/app/[username]/page.tsx")).not.toContain("?source=swift_card");
   });
   it("the desktop save QR carries the visit's source, through the offline outbox on the phone", () => {
     expect(read("src/components/ScanSaveContact.tsx")).toContain('outbox.fetch("/api/card-events", {');

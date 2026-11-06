@@ -218,32 +218,44 @@ describe("the marketing mockups show the card page's real Swift Links design", (
 describe("public card page copy and controls", () => {
   const PAGE = "src/app/[username]/page.tsx";
 
-  it('the Swift Links button says "View my Swift Links page", not "View all"', () => {
+  // Owner, 2026-11-06: the "View my Swift Links page →" pill at the top of the
+  // card page's Swift Links box is gone for good, and so is the row it took up.
+  // (It had replaced the box's "Swift Links" heading on 2026-10-14.)
+  const swiftLinksBox = () => {
     const c = code(PAGE);
-    expect(c).toMatch(/View my Swift Links page →/);
-    expect(c, "the vague label is back").not.toMatch(/>\s*View all →\s*</);
+    const start = c.indexOf('aria-label="Swift Links"');
+    const end = c.indexOf("<CardActionLinks", start);
+    expect(start, "the Swift Links box is gone from the card page").toBeGreaterThan(-1);
+    expect(end, "the Swift Links box lost its action links").toBeGreaterThan(start);
+    return c.slice(start, end);
+  };
+
+  it("the Swift Links box has no link out to the Swift Links page (owner 2026-11-06)", () => {
+    const box = swiftLinksBox();
+    expect(box, "a link to the Swift Links page is back in the box").not.toMatch(/href=\{`\/links\//);
+    expect(box, "the box's link to Swift Links is back").not.toContain("?source=swift_card");
+    expect(box, "the button label is back").not.toMatch(/Swift Links page/);
+    expect(code(PAGE), "the button label is back on the card page").not.toMatch(/View my Swift Links/);
   });
 
-  it("the button replaced the Swift Links heading, on the page and its mockups (owner 2026-10-14)", () => {
+  it("the box opens straight on its content: no heading, no leftover row above it", () => {
+    const box = swiftLinksBox();
+    expect(box, "a heading is back in the Swift Links box").not.toMatch(/<SectionHeading/);
     expect(code(PAGE), "the Swift Links heading is back").not.toMatch(/<SectionHeading>Swift Links<\/SectionHeading>/);
+    // The first element inside the box is the bio block. A wrapper row (the
+    // pill's old `flex mb-3`) above it would put the white space back.
+    // code() has already dropped comment text, leaving JSX comments as `{}`.
+    const afterOpen = box.slice(box.indexOf(">") + 1).replace(/\{\s*\}/g, "").trimStart();
+    expect(afterOpen.startsWith("{bio && ("), "something sits above the bio again").toBe(true);
+  });
+
+  it("the mockups of the card page match it: no button, no title", () => {
     for (const f of ["src/components/site/DemoSwiftLinks.tsx", "src/components/site/HeroShowcase.tsx"]) {
       const c = code(f);
-      expect(c, `${f} lost the new label`).toMatch(/View my Swift Links page →/);
+      expect(c, `${f} shows the removed button`).not.toMatch(/View my Swift Links page/);
+      expect(c, `${f} shows the removed button`).not.toMatch(/View page →|View all →/);
       expect(c, `${f} still shows the old title`).not.toMatch(/>\s*Swift Links\s*</);
-      expect(c, `${f} still abbreviates the label`).not.toMatch(/View page →/);
     }
-  });
-
-  it("the button is a small outline in the card's colour, not a big dark pill (owner 2026-10-14)", () => {
-    // Text, arrow and border take the same colour as Save Contact (--sc-accent
-    // on the page and the mockups; the persona's accent in HeroShowcase).
-    const page = code(PAGE);
-    const btn = page.slice(page.indexOf("href={`/links/${profile.username}?source=swift_card`}"), page.indexOf("View my Swift Links page →"));
-    expect(btn).toMatch(/borderColor: "var\(--sc-accent, #1D4ED8\)", color: "var\(--sc-accent, #1D4ED8\)"/);
-    expect(btn, "the button grew back to primary size").toMatch(/text-xs/);
-    expect(btn, "the dark filled pill is back").not.toMatch(/bg-slate-900|text-white/);
-    expect(code("src/components/site/DemoSwiftLinks.tsx")).toMatch(/color: "var\(--sc-accent, #1D4ED8\)"/);
-    expect(code("src/components/site/HeroShowcase.tsx")).toMatch(/borderColor: persona\.accent, color: persona\.accent/);
   });
 
   it("Share this card no longer offers Show QR Code", () => {

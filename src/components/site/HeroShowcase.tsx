@@ -638,12 +638,6 @@ function PhoneCard({ persona }: { persona: Persona }) {
           {/* ── Swift Links — bio, website capsule, brand discs ──
               Right after Save contact, as on the live page since 2026-09-22. */}
           <div className="w-full max-w-sm rounded-2xl p-4 shadow-sm" style={{ background: "#fff", border: "1px solid #E4DDD4" }}>
-            <div className="flex mb-2.5">
-              {/* Card page's accent-outline button, in this persona's Save Contact colour. */}
-              <span className="inline-flex items-center whitespace-nowrap rounded-full border bg-white px-3.5 py-[7px] text-xs font-semibold" style={{ borderColor: persona.accent, color: persona.accent }}>
-                View my Swift Links page →
-              </span>
-            </div>
             <p className="text-slate-600 text-[0.8125rem] leading-[1.6]">{persona.bio}</p>
             <div className="h-px bg-[#EFE9E1] my-3" />
             <div className="flex flex-col gap-2.5">

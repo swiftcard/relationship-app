@@ -16,10 +16,9 @@ import { buildConnectLinks } from "@/lib/social-url";
 // used by all three, is what stops that happening again.
 //
 // The structure below mirrors src/app/[username]/page.tsx's Swift Links
-// section exactly — the "View my Swift Links page →" outline button in the
-// card's accent colour where the
-// heading used to be (owner change 2026-10-14), bio, rule, socials rail,
-// rule, action links — and the pieces that ARE the design
+// section exactly — bio, rule, socials rail, rule, action links, with no
+// heading and no "View my Swift Links page →" button above them (heading gone
+// 2026-10-14, button gone 2026-11-06) — and the pieces that ARE the design
 // (SocialLinkIntercept's "rail", CardActionLinks) are the live components,
 // not copies, so a change there lands here for free.
 
@@ -63,24 +62,6 @@ const RULE = <div className="h-px bg-[#EFE9E1]" />;
 export default function DemoSwiftLinks({ compact = true }: { compact?: boolean }) {
   return (
     <>
-      <div className="flex mb-3">
-        {/* The card page's accent-outline button in the heading's old
-            top-left spot (no "Swift Links" title since 2026-10-14). Every
-            mockup wrapping this sets --sc-accent, exactly as the card page
-            does, so it takes the same colour as the mockup's Save Contact.
-            A span, not a link:
-            everything in these mockups is display-only, and a button that
-            looks clickable and does nothing is worse than one that never
-            invited the tap. Hover styling is dropped for the same reason.
-            With the heading gone the full label fits the compact frame too. */}
-        <span
-          className={`inline-flex items-center whitespace-nowrap rounded-full border bg-white font-semibold ${compact ? "text-[0.625rem] px-2.5 py-1" : "text-xs px-3.5 py-[7px]"}`}
-          style={{ borderColor: "var(--sc-accent, #1D4ED8)", color: "var(--sc-accent, #1D4ED8)" }}
-        >
-          View my Swift Links page →
-        </span>
-      </div>
-
       <p className={`text-slate-600 leading-[1.6] ${compact ? "text-[0.75rem]" : "text-[0.8125rem]"}`}>{BIO}</p>
 
       <div className={compact ? "my-3" : "my-4"}>{RULE}</div>

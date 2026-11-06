@@ -486,26 +486,9 @@ export default async function CardPage({
           being asked for their own details. */}
       {hasConnectSection && (
         <div role="region" aria-label="Swift Links" className="w-full max-w-sm rounded-2xl p-5 shadow-sm" style={{ background: "#fff", border: "1px solid #E4DDD4" }}>
-          {/* The button IS the box's heading (owner change 2026-10-14): the
-              "Swift Links" title is gone and the link to the full page took its
-              top-left spot. An OUTLINE in the card's own colour — text, arrow
-              and border all --sc-accent, the same colour as Save Contact above,
-              on white — like the "Scan QR code" button beside Save Contact.
-              Smaller than a primary button on purpose (owner: the filled dark
-              pill was "way too big and overwhelming"): noticeable, not loud.
-              cardPageTheme keeps the accent dark enough for white text, so it
-              is just as readable as text on white. */}
-          <div className="flex mb-3">
-            {/* Tagged, so the Swift Links visit says it came from this card
-                (and the address bar drops the tag on arrival, CleanShareUrl). */}
-            <a
-              href={`/links/${profile.username}?source=swift_card`}
-              className="inline-flex items-center gap-1 rounded-full border bg-white px-3.5 py-[7px] text-xs font-semibold transition-colors hover:bg-[color-mix(in_srgb,var(--sc-accent,#1D4ED8)_8%,#fff)]"
-              style={{ borderColor: "var(--sc-accent, #1D4ED8)", color: "var(--sc-accent, #1D4ED8)" }}
-            >
-              View my Swift Links page →
-            </a>
-          </div>
+          {/* No heading and no link out to the full Swift Links page (owner,
+              2026-11-06): the "View my Swift Links page →" pill and the row it
+              sat in are gone, so the content starts at the box's own padding. */}
           {bio && (
             <p className="text-slate-600 text-[0.8125rem] leading-[1.6] whitespace-pre-wrap [text-wrap:pretty]">{bio}</p>
           )}
