@@ -48,7 +48,8 @@ export function isStarter(l: Pick<LeadRow, "message">): boolean {
  * The email a lead becomes. A whole email written from their site is used as
  * it is. A lead from before 2026-11-04 carries only one opener sentence (a
  * checked, specific detail from their site); it goes inside a short starter
- * in the founder voice, which the owner reads and edits before Send. No AI
+ * in the founder voice, under the writing check's 80-word cold email limit,
+ * which the owner reads and edits before Send. No AI
  * call, no invented detail: the only specific line is the one the site backed.
  */
 export function leadEmailBody(l: Pick<LeadRow, "message" | "name" | "company">): string | null {
@@ -70,9 +71,9 @@ export function leadEmailBody(l: Pick<LeadRow, "message" | "name" | "company">):
     ...(first ? [`Hi ${first},`, ""] : []),
     opener,
     "",
-    "I'm Menash, one of the two founders of SwiftCard. We make digital business cards your team can share with a tap or a QR code, and the people you meet can save your contact and leave their details for you in one place.",
+    "I'm Menash, one of the two founders of SwiftCard. We make digital business cards your team can share with a tap or a QR code, so the people you meet save your details in one step.",
     "",
-    "If it helps, I'd be happy to put together a sample card with your branding so you can see how it looks. Want me to send one over?",
+    "I'd be happy to make a sample card with your branding so you can see it. Want me to send one over?",
     "",
     "Menash",
   ].join("\n");

@@ -12,6 +12,7 @@ import { MemoryEmailSends } from "@/lib/crew/email/sends";
 import { personFor } from "@/lib/crew/ledger";
 import { leadKey } from "@/lib/crew/sheets/keys";
 import { MemoryStore } from "@/lib/crew/store-memory";
+import { writingProblems } from "@/lib/crew/writing-check";
 
 // Approved emails from the SwiftCard mailbox: nothing leaves without the
 // admin's Send, a dry run sends nothing, one draft is one email at most, and
@@ -323,6 +324,8 @@ describe("Web Leads become drafts, never emails", () => {
     expect(d.body.trim().endsWith("Menash")).toBe(true);
     expect(d.body).not.toMatch(/[\u2013\u2014]/);
     expect(draftProblems(d.body, "ana@cleanco.com")).toEqual([]);
+    // The Email page's writing check stops a cold email at 80 words; a starter must pass it as built.
+    expect(writingProblems(d.body, { kind: "cold_email", platform: "email" })).toEqual([]);
   });
   it("an older whole short note keeps its own words: greeting on its own line, signed, no second pitch", async () => {
     const note = "Hi Dora, I saw Service Star has managed Phoenix rentals since 2011. We give each of your managers a branded digital card owners and tenants can save. Could I show you?";
