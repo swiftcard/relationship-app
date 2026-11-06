@@ -9,9 +9,9 @@
 // 2026-09-09 / 2026-09-28):
 //   x        OAuth 2.0 + PKCE, user context. tweet.write + offline.access.
 //            Access token 2h, refresh token rotates on each use.
-//   meta     Facebook Login. Short user token → long-lived user token →
-//            page tokens (long-lived, never expire). The Page's linked
-//            Instagram Business account rides on the same page token.
+//   meta     Facebook Login. Short user token → long-lived user token (about
+//            60 days; Connect again before it lapses). Since 2026-11-06 it
+//            is read-only: Instagram Business Discovery for the crew.
 //   youtube  Google OAuth, youtube.upload (+ readonly for the channel name).
 //            Refresh token only on access_type=offline&prompt=consent.
 //   linkedin OpenID + w_member_social (self-serve). Posting AS THE PAGE needs
@@ -67,18 +67,19 @@ export const bindCookie = (p: string) => `agent_connect_bind_${p}`;
 export const pkceCookie = (p: string) => `agent_connect_pkce_${p}`;
 export const CONNECT_COOKIE = { httpOnly: true, secure: true, sameSite: "lax" as const, maxAge: 15 * 60, path: "/api/admin/connect" };
 
+/** What Business Discovery needs, and all the Meta connection asks for. */
+export const META_DISCOVERY_SCOPES = "pages_show_list pages_read_engagement instagram_basic instagram_manage_insights";
+
 const SCOPES: Record<OwnerConnectProvider, string> = {
   google_calendar: "openid email https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.freebusy",
   google_gmail: ["openid", "email", ...GMAIL_SCOPES].join(" "),
   x: "tweet.read tweet.write users.read offline.access",
-  // pages_manage_posts publishes to the Page; instagram_content_publish to the
-  // linked IG Business account; the rest are what the two need to list + read.
-  // The (removed) Instagram and Facebook comment bots added the comment, message
-  // and webhook scopes below. META_SCOPES
-  // overrides the whole list if the Meta app is ever
-  // missing one of them (an unknown scope fails the consent screen outright).
-  meta: process.env.META_SCOPES
-    || "pages_show_list pages_read_engagement pages_manage_posts instagram_basic instagram_content_publish business_management instagram_manage_comments instagram_manage_messages pages_manage_metadata pages_messaging pages_manage_engagement pages_read_user_content",
+  // Read-only since 2026-11-06: the "SwiftCard Discovery" Meta app looks up
+  // other businesses' public Instagram profiles and posts (Business Discovery,
+  // lib/crew/sources/instagram-discovery). Nothing here can post, comment or
+  // message. The four scopes are the ones that app was set up with; an unknown
+  // scope fails the consent screen outright, and META_SCOPES overrides the list.
+  meta: process.env.META_SCOPES || META_DISCOVERY_SCOPES,
   youtube: "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly",
   // The Page-attached "SwiftCard Agent Flow" app (LINKEDIN_AGENT_CLIENT_ID) can
   // only hold the Community Management API — LinkedIn refuses to add Sign In /
@@ -155,8 +156,10 @@ export async function exchangeCode(p: OwnerConnectProvider, code: string, codeVe
       const short = await form(`${META_GRAPH}/oauth/access_token`, { client_id: process.env.META_APP_ID!, client_secret: process.env.META_APP_SECRET!, redirect_uri, code });
       // Long-lived user token (60 days); page tokens minted from it never expire.
       const long = await fetch(`${META_GRAPH}/oauth/access_token?${new URLSearchParams({ grant_type: "fb_exchange_token", client_id: process.env.META_APP_ID!, client_secret: process.env.META_APP_SECRET!, fb_exchange_token: String(short.access_token) })}`)
-        .then((r) => r.json()).catch(() => ({})) as { access_token?: string };
-      return { access_token: long.access_token ?? String(short.access_token), refresh_token: null, expires_in: null, scope: null };
+        .then((r) => r.json()).catch(() => ({})) as { access_token?: string; expires_in?: number };
+      // A short token lasts about an hour; the long one about 60 days (Meta can't refresh it: Connect again before then).
+      if (!long.access_token) throw new Error("Meta didn't extend the login to a long-lived token. Press Connect again");
+      return { access_token: long.access_token, refresh_token: null, expires_in: Number(long.expires_in) || 60 * 86400, scope: null };
     }
     case "youtube": {
       const j = await form("https://oauth2.googleapis.com/token", { grant_type: "authorization_code", code, redirect_uri, client_id: youtubeClient().id!, client_secret: youtubeClient().secret! });
@@ -186,7 +189,7 @@ export async function exchangeCode(p: OwnerConnectProvider, code: string, codeVe
 export type AccountInfo = {
   account_id: string | null;
   account_label: string | null;
-  /** The token the connector should actually use (Meta: the PAGE token, not the user token). */
+  /** The token the connector should actually use (Meta: the long-lived user token, for Business Discovery). */
   access_token: string;
   expires_at: string | null;
   meta: Record<string, unknown>;
@@ -234,38 +237,50 @@ export async function describeAccount(p: OwnerConnectProvider, t: TokenSet): Pro
       return { account_id: j.data?.id ?? null, account_label: j.data?.username ? `@${j.data.username}` : j.data?.name ?? null, access_token: t.access_token, expires_at, meta: {} };
     }
     case "meta": {
-      type Page = { id: string; name: string; access_token: string; instagram_business_account?: { id: string; username?: string } };
-      const j = (await getJson(`${META_GRAPH}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username}&limit=50`, bearer)) as { data?: Page[] };
-      const pages = j.data ?? [];
-      if (!pages.length) throw new Error("this Facebook login administers no Page — create the SwiftCard Page first, then connect again");
-      // META_PAGE_ID picks among several Pages; otherwise the first (usually only) one.
-      const page = pages.find((pg) => pg.id === process.env.META_PAGE_ID) ?? pages[0];
-      // What the owner actually granted — the consent screen lets them untick
-      // any of it, and the Instagram bot needs to know before it tries to send.
+      // The Page is found three ways, since a Page owned by a business
+      // portfolio is missing from /me/accounts without business_management
+      // (SwiftCard's is, 2026-11-06): META_PAGE_ID, then /me/accounts, then the
+      // Pages ticked on the consent screen (debug_token's granular scopes).
+      type Page = { id: string; name?: string; instagram_business_account?: { id: string; username?: string } };
+      const ids: string[] = [];
+      if (process.env.META_PAGE_ID) ids.push(process.env.META_PAGE_ID);
+      try {
+        const j = (await getJson(`${META_GRAPH}/me/accounts?fields=id&limit=50`, bearer)) as { data?: Array<{ id: string }> };
+        ids.push(...(j.data ?? []).map((x) => x.id));
+      } catch { /* checked below */ }
+      try {
+        const appToken = `${process.env.META_APP_ID}|${process.env.META_APP_SECRET}`;
+        const d = (await getJson(`${META_GRAPH}/debug_token?input_token=${encodeURIComponent(t.access_token)}`, { Authorization: `Bearer ${appToken}` })) as { data?: { granular_scopes?: Array<{ scope?: string; target_ids?: string[] }> } };
+        for (const g of d.data?.granular_scopes ?? []) if (g.scope?.startsWith("pages_")) ids.push(...(g.target_ids ?? []));
+      } catch { /* checked below */ }
+      let page: Page | null = null;
+      for (const id of [...new Set(ids)]) {
+        try {
+          const pg = (await getJson(`${META_GRAPH}/${encodeURIComponent(id)}?fields=id,name,instagram_business_account{id,username}`, bearer)) as Page;
+          if (pg.instagram_business_account?.id) { page = pg; break; }
+          page ??= pg;
+        } catch { /* a Page this login can't read */ }
+      }
+      if (!page) throw new Error("no Facebook Page was shared. Press Connect again and tick the SwiftCard Page and its Instagram account");
+      const ig = page.instagram_business_account;
+      if (!ig?.id) throw new Error(`the ${page.name ?? "Facebook"} Page has no Instagram business account linked (or it wasn't ticked). Link it in Meta Business Suite, then press Connect again`);
+      // Prove the stored token does the one thing it's for: Business Discovery, on our own account.
+      if (ig.username) {
+        const self = (await getJson(`${META_GRAPH}/${ig.id}?fields=${encodeURIComponent(`business_discovery.username(${ig.username}){username,media_count}`)}`, bearer).catch((e) => ({ error: String(e) }))) as { business_discovery?: { username?: string }; error?: string };
+        if (!self.business_discovery?.username) throw new Error(`connected, but Instagram's Business Discovery refused this login (${String(self.error ?? "no data").slice(0, 120)}). Check that instagram_basic and instagram_manage_insights were allowed`);
+      }
       let granted: string[] = [];
       try {
         const perms = (await getJson(`${META_GRAPH}/me/permissions`, bearer)) as { data?: Array<{ permission?: string; status?: string }> };
         granted = (perms.data ?? []).filter((x) => x.status === "granted" && x.permission).map((x) => String(x.permission));
-      } catch { /* best-effort: an empty list reads as "not granted yet" */ }
-      // Subscribe the Page so Instagram messages — and comments on the Page's
-      // own posts (feed) — reach /api/meta/webhook. A
-      // refusal here (app not Live yet) is fine — the 10-minute pass covers it.
-      if (granted.includes("pages_manage_metadata")) {
-        try {
-          await fetch(`${META_GRAPH}/${page.id}/subscribed_apps?subscribed_fields=messages,feed`, { method: "POST", headers: { Authorization: `Bearer ${page.access_token}` } });
-        } catch { /* best-effort */ }
-      }
+      } catch { /* best-effort */ }
       return {
         account_id: page.id,
-        account_label: page.instagram_business_account?.username ? `${page.name} · @${page.instagram_business_account.username}` : `${page.name} (Page)`,
-        access_token: page.access_token,
-        expires_at: null,
-        meta: {
-          page_id: page.id, page_name: page.name,
-          ig_user_id: page.instagram_business_account?.id ?? null, ig_username: page.instagram_business_account?.username ?? null,
-          pages: pages.map((pg) => ({ id: pg.id, name: pg.name })),
-          granted,
-        },
+        account_label: ig.username ? `${page.name ?? "Page"} · @${ig.username}` : `${page.name ?? page.id} (Page)`,
+        // The long-lived USER token: Business Discovery is asked as the user (Meta's reference), not the Page.
+        access_token: t.access_token,
+        expires_at,
+        meta: { page_id: page.id, page_name: page.name ?? null, ig_user_id: ig.id, ig_username: ig.username ?? null, granted },
       };
     }
     case "youtube": {

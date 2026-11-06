@@ -7,7 +7,8 @@ import { PROFESSIONS, US_METROS } from "../search-plan";
 import { redditConfigured, searchSubreddits } from "../sources/reddit";
 import { SEARCH_WANT, searchItems, searchPlatform, searchRedditByWeb } from "../sources/web-discovery";
 import type { CrewInput, Platform } from "../types";
-import { instagramLinkedinBio, isPastedPost } from "./instagram-conversations";
+import { discoveryAuth, lookupBusiness, profileText, commentablePosts, queueDiscovered, daysSincePost, ACTIVE_DAYS, type DiscoveryAuth, type DiscoveredPost } from "../sources/instagram-discovery";
+import { ON_TOPIC, instagramLinkedinBio, isPastedPost } from "./instagram-conversations";
 import { PROFILE_SCORE_SYSTEM, unsupportedClaims } from "./instagram-prospects";
 import { DEFAULT_SUBREDDITS, SHEET_AGENT_USD, SHEET_DAILY_TARGET, SHEET_MAX_PENDING, guessAuthor } from "./replies";
 
@@ -117,7 +118,65 @@ async function igCandidates(ctx: AgentContext, topic: string): Promise<Candidate
   const busy = new Set(live.map((a) => instagramHandle(String(a.meta?.author ?? "")) ?? instagramHandle(a.target_url)).filter(Boolean));
   const kept = out.filter((c) => !!c.author && !busy.has(instagramHandle(c.author) ?? ""));
   ctx.stat("skipped_draft_waiting", out.filter((c) => !!c.author).length - kept.length);
-  return kept;
+  return enrichFromInstagram(ctx, kept);
+}
+
+/** At most this many Instagram API lookups a run (free, but Meta rate-limits per hour). */
+export const ENRICH_PER_RUN = 15;
+
+/**
+ * Each prospect's real profile from Instagram's API (2026-11-06), before
+ * scoring: bio, website, followers, activity and latest posts replace the
+ * search snippet, so the score and the DM rest on what the account actually
+ * says. Nobody is dropped here: an account the API can't find, or one that
+ * hasn't posted in 30 days, is described as such and scoring weighs it.
+ * Recent on-topic posts go to the comment agent's queue. Without a Meta
+ * connection this changes nothing.
+ */
+export async function enrichFromInstagram(ctx: AgentContext, cands: Candidate[], auth?: DiscoveryAuth | null, fetchImpl?: typeof fetch): Promise<Candidate[]> {
+  if (!cands.length) return cands;
+  const a = auth === undefined ? await discoveryAuth().catch(() => null) : auth;
+  if (!a) {
+    ctx.stat("ig_api_not_connected");
+    return cands;
+  }
+  const now = ctx.now();
+  const forComments: DiscoveredPost[] = [];
+  const out: Candidate[] = [];
+  let looked = 0;
+  let stop = false;
+  for (const c of cands) {
+    const handle = instagramHandle(c.author);
+    if (!handle || stop || looked >= ENRICH_PER_RUN) {
+      out.push(c);
+      continue;
+    }
+    looked++;
+    const r = await lookupBusiness(a, handle, fetchImpl);
+    if (r.ok) {
+      ctx.stat("ig_api_profiles");
+      const since = daysSincePost(r.profile, now);
+      if (since === null || since > ACTIVE_DAYS) ctx.stat("ig_api_inactive");
+      forComments.push(...commentablePosts(r.profile, now, ON_TOPIC));
+      out.push({ ...c, author: r.profile.handle, title: `${r.profile.name ?? r.profile.handle} (@${r.profile.handle}) on Instagram`, text: profileText(r.profile, now) });
+    } else if (r.reason === "not_business") {
+      ctx.stat("ig_api_not_business");
+      out.push({ ...c, text: `${c.text}\nInstagram's API found no business or creator account named @${handle} (a personal account, renamed or removed).` });
+    } else {
+      ctx.stat(`ig_api_${r.reason}`);
+      // A lapsed token or Meta's hourly limit won't fix itself this run: the rest go unenriched.
+      if (r.reason === "auth" || r.reason === "rate_limited") {
+        stop = true;
+        ctx.log(`Instagram API ${r.reason === "auth" ? "connection needs reconnecting at /api/admin/connect/meta" : "hourly limit reached"} (${r.detail}); the rest were scored from search results.`);
+      }
+      out.push(c);
+    }
+  }
+  if (forComments.length) {
+    await queueDiscovered(ctx.store, forComments);
+    ctx.stat("ig_api_posts_queued", forComments.length);
+  }
+  return out;
 }
 
 export const instagramDms: AgentDef = {
@@ -128,7 +187,7 @@ export const instagramDms: AgentDef = {
   dailyUsd: SHEET_AGENT_USD,
   purpose: "Finds business professionals' recent Instagram posts and writes each a short DM about that post. The link opens the chat with them in the Instagram app.",
   async run(ctx) {
-    return runEngagement(ctx, {
+    const r = await runEngagement(ctx, {
       platform: "instagram",
       kind: "dm",
       action: "dm",
@@ -149,6 +208,8 @@ export const instagramDms: AgentDef = {
         return igCandidates(ctx, `${who} in ${where} on Instagram: their recent public posts (instagram.com/<username>/p/ or /reel/ links) or their business profiles (instagram.com/<username>). For author give their @username. No law firms.`);
       },
     });
+    // What the Instagram API step had to say (a lapsed login, Meta's hourly limit) belongs on the run's line.
+    return ctx.notes.length ? { ...r, summary: `${r.summary} ${ctx.notes.join(" ")}` } : r;
   },
 };
 
