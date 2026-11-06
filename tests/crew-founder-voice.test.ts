@@ -20,7 +20,7 @@ describe("the shared voice", () => {
     expect(HUMAN_VOICE).toMatch(/No pricing unless they asked/);
     expect(HUMAN_VOICE).toMatch(/Never ask for a demo, a call or a meeting in a first message/);
     expect(HUMAN_VOICE).toMatch(/Never invent a problem/);
-    expect(HUMAN_VOICE).toMatch(/Email 60 to 100 words/);
+    expect(HUMAN_VOICE).toMatch(/Email 50 to 75 words/);
     // The old push: name a cost they live with, always say "free to start".
     expect(HUMAN_VOICE).not.toMatch(/small cost they're living with/);
     expect(HUMAN_VOICE).not.toMatch(/free to start/);
@@ -62,7 +62,7 @@ describe("every agent asks for this style", () => {
     const { prompt } = assessPrompt([{ name: "Acme Insurance", website: "https://acme.example.com", type: "insurance agencies", area: "Chicago", pages: [{ url: "https://acme.example.com/", html: "Acme Insurance" }] }], { office: false });
     expect(prompt).toMatch(/the whole first email to them, from Menash/);
     expect(prompt).toMatch(/First line "Subject: "/);
-    expect(prompt).toMatch(/60 to 100 words/);
+    expect(prompt).toMatch(/50 to 75 words \(80 is the hard limit\)/);
     expect(prompt).toMatch(/offer to put together a sample card with their branding/);
     expect(prompt).not.toMatch(/under 30 words/);
     // The Office call opener is still a phone script.

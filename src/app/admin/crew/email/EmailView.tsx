@@ -4,6 +4,7 @@ import type { GmailAccount } from "@/lib/crew/email/gmail";
 import { followUpDue, type LeadRow } from "@/lib/crew/email/outbox";
 import type { EmailSend } from "@/lib/crew/email/sends";
 import type { Approval } from "@/lib/crew/types";
+import { writingProblems } from "@/lib/crew/writing-check";
 import { Badge, btn, card, input } from "../ui";
 
 // ── The Email page ──────────────────────────────────────────────────────────
@@ -69,7 +70,8 @@ function Setup({ config, account, tableReady, used }: { config: Config; account:
 }
 
 function DraftCard({ a, send, config }: { a: Approval; send?: EmailSend; config: Config }) {
-  const problems = Array.isArray(a.meta?.writing_problems) ? (a.meta.writing_problems as string[]) : [];
+  // Checked on the text as it stands now, so an edit that fixes it clears it.
+  const problems = writingProblems(a.body, { kind: "cold_email", platform: "email" });
   const err = typeof a.meta?.send_error === "string" ? scrub(a.meta.send_error) : null;
   const retry = send && (send.status === "failed" || send.status === "unknown");
   return (
