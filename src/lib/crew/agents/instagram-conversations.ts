@@ -6,6 +6,7 @@ import { exactPostLink, instagramHandle } from "../exact-links";
 import { remainingToday } from "../rate-limit";
 import { emptyRest, rotate } from "../replies/engine";
 import { minutesToTomorrow, nyDayStart } from "../schedule";
+import { takeDiscovered } from "../sources/instagram-discovery";
 import { blockedDomain, onDomain, searchItems } from "../sources/web-discovery";
 import type { CrewInput, RunResult } from "../types";
 import { BANNED_PHRASES } from "../voice";
@@ -92,6 +93,9 @@ export type IgPost = { url: string; handle: string | null; title: string; text: 
 
 /** Pasted posts drafted per run; the rest stay in Paste a Post for the next run. */
 export const PASTES_PER_RUN = 5;
+
+/** Posts taken each run from the ones the DM agent read through Instagram's API. */
+export const API_POSTS_PER_RUN = 10;
 
 /**
  * A pasted post needs this score to get a comment. 0.25 until 2026-11-05, when
@@ -326,19 +330,23 @@ async function noteTurnedDown(ctx: AgentContext, t: Omit<TurnedDown, "at">): Pro
 export function emptyReason(s: Record<string, number>, topics: string[]): string {
   const where = topics.map((t) => t.split(":")[0]).join(" and ");
   const hits = s.search_results ?? 0;
-  if (s.pasted_inputs && !topics.length) {
+  if ((s.pasted_inputs || s.api_posts) && !topics.length) {
     const parts = [
       ["dropped_already_answered", "already had a draft"],
       ["dropped_recent_person", "were from accounts drafted for in the last 30 days"],
       ["rejected_ad_or_giveaway", "looked like an ad or giveaway"],
       ["rejected_low_relevance", "weren't about networking, cards, events or business relationships"],
       ["rejected_not_scored", "couldn't be scored"],
+      ["rejected_not_a_professional", "weren't by a professional or business"],
+      ["dropped_seen", "were read before"],
+      ["dropped_off_topic", "weren't on topic"],
       ["drafts_failed_checks", "got drafts that failed the writing check twice"],
       ["draft_empty", "got no draft back"],
     ]
       .filter(([k]) => (s[k] ?? 0) > 0)
       .map(([k, w]) => `${s[k]} ${w}`);
-    return `Read ${s.pasted_inputs} pasted post${s.pasted_inputs === 1 ? "" : "s"}, no comment drafted: ${parts.join(", ") || "none qualified"}.`;
+    const read = [s.pasted_inputs ? `${s.pasted_inputs} pasted post${s.pasted_inputs === 1 ? "" : "s"}` : "", s.api_posts ? `${s.api_posts} post${s.api_posts === 1 ? "" : "s"} from Instagram's API` : ""].filter(Boolean).join(" and ");
+    return `Read ${read}, no comment drafted: ${parts.join(", ") || "none qualified"}.`;
   }
   if (s.search_blocked) return `Web search can't read instagram.com right now; nothing searched (${where}).`;
   if (!hits) return `The search engine returned no Instagram posts for ${where}${s.search_web_searches ? ` after ${s.search_web_searches} searches` : ""}. Trying other topics next run.`;
@@ -380,6 +388,12 @@ export async function runInstagramConversations(ctx: AgentContext): Promise<RunR
   const pastes = await ctx.store.takeInputs(["instagram"], PASTES_PER_RUN, ctx.def.id, isPastedPost);
   ctx.stat("pasted_inputs", pastes.length);
   const pasted = pastes.map(fromPaste).filter((p): p is IgPost => !!p);
+  // Recent on-topic posts the DM agent read through Instagram's API (2026-11-06).
+  // Not pasted: they go through every gate a found post does.
+  const fromApi: IgPost[] = (await takeDiscovered(ctx.store, API_POSTS_PER_RUN, ctx.now())).map((d) => ({
+    url: d.url, handle: d.handle, title: `${d.name ?? d.handle} on Instagram (${d.at.slice(0, 10)})`, text: d.caption.slice(0, 600), topic: "instagram api",
+  }));
+  ctx.stat("api_posts", fromApi.length);
   const searchOn = ctx.config<boolean>("web_search", false) === true;
   const topics = searchOn ? await rotate(ctx, "topic_i", SEARCH_TOPICS, 2) : [];
   let hits: SearchHit[] = [];
@@ -401,11 +415,11 @@ export async function runInstagramConversations(ctx: AgentContext): Promise<RunR
     }
     ctx.stat("search_results", hits.length);
   }
-  ctx.stat("posts_read", pasted.length + hits.length);
-  if (!pasted.length && !searchOn) {
+  ctx.stat("posts_read", pasted.length + fromApi.length + hits.length);
+  if (!pasted.length && !fromApi.length && !searchOn) {
     return { summary: "Nothing pasted. Paste an Instagram post's link and its caption into Paste a Post (platform instagram) and I'll draft a comment.", status: "skipped" };
   }
-  const posts = [...pasted, ...toPosts(hits, topics.join(" | "), (k, n) => ctx.stat(k, n))];
+  const posts = [...pasted, ...fromApi, ...toPosts(hits, topics.join(" | "), (k, n) => ctx.stat(k, n))];
 
   // 2. Never twice: not a post it has seen, not a post any Instagram agent drafted for, not an account drafted for lately.
   // A pasted post skips the topic filter (a person chose it) but never the

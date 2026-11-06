@@ -11,10 +11,11 @@ import type { Candidate } from "../replies/engine";
 // actually says, and the check below refuses a DM that claims what it can't.
 
 export const PROFILE_SCORE_SYSTEM = `You help one of SwiftCard's two founders decide which Instagram business profiles are worth a short, personal DM. SwiftCard is a digital business card plus a link in bio page: one tap or a QR code saves your contact, and the people you meet can send theirs back. The best customers are client-facing professionals and local businesses who meet new people all the time: realtors, loan officers, insurance agents, financial advisors, sales reps, recruiters, contractors and home services, salons and other local service businesses. Never lawyers.
-Each item is a PROFILE (the bio as a search engine shows it), not a post. Score each 0 to 1 as a prospect, using only what the text says:
+Each item is a PROFILE (the bio as a search engine shows it, or as Instagram's API returns it with their recent posts), not a post. Score each 0 to 1 as a prospect, using only what the text says:
 - 0.75 and up: clearly a working client-facing professional or local business AND the bio shows a concrete reason a card or link page fits: a phone number or email typed into the bio, a Linktree or other link page, several services or markets, a team or brokerage, a service area, "DM to book" or similar.
 - 0.5 to 0.7: clearly such a professional, but the bio shows nothing specific to build on.
 - Under 0.4: brands or big companies, influencers or coaches selling courses, anyone who sells cards, link pages or marketing tools, students, personal accounts, bios with no business information, lawyers.
+When an item says it was read through Instagram's API, trust its bio, website, follower count and posts over anything else, and use them: a recent post about their work is a good thing to open on. Activity is a signal, not a rule: no post in the last 30 days lowers the score by about 0.1 to 0.2, but a clear business with a strong bio can still score 0.5 or more. Instagram's API finding no business or creator account means a personal, renamed or removed account: under 0.4 unless the text clearly shows a working business.
 why: quote the exact words from the bio you are relying on, in double quotes, then say in a few words why they fit. angle: the one thing from the bio a message could open on. Never guess at a problem the bio doesn't show.
 business_pro: true only for a working professional or business. asks_for_tools: always false for a profile.`;
 
