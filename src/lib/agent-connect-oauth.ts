@@ -110,7 +110,10 @@ export function authorizeUrl(p: OwnerConnectProvider, state: string, codeChallen
       return `https://x.com/i/oauth2/authorize?${q}`;
     }
     case "meta": {
-      const q = new URLSearchParams({ client_id: process.env.META_APP_ID!, redirect_uri, scope: SCOPES.meta, state, response_type: "code" });
+      // A Facebook Login for Business configuration (META_LOGIN_CONFIG_ID), when
+      // set, names the permissions instead of the scope list.
+      const cfg = process.env.META_LOGIN_CONFIG_ID;
+      const q = new URLSearchParams({ client_id: process.env.META_APP_ID!, redirect_uri, ...(cfg ? { config_id: cfg } : { scope: SCOPES.meta }), state, response_type: "code" });
       return `https://www.facebook.com/v26.0/dialog/oauth?${q}`;
     }
     case "youtube": {

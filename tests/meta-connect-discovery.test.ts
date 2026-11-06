@@ -43,6 +43,14 @@ describe("Meta connect: read-only, for Business Discovery", () => {
     expect(scope?.split(" ").sort()).toEqual(["instagram_basic", "instagram_manage_insights", "pages_read_engagement", "pages_show_list"]);
   });
 
+  it("uses a Facebook Login for Business configuration instead of the scope list when one is set", () => {
+    vi.stubEnv("META_APP_ID", "123");
+    vi.stubEnv("META_LOGIN_CONFIG_ID", "987");
+    const q = new URL(authorizeUrl("meta", "state")).searchParams;
+    expect(q.get("config_id")).toBe("987");
+    expect(q.get("scope")).toBeNull();
+  });
+
   it("keeps the long-lived token and its 60-day expiry, and refuses a short one", async () => {
     vi.stubEnv("META_APP_ID", "123");
     vi.stubEnv("META_APP_SECRET", "s");
