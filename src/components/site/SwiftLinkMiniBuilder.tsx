@@ -189,7 +189,7 @@ export default function SwiftLinkMiniBuilder({ linkedinEnabled = false }: { link
             checked={sketch.showCardLink}
             onChange={(v) => patch({ showCardLink: v })}
             label="Link to your business card"
-            help="A small link at the bottom of your page that opens your card."
+            help="A small link under your Connect button that opens your card."
           />
         </div>
       ),

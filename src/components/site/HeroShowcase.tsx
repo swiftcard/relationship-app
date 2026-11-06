@@ -413,6 +413,12 @@ function MiniLinks({ persona }: { persona: Persona }) {
             Connect with {first}
           </div>
 
+          {/* The contact-info link right under Connect, as on the live page
+              since 2026-11-06 (SwiftLinkProfile: mt-2, a 44px-tall row). */}
+          <div className="flex justify-center mt-2">
+            <span className="inline-flex items-center min-h-[44px] px-4 text-xs" style={{ color: text, opacity: 0.5 }}>View Contact Info →</span>
+          </div>
+
           {/* Links — all THREE sizes the live tile system renders for a paid
               page (owner, 2026-09-17: "play with all the features"): one
               full-width FEATURED tile, a GRID pair beneath it, then a COMPACT
@@ -472,12 +478,9 @@ function MiniLinks({ persona }: { persona: Persona }) {
             </div>
           </div>
 
-          {/* "View Contact Info →", and no "Made with" footer: these are paid
-              pages (verified seal), and paid pages dropped it on 2026-09-02 —
-              the corner badge carries the invite instead. */}
-          <div className="flex justify-center mt-10">
-            <span className="inline-block px-4 py-2 text-xs" style={{ color: text, opacity: 0.5 }}>View Contact Info →</span>
-          </div>
+          {/* No "Made with" footer: these are paid pages (verified seal), and
+              paid pages dropped it on 2026-09-02 — the corner badge carries
+              the invite instead. */}
         </div>
       </div>
     </div>

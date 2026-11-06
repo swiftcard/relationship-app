@@ -156,8 +156,9 @@ export default function SwiftLinkProfile({
   trackSource?: string;
   /** Owner looking at their own Swift Links page. */
   suppressTracking?: boolean;
-  /** Owner toggle (Social design step): the faint "View Contact Info →" link at
-   *  the bottom. ON by default — hiding it is the owner's explicit choice. */
+  /** Owner toggle (Social design step): the faint "View Contact Info" link
+   *  under the Connect button. ON by default — hiding it is the owner's
+   *  explicit choice. */
   showCardLink?: boolean;
   /** "Made with swiftcard.me" footer — FREE plan only (owner order
    *  2026-09-02, superseding the 2026-08-11 every-plan rule for THIS surface:
@@ -837,6 +838,28 @@ export default function SwiftLinkProfile({
             <ConnectButton cardOwner={username} ownerFirstName={firstName} accent={accent} accentText={accentText} />
           </div>
 
+          {/* Quiet link to this person's full SwiftCard, right under Connect
+              (owner order 2026-11-06: it used to sit at the very bottom of the
+              page, below every link, where visitors rarely reached it). It is
+              Connect's quieter second option, so it hugs the button: mt-2 and
+              a 44px-tall tap row put the words ~22px under Connect and ~38px
+              above the first tile. Owner-toggleable from the Social design
+              step (hideCardLink in customization); switched off, nothing
+              renders and Connect → links stays the plain 24px. Reads "View
+              Contact Info" since 2026-11-06 (was "View SwiftCard"). Tagged:
+              the card visit came from Swift Links, not a plain card link. */}
+          {showCardLink && (
+            <div className="flex justify-center mt-2">
+              <a
+                href={`/${username}?source=swift_links`}
+                className={`inline-flex items-center min-h-[44px] px-4 text-xs rounded-lg transition-colors ${"" /* hover well must be visible on BOTH modes */}${light ? "hover:bg-black/[0.06]" : "hover:bg-white/10"}`}
+                style={{ color: textColor, opacity: 0.5 }}
+              >
+                View Contact Info →
+              </a>
+            </div>
+          )}
+
           {/* Featured links — rich preview cards */}
           {links.length > 0 && <span data-sl-section="links" aria-hidden className="block h-0" />}
           <SwiftLinkButtons
@@ -861,23 +884,6 @@ export default function SwiftLinkProfile({
             trackSource={trackSource}
             suppressTracking={suppressTracking}
           />
-
-          {/* Faint link to this person's full SwiftCard — owner-toggleable from
-              the Social design step (hideCardLink in customization). Reads
-              "View Contact Info" since 2026-11-06 (owner: was "View SwiftCard"). */}
-          {showCardLink && (
-            <div className="flex justify-center mt-10">
-              {/* Tagged: the card visit came from Swift Links, not a plain
-                  card link. */}
-              <a
-                href={`/${username}?source=swift_links`}
-                className={`inline-block px-4 py-2 text-xs rounded-lg transition-colors ${"" /* hover well must be visible on BOTH modes */}${light ? "hover:bg-black/[0.06]" : "hover:bg-white/10"}`}
-                style={{ color: textColor, opacity: 0.5 }}
-              >
-                View Contact Info →
-              </a>
-            </div>
-          )}
 
           {/* Footer — "Made with swiftcard.me" attribution, FREE plan only
               since 2026-09-02 (owner order): paid plans drop it, and the

@@ -1469,7 +1469,7 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
               checked={showCardLinkBtn}
               onChange={setShowCardLinkBtn}
               label="Link to your business card"
-              help="A small link at the bottom of your page that opens your card."
+              help="A small link under your Connect button that opens your card."
             />
             {/* Same removal as the Card design tab above: the offer belongs
                 on Save Changes, not parked under the controls. */}

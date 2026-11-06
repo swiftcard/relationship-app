@@ -19,6 +19,48 @@ describe("the View SwiftCard button toggle", () => {
     expect(src).not.toContain("View SwiftCard →");
   });
 
+  // Owner order 2026-11-06: the link sits right UNDER the Connect button, not
+  // at the very bottom of the page below every link. One copy, between
+  // Connect and the link tiles; the switch still decides whether it renders.
+  it("the link sits under Connect, above the links — once", () => {
+    const src = read("src/components/SwiftLinkProfile.tsx");
+    const connect = src.indexOf("<ConnectButton");
+    const cardLink = src.indexOf("{showCardLink && (");
+    const tiles = src.indexOf("<SwiftLinkButtons");
+    expect(src.split("{showCardLink && (").length - 1).toBe(1);
+    expect(src.split("View Contact Info →").length - 1).toBe(1);
+    expect(connect).toBeGreaterThan(0);
+    expect(cardLink, "the card link is no longer right under Connect").toBeGreaterThan(connect);
+    expect(tiles, "the card link fell back below the link tiles").toBeGreaterThan(cardLink);
+    // The tap row is a full 44px and hugs Connect (mt-2), not the old mt-10 gap.
+    const block = src.slice(cardLink, src.indexOf(")}", cardLink));
+    expect(block).toContain('className="flex justify-center mt-2"');
+    expect(block).toMatch(/min-h-\[44px\]/);
+    expect(block).not.toMatch(/mt-10/);
+  });
+
+  it("the homepage hero mock-up shows it under its Connect too", () => {
+    const hero = read("src/components/site/HeroShowcase.tsx");
+    const connect = hero.indexOf("Connect with {first}");
+    const link = hero.indexOf("View Contact Info →");
+    const tiles = hero.indexOf("persona.featured");
+    expect(connect).toBeGreaterThan(0);
+    expect(link).toBeGreaterThan(connect);
+    expect(tiles).toBeGreaterThan(link);
+    expect(hero.split("View Contact Info →").length - 1).toBe(1);
+  });
+
+  it("the switch's help text says where the link is", () => {
+    for (const f of ["src/app/cards/new/NewCardWizard.tsx", "src/app/cards/[id]/edit/CardEditForm.tsx", "src/components/site/SwiftLinkMiniBuilder.tsx"]) {
+      const src = read(f);
+      expect(src, f).toContain('help="A small link under your Connect button that opens your card."');
+      expect(src, f).not.toContain("A small link at the bottom of your page");
+    }
+    const doc = read("src/lib/knowledge/docs/cards.ts");
+    expect(doc).toContain('\\"View Contact Info\\" link under the Connect button');
+    expect(doc).not.toMatch(/View Contact Info\\" link at the bottom/);
+  });
+
   it("the homepage hero mock-up and the support docs use the same words", () => {
     expect(read("src/components/site/HeroShowcase.tsx")).toContain("View Contact Info →");
     expect(read("src/components/site/HeroShowcase.tsx")).not.toContain("View SwiftCard →");

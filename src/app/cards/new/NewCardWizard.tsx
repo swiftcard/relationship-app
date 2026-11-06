@@ -2452,7 +2452,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
               checked={showCardLinkBtn}
               onChange={setShowCardLinkBtn}
               label="Link to your business card"
-              help="A small link at the bottom of your page that opens your card."
+              help="A small link under your Connect button that opens your card."
             />
             {!isPro && !designUnlocked && (
               <PlanGate
