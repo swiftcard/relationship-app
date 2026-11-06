@@ -6,6 +6,8 @@ import { socialInput } from "@/lib/social-input";
 import { PLAN_LIMITS } from "@/lib/plan";
 import SocialHandleField from "@/components/SocialHandleField";
 import AddLinkForm from "@/components/AddLinkForm";
+import LinkListEditor from "@/components/LinkListEditor";
+import { withHttps } from "@/lib/link-list";
 
 // Small form primitives shared by the three homepage product builders, styled
 // to match the dark builder shell. Kept in one place so the card, SwiftLink and
@@ -103,56 +105,23 @@ export function LinkButtons({
   function add() {
     if (atLinkCap) return;
     const l = draft.label.trim();
-    let u = draft.url.trim();
+    const u = withHttps(draft.url);
     if (!l || !u) return;
-    if (!/^https?:\/\//i.test(u)) u = `https://${u}`;
     onChange([...links, { label: l, url: u }]);
     setDraft({ label: "", url: "" });
   }
-
-  const remove = (i: number) => onChange(links.filter((_, j) => j !== i));
 
   return (
     <div>
       <span className="block text-white/55 text-[0.75rem] font-medium mb-1">{label}</span>
       <p className="text-white/70 text-[0.6875rem] mb-2 leading-snug">{hint}</p>
 
-      {links.length > 0 && (
-        <div className="space-y-1.5 mb-2.5">
-          {links.map((l, i) =>
-            l.kind === "header" ? (
-              <div key={i} className="flex items-center gap-2 rounded-xl bg-[#15171F] border border-dashed border-white/15 px-3 py-2">
-                <span className="text-[0.5625rem] font-bold uppercase tracking-wide text-white/40 shrink-0">Section</span>
-                <input
-                  type="text"
-                  value={l.label}
-                  onChange={(e) => onChange(links.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
-                  placeholder="Section title (e.g. Watch)"
-                  className="flex-1 min-w-0 bg-transparent text-white text-xs font-bold uppercase tracking-wide focus:outline-none placeholder:text-white/30"
-                />
-                <button type="button" onClick={() => remove(i)} aria-label="Remove section" className="shrink-0 text-white/40 hover:text-red-400 transition-colors">
-                  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" /></svg>
-                </button>
-              </div>
-            ) : (
-              <div key={i} className="flex items-center gap-2 rounded-xl bg-[#15171F] border border-white/10 px-3 py-2">
-                <span className="min-w-0 flex-1">
-                  <span className="block text-white text-sm truncate">{l.label}</span>
-                  <span className="block text-white/40 text-[0.6875rem] truncate">{l.url}</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => remove(i)}
-                  aria-label={`Remove ${l.label}`}
-                  className="shrink-0 text-white/40 hover:text-red-400 transition-colors"
-                >
-                  <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8}><path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" /></svg>
-                </button>
-              </div>
-            ),
-          )}
-        </div>
-      )}
+      {/* The same list as the real builder (LinkListEditor): in page order,
+          drag a row by its grip, tap a link to edit it in place, and
+          "+ Add a section header" under it, above the add form. */}
+      <div className="mb-2.5">
+        <LinkListEditor links={links} onChange={onChange} variant="site" canAddHeader />
+      </div>
 
       {atLinkCap ? (
         <p className="text-[0.6875rem] text-white/50 bg-[#15171F] border border-white/10 rounded-xl px-3 py-2.5 leading-relaxed">
@@ -170,16 +139,6 @@ export function LinkButtons({
           idPrefix="mini-link"
         />
       )}
-
-      {/* Section headers — chapters for a long page. Last and quiet: an extra,
-          not the first thing to do. */}
-      <button
-        type="button"
-        onClick={() => onChange([...links, { label: "", url: "", kind: "header" }])}
-        className="block mt-2.5 text-[0.6875rem] font-semibold text-white/55 hover:text-white transition-colors"
-      >
-        + Add a section header
-      </button>
     </div>
   );
 }

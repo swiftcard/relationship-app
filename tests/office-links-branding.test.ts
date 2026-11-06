@@ -130,19 +130,23 @@ describe("the server pins them — the UI is not the boundary", () => {
 
 describe("the member can tell which links are theirs", () => {
   const form = read("src/app/cards/[id]/edit/CardEditForm.tsx");
+  // The rows themselves are drawn by the shared list (2026-11-06: drag to
+  // reorder, tap to edit); the editor hands it the company-row test.
+  const list = read("src/components/LinkListEditor.tsx");
 
   it("marks the office's links and gives them no remove control", () => {
     // A remove button the server undoes on save is worse than no button.
     // isOfficeRow, not isOfficeLink: a company SECTION HEADER has no URL, so a
     // URL-only matcher left company headers looking like the member's own —
     // editable and removable, then silently restored by the server on save.
-    expect(form).toContain("isOfficeRow(l)");
+    expect(form).toMatch(/isLocked=\{isOfficeRow\}/);
     expect(form, "a URL-only matcher cannot see a company header").not.toContain("isOfficeLink(");
-    expect(form).toMatch(/Company<\/span>/);
+    expect(list).toMatch(/const removeCell = lockedRow \? \(\s*<span[^>]*>Company<\/span>/);
   });
 
   it("keeps the member's own links fully editable", () => {
-    expect(form).toMatch(/\) : \(\s*<button type="button" onClick=\{\(\) => removeLink\(i\)\}/);
+    expect(list).toMatch(/\) : \(\s*<button\s+type="button"\s+onClick=\{\(\) => remove\(i\)\}/);
+    expect(list).toMatch(/onClick=\{\(\) => openEdit\(i\)\}/);
   });
 
   it("still offers the add form to everyone", () => {

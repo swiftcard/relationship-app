@@ -36,6 +36,8 @@ import type { CardAddress, CardData, CardLink, CardPhone, PhoneLabel, CustomLayo
 import { SOCIAL_INPUTS } from "@/lib/social-input";
 import SocialHandleField from "@/components/SocialHandleField";
 import AddLinkForm from "@/components/AddLinkForm";
+import LinkListEditor from "@/components/LinkListEditor";
+import { withHttps } from "@/lib/link-list";
 import FormSection from "@/components/ui/FormSection";
 import { cardSlug, prettyCardSlug } from "@/lib/slug";
 import { useGuestDraft, draftHasWork, draftStore, accountDraftKey, officeHopDraftKey, GUEST_DRAFT_KEY, type GuestDraft } from "@/lib/guest-draft";
@@ -899,15 +901,11 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
   function addLink() {
     if (atLinkCap) return;
     const label = newLink.label.trim();
-    let url = newLink.url.trim();
+    const url = withHttps(newLink.url);
     if (!label || !url) return;
-    if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
     // Add, then reset the fields so another link can be entered right away.
     setLinks((prev) => [...prev, { label, url }]);
     setNewLink({ label: "", url: "" });
-  }
-  function removeLink(i: number) {
-    setLinks((prev) => prev.filter((_, idx) => idx !== i));
   }
 
   function goNextFrom1() {
@@ -2119,43 +2117,18 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                 ? "Your company's links are already on your page. Add your own below."
                 : "Buttons on your page that open any website."}
             >
-              {links.length > 0 && (
-                <div className="space-y-2">
-                  {links.map((l, i) =>
-                    l.kind === "header" ? (
-                      <div key={i} className={`flex items-center gap-2 border border-dashed rounded-xl px-3 py-2.5 ${isOfficeRow(l) ? "bg-purple-500/[0.06] border-purple-500/25" : "bg-gray-900 border-gray-700"}`}>
-                        <span className="text-[0.5625rem] font-bold uppercase tracking-wide text-gray-500 shrink-0">Section</span>
-                        <input
-                          type="text"
-                          value={l.label}
-                          onChange={(e) => setLinks((prev) => prev.map((x, xi) => (xi === i ? { ...x, label: e.target.value } : x)))}
-                          placeholder="Section title (e.g. Watch)"
-                          readOnly={isOfficeRow(l)}
-                          className={`flex-1 min-w-0 bg-transparent text-gray-200 text-xs font-bold uppercase tracking-wide focus:outline-none placeholder-gray-600 ${isOfficeRow(l) ? "cursor-default opacity-80" : ""}`}
-                        />
-                        {isOfficeRow(l) ? (
-                          <span className="text-[0.5625rem] font-semibold uppercase tracking-wide text-purple-300 shrink-0">Company</span>
-                        ) : (
-                          <button type="button" onClick={() => removeLink(i)} aria-label="Remove section" className="text-gray-600 hover:text-red-400 transition-colors text-lg leading-none shrink-0">×</button>
-                        )}
-                      </div>
-                    ) : (
-                    <div key={i} className="bg-gray-900 border border-gray-700 rounded-xl px-3 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-gray-200 text-xs font-semibold truncate">{l.label}</p>
-                          <p className="text-gray-500 text-[0.625rem] truncate">{l.url}</p>
-                        </div>
-                        <button type="button" onClick={() => removeLink(i)} aria-label={`Remove ${l.label}`} className="text-gray-600 hover:text-red-400 transition-colors text-lg leading-none shrink-0">×</button>
-                      </div>
-                      {/* How the link LOOKS on the page (Featured / Grid /
-                          Compact, its preview, its row style) is chosen per
-                          link on the Social design step — see LinkButtonsControls. */}
-                    </div>
-                    ),
-                  )}
-                </div>
-              )}
+              {/* The list on top, in page order: drag a row by its grip, tap a
+                  link to edit it in place, and "+ Add a section header" under
+                  it, ABOVE the add form (owner, 2026-11-06). Section headers
+                  are Pro-gated the same way as the size control. How each
+                  link LOOKS on the page is chosen on the Social design step
+                  (LinkButtonsControls). The same LinkListEditor as Edit card. */}
+              <LinkListEditor
+                links={links}
+                onChange={setLinks}
+                isLocked={isOfficeRow}
+                canAddHeader={designUnlocked}
+              />
               {atLinkCap ? (
                 <PlanGate
                   feature="swift-links-cap"
@@ -2167,20 +2140,6 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                 </PlanGate>
               ) : (
                 <AddLinkForm value={newLink} onChange={setNewLink} onAdd={addLink} idPrefix="wizard-link" />
-              )}
-              {/* Section headers — chapters for a long page. Pro-gated the
-                  same way as the size control, and OUTSIDE the links-exist
-                  wrapper so a header can open the page's first section before
-                  any link has been added. Last and quiet: it is an extra, not
-                  the first thing to do. */}
-              {designUnlocked && (
-                <button
-                  type="button"
-                  onClick={() => setLinks((prev) => [...prev, { label: "", url: "", kind: "header" as const }])}
-                  className="block text-[0.6875rem] font-semibold text-gray-400 hover:text-gray-200 transition-colors"
-                >
-                  + Add a section header
-                </button>
               )}
             </FormSection>
 

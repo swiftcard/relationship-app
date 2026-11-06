@@ -10,6 +10,8 @@ import { normalizeSocial, socialDestination } from "@/lib/social-url";
 import { socialInput } from "@/lib/social-input";
 import SocialHandleField from "@/components/SocialHandleField";
 import AddLinkForm from "@/components/AddLinkForm";
+import LinkListEditor from "@/components/LinkListEditor";
+import { withHttps } from "@/lib/link-list";
 import SwiftLinkLivePreview from "@/components/SwiftLinkLivePreview";
 // From lib/office-link-design, NOT lib/office-brand: that module reaches for
 // the service-role database client, and importing a value from it here would
@@ -129,8 +131,7 @@ export default function OfficeLinksBranding({ office, active = true }: {
   const readyToAdd = !!newLink.label.trim() && !!newLink.url.trim();
   function addLink() {
     if (!readyToAdd) return;
-    let url = newLink.url.trim();
-    if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+    const url = withHttps(newLink.url);
     setLinks((prev) => [...prev, { label: newLink.label.trim(), url }]);
     setNewLink({ label: "", url: "" });
   }
@@ -253,76 +254,35 @@ export default function OfficeLinksBranding({ office, active = true }: {
                 These appear at the top of every teammate&apos;s page and they can&apos;t change them, but they can
                 still add their own underneath.
               </p>
-              {links.length > 0 && (
-                <div className="space-y-2 mb-2">
-                  {links.map((l, i) => l.kind === "header" ? (
-                    // Label only, edited in place — the same control the
-                    // teammate's own "Add a section header" produces.
-                    <div key={`h-${i}`} className="flex items-center gap-2.5 bg-gray-950 border border-gray-700 border-dashed rounded-xl px-3 py-2.5">
-                      <span className="text-[0.5625rem] font-bold uppercase tracking-wide text-gray-500 shrink-0">Section</span>
-                      <input
-                        type="text"
-                        value={l.label}
-                        onChange={(e) => setLinks((prev) => prev.map((x, xi) => (xi === i ? { ...x, label: e.target.value.slice(0, 120) } : x)))}
-                        placeholder="Section title (e.g. Listings)"
-                        className="flex-1 min-w-0 bg-transparent text-gray-200 text-xs font-bold uppercase tracking-wide focus:outline-none placeholder-gray-600"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setLinks((prev) => prev.filter((_, xi) => xi !== i))}
-                        aria-label={`Remove section ${l.label || "header"}`}
-                        className="shrink-0 grid place-items-center w-9 h-9 -mr-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors text-lg leading-none"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ) : (
-                    <div key={`${l.url}-${i}`} className="flex items-center gap-2.5 bg-gray-950 border border-gray-800 rounded-xl px-3 py-2.5">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-gray-200 text-xs font-semibold truncate">{l.label}</p>
-                        <p className="text-gray-600 text-[0.625rem] truncate">{l.url}</p>
-                      </div>
-                      {/* A real tap target, not a bare glyph. Measured: the
-                          plain "×" came out 18px tall, which is a miss on a
-                          phone — and this one deletes a link from fifteen
-                          people's pages. */}
-                      <button
-                        type="button"
-                        onClick={() => setLinks((prev) => prev.filter((_, xi) => xi !== i))}
-                        aria-label={`Remove ${l.label}`}
-                        className="shrink-0 grid place-items-center w-9 h-9 -mr-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors text-lg leading-none"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {/* The same list as every teammate's (LinkListEditor): in page
+                  order, drag a row by its grip, tap a link to edit it in
+                  place, and "+ Add a section header" under it, above the add
+                  form (owner, 2026-11-06). Its × and grip are real tap targets
+                  (36px and up): these rows sit on fifteen people's pages. A
+                  header can open the first section before any company link
+                  exists. */}
+              <LinkListEditor
+                links={links}
+                onChange={setLinks}
+                variant="panel"
+                canAddHeader
+                headerPlaceholder="Section title (e.g. Listings)"
+                headerMaxLength={120}
+                listLabel="Company links, in page order"
+              />
               {/* The same add form as every teammate's (AddLinkForm): ideas that
                   show what a link is for, then "Button text" and "Web address". */}
-              <AddLinkForm
-                value={newLink}
-                onChange={setNewLink}
-                onAdd={addLink}
-                addLabel="+ Add company link"
-                addClass="bg-purple-600 hover:bg-purple-500 text-white"
-                ideas={["Book a meeting", "Leave a review", "See our listings", "Watch our video", "Shop now"]}
-                idPrefix="office-link-new"
-              />
-              {/* Below the form, as on every teammate's Socials step: an extra,
-                  not the first thing to do. Outside the list wrapper on purpose:
-                  a header has to be able to open the first section before any
-                  company link exists. */}
-              <button
-                type="button"
-                onClick={() => setLinks((prev) => [...prev, { label: "", url: "", kind: "header" as const }])}
-                // Real padding, not a bare text link: measured at 15px tall
-                // without it, which is a miss on a phone — and this control
-                // sits on the page fifteen people hand to customers.
-                className="block mt-2 -ml-1.5 px-1.5 py-2 rounded-lg text-[0.6875rem] font-semibold text-gray-400 hover:text-gray-200 hover:bg-gray-800/60 transition-colors"
-              >
-                + Add a section header
-              </button>
+              <div className="mt-3">
+                <AddLinkForm
+                  value={newLink}
+                  onChange={setNewLink}
+                  onAdd={addLink}
+                  addLabel="+ Add company link"
+                  addClass="bg-purple-600 hover:bg-purple-500 text-white"
+                  ideas={["Book a meeting", "Leave a review", "See our listings", "Watch our video", "Shop now"]}
+                  idPrefix="office-link-new"
+                />
+              </div>
             </div>
           </div>
         </Section>

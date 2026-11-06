@@ -38,6 +38,10 @@ const TONE: Record<Variant, { label: string; input: string; chip: string; chipOn
     idle: "border border-dashed border-white/15 text-white/40 disabled:opacity-60",
   },
 };
+/** The same boxes and labels, for editing a link that is already on the list
+ *  (LinkListEditor), so adding and editing look like one form. */
+export const LINK_FORM_TONE = TONE;
+export type LinkFormVariant = Variant;
 
 export default function AddLinkForm({
   value,

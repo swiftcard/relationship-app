@@ -107,6 +107,7 @@ const PAGES = [
   "src/components/FreeCardEditor.tsx",
   "src/components/LinkButtonsControls.tsx",
   "src/components/AddLinkForm.tsx",
+  "src/components/LinkListEditor.tsx",
   "src/components/SocialHandleField.tsx",
   "src/components/card-templates/CardLookPicker.tsx",
   "src/components/QRCodeModal.tsx",

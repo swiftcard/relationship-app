@@ -45,8 +45,9 @@ import { normalizeSocial } from "@/lib/social-url";
 import { SOCIAL_INPUTS } from "@/lib/social-input";
 import SocialHandleField from "@/components/SocialHandleField";
 import AddLinkForm from "@/components/AddLinkForm";
+import LinkListEditor from "@/components/LinkListEditor";
+import { withHttps } from "@/lib/link-list";
 import FormSection from "@/components/ui/FormSection";
-import LinkPreviewThumb from "@/components/LinkPreviewThumb";
 import CardUrlEditor from "@/components/CardUrlEditor";
 import { unitLine } from "@/lib/address-unit";
 import UnsavedLeaveGuard from "@/components/UnsavedLeaveGuard";
@@ -463,15 +464,11 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
   function addLink() {
     if (atLinkCap) return;
     const linkLabel = newLink.label.trim();
-    let url = newLink.url.trim();
+    const url = withHttps(newLink.url);
     if (!linkLabel || !url) return;
-    if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
     // Add the link, then reset the fields so another can be entered right away.
     setLinks((prev) => [...prev, { label: linkLabel, url }]);
     setNewLink({ label: "", url: "" });
-  }
-  function removeLink(i: number) {
-    setLinks((prev) => prev.filter((_, idx) => idx !== i));
   }
 
   const previewData: CardData = {
@@ -1366,56 +1363,24 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                 ? "Your company's links come first. Add your own below."
                 : "Buttons on your page that open any website."}
             >
-              {links.length > 0 && (
-                <div className="space-y-2">
-                  {links.map((l, i) =>
-                    l.kind === "header" ? (
-                      // A section header — label only, editable in place.
-                      <div key={i} className={`flex items-center gap-2.5 border border-dashed rounded-xl px-3 py-2.5 ${isOfficeRow(l) ? "bg-purple-500/[0.06] border-purple-500/25" : "bg-gray-900 border-gray-700"}`}>
-                        <span className="text-[0.5625rem] font-bold uppercase tracking-wide text-gray-500 shrink-0">Section</span>
-                        <input
-                          type="text"
-                          value={l.label}
-                          onChange={(e) => setLinks((prev) => prev.map((x, xi) => (xi === i ? { ...x, label: e.target.value } : x)))}
-                          placeholder="Section title (e.g. Watch)"
-                          readOnly={isOfficeRow(l)}
-                          className={`flex-1 min-w-0 bg-transparent text-gray-200 text-xs font-bold uppercase tracking-wide focus:outline-none placeholder-gray-600 ${isOfficeRow(l) ? "cursor-default opacity-80" : ""}`}
-                        />
-                        {/* A company section is re-pinned by the server on every
-                            save, so an × here would silently undo itself — the
-                            same reason a company LINK carries a word instead. */}
-                        {isOfficeRow(l) ? (
-                          <span className="text-[0.5625rem] font-semibold uppercase tracking-wide text-purple-300 shrink-0">Company</span>
-                        ) : (
-                          <button type="button" onClick={() => removeLink(i)} aria-label="Remove section" className="text-gray-600 hover:text-red-400 transition-colors text-lg leading-none shrink-0">×</button>
-                        )}
-                      </div>
-                    ) : (
-                    <div key={i} className={`rounded-xl px-3 py-2.5 border ${isOfficeRow(l) ? "bg-purple-500/[0.06] border-purple-500/25" : "bg-gray-900 border-gray-700"}`}>
-                      <div className="flex items-center gap-2.5">
-                        <LinkPreviewThumb url={l.url} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-gray-200 text-xs font-semibold truncate">{l.label}</p>
-                          <p className="text-gray-500 text-[0.625rem] truncate">{l.url}</p>
-                        </div>
-                        {/* An office link carries a word, not a disabled button:
-                            the server re-pins it on save, so a remove control
-                            here would silently undo itself. The member's own
-                            links keep theirs. */}
-                        {isOfficeRow(l) ? (
-                          <span className="text-[0.5625rem] font-semibold uppercase tracking-wide text-purple-300 shrink-0">Company</span>
-                        ) : (
-                          <button type="button" onClick={() => removeLink(i)} aria-label={`Remove ${l.label}`} className="text-gray-600 hover:text-red-400 transition-colors text-lg leading-none shrink-0">×</button>
-                        )}
-                      </div>
-                      {/* How the link LOOKS on the page (Featured / Grid /
-                          Compact, its preview, its row style) is chosen per
-                          link on the Social design tab — see LinkButtonsControls. */}
-                    </div>
-                    ),
-                  )}
-                </div>
-              )}
+              {/* The list on top, in page order: drag a row by its grip, tap a
+                  link to edit it in place, and "+ Add a section header" under
+                  it, ABOVE the add form (owner, 2026-11-06). A company row (an
+                  office's pinned link or section) carries the word "Company"
+                  and has no grip, edit or ×: the server re-pins those first on
+                  every save, so a control there would silently undo itself.
+                  Section headers are Pro, like the tile sizes: Free pages don't
+                  render them. How each link LOOKS on the page is chosen on the
+                  Social design tab (LinkButtonsControls). Every change here
+                  counts as unsaved, so "Leave without saving?" covers a
+                  reorder too. */}
+              <LinkListEditor
+                links={links}
+                onChange={(next) => { noteTyped(); setLinks(next); }}
+                isLocked={isOfficeRow}
+                thumbs
+                canAddHeader={isPro}
+              />
               {atLinkCap ? (
                 <PlanGate
                   feature="swift-links-cap"
@@ -1427,20 +1392,6 @@ export default function CardEditForm({ card, photoUrl, logoUrl: initialLogoUrl, 
                 </PlanGate>
               ) : (
                 <AddLinkForm value={newLink} onChange={setNewLink} onAdd={addLink} idPrefix="card-link" />
-              )}
-              {/* Section headers — chapters for a long page. Pro, like the
-                  tile sizes: Free pages don't render them. OUTSIDE the
-                  links-exist wrapper so a header can open the page's first
-                  section before any link has been added. Last and quiet: it is
-                  an extra, not the first thing to do. */}
-              {isPro && (
-                <button
-                  type="button"
-                  onClick={() => setLinks((prev) => [...prev, { label: "", url: "", kind: "header" as const }])}
-                  className="block text-[0.6875rem] font-semibold text-gray-400 hover:text-gray-200 transition-colors"
-                >
-                  + Add a section header
-                </button>
               )}
             </FormSection>
 
