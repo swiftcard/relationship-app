@@ -13,7 +13,20 @@ describe("the View SwiftCard button toggle", () => {
     const src = read("src/components/SwiftLinkProfile.tsx");
     expect(src).toMatch(/showCardLink = true,/);
     expect(src).toMatch(/\{showCardLink && \(/);
-    expect(src).toContain("View SwiftCard →");
+    // Owner order 2026-11-06: the link reads "View Contact Info", not the
+    // product name. Same link, same switch, same ?source=swift_links tag.
+    expect(src).toContain("View Contact Info →");
+    expect(src).not.toContain("View SwiftCard →");
+  });
+
+  it("the homepage hero mock-up and the support docs use the same words", () => {
+    expect(read("src/components/site/HeroShowcase.tsx")).toContain("View Contact Info →");
+    expect(read("src/components/site/HeroShowcase.tsx")).not.toContain("View SwiftCard →");
+    for (const f of ["src/lib/knowledge/docs/cards.ts", "src/lib/knowledge/docs/dashboard.ts"]) {
+      const doc = read(f);
+      expect(doc, f).toContain("View Contact Info");
+      expect(doc, f).not.toContain("View SwiftCard");
+    }
   });
 
   it("the public page maps hideCardLink !== true → shown", () => {

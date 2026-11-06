@@ -472,11 +472,11 @@ function MiniLinks({ persona }: { persona: Persona }) {
             </div>
           </div>
 
-          {/* "View SwiftCard →", and no "Made with" footer: these are paid
+          {/* "View Contact Info →", and no "Made with" footer: these are paid
               pages (verified seal), and paid pages dropped it on 2026-09-02 —
               the corner badge carries the invite instead. */}
           <div className="flex justify-center mt-10">
-            <span className="inline-block px-4 py-2 text-xs" style={{ color: text, opacity: 0.5 }}>View SwiftCard →</span>
+            <span className="inline-block px-4 py-2 text-xs" style={{ color: text, opacity: 0.5 }}>View Contact Info →</span>
           </div>
         </div>
       </div>

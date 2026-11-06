@@ -156,7 +156,7 @@ export default function SwiftLinkProfile({
   trackSource?: string;
   /** Owner looking at their own Swift Links page. */
   suppressTracking?: boolean;
-  /** Owner toggle (Social design step): the faint "View SwiftCard →" link at
+  /** Owner toggle (Social design step): the faint "View Contact Info →" link at
    *  the bottom. ON by default — hiding it is the owner's explicit choice. */
   showCardLink?: boolean;
   /** "Made with swiftcard.me" footer — FREE plan only (owner order
@@ -863,7 +863,8 @@ export default function SwiftLinkProfile({
           />
 
           {/* Faint link to this person's full SwiftCard — owner-toggleable from
-              the Social design step (hideCardLink in customization). */}
+              the Social design step (hideCardLink in customization). Reads
+              "View Contact Info" since 2026-11-06 (owner: was "View SwiftCard"). */}
           {showCardLink && (
             <div className="flex justify-center mt-10">
               {/* Tagged: the card visit came from Swift Links, not a plain
@@ -873,7 +874,7 @@ export default function SwiftLinkProfile({
                 className={`inline-block px-4 py-2 text-xs rounded-lg transition-colors ${"" /* hover well must be visible on BOTH modes */}${light ? "hover:bg-black/[0.06]" : "hover:bg-white/10"}`}
                 style={{ color: textColor, opacity: 0.5 }}
               >
-                View SwiftCard →
+                View Contact Info →
               </a>
             </div>
           )}
