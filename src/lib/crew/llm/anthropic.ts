@@ -40,12 +40,21 @@ export function textOf(content: { type: string; text?: string }[]): string {
     .trim();
 }
 
+/**
+ * Text cut with .slice() can end in half an emoji (a lone UTF-16 surrogate).
+ * JSON.stringify writes that as "\ud83d" with nothing after it, and the API
+ * refuses the whole request ("unexpected end of hex escape"): the first run on
+ * real Instagram captions failed that way (2026-11-07). The broken half
+ * becomes U+FFFD; everything else is unchanged.
+ */
+export const wellFormed = (s: string): string => s.toWellFormed();
+
 function params(req: LlmRequest) {
   return {
     model: req.model,
     max_tokens: req.maxTokens,
-    system: [{ type: "text" as const, text: req.system, cache_control: { type: "ephemeral" as const } }],
-    messages: [{ role: "user" as const, content: req.prompt }],
+    system: [{ type: "text" as const, text: wellFormed(req.system), cache_control: { type: "ephemeral" as const } }],
+    messages: [{ role: "user" as const, content: wellFormed(req.prompt) }],
     thinking: { type: "adaptive" as const },
     output_config: {
       effort: req.effort,
