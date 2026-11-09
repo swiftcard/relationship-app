@@ -4,7 +4,8 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { isCardActive } from "@/lib/card-active";
 import { storedCaptureIsCurrent } from "@/lib/stored-capture";
 import { fetchVCardPhoto, withLogoSize } from "@/lib/contact-photo";
-import { BrandOg, loadBrandOgInputs } from "@/lib/brand-og";
+import { BrandOg, googleFont, loadBrandOgInputs } from "@/lib/brand-og";
+import { isHexColor, qrSvgMarkup, qrTarget } from "@/lib/qr-svg";
 import { squareCorners } from "@/lib/square-corners";
 import { isDarkBg } from "@/lib/template-style";
 
@@ -45,6 +46,8 @@ export const runtime = "nodejs";
 type Meta = NonNullable<Awaited<ReturnType<typeof resolveCardMeta>>> & {
   /** The embedded logo's own width ÷ height (logoAspectOf), when known. */
   logoAspect?: number | null;
+  /** The card's public address, for the QR the stand-in draws. */
+  cardUrl?: string;
 };
 
 // ── The logo at its own shape ───────────────────────────────────────────────
@@ -319,40 +322,100 @@ function LocalBusinessOG(p: Meta) {
   );
 }
 
+// The card's own layout (components/card-templates/LuxuryMinimal.tsx) at OG
+// scale: company and name on the left, "Private Contact" details on the right,
+// the QR in the corner — in the colours the owner chose. This stand-in used to
+// be an older design on a fixed ivory with the photo circle on the right, so a
+// link sent before the capture landed looked like a different card (Matthew
+// Abramson's card, 2026-11-09: cream + serif on the card, white + sans and a
+// big "MA" circle in the iMessage preview).
 function LuxuryMinimalOG(p: Meta) {
-  const GOLD = p.accentColor || "#b08d57";
+  const s = p.style ?? {};
+  const GOLD = s.accentColor || p.accentColor || "#b08d57";
+  const GOLD2 = s.accentColor || p.accentColor || "#c9a96e";
+  const bg = cssBg(s.bgColor, "#fafaf6");
+  const dark = isDarkBg(bg);
+  const nameColor = s.textColor || (dark ? "#f2ead9" : "#1c1612");
+  const titleColor = s.titleColor || GOLD;
+  const companyColor = s.companyColor || GOLD;
+  const info = s.infoColor || (dark ? "#f2ead9" : "#1c1612");
+  const soft = s.infoColor ? `${s.infoColor}b3` : dark ? "#c9bda6" : "#8c7b60";
   const website = (p.website ?? "").replace(/^https?:\/\//, "");
+  const qr = qrDataUrl(p.cardUrl, GOLD);
+  const rows: { icon: string; value: string; color: string; fs: number; weight: number }[] = [];
+  if (p.phone) rows.push({ icon: ICON.phone, value: p.phone, color: info, fs: 40, weight: 700 });
+  if (p.email) rows.push({ icon: ICON.mail, value: p.email, color: info, fs: rows.length ? 32 : 40, weight: 600 });
+  if (website) rows.push({ icon: ICON.globe, value: website, color: soft, fs: 30, weight: 400 });
+  if (p.address) rows.push({ icon: ICON.pin, value: p.address, color: soft, fs: 30, weight: 400 });
+  const nameFs = (p.name ?? "").length > 22 ? 58 : 72;
   return (
-    <div style={{ width: "100%", height: "100%", display: "flex", background: "#fafaf6" }}>
-      {/* Gold spine */}
-      <div style={{ width: 14, background: `linear-gradient(to bottom, #c9a96a, ${GOLD}, #8c6c34)`, display: "flex" }} />
-      <div style={{ display: "flex", flex: 1, alignItems: "center", justifyContent: "space-between", padding: "48px 64px" }}>
+    <div style={{ width: "100%", height: "100%", display: "flex", background: bg, position: "relative" }}>
+      <div style={{ width: 14, background: `linear-gradient(to bottom, ${GOLD2}, ${GOLD}, #8c6c34)`, display: "flex" }} />
+      {/* Faded initials behind the name, as on the card. */}
+      <div style={{ position: "absolute", left: 60, top: 0, bottom: 0, display: "flex", alignItems: "center", fontSize: 260, fontWeight: 700, color: "rgba(176,141,87,0.07)", letterSpacing: -10 }}>
+        {initialsOf(p.name)}
+      </div>
+      {/* Left: company, then name and title */}
+      <div style={{ width: "44%", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "46px 40px 44px 42px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+          {p.logoUrl ? <img src={p.logoUrl} alt="" {...logoBox(p, 84, p.company ? 200 : 380)} style={{ borderRadius: 10, objectFit: "contain" }} /> : null}
+          {p.company ? <div style={{ fontSize: p.company.length > 18 ? 26 : 34, letterSpacing: 7, textTransform: "uppercase", color: companyColor, fontWeight: 700 }}>{p.company}</div> : null}
+        </div>
         <div style={{ display: "flex", flexDirection: "column" }}>
-          {/* Logo beside the company, as on the card — this stand-in used to
-              leave the logo off entirely. */}
-          {p.logoUrl || p.company ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-              {/* A wide logo is not forced into the round badge: it would be
-                  a sliver inside it (logoBox). */}
-              {p.logoUrl ? ((p.logoAspect ?? 1) > 1.25
-                ? <img src={p.logoUrl} alt="" {...logoBox(p, 56, p.company ? 220 : 340)} style={{ borderRadius: 12, objectFit: "contain" }} />
-                : <img src={p.logoUrl} alt="" width={72} height={72} style={{ borderRadius: 72, objectFit: "contain", background: "#ffffff" }} />) : null}
-              {p.company ? <div style={{ fontSize: 24, letterSpacing: 7, textTransform: "uppercase", color: "#8c7b60", fontWeight: 600 }}>{p.company}</div> : null}
+          <div style={{ fontSize: nameFs, fontWeight: 400, color: nameColor, lineHeight: 1.15 }}>{p.name}</div>
+          {p.title ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 18 }}>
+              <div style={{ width: 52, height: 2, background: GOLD, display: "flex" }} />
+              <div style={{ fontSize: 30, letterSpacing: 6, textTransform: "uppercase", color: titleColor, fontWeight: 700 }}>{p.title}</div>
             </div>
           ) : null}
-          <div style={{ fontSize: 62, fontWeight: 700, color: "#1c1612", lineHeight: 1.08, marginTop: 14, letterSpacing: 1 }}>{p.name}</div>
-          <div style={{ width: 90, height: 3, background: `linear-gradient(90deg, ${GOLD}, transparent)`, marginTop: 18, display: "flex" }} />
-          {p.title ? <div style={{ fontSize: 29, color: "#8c7b60", marginTop: 16 }}>{p.title}</div> : null}
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 26 }}>
-            {p.phone ? <Contact value={p.phone} dot={GOLD} color="#1c1612" fs={28} /> : null}
-            {p.email ? <Contact value={p.email} dot={GOLD} color="#5f5142" /> : null}
-            {website ? <Contact value={website} dot={GOLD} color="#5f5142" /> : null}
-          </div>
         </div>
-        <Photo url={p.photoUrl} name={p.name ?? ""} size={190} radius={190} border={`3px solid ${GOLD}`} bg="#8c7b60" />
+        <div style={{ width: 104, height: 3, background: `linear-gradient(90deg, ${GOLD}, transparent)`, display: "flex" }} />
+      </div>
+      <div style={{ width: 2, marginTop: 42, marginBottom: 42, background: `linear-gradient(to bottom, transparent, ${GOLD}40, transparent)`, display: "flex" }} />
+      {/* Right: private contact */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: "46px 46px 44px 42px", position: "relative" }}>
+        <div style={{ fontSize: 20, letterSpacing: 6, color: soft, textTransform: "uppercase" }}>— Private Contact —</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 26, marginTop: 40 }}>
+          {rows.map((r) => (
+            <div key={r.icon} style={{ display: "flex", alignItems: "center", gap: 22 }}>
+              <img src={iconUrl(r.icon, GOLD)} alt="" width={30} height={30} />
+              <div style={{ fontSize: r.fs, color: r.color, fontWeight: r.weight }}>{r.value}</div>
+            </div>
+          ))}
+        </div>
+        {qr ? (
+          <div style={{ position: "absolute", right: 46, bottom: 44, display: "flex", padding: 10, background: "#f5f0e8", borderRadius: 10 }}>
+            <img src={qr} alt="" width={150} height={150} />
+          </div>
+        ) : null}
       </div>
     </div>
   );
+}
+
+// Line icons (24-unit, stroked) for the stand-ins' contact rows.
+const ICON = {
+  phone: '<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/>',
+  mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/>',
+  globe: '<circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/>',
+  pin: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>',
+};
+function iconUrl(paths: string, color: string): string {
+  return `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`)}`;
+}
+
+/** The card's QR (lib/qr-svg, the same drawing every card uses) as an image. */
+function qrDataUrl(url: string | undefined, fg: string): string | null {
+  if (!url || !isHexColor(fg)) return null;
+  const svg = qrSvgMarkup(qrTarget(url), fg);
+  return svg ? `data:image/svg+xml;utf8,${encodeURIComponent(svg)}` : null;
+}
+
+/** A background Satori can paint: a colour or a gradient, never a url() layer. */
+function cssBg(v: string | undefined, fallback: string): string {
+  if (!v || /url\(/i.test(v)) return fallback;
+  return /^#[0-9a-f]{3,8}$/i.test(v) || /^(linear|radial)-gradient\(/i.test(v) || /^rgba?\(/i.test(v) ? v : fallback;
 }
 
 function LogoFirstOG(p: Meta) {
@@ -505,13 +568,34 @@ const CACHE_DEGRADED = "public, max-age=60, s-maxage=60";
 // lands — the Share tap's own warm-up, usually — swaps it for the real card.
 const CACHE_STANDIN = "public, max-age=0, s-maxage=1, stale-while-revalidate=604800";
 
+// The card's typeface, when the owner picked one Satori's default cannot
+// stand in for. A Serif card drawn in the default sans was the most visible
+// way the preview stopped looking like the card. Gelasio is metric-compatible
+// with Georgia (the Serif option's first choice); Courier Prime with Courier.
+// Optional and time-bounded like every other input: no font → default face.
+type OgFont = { name: string; data: ArrayBuffer; weight: 400 | 700; style: "normal" };
+async function cardFonts(fontFamily: string | undefined): Promise<{ family?: string; fonts: OgFont[] }> {
+  const f = (fontFamily ?? "").toLowerCase();
+  const family = /courier|monospace/.test(f) ? "Courier Prime"
+    : /georgia|times|(^|[ ,])serif/.test(f.replace(/sans-serif/g, "")) ? "Gelasio"
+    : null;
+  if (!family) return { fonts: [] };
+  const q = family.replace(/ /g, "+");
+  const [regular, bold] = await Promise.all([googleFont(`${q}:wght@400`, 2500), googleFont(`${q}:wght@700`, 2500)]);
+  const fonts: OgFont[] = [];
+  if (regular) fonts.push({ name: family, data: regular, weight: 400, style: "normal" });
+  if (bold) fonts.push({ name: family, data: bold, weight: 700, style: "normal" });
+  return fonts.length ? { family, fonts } : { fonts: [] };
+}
+
 async function toResponse(
   el: React.ReactElement,
   contentType = "image/png",
   /** False when the render is missing something it wanted — see CACHE_DEGRADED. */
   complete = true,
+  fonts: OgFont[] = [],
 ): Promise<Response> {
-  const buf = await new ImageResponse(el, { ...size }).arrayBuffer();
+  const buf = await new ImageResponse(el, { ...size, ...(fonts.length ? { fonts } : {}) }).arrayBuffer();
   return new Response(buf, {
     headers: {
       "Content-Type": contentType,
@@ -612,6 +696,11 @@ export default async function Image({
     // ("4048550515"), so the preview someone saw depended on which tier served
     // it. Non-US numbers pass through untouched.
     if (meta.phone) meta.phone = prettyPhone(meta.phone);
+    meta.cardUrl = `${(process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me").replace(/\/$/, "")}/${username.toLowerCase()}`;
+    const { family, fonts } = await cardFonts(meta.style?.fontFamily);
+    const frame = (c: React.ReactElement) => (
+      <div style={{ width: "100%", height: "100%", display: "flex", ...(family ? { fontFamily: family } : {}) }}>{c}</div>
+    );
 
     const drawCard = (m: Meta): React.ReactElement => {
       switch (m.template) {
@@ -628,7 +717,7 @@ export default async function Image({
     try {
       // Full-bleed: the card fills the ENTIRE frame — no backdrop, no blank space.
       return drew(
-        await toResponse(<div style={{ width: "100%", height: "100%", display: "flex" }}>{card}</div>, "image/png", complete),
+        await toResponse(frame(card), "image/png", complete, fonts),
         standin(wantedPhoto && !meta.photoUrl, wantedLogo && !meta.logoUrl),
       );
     } catch (e) {
@@ -639,7 +728,7 @@ export default async function Image({
       if (!meta.photoUrl && !meta.logoUrl) throw e;
       card = drawCard({ ...meta, photoUrl: null, logoUrl: null });
       return drew(
-        await toResponse(<div style={{ width: "100%", height: "100%", display: "flex" }}>{card}</div>, "image/png", false),
+        await toResponse(frame(card), "image/png", false, fonts),
         standin(wantedPhoto, wantedLogo),
       );
     }

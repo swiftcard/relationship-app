@@ -50,7 +50,7 @@ async function asset(rel: string, mime: string): Promise<string | null> {
 // Google Fonts hands out TTFs (which Satori can read) when no browser UA is
 // sent. Each family is independent and optional, and bounded so a slow font
 // host can never hold up a preview.
-async function googleFont(css: string, timeoutMs: number): Promise<ArrayBuffer | null> {
+export async function googleFont(css: string, timeoutMs: number): Promise<ArrayBuffer | null> {
   try {
     const signal = AbortSignal.timeout(timeoutMs);
     const sheet = await fetch(`https://fonts.googleapis.com/css2?family=${css}&display=swap`, {

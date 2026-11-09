@@ -66,7 +66,7 @@ describe("a degraded preview expires quickly", () => {
   });
 
   it("passes that verdict to the response", () => {
-    expect(og()).toMatch(/toResponse\(<div style=\{\{ width: "100%", height: "100%", display: "flex" \}\}>\{card\}<\/div>, "image\/png", complete\)/);
+    expect(og()).toMatch(/toResponse\(frame\(card\), "image\/png", complete, fonts\)/);
   });
 
   it("never caches a branded fallback as if it were the card", () => {

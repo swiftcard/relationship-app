@@ -102,3 +102,24 @@ describe("every kind of logo a card can hold reaches the preview", () => {
     expect(res.headers.get("x-sc-preview")).toBe("standin; missing=logo");
   });
 });
+
+// Matthew Abramson's card, 2026-11-09: a link texted minutes after the card was
+// made unfurled as the stand-in, and the stand-in ignored the owner's colours —
+// a white sans-serif card with an "MA" photo circle, under a cream serif card.
+describe("Luxury Minimal's stand-in is drawn in the card's own colours", () => {
+  it("paints the chosen background, not the template's ivory", async () => {
+    meta.current = {
+      name: "Matthew Abramson", title: "Principal", company: "Apex Lending",
+      photoUrl: null, logoUrl: null, phone: "3478153112", email: "m@apex.com",
+      website: null, address: "Long Island", accentColor: null, template: "luxury-minimal",
+      style: { bgColor: "#2a3b4c", textColor: "#ffffff", accentColor: "#9a6b3f" }, custom: null,
+    };
+    const { default: Image } = await import("@/app/card/[username]/opengraph-image");
+    const res = await Image({ params: Promise.resolve({ username: "matthew" }) });
+    expect(res.headers.get("x-sc-preview")).toBe("standin");
+    const { data, info } = await sharp(Buffer.from(await res.arrayBuffer())).raw().toBuffer({ resolveWithObject: true });
+    // A point in the empty lower middle of the left panel.
+    const i = (650 * info.width + 300) * info.channels;
+    expect([data[i], data[i + 1], data[i + 2]]).toEqual([0x2a, 0x3b, 0x4c]);
+  });
+});
