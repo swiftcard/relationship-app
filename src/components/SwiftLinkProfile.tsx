@@ -62,6 +62,11 @@ function isLightHex(hex: string): boolean {
 const HERO_DISSOLVE =
   "linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 38%, rgba(0,0,0,0.88) 52%, rgba(0,0,0,0.6) 66%, rgba(0,0,0,0.28) 80%, rgba(0,0,0,0) 92%, rgba(0,0,0,0) 100%)";
 
+/** The whole page is drawn 8% smaller on a phone (`zoom` on the sheet, at
+ *  767px and below). The CSS scroll fade divides its ranges by it, so this is
+ *  the one place the number lives. */
+const PHONE_ZOOM = 0.92;
+
 /** The frosted sheet's blur, eased in over the same 64px its tint ramps in
  *  over (sheetGlassBg), so the frost has no starting edge. */
 const GLASS_EASE_IN = "linear-gradient(180deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0.15) 16px, rgba(0,0,0,0.45) 32px, rgba(0,0,0,0.8) 48px, rgba(0,0,0,1) 64px)";
@@ -445,7 +450,13 @@ export default function SwiftLinkProfile({
   // tests/no-zoom-lockout.test.ts); buttons and links already had this.
   // The live page only: the marketing phone scrolls its own box and keeps
   // the effects above, and the editor previews do not scroll at all.
-  const scrollCss = embedded ? "" : ` main.sc-sl-page { touch-action: manipulation; } @supports (animation-timeline: scroll()) { @keyframes sc-sl-hero-fade { from { opacity: 1; } to { opacity: 0; } } @keyframes sc-sl-bar-in { from { opacity: 0; pointer-events: none; } to { opacity: 1; pointer-events: auto; } } main.sc-sl-page [data-sl-hero] { animation: sc-sl-hero-fade linear both; animation-timeline: scroll(root); animation-range: 0px var(--sl-fade); } main.sc-sl-page [data-sl-bar] { animation: sc-sl-bar-in linear both; animation-timeline: scroll(root); animation-range: var(--sl-bar-at) calc(var(--sl-bar-at) + 40px); } @media (min-width: 768px) { main.sc-sl-page [data-sl-hero] { animation-range: 2rem calc(2rem + var(--sl-fade)); } } }`;
+  // On a phone the sheet is zoomed (PHONE_ZOOM), and the zoom shrinks these
+  // ranges with it: the photo was gone by 152px of scroll instead of 165, and
+  // the bar came in at 212 instead of 230 (measured live, 2026-11-06). Phone
+  // ranges are divided by the zoom so they land on the script's exact numbers;
+  // a computer has no zoom and takes the plain values.
+  const z = PHONE_ZOOM;
+  const scrollCss = embedded ? "" : ` main.sc-sl-page { touch-action: manipulation; } @supports (animation-timeline: scroll()) { @keyframes sc-sl-hero-fade { from { opacity: 1; } to { opacity: 0; } } @keyframes sc-sl-bar-in { from { opacity: 0; pointer-events: none; } to { opacity: 1; pointer-events: auto; } } main.sc-sl-page [data-sl-hero] { animation: sc-sl-hero-fade linear both; animation-timeline: scroll(root); animation-range: 0px calc(var(--sl-fade) / ${z}); } main.sc-sl-page [data-sl-bar] { animation: sc-sl-bar-in linear both; animation-timeline: scroll(root); animation-range: calc(var(--sl-bar-at) / ${z}) calc((var(--sl-bar-at) + 40px) / ${z}); } @media (min-width: 768px) { main.sc-sl-page [data-sl-hero] { animation-range: 2rem calc(2rem + var(--sl-fade)); } main.sc-sl-page [data-sl-bar] { animation-range: var(--sl-bar-at) calc(var(--sl-bar-at) + 40px); } } }`;
 
   return (
     <main className={embedded ? "" : "sc-sl-page min-h-[100dvh] flex flex-col"} style={{ background: embedded ? "transparent" : look.page }}>
@@ -459,7 +470,7 @@ export default function SwiftLinkProfile({
           `clip` (Safari < 16) drops the rule and keeps overflow-hidden: the
           photo scrolls normally there, exactly as before. Unlayered, so it
           wins over the Tailwind utility. */}
-      <style>{`@media (max-width: 767px) { .sc-sl-sheet { zoom: 0.92; } }${live ? " .sc-sl-sheet.sc-sl-pin { overflow: clip; }" : ""}${canvasCss}${scrollCss}`}</style>
+      <style>{`@media (max-width: 767px) { .sc-sl-sheet { zoom: ${PHONE_ZOOM}; } }${live ? " .sc-sl-sheet.sc-sl-pin { overflow: clip; }" : ""}${canvasCss}${scrollCss}`}</style>
       <div
         ref={sheetRef}
         className={`sc-sl-sheet relative mx-auto w-full max-w-[430px] overflow-hidden ${live ? "sc-sl-pin " : ""}${

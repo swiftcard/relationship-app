@@ -262,12 +262,22 @@ describe.each(engines)("Swift Links pinned header photo (%s)", (_name, engine) =
     await scrollTo(page, 120);
     s = await state();
     expect(Math.abs(s.heroTop), "the photo scrolled away instead of staying pinned").toBeLessThan(1);
-    // 1 - 120/165 = 0.27: the same ramp the script draws.
-    expect(s.hero).toBeGreaterThan(0.15);
-    expect(s.hero).toBeLessThan(0.4);
+    // 1 - 120/165 = 0.27: EXACTLY the ramp the script draws. The phone's
+    // `zoom: 0.92` shrinks CSS ranges, which once made this 0.21 (the photo
+    // gone by 152px instead of 165); the ranges are divided by the zoom now.
+    expect(s.hero).toBeCloseTo(1 - 120 / 165, 1);
+    expect(Math.abs(s.hero - (1 - 120 / 165)), "the CSS fade drifted from the script's").toBeLessThan(0.03);
 
     await scrollTo(page, 200);
     expect((await state()).hero, "the photo is still showing behind the page").toBe(0);
+
+    // The bar starts where the script starts it (scrollY 230 on a cover).
+    await scrollTo(page, 225);
+    expect((await state()).bar, "the name bar came in early").toBe(0);
+    await scrollTo(page, 245);
+    s = await state();
+    expect(s.bar).toBeGreaterThan(0);
+    expect(s.bar).toBeLessThan(1);
 
     await scrollTo(page, 320);
     s = await state();
@@ -289,8 +299,13 @@ describe.each(engines)("Swift Links pinned header photo (%s)", (_name, engine) =
     await scrollTo(page, 120);
     const s = await heroState(page);
     expect(Math.abs(s.top)).toBeLessThan(1);
-    expect(s.opacity).toBeLessThan(1);
-    expect(s.opacity).toBeGreaterThan(0.3); // 1 - (120 - 32) / 165 = 0.47
+    // 1 - (120 - 32) / 165 = 0.47, the script's own number (no zoom here).
+    expect(Math.abs(s.opacity - (1 - 88 / 165))).toBeLessThan(0.03);
+    const bar = () => page.evaluate(() => Number(getComputedStyle(document.querySelector("[data-sl-bar]")!).opacity));
+    await scrollTo(page, 225);
+    expect(await bar()).toBe(0);
+    await scrollTo(page, 300);
+    expect(await bar()).toBe(1);
     await page.close();
   });
 
