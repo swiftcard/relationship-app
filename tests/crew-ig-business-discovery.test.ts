@@ -31,6 +31,7 @@ import {
 import { MemoryStore } from "@/lib/crew/store-memory";
 import { runAgent } from "@/lib/crew/tick";
 
+// Fixed: the fixtures are real posts from 2026-11-06, and "active" means a post in the last 30 days.
 const NOW = new Date("2026-11-06T16:00:00Z");
 const AUTH = { igUserId: "17841443384324190", token: "TEST-TOKEN" };
 
@@ -204,7 +205,7 @@ describe("Instagram DMs: real profiles before scoring", () => {
     const g = graph(byHandle);
     vi.stubGlobal("fetch", g.f);
     const seen: string[] = [];
-    await runAgent({ def: dms, store, providers: { claude: dmClaude(seen), critic: null } });
+    await runAgent({ def: dms, store, providers: { claude: dmClaude(seen), critic: null }, now: () => NOW });
     const [run] = await store.recentRuns(dms.id, 1);
     return { store, run, seen, calls: g.calls };
   }
@@ -239,7 +240,7 @@ describe("Instagram DMs: real profiles before scoring", () => {
     for (const h of ["one.realtor", "two.realtor", "three.realtor"]) await store.addInput({ platform: "instagram", kind: "profile", url: `https://www.instagram.com/${h}/`, text: `@${h}` });
     const f = vi.fn(async () => new Response(JSON.stringify({ error: { code: 190, message: "Error validating access token: Session has expired" } }), { status: 400 }));
     vi.stubGlobal("fetch", f);
-    await runAgent({ def: dms, store, providers: { claude: dmClaude([]), critic: null } });
+    await runAgent({ def: dms, store, providers: { claude: dmClaude([]), critic: null }, now: () => NOW });
     const [run] = await store.recentRuns(dms.id, 1);
     expect(f).toHaveBeenCalledTimes(1);
     expect(run.stats).toMatchObject({ ig_api_auth: 1 });
@@ -271,7 +272,7 @@ describe("Instagram LinkedIn Bio: queued API posts, every gate still on", () => 
     await store.patchAgentState(COMMENTS_ID, { enabled: true });
     await queueDiscovered(store, commentablePosts(await profileOf(MIKE), new Date(), ON_TOPIC));
     const prompts: string[] = [];
-    await runAgent({ def: instagramLinkedinBio, store, providers: { claude: commentClaude(prompts), critic: null } });
+    await runAgent({ def: instagramLinkedinBio, store, providers: { claude: commentClaude(prompts), critic: null }, now: () => NOW });
     const [run] = await store.recentRuns(COMMENTS_ID, 1);
     // One account, so the 30-day-per-account rule leaves one of its four posts to score.
     expect(run.stats).toMatchObject({ api_posts: 4, dropped_recent_person: 3, posts_scored: 1, rejected_low_relevance: 1 });
@@ -287,7 +288,7 @@ describe("Instagram LinkedIn Bio: queued API posts, every gate still on", () => 
     await store.insertApproval({ agent_id: "contact-instagram", team: "contact", kind: "dm", title: "DM", summary: "", body: "hi", platform: "instagram", target_url: "https://www.instagram.com/mike.mclean_realtor/", person_id: null, debate: null, model_used: null, meta: { author: "mike.mclean_realtor" } });
     await queueDiscovered(store, commentablePosts(await profileOf(MIKE), new Date(), ON_TOPIC));
     const prompts: string[] = [];
-    await runAgent({ def: instagramLinkedinBio, store, providers: { claude: commentClaude(prompts), critic: null } });
+    await runAgent({ def: instagramLinkedinBio, store, providers: { claude: commentClaude(prompts), critic: null }, now: () => NOW });
     const [run] = await store.recentRuns(COMMENTS_ID, 1);
     expect(run.stats).toMatchObject({ api_posts: 4, dropped_recent_person: 4 });
     expect(prompts).toHaveLength(0);
