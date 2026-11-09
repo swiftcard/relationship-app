@@ -8,7 +8,7 @@ import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase-server";
 import { buildConnectLinks } from "@/lib/social-url";
 import { isPaidPlan, PLAN_LIMITS } from "@/lib/plan";
-import { freeSafeLook, getLook, resolveHero } from "@/lib/swiftlink-looks";
+import { freeSafeLook, getLook, resolveHero, heroPictureUrl } from "@/lib/swiftlink-looks";
 import { getPhotoTone } from "@/lib/photo-tone-server";
 import { cardIsOffline } from "@/lib/card-active";
 import { getCardPageData } from "@/lib/card-page-data";
@@ -237,13 +237,15 @@ export default async function SwiftLinksPage({ params, searchParams }: { params:
         }
       : {}),
   };
-  // "Photo match" (the default Look): the header photo's colour, read here on
-  // the server so the page paints in it from the first frame. Null when the
-  // Look is something else or the header is not a photo — passed as null, not
-  // left out, so the browser never goes looking for it either.
-  const heroForTone = resolveHero(pageStyle, photoUrl, (cardOrLegacy.logo_url as string | null) ?? null);
-  const photoTone = getLook(pageStyle.look).photoMatch && heroForTone.kind === "photo"
-    ? await getPhotoTone(heroForTone.url)
+  // "Photo match" (the default Look): the header picture's colour, read here on
+  // the server so the page paints in it from the first frame. The picture is a
+  // headshot, an uploaded header photo or the logo (heroPictureUrl — a logo
+  // header works exactly like an upload, owner 2026-11-09). Null when the Look
+  // is something else or the header has no picture (initials, a video) —
+  // passed as null, not left out, so the browser never goes looking for it.
+  const heroForTone = heroPictureUrl(resolveHero(pageStyle, photoUrl, (cardOrLegacy.logo_url as string | null) ?? null));
+  const photoTone = getLook(pageStyle.look).photoMatch && heroForTone
+    ? await getPhotoTone(heroForTone)
     : null;
   const bio = customization.bio || "";
   // Free is capped at FREE_MAX_LINKS Swift Links buttons; paid plans get

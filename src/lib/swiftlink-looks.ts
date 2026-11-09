@@ -480,6 +480,22 @@ export function resolveHero(
   return { kind: "initials", url: null };
 }
 
+/**
+ * The header PICTURE — what the page header draws as a full-bleed image and
+ * what "Photo match" reads the page colour from. A headshot, an uploaded
+ * header photo, AND the logo (owner, 2026-11-09): a logo header works exactly
+ * like "Upload photo or video" — it fills the cover photo, the short banner and
+ * the compact circle, and the page takes its colour from it. The owner's own
+ * test: the same logo uploaded as the header looked designed, picked as "Logo"
+ * it sat boxed on a white plate / an indigo panel over a plain white page.
+ * Null for a video (no still to read) and for initials (no picture at all).
+ * One rule, because the server render, the live page and the design panel's
+ * swatches must never disagree about which picture the colour came from.
+ */
+export function heroPictureUrl(hero: HeroSource): string | null {
+  return hero.kind === "photo" || hero.kind === "logo" ? hero.url : null;
+}
+
 // ── Link ROW style (Linktree-informed, 2026-09-01) ──────────────────────────
 //
 // Styles the COMPACT link rows only — it composes with the per-link sizes the

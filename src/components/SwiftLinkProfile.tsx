@@ -14,7 +14,7 @@ import SocialIcons, { type BrandSocial } from "@/components/SocialIcons";
 import { SwiftCardIcon } from "@/components/SwiftCardLogo";
 import SwiftLinkButtons from "@/components/SwiftLinkButtons";
 import SwiftLinksPromoBadge from "@/components/SwiftLinksPromoBadge";
-import { getLook, resolveLook, resolveHero, hexAlpha, normalizeIconShape, normalizeIconFill, normalizeHeroStyle, normalizeButtonStyle, pageMediaUrl, normalizePageMediaType, normalizePageDim, PAGE_MEDIA_BASE, washGradient } from "@/lib/swiftlink-looks";
+import { getLook, resolveLook, resolveHero, heroPictureUrl, hexAlpha, normalizeIconShape, normalizeIconFill, normalizeHeroStyle, normalizeButtonStyle, pageMediaUrl, normalizePageMediaType, normalizePageDim, PAGE_MEDIA_BASE, washGradient } from "@/lib/swiftlink-looks";
 
 // Owner-picked "Social design": a named Look (every plan — Free gets the free
 // pair, see lib/swiftlink-looks) plus optional Pro fine-tuning (bg/text/font)
@@ -186,17 +186,22 @@ export default function SwiftLinkProfile({
   // exist, so the header can never render empty. An uploaded "custom" header
   // renders exactly like a headshot: cover-cropped in the hero, circle-cropped
   // in the compact avatar; a header VIDEO renders where a photo would,
-  // autoplaying, muted, on a loop. Shared with the public page's server
-  // render (lib/swiftlink-looks resolveHero), which samples the same photo.
+  // autoplaying, muted, on a loop. The LOGO renders exactly like an upload
+  // too (owner, 2026-11-09 — see heroPictureUrl). Shared with the public
+  // page's server render (lib/swiftlink-looks resolveHero), which samples the
+  // same picture.
   const hero = resolveHero(pageStyle, photoUrl, logoUrl);
+  // The header picture — headshot, upload or logo — drawn full-bleed by one
+  // and the same <img> below, and the picture Photo match reads.
+  const heroPicture = heroPictureUrl(hero);
 
-  // "Photo match" (the default Look): the page takes the header photo's own
+  // "Photo match" (the default Look): the page takes the header picture's own
   // colour. The public page reads it on the server and passes it in; the
   // editor's previews leave it undefined and it is read here, in the browser,
   // with the same arithmetic (lib/photo-tone).
   const matchOn = !!getLook(pageStyle?.look).photoMatch;
-  const browserTone = usePhotoTone(matchOn && photoTone === undefined && hero.kind === "photo" ? hero.url : null);
-  const tone = !matchOn || hero.kind !== "photo" ? null : photoTone === undefined ? browserTone : photoTone;
+  const browserTone = usePhotoTone(matchOn && photoTone === undefined ? heroPicture : null);
+  const tone = !matchOn || !heroPicture ? null : photoTone === undefined ? browserTone : photoTone;
 
   // ── Page background media ─────────────────────────────────────────────────
   // A photo or short video behind the WHOLE page, under every header style
@@ -330,6 +335,32 @@ export default function SwiftLinkProfile({
   // Neutral chrome (rings, hover wells, the icon set) follows the SURFACE in
   // use. Over dimmed media that surface is dark, whatever the Look says.
   const light = bgMedia ? false : pageStyle?.bg ? isLightHex(pageStyle.bg) : look.mode === "light";
+
+  // ── The INITIALS header, in the page's own colours (owner, 2026-11-09) ────
+  // It used to be one fixed indigo gradient on every Look, so the default light
+  // page opened with an indigo block fading into white. It is now drawn from
+  // the surface the page is already using, with the initials in the page's
+  // own text colour — the colour the name already reads in on that surface:
+  //   • a solid or gradient Look: its tile colour (a step off the sheet)
+  //     easing down into the sheet, so the header melts into the page; a Pro
+  //     custom background is that colour throughout;
+  //   • a glass Look or Aura: the sheet's own frosted tint, so the colour
+  //     behind still glows through and the hero's dissolve mask still works;
+  //   • background media: nothing at all — the photo or video is the tile.
+  // Photo match has no picture to read here, so it renders as Paper: a light
+  // tile, dark initials, a light page — the owner's choice.
+  const initialsTile = bgMedia
+    ? "transparent"
+    : glassOn
+      ? sheetMeet
+      : `linear-gradient(180deg, ${pageStyle?.bg ? sheetBg : look.tile} 0%, ${sheetBg} 100%)`;
+  // The compact circle sits ON the sheet, so it needs to stand off it: the
+  // Look's tile colour on a solid/gradient Look, a soft neutral well over
+  // glass, media or a custom background (whose colour the Look's tile was
+  // never designed against).
+  const initialsCircle = bgMedia || glassOn || pageStyle?.bg
+    ? (light ? "rgba(17,24,39,0.07)" : "rgba(255,255,255,0.12)")
+    : look.tile;
 
   // The accent — the Connect button and any social chip set to "Accent".
   //
@@ -662,53 +693,31 @@ export default function SwiftLinkProfile({
               preload="auto"
               aria-label={name}
             />
-          ) : hero.kind === "photo" ? (
-            // A headshot is a photo of a person: fill the frame and crop, which
+          ) : heroPicture ? (
+            // The header PICTURE — a headshot, an uploaded header photo, or the
+            // LOGO — all through this one <img>: fill the frame and crop, which
             // is what makes the link.me hero look right. The BANNER anchors the
-            // crop to the TOP of the photo (faces live in the upper part of a
+            // crop to the TOP of the picture (faces live in the upper part of a
             // portrait) — centered cropping cut the head off and kept the torso.
+            // The logo used to be shrunk onto an indigo panel here; the owner
+            // (2026-11-09) wants it to work exactly like "Upload photo or
+            // video", which is this element, so it now is this element.
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={hero.url!} alt={name} className={`absolute inset-0 w-full h-full object-cover ${heroBanner ? "object-top" : ""}`} />
-          ) : hero.kind === "logo" ? (
-            // A LOGO is not a headshot and must not be treated like one.
-            // object-cover would crop a wide wordmark down to its middle
-            // letters, so it is object-CONTAIN, centred, on the same gradient
-            // the initials use — the logo is shown whole, at its own aspect
-            // ratio, never cut. p-[18%] keeps it clear of the rounded top
-            // corners and of the sheet's fade at the bottom, so nothing eats
-            // into it. A transparent PNG sits on the gradient; a square logo
-            // reads as a centred emblem rather than a stretched background.
-            <div
-              // pb is a FIXED length, not a percentage, and that is the whole
-              // point: the thing it clears — the fade below — is itself a fixed
-              // height at every width, while a percentage only clears it at one
-              // width (the old pb-[36%] let a square logo's bottom ~13px wash
-              // out at 320px). Padding-top stays a percentage — it clears the
-              // top corners, which DO scale with width.
-              // Measured 2026-09-02 for the hold-opaque wash (h-[55%] of the
-              // hero; the ramp is unchanged below 58% since): the logo's bottom
-              // edge must sit where the ramp is ≤~0.3 alpha (≤35% into the
-              // fade), which is ≥65% up from the hero's bottom — 160px at
-              // the widest cover, 100px on the banner, at every width.
-              // Banner: fixed 56px top clearance keeps the plate out from
-              // under the corner bolt badge, which floats over the short
-              // banner's top-left.
-              className={`absolute inset-0 flex items-center justify-center ${heroBanner ? "px-[8%] pt-[56px] pb-[100px]" : "p-[16%] pb-[160px]"}`}
-              style={{ background: "linear-gradient(160deg, #181538 0%, #2A2466 60%, #4338ca 100%)" }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={hero.url!}
-                alt={name}
-                className="max-w-full max-h-full w-auto h-auto object-contain"
-              />
-            </div>
+            <img src={heroPicture} alt={name} className={`absolute inset-0 w-full h-full object-cover ${heroBanner ? "object-top" : ""}`} />
           ) : (
+            // INITIALS, in the page's own colours (owner, 2026-11-09) — see
+            // initialsTile.
             <div
+              data-sl-initials
               className="absolute inset-0 flex items-center justify-center"
-              style={{ background: "linear-gradient(160deg, #181538 0%, #2A2466 60%, #4338ca 100%)" }}
+              style={{ background: initialsTile }}
             >
-              <span className={`text-white/90 font-extrabold tracking-wide ${heroBanner ? "text-5xl" : "text-7xl"}`}>{initials}</span>
+              <span
+                className={`font-extrabold tracking-wide ${heroBanner ? "text-5xl" : "text-7xl"}`}
+                style={{ color: textColor, opacity: 0.9, ...(bgMedia ? { textShadow: "0 1px 12px rgba(0,0,0,0.5)" } : {}) }}
+              >
+                {initials}
+              </span>
             </div>
           )}
           {/* Soft fade into the sheet — ends at exactly the surface the sheet
@@ -795,25 +804,20 @@ export default function SwiftLinkProfile({
             />
           )}
           {/* Compact circular avatar — the "avatar" header style. Shows the
-              same resolved `hero`: headshot (cropped), or logo (contained, on
-              a white plate so any mark reads), or initials on the indigo
-              gradient. */}
+              same resolved `hero`: the header picture (headshot, upload or
+              logo — one circle-cropped <img>, exactly like an upload, owner
+              2026-11-09), or the initials in the page's own colours. */}
           {heroAvatar && (
             <div className="flex justify-center mb-4">
               <div className={`w-28 h-28 rounded-full overflow-hidden shrink-0 ring-4 ${light ? "ring-black/[0.06]" : "ring-white/15"}`}>
                 {hero.kind === "video" ? (
                   <video src={`${hero.url}#t=0.001`} className="w-full h-full object-cover" autoPlay muted loop playsInline preload="auto" aria-label={name} />
-                ) : hero.kind === "photo" ? (
+                ) : heroPicture ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={hero.url!} alt={name} className="w-full h-full object-cover" />
-                ) : hero.kind === "logo" ? (
-                  <div className="w-full h-full bg-white flex items-center justify-center p-3.5">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={hero.url!} alt={name} className="max-w-full max-h-full w-auto h-auto object-contain" />
-                  </div>
+                  <img src={heroPicture} alt={name} className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center" style={{ background: "linear-gradient(160deg, #181538 0%, #2A2466 60%, #4338ca 100%)" }}>
-                    <span className="text-white/90 font-extrabold text-4xl tracking-wide">{initials}</span>
+                  <div data-sl-initials className="w-full h-full flex items-center justify-center" style={{ background: initialsCircle }}>
+                    <span className="font-extrabold text-4xl tracking-wide" style={{ color: textColor, opacity: 0.9 }}>{initials}</span>
                   </div>
                 )}
               </div>

@@ -24,7 +24,7 @@ import { CARD_FONT_OPTIONS } from "@/components/card-templates/shared";
 // Pro identically (owner, 2026-09-18).
 import { DesignSteps, ProTag, type DesignStep } from "@/components/ui/DesignControls";
 import {
-  DEFAULT_SWIFTLINK_LOOK, isFreeLook, getLook, resolveLook, resolveHero,
+  DEFAULT_SWIFTLINK_LOOK, isFreeLook, getLook, resolveLook, resolveHero, heroPictureUrl,
   LOOK_FAMILIES, looksInFamily, washGradient, hexAlpha,
   type SwiftLinkLook, type LookFamily,
   ICON_SHAPES, ICON_FILLS, normalizeIconShape, normalizeIconFill,
@@ -738,7 +738,9 @@ export function SwiftLinkStyleControls({
   // makes, cached, so this costs nothing extra).
   const hero = resolveHero({ heroContent: value.linkHeroContent, heroImage: value.linkHeroImage, heroMediaType: value.linkHeroMediaType }, photoUrl, logoUrl);
   const matchOn = !!getLook(value.linkLook).photoMatch;
-  const tone = usePhotoTone(matchOn && hero.kind === "photo" ? hero.url : null);
+  // heroPictureUrl: a headshot, an upload or the logo (a logo header works
+  // exactly like an upload, owner 2026-11-09).
+  const tone = usePhotoTone(matchOn ? heroPictureUrl(hero) : null);
   const pageLook = resolveLook(value.linkLook, tone);
 
   // ── SECTION ORDER IS DELIBERATE: the panel is a route, not a list ─────────

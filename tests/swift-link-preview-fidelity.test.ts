@@ -87,8 +87,15 @@ describe("the Swift Links preview shows what the live page will show", () => {
     expect(read("src/lib/swiftlink-looks.ts"), "the hero's headshot → logo → initials chain is gone").toMatch(
       /if \(photoUrl\) return \{ kind: "photo"[\s\S]{0,120}?if \(logoUrl\) return \{ kind: "logo"[\s\S]{0,120}?return \{ kind: "initials"/,
     );
+    // Since 2026-11-09 the headshot, an upload and the LOGO all draw through
+    // one picture element (heroPictureUrl — the owner wants a logo header to
+    // work exactly like "Upload photo or video"), and the JSX branches on
+    // "is there a picture", with the initials as the else.
     expect(profile, "the hero JSX no longer branches on the resolved identity").toMatch(
-      /hero\.kind === "photo" \?[\s\S]{0,600}?\) : hero\.kind === "logo" \?/,
+      /const heroPicture = heroPictureUrl\(hero\);/,
+    );
+    expect(profile, "the hero JSX no longer branches on the resolved identity").toMatch(
+      /\) : heroPicture \?[\s\S]{0,900}?<img src=\{heroPicture\}[\s\S]{0,400}?\) : \([\s\S]{0,200}?initials/,
     );
   });
 
