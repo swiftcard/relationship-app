@@ -11,6 +11,7 @@ import LogoSuggest from "@/components/LogoSuggest";
 import ProfilePhotoSuggest from "@/components/ProfilePhotoSuggest";
 import EnablePushButton from "@/components/EnablePushButton";
 import ShareButton from "@/components/ShareButton";
+import NewCardShareCapture from "@/components/NewCardShareCapture";
 import QRCodeModal from "@/components/QRCodeModal";
 import CopyButton from "@/components/CopyButton";
 import { qrScanUrl } from "@/lib/share-source";
@@ -2197,6 +2198,9 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
               <QRCodeModal url={qrScanUrl(liveUrl)} firstName={name.trim().split(/\s+/)[0] || "me"} label="Show QR" variant="primary" />
               <ShareButton url={liveUrl} title="My SwiftCard" text="Save my contact and connect with me instantly." label="Share link" variant="ghost" ownCard />
             </div>
+            {/* Invisible: captures the new card for its link preview, so the
+                first link sent from here unfurls as the real card. */}
+            <NewCardShareCapture username={createdUsername} />
 
             <EnablePushButton />
 

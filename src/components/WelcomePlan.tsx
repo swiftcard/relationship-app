@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import EnablePushButton from "@/components/EnablePushButton";
 import ShareButton from "@/components/ShareButton";
+import NewCardShareCapture from "@/components/NewCardShareCapture";
 import QRCodeModal from "@/components/QRCodeModal";
 import CopyButton from "@/components/CopyButton";
 import { qrScanUrl } from "@/lib/share-source";
@@ -360,6 +361,8 @@ export default function WelcomePlan({
               <div className="mt-6 space-y-2 text-left">
                 <QRCodeModal url={qrScanUrl(liveUrl)} firstName={ownerFirstName} label="Show QR" variant="primary" contactPayload={contactPayload} />
                 <ShareButton url={liveUrl} title="My SwiftCard" text="Save my contact and connect with me instantly." label="Share link" variant="ghost" ownCard />
+                {/* Invisible: captures the card for its link preview (see NewCardShareCapture). */}
+                <NewCardShareCapture username={cardSlug} />
               </div>
             )}
             {/* One notifications control: it carries its own heading and, in an
