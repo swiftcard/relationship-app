@@ -46,7 +46,9 @@ describe("every header style (owner, 2026-09-17)", () => {
     const profile = read("src/components/SwiftLinkProfile.tsx");
     // glassOn = a glass wash OR Aura (2026-10-15: Aura dissolves too, rather
     // than stopping under a capped overlay on a hard line).
-    expect(profile).toContain("style={glassOn || bgMedia ? {");
+    // The hero's style also carries --sl-fade (2026-11-06, the CSS fade that
+    // runs before the script), so the mask is spread into it.
+    expect(profile).toContain("...(glassOn || bgMedia ? { maskImage: HERO_DISSOLVE, WebkitMaskImage: HERO_DISSOLVE } : {}),");
     expect(profile).toContain("{!glassOn && !bgMedia && (");
     expect(profile).toMatch(/const glassOn = auraOn \|\| !!wash;/);
   });

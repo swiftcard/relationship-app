@@ -39,15 +39,22 @@ beforeAll(async () => {
     join(tmp, "entry.tsx"),
     `
     import { createRoot } from "react-dom/client";
+    import { renderToString } from "react-dom/server";
     import { createElement as h } from "react";
     import SwiftLinkProfile from "@/components/SwiftLinkProfile";
     window.fetch = (async () => new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } })) as any;
+    const base = {
+      name: "Alex Morgan", username: "alex-morgan", logoUrl: null,
+      subtitle: "Broker  ·  Morgan Realty", bio: "Helping you find home.",
+      verified: false, socials: [], appUrl: "https://swiftcard.me",
+    };
     (window as any).mount = (props: any) => {
-      createRoot(document.getElementById("root")!).render(h(SwiftLinkProfile, {
-        name: "Alex Morgan", username: "alex-morgan", logoUrl: null,
-        subtitle: "Broker  ·  Morgan Realty", bio: "Helping you find home.",
-        verified: false, socials: [], appUrl: "https://swiftcard.me", ...props,
-      }));
+      createRoot(document.getElementById("root")!).render(h(SwiftLinkProfile, { ...base, ...props }));
+    };
+    // The page exactly as the server sends it, before any script runs: HTML
+    // only, never hydrated, so no effect ever attaches.
+    (window as any).renderStatic = (props: any) => {
+      document.getElementById("root")!.innerHTML = renderToString(h(SwiftLinkProfile, { ...base, ...props }));
     };
   `,
   );
@@ -65,7 +72,7 @@ afterAll(() => {
   if (tmp) rmSync(tmp, { recursive: true, force: true });
 });
 
-type Mount = { embedded?: boolean; photoTone?: string | null; look?: string; heroStyle?: string; photoUrl?: string | null; width?: number };
+type Mount = { embedded?: boolean; photoTone?: string | null; look?: string; heroStyle?: string; photoUrl?: string | null; width?: number; serverHtmlOnly?: boolean };
 
 async function mount(browser: Browser, opts: Mount): Promise<Page> {
   const css = await appCss();
@@ -84,7 +91,9 @@ async function mount(browser: Browser, opts: Mount): Promise<Page> {
       pageStyle: { look: o.look, heroStyle: o.heroStyle },
     };
     if ("photoTone" in o) props.photoTone = o.photoTone;
-    (window as never as { mount: (p: unknown) => void }).mount(props);
+    const w = window as never as { mount: (p: unknown) => void; renderStatic: (p: unknown) => void };
+    if (o.serverHtmlOnly) w.renderStatic(props);
+    else w.mount(props);
   }, { ...opts, links: LINKS, photoUrl: opts.photoUrl === undefined ? TWO_TONE : opts.photoUrl });
   await page.waitForSelector("h1");
   return page;
@@ -218,7 +227,82 @@ describe.each(engines)("Swift Links pinned header photo (%s)", (_name, engine) =
   it("the preview never pins (there is no page scroll in it)", async () => {
     const page = await mount(browser, { embedded: true, photoTone: null });
     expect((await heroState(page)).position).toBe("relative");
+    // …and the live page's scroll-driven fade never reaches it.
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector("[data-sl-hero]")!).animationName)).toBe("none");
     await page.close();
+  });
+
+  // Owner, 2026-11-06: swiping up on a freshly opened Swift Links page left
+  // the photo at full strength behind the name, with no name bar; a reload
+  // was fine. Both effects were JavaScript only, and on a phone connection
+  // the page shows 2 to 2.7 seconds before that script is ready. They now
+  // come with the server's HTML (scrollCss), so this renders the page with
+  // NO script at all, never hydrated, and scrolls it.
+  it("before the page's script runs, the photo still fades and the name bar still arrives", async () => {
+    const page = await mount(browser, { photoTone: "#6E4628", serverHtmlOnly: true });
+    const state = () => page.evaluate(() => {
+      const hero = document.querySelector("[data-sl-hero]") as HTMLElement;
+      const bar = document.querySelector("[data-sl-bar]") as HTMLElement;
+      const badge = document.querySelector('[aria-label="What is Swift Links?"]') as HTMLElement;
+      return {
+        hydrated: Object.keys(hero).some((k) => k.startsWith("__react")),
+        hero: Number(getComputedStyle(hero).opacity),
+        heroTop: hero.getBoundingClientRect().top,
+        bar: Number(getComputedStyle(bar).opacity),
+        barTop: bar.getBoundingClientRect().top,
+        badge: badge.getBoundingClientRect().top,
+      };
+    });
+    let s = await state();
+    expect(s.hydrated, "this must be the server HTML alone").toBe(false);
+    expect(s.hero).toBe(1);
+    expect(s.bar).toBe(0);
+    const badgeAtRest = s.badge;
+
+    await scrollTo(page, 120);
+    s = await state();
+    expect(Math.abs(s.heroTop), "the photo scrolled away instead of staying pinned").toBeLessThan(1);
+    // 1 - 120/165 = 0.27: the same ramp the script draws.
+    expect(s.hero).toBeGreaterThan(0.15);
+    expect(s.hero).toBeLessThan(0.4);
+
+    await scrollTo(page, 200);
+    expect((await state()).hero, "the photo is still showing behind the page").toBe(0);
+
+    await scrollTo(page, 320);
+    s = await state();
+    expect(s.bar, "no name bar before the script runs").toBe(1);
+    expect(Math.abs(s.barTop)).toBeLessThan(1);
+    expect(Math.abs(s.badge - badgeAtRest), "the corner badge moved").toBeLessThan(1);
+
+    await scrollTo(page, 0);
+    s = await state();
+    expect(s.hero).toBe(1);
+    expect(s.bar).toBe(0);
+    await page.close();
+  });
+
+  it("before the page's script runs on a computer, the photo waits until it reaches the top", async () => {
+    const page = await mount(browser, { photoTone: "#6E4628", serverHtmlOnly: true, width: 1280 });
+    await scrollTo(page, 20); // the card sits 2rem (32px) down the page
+    expect((await heroState(page)).opacity).toBe(1);
+    await scrollTo(page, 120);
+    const s = await heroState(page);
+    expect(Math.abs(s.top)).toBeLessThan(1);
+    expect(s.opacity).toBeLessThan(1);
+    expect(s.opacity).toBeGreaterThan(0.3); // 1 - (120 - 32) / 165 = 0.47
+    await page.close();
+  });
+
+  // Owner, 2026-11-06: a double tap on the photo or the bio zoomed the page
+  // in, and zoomed in, the corner badge and the name bar slide with the page.
+  it("double-tap zoom is off on the live page and only there", async () => {
+    const live = await mount(browser, { photoTone: "#6E4628" });
+    expect(await live.evaluate(() => getComputedStyle(document.querySelector("main.sc-sl-page")!).touchAction)).toBe("manipulation");
+    await live.close();
+    const preview = await mount(browser, { embedded: true, photoTone: null });
+    expect(await preview.evaluate(() => getComputedStyle(document.querySelector("main")!).touchAction)).toBe("auto");
+    await preview.close();
   });
 
   it("the short banner pins too; the compact circle has no photo to pin", async () => {

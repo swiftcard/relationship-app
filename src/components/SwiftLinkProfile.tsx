@@ -6,7 +6,7 @@
 // Mobile-first (this lives in Instagram/TikTok/X bios) — on desktop the same
 // column renders centered at phone width.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { usePhotoTone } from "@/components/usePhotoTone";
 import { useIsNativeApp } from "@/lib/platform";
 import ConnectButton from "@/components/ConnectButton";
@@ -422,6 +422,31 @@ export default function SwiftLinkProfile({
     : hex(!glassOn && sheetTo ? sheetTo : sheetBg, look.sheet);
   const canvasCss = embedded ? "" : ` :root:has(main.sc-sl-page), :root:has(main.sc-sl-page) body { background: ${hex(look.page, sheetHex)}; } @media (max-width: 767px) { :root:has(main.sc-sl-page), :root:has(main.sc-sl-page) body { background: ${canvasPhone}; } .sc-sl-fillcol { display: flex; flex-direction: column; } .sc-sl-fillcol > * { flex-shrink: 0; } .sc-sl-fillcol > .sc-sl-body { flex-grow: 1; } }`;
 
+  // THE SCROLL EFFECTS RUN BEFORE THE PAGE'S SCRIPT DOES (owner, 2026-11-06).
+  // The photo fade and the name bar used to be JavaScript only (the two
+  // effects above). On a phone connection the page shows 2 to 2.7 seconds
+  // before that script is ready (measured on a live page, 4G with a slowed
+  // CPU), and a visitor who swiped up in that window got the photo at full
+  // strength behind the name and no name bar: the owner's "the information
+  // below is supposed to cover the photo very cleanly". A reload had the
+  // script cached, so it looked fixed. These rules come with the server's
+  // HTML, so they work from the first frame:
+  //   • the photo fades over the same PIN_FADE px of scroll, starting once the
+  //     sheet reaches the top (2rem down on a computer: the sheet's md:my-8);
+  //   • the name bar fades in over 40px from the same scrollThreshold point.
+  // Only where the browser has scroll-driven animations (Safari 26+, Chrome
+  // 115+); everywhere else the effects above still do it. Where both run, the
+  // animation wins over their inline opacity and classes, so they cannot
+  // disagree. `animation-timeline` comes AFTER the `animation` shorthand,
+  // which resets it.
+  // Plus double-tap zoom is off on the page (owner, 2026-11-06): a double tap
+  // on the photo or the bio zoomed the page in, and zoomed in, the corner
+  // badge and the name bar slide with the page. Pinch zoom stays (WCAG 1.4.4,
+  // tests/no-zoom-lockout.test.ts); buttons and links already had this.
+  // The live page only: the marketing phone scrolls its own box and keeps
+  // the effects above, and the editor previews do not scroll at all.
+  const scrollCss = embedded ? "" : ` main.sc-sl-page { touch-action: manipulation; } @supports (animation-timeline: scroll()) { @keyframes sc-sl-hero-fade { from { opacity: 1; } to { opacity: 0; } } @keyframes sc-sl-bar-in { from { opacity: 0; pointer-events: none; } to { opacity: 1; pointer-events: auto; } } main.sc-sl-page [data-sl-hero] { animation: sc-sl-hero-fade linear both; animation-timeline: scroll(root); animation-range: 0px var(--sl-fade); } main.sc-sl-page [data-sl-bar] { animation: sc-sl-bar-in linear both; animation-timeline: scroll(root); animation-range: var(--sl-bar-at) calc(var(--sl-bar-at) + 40px); } @media (min-width: 768px) { main.sc-sl-page [data-sl-hero] { animation-range: 2rem calc(2rem + var(--sl-fade)); } } }`;
+
   return (
     <main className={embedded ? "" : "sc-sl-page min-h-[100dvh] flex flex-col"} style={{ background: embedded ? "transparent" : look.page }}>
       {/* overflow CLIP on the real page, not hidden. Both clip the photo to the
@@ -434,7 +459,7 @@ export default function SwiftLinkProfile({
           `clip` (Safari < 16) drops the rule and keeps overflow-hidden: the
           photo scrolls normally there, exactly as before. Unlayered, so it
           wins over the Tailwind utility. */}
-      <style>{`@media (max-width: 767px) { .sc-sl-sheet { zoom: 0.92; } }${live ? " .sc-sl-sheet.sc-sl-pin { overflow: clip; }" : ""}${canvasCss}`}</style>
+      <style>{`@media (max-width: 767px) { .sc-sl-sheet { zoom: 0.92; } }${live ? " .sc-sl-sheet.sc-sl-pin { overflow: clip; }" : ""}${canvasCss}${scrollCss}`}</style>
       <div
         ref={sheetRef}
         className={`sc-sl-sheet relative mx-auto w-full max-w-[430px] overflow-hidden ${live ? "sc-sl-pin " : ""}${
@@ -546,7 +571,10 @@ export default function SwiftLinkProfile({
               className={`flex items-center gap-2.5 pr-4 ${nativeApp ? "pl-4" : "pl-16"} h-[68px] transition-opacity duration-300 ${
                 scrolled ? "opacity-100" : "opacity-0 pointer-events-none"
               }`}
-              style={{ background: hexAlpha(sheetBg, 0.84), backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" }}
+              // data-sl-bar + --sl-bar-at: the live page fades it in from CSS
+              // before the script runs (scrollCss).
+              data-sl-bar
+              style={{ background: hexAlpha(sheetBg, 0.84), backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)", ["--sl-bar-at" as string]: `${scrollThreshold}px` } as CSSProperties}
             >
               <div className="w-9 h-9 rounded-full overflow-hidden shrink-0" style={{ background: light ? "rgba(17,24,39,0.08)" : "#2c2d2d" }}>
                 {photoUrl ? (
@@ -605,10 +633,12 @@ export default function SwiftLinkProfile({
           // so the photo never faded at all and stopped on a hard line where
           // the blurred page began. Dissolving it reveals the Aura backdrop —
           // the same photo, blurred — which is what the page continues with.
-          style={glassOn || bgMedia ? {
-            maskImage: HERO_DISSOLVE,
-            WebkitMaskImage: HERO_DISSOLVE,
-          } : undefined}
+          style={{
+            // How far the page travels while the photo fades, for the CSS
+            // fade that runs before the script (scrollCss).
+            ["--sl-fade" as string]: `${PIN_FADE}px`,
+            ...(glassOn || bgMedia ? { maskImage: HERO_DISSOLVE, WebkitMaskImage: HERO_DISSOLVE } : {}),
+          } as CSSProperties}
         >
           {hero.kind === "video" ? (
             <video
