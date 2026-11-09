@@ -18,7 +18,7 @@ const ROUTES = new Set([
 
 // The posts live on the day of the audit, plus a few shapes the writer agent produces.
 const POSTS = [
-  { slug: "swiftcard-raises-250000-private-angel-funding", title: "SwiftCard raises $250,000 in private angel funding", keyword: "SwiftCard funding" },
+  { slug: "swiftcard-announces-android-app", title: "SwiftCard announces its Android app", keyword: "SwiftCard news" },
   { slug: "digital-business-card-with-lead-capture", title: "A Digital Business Card With Lead Capture: How It Actually Works", keyword: "digital business card with lead capture" },
   { slug: "fall-trade-show-follow-up-before-leads-go-cold", title: "Fall Trade Show Season Is Here: How to Follow Up Before Your Leads Go Cold", keyword: "trade show lead follow up" },
   { slug: "blinq-vs-swiftcard-vs-hihello", title: "Blinq vs. SwiftCard vs. HiHello: Which Digital Business Card Is Actually Worth It?", keyword: "digital business card comparison" },
