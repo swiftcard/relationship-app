@@ -11,10 +11,26 @@
 set -e
 cd "$(git rev-parse --show-toplevel)"
 
+# Git hands the pushed refs over on stdin exactly once. Keep them in a file so
+# every check below can read them from the start.
+refs="$(mktemp)"
+trap 'rm -f "$refs"' EXIT
+cat > "$refs"
+
 # A skip-CI tag in a commit message means CI never runs, so Vercel's
 # Deployment Checks hold the deploy forever. Reads Git's ref lines on stdin.
 echo "pre-push: no skip-CI tag in the commits being pushed"
+exec < "$refs"
 node scripts/no-skip-ci.mjs
+
+# A commit built on an out-of-date copy can put an older version of a file back
+# over a newer one and nothing else would object (087c4cc3, 2026-10-20). This is
+# the second look, at push time, for anything that got past the commit-msg hook
+# (a commit built with plumbing never ran it). Judges the commits actually being
+# pushed, which is not always origin/main..HEAD.
+echo "pre-push: no older file version silently put back (scripts/revert-guard.mjs)"
+exec < "$refs"
+node scripts/revert-guard.mjs --pushed
 
 echo "pre-push: typecheck (npx tsc --noEmit)"
 npx tsc --noEmit

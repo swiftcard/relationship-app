@@ -1,0 +1,386 @@
+[
+  {
+    "screen": "m-home",
+    "kind": "voice-control",
+    "detail": "visible \"Alex MorganYouRealtor®alex@coa\" but aria-label \"Open Alex Morgan's details\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-home",
+    "kind": "voice-control",
+    "detail": "visible \"Dana RuizMarketing Leaddana@co\" but aria-label \"Open Dana Ruiz's details\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-home",
+    "kind": "voice-control",
+    "detail": "visible \"Elena DiazAgentelena@coastline\" but aria-label \"Open Elena Diaz's details\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-home",
+    "kind": "voice-control",
+    "detail": "visible \"Marcus LeeAgentmarcus@coastlin\" but aria-label \"Open Marcus Lee's details\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-home",
+    "kind": "voice-control",
+    "detail": "visible \"Sofia ReyesSenior Agentsofia@c\" but aria-label \"Open Sofia Reyes's details\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-home",
+    "kind": "focus-visible",
+    "detail": "no focus indicator: input \"Your full name\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-pricing",
+    "kind": "axe:color-contrast",
+    "detail": "Elements must meet minimum color contrast ratio thresholds — summary",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Classic ProfessionalClean, tru\" but aria-label \"Choose the Classic Professiona\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Modern BoldHigh contrast, stro\" but aria-label \"Choose the Modern Bold templat\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Photo FirstPersonal and approa\" but aria-label \"Choose the Photo First templat\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Local BusinessEasy to scan. Bu\" but aria-label \"Choose the Local Business temp\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Luxury MinimalRefined and eleg\" but aria-label \"Choose the Luxury Minimal temp\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Logo FirstLeads with your mark\" but aria-label \"Choose the Logo First template\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-terms",
+    "kind": "axe:color-contrast",
+    "detail": "Elements must meet minimum color contrast ratio thresholds — .sm\\:items-baseline.sm\\:gap-4.py-3:nth-child(1) > dt | .sm\\:items-baseline.sm\\:gap-4.py-3:nth-child(2) > dt | .sm\\:items-baseline.sm\\:gap-4.py-3:nth-child(3) > dt",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-rm-home",
+    "kind": "axe:aria-hidden-focus",
+    "detail": "ARIA hidden element must not be focusable or contain focusable elements — .rotate-\\[-3deg\\] > .select-none.pointer-events-none[aria-hidden=\"true\"]",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-rm-home",
+    "kind": "voice-control",
+    "detail": "visible \"Alex MorganYouRealtor®alex@coa\" but aria-label \"Open Alex Morgan's details\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-rm-home",
+    "kind": "voice-control",
+    "detail": "visible \"Dana RuizMarketing Leaddana@co\" but aria-label \"Open Dana Ruiz's details\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-rm-home",
+    "kind": "voice-control",
+    "detail": "visible \"Elena DiazAgentelena@coastline\" but aria-label \"Open Elena Diaz's details\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-rm-home",
+    "kind": "voice-control",
+    "detail": "visible \"Marcus LeeAgentmarcus@coastlin\" but aria-label \"Open Marcus Lee's details\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-rm-home",
+    "kind": "voice-control",
+    "detail": "visible \"Sofia ReyesSenior Agentsofia@c\" but aria-label \"Open Sofia Reyes's details\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-rm-pricing",
+    "kind": "axe:color-contrast",
+    "detail": "Elements must meet minimum color contrast ratio thresholds — summary",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-rm-templates",
+    "kind": "axe:color-contrast",
+    "detail": "Elements must meet minimum color contrast ratio thresholds — .hp-lede.mt-3",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-rm-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Classic ProfessionalClean, tru\" but aria-label \"Choose the Classic Professiona\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-rm-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Modern BoldHigh contrast, stro\" but aria-label \"Choose the Modern Bold templat\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-rm-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Photo FirstPersonal and approa\" but aria-label \"Choose the Photo First templat\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-rm-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Local BusinessEasy to scan. Bu\" but aria-label \"Choose the Local Business temp\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-rm-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Luxury MinimalRefined and eleg\" but aria-label \"Choose the Luxury Minimal temp\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "m-rm-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Logo FirstLeads with your mark\" but aria-label \"Choose the Logo First template\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-home",
+    "kind": "axe:color-contrast",
+    "detail": "Elements must meet minimum color contrast ratio thresholds — .text-slate-400.text-\\[0\\.5625rem\\].leading-tight",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-home",
+    "kind": "larger-text",
+    "detail": "only 32/60 text nodes grew when the root font doubled — the rest are pinned in px",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-home",
+    "kind": "voice-control",
+    "detail": "visible \"Alex MorganYouRealtor®alex@coa\" but aria-label \"Open Alex Morgan's details\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-home",
+    "kind": "voice-control",
+    "detail": "visible \"Dana RuizMarketing Leaddana@co\" but aria-label \"Open Dana Ruiz's details\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-home",
+    "kind": "voice-control",
+    "detail": "visible \"Elena DiazAgentelena@coastline\" but aria-label \"Open Elena Diaz's details\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-home",
+    "kind": "voice-control",
+    "detail": "visible \"Marcus LeeAgentmarcus@coastlin\" but aria-label \"Open Marcus Lee's details\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-home",
+    "kind": "voice-control",
+    "detail": "visible \"Sofia ReyesSenior Agentsofia@c\" but aria-label \"Open Sofia Reyes's details\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-home",
+    "kind": "focus-visible",
+    "detail": "no focus indicator: input \"Your full name\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-pricing",
+    "kind": "axe:color-contrast",
+    "detail": "Elements must meet minimum color contrast ratio thresholds — summary",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-pricing",
+    "kind": "larger-text",
+    "detail": "only 32/60 text nodes grew when the root font doubled — the rest are pinned in px",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-templates",
+    "kind": "larger-text",
+    "detail": "only 32/60 text nodes grew when the root font doubled — the rest are pinned in px",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Classic ProfessionalClean, tru\" but aria-label \"Choose the Classic Professiona\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Modern BoldHigh contrast, stro\" but aria-label \"Choose the Modern Bold templat\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Photo FirstPersonal and approa\" but aria-label \"Choose the Photo First templat\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Local BusinessEasy to scan. Bu\" but aria-label \"Choose the Local Business temp\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Luxury MinimalRefined and eleg\" but aria-label \"Choose the Luxury Minimal temp\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Logo FirstLeads with your mark\" but aria-label \"Choose the Logo First template\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-contact",
+    "kind": "larger-text",
+    "detail": "only 32/60 text nodes grew when the root font doubled — the rest are pinned in px",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-preview",
+    "kind": "larger-text",
+    "detail": "only 32/60 text nodes grew when the root font doubled — the rest are pinned in px",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-terms",
+    "kind": "axe:color-contrast",
+    "detail": "Elements must meet minimum color contrast ratio thresholds — .sm\\:items-baseline.sm\\:gap-4.py-3:nth-child(1) > dt | .sm\\:items-baseline.sm\\:gap-4.py-3:nth-child(2) > dt | .sm\\:items-baseline.sm\\:gap-4.py-3:nth-child(3) > dt",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-terms",
+    "kind": "larger-text",
+    "detail": "only 32/60 text nodes grew when the root font doubled — the rest are pinned in px",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-rm-home",
+    "kind": "axe:aria-hidden-focus",
+    "detail": "ARIA hidden element must not be focusable or contain focusable elements — .hp-final-phone > .select-none.pointer-events-none[aria-hidden=\"true\"]",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-rm-home",
+    "kind": "axe:color-contrast",
+    "detail": "Elements must meet minimum color contrast ratio thresholds — .text-slate-400.text-\\[0\\.5625rem\\].leading-tight | .origin-top-left > .relative[role=\"group\"] > .relative > .relative > .overflow-hidden.relative > .inset-0.flex-col.absolute > .rounded-t-\\[22px\\].shadow-\\[0_-10px_40px_rgba\\(0\\,0\\,0\\,0\\.25\\)\\].pb-3 > .overflow-x-auto.rd-scrollbar-none.px-2\\.5:nth-child(3) > .gap-1.w-\\[46px\\].flex-col:nth-child(1) > .h-\\[46px\\].shadow-sm.w-\\[46px\\] | .origin-top-left > .relative[role=\"group\"] > .relative > .relative > .overflow-hidden.relative > .inset-0.flex-col.absolute > .rounded-t-\\[22px\\].shadow-\\[0_-10px_40px_rgba\\(0\\,0\\,0\\,0\\.25\\)\\].pb-3 > .overflow-x-auto.rd-scrollbar-none.px-2\\.5:nth-child(3) > .gap-1.w-\\[46px\\].flex-col:nth-child(2) > .h-\\[46px\\].shadow-sm.w-\\[46px\\]",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-rm-home",
+    "kind": "voice-control",
+    "detail": "visible \"Alex MorganYouRealtor®alex@coa\" but aria-label \"Open Alex Morgan's details\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-rm-home",
+    "kind": "voice-control",
+    "detail": "visible \"Dana RuizMarketing Leaddana@co\" but aria-label \"Open Dana Ruiz's details\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-rm-home",
+    "kind": "voice-control",
+    "detail": "visible \"Elena DiazAgentelena@coastline\" but aria-label \"Open Elena Diaz's details\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-rm-home",
+    "kind": "voice-control",
+    "detail": "visible \"Marcus LeeAgentmarcus@coastlin\" but aria-label \"Open Marcus Lee's details\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-rm-home",
+    "kind": "voice-control",
+    "detail": "visible \"Sofia ReyesSenior Agentsofia@c\" but aria-label \"Open Sofia Reyes's details\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-rm-pricing",
+    "kind": "axe:color-contrast",
+    "detail": "Elements must meet minimum color contrast ratio thresholds — summary",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-rm-templates",
+    "kind": "axe:color-contrast",
+    "detail": "Elements must meet minimum color contrast ratio thresholds — .hp-lede.mt-3",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-rm-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Classic ProfessionalClean, tru\" but aria-label \"Choose the Classic Professiona\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-rm-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Modern BoldHigh contrast, stro\" but aria-label \"Choose the Modern Bold templat\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-rm-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Photo FirstPersonal and approa\" but aria-label \"Choose the Photo First templat\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-rm-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Local BusinessEasy to scan. Bu\" but aria-label \"Choose the Local Business temp\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-rm-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Luxury MinimalRefined and eleg\" but aria-label \"Choose the Luxury Minimal temp\"",
+    "impact": "serious"
+  },
+  {
+    "screen": "d-rm-templates",
+    "kind": "voice-control",
+    "detail": "visible \"Logo FirstLeads with your mark\" but aria-label \"Choose the Logo First template\"",
+    "impact": "serious"
+  }
+]

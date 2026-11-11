@@ -61,6 +61,22 @@ jobs:
       - name: Test
         run: npx vitest run
 
+      # The net for a machine whose git hooks are not installed (another clone,
+      # a CI-less tool). A commit built on an out-of-date copy can put an older
+      # version of a file back over a newer one with no error from anything above
+      # (087c4cc3, 2026-10-20: six files, the push fixes). Last on purpose: it
+      # needs history, and deepening the clone HERE rather than at checkout keeps
+      # every step above running on exactly the checkout it always ran on. It
+      # passes with a warning if it cannot read the range; it only fails on a real
+      # finding. scripts/revert-guard.mjs says how to mark a deliberate revert.
+      - name: No older file version silently put back
+        env:
+          RANGE_FROM: ${{ github.event.before || github.event.pull_request.base.sha }}
+          RANGE_TO: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          git fetch --no-tags --prune --deepen=500 origin || true
+          node scripts/revert-guard.mjs --ci
+
   # ── The suite that measures a real browser ──────────────────────────────────
   #
   # `npm test` is 2700 source-invariant and logic tests, and not one of them can

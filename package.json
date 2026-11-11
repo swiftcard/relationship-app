@@ -17,6 +17,8 @@
     "qa:a11y": "node scripts/qa-a11y.mjs",
     "qa:mac": "node scripts/qa-mac.mjs",
     "kb:check": "node scripts/kb-drift.mjs",
+    "sync": "node scripts/sync-main.mjs",
+    "guard:reverts": "node scripts/revert-guard.mjs --history 500",
     "ios:sync": "cap sync ios",
     "ios:sim": "bash scripts/ios-sim.sh",
     "ios:release": "bash scripts/ios-release.sh",

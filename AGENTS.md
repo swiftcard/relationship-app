@@ -88,6 +88,22 @@ a pixel, run `test:render`. If it changes what a button does, run `qa:flows`.
   `git add -A` or `git commit -a` — you will commit someone else's half-finished
   feature. `git status` before and after.
 
+- **Level the folder before you build a commit, and never commit from a stale
+  copy.** On 2026-10-20 a commit built on a copy taken before two other fixes
+  landed put six files back to their old versions and undid the push fixes; two
+  more commits did the same that day. Types, lint and tests all passed, because
+  the older code was valid. Start with `node scripts/sync-main.mjs` (report) and
+  `--apply` (drops only copies identical to origin/main, then fast-forwards). If
+  you stage a file you built from a copy (`hash-object` + `update-index`), re-read
+  it from disk first. `revert-guard` refuses a commit whose version of a file is an
+  older version of it; a deliberate revert or removal says so in the message (the
+  word revert, restore, undo, roll back or back out) or adds a line
+  `Revert-ok: <why>`.
+
+- **A bug fix ships with the test that would have caught it.** The ~2700 tests are
+  how a fix stays fixed; a fix without one is a fix that comes back. Add the
+  tripwire in the same commit, and say in the commit message what it pins.
+
 # The guards that are always on (do not switch one off)
 
 The owner has had the same things fixed more than once — a bug that came back,
@@ -103,6 +119,7 @@ of them is removed or quietly weakened.
 | `.github/workflows/deploy-watchdog.yml` | on every deploy, **when enabled** | error-rate spike → automatic rollback (needs the Sentry secrets). Found switched off in GitHub (Actions → "Deploy watchdog (auto-rollback)", disabled by hand 2026-08-17) on 2026-10-09; no test can see that switch, so check it there. |
 | `ci.yml` + the tripwire tests (`one-notification-per-visit`, `view-visit-window`, `analytics-*`, `trial-eligibility`, `proxy-auth-hop`) | every push | the recurring bugs, pinned at source |
 | `.githooks/pre-push` (installed by `npm install` via `scripts/install-hooks.mjs`) | before every push leaves the machine | a type or lint error reaching `main`. CI was red for 26 pushes in Sept 2026 over one lint error nobody saw, and while red its Test job never ran. Pinned by `tests/push-guard.test.ts`. |
+| `scripts/revert-guard.mjs` via `.githooks/commit-msg`, `.githooks/pre-push` and a CI step, plus `scripts/sync-main.mjs` via `.claude/settings.json` | every commit, every push, every Claude session | a commit built on an out-of-date copy that quietly puts an older version of a file back over a newer one and undoes a live fix (087c4cc3, c0a74f9f, 5623aa20 on 2026-10-20; nothing else objects because the old code is valid). The session hooks tell a session its folder is behind origin/main and refuse a `git commit` until it is level. Run `node scripts/revert-guard.mjs --history 500` to audit. Pinned by `tests/revert-guard.test.ts` and `tests/sync-main.test.ts`. |
 | `.gitattributes` (`* text=auto eol=lf`) | every checkout | CRLF working copies. ~600 tests read source as strings; with `core.autocrlf=true` they failed locally and passed in CI, so red stopped meaning anything. Pinned by `tests/line-endings.test.ts`. |
 
 **A red CI run is a page, not a colour.** Read the failing step before pushing

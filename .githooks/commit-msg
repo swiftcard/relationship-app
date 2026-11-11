@@ -1,0 +1,12 @@
+#!/bin/sh
+# Runs after the commit message is written and before the commit is made; $1 is
+# the file holding the message. Refuses a commit that quietly puts an OLDER
+# version of a file back over a newer one: the way a copy taken before another
+# fix landed undoes that fix with no error anywhere (087c4cc3, 2026-10-20 — it
+# put six files back and removed the push-notification fixes). See
+# scripts/revert-guard.mjs for what it catches and how to say a revert is meant.
+#
+# Bypass for a genuine emergency:  git commit --no-verify
+set -e
+cd "$(git rev-parse --show-toplevel)"
+node scripts/revert-guard.mjs --staged --message-file "$1"

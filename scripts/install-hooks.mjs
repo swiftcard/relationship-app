@@ -28,7 +28,7 @@ try {
 }
 try {
   execFileSync("git", ["config", "core.hooksPath", ".githooks"], { cwd: root, stdio: "ignore" });
-  console.log("git hooks: core.hooksPath → .githooks (pre-push runs tsc + eslint)");
+  console.log("git hooks: core.hooksPath → .githooks (commit-msg refuses a stale-copy revert; pre-push runs that plus tsc + eslint)");
 } catch {
   /* no git, or not allowed to write config — the hook is a convenience, not a dependency */
 }

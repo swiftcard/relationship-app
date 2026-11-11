@@ -93,6 +93,18 @@ describe("always-on production guards", () => {
     }
   });
 
+  // 2026-10-20: three commits in one day built on out-of-date copies put older
+  // versions of files back over newer ones and undid live fixes, with every check
+  // still green. The guards that stop that are files too; each has its own test
+  // that runs it for real, so this only pins that neither can be quietly deleted.
+  it("the guards against a stale copy undoing a fix are still in place", () => {
+    for (const f of ["scripts/revert-guard.mjs", "scripts/sync-main.mjs", ".githooks/commit-msg", ".claude/settings.json", "tests/revert-guard.test.ts", "tests/sync-main.test.ts"]) {
+      expect(existsSync(f), f).toBe(true);
+    }
+    expect(read(".githooks/pre-push")).toContain("scripts/revert-guard.mjs --pushed");
+    expect(read(".github/workflows/ci.yml")).toContain("scripts/revert-guard.mjs --ci");
+  });
+
   it("the recurring-bug tripwires are still in the suite", () => {
     for (const t of ["one-notification-per-visit", "view-visit-window", "analytics-integrity", "analytics-accuracy", "trial-eligibility", "proxy-auth-hop"]) {
       expect(existsSync(`tests/${t}.test.ts`), t).toBe(true);
