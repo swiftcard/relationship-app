@@ -243,9 +243,10 @@ describe("Company Analytics counts real customers and real money (2026-10-28)", 
 describe("Notifications: money, customers leaving, the agents (2026-10-28)", () => {
   // Owner: "a notification center in our admin page … for really important
   // things". Admin only: no email, no push.
-  it("All, Money, Customers leaving, Agents, Demos, in that order", () => {
+  // Prospects (2026-11-11): a sales prospect looked at their Card Builder preview.
+  it("All, Money, Customers leaving, Agents, Demos, Prospects, in that order", () => {
     const keys = [...read("src/app/admin/notifications/tabs.ts").matchAll(/key: "([a-z]+)"/g)].map((m) => m[1]);
-    expect(keys).toEqual(["all", "money", "leaving", "agents", "demos"]);
+    expect(keys).toEqual(["all", "money", "leaving", "agents", "demos", "prospects"]);
   });
 
   it("Mark all read only ever reads its kinds from the tabs (a missing kind once marked everything read)", () => {

@@ -211,3 +211,15 @@
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 0.7fr) minmax(0, 0.7fr) minmax(0, 0.7fr) minmax(0, 0.7fr) minmax(0, 1.8fr);
   column-gap: 1rem;
 }
+
+/* ── "They're viewing their card right now" (Card Builder, 2026-11-11) ───────
+   The one loud thing in the console, on purpose: it asks for a phone call
+   while a prospect is still on the page. Solid green, white words, and a
+   white Call button, so it reads as "go" and can't be mistaken for an error. */
+.sc-admin .adm-prospect-banner { box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18); }
+.sc-admin .adm-prospect-alert { background: #0B7A3B; color: #fff; }
+.sc-admin .adm-prospect-alert + .adm-prospect-alert { border-top: 1px solid rgba(255, 255, 255, 0.25); }
+.sc-admin .adm-prospect-call { background: #fff; color: #0B5C2D; font-weight: 700; }
+.sc-admin .adm-prospect-call:hover { background: #E9F7EE; }
+.sc-admin .adm-prospect-more { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.sc-admin .adm-prospect-more:hover { background: rgba(255, 255, 255, 0.28); }

@@ -74,7 +74,8 @@ export type PushCategory =
   | "billing_problem"
   | "weekly_recap"
   | "team_alert"
-  | "getting_started";
+  | "getting_started"
+  | "prospect_view";
 
 export const PUSH_CATEGORIES: PushCategory[] = [
   "new_lead",
@@ -87,6 +88,7 @@ export const PUSH_CATEGORIES: PushCategory[] = [
   "weekly_recap",
   "team_alert",
   "getting_started",
+  "prospect_view",
 ];
 
 /**
@@ -130,6 +132,9 @@ export const PUSH_CATEGORY_COPY: Record<PushCategory, { label: string; hint: str
   team_alert: { label: "Team alerts", hint: "Leads waiting a day, a teammate's first lead, team milestones — at most two a day" },
   getting_started: { label: "Getting started", hint: "Once, in your first week, if your card hasn't been opened yet" },
   // NOTE: quiet hours apply to this one too — see decidePush().
+  // Staff only (lib/prospect-preview/alert.ts): never in LIVE_CATEGORIES, so no
+  // customer is ever shown a switch for it.
+  prospect_view: { label: "Prospect is viewing their preview", hint: "A sales prospect opened the preview card you sent them" },
 };
 
 /**
@@ -139,7 +144,21 @@ export const PUSH_CATEGORY_COPY: Record<PushCategory, { label: string; hint: str
  * have withheld. Everything else is capped, so a busy day can never turn into
  * a stream of interruptions.
  */
-export const UNCAPPED: PushCategory[] = ["new_lead", "lead_reply", "billing_problem"];
+export const UNCAPPED: PushCategory[] = ["new_lead", "lead_reply", "billing_problem", "prospect_view"];
+
+/**
+ * THE ONE CATEGORY QUIET HOURS DO NOT HOLD (owner, 2026-11-11).
+ *
+ * Until this, nothing was exempt, billing included: see the note in
+ * decidePush. `prospect_view` is the exception the owner asked for by name
+ * ("Always alert, any hour"): a sales prospect looking at the preview card
+ * staff built for them, sent only to the site admins (lib/prospect-preview).
+ * The whole value of the alert is calling while the card is on their screen;
+ * at 8am the moment is gone. It is not a customer notification and no
+ * customer can receive it. Do not add a second category here without the
+ * owner asking for it by name.
+ */
+export const QUIET_EXEMPT: PushCategory[] = ["prospect_view"];
 
 /** Everything on by default. Switching one off is a decision the person makes. */
 export const DEFAULT_PUSH_PREFS: Record<PushCategory, boolean> = {
@@ -153,6 +172,7 @@ export const DEFAULT_PUSH_PREFS: Record<PushCategory, boolean> = {
   weekly_recap: true,
   team_alert: true,
   getting_started: true,
+  prospect_view: true,
 };
 
 export const DAILY_CAP = 5;          // excludes UNCAPPED and OWN_CAP categories
@@ -346,7 +366,8 @@ export function decidePush(input: PolicyInput): PolicyResult {
 
   if (prefs[category] === false) return { send: false, reason: "category_off" };
 
-  // NOTHING is exempt, billing included — and a silent count update is still
+  // NOTHING a customer receives is exempt, billing included (the one staff
+  // alert that is: QUIET_EXEMPT above) — and a silent count update is still
   // something arriving on a phone at 3am, so quiet hours are checked before the
   // view batch below rather than after it.
   //
@@ -359,7 +380,7 @@ export function decidePush(input: PolicyInput): PolicyResult {
   //
   // Nothing held here is LOST any more: /api/push/catchup announces it once, at
   // 8am in the person's own timezone, from the bell rows it left behind.
-  if (prefs.quietHours !== false && inQuietHours(now, prefs.timezone)) {
+  if (!QUIET_EXEMPT.includes(category) && prefs.quietHours !== false && inQuietHours(now, prefs.timezone)) {
     return { send: false, reason: "quiet_hours" };
   }
 

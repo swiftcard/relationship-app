@@ -38,6 +38,8 @@ export const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { href: "/admin/marketing", label: "Marketing", icon: "marketing" },
       { href: "/admin/crew", label: "Agents", icon: "agents" },
+      // Preview cards for sales prospects, and who has looked at theirs (2026-11-11).
+      { href: "/admin/card-builder", label: "Card Builder", icon: "idCard" },
       { href: "/admin/plans", label: "Sandbox", icon: "sandbox" },
     ],
   },

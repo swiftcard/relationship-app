@@ -7,6 +7,12 @@ const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? "")
   .map((e) => e.trim().toLowerCase())
   .filter(Boolean);
 
+/** Every site admin's email, lowercased. For telling the admins something
+ *  (lib/prospect-preview/alert.ts), never for deciding access. */
+export function adminEmailList(): string[] {
+  return [...ADMIN_EMAILS];
+}
+
 export function isAdminEmail(email?: string | null): boolean {
   return !!email && ADMIN_EMAILS.includes(email.toLowerCase());
 }

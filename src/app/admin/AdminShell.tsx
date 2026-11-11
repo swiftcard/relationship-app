@@ -1,5 +1,6 @@
 import ForceLightTheme from "@/components/ForceLightTheme";
 import AdminNav from "./AdminNav";
+import ProspectAlertBanner from "./ProspectAlertBanner";
 
 // ── The site admin's frame: sidebar (or phone top bar) + the page ───────────
 // Split from layout.tsx (which only gates) so tests/render can measure the
@@ -18,9 +19,15 @@ export default function AdminShell({ email, unread = null, children }: { email: 
     <div className="sc-app sc-admin min-h-screen lg:flex">
       <ForceLightTheme />
       <AdminNav email={email} unread={unread} />
-      <main className="flex-1 min-w-0 px-4 sm:px-6 lg:px-10 pt-5 sm:pt-6 lg:pt-8 pb-16">
-        <div className="mx-auto w-full max-w-[1200px]">{children}</div>
-      </main>
+      <div className="flex-1 min-w-0">
+        {/* A prospect is on their preview card right now: who, and a Call
+            button, on every admin page (Card Builder, 2026-11-11). Renders
+            nothing the rest of the time. */}
+        <ProspectAlertBanner />
+        <main className="px-4 sm:px-6 lg:px-10 pt-5 sm:pt-6 lg:pt-8 pb-16">
+          <div className="mx-auto w-full max-w-[1200px]">{children}</div>
+        </main>
+      </div>
     </div>
   );
 }
