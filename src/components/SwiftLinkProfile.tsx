@@ -501,7 +501,14 @@ export default function SwiftLinkProfile({
           `clip` (Safari < 16) drops the rule and keeps overflow-hidden: the
           photo scrolls normally there, exactly as before. Unlayered, so it
           wins over the Tailwind utility. */}
-      <style>{`@media (max-width: 767px) { .sc-sl-sheet { zoom: ${PHONE_ZOOM}; } }${live ? " .sc-sl-sheet.sc-sl-pin { overflow: clip; }" : ""}${canvasCss}${scrollCss}`}</style>
+      {/* Edge to edge on a phone (owner, 2026-11-12: "a little white line of
+          space on the left and right sides… only on the iPhone"). The zoom
+          shrinks the sheet's 430px cap with it, to 395.6px, so on every phone
+          wider than that (iPhone Pro 402, Plus / Pro Max 428-440) the page
+          stopped short of both edges. On the live page at phone widths the
+          cap goes; tablets, desktop and the editor previews keep it.
+          tests/render/swiftlink-phone-edges.test.ts measures it. */}
+      <style>{`@media (max-width: 767px) { .sc-sl-sheet { zoom: ${PHONE_ZOOM}; } } @media (max-width: 480px) { main.sc-sl-page > .sc-sl-sheet { max-width: none; } }${live ? " .sc-sl-sheet.sc-sl-pin { overflow: clip; }" : ""}${canvasCss}${scrollCss}`}</style>
       <div
         ref={sheetRef}
         className={`sc-sl-sheet relative mx-auto w-full max-w-[430px] overflow-hidden ${live ? "sc-sl-pin " : ""}${
