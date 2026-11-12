@@ -40,6 +40,13 @@ export default function OfficeNotificationBell({
   const [bulkPending, setBulkPending] = useState<"markAll" | "clearRead" | null>(null);
   const openRef = useRef(open);
   useEffect(() => { openRef.current = open; }, [open]);
+  // Escape closes the panel; the Android back button sends it (NativeAppBridge).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
 
   const unread = notifications.filter((n) => !n.read).length;
   const readCount = notifications.filter((n) => n.read).length;
