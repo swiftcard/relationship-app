@@ -64,6 +64,13 @@ export type ProspectPreview = {
   called: boolean;
   called_at: string | null;
   notes: string | null;
+  /** The first text (no link) went out. */
+  asked_at: string | null;
+  /** The link went out, and how (the latest send). */
+  sent_at: string | null;
+  sent_channel: "text" | "email" | null;
+  /** Only what a person decides: meeting_booked | won | lost. See lib/prospect-preview/pipeline.ts. */
+  stage: string | null;
   crew_lead_id: string | null;
 };
 
