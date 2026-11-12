@@ -47,7 +47,12 @@ function Card({ data }: { data: ReturnType<typeof ownerCard> }) {
   );
 }
 
-export default function PreviewView({ preview, calendarUrl }: { preview: ProspectPreview; calendarUrl: string }) {
+export default function PreviewView({ preview, calendarUrl, logoSrc }: {
+  preview: ProspectPreview;
+  calendarUrl: string;
+  /** The logo with its margin added (card.ts paddedLogoSrc). Without it the raw file is drawn. */
+  logoSrc?: string | null;
+}) {
   const theme = cardPageTheme(preview.brand_primary, HOUSE_TEMPLATE);
   const first = preview.owner_name.split(/\s+/)[0] || preview.owner_name;
   const team = preview.team_members;
@@ -67,7 +72,7 @@ export default function PreviewView({ preview, calendarUrl }: { preview: Prospec
         </header>
 
         <section aria-label={`${preview.owner_name}'s card`} data-owner-card>
-          <Card data={ownerCard(preview)} />
+          <Card data={ownerCard(preview, logoSrc)} />
           {found.length > 0 && (
             <p className="mt-3 text-center text-xs" style={{ color: MUTED }} data-socials>Your card links to your {sentenceList(found)}.</p>
           )}
@@ -81,7 +86,7 @@ export default function PreviewView({ preview, calendarUrl }: { preview: Prospec
             <ul data-team-strip className="mt-3 -mx-4 px-4 flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2" style={{ scrollbarWidth: "none" }}>
               {team.map((m, i) => (
                 <li key={`${m.name}-${i}`} className="w-[260px] shrink-0 snap-start" aria-label={m.title ? `${m.name}, ${m.title}` : m.name}>
-                  <Card data={memberCard(preview, m)} />
+                  <Card data={memberCard(preview, m, logoSrc)} />
                   {faces && (
                     <div className="mt-2 flex items-center gap-2 min-w-0" data-member-face>
                       <Face src={m.headshot} name={m.name} size={32} />

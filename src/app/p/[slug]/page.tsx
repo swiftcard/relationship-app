@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PUBLIC_PAGE_META } from "@/lib/universal-links";
-import { previewVersion } from "@/lib/prospect-preview/card";
+import { paddedLogoSrc, previewVersion } from "@/lib/prospect-preview/card";
 import { SLUG_RE } from "@/lib/prospect-preview/input";
 import { previewState } from "@/lib/prospect-preview/real-view";
 import { getPreviewBySlug } from "@/lib/prospect-preview/store";
@@ -74,7 +74,7 @@ export default async function ProspectPreviewPage({ params }: { params: Promise<
   return (
     <>
       <PreviewBeacon slug={preview.slug} />
-      <PreviewView preview={preview} calendarUrl={calendarUrl()} />
+      <PreviewView preview={preview} calendarUrl={calendarUrl()} logoSrc={paddedLogoSrc(preview, false)} />
     </>
   );
 }

@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
+import { paddedLogoSrc } from "@/lib/prospect-preview/card";
 import { UUID_RE } from "@/lib/prospect-preview/input";
 import { getPreviewById } from "@/lib/prospect-preview/store";
 import PreviewView from "@/app/p/[slug]/PreviewView";
@@ -27,7 +28,7 @@ export default async function StaffPreviewPage({ params }: { params: Promise<{ i
         {p.status === "live" ? "This is what the prospect sees at their link." : "Only SwiftCard staff can see this. The prospect's link doesn't open until the preview is published."}
       </p>
       <div className="rounded-2xl overflow-hidden" data-staff-preview>
-        <PreviewView preview={p} calendarUrl="#" />
+        <PreviewView preview={p} calendarUrl="#" logoSrc={paddedLogoSrc(p, true)} />
       </div>
     </Stack>
   );

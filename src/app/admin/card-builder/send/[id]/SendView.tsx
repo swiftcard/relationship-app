@@ -53,6 +53,11 @@ export default function SendView({ p, messages, now, senderKnown, done, error }:
         These go from your own phone number and your own inbox. Each button opens your Messages or Mail app with the words filled in; you press send there. Change any wording here first.
         {!senderKnown && " Your SwiftCard profile has no name, so the messages say “the founder of SwiftCard”: add your name before sending."}
       </p>
+      {!messages.specific && (
+        <p className="adm-callout-danger sc-t-subhead rounded-xl px-4 py-3" data-generic-messages>
+          <span className="font-semibold">These could go to any office.</span> This preview has no hook, so the messages say nothing true about {p.office_name} in particular. <Link className="adm-link" href={`/admin/card-builder/edit/${p.id}`}>Add the hook</Link> before you send, or rewrite them here.
+        </p>
+      )}
       {!live && (
         <p className="adm-callout-danger sc-t-subhead rounded-xl px-4 py-3" data-not-live>
           {p.status === "draft" ? "This preview is still a draft." : "This preview's link doesn't open right now."} The first text can go; the two with the link can&apos;t until it is published. <Link className="adm-link" href={`/admin/card-builder/edit/${p.id}`}>Open the edit screen</Link>

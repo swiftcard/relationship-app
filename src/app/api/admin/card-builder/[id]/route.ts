@@ -3,7 +3,8 @@ import { requireAdmin } from "@/lib/admin";
 import { pullBrandColors } from "@/lib/prospect-preview/colors-server";
 import { clean, parsePreviewFields, UUID_RE } from "@/lib/prospect-preview/input";
 import { isCallOutcome } from "@/lib/prospect-preview/call";
-import { clearSent, deletePreview, logOutcome, reopenPreview, getPreviewById, markSent, publishPreview, setBrandColors, unpublishPreview, updateCall, updatePreview } from "@/lib/prospect-preview/store";
+import { assessQuality } from "@/lib/prospect-preview/quality";
+import { clearSent, deletePreview, logOutcome, reopenPreview, getPreviewById, markSent, publishPreview, setBrandColors, setQualityOverride, unpublishPreview, updateCall, updatePreview } from "@/lib/prospect-preview/store";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -12,7 +13,10 @@ export const maxDuration = 30;
 //
 //   call       the "Called" checkbox and the notes beside it (both in one form)
 //   save       the edit screen: every field of the preview, and its sources
-//   publish    save, then make the link open (the 14 days start now)
+//   publish    save, then make the link open (the 14 days start now). HELD when
+//              the preview is too generic (lib/prospect-preview/quality.ts)
+//              and the owner hasn't overridden it: it is saved and stays a draft
+//   override   on = 1 | 0: the owner lets a too-generic preview go out anyway
 //   unpublish  back to a draft: the link answers 404 again
 //   outcome    how a call went (outcome = no_answer | voicemail | reached |
 //              meeting_booked | won | lost), which also moves the stage
@@ -42,7 +46,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     ? await req.json().catch(() => ({}))
     : Object.fromEntries((await req.formData().catch(() => new FormData())).entries());
   const reply = (done: string, status = 200, error?: string) => {
-    if (isJson) return NextResponse.json({ ok: !error && done !== "failed", done, ...(error ? { error } : {}) }, { status });
+    if (isJson) return NextResponse.json({ ok: !error && done !== "failed" && done !== "held", done, ...(error ? { error } : {}) }, { status });
     const url = new URL(safeBack(input.back), req.nextUrl.origin);
     if (error) url.searchParams.set("error", error.slice(0, 300));
     else url.searchParams.set("done", done);
@@ -66,9 +70,19 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       if (!parsed.ok) return reply("failed", 400, parsed.error);
       if (!(await updatePreview(id, parsed.value))) return reply("failed", 500);
       if (input.action === "save") return reply("saved");
+      // The quality gate: a draft that could have been written for any office
+      // doesn't go out. The save above stands; the owner fixes it or overrides it.
+      const saved = await getPreviewById(id);
+      if (!saved) return reply("failed", 404);
+      if (saved.status !== "live" && !assessQuality(saved).mayPublish) return reply("held", 409);
       // Already live: the save above is all "publish" has left to do.
       await publishPreview(id);
       return reply("published");
+    }
+    case "override": {
+      const on = input.on === "1" || input.on === true;
+      const ok = await setQualityOverride(id, on);
+      return reply(ok ? (on ? "override_on" : "override_off") : "failed", ok ? 200 : 500);
     }
     case "unpublish": {
       const ok = await unpublishPreview(id);

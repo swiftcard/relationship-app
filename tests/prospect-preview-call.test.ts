@@ -48,7 +48,7 @@ describe("the brief", () => {
     const b = callBrief(p, { sender: "Menash Harooni" });
     expect(b.whyBuyer).toBe("Managing broker: Named Managing Broker on the brokerage's team page.");
     expect(b.teamSize).toBe(14);
-    expect(b.opener).toBe("Hi Dana, it's Menash, the founder of SwiftCard. I sent you the card I made for you and the team at Harbor Realty Group. I noticed you cover Park Slope and Windsor Terrace. Did the team's cards look right to you?");
+    expect(b.opener).toBe("Hi Dana, it's Menash, the founder of SwiftCard. I noticed you cover Park Slope and Windsor Terrace. I sent you the card I made for you and the team at Harbor Realty Group. Did the team's cards look right to you?");
     expect(callBrief({ ...p, team_strip_scrolled: false }, { sender: null }).opener).toMatch(/it's the founder of SwiftCard\..* Did you get a chance to look at it\?$/);
   });
 

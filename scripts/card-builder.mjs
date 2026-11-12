@@ -11,13 +11,20 @@
 //   node scripts/card-builder.mjs check <candidates.json>
 //       For each candidate office: already a lead? already has a preview?
 //       already contacted or on the do-not-contact list?
+//   node scripts/card-builder.mjs fit <offices.json>
+//       Score each office on the six stated criteria and show the breakdown,
+//       and say which are disqualified and why. Saves nothing.
 //   node scripts/card-builder.mjs save-leads <leads.json>
-//       Save decision-makers to crew_leads (the Office list), ranked by fit.
+//       Save decision-makers to crew_leads (the Office list), ranked by that
+//       score. A disqualified office is never saved.
 //   node scripts/card-builder.mjs colors <logo https url> [website https url]
 //       Brand colours read from the logo (or the site's theme colour).
 //   node scripts/card-builder.mjs create-draft <preview.json>
 //   node scripts/card-builder.mjs update-draft <preview id> <preview.json>
 //       Make or change a DRAFT preview. A published one is never touched.
+//   node scripts/card-builder.mjs quality <preview id>
+//       The personalization checklist and score the edit screen shows, whether
+//       the draft is "too generic", and the messages that would be written.
 //   node scripts/card-builder.mjs shots <preview id> [out dir]
 //       The preview page as a phone (390px) and a computer (1280px) see it,
 //       as PNG files, plus anything that looks wrong (broken pictures, text
@@ -47,7 +54,7 @@ if (!args.length) {
   process.exit(2);
 }
 // File arguments are resolved here, where the caller's working directory is known.
-const FILE_ARG = { check: [1], "save-leads": [1], "create-draft": [1], "update-draft": [2], shots: [2] };
+const FILE_ARG = { check: [1], fit: [1], "save-leads": [1], "create-draft": [1], "update-draft": [2], shots: [2] };
 for (const i of FILE_ARG[args[0]] ?? []) if (args[i]) args[i] = resolve(process.cwd(), args[i]);
 
 const out = join(mkdtempSync(join(tmpdir(), "card-builder-")), "result.json");
