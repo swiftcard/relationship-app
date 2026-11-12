@@ -73,6 +73,15 @@ const PREVIEW: ProspectPreview = {
   buyer_reason: "Listed as Broker of Record and owner on the About page",
   team_size: 14,
   detail: "your new listing on Hicks Street",
+  license: null,
+  type_feel: null,
+  current_tool: null,
+  specifics: [],
+  hook_specific: null,
+  hook_angle: null,
+  hook_why: null,
+  quality_override: false,
+  quality_override_at: null,
   call_outcome: null,
   call_outcome_at: null,
   crew_lead_id: null,
@@ -270,6 +279,63 @@ describe.each([390, 1280])("/admin/card-builder/edit/<id> at %ipx", (width) => {
     expect(m.copy).toBe(false);
     expect(m.team).toContain("Marcus Lee, Office Manager, data:");
     await page.close();
+  });
+
+  it("the personalization checklist: a thin draft is marked too generic with what to fix; a specific one isn't", async () => {
+    const measure = (page: Page) => page.evaluate(() => {
+      const vw = window.innerWidth;
+      const spill: string[] = [];
+      document.querySelectorAll("#pp-quality, [data-check], [data-specific-row], [data-specific-row] input, [data-specific-row] select, [data-override] button, select").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && (r.right > vw + 0.5 || r.left < -0.5)) spill.push(`${el.tagName}.${String(el.className).slice(0, 40)} → ${Math.round(r.left)}..${Math.round(r.right)}`);
+      });
+      return {
+        spill, sideways: document.documentElement.scrollWidth > vw,
+        quality: (document.querySelector("#pp-quality") as HTMLElement).innerText,
+        needed: [...document.querySelectorAll('[data-check][data-ok="no"]')].map((el) => el.getAttribute("data-check")),
+        tooGeneric: !!document.querySelector("[data-too-generic]"),
+        override: (document.querySelector("[data-override] button") as HTMLElement | null)?.innerText ?? null,
+        names: [...document.querySelectorAll("#pp-edit [name]")].map((el) => el.getAttribute("name")),
+        qualityTop: document.querySelector("#pp-quality")!.getBoundingClientRect().top, formTop: document.querySelector("#pp-edit")!.getBoundingClientRect().top,
+      };
+    });
+
+    const thin = await open(width, await editMarkup({ ...RICH, status: "draft" }, { done: "held" }), adminCss);
+    const t = await measure(thin);
+    expect(t.spill).toEqual([]);
+    expect(t.sideways).toBe(false);
+    expect(t.tooGeneric).toBe(true);
+    expect(t.quality).toMatch(/Personalization: \d+ of 100/);
+    expect(t.quality).toContain("Too generic.");
+    expect(t.quality).toContain("0 of 3 so far");
+    for (const k of ["specifics", "buyer", "hook"]) expect(t.needed).toContain(k);
+    expect(t.override).toBe("Override: let me publish it as it is");
+    expect(t.qualityTop).toBeLessThan(t.formTop);
+    expect(await thin.evaluate(() => document.body.innerText)).toContain("Saved, but not published.");
+    for (const n of ["license", "type_feel", "current_tool", "spec_kind_0", "spec_text_5", "spec_src_0", "spec_date_0", "spec_unc_0", "hook_specific", "hook_angle", "hook_why", "src_buyer_second"]) expect(t.names).toContain(n);
+    await thin.close();
+
+    const sp = (text: string, i: number) => ({ kind: "listing" as const, text, source_url: `https://harbor.example/listings/${i}`, dated: "2026-11-03", uncertain: false });
+    const strong = await open(width, await editMarkup({
+      ...RICH, status: "draft",
+      specifics: [sp("Listed 412 4th St in Park Slope at $2.15M", 1), sp("Sold 88 Hicks St for $3.1M after a bidding war that ran three weekends in a row", 2), sp("11 of 14 agents list a personal cell number", 3)],
+      detail: "your new listing at 412 4th St in Park Slope", hook_specific: 0, hook_angle: "views", hook_why: "You'd know which buyers opened the card your agents hand out at the showings.",
+      sources: { ...RICH.sources, buyer_role: { url: "https://harbor.example/about", uncertain: false, note: "" }, buyer_second: { url: "https://appext20.dos.ny.gov/nydos/x", uncertain: false, note: "" } },
+    }), adminCss);
+    const g = await measure(strong);
+    expect(g.spill).toEqual([]);
+    expect(g.sideways).toBe(false);
+    expect(g.tooGeneric).toBe(false);
+    expect(g.quality).toContain("Specific enough to send.");
+    expect(g.override).toBeNull();
+    for (const k of ["specifics", "buyer", "hook"]) expect(g.needed).not.toContain(k);
+    await strong.close();
+
+    const over = await open(width, await editMarkup({ ...RICH, status: "draft", quality_override: true }), adminCss);
+    const o = await measure(over);
+    expect(o.quality).toContain("You overrode this, so it can be published as it is.");
+    expect(o.override).toBe("Remove my override");
+    await over.close();
   });
 
   it("a published one: the link to copy, Save, and a way back to draft", async () => {
@@ -518,7 +584,7 @@ describe.each([390, 1280])("/admin/card-builder/call/<id> at %ipx", (width) => {
     const brief = await page.evaluate(() => (document.querySelector("#pp-brief") as HTMLElement).innerText);
     expect(brief).toContain("Not recorded. Confirm they run the office before you pitch.");
     expect(brief).toContain("Not known");
-    expect(brief).toContain("Nothing specific recorded");
+    expect(brief).toContain("None recorded. Don't open with a compliment: find one true thing first.");
     await page.close();
   });
 });

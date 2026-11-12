@@ -57,16 +57,32 @@ export default function CallView({ p, brief, appUrl, now, done }: { p: PreviewLi
         <dl className="sc-t-subhead space-y-1.5">
           <Fact label="Decides because">{brief.whyBuyer ?? <span className="adm-bad">Not recorded. Confirm they run the office before you pitch.</span>}</Fact>
           <Fact label="Team size">{brief.teamSize ? `${brief.teamSize} people` : "Not known"}{p.team_members.length ? ` (${p.team_members.length} have a card on the preview)` : ""}</Fact>
-          <Fact label="What we found">
-            {p.detail ?? "Nothing specific recorded"}
+          <Fact label="The hook">
+            {p.detail ?? <span className="adm-bad">None recorded. Don&apos;t open with a compliment: find one true thing first.</span>}
             {p.detail && detailSource ? <> · <a className="adm-link" href={detailSource} target="_blank" rel="noopener noreferrer">source</a></> : null}
+            {brief.angle && <span className="adm-muted block">Leads to: {brief.angle.toLowerCase()}</span>}
           </Fact>
+          <Fact label="Uses today">{brief.currentTool ?? "Not checked"}</Fact>
+          {p.specifics.length > 0 && (
+            <Fact label="Also true">
+              <ul className="space-y-1" data-specifics>
+                {p.specifics.map((sp, i) => (
+                  <li key={i}>
+                    {sp.text}{sp.dated ? <span className="adm-muted"> ({sp.dated})</span> : null}
+                    {sp.source_url ? <> · <a className="adm-link" href={sp.source_url} target="_blank" rel="noopener noreferrer">source</a></> : null}
+                    {sp.uncertain ? <span className="adm-bad"> · uncertain</span> : null}
+                  </li>
+                ))}
+              </ul>
+            </Fact>
+          )}
           <Fact label="Views">{p.views === 0 ? "None yet" : `${p.views}${p.devices > 1 ? ` from ${p.devices} devices` : ""}, last ${p.last_viewed_at ? fmtDateTime(p.last_viewed_at) : ""}`}</Fact>
           <Fact label="Team strip">{p.views === 0 ? "—" : p.team_strip_scrolled ? "Scrolled through the team's cards" : "Didn't scroll the team's cards"}</Fact>
         </dl>
       </Section>
 
       <Section title="Open with" hint="A suggestion. Say it your way.">
+        {!brief.specific && <p className="adm-callout-danger sc-t-footnote rounded-xl px-4 py-3 mb-3" data-generic-opener>This opener could be said to any office: the preview has no hook. Add one on the edit screen, or open with something true from the list above.</p>}
         <p className="sc-t-body" data-opener>{brief.opener}</p>
       </Section>
 

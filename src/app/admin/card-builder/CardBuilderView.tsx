@@ -7,6 +7,7 @@ import { Icon } from "../_ui/icons";
 import { fmtDate, fmtDateTime, timeAgo } from "../_ui/format";
 import { telHref } from "@/lib/prospect-preview/input";
 import { followUps, STAGE_LABELS, STAGES, stageCounts, stageOf, type Stage } from "@/lib/prospect-preview/pipeline";
+import { assessQuality } from "@/lib/prospect-preview/quality";
 import { previewState } from "@/lib/prospect-preview/real-view";
 import type { PreviewList } from "@/lib/prospect-preview/store";
 import { BUYER_ROLES, BUYER_ROLE_LABELS, DEFAULT_BRAND_PRIMARY, DEFAULT_BRAND_SECONDARY, DEFAULT_EXPIRY_DAYS, MAX_TEAM_MEMBERS, type PreviewListRow } from "@/lib/prospect-preview/types";
@@ -92,6 +93,8 @@ function statusBadge(r: PreviewListRow, now: number) {
   return (
     <>
       <StatusBadge tone={STAGE_TONE[stage]}>{STAGE_LABELS[stage]}</StatusBadge>
+      {/* A draft that could have been written for any office can't move to Ready. */}
+      {stage === "draft" && !assessQuality(r).mayPublish && <StatusBadge tone="bad">Too generic</StatusBadge>}
       {r.status === "paused" ? <StatusBadge tone="neutral">Paused</StatusBadge> : r.status === "live" && state === "expired" ? <StatusBadge tone="bad">Expired</StatusBadge> : null}
     </>
   );

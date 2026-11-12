@@ -28,25 +28,52 @@ export function displayHost(url: string): string {
   }
 }
 
-type Branded = Pick<ProspectPreview, "slug" | "office_name" | "logo_url" | "brand_primary" | "brand_secondary">;
+type Branded = Pick<ProspectPreview, "slug" | "office_name" | "logo_url" | "brand_primary" | "brand_secondary"> & Partial<Pick<ProspectPreview, "type_feel">>;
 
-function base(p: Branded): Pick<CardData, "company" | "logoUrl" | "photoUrl" | "cardUrl" | "customization"> {
+/** The card's type when their own site is set in a serif. Otherwise the house sans. */
+const SERIF_STACK = "Georgia, 'Times New Roman', serif";
+
+/** A short hash of an address, so a changed logo is never served from a cache. */
+export function logoVersion(url: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < url.length; i++) h = Math.imul(h ^ url.charCodeAt(i), 16777619);
+  return (h >>> 0).toString(36);
+}
+
+/**
+ * Where the page gets the logo WITH ITS MARGIN (lib/prospect-preview/logo-server).
+ * Most logo files are cut tight to the artwork, and the card's tile clips to
+ * the file's edges, so a raw file sits hard against them. The public page of
+ * a published preview and staff's look at a draft each have their own route.
+ */
+export function paddedLogoSrc(p: Pick<ProspectPreview, "id" | "slug" | "logo_url">, forStaff: boolean): string | null {
+  if (!p.logo_url) return null;
+  const v = logoVersion(p.logo_url);
+  return forStaff ? `/api/admin/card-builder/${p.id}/logo?v=${v}` : `/p/${p.slug}/logo?v=${v}`;
+}
+
+/** Their title with their licence line after it, the way a real card prints both. */
+export function titleLine(title: string | null | undefined, license: string | null | undefined): string {
+  return [title, license].map((s) => (s ?? "").trim()).filter(Boolean).join(" · ");
+}
+
+function base(p: Branded, logoSrc?: string | null): Pick<CardData, "company" | "logoUrl" | "photoUrl" | "cardUrl" | "customization"> {
   return {
     company: p.office_name,
-    logoUrl: p.logo_url,
+    logoUrl: p.logo_url ? logoSrc ?? p.logo_url : null,
     photoUrl: null,
     // What the card's QR points at: this preview, never a card that isn't theirs.
     cardUrl: `${APP_HOST}/p/${p.slug}`,
-    customization: { bgColor: p.brand_primary, accentColor: p.brand_secondary },
+    customization: { bgColor: p.brand_primary, accentColor: p.brand_secondary, ...(p.type_feel === "serif" ? { fontFamily: SERIF_STACK } : {}) },
   };
 }
 
 /** The owner's card, at the top of the page and in the link preview. */
-export function ownerCard(p: ProspectPreview): CardData {
+export function ownerCard(p: ProspectPreview, logoSrc?: string | null): CardData {
   return {
-    ...base(p),
+    ...base(p, logoSrc),
     name: p.owner_name,
-    title: p.owner_title ?? "",
+    title: titleLine(p.owner_title, p.license),
     phone: p.phone,
     email: p.email ?? "",
     website: p.website ? displayHost(p.website) : "",
@@ -60,13 +87,13 @@ export function ownerCard(p: ProspectPreview): CardData {
  * title, so the card carries those under the office's logo and colours and
  * invents nothing: no phone number or email that isn't theirs.
  */
-export function memberCard(p: Branded, m: TeamMember): CardData {
-  return { ...base(p), name: m.name, title: m.title, phone: "", email: "", initials: initialsOf(m.name) };
+export function memberCard(p: Branded, m: TeamMember, logoSrc?: string | null): CardData {
+  return { ...base(p, logoSrc), name: m.name, title: m.title, phone: "", email: "", initials: initialsOf(m.name) };
 }
 
 /** A short hash of everything the link-preview picture shows, for its ?v=. */
 export function previewVersion(p: ProspectPreview): string {
-  const s = [p.owner_name, p.owner_title, p.office_name, p.phone, p.email, p.logo_url, p.brand_primary, p.brand_secondary].join("|");
+  const s = [p.owner_name, p.owner_title, p.license, p.office_name, p.phone, p.email, p.logo_url, p.brand_primary, p.brand_secondary].join("|");
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
   return (h >>> 0).toString(36);

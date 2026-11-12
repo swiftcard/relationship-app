@@ -1,6 +1,8 @@
 import {
-  BUYER_ROLES, DEFAULT_BRAND_PRIMARY, DEFAULT_BRAND_SECONDARY, DEFAULT_EXPIRY_DAYS, MAX_TEAM_MEMBERS, SOCIAL_KEYS, SOURCE_FIELDS,
-  type BuyerRole, type FactSources, type PreviewStatus, type SocialLinks, type TeamMember,
+  BUYER_ROLES, CURRENT_TOOLS, DEFAULT_BRAND_PRIMARY, DEFAULT_BRAND_SECONDARY, DEFAULT_EXPIRY_DAYS, HOOK_ANGLES, MAX_SPECIFICS, MAX_TEAM_MEMBERS,
+  SOCIAL_KEYS, SOURCE_FIELDS, SPECIFIC_KINDS, TYPE_FEELS,
+  type BuyerRole, type CurrentTool, type FactSources, type HookAngle, type PreviewStatus, type SocialLinks, type Specific, type SpecificKind,
+  type TeamMember, type TypeFeel,
 } from "./types";
 
 // ── Card Builder: reading the create form ───────────────────────────────────
@@ -115,6 +117,53 @@ export function readSources(v: unknown): FactSources {
   return out;
 }
 
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const oneOf = <T extends string>(list: readonly T[], v: unknown): T | null => ((list as readonly unknown[]).includes(v) ? (v as T) : null);
+
+/**
+ * The specifics, from the database's jsonb or from a form's rows. A row with
+ * no text is not a specific and is dropped; the date is a real calendar day
+ * or it is empty.
+ */
+export function readSpecifics(v: unknown): Specific[] {
+  if (!Array.isArray(v)) return [];
+  const out: Specific[] = [];
+  for (const raw of v) {
+    const r = (raw ?? {}) as Record<string, unknown>;
+    const text = clean(r.text, 240);
+    if (!text) continue;
+    const dated = clean(r.dated, 10);
+    out.push({
+      kind: oneOf<SpecificKind>(SPECIFIC_KINDS, r.kind) ?? "other",
+      text,
+      source_url: cleanSourceUrl(r.source_url) ?? "",
+      dated: ISO_DAY.test(dated) && !Number.isNaN(Date.parse(dated)) ? dated : "",
+      uncertain: r.uncertain === true || r.uncertain === "on" || r.uncertain === "true",
+    });
+    if (out.length >= MAX_SPECIFICS) break;
+  }
+  return out;
+}
+
+/**
+ * The edit screen's rows: spec_kind_<i>, spec_text_<i>, spec_src_<i>,
+ * spec_date_<i>, spec_unc_<i>, and hook_specific as the ROW the hook is built
+ * on. Empty rows are dropped, so the hook's position is moved with its row.
+ */
+export function parseSpecifics(get: (key: string) => unknown): { specifics: Specific[]; hook_specific: number | null } {
+  const picked = clean(get("hook_specific"), 2);
+  const wanted = /^\d$/.test(picked) ? Number(picked) : -1;
+  const specifics: Specific[] = [];
+  let hook_specific: number | null = null;
+  for (let i = 0; i < MAX_SPECIFICS; i++) {
+    const [one] = readSpecifics([{ kind: get(`spec_kind_${i}`), text: get(`spec_text_${i}`), source_url: get(`spec_src_${i}`), dated: get(`spec_date_${i}`), uncertain: get(`spec_unc_${i}`) }]);
+    if (!one) continue;
+    if (i === wanted) hook_specific = specifics.length;
+    specifics.push(one);
+  }
+  return { specifics, hook_specific };
+}
+
 /** Where a fact was found: any http(s) page. */
 export function cleanSourceUrl(v: unknown): string | null {
   const s = clean(v, 600);
@@ -176,6 +225,13 @@ export type PreviewFields = {
   buyer_reason: string | null;
   team_size: number | null;
   detail: string | null;
+  license: string | null;
+  type_feel: TypeFeel | null;
+  current_tool: CurrentTool | null;
+  specifics: Specific[];
+  hook_specific: number | null;
+  hook_angle: HookAngle | null;
+  hook_why: string | null;
 };
 
 export type NewPreviewInput = PreviewFields & {
@@ -273,6 +329,12 @@ export function parsePreviewFields(get: (key: string) => unknown): ParsedFields 
       buyer_reason: clean(get("buyer_reason"), 240) || null,
       team_size,
       detail: clean(get("detail"), 200) || null,
+      license: clean(get("license"), 80) || null,
+      type_feel: oneOf<TypeFeel>(TYPE_FEELS, clean(get("type_feel"), 10)),
+      current_tool: oneOf<CurrentTool>(CURRENT_TOOLS, clean(get("current_tool"), 20)),
+      ...parseSpecifics(get),
+      hook_angle: oneOf<HookAngle>(HOOK_ANGLES, clean(get("hook_angle"), 20)),
+      hook_why: clean(get("hook_why"), 280) || null,
     },
   };
 }

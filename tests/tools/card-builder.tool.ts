@@ -9,7 +9,11 @@ import { SupabaseStore } from "@/lib/crew/store-supabase";
 import type { Lead } from "@/lib/crew/types";
 import { pullBrandColors } from "@/lib/prospect-preview/colors-server";
 import { cleanHttpsUrl, expiryFrom, formatTeam, newSlug, parsePreviewFields, UUID_RE } from "@/lib/prospect-preview/input";
-import { BUYER_ROLE_LABELS, BUYER_ROLES, DEFAULT_EXPIRY_DAYS, SOCIAL_KEYS, SOURCE_FIELDS, type BuyerRole, type ProspectPreview } from "@/lib/prospect-preview/types";
+import { paddedLogoSrc } from "@/lib/prospect-preview/card";
+import { scoreFit, type FitEvidence, type FitInput, type FitKey } from "@/lib/prospect-preview/fit";
+import { buildMessages } from "@/lib/prospect-preview/messages";
+import { assessQuality } from "@/lib/prospect-preview/quality";
+import { BUYER_ROLE_LABELS, BUYER_ROLES, CURRENT_TOOL_LABELS, CURRENT_TOOLS, DEFAULT_EXPIRY_DAYS, MAX_SPECIFICS, SOCIAL_KEYS, SOURCE_FIELDS, type BuyerRole, type CurrentTool, type ProspectPreview } from "@/lib/prospect-preview/types";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 
 // ── Card Builder's command-line tool ────────────────────────────────────────
@@ -23,6 +27,10 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 //   - a preview is created as a DRAFT, and only a draft can be changed
 //   - a headshot needs a source on their own site or brokerage profile
 //   - nobody on the do-not-contact list, and nobody already contacted, is listed
+//   - an office is scored on the six stated criteria, and one that is
+//     disqualified (corporate decides, under 5 people, no named leader, only
+//     a general line and address) is never saved as a lead
+//   - the quality gate's override belongs to the owner: nothing here sets it
 //   - nothing is published and nothing is sent
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL && !/localhost|127\.0\.0\.1/.test(process.env.NEXT_PUBLIC_APP_URL) ? process.env.NEXT_PUBLIC_APP_URL : "https://swiftcard.me";
@@ -117,19 +125,51 @@ async function check(file: string) {
 
 // ── save-leads ──────────────────────────────────────────────────────────────
 
+/** What one office looks like to the scorer (lib/prospect-preview/fit.ts). */
+function fitInput(l: Json): FitInput {
+  const size = Number(l.team_size);
+  return {
+    name: str(l.name),
+    team_size: Number.isInteger(size) && size > 0 ? size : null,
+    phone: str(l.phone),
+    phone_kind: str(l.phone_kind),
+    email: str(l.email),
+    corporate_decides: l.corporate_decides === true,
+    evidence: (l.evidence ?? {}) as Partial<Record<FitKey, FitEvidence>>,
+  };
+}
+
+const toolOf = (l: Json): CurrentTool | null => ((CURRENT_TOOLS as readonly string[]).includes(str(l.current_tool)) ? (str(l.current_tool) as CurrentTool) : null);
+
+/** The score and its breakdown for each office, without saving anything. */
+function fit(file: string) {
+  const list = readJson(file) as Json[];
+  if (!Array.isArray(list)) throw new Error("fit wants a JSON array of offices.");
+  return { ok: true, results: list.map((l) => ({ company: str(l.company) || null, ...scoreFit(fitInput(l)), current_tool: toolOf(l) ? CURRENT_TOOL_LABELS[toolOf(l)!] : "not checked" })) };
+}
+
 /**
  * [{ name, buyer_role, buyer_source, title?, company, website, email?, phone?,
  *    phone_kind?: "mobile" | "direct" | "office line", business_type?, city?,
- *    region?, team_size?, fit: 0-100, why, hook? }]
+ *    region?, team_size?, corporate_decides?, why, hook?,
+ *    current_tool?: paper | link_in_bio | popl | linq | blinq | hihello | dot | other_digital,
+ *    current_tool_source?,
+ *    evidence: { independent, active, in_person, growing: { met: true|false|null, note, source, date } } }]
+ * The score is worked out here from the six criteria; a `fit` number in the
+ * file is ignored.
  */
 async function saveLeads(file: string) {
   const list = readJson(file) as Json[];
   if (!Array.isArray(list)) throw new Error("save-leads wants a JSON array.");
   const refused: { company: string; why: string }[] = [];
+  const disqualified: { company: string; why: string[] }[] = [];
+  const breakdown: Json[] = [];
   const rows: Lead[] = [];
   for (const l of list) {
     const company = str(l.company);
     const refuse = (why: string) => refused.push({ company: company || "(no company)", why });
+    const scored = scoreFit(fitInput(l));
+    if (scored.disqualified.length) { disqualified.push({ company: company || "(no company)", why: scored.disqualified }); continue; }
     if (!company || !str(l.name)) { refuse("needs the company and the decision-maker's name"); continue; }
     if (!(BUYER_ROLES as readonly string[]).includes(str(l.buyer_role))) { refuse("buyer_role must be broker_owner, managing_broker, team_lead or branch_manager: nobody else can buy an Office plan"); continue; }
     const source = cleanHttpsUrl(l.buyer_source) ?? "";
@@ -138,8 +178,9 @@ async function saveLeads(file: string) {
     if (!str(l.email) && !str(l.phone)) { refuse("needs a phone number or an email"); continue; }
     const s = await standing({ company, website, email: str(l.email), phone: str(l.phone) });
     if (s.skip || s.lead_id) { refuse(s.reasons.join("; ")); continue; }
-    const fit = Math.max(0, Math.min(100, Math.round(Number(l.fit) || 0)));
     const size = Number(l.team_size);
+    const tool = toolOf(l);
+    breakdown.push({ company, score: scored.score, lines: scored.lines, current_tool: tool ? CURRENT_TOOL_LABELS[tool] : "not checked" });
     rows.push({
       list: "office",
       name: str(l.name),
@@ -153,13 +194,15 @@ async function saveLeads(file: string) {
       country: "US",
       source_platform: "web",
       source_url: website,
-      score: fit,
+      score: scored.score,
       why: str(l.why).slice(0, 400) || null,
       hook: str(l.hook).slice(0, 300) || null,
       notes: [
         `Decision-maker: ${BUYER_ROLE_LABELS[str(l.buyer_role) as BuyerRole]} (${source}).`,
         str(l.phone) ? `Phone is their ${str(l.phone_kind) || "office line"}.` : "",
         Number.isInteger(size) && size > 0 ? `About ${size} people.` : "",
+        scored.summary,
+        tool ? `Shares contact details today with: ${CURRENT_TOOL_LABELS[tool]}${cleanHttpsUrl(l.current_tool_source) ? ` (${cleanHttpsUrl(l.current_tool_source)})` : ""}.` : "What they share contact details with today: not checked.",
         "Found by /find-offices for Card Builder.",
       ].filter(Boolean).join(" "),
     });
@@ -173,7 +216,7 @@ async function saveLeads(file: string) {
   const { data } = keys.length
     ? await getAdminSupabase().from("crew_leads").select("id, name, title, company, phone, email, city, score, why, source_url").in("company_key", keys).order("score", { ascending: false })
     : { data: [] };
-  return { ok: true, added, stats, refused, saved: data ?? [] };
+  return { ok: true, added, stats, refused, disqualified, breakdown, saved: data ?? [] };
 }
 
 // ── drafts ──────────────────────────────────────────────────────────────────
@@ -182,11 +225,18 @@ async function saveLeads(file: string) {
  * { office_name, owner_name, owner_title?, buyer_role, buyer_reason?, phone,
  *   email?, logo_url?, headshot_url?, address?, website?, specialty?, detail?,
  *   team_size?, brand_primary?, brand_secondary?, crew_lead_id?,
+ *   license?, type_feel?: "sans" | "serif", current_tool?,
+ *   specifics?: [{ kind, text, source_url, dated: "YYYY-MM-DD", uncertain? }]   (up to 6;
+ *     kind: listing | sale | open_house | recruiting | cell_numbers | years | award | other),
+ *   hook_specific?: <position in specifics, from 0>, hook_angle?: views | departures | open_house,
+ *   hook_why?,
  *   team_members?: [{ name, title?, headshot? }],
  *   social_links?: { linkedin?, instagram?, facebook?, x?, youtube?, tiktok?, zillow? },
  *   sources?: { <fact>: { url, uncertain?, note? } } }
  * Facts: owner_name, owner_title, phone, email, logo_url, headshot_url, colors,
- * address, website, social_links, specialty, team_members, buyer_role, team_size, detail.
+ * address, website, social_links, specialty, team_members, buyer_role,
+ * buyer_second (the SECOND site that confirms the name and role), team_size,
+ * detail (the hook's fact), license, current_tool.
  * Leave out anything that wasn't confirmed.
  */
 function fieldsFrom(raw: Json) {
@@ -205,9 +255,34 @@ function fieldsFrom(raw: Json) {
     flat[`note_${k}`] = sources[k]?.note;
   }
   if (typeof raw.team_size === "number") flat.team_size = String(raw.team_size);
+  if (raw.specifics !== undefined && !Array.isArray(raw.specifics)) throw new Error("specifics is a list.");
+  const specifics = (raw.specifics ?? []) as Json[];
+  if (specifics.length > MAX_SPECIFICS) throw new Error(`At most ${MAX_SPECIFICS} specifics. Keep the strongest.`);
+  specifics.forEach((sp, i) => {
+    flat[`spec_kind_${i}`] = sp.kind; flat[`spec_text_${i}`] = sp.text; flat[`spec_src_${i}`] = sp.source_url;
+    flat[`spec_date_${i}`] = sp.dated; flat[`spec_unc_${i}`] = sp.uncertain === true;
+  });
+  if (typeof raw.hook_specific === "number") flat.hook_specific = String(raw.hook_specific);
+  // The override of the quality gate is the owner's, on the edit screen. Never from here.
+  if ("quality_override" in raw) throw new Error("quality_override can't be set from the command line: only the owner overrides the quality gate, on the edit screen.");
   const parsed = parsePreviewFields((k) => flat[k]);
   if (!parsed.ok) throw new Error(parsed.error);
   return parsed.value;
+}
+
+/** The checklist as the edit screen shows it, and the messages that would be written. */
+async function quality(id: string) {
+  if (!UUID_RE.test(id)) throw new Error("quality wants the preview's id.");
+  const { getPreviewById } = await import("@/lib/prospect-preview/store");
+  const p = await getPreviewById(id);
+  if (!p) throw new Error("No preview with that id.");
+  const q = assessQuality(p);
+  const m = buildMessages(p, { link: `${APP_URL}/p/${p.slug}`, sender: null });
+  return {
+    ok: true, status: p.status, score: q.score, too_generic: q.tooGeneric, overridden_by_owner: p.quality_override,
+    checks: q.checks.map((c) => ({ check: c.label, done: c.ok, needed_to_publish: c.required, points: `${c.earned}/${c.points}`, ...(c.fix ? { fix: c.fix } : {}) })),
+    messages: { opens_with_the_hook: m.specific, first_text: m.ask, text_with_link: m.text, email_subject: m.email.subject, email: m.email.body },
+  };
 }
 
 const links = (p: { id: string; slug: string }) => ({
@@ -254,7 +329,11 @@ async function shots(id: string, dir?: string) {
   const { renderToStaticMarkup } = await import("react-dom/server");
   const { createElement } = await import("react");
   const { default: PreviewView } = await import("@/app/p/[slug]/PreviewView");
-  const markup = renderToStaticMarkup(createElement(PreviewView, { preview, calendarUrl: "/demo" }));
+  const logoSrc = paddedLogoSrc(preview, false);
+  const { logoResponse } = await import("@/lib/prospect-preview/logo-server");
+  const logo = logoSrc ? await logoResponse(preview.logo_url) : null;
+  const logoPng = logo?.ok ? Buffer.from(await logo.arrayBuffer()) : null;
+  const markup = renderToStaticMarkup(createElement(PreviewView, { preview, calendarUrl: "/demo", logoSrc: logoPng ? logoSrc : null }));
   const css = await appCss();
   const outDir = dir || join(tmpdir(), "card-builder-shots");
   mkdirSync(outDir, { recursive: true });
@@ -265,6 +344,8 @@ async function shots(id: string, dir?: string) {
       const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 2 });
       // The app's own files (the SwiftCard icon) come from ./public, not the live site.
       await page.route("http://card-builder.local/**", (route) => {
+        // The padded logo is a route of the app; here it is made by the same code.
+        if (logoPng && /^\/p\/[^/]+\/logo$/.test(new URL(route.request().url()).pathname)) return route.fulfill({ contentType: "image/png", body: logoPng });
         const file = join("public", decodeURIComponent(new URL(route.request().url()).pathname));
         return existsSync(file) ? route.fulfill({ path: file }) : route.fulfill({ status: 404, body: "" });
       });
@@ -308,6 +389,8 @@ async function run(args: string[]): Promise<Json> {
   switch (cmd) {
     case "leads": return leads(args.slice(1));
     case "check": return check(a);
+    case "fit": return fit(a);
+    case "quality": return quality(a);
     case "save-leads": return saveLeads(a);
     case "create-draft": return createDraft(a);
     case "update-draft": return updateDraft(a, b);

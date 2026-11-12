@@ -1,8 +1,8 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { VIEW_VISIT_WINDOW_MS } from "@/lib/view-window";
-import { expiryFrom, readSocials, readSources, readTeam, type NewPreviewInput, type PreviewFields } from "./input";
+import { expiryFrom, readSocials, readSources, readSpecifics, readTeam, type NewPreviewInput, type PreviewFields } from "./input";
 import { outcomeEffect, type CallOutcome } from "./call";
-import { BUYER_ROLES, DEFAULT_EXPIRY_DAYS, type BuyerRole, type DeviceType, type FactSources, type LiveAlert, type PreviewListRow, type ProspectPreview } from "./types";
+import { BUYER_ROLES, CURRENT_TOOLS, DEFAULT_EXPIRY_DAYS, HOOK_ANGLES, TYPE_FEELS, type BuyerRole, type CurrentTool, type HookAngle, type TypeFeel, type DeviceType, type FactSources, type LiveAlert, type PreviewListRow, type ProspectPreview } from "./types";
 
 // ── Card Builder: the database ──────────────────────────────────────────────
 // Both tables are RLS-on with no policies (supabase/prospect-previews.sql), so
@@ -37,6 +37,15 @@ function toPreview(row: Record<string, unknown>): ProspectPreview {
     buyer_reason: (row.buyer_reason as string | null) ?? null,
     team_size: typeof row.team_size === "number" ? row.team_size : null,
     detail: (row.detail as string | null) ?? null,
+    license: (row.license as string | null) ?? null,
+    type_feel: (TYPE_FEELS as readonly unknown[]).includes(row.type_feel) ? (row.type_feel as TypeFeel) : null,
+    current_tool: (CURRENT_TOOLS as readonly unknown[]).includes(row.current_tool) ? (row.current_tool as CurrentTool) : null,
+    specifics: readSpecifics(row.specifics),
+    hook_specific: typeof row.hook_specific === "number" ? row.hook_specific : null,
+    hook_angle: (HOOK_ANGLES as readonly unknown[]).includes(row.hook_angle) ? (row.hook_angle as HookAngle) : null,
+    hook_why: (row.hook_why as string | null) ?? null,
+    quality_override: row.quality_override === true,
+    quality_override_at: (row.quality_override_at as string | null) ?? null,
     call_outcome: (row.call_outcome as string | null) ?? null,
     call_outcome_at: (row.call_outcome_at as string | null) ?? null,
     team_members: readTeam(row.team_members),
@@ -128,6 +137,16 @@ export async function publishPreview(id: string, now: Date = new Date()): Promis
   const { data, error } = await getAdminSupabase().from(PREVIEWS)
     .update({ status: "live", expires_at: expiryFrom(DEFAULT_EXPIRY_DAYS, now), updated_at: now.toISOString() })
     .eq("id", id).neq("status", "live").select("id");
+  return !error && !!data?.length;
+}
+
+/**
+ * The owner's override of the quality gate: "I know this one is thin, let it
+ * go out anyway" (or taking that back). Only ever set from the edit screen.
+ */
+export async function setQualityOverride(id: string, on: boolean, now: Date = new Date()): Promise<boolean> {
+  const { data, error } = await getAdminSupabase().from(PREVIEWS)
+    .update({ quality_override: on, quality_override_at: on ? now.toISOString() : null, updated_at: now.toISOString() }).eq("id", id).select("id");
   return !error && !!data?.length;
 }
 

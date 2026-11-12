@@ -6,7 +6,11 @@ import { Icon } from "../../../_ui/icons";
 import { fmtDate } from "../../../_ui/format";
 import { formatTeam } from "@/lib/prospect-preview/input";
 import { previewState } from "@/lib/prospect-preview/real-view";
-import { BUYER_ROLES, BUYER_ROLE_LABELS, MAX_TEAM_MEMBERS, SOCIAL_KEYS, SOCIAL_LABELS, SOURCE_FIELDS, SOURCE_LABELS, type ProspectPreview } from "@/lib/prospect-preview/types";
+import { assessQuality } from "@/lib/prospect-preview/quality";
+import {
+  BUYER_ROLES, BUYER_ROLE_LABELS, CURRENT_TOOLS, CURRENT_TOOL_LABELS, HOOK_ANGLES, HOOK_ANGLE_LABELS, MAX_SPECIFICS, MAX_TEAM_MEMBERS, MIN_SPECIFICS,
+  SOCIAL_KEYS, SOCIAL_LABELS, SOURCE_FIELDS, SOURCE_LABELS, SPECIFIC_KINDS, SPECIFIC_LABELS, type ProspectPreview,
+} from "@/lib/prospect-preview/types";
 import CopyPreviewLink from "../../CopyPreviewLink";
 
 // ── Card Builder: the edit screen (server component, no data loading) ───────
@@ -23,6 +27,8 @@ const DONE: Record<string, string> = {
   published: "Published. The link opens now.",
   unpublished: "Back to a draft. The link no longer opens.",
   colors: "Colors read. Check them on the preview.",
+  override_on: "Override on. This preview can be published as it is.",
+  override_off: "Override removed.",
 };
 
 const input = "sc-field w-full px-3 py-2";
@@ -51,6 +57,8 @@ export default function EditView({ p, appUrl, now, done, error }: {
   const live = state === "live";
   const unsure = SOURCE_FIELDS.filter((k) => p.sources[k]?.uncertain);
   const flag = (k: (typeof SOURCE_FIELDS)[number]) => !!p.sources[k]?.uncertain;
+  const q = assessQuality(p);
+  const rows = Array.from({ length: MAX_SPECIFICS }, (_, i) => p.specifics[i] ?? null);
 
   return (
     <Stack>
@@ -74,6 +82,11 @@ export default function EditView({ p, appUrl, now, done, error }: {
       {done && DONE[done] && <p className="adm-callout-good sc-t-subhead rounded-xl px-4 py-3" role="status">{DONE[done]}</p>}
       {done === "failed" && <p className="adm-callout-danger sc-t-subhead rounded-xl px-4 py-3" role="alert">That didn&apos;t work. Try again in a minute.</p>}
       {error && <p className="adm-callout-danger sc-t-subhead rounded-xl px-4 py-3" role="alert">{error} Nothing was saved.</p>}
+      {done === "held" && (
+        <p className="adm-callout-danger sc-t-subhead rounded-xl px-4 py-3" role="alert" data-held>
+          <span className="font-semibold">Saved, but not published.</span> This draft is too generic to send. Fix what the checklist below marks, or override it there.
+        </p>
+      )}
 
       {live ? (
         <div className="adm-callout-good rounded-xl px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -92,15 +105,60 @@ export default function EditView({ p, appUrl, now, done, error }: {
         </p>
       )}
 
+      <Section
+        title={`Personalization: ${q.score} of 100`}
+        hint="Would this preview, and the messages written from it, make sense for any other office? If so it isn't ready."
+        id="pp-quality"
+      >
+        {q.tooGeneric ? (
+          <p className="adm-callout-danger sc-t-subhead rounded-xl px-4 py-3" data-too-generic>
+            <span className="font-semibold">Too generic.</span>{" "}
+            {p.quality_override
+              ? "You overrode this, so it can be published as it is."
+              : "It can't be published until the items marked Needed are fixed, or you override it."}
+          </p>
+        ) : (
+          <p className="adm-callout-good sc-t-subhead rounded-xl px-4 py-3" data-specific-enough>Specific enough to send.</p>
+        )}
+        <ul className="mt-3 space-y-2.5" data-quality-checks>
+          {q.checks.map((c) => (
+            <li key={c.key} className="flex items-start gap-3" data-check={c.key} data-ok={c.ok ? "yes" : "no"}>
+              <span className="shrink-0 w-[4.5rem]">
+                <StatusBadge tone={c.ok ? "good" : c.required ? "bad" : "neutral"}>{c.ok ? "Done" : c.required ? "Needed" : "Missing"}</StatusBadge>
+              </span>
+              <span className="min-w-0 sc-t-subhead" style={{ overflowWrap: "anywhere" }}>
+                <span className="font-medium">{c.label}</span>
+                <span className="adm-muted"> · {c.earned} of {c.points}</span>
+                {c.fix && <span className="adm-muted block sc-t-footnote mt-0.5">{c.fix}</span>}
+              </span>
+            </li>
+          ))}
+        </ul>
+        {(q.tooGeneric || p.quality_override) && (
+          <form method="post" action={post} className="mt-4 flex flex-wrap items-center gap-2" data-override>
+            <input type="hidden" name="action" value="override" />
+            <input type="hidden" name="on" value={p.quality_override ? "0" : "1"} />
+            <input type="hidden" name="back" value={here} />
+            <button type="submit" className="sc-btn sc-btn-sm sc-btn-gray">{p.quality_override ? "Remove my override" : "Override: let me publish it as it is"}</button>
+            <span className="sc-t-caption adm-muted">Only you can do this, here. Save your changes first: this button doesn&apos;t save the form below.</span>
+          </form>
+        )}
+      </Section>
+
       <form method="post" action={post} id="pp-edit">
         <input type="hidden" name="back" value={here} />
         <Stack>
           <Section title="The owner" hint="The person who can say yes for the whole office.">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Owner's name" flag={flag("owner_name")}><input name="owner_name" required maxLength={80} defaultValue={p.owner_name} className={input} autoComplete="off" /></Field>
-              <Field label="Owner's title" flag={flag("owner_title")}><input name="owner_title" maxLength={80} defaultValue={p.owner_title ?? ""} className={input} autoComplete="off" /></Field>
+              <Field label="Owner's title" hint="Exactly as they write it." flag={flag("owner_title")}><input name="owner_title" maxLength={80} defaultValue={p.owner_title ?? ""} className={input} autoComplete="off" /></Field>
               <Field label="Owner's phone" hint="The alert tells you to call this number." flag={flag("phone")}><input name="phone" type="tel" required maxLength={40} defaultValue={p.phone} className={input} autoComplete="off" /></Field>
               <Field label="Owner's email" flag={flag("email")}><input name="email" type="email" maxLength={160} defaultValue={p.email ?? ""} className={input} autoComplete="off" /></Field>
+              <div className="sm:col-span-2">
+                <Field label="License line" hint="Only if they show one, exactly as they show it: Licensed Real Estate Broker; NMLS #123456. Printed after their title on the card." flag={flag("license")}>
+                  <input name="license" maxLength={80} defaultValue={p.license ?? ""} className={input} autoComplete="off" />
+                </Field>
+              </div>
               <div className="sm:col-span-2">
                 <Field label="Headshot address" hint="Only a picture from their own business website or brokerage profile, and name that page under Sources. Leave empty otherwise." flag={flag("headshot_url")}>
                   <input name="headshot_url" type="url" maxLength={600} defaultValue={p.headshot_url ?? ""} className={input} placeholder="https://" autoComplete="off" />
@@ -125,9 +183,54 @@ export default function EditView({ p, appUrl, now, done, error }: {
                   <input name="buyer_reason" maxLength={240} defaultValue={p.buyer_reason ?? ""} className={input} autoComplete="off" />
                 </Field>
               </div>
+            </div>
+          </Section>
+
+          <Section
+            title="Specifics"
+            hint={`True, checkable things about this office beyond its name, logo and location. At least ${MIN_SPECIFICS}, each with the page it is on and a date: the day it happened, or the day you read it.`}
+          >
+            <ul className="space-y-4" data-specifics>
+              {rows.map((sp, i) => (
+                <li key={i} className="grid gap-2 sm:grid-cols-[11rem_minmax(0,1fr)]" data-specific-row>
+                  <select name={`spec_kind_${i}`} defaultValue={sp?.kind ?? "listing"} aria-label={`Kind of specific ${i + 1}`} className="sc-field sc-field-fit px-3 py-2 text-sm w-full">
+                    {SPECIFIC_KINDS.map((k) => <option key={k} value={k}>{SPECIFIC_LABELS[k]}</option>)}
+                  </select>
+                  <input name={`spec_text_${i}`} maxLength={240} defaultValue={sp?.text ?? ""} placeholder={i === 0 ? "Listing at 412 4th St, Park Slope, $2.15M" : `Specific ${i + 1}`} aria-label={`Specific ${i + 1}`} className="sc-field sc-field-fit px-3 py-2 text-sm min-w-0 w-full" autoComplete="off" />
+                  <input name={`spec_date_${i}`} type="date" defaultValue={sp?.dated ?? ""} aria-label={`Date of specific ${i + 1}`} className="sc-field sc-field-fit px-3 py-2 text-sm w-full" />
+                  <div className="flex flex-wrap items-center gap-3 min-w-0">
+                    <input name={`spec_src_${i}`} type="url" maxLength={600} defaultValue={sp?.source_url ?? ""} placeholder="https:// where it was found" aria-label={`Source for specific ${i + 1}`} className="sc-field sc-field-fit px-3 py-2 text-sm min-w-0 flex-1 basis-48" autoComplete="off" />
+                    <label className="inline-flex items-center gap-2 sc-t-footnote min-h-[32px]">
+                      <input type="checkbox" name={`spec_unc_${i}`} defaultChecked={!!sp?.uncertain} className="w-4 h-4" style={{ accentColor: "var(--sc-tint)" }} />Uncertain
+                    </label>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Section>
+
+          <Section title="The hook" hint="One specific, and why it matters to them. Every text, the email and the call opener lead with it. &quot;You cover Park Slope&quot; is not a hook.">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
-                <Field label="Specific detail" hint="Finishes the sentence &quot;I noticed …&quot;: your new listing on Hicks Street; you cover Park Slope and Windsor Terrace." flag={flag("detail")}>
+                <Field label="The fact" hint="Finishes the sentence &quot;I saw …&quot;: all 8 of your agents list their own cell number on your site." flag={flag("detail")}>
                   <input name="detail" maxLength={200} defaultValue={p.detail ?? ""} className={input} autoComplete="off" />
+                </Field>
+              </div>
+              <Field label="Built on" hint="Which of the specifics above it comes from.">
+                <select name="hook_specific" defaultValue={p.hook_specific ?? ""} className={input}>
+                  <option value="">Choose…</option>
+                  {rows.map((sp, i) => <option key={i} value={i}>{`${i + 1}. ${sp ? sp.text.slice(0, 60) : "(empty row)"}`}</option>)}
+                </select>
+              </Field>
+              <Field label="Leads to" hint="What SwiftCard does about it.">
+                <select name="hook_angle" defaultValue={p.hook_angle ?? ""} className={input}>
+                  <option value="">Choose…</option>
+                  {HOOK_ANGLES.map((a) => <option key={a} value={a}>{HOOK_ANGLE_LABELS[a]}</option>)}
+                </select>
+              </Field>
+              <div className="sm:col-span-2">
+                <Field label="Why it matters to them" hint="One full sentence, said to them: When one of them moves on, the clients who saved that number go with them.">
+                  <input name="hook_why" maxLength={280} defaultValue={p.hook_why ?? ""} className={input} autoComplete="off" />
                 </Field>
               </div>
             </div>
@@ -141,7 +244,7 @@ export default function EditView({ p, appUrl, now, done, error }: {
                 <Field label="Office address" flag={flag("address")}><input name="address" maxLength={200} defaultValue={p.address ?? ""} className={input} autoComplete="off" /></Field>
               </div>
               <div className="sm:col-span-2">
-                <Field label="Specialty" hint="One line under their name on the preview: what this office is known for." flag={flag("specialty")}>
+                <Field label="Tagline" hint="Their own line about themselves, as they write it. Shown under their name on the preview." flag={flag("specialty")}>
                   <input name="specialty" maxLength={140} defaultValue={p.specialty ?? ""} className={input} autoComplete="off" />
                 </Field>
               </div>
@@ -150,13 +253,25 @@ export default function EditView({ p, appUrl, now, done, error }: {
                   <input name="logo_url" type="url" maxLength={600} defaultValue={p.logo_url ?? ""} className={input} placeholder="https://" autoComplete="off" />
                 </Field>
               </div>
+              <Field label="Type feel" hint="Match their own site and logo.">
+                <select name="type_feel" defaultValue={p.type_feel ?? "sans"} className={input}>
+                  <option value="sans">Sans-serif (clean, modern)</option>
+                  <option value="serif">Serif (classic, like a printed card)</option>
+                </select>
+              </Field>
+              <Field label="What they use today" hint="To share contact details. A competitor doesn't rule them out; it changes what you say on the call." flag={flag("current_tool")}>
+                <select name="current_tool" defaultValue={p.current_tool ?? ""} className={input}>
+                  <option value="">Not checked yet</option>
+                  {CURRENT_TOOLS.map((t) => <option key={t} value={t}>{CURRENT_TOOL_LABELS[t]}</option>)}
+                </select>
+              </Field>
               <Field label="Brand color" flag={flag("colors")}><input name="brand_primary" type="color" defaultValue={p.brand_primary} className="sc-field w-full h-11 p-1" /></Field>
               <Field label="Accent color"><input name="brand_secondary" type="color" defaultValue={p.brand_secondary} className="sc-field w-full h-11 p-1" /></Field>
             </div>
           </Section>
 
           <Section title="Team" hint={`Each gets a card in the "Your team" strip. Up to ${MAX_TEAM_MEMBERS}.`}>
-            <Field label="Team members" hint="One per line: Name, Title, then (if you have it) the https:// address of their picture." flag={flag("team_members")}>
+            <Field label="Team members" hint="One per line: Name, Title, then (if you have it) the https:// address of their picture. Use each person's real title. If their site gives none, use their license type or leave it off. Never invent one." flag={flag("team_members")}>
               <textarea name="team_members" rows={6} defaultValue={formatTeam(p.team_members)} className={input} />
             </Field>
           </Section>

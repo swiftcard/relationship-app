@@ -113,9 +113,9 @@ describe("the page shows the card and one button, and never sells", () => {
   const view = read("src/app/p/[slug]/PreviewView.tsx");
 
   it("has the owner's card, the team strip, the notification, the button and the credit", () => {
-    expect(view).toContain("<Card data={ownerCard(preview)} />");
+    expect(view).toContain("<Card data={ownerCard(preview, logoSrc)} />");
     expect(view).toContain("data-team-strip");
-    expect(view).toContain("<Card data={memberCard(preview, m)} />");
+    expect(view).toContain("<Card data={memberCard(preview, m, logoSrc)} />");
     expect(view).toContain("data-mock-notification");
     expect(view).toContain("Claim your team&apos;s cards, 15-min setup call");
     expect(view).toContain("Preview made by SwiftCard.");

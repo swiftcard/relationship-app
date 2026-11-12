@@ -1,5 +1,5 @@
-import { possessive } from "./messages";
-import { BUYER_ROLE_LABELS, type BuyerRole, type PreviewListRow } from "./types";
+import { hookLines, possessive } from "./messages";
+import { BUYER_ROLE_LABELS, COMPETITOR_TOOLS, CURRENT_TOOL_LABELS, HOOK_ANGLE_LABELS, type BuyerRole, type PreviewListRow } from "./types";
 
 // ── Card Builder: what to say on the call ───────────────────────────────────
 // The Call screen's brief, written from what we know about this prospect and
@@ -31,10 +31,17 @@ export type CallBrief = {
   /** People on the team, when it was researched; null when it wasn't (the cards on the preview are a sample, not a headcount). */
   teamSize: number | null;
   opener: string;
+  /** The opener leads with this prospect's hook. False = it could be said to anyone: fix the hook first. */
+  specific: boolean;
+  /** What the hook leads to ("Keeping contacts when an agent leaves"); null without one. */
+  angle: string | null;
+  /** What they share contact details with today; null when nobody recorded it. */
+  currentTool: string | null;
   objections: { they: string; you: string }[];
 };
 
-type About = Pick<PreviewListRow, "owner_name" | "office_name" | "buyer_role" | "buyer_reason" | "team_size" | "detail" | "views" | "team_strip_scrolled" | "sent_at">;
+type About = Pick<PreviewListRow, "owner_name" | "office_name" | "buyer_role" | "buyer_reason" | "team_size" | "detail" | "views" | "team_strip_scrolled" | "sent_at">
+  & Partial<Pick<PreviewListRow, "hook_why" | "hook_angle" | "current_tool">>;
 
 const firstName = (name: string) => name.trim().split(/\s+/)[0] || name.trim();
 const sentence = (s: string) => (/[.!?]$/.test(s) ? s : `${s}.`);
@@ -46,21 +53,42 @@ export function callBrief(p: About, opts: { sender: string | null }): CallBrief 
   const whyBuyer = role || p.buyer_reason ? [role, p.buyer_reason ? sentence(p.buyer_reason) : null].filter(Boolean).join(": ") : null;
   const teamSize = p.team_size;
   const people = teamSize && teamSize > 1 ? `all ${teamSize} of you` : "your whole team";
-  const noticed = p.detail ? ` I noticed ${sentence(p.detail)}` : "";
+  const hook = hookLines({ detail: p.detail, hook_why: p.hook_why ?? null });
+  // The fact first, then why it matters to them, then the card as the proof.
+  const noticed = hook ? ` ${hook.saw} ${hook.why}` : p.detail ? ` I noticed ${sentence(p.detail)}` : "";
+  const tool = p.current_tool ?? null;
+  const toolName = tool ? CURRENT_TOOL_LABELS[tool] : null;
 
   const opener = p.views > 0
-    ? `Hi ${first}, it's ${me}. I sent you the card I made for you and the team at ${p.office_name}.${noticed} ${p.team_strip_scrolled ? "Did the team's cards look right to you?" : "Did you get a chance to look at it?"}`
-    : `Hi ${first}, it's ${me}. I ${p.sent_at ? "sent you" : "made"} a digital business card for you and the team at ${p.office_name}.${noticed} Do you have two minutes?`;
+    ? `Hi ${first}, it's ${me}.${noticed} ${hook ? "That's why I sent you" : "I sent you"} the card I made for you and the team at ${p.office_name}. ${p.team_strip_scrolled ? "Did the team's cards look right to you?" : "Did you get a chance to look at it?"}`
+    : `Hi ${first}, it's ${me}.${noticed} ${hook ? "So I" : "I"} ${p.sent_at ? "sent you" : "made"} a digital business card for you and the team at ${p.office_name}. Do you have two minutes?`;
+
+  // What they use today decides the first objection: a competitor in use isn't
+  // a reason to skip them, it is a different conversation.
+  const already = tool && COMPETITOR_TOOLS.includes(tool)
+    ? {
+        they: tool === "other_digital" ? "We already use a digital card." : `We already use ${toolName}.`,
+        you: `Good, so your agents already share that way and there's nothing new to learn. What I built is the office's side of it: every card in ${possessive(p.office_name)} branding on one account, you can see when a client opens one, and the contacts stay with the office when an agent leaves. Put the card I made you next to the one you have and tell me which you'd rather hand a client.`,
+      }
+    : tool === "link_in_bio"
+      ? {
+          they: "We already have a link in our bio.",
+          you: `Keep it. A link in a bio is for people who already follow you. A card is what you hand the person standing in front of you, and one tap saves you in their phone. Everyone gets one in ${possessive(p.office_name)} branding like the one I made you, and you can see when a client opens it.${p.views > 0 ? " That's how I knew to call: you opened yours." : ""}`,
+        }
+      : {
+          they: "We already have business cards.",
+          you: `Keep them. This is the one you text or tap. Everyone gets a card in ${possessive(p.office_name)} branding like the one I made you, and you can see when a client opens it.${p.views > 0 ? " That's how I knew to call: you opened yours." : ""}`,
+        };
 
   return {
     whyBuyer,
     teamSize,
     opener,
+    specific: !!hook,
+    angle: hook && p.hook_angle ? HOOK_ANGLE_LABELS[p.hook_angle] : null,
+    currentTool: toolName,
     objections: [
-      {
-        they: "We already have business cards.",
-        you: `Keep them. This is the one you text or tap. Everyone gets a card in ${possessive(p.office_name)} branding like the one I made you, and you can see when a client opens it.${p.views > 0 ? " That's how I knew to call: you opened yours." : ""}`,
-      },
+      already,
       {
         they: "I'm busy, just send me some information.",
         you: `The card I sent is the information: it's already built, with your name and your team on it. All that's left is a 15-minute setup call and I'll have ${people} live. Is tomorrow morning or afternoon better?`,
