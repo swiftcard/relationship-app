@@ -18,6 +18,16 @@ export function initialsOf(name: string): string {
   return name.split(/\s+/).filter(Boolean).map((n) => n[0]).join("").slice(0, 2).toUpperCase();
 }
 
+/** "https://www.harborrealty.com/" → "harborrealty.com", as a card prints it. */
+export function displayHost(url: string): string {
+  try {
+    const u = new URL(url);
+    return (u.hostname.replace(/^www\./, "") + u.pathname.replace(/\/$/, "")).slice(0, 60);
+  } catch {
+    return "";
+  }
+}
+
 type Branded = Pick<ProspectPreview, "slug" | "office_name" | "logo_url" | "brand_primary" | "brand_secondary">;
 
 function base(p: Branded): Pick<CardData, "company" | "logoUrl" | "photoUrl" | "cardUrl" | "customization"> {
@@ -39,6 +49,8 @@ export function ownerCard(p: ProspectPreview): CardData {
     title: p.owner_title ?? "",
     phone: p.phone,
     email: p.email ?? "",
+    website: p.website ? displayHost(p.website) : "",
+    address: p.address ?? "",
     initials: initialsOf(p.owner_name),
   };
 }

@@ -48,6 +48,12 @@ const PREVIEW: ProspectPreview = {
   phone: "(212) 555-0199",
   email: "dana@harborrealtygroup.com",
   logo_url: null,
+  headshot_url: null,
+  address: null,
+  website: null,
+  social_links: {},
+  specialty: null,
+  sources: {},
   brand_primary: "#0B3D2E",
   brand_secondary: "#E7C873",
   team_members: [
@@ -166,6 +172,110 @@ describe("/p/<slug> with nothing optional filled in", () => {
   });
 });
 
+// A 1x1 picture, so a headshot loads without the network.
+const PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+const RICH: ProspectPreview = {
+  ...PREVIEW,
+  headshot_url: PIXEL,
+  address: "1200 Atlantic Avenue, Suite 400, Brooklyn Heights, Brooklyn, NY 11201",
+  website: "https://www.harborrealtygroup-brooklynheights.com/",
+  specialty: "Brownstones and pre-war co-ops in Brooklyn Heights, Cobble Hill and Carroll Gardens since 1987",
+  social_links: { instagram: "https://instagram.com/harbor", linkedin: "https://linkedin.com/company/harbor", zillow: "https://zillow.com/profile/harbor" },
+  team_members: [{ name: "Marcus Lee", title: "Office Manager", headshot: PIXEL }, { name: "Priyanka Venkataraman-Fitzgerald", title: "Senior Residential Sales Associate" }],
+  sources: { phone: { url: "https://harbor.example/contact", uncertain: true, note: "Office line, not her mobile" }, owner_name: { url: "https://harbor.example/about", uncertain: false, note: "" } },
+};
+
+describe.each([390, 1280])("/p/<slug> with everything filled in, at %ipx", (width) => {
+  it("shows the headshot, the specialty, the address and website on the card, and names the social links without linking them", async () => {
+    const page = await open(width, await previewMarkup(RICH));
+    const m = await page.evaluate(() => {
+      const face = document.querySelector("[data-owner-face] img")!.getBoundingClientRect();
+      const special = document.querySelector("[data-specialty]")!.getBoundingClientRect();
+      return {
+        sideways: document.documentElement.scrollWidth > window.innerWidth,
+        face: [Math.round(face.width), Math.round(face.height)],
+        specialRight: special.right, vw: window.innerWidth,
+        card: document.querySelector("[data-owner-card]")!.textContent ?? "",
+        socials: (document.querySelector("[data-socials]") as HTMLElement).innerText,
+        links: [...document.querySelectorAll("a")].filter((a) => !a.closest("[inert]")).length,
+        memberFaces: document.querySelectorAll("[data-member-face]").length,
+        memberPics: document.querySelectorAll("[data-member-face] img").length,
+      };
+    });
+    expect(m.sideways).toBe(false);
+    expect(m.face).toEqual([72, 72]);
+    expect(m.specialRight).toBeLessThanOrEqual(m.vw);
+    expect(m.card).toContain("harborrealtygroup-brooklynheights.com");
+    expect(m.card).toContain("1200 Atlantic Avenue");
+    expect(m.socials).toBe("Your card links to your LinkedIn, Instagram and Zillow.");
+    // Still one thing to tap.
+    expect(m.links).toBe(1);
+    // One teammate has a picture, so every teammate gets a face row (initials for the other).
+    expect(m.memberFaces).toBe(2);
+    expect(m.memberPics).toBe(1);
+    await page.close();
+  });
+});
+
+// ── The edit screen ─────────────────────────────────────────────────────────
+
+async function editMarkup(p: ProspectPreview, props: Record<string, unknown> = {}): Promise<string> {
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { createElement } = await import("react");
+  const { default: AdminShell } = await import("@/app/admin/AdminShell");
+  const { default: EditView } = await import("@/app/admin/card-builder/edit/[id]/EditView");
+  const view = createElement(EditView, { p, appUrl: "https://swiftcard.me", now: Date.parse("2026-11-11T15:00:00Z"), done: null, error: null, ...props } as React.ComponentProps<typeof EditView>);
+  return renderToStaticMarkup(createElement(AdminShell, { email: "hello@swiftcard.me", unread: 0 }, view));
+}
+
+describe.each([390, 1280])("/admin/card-builder/edit/<id> at %ipx", (width) => {
+  it("a draft: every field is editable, nothing spills, and it says the link doesn't open yet", async () => {
+    const page = await open(width, await editMarkup({ ...RICH, status: "draft" }, { error: "The website needs a full https:// address." }), adminCss);
+    const m = await page.evaluate(() => {
+      const vw = window.innerWidth;
+      const spill: string[] = [];
+      document.querySelectorAll(".adm-card, form, input, textarea, h1, h2, .sc-btn, [data-source-row], [role=alert]").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && (r.right > vw + 0.5 || r.left < -0.5)) spill.push(`${el.tagName}.${String(el.className).slice(0, 50)} → ${Math.round(r.left)}..${Math.round(r.right)}`);
+      });
+      const names = [...document.querySelectorAll("#pp-edit [name]")].map((el) => el.getAttribute("name"));
+      return {
+        sideways: document.documentElement.scrollWidth > vw, spill, names,
+        text: document.body.innerText,
+        publish: !!document.querySelector("[data-publish]"),
+        copy: [...document.querySelectorAll("button")].some((b) => b.textContent === "Copy link"),
+        team: (document.querySelector('textarea[name="team_members"]') as HTMLTextAreaElement).value,
+      };
+    });
+    expect(m.spill).toEqual([]);
+    expect(m.sideways).toBe(false);
+    for (const n of ["owner_name", "owner_title", "phone", "email", "headshot_url", "office_name", "website", "address", "specialty", "logo_url", "brand_primary", "brand_secondary", "team_members", "social_linkedin", "social_zillow", "src_phone", "unc_phone", "note_phone", "src_team_members"]) {
+      expect(m.names).toContain(n);
+    }
+    expect(m.text).toContain("This is a draft.");
+    expect(m.text).toContain("Check before you publish: Phone.");
+    expect(m.text).toContain("The website needs a full https:// address. Nothing was saved.");
+    expect(m.publish).toBe(true);
+    // No link to copy for a page that would 404.
+    expect(m.copy).toBe(false);
+    expect(m.team).toContain("Marcus Lee, Office Manager, data:");
+    await page.close();
+  });
+
+  it("a published one: the link to copy, Save, and a way back to draft", async () => {
+    const page = await open(width, await editMarkup(RICH), adminCss);
+    const m = await page.evaluate(() => ({
+      text: document.body.innerText,
+      publish: !!document.querySelector("[data-publish]"),
+      unpublish: !!document.querySelector('input[name="action"][value="unpublish"]'),
+      copy: [...document.querySelectorAll("button")].some((b) => b.textContent === "Copy link"),
+    }));
+    expect(m.text).toContain("Link opens until");
+    expect(m).toMatchObject({ publish: false, unpublish: true, copy: true });
+    await page.close();
+  });
+});
+
 // ── The admin page ──────────────────────────────────────────────────────────
 
 const NOW = Date.parse("2026-11-11T15:00:00Z");
@@ -181,6 +291,7 @@ const ROWS: PreviewListRow[] = [
     notes: "Wants cards for all 14 agents. Call back Thursday after their sales meeting.", views: 1, devices: 1, last_viewed_at: "2026-11-10T17:40:00Z",
   }),
   row({ id: "33333333-2222-4333-8444-555555555555", slug: "old-one-abc234", expires_at: "2026-11-01T00:00:00Z" }),
+  row({ id: "44444444-2222-4333-8444-555555555555", slug: "draft-one-abc234", status: "draft" }),
 ];
 
 async function adminMarkup(props: Record<string, unknown>): Promise<string> {
@@ -220,7 +331,12 @@ describe.each([390, 1280])("/admin/card-builder at %ipx", (width) => {
       copy: [...li.querySelectorAll("button")].some((b) => b.textContent === "Copy link"),
       del: !!li.querySelector('input[name="action"][value="delete"]'),
     })));
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(4);
+    // A draft says so, has no link to copy, and its way forward is the edit screen.
+    expect(rows[3].text).toContain("Draft");
+    expect(rows[3].text).toContain("not published yet");
+    expect(rows[3].text).toContain("Edit and publish");
+    expect(rows[3]).toMatchObject({ copy: false, del: true });
     expect(rows[0].text).toContain("3 real views");
     expect(rows[0].text).toContain("last viewed 2m ago");
     expect(rows[0].text).toContain("2 devices");

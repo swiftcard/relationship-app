@@ -45,6 +45,8 @@ export const UNDOCUMENTED_ROUTES: Record<string, string> = {
   "/admin/crew/blog": "Staff console — the Blog Writer: Generate writes two SwiftCard blog posts, staff publish one to swiftcard.me/blog. Never describe it to a customer.",
   "/admin/crew/agent/[id]": "Staff console — one internal AI agent: its status, schedule, this week's activity and raw run records. Never describe it to a customer.",
   "/admin/card-builder": "Staff console — Card Builder: staff build a preview card for a sales prospect's office, copy its unlisted link, and see who really looked. Holds prospects' names and phone numbers; never describe it to a customer.",
+  "/admin/card-builder/edit/[id]": "Staff console — Card Builder's edit screen: every field of one prospect's preview card, where each fact came from, and the Publish button. Never describe it to a customer.",
+  "/admin/card-builder/preview/[id]": "Staff console — a prospect's preview card as they will see it, for staff to check before it is published. Never describe it to a customer.",
   "/admin/card-builder/call/[id]": "Staff console — the Call screen a staff alert opens: one prospect's name, a Call button and call notes. Never describe it to a customer.",
   "/p/[slug]": "A sales preview card staff built for one prospect (admin › Card Builder) and sent to them by hand. Unlisted: noindex, in no sitemap, linked from nowhere, gone after it expires. Not a product feature a customer can use or make, so never describe it or send anyone to one.",
   "/admin/demos": "Staff console — the Office demos visitors booked from the pricing page (names, emails, phone numbers, notes) and the Google Calendar connection they run on. Contains other people's details; never describe it to a customer.",

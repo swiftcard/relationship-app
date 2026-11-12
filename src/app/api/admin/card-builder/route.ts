@@ -7,8 +7,9 @@ export const runtime = "nodejs";
 
 // POST /api/admin/card-builder: create a preview card for a prospect.
 // Posted by the plain <form method="post"> on /admin/card-builder, so it works
-// before hydration and answers with a 303 back to the page: ?made=<slug> on
-// success (the page shows the link to copy), ?error=… with what to fix.
+// before hydration and answers with a 303: to the new DRAFT's edit screen on
+// success (nothing is public until it is published there), or back to the
+// page with ?error=… and what to fix.
 
 function back(req: NextRequest, params: Record<string, string>): NextResponse {
   const url = new URL("/admin/card-builder", req.nextUrl.origin);
@@ -27,7 +28,8 @@ export async function POST(req: NextRequest) {
   if (!parsed.ok) return back(req, { error: parsed.error });
 
   const made = await createPreview(parsed.value);
-  if (made.ok) return back(req, { made: made.preview.slug });
+  // A new preview is a draft: it opens on its edit screen, where it is published.
+  if (made.ok) return NextResponse.redirect(new URL(`/admin/card-builder/edit/${made.preview.id}?done=created`, req.nextUrl.origin), 303);
   if (made.reason === "slug_taken") return back(req, { error: "That link name is already used by another preview. Pick a different one, or leave it empty." });
   if (made.reason === "not_set_up") return back(req, { error: "Card Builder's storage hasn't been created yet. Run supabase/prospect-previews.sql once." });
   return back(req, { error: "That didn't save. Try again in a minute." });
