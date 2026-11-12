@@ -7,7 +7,7 @@ import { previewState } from "@/lib/prospect-preview/real-view";
 // Card Builder, part 2 (2026-11-11): richer previews, drafts and sources.
 
 const form = (over: Record<string, unknown> = {}) => {
-  const base: Record<string, unknown> = { office_name: "Harbor Realty Group", owner_name: "Dana Whitfield", phone: "(212) 555-0199", ...over };
+  const base: Record<string, unknown> = { office_name: "Harbor Realty Group", owner_name: "Dana Whitfield", phone: "(212) 555-0199", buyer_role: "broker_owner", ...over };
   return (k: string) => base[k];
 };
 

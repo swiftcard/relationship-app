@@ -69,6 +69,12 @@ const PREVIEW: ProspectPreview = {
   sent_at: null,
   sent_channel: null,
   stage: null,
+  buyer_role: "broker_owner",
+  buyer_reason: "Listed as Broker of Record and owner on the About page",
+  team_size: 14,
+  detail: "your new listing on Hicks Street",
+  call_outcome: null,
+  call_outcome_at: null,
   crew_lead_id: null,
 };
 
@@ -253,7 +259,7 @@ describe.each([390, 1280])("/admin/card-builder/edit/<id> at %ipx", (width) => {
     });
     expect(m.spill).toEqual([]);
     expect(m.sideways).toBe(false);
-    for (const n of ["owner_name", "owner_title", "phone", "email", "headshot_url", "office_name", "website", "address", "specialty", "logo_url", "brand_primary", "brand_secondary", "team_members", "social_linkedin", "social_zillow", "src_phone", "unc_phone", "note_phone", "src_team_members"]) {
+    for (const n of ["owner_name", "owner_title", "phone", "email", "headshot_url", "office_name", "website", "address", "specialty", "logo_url", "brand_primary", "brand_secondary", "team_members", "social_linkedin", "social_zillow", "src_phone", "unc_phone", "note_phone", "src_team_members", "buyer_role", "buyer_reason", "team_size", "detail", "src_detail"]) {
       expect(m.names).toContain(n);
     }
     expect(m.text).toContain("This is a draft.");
@@ -452,6 +458,67 @@ describe.each([390, 1280])("/admin/card-builder/send/<id> at %ipx", (width) => {
     expect(m.text).toContain("still a draft");
     expect(m.text).toContain("add your name before sending");
     expect(m.disabled).toBe(2);
+    await page.close();
+  });
+});
+
+// ── The Call screen ─────────────────────────────────────────────────────────
+
+async function callMarkup(p: PreviewListRow): Promise<string> {
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { createElement } = await import("react");
+  const { default: AdminShell } = await import("@/app/admin/AdminShell");
+  const { default: CallView } = await import("@/app/admin/card-builder/call/[id]/CallView");
+  const { callBrief } = await import("@/lib/prospect-preview/call");
+  const view = createElement(CallView, { p, brief: callBrief(p, { sender: "Menash Harooni" }), appUrl: "https://swiftcard.me", now: NOW, done: null });
+  return renderToStaticMarkup(createElement(AdminShell, { email: "hello@swiftcard.me", unread: 0 }, view));
+}
+
+describe.each([390, 1280])("/admin/card-builder/call/<id> at %ipx", (width) => {
+  it("the Call button first, then why them, what they did, an opener, two objections and the outcome buttons", async () => {
+    const p = row({ ...ROWS[1], views: 3, devices: 2, last_viewed_at: "2026-11-11T14:58:00Z", team_strip_scrolled: true, sources: { detail: { url: "https://harbor.example/listings/hicks", uncertain: false, note: "" }, phone: { url: "", uncertain: false, note: "Office line" } } });
+    const page = await open(width, await callMarkup(p), adminCss);
+    const m = await page.evaluate(() => {
+      const vw = window.innerWidth;
+      const spill: string[] = [];
+      document.querySelectorAll(".adm-card, form, textarea, h1, h2, .sc-btn, dd, [data-opener], [data-objection]").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && (r.right > vw + 0.5 || r.left < -0.5)) spill.push(`${el.tagName}.${String(el.className).slice(0, 50)} → ${Math.round(r.left)}..${Math.round(r.right)}`);
+      });
+      const call = document.querySelector("[data-call]") as HTMLAnchorElement;
+      return {
+        spill, sideways: document.documentElement.scrollWidth > vw,
+        callHref: call.getAttribute("href"), callTop: call.getBoundingClientRect().top, briefTop: document.querySelector("#pp-brief")!.getBoundingClientRect().top,
+        brief: (document.querySelector("#pp-brief") as HTMLElement).innerText,
+        opener: (document.querySelector("[data-opener]") as HTMLElement).innerText,
+        objections: document.querySelectorAll("[data-objection]").length,
+        outcomes: [...document.querySelectorAll('[data-outcomes] input[name="outcome"]')].map((i) => (i as HTMLInputElement).value),
+        text: document.body.innerText,
+      };
+    });
+    expect(m.spill).toEqual([]);
+    expect(m.sideways).toBe(false);
+    expect(m.callHref).toBe("tel:+12125550199");
+    expect(m.callTop).toBeLessThan(m.briefTop);
+    expect(m.brief).toContain("Broker-owner: Listed as Broker of Record and owner on the About page.");
+    expect(m.brief).toContain("14 people");
+    expect(m.brief).toContain("your new listing on Hicks Street");
+    expect(m.brief).toContain("3 from 2 devices");
+    expect(m.brief).toContain("Scrolled through the team's cards");
+    expect(m.opener).toContain("Hi Bartholomew, it's Menash, the founder of SwiftCard.");
+    expect(m.opener).toContain("I noticed your new listing on Hicks Street.");
+    expect(m.objections).toBe(2);
+    expect(m.outcomes).toEqual(["no_answer", "voicemail", "reached", "meeting_booked", "won", "lost"]);
+    expect(m.text).toContain("Office line");
+    await page.close();
+  });
+
+  it("a preview from before the role was recorded says so instead of guessing", async () => {
+    const page = await open(width, await callMarkup(row({ buyer_role: null, buyer_reason: null, team_size: null, detail: null })), adminCss);
+    const brief = await page.evaluate(() => (document.querySelector("#pp-brief") as HTMLElement).innerText);
+    expect(brief).toContain("Not recorded. Confirm they run the office before you pitch.");
+    expect(brief).toContain("Not known");
+    expect(brief).toContain("Nothing specific recorded");
     await page.close();
   });
 });

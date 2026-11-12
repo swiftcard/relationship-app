@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin";
 import { pullBrandColors } from "@/lib/prospect-preview/colors-server";
 import { clean, parsePreviewFields, UUID_RE } from "@/lib/prospect-preview/input";
-import { clearSent, deletePreview, getPreviewById, markSent, publishPreview, setBrandColors, unpublishPreview, updateCall, updatePreview } from "@/lib/prospect-preview/store";
+import { isCallOutcome } from "@/lib/prospect-preview/call";
+import { clearSent, deletePreview, logOutcome, reopenPreview, getPreviewById, markSent, publishPreview, setBrandColors, unpublishPreview, updateCall, updatePreview } from "@/lib/prospect-preview/store";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -13,6 +14,9 @@ export const maxDuration = 30;
 //   save       the edit screen: every field of the preview, and its sources
 //   publish    save, then make the link open (the 14 days start now)
 //   unpublish  back to a draft: the link answers 404 again
+//   outcome    how a call went (outcome = no_answer | voicemail | reached |
+//              meeting_booked | won | lost), which also moves the stage
+//   reopen     put a won / lost / booked preview back in play
 //   sent       a send button was pressed: kind = ask | text | email (the message
 //              itself goes from the founder's own phone or inbox)
 //   unsent     "I didn't send that after all"
@@ -69,6 +73,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     case "unpublish": {
       const ok = await unpublishPreview(id);
       return reply(ok ? "unpublished" : "failed", ok ? 200 : 500);
+    }
+    case "outcome": {
+      if (!isCallOutcome(input.outcome)) return reply("failed", 400);
+      const ok = await logOutcome(id, input.outcome);
+      return reply(ok ? "logged" : "failed", ok ? 200 : 500);
+    }
+    case "reopen": {
+      const ok = await reopenPreview(id);
+      return reply(ok ? "saved" : "failed", ok ? 200 : 500);
     }
     case "sent": {
       const kind = input.kind;

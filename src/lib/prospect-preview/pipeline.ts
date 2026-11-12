@@ -62,7 +62,8 @@ const ago = (iso: string | null, now: number) => {
   return n < 1 ? "today" : n === 1 ? "yesterday" : `${n} days ago`;
 };
 
-type Row = Pick<PreviewListRow, "id" | "status" | "stage" | "called" | "called_at" | "views" | "last_viewed_at" | "sent_at" | "asked_at" | "expires_at" | "updated_at">;
+type Row = Pick<PreviewListRow, "id" | "status" | "stage" | "called" | "called_at" | "views" | "last_viewed_at" | "sent_at" | "asked_at" | "expires_at" | "updated_at">
+  & Partial<Pick<PreviewListRow, "call_outcome" | "call_outcome_at">>;
 
 /**
  * Who needs something from you today, most urgent first:
@@ -87,7 +88,9 @@ export function followUps(rows: Row[], now: number): FollowUp[] {
       out.push({ id: r.id, kind, why, next, screen, rank, at: at ? Date.parse(at) : 0 });
 
     if (stage === "viewed") {
-      add(1, "viewed_not_reached", r.last_viewed_at, `Viewed ${ago(r.last_viewed_at, now)}, not reached yet.`, "Call them.", "call");
+      // A ring-out or a voicemail is a try, not a conversation: they stay here.
+      const tried = r.call_outcome === "voicemail" ? ` Left a voicemail ${ago(r.call_outcome_at ?? null, now)}.` : r.call_outcome === "no_answer" ? ` No answer ${ago(r.call_outcome_at ?? null, now)}.` : "";
+      add(1, "viewed_not_reached", r.last_viewed_at, `Viewed ${ago(r.last_viewed_at, now)}, not reached yet.${tried}`, tried ? "Try again." : "Call them.", "call");
     } else if (stage === "sent" && daysSince(r.sent_at, now) >= 1) {
       add(2, "sent_not_viewed", r.sent_at, `Sent ${ago(r.sent_at, now)}, not opened.`, `Send a short nudge.${linkNote}`, "send");
     } else if (stage === "ready" && r.asked_at && daysSince(r.asked_at, now) >= 1) {
