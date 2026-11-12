@@ -6,7 +6,7 @@
 // Best for: firms that lead with a brand mark rather than a face — agencies,
 // practices, contractors, funds, anyone whose logo is the recognisable thing.
 
-import { panelBackground, qrInk } from "@/lib/template-style";
+import { panelBackground, qrColors, qrInk } from "@/lib/template-style";
 import React from "react";
 import { MiniQR as QR } from "./MiniQR";
 import type { CardData } from "./types";
@@ -109,12 +109,11 @@ export default function LogoFirst({ data }: { data: CardData }) {
   // oxblood and bone — the three grounds the picker offers alongside it.
   const qrBg = dark ? "#F2F4F7" : "#FFFFFF";
   // ...and its PATTERN follows the accent, so the control that colours the
-  // icons colours the code too. It stays light-on-dark-modules and is darkened
-  // until it clears the background by a wide margin: a QR is the one thing on
-  // the card with a job beyond looking right, and a pale pattern on a pale
-  // square is a code that phones stop reading. Past what darkening can fix it
-  // falls back to ink rather than shipping something unscannable.
-  const qrFg = qrInk(accent, qrBg, INK);
+  // icons colours the code too — in EXACTLY the colour the icons show. A light
+  // one that can't read on this pale square moves onto the card's own ground
+  // (or near-black) instead of being darkened into a shade nobody picked
+  // (qrColors, owner 2026-11-12). No accent: the template's own ink, unchanged.
+  const qr = style.accentColor ? qrColors(accent, qrBg, style.bgColor || NAVY, INK) : { fg: qrInk(accent, qrBg, INK), bg: qrBg };
 
   const initials =
     data.initials ??
@@ -320,7 +319,7 @@ export default function LogoFirst({ data }: { data: CardData }) {
         </div>
         </div>
         <div className="shrink-0" style={{ marginTop: 10, lineHeight: 0 }}>
-          <QR size={qrSize(f)} bg={qrBg} fg={qrFg} url={data.cardUrl} />
+          <QR size={qrSize(f)} bg={qr.bg} fg={qr.fg} url={data.cardUrl} />
         </div>
       </div>
 

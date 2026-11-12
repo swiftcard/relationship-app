@@ -7,7 +7,7 @@ import { fetchVCardPhoto, withLogoSize } from "@/lib/contact-photo";
 import { BrandOg, googleFont, loadBrandOgInputs } from "@/lib/brand-og";
 import { isHexColor, qrSvgMarkup, qrTarget } from "@/lib/qr-svg";
 import { squareCorners } from "@/lib/square-corners";
-import { isDarkBg } from "@/lib/template-style";
+import { isDarkBg, qrColors } from "@/lib/template-style";
 
 // A pixel-perfect PNG of the real card, captured client-side on the dashboard
 // and stored here. When present it IS the share preview, so the link unfurls
@@ -341,7 +341,10 @@ function LuxuryMinimalOG(p: Meta) {
   const info = s.infoColor || (dark ? "#f2ead9" : "#1c1612");
   const soft = s.infoColor ? `${s.infoColor}b3` : dark ? "#c9bda6" : "#8c7b60";
   const website = (p.website ?? "").replace(/^https?:\/\//, "");
-  const qr = qrDataUrl(p.cardUrl, GOLD);
+  // The same QR the card prints: exactly the accent, on the card's own
+  // square or — for a light accent — its ground (LuxuryMinimal.tsx, qrColors).
+  const qrInkBg = s.accentColor || p.accentColor ? qrColors(GOLD, "#f5f0e8", s.bgColor, "#1c1612") : { fg: GOLD, bg: "#f5f0e8" };
+  const qr = qrDataUrl(p.cardUrl, qrInkBg.fg);
   const rows: { icon: string; value: string; color: string; fs: number; weight: number }[] = [];
   if (p.phone) rows.push({ icon: ICON.phone, value: p.phone, color: info, fs: 40, weight: 700 });
   if (p.email) rows.push({ icon: ICON.mail, value: p.email, color: info, fs: rows.length ? 32 : 40, weight: 600 });
@@ -385,7 +388,7 @@ function LuxuryMinimalOG(p: Meta) {
           ))}
         </div>
         {qr ? (
-          <div style={{ position: "absolute", right: 46, bottom: 44, display: "flex", padding: 10, background: "#f5f0e8", borderRadius: 10 }}>
+          <div style={{ position: "absolute", right: 46, bottom: 44, display: "flex", padding: 10, background: qrInkBg.bg, borderRadius: 10 }}>
             <img src={qr} alt="" width={150} height={150} />
           </div>
         ) : null}

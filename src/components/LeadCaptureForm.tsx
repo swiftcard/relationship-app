@@ -229,8 +229,8 @@ export default function LeadCaptureForm({
       <button
         type="submit"
         disabled={status === "loading"}
-        className="w-full hover:opacity-90 disabled:opacity-50 text-white font-semibold py-3 px-6 rounded-full transition-all text-sm active:scale-[0.98]"
-        style={{ background: "var(--sc-accent, #1D4ED8)" }}
+        className="w-full hover:opacity-90 disabled:opacity-50 font-semibold py-3 px-6 rounded-full transition-all text-sm active:scale-[0.98]"
+        style={{ background: "var(--sc-accent, #1D4ED8)", color: "var(--sc-accent-text, #fff)" }}
       >
         {status === "loading" ? "Sending…" : "Share My Info"}
       </button>

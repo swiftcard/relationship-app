@@ -370,6 +370,7 @@ export default async function CardPage({
         background: theme.pageBackground,
         ["--sc-accent" as string]: theme.accent,
         ["--sc-accent-text" as string]: theme.accentText,
+        ["--sc-accent-ink" as string]: theme.accentInk,
       }}
     >
       {/* The page's one authored motion moment: the card SETTLES in — a small

@@ -115,19 +115,48 @@ export function accentGlow(accentSet: string | undefined, accent: string): strin
   return accentSet && /^#[0-9a-f]{6}$/i.test(accent) ? withAlpha(accent, 0.12) : "rgba(59,130,246,0.12)";
 }
 
+/** The brightness gap (YIQ, out of 255) a QR's dots need from their square to scan. */
+export const QR_MIN_GAP = 125;
+
 /**
- * The accent, made safe to print a QR code in — so the "Accent / icons" picker
- * colours the code too, on every template (it reached only Logo First's; the
- * others pinned theirs to a template constant, owner report 2026-10-20).
+ * The colours a card's QR is drawn in once its owner has picked an accent:
+ * the dots are EXACTLY that accent, always.
  *
- * A QR is the only thing on the card with a job beyond looking right, so this
- * is deliberately strict: scanners need a wide luminance gap between the dark
- * modules and the quiet zone, and a pale accent on a pale square is a code
- * phones stop reading. The colour is DARKENED along its own hue until it clears
- * the QR's background by 130 (out of 255) — a teal accent gives a deep-teal
- * code rather than being thrown away — and only if darkening cannot get there
- * does it fall back to `fallback`, which is also what a colour it can't read
- * (a name, rgb()) gets, since its contrast can't be checked.
+ * Owner, 2026-11-12 (the Glasshouse card, accent #88f9c1 on a navy panel): "the
+ * color I chose for the accent and icons only became the color for the icons…
+ * on the QR code, that color became green… It has to be the exact same color
+ * that I choose." The QR used to darken a light accent until it read on the
+ * QR's pale square (qrInk below) — mint went to #4b896a, a sea green nobody
+ * picked.
+ *
+ * Scanning still needs a wide brightness gap between the dots and their square,
+ * so it is the SQUARE that gives way, never the colour: the template's own
+ * square when the accent already clears it (every dark or mid accent — those
+ * cards do not change), otherwise the panel the QR sits on (`surface`) when
+ * that is dark enough — Glasshouse's mint dots on its own navy — then
+ * near-black, black, white. Black or white always clears for any colour, so
+ * the result is always a scannable code. Modern Bold has drawn its QR this way
+ * (exact accent on a plate) since before this existed.
+ *
+ * A colour that can't be measured (a name, rgb()) keeps `fallbackInk` on the
+ * template's square, as before.
+ */
+export function qrColors(accent: string, qrBg: string, surface: string | undefined, fallbackInk: string): { fg: string; bg: string } {
+  const fg = hex6(accent);
+  if (!fg) return { fg: fallbackInk, bg: qrBg };
+  const y = brightness(fg);
+  const clears = (bg: string) => Math.abs(y - brightness(bg)) >= QR_MIN_GAP;
+  if (!hex6(qrBg) || clears(qrBg)) return { fg, bg: qrBg };
+  const panel = surface?.match(/#[0-9a-f]{6}/i)?.[0]?.toLowerCase();
+  const bg = [panel, "#0b0f16", "#000000", "#ffffff"].find((c): c is string => !!c && clears(c)) ?? "#000000";
+  return { fg, bg };
+}
+
+/**
+ * A template's OWN QR ink when no accent is picked (Logo First's white or navy
+ * on its light square). Darkens along the colour's hue until it clears the
+ * square by 130; past that, `fallback`. An accent the owner picked never comes
+ * through here any more — that is qrColors, which keeps the colour exact.
  */
 export function qrInk(accent: string, qrBg: string, fallback: string): string {
   const bg = hex6(qrBg);

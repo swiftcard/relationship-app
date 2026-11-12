@@ -131,7 +131,11 @@ export default function ShareButton({
         style={isGhost
           ? undefined
           : isPrimary
-            ? { background: "linear-gradient(to right, #16a34a, #15803d)", color: "#fff" }
+            // On a card page "Link copied!" stays the card's exact accent
+            // (owner, 2026-11-12: nothing green they didn't pick). Where no
+            // card sets --sc-accent — the dashboard, the wizard — it keeps
+            // its green.
+            ? { background: "var(--sc-accent, linear-gradient(to right, #16a34a, #15803d))", color: "var(--sc-accent-text, #fff)" }
             : { background: "transparent", border: "1px solid #374151", color: "#d1d5db" }}
       >
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>

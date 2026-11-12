@@ -7,25 +7,16 @@
 // what makes the page read as THIS person's page rather than a generic form.
 //
 // Pure module: the page passes the result down as CSS custom properties
-// (--sc-accent / --sc-accent-text), which the action buttons read with a
-// stock-blue fallback, so every other surface that renders those buttons is
-// unchanged.
+// (--sc-accent / --sc-accent-text / --sc-accent-ink), which the action buttons
+// read with a stock-blue fallback, so every other surface that renders those
+// buttons is unchanged.
 
 import { metaForTemplate } from "@/lib/template-style-presets";
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
-function yiq(hex: string): number {
-  const n = parseInt(hex.slice(1), 16);
-  return (((n >> 16) & 255) * 299 + ((n >> 8) & 255) * 587 + (n & 255) * 114) / 1000;
-}
-
-/** Mix a hex toward black by `f` (0..1). */
-function darken(hex: string, f: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  const ch = (v: number) => Math.round(v * (1 - f)).toString(16).padStart(2, "0");
-  return `#${ch((n >> 16) & 255)}${ch((n >> 8) & 255)}${ch(n & 255)}`;
-}
+/** Dark text for a light accent — the same ink Swift Links puts on one. */
+export const ACCENT_DARK_TEXT = "#111827";
 
 /** WCAG contrast of white text on `hex`. */
 function contrastWithWhite(hex: string): number {
@@ -41,39 +32,39 @@ function alpha(hex: string, a: number): string {
 }
 
 export type CardPageTheme = {
-  /** The action color — buttons, selected states. Always dark enough for white text. */
+  /** The action color — buttons, selected states. EXACTLY the card's accent. */
   accent: string;
-  /** Text on the accent. */
+  /** Text on the accent: white, or dark ink when white would not read. */
   accentText: string;
+  /** Accent-coloured TEXT on the page's white sections (an outline button's
+      label): the accent when it reads on white, otherwise dark ink. */
+  accentInk: string;
   /** The page background: a soft wash of the accent fading into the cream. */
   pageBackground: string;
 };
 
+/**
+ * The buttons are the card's accent EXACTLY — never a shade of it.
+ *
+ * Owner, 2026-11-12 (the Glasshouse card, accent #88f9c1): "on the Save
+ * Contact button and all those other buttons, it comes up as green… It has to
+ * be the exact same color that I choose." This used to DARKEN a light accent
+ * until white text read on it, so mint became #4b896a, a sea green. Now the
+ * colour stays and the TEXT gives way: white wherever it reaches 3:1 (every
+ * accent that already passed keeps exactly what it had), dark ink otherwise.
+ */
 export function cardPageTheme(accentRaw: string | null | undefined, templateId: string): CardPageTheme {
   const fromCard = typeof accentRaw === "string" && HEX.test(accentRaw.trim())
     ? accentRaw.trim().toLowerCase()
     : null;
   const fromTemplate = metaForTemplate(templateId).accent?.fallback;
-  let accent = fromCard ?? (fromTemplate && HEX.test(fromTemplate) ? fromTemplate : "#1d4ed8");
-
-  // A BUTTON needs white text; a pastel or white accent can't carry it.
-  // Darken toward readable rather than falling back to blue, so a gold card
-  // gets deep-gold buttons instead of losing its identity.
-  if (yiq(accent) > 160) accent = darken(accent, 0.45);
-  if (yiq(accent) > 160) accent = darken(accent, 0.35); // near-white accents need a second step
-  // Brightness alone let saturated mid-tones through: mint, teal, sky and
-  // coral sit under 160 yet carry white text at under 2:1 (Modern Bold's
-  // #34d399 swatch, and the card Looks that use those accents, 2026-10-15).
-  // Keep darkening along the same hue until white text clears 3:1 — the floor
-  // the templates' own defaults already meet. Anything already there is
-  // untouched.
-  for (let i = 0; i < 8 && contrastWithWhite(accent) < 3; i++) accent = darken(accent, 0.12);
+  const accent = fromCard ?? (fromTemplate && HEX.test(fromTemplate) ? fromTemplate : "#1d4ed8");
+  const whiteReads = contrastWithWhite(accent) >= 3;
 
   return {
     accent,
-    accentText: "#ffffff",
-    // The wash is the ORIGINAL card color (pre-darkening) so a light-accent
-    // card still tints its page with the color it actually shows.
-    pageBackground: `linear-gradient(180deg, ${alpha(fromCard ?? accent, 0.10)} 0%, rgba(250,247,242,0) 420px), #FAF7F2`,
+    accentText: whiteReads ? "#ffffff" : ACCENT_DARK_TEXT,
+    accentInk: whiteReads ? accent : ACCENT_DARK_TEXT,
+    pageBackground: `linear-gradient(180deg, ${alpha(accent, 0.10)} 0%, rgba(250,247,242,0) 420px), #FAF7F2`,
   };
 }

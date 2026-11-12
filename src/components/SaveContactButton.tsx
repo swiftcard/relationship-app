@@ -484,14 +484,19 @@ export default function SaveContactButton({
           onClick={downloadVCard}
           disabled={downloading}
           aria-busy={downloading || undefined}
-          className={`flex-1 min-w-0 text-white font-semibold py-3 px-4 rounded-full transition-colors text-sm flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-70 ${saved ? "" : "active:bg-blue-800"}`}
-          style={{ background: saved ? "#16a34a" : "var(--sc-accent, #1D4ED8)" }}
+          // EXACTLY the card's accent, saved or not, with the text that reads
+          // on it (--sc-accent-text: dark on a light accent). It used to flip
+          // to a fixed green once saved, and the accent was darkened for white
+          // text — a mint card got green buttons (owner, 2026-11-12). Outside
+          // a card page (no --sc-accent) the saved state keeps its green.
+          className="flex-1 min-w-0 font-semibold py-3 px-4 rounded-full transition-colors text-sm flex items-center justify-center gap-2 whitespace-nowrap disabled:opacity-70"
+          style={{ background: saved ? "var(--sc-accent, #16a34a)" : "var(--sc-accent, #1D4ED8)", color: "var(--sc-accent-text, #fff)" }}
         >
           {downloading ? (
             // The browser-built file can wait up to 4s on the headshot; the
             // button used to say nothing at all for that whole time.
             <>
-              <span className="w-4 h-4 rounded-full border-2 border-white/40 border-t-white animate-spin" aria-hidden="true" />
+              <span className="w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin" aria-hidden="true" />
               Preparing…
             </>
           ) : saved ? (
@@ -520,7 +525,9 @@ export default function SaveContactButton({
           // taking flex-1; shrinking the LABEL to do that made them visibly
           // mismatched, which is what this restores.
           className="hidden md:flex shrink-0 items-center justify-center gap-2 font-semibold py-3 px-3 rounded-full text-sm whitespace-nowrap border transition-colors hover:bg-blue-50"
-          style={{ borderColor: "var(--sc-accent, #1D4ED8)", color: "var(--sc-accent, #1D4ED8)", background: "#fff" }}
+          // Border in the exact accent; the label is the accent where it reads
+          // on white, dark ink where it doesn't (--sc-accent-ink).
+          style={{ borderColor: "var(--sc-accent, #1D4ED8)", color: "var(--sc-accent-ink, var(--sc-accent, #1D4ED8))", background: "#fff" }}
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" />
@@ -669,8 +676,8 @@ export default function SaveContactButton({
                   <button
                     type="submit"
                     disabled={status === "loading"}
-                    className="w-full font-bold py-3 rounded-full text-white text-sm transition-all disabled:opacity-50"
-                    style={{ background: "var(--sc-accent, #1D4ED8)" }}
+                    className="w-full font-bold py-3 rounded-full text-sm transition-all disabled:opacity-50"
+                    style={{ background: "var(--sc-accent, #1D4ED8)", color: "var(--sc-accent-text, #fff)" }}
                   >
                     {status === "loading" ? "Sending…" : `Share my info with ${ownerFirstName ?? "them"} →`}
                   </button>

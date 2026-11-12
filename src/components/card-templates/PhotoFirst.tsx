@@ -4,7 +4,7 @@
 // Includes: Profile photo (full-height), name overlay, company, phone, email, website, QR
 // Best for: Real estate, beauty, fitness, coaches, personal brand, healthcare
 
-import { accentShade, panelBackground, qrInk } from "@/lib/template-style";
+import { accentShade, panelBackground, qrColors } from "@/lib/template-style";
 import React from "react";
 import { MiniQR as QR } from "./MiniQR";
 import type { CardData } from "./types";
@@ -44,6 +44,11 @@ export default function PhotoFirst({ data }: { data: CardData }) {
     ? infoPaletteFrom(style.infoColor)
     : { strong: infoPalette.strong, mid: infoPalette.mid, soft: infoPalette.soft, muted: infoPalette.muted };
   const companyColor = style.companyColor ?? style.infoColor ?? infoPalette.company;
+  // A picked accent prints the QR in EXACTLY that colour; a light one gets the
+  // info panel (or near-black) as its square instead of being darkened.
+  const qr = style.accentColor
+    ? qrColors(ACCENT, infoPalette.qrBg, style.bgColor, "#1e1b4b")
+    : { fg: darkInfo ? "#1e1b4b" : ACCENT, bg: infoPalette.qrBg };
   const f = fitFactor(data); // auto-fit: more info → everything sizes down together
   // A packed card has less height per line of text, so the circle gives some
   // back rather than crowd the name and title under it. Raised from 62/56/50
@@ -223,7 +228,7 @@ export default function PhotoFirst({ data }: { data: CardData }) {
           <ContactRows
             data={data}
             palette={{ accent: ACCENT, ...rowPal }}
-            qr={{ size: qrSize(f), node: <QR size={qrSize(f)} bg={infoPalette.qrBg} fg={style.accentColor ? qrInk(ACCENT, infoPalette.qrBg, "#1e1b4b") : darkInfo ? "#1e1b4b" : ACCENT} url={data.cardUrl} /> }}
+            qr={{ size: qrSize(f), node: <QR size={qrSize(f)} bg={qr.bg} fg={qr.fg} url={data.cardUrl} /> }}
           />
         </div>
       </div>
