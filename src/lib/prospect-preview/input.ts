@@ -1,6 +1,6 @@
 import {
-  DEFAULT_BRAND_PRIMARY, DEFAULT_BRAND_SECONDARY, DEFAULT_EXPIRY_DAYS, MAX_TEAM_MEMBERS,
-  type TeamMember,
+  DEFAULT_BRAND_PRIMARY, DEFAULT_BRAND_SECONDARY, DEFAULT_EXPIRY_DAYS, MAX_TEAM_MEMBERS, SOCIAL_KEYS, SOURCE_FIELDS,
+  type FactSources, type PreviewStatus, type SocialLinks, type TeamMember,
 } from "./types";
 
 // ── Card Builder: reading the create form ───────────────────────────────────
@@ -42,31 +42,8 @@ export function randomTail(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => alphabet[b % alphabet.length]).join("");
 }
 
-/** One teammate per line: "Name, Title" (the title is optional). */
-export function parseTeam(v: unknown): TeamMember[] {
-  if (typeof v !== "string") return [];
-  const out: TeamMember[] = [];
-  for (const line of v.split(/\r?\n/)) {
-    const at = line.indexOf(",");
-    const name = clean(at === -1 ? line : line.slice(0, at), 80);
-    const title = at === -1 ? "" : clean(line.slice(at + 1), 80);
-    if (name) out.push({ name, title });
-    if (out.length >= MAX_TEAM_MEMBERS) break;
-  }
-  return out;
-}
-
-/** Rows read back from the database: never trust the jsonb's shape. */
-export function readTeam(v: unknown): TeamMember[] {
-  if (!Array.isArray(v)) return [];
-  return v
-    .map((m) => ({ name: clean((m as TeamMember | null)?.name, 80), title: clean((m as TeamMember | null)?.title, 80) }))
-    .filter((m) => m.name)
-    .slice(0, MAX_TEAM_MEMBERS);
-}
-
-/** A logo address we are willing to show and to fetch: https only. */
-export function cleanLogoUrl(v: unknown): string | null {
+/** An address we are willing to show and to fetch: https only. */
+export function cleanHttpsUrl(v: unknown): string | null {
   const s = clean(v, 600);
   if (!s) return null;
   try {
@@ -74,6 +51,95 @@ export function cleanLogoUrl(v: unknown): string | null {
     return u.protocol === "https:" ? u.toString() : null;
   } catch {
     return null;
+  }
+}
+export const cleanLogoUrl = cleanHttpsUrl;
+
+/**
+ * One teammate per line: "Name, Title, https://their-picture". The title and
+ * the picture are optional; a last part that is an https address is the picture.
+ */
+export function parseTeam(v: unknown): TeamMember[] {
+  if (typeof v !== "string") return [];
+  const out: TeamMember[] = [];
+  for (const line of v.split(/\r?\n/)) {
+    const parts = line.split(",");
+    let headshot: string | null = null;
+    if (parts.length > 1 && /^\s*https:\/\//i.test(parts[parts.length - 1])) headshot = cleanHttpsUrl(parts.pop());
+    const name = clean(parts[0], 80);
+    const title = clean(parts.slice(1).join(","), 80);
+    if (name) out.push({ name, title, ...(headshot ? { headshot } : {}) });
+    if (out.length >= MAX_TEAM_MEMBERS) break;
+  }
+  return out;
+}
+
+/** The team as the edit form's textarea shows it (parseTeam reads it back). */
+export function formatTeam(team: TeamMember[]): string {
+  return team.map((m) => [m.name, m.title, m.headshot].filter((x, i) => i === 0 || x || (i === 1 && m.headshot)).join(", ")).join("\n");
+}
+
+/** Rows read back from the database: never trust the jsonb's shape. */
+export function readTeam(v: unknown): TeamMember[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((m) => {
+      const headshot = cleanHttpsUrl((m as TeamMember | null)?.headshot);
+      return { name: clean((m as TeamMember | null)?.name, 80), title: clean((m as TeamMember | null)?.title, 80), ...(headshot ? { headshot } : {}) };
+    })
+    .filter((m) => m.name)
+    .slice(0, MAX_TEAM_MEMBERS);
+}
+
+export function readSocials(v: unknown): SocialLinks {
+  const out: SocialLinks = {};
+  if (!v || typeof v !== "object") return out;
+  for (const k of SOCIAL_KEYS) {
+    const url = cleanHttpsUrl((v as Record<string, unknown>)[k]);
+    if (url) out[k] = url;
+  }
+  return out;
+}
+
+export function readSources(v: unknown): FactSources {
+  const out: FactSources = {};
+  if (!v || typeof v !== "object") return out;
+  for (const k of SOURCE_FIELDS) {
+    const s = (v as Record<string, unknown>)[k] as { url?: unknown; uncertain?: unknown; note?: unknown } | null | undefined;
+    if (!s || typeof s !== "object") continue;
+    const url = cleanSourceUrl(s.url) ?? "";
+    const note = clean(s.note, 200);
+    const uncertain = s.uncertain === true;
+    if (url || note || uncertain) out[k] = { url, uncertain, note };
+  }
+  return out;
+}
+
+/** Where a fact was found: any http(s) page. */
+export function cleanSourceUrl(v: unknown): string | null {
+  const s = clean(v, 600);
+  if (!s) return null;
+  try {
+    const u = new URL(s);
+    return /^https?:$/.test(u.protocol) ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A headshot may only come from the person's own business website or their
+ * brokerage profile (owner's rule, 2026-11-11). A picture lifted from a social
+ * network or a search result is someone's personal photo, not their business
+ * one. The rule is checked on the SOURCE page the researcher names.
+ */
+const NOT_A_HEADSHOT_SOURCE = /(^|\.)(linkedin\.com|facebook\.com|fb\.com|instagram\.com|x\.com|twitter\.com|tiktok\.com|youtube\.com|pinterest\.com|google\.[a-z.]+|bing\.com|gstatic\.com|googleusercontent\.com)$/i;
+export function headshotSourceAllowed(sourceUrl: string | null | undefined): boolean {
+  if (!sourceUrl) return false;
+  try {
+    return !NOT_A_HEADSHOT_SOURCE.test(new URL(sourceUrl).hostname);
+  } catch {
+    return false;
   }
 }
 
@@ -89,28 +155,51 @@ export function telHref(phone: string): string {
   return `tel:${plus}${digits}`;
 }
 
-export type NewPreviewInput = {
-  slug: string;
+/** Everything staff type about a prospect: the create form and the edit screen share it. */
+export type PreviewFields = {
   office_name: string;
   owner_name: string;
   owner_title: string | null;
   phone: string;
   email: string | null;
   logo_url: string | null;
+  headshot_url: string | null;
+  address: string | null;
+  website: string | null;
+  social_links: SocialLinks;
+  specialty: string | null;
   brand_primary: string;
   brand_secondary: string;
   team_members: TeamMember[];
+  sources: FactSources;
+};
+
+export type NewPreviewInput = PreviewFields & {
+  slug: string;
+  status: PreviewStatus;
   expires_at: string;
   crew_lead_id: string | null;
 };
 
-export type ParsedPreview = { ok: true; value: NewPreviewInput } | { ok: false; error: string };
+type Refusal = { ok: false; error: string };
+export type ParsedFields = { ok: true; value: PreviewFields } | Refusal;
+export type ParsedPreview = { ok: true; value: NewPreviewInput } | Refusal;
+
+/** The sources table of the edit screen: src_<fact>, unc_<fact>, note_<fact>. */
+export function parseSources(get: (key: string) => unknown): FactSources {
+  const raw: Record<string, unknown> = {};
+  for (const k of SOURCE_FIELDS) {
+    const unc = get(`unc_${k}`);
+    raw[k] = { url: get(`src_${k}`), uncertain: unc === "on" || unc === true || unc === "true", note: get(`note_${k}`) };
+  }
+  return readSources(raw);
+}
 
 /**
- * The create form, checked. Every refusal is a sentence the person filling in
- * the form can act on.
+ * The fields of a preview, checked. Every refusal is a sentence the person
+ * filling in the form can act on.
  */
-export function parsePreviewForm(get: (key: string) => unknown, now: Date = new Date()): ParsedPreview {
+export function parsePreviewFields(get: (key: string) => unknown): ParsedFields {
   const office_name = clean(get("office_name"), 120);
   const owner_name = clean(get("owner_name"), 80);
   const phone = clean(get("phone"), 40);
@@ -121,36 +210,82 @@ export function parsePreviewForm(get: (key: string) => unknown, now: Date = new 
   const email = clean(get("email"), 160).toLowerCase();
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: "That email address doesn't look right." };
 
-  const rawLogo = clean(get("logo_url"), 600);
-  const logo_url = cleanLogoUrl(rawLogo);
-  if (rawLogo && !logo_url) return { ok: false, error: "The logo needs a full https:// address of an image." };
+  const https = (key: string, what: string): string | null | Refusal => {
+    const raw = clean(get(key), 600);
+    const url = cleanHttpsUrl(raw);
+    return raw && !url ? { ok: false, error: `${what} needs a full https:// address.` } : url;
+  };
+  const logo_url = https("logo_url", "The logo");
+  if (logo_url && typeof logo_url === "object") return logo_url;
+  const headshot_url = https("headshot_url", "The headshot");
+  if (headshot_url && typeof headshot_url === "object") return headshot_url;
+  const website = https("website", "The website");
+  if (website && typeof website === "object") return website;
 
-  const wanted = clean(get("slug"), 64).toLowerCase();
-  const slug = wanted ? slugify(wanted) : newSlug(office_name);
-  if (!SLUG_RE.test(slug)) return { ok: false, error: "The link name needs at least 3 letters or numbers." };
+  const social_links: SocialLinks = {};
+  for (const k of SOCIAL_KEYS) {
+    const url = https(`social_${k}`, "Each social link");
+    if (url && typeof url === "object") return url;
+    if (url) social_links[k] = url;
+  }
 
-  const daysRaw = clean(get("expires_days"), 4);
-  const days = daysRaw === "" ? DEFAULT_EXPIRY_DAYS : Number(daysRaw);
-  if (!Number.isInteger(days) || days < 1 || days > 90) return { ok: false, error: "The link can stay up for 1 to 90 days." };
-
-  const lead = clean(get("crew_lead_id"), 40);
-  if (lead && !UUID_RE.test(lead)) return { ok: false, error: "The lead ID isn't one of ours. Leave it empty if you're not sure." };
+  const sources = parseSources(get);
+  if (headshot_url && !headshotSourceAllowed(sources.headshot_url?.url)) {
+    return { ok: false, error: "A headshot needs its source: the page on their own business website or brokerage profile it came from. Pictures from social networks or image search aren't used." };
+  }
+  const team_members = parseTeam(get("team_members"));
+  if (team_members.some((m) => m.headshot) && !headshotSourceAllowed(sources.team_members?.url)) {
+    return { ok: false, error: "Team headshots need the team's source: the page on their own website or brokerage profile they came from." };
+  }
 
   return {
     ok: true,
     value: {
-      slug,
       office_name,
       owner_name,
       owner_title: clean(get("owner_title"), 80) || null,
       phone,
       email: email || null,
-      logo_url,
+      logo_url: logo_url as string | null,
+      headshot_url: headshot_url as string | null,
+      address: clean(get("address"), 200) || null,
+      website: website as string | null,
+      social_links,
+      specialty: clean(get("specialty"), 140) || null,
       brand_primary: cleanHex(get("brand_primary"), DEFAULT_BRAND_PRIMARY),
       brand_secondary: cleanHex(get("brand_secondary"), DEFAULT_BRAND_SECONDARY),
-      team_members: parseTeam(get("team_members")),
-      expires_at: new Date(now.getTime() + days * 24 * 60 * 60 * 1000).toISOString(),
-      crew_lead_id: lead || null,
+      team_members,
+      sources,
     },
   };
+}
+
+/** 1 to 90 days from now, or a refusal. Empty means the default. */
+export function parseExpiryDays(v: unknown): number | Refusal {
+  const raw = clean(v, 4);
+  const days = raw === "" ? DEFAULT_EXPIRY_DAYS : Number(raw);
+  return !Number.isInteger(days) || days < 1 || days > 90 ? { ok: false, error: "The link can stay up for 1 to 90 days." } : days;
+}
+
+export const expiryFrom = (days: number, now: Date = new Date()): string => new Date(now.getTime() + days * 24 * 60 * 60 * 1000).toISOString();
+
+/**
+ * The create form, checked. A new preview is always a DRAFT: nobody outside
+ * staff can open it until it is published from its edit screen.
+ */
+export function parsePreviewForm(get: (key: string) => unknown, now: Date = new Date()): ParsedPreview {
+  const fields = parsePreviewFields(get);
+  if (!fields.ok) return fields;
+
+  const wanted = clean(get("slug"), 64).toLowerCase();
+  const slug = wanted ? slugify(wanted) : newSlug(fields.value.office_name);
+  if (!SLUG_RE.test(slug)) return { ok: false, error: "The link name needs at least 3 letters or numbers." };
+
+  const days = parseExpiryDays(get("expires_days"));
+  if (typeof days === "object") return days;
+
+  const lead = clean(get("crew_lead_id"), 40);
+  if (lead && !UUID_RE.test(lead)) return { ok: false, error: "The lead ID isn't one of ours. Leave it empty if you're not sure." };
+
+  return { ok: true, value: { ...fields.value, slug, status: "draft", expires_at: expiryFrom(days, now), crew_lead_id: lead || null } };
 }

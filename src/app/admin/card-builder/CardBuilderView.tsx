@@ -68,7 +68,7 @@ function CreateForm() {
         </div>
       </details>
       <div className="sm:col-span-2">
-        <button type="submit" className="sc-btn sc-btn-filled"><Icon name="plus" className="w-4 h-4" />Create preview</button>
+        <button type="submit" className="sc-btn sc-btn-filled"><Icon name="plus" className="w-4 h-4" />Create draft</button>
       </div>
     </form>
   );
@@ -76,6 +76,7 @@ function CreateForm() {
 
 function statusBadge(r: PreviewListRow, now: number) {
   const state = previewState(r, now);
+  if (r.status === "draft") return <StatusBadge tone="warn">Draft</StatusBadge>;
   if (r.status === "paused") return <StatusBadge tone="neutral">Paused</StatusBadge>;
   if (state === "expired") return <StatusBadge tone="bad">Expired</StatusBadge>;
   if (r.called) return <StatusBadge tone="good">Called</StatusBadge>;
@@ -105,7 +106,7 @@ function Row({ r, link, now }: { r: PreviewListRow; link: string; now: number })
           <p className="sc-t-footnote adm-muted mt-1 break-all">
             <a className="adm-link" href={telHref(r.phone)}>{r.phone}</a>
             {r.email ? <> · <a className="adm-link" href={`mailto:${r.email}`}>{r.email}</a></> : null}
-            {" · "}{live ? `link expires ${fmtDate(r.expires_at, now)}` : `link expired ${fmtDate(r.expires_at, now)}`}
+            {" · "}{r.status === "draft" ? "not published yet" : live ? `link expires ${fmtDate(r.expires_at, now)}` : r.status === "paused" ? "link paused" : `link expired ${fmtDate(r.expires_at, now)}`}
             {r.team_members.length ? ` · ${r.team_members.length} on the team` : ""}
           </p>
           <form method="post" action={`/api/admin/card-builder/${r.id}`} className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -118,7 +119,10 @@ function Row({ r, link, now }: { r: PreviewListRow; link: string; now: number })
         </div>
         <div className="flex flex-wrap items-center gap-2 lg:justify-end lg:max-w-[20rem]">
           {live && <CopyPreviewLink link={link} />}
-          {live && <a href={link} target="_blank" rel="noopener noreferrer" className="sc-btn sc-btn-sm sc-btn-plain"><Icon name="external" className="w-4 h-4" />Open</a>}
+          {live
+            ? <a href={link} target="_blank" rel="noopener noreferrer" className="sc-btn sc-btn-sm sc-btn-plain"><Icon name="external" className="w-4 h-4" />Open</a>
+            : <Link href={`/admin/card-builder/preview/${r.id}`} className="sc-btn sc-btn-sm sc-btn-plain"><Icon name="external" className="w-4 h-4" />Look</Link>}
+          <Link href={`/admin/card-builder/edit/${r.id}`} className="sc-btn sc-btn-sm sc-btn-plain" data-edit>{r.status === "draft" ? "Edit and publish" : "Edit"}</Link>
           <Link href={`/admin/card-builder/call/${r.id}`} className="sc-btn sc-btn-sm sc-btn-plain"><Icon name="phone" className="w-4 h-4" />Call screen</Link>
           {/* Full width at every size: the confirm button opens on its own
               line, inside the column, instead of pushing past the screen edge. */}
@@ -171,7 +175,7 @@ export default function CardBuilderView({ list, appUrl, now, made, error, done, 
         </Section>
       ) : (
         <>
-          <Section title="New preview" hint="What you type here is what the prospect sees on their card.">
+          <Section title="New preview" hint="Starts as a draft. The next screen has every other field (headshot, address, website, social links, sources) and the Publish button.">
             <CreateForm />
           </Section>
 

@@ -1,7 +1,7 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { VIEW_VISIT_WINDOW_MS } from "@/lib/view-window";
-import { readTeam, type NewPreviewInput } from "./input";
-import type { DeviceType, LiveAlert, PreviewListRow, ProspectPreview } from "./types";
+import { expiryFrom, readSocials, readSources, readTeam, type NewPreviewInput, type PreviewFields } from "./input";
+import { DEFAULT_EXPIRY_DAYS, type DeviceType, type FactSources, type LiveAlert, type PreviewListRow, type ProspectPreview } from "./types";
 
 // ── Card Builder: the database ──────────────────────────────────────────────
 // Both tables are RLS-on with no policies (supabase/prospect-previews.sql), so
@@ -22,7 +22,16 @@ function tableMissing(error: { code?: string; message?: string } | null): boolea
 }
 
 function toPreview(row: Record<string, unknown>): ProspectPreview {
-  return { ...(row as unknown as ProspectPreview), team_members: readTeam(row.team_members) };
+  return {
+    ...(row as unknown as ProspectPreview),
+    headshot_url: (row.headshot_url as string | null) ?? null,
+    address: (row.address as string | null) ?? null,
+    website: (row.website as string | null) ?? null,
+    specialty: (row.specialty as string | null) ?? null,
+    team_members: readTeam(row.team_members),
+    social_links: readSocials(row.social_links),
+    sources: readSources(row.sources),
+  };
 }
 
 export type PreviewList = { ready: true; rows: PreviewListRow[] } | { ready: false; reason: "not_set_up" | "failed" };
@@ -91,6 +100,36 @@ export async function createPreview(input: NewPreviewInput): Promise<CreateResul
   if (!error && data) return { ok: true, preview: toPreview(data) };
   if (error?.code === "23505") return { ok: false, reason: "slug_taken" };
   return { ok: false, reason: tableMissing(error) ? "not_set_up" : "failed" };
+}
+
+/** Save the edit screen. The link's name, status and expiry are not touched here. */
+export async function updatePreview(id: string, fields: PreviewFields, now: Date = new Date()): Promise<boolean> {
+  const { data, error } = await getAdminSupabase().from(PREVIEWS).update({ ...fields, updated_at: now.toISOString() }).eq("id", id).select("id");
+  return !error && !!data?.length;
+}
+
+/**
+ * Publish a draft (or a paused preview): the link opens from now. The 14 days
+ * start HERE, not when the draft was made, so a draft that waited a week for
+ * its research doesn't go out with half its life gone.
+ */
+export async function publishPreview(id: string, now: Date = new Date()): Promise<boolean> {
+  const { data, error } = await getAdminSupabase().from(PREVIEWS)
+    .update({ status: "live", expires_at: expiryFrom(DEFAULT_EXPIRY_DAYS, now), updated_at: now.toISOString() })
+    .eq("id", id).neq("status", "live").select("id");
+  return !error && !!data?.length;
+}
+
+/** Take a published preview back to a draft: its link answers 404 again. */
+export async function unpublishPreview(id: string, now: Date = new Date()): Promise<boolean> {
+  const { data, error } = await getAdminSupabase().from(PREVIEWS).update({ status: "draft", updated_at: now.toISOString() }).eq("id", id).select("id");
+  return !error && !!data?.length;
+}
+
+export async function setBrandColors(id: string, colors: { primary: string; secondary: string }, sources: FactSources, now: Date = new Date()): Promise<boolean> {
+  const { error } = await getAdminSupabase().from(PREVIEWS)
+    .update({ brand_primary: colors.primary, brand_secondary: colors.secondary, sources, updated_at: now.toISOString() }).eq("id", id);
+  return !error;
 }
 
 /** Deletes the preview and (on delete cascade) every view of it. */
