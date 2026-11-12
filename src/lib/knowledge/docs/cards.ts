@@ -177,7 +177,7 @@ export const cardDocs = defineDocs([
       "vanity url", "my link", "rename my link",
     ],
     answer:
-      "On the \"Card info\" tab of the card editor — your card lives at swiftcard.me/<your-url>. The URL is YourName-YourCompany (for example swiftcard.me/JaneSmith-SmithRealty, any capitalization works) and it updates ITSELF when you change the card's name or company \u2014 links and QR codes you already shared keep working, they redirect to the new URL. The editor on the Card info tab is only needed if you want a fully custom ending; a custom URL never changes on its own.",
+      "On the \"Card info\" tab of the card editor — your card lives at swiftcard.me/<your-url>. The URL is YourName-YourCompany (for example swiftcard.me/JaneSmith-SmithRealty, any capitalization works) and it updates ITSELF when you change the card's name or company \u2014 links and QR codes you already shared keep working, they redirect to the new URL. The editor on the Card info tab is only needed if you want a fully custom ending; a custom URL never changes on its own. As you type a new ending, the editor tells you whether it is free: one that is already taken (by anyone, or by another of your cards) or reserved says so and cannot be saved. The \"Change URL\" button stays off until you pick one that is available.",
     detail:
       "Changing it breaks anything already pointing at the old address: printed QR codes, NFC cards already written, links you've shared, and anything you linked with Create + (make and copy those again after the change). The QR and the NFC tag store the link, so they need re-writing or reprinting after a change. Your Swift Links page uses the same ending, so both move together.",
   },

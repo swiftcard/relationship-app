@@ -42,6 +42,39 @@ export async function slugTaken(admin: Admin, slug: string): Promise<boolean> {
   return !!card || !!profile || heldAsAlias;
 }
 
+export type SlugAvailability = "available" | "current" | "taken" | "reserved" | "invalid" | "error";
+
+/**
+ * Can THIS card take this URL? The live check behind the card URL editor
+ * (owner, 2026-11-12: "if a username is taken and a user puts in that
+ * username, it won't let them save it and it'll say it's taken already").
+ *
+ * Exactly the rules the save enforces — the rename route (reserved names,
+ * another card's old address) plus rename_card_slug (any card, any account
+ * handle) — so what the editor says while you type is what the save does.
+ * A card may take back ITS OWN old address, as the rename allows. The save
+ * stays the authority: a lookup that errors here says "error", not
+ * "available", and the rename still checks for itself.
+ */
+export async function slugAvailability(admin: Admin, raw: string, cardId: string): Promise<{ slug: string; status: SlugAvailability }> {
+  const slug = normalizeSlug(raw);
+  if (!slug) return { slug, status: "invalid" };
+  if (isReservedSlug(slug)) return { slug, status: "reserved" };
+  try {
+    const [card, profile, heldAsAlias] = await Promise.all([
+      admin.from("cards").select("id").eq("username", slug).limit(1).maybeSingle(),
+      admin.from("profiles").select("id").eq("username", slug).limit(1).maybeSingle(),
+      slugHeldAsAlias(admin, slug, cardId),
+    ]);
+    if (card.error || profile.error) return { slug, status: "error" };
+    if (card.data && (card.data as { id: string }).id === cardId) return { slug, status: "current" };
+    if (card.data || profile.data || heldAsAlias) return { slug, status: "taken" };
+    return { slug, status: "available" };
+  } catch {
+    return { slug, status: "error" };
+  }
+}
+
 // Return an available slug based on `base`, appending -2, -3, … then a short
 // random suffix if we somehow exhaust the numbered range. Always returns a valid,
 // non-empty, ≤60-char slug — never throws, so card creation can't be blocked.

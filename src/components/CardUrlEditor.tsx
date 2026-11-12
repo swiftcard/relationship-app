@@ -1,7 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { normalizeSlug } from "@/lib/slug";
+import type { SlugAvailability } from "@/lib/username";
+
+type Verdict = SlugAvailability | "checking";
+const KNOWN = ["available", "current", "taken", "reserved", "invalid", "error"] as const;
 
 // Editable card URL (slug). Collapsed it just shows the current URL with a
 // "Change" link; expanded it lets the owner set a new slug, with an explicit
@@ -23,8 +27,43 @@ export default function CardUrlEditor({ cardId, currentSlug }: { cardId: string;
   // lib/auto-rename-slug — old links keep working via the _prevSlugs redirect).
   // This editor is only for hand-picking a custom URL.
 
+  // ── Is it free? Checked WHILE you type (owner, 2026-11-12) ──────────────
+  // A taken URL says so before "Change URL" is tapped, and the button only
+  // turns on for a URL the check says is free. Same rules as the save
+  // (api/cards/[id]/slug-check → lib/username slugAvailability); the save
+  // still checks for itself, so a check that fails to answer leaves the
+  // button on and the server decides. Answers are kept PER URL, so a slow
+  // reply for something typed earlier can never relabel what is in the box.
+  const [answers, setAnswers] = useState<Record<string, SlugAvailability | undefined>>({});
+  // Runs when the URL in the box changes — not when a save finishes, so a 409
+  // ("someone just took it") stays on screen instead of being re-asked.
+  useEffect(() => {
+    if (!open || !normalized || normalized === currentSlug) return;
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      let answer: SlugAvailability = "error";
+      try {
+        const res = await fetch(`/api/cards/${cardId}/slug-check?slug=${encodeURIComponent(normalized)}`, { signal: ctrl.signal, cache: "no-store" });
+        const data = (await res.json().catch(() => null)) as { status?: string } | null;
+        if (res.ok && data?.status && (KNOWN as readonly string[]).includes(data.status)) answer = data.status as SlugAvailability;
+      } catch {
+        if (ctrl.signal.aborted) return;
+      }
+      setAnswers((a) => ({ ...a, [normalized]: answer }));
+    }, 300);
+    return () => { clearTimeout(t); ctrl.abort(); };
+  }, [open, normalized, currentSlug, cardId]);
+
+  const verdict: Verdict | null = !normalized
+    ? null
+    : normalized === currentSlug
+      ? "current"
+      : answers[normalized] ?? "checking";
+  // "error" = the check couldn't answer: the server decides on save.
+  const canSave = !!changed && status === "idle" && (verdict === "available" || verdict === "error");
+
   async function save() {
-    if (!changed || status === "saving") return;
+    if (!canSave) return;
     setStatus("saving");
     setError("");
     try {
@@ -35,7 +74,14 @@ export default function CardUrlEditor({ cardId, currentSlug }: { cardId: string;
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data?.error || "Couldn't change the URL. Please try again.");
+        // 409 = someone has it (taken a moment ago, or reserved): show it as
+        // the check would, and the button stays off until the URL changes.
+        if (res.status === 409) {
+          const now: SlugAvailability = /reserved/i.test(String(data?.error ?? "")) ? "reserved" : "taken";
+          setAnswers((a) => ({ ...a, [normalized]: now }));
+        } else {
+          setError(data?.error || "Couldn't change the URL. Please try again.");
+        }
         setStatus("idle");
         return;
       }
@@ -103,7 +149,8 @@ export default function CardUrlEditor({ cardId, currentSlug }: { cardId: string;
         <input
           type="text"
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => { setValue(e.target.value); setError(""); }}
+          aria-describedby="card-url-check"
           placeholder="your-name"
           className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
         />
@@ -111,6 +158,16 @@ export default function CardUrlEditor({ cardId, currentSlug }: { cardId: string;
       {normalized && normalized !== value && (
         <p className="text-gray-500 text-[0.6875rem]">Will be saved as <span className="text-gray-300">swiftcard.me/{normalized}</span></p>
       )}
+      {/* The live answer. role=status so a screen reader hears "already
+          taken" without moving focus. */}
+      <p id="card-url-check" role="status" aria-live="polite" data-url-check={verdict ?? ""} className="text-[0.6875rem] min-h-0">
+        {verdict === "checking" && <span className="text-gray-500">Checking…</span>}
+        {verdict === "available" && <span className="text-emerald-400">✓ swiftcard.me/{normalized} is available</span>}
+        {verdict === "taken" && <span className="text-red-400">✗ swiftcard.me/{normalized} is already taken. Try another.</span>}
+        {verdict === "reserved" && <span className="text-red-400">That URL is reserved. Try another.</span>}
+        {verdict === "current" && <span className="text-gray-500">That&apos;s your current URL.</span>}
+        {!normalized && value.trim() !== "" && <span className="text-red-400">Use letters, numbers, and dashes.</span>}
+      </p>
       <p className="text-amber-400/90 text-[0.6875rem] leading-relaxed">
         Heads up: everything inside SwiftCard (your card, your Swift Links page, and all your views, leads &amp;
         analytics) moves to the new URL automatically. But anything already shared with your old URL (QR codes,
@@ -122,7 +179,7 @@ export default function CardUrlEditor({ cardId, currentSlug }: { cardId: string;
         <button
           type="button"
           onClick={save}
-          disabled={!changed || status === "saving"}
+          disabled={!canSave}
           className="text-xs font-semibold px-3 py-1.5 rounded-full transition-colors disabled:opacity-40 bg-blue-600 hover:bg-blue-500 text-white"
         >
           {status === "saving" ? "Changing…" : "Change URL"}

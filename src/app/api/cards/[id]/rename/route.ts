@@ -53,6 +53,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   });
 
   if (error) {
+    // Two people saving the same free URL at the same moment: both pass the
+    // function's "taken" check, and the unique index on cards.username stops
+    // the second (Postgres 23505). That person was told "Couldn't change the
+    // URL right now" — it is taken, so say so (owner, 2026-11-12).
+    if (error.code === "23505") {
+      return NextResponse.json({ error: "That URL is already taken — try another." }, { status: 409 });
+    }
     // Most likely the migration (supabase/rename-card-slug.sql) hasn't been run
     // yet — surface a clear message rather than a raw Postgres error.
     console.error("rename_card_slug failed:", error.message, { cardId: id });
