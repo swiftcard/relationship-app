@@ -69,7 +69,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (wantsOnline) {
     const { data: target } = await admin
       .from("cards")
-      .select("is_office_card")
+      .select("is_office_card, username")
       .eq("id", id)
       .eq("user_id", user.id)
       .maybeSingle();
@@ -81,6 +81,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       );
     }
     await admin.from("cards").update({ is_offline: false }).eq("id", id).eq("user_id", user.id);
+    // The public page reads a per-slug cache (lib/card-page-data). This path
+    // returns before the revalidate every other save reaches, so the card
+    // stayed a 404 for visitors for a minute or more after its owner was told
+    // it was back online (reproduced on production 2026-11-12).
+    revalidateCardPage((target as { username?: string | null }).username);
     if (!Object.keys(updates).length) return NextResponse.json({ ok: true, online: true });
   }
 
