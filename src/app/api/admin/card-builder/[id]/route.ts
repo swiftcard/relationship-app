@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin";
 import { pullBrandColors } from "@/lib/prospect-preview/colors-server";
 import { clean, parsePreviewFields, UUID_RE } from "@/lib/prospect-preview/input";
-import { deletePreview, getPreviewById, publishPreview, setBrandColors, unpublishPreview, updateCall, updatePreview } from "@/lib/prospect-preview/store";
+import { clearSent, deletePreview, getPreviewById, markSent, publishPreview, setBrandColors, unpublishPreview, updateCall, updatePreview } from "@/lib/prospect-preview/store";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -13,6 +13,9 @@ export const maxDuration = 30;
 //   save       the edit screen: every field of the preview, and its sources
 //   publish    save, then make the link open (the 14 days start now)
 //   unpublish  back to a draft: the link answers 404 again
+//   sent       a send button was pressed: kind = ask | text | email (the message
+//              itself goes from the founder's own phone or inbox)
+//   unsent     "I didn't send that after all"
 //   colors     read the brand colours from the logo (or the site's theme colour)
 //   delete     removes the preview and every view of it; its link then 404s
 //
@@ -21,7 +24,7 @@ export const maxDuration = 30;
 // (?done=…, or ?error=… with what to fix); a JSON caller gets JSON.
 
 function safeBack(v: unknown): string {
-  return typeof v === "string" && /^\/admin\/card-builder(\/(call|edit)\/[0-9a-f-]{36})?$/i.test(v) ? v : "/admin/card-builder";
+  return typeof v === "string" && /^\/admin\/card-builder(\/(call|edit|send)\/[0-9a-f-]{36})?$/i.test(v) ? v : "/admin/card-builder";
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -67,6 +70,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       const ok = await unpublishPreview(id);
       return reply(ok ? "unpublished" : "failed", ok ? 200 : 500);
     }
+    case "sent": {
+      const kind = input.kind;
+      if (kind !== "ask" && kind !== "text" && kind !== "email") return reply("failed", 400);
+      const got = await markSent(id, kind);
+      if (got === "not_live") return reply("failed", 409, "That message has the link in it, and the link doesn't open yet. Publish the preview first.");
+      return reply(got === "ok" ? "sent" : "failed", got === "ok" ? 200 : 500);
+    }
+    case "unsent": {
+      const ok = await clearSent(id);
+      return reply(ok ? "unsent" : "failed", ok ? 200 : 500);
+    }
     case "colors": {
       const p = await getPreviewById(id);
       if (!p) return reply("failed", 404);
@@ -78,7 +92,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     }
     case "delete": {
       // Deleting from the Call or edit screen can't return to a page that is gone.
-      if (/\/(call|edit)\//.test(clean(input.back, 120))) input.back = "/admin/card-builder";
+      if (/\/(call|edit|send)\//.test(clean(input.back, 120))) input.back = "/admin/card-builder";
       const ok = await deletePreview(id);
       return reply(ok ? "deleted" : "failed", ok ? 200 : 500);
     }

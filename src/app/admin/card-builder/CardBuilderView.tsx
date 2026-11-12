@@ -6,6 +6,7 @@ import { StatusBadge } from "../_ui/badges";
 import { Icon } from "../_ui/icons";
 import { fmtDate, fmtDateTime, timeAgo } from "../_ui/format";
 import { telHref } from "@/lib/prospect-preview/input";
+import { followUps, STAGE_LABELS, STAGES, stageCounts, stageOf, type Stage } from "@/lib/prospect-preview/pipeline";
 import { previewState } from "@/lib/prospect-preview/real-view";
 import type { PreviewList } from "@/lib/prospect-preview/store";
 import { DEFAULT_BRAND_PRIMARY, DEFAULT_BRAND_SECONDARY, DEFAULT_EXPIRY_DAYS, MAX_TEAM_MEMBERS, type PreviewListRow } from "@/lib/prospect-preview/types";
@@ -74,14 +75,58 @@ function CreateForm() {
   );
 }
 
+const STAGE_TONE: Record<Stage, "good" | "bad" | "warn" | "neutral" | "tint"> = {
+  draft: "warn", ready: "neutral", sent: "neutral", viewed: "tint", called: "tint", meeting_booked: "good", won: "good", lost: "bad",
+};
+
+/** Where the prospect is, and (separately) whether their link still opens. */
 function statusBadge(r: PreviewListRow, now: number) {
+  const stage = stageOf(r);
   const state = previewState(r, now);
-  if (r.status === "draft") return <StatusBadge tone="warn">Draft</StatusBadge>;
-  if (r.status === "paused") return <StatusBadge tone="neutral">Paused</StatusBadge>;
-  if (state === "expired") return <StatusBadge tone="bad">Expired</StatusBadge>;
-  if (r.called) return <StatusBadge tone="good">Called</StatusBadge>;
-  if (r.views > 0) return <StatusBadge tone="tint">Viewed</StatusBadge>;
-  return <StatusBadge tone="warn">Not opened yet</StatusBadge>;
+  return (
+    <>
+      <StatusBadge tone={STAGE_TONE[stage]}>{STAGE_LABELS[stage]}</StatusBadge>
+      {r.status === "paused" ? <StatusBadge tone="neutral">Paused</StatusBadge> : r.status === "live" && state === "expired" ? <StatusBadge tone="bad">Expired</StatusBadge> : null}
+    </>
+  );
+}
+
+const SCREEN_LABEL = { call: "Call screen", send: "Send", edit: "Edit" } as const;
+
+function FollowUps({ rows, now }: { rows: PreviewListRow[]; now: number }) {
+  const list = followUps(rows, now);
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  if (!list.length) return <EmptyState>Nobody to chase today.</EmptyState>;
+  return (
+    <ul className="adm-divide">
+      {list.map((f) => {
+        const r = byId.get(f.id)!;
+        return (
+          <li key={f.id} className="px-4 sm:px-5 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between" data-follow-up={f.kind}>
+            <p className="sc-t-subhead min-w-0">
+              <span className="font-semibold">{r.owner_name}</span><span className="adm-muted"> · {r.office_name}</span>
+              <span className="block adm-muted">{f.why} {f.next}</span>
+            </p>
+            <Link href={`/admin/card-builder/${f.screen}/${r.id}`} className="sc-btn sc-btn-sm sc-btn-gray shrink-0 self-start sm:self-auto">{SCREEN_LABEL[f.screen]}</Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function StageCounts({ rows }: { rows: PreviewListRow[] }) {
+  const counts = stageCounts(rows);
+  return (
+    <ul className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2" aria-label="Previews at each stage" data-stage-counts>
+      {STAGES.map((s) => (
+        <li key={s} className="adm-card rounded-xl px-3 py-2.5 min-w-0" data-stage={s}>
+          <p className="sc-t-title2 font-semibold tabular-nums">{counts[s]}</p>
+          <p className="sc-t-caption adm-muted truncate">{STAGE_LABELS[s]}</p>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function Row({ r, link, now }: { r: PreviewListRow; link: string; now: number }) {
@@ -108,6 +153,7 @@ function Row({ r, link, now }: { r: PreviewListRow; link: string; now: number })
             {r.email ? <> · <a className="adm-link" href={`mailto:${r.email}`}>{r.email}</a></> : null}
             {" · "}{r.status === "draft" ? "not published yet" : live ? `link expires ${fmtDate(r.expires_at, now)}` : r.status === "paused" ? "link paused" : `link expired ${fmtDate(r.expires_at, now)}`}
             {r.team_members.length ? ` · ${r.team_members.length} on the team` : ""}
+            {r.sent_at ? ` · link sent by ${r.sent_channel === "email" ? "email" : "text"} ${timeAgo(r.sent_at, now)}` : r.asked_at ? ` · asked ${timeAgo(r.asked_at, now)}` : ""}
           </p>
           <form method="post" action={`/api/admin/card-builder/${r.id}`} className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
             <input type="hidden" name="action" value="call" />
@@ -122,6 +168,7 @@ function Row({ r, link, now }: { r: PreviewListRow; link: string; now: number })
           {live
             ? <a href={link} target="_blank" rel="noopener noreferrer" className="sc-btn sc-btn-sm sc-btn-plain"><Icon name="external" className="w-4 h-4" />Open</a>
             : <Link href={`/admin/card-builder/preview/${r.id}`} className="sc-btn sc-btn-sm sc-btn-plain"><Icon name="external" className="w-4 h-4" />Look</Link>}
+          <Link href={`/admin/card-builder/send/${r.id}`} className="sc-btn sc-btn-sm sc-btn-plain" data-send-link>Send</Link>
           <Link href={`/admin/card-builder/edit/${r.id}`} className="sc-btn sc-btn-sm sc-btn-plain" data-edit>{r.status === "draft" ? "Edit and publish" : "Edit"}</Link>
           <Link href={`/admin/card-builder/call/${r.id}`} className="sc-btn sc-btn-sm sc-btn-plain"><Icon name="phone" className="w-4 h-4" />Call screen</Link>
           {/* Full width at every size: the confirm button opens on its own
@@ -175,6 +222,15 @@ export default function CardBuilderView({ list, appUrl, now, made, error, done, 
         </Section>
       ) : (
         <>
+          {list.ready && list.rows.length > 0 && (
+            <>
+              <StageCounts rows={list.rows} />
+              <Section title="Follow up today" hint="Viewed but not reached comes first. Then links sent a day ago and not opened, first texts with no reply, and calls with no outcome." flush>
+                <FollowUps rows={list.rows} now={now} />
+              </Section>
+            </>
+          )}
+
           <Section title="New preview" hint="Starts as a draft. The next screen has every other field (headshot, address, website, social links, sources) and the Publish button.">
             <CreateForm />
           </Section>

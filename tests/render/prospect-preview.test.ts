@@ -65,6 +65,10 @@ const PREVIEW: ProspectPreview = {
   called: false,
   called_at: null,
   notes: null,
+  asked_at: null,
+  sent_at: null,
+  sent_channel: null,
+  stage: null,
   crew_lead_id: null,
 };
 
@@ -347,6 +351,7 @@ describe.each([390, 1280])("/admin/card-builder at %ipx", (width) => {
     expect(rows[1]).toMatchObject({ called: true, notes: "Wants cards for all 14 agents. Call back Thursday after their sales meeting.", copy: true, del: true });
     // An expired preview says so, and offers no link to copy (it would 404).
     expect(rows[2].text).toContain("Expired");
+    expect(rows[1].text).toContain("Called");
     expect(rows[2].text).toContain("never opened");
     expect(rows[2]).toMatchObject({ copy: false, del: true });
     await page.close();
@@ -355,6 +360,98 @@ describe.each([390, 1280])("/admin/card-builder at %ipx", (width) => {
   it("Card Builder is in the navigation", async () => {
     const page = await open(width, await adminMarkup({}), adminCss);
     expect(await page.locator('a[href="/admin/card-builder"]').count()).toBeGreaterThan(0);
+    await page.close();
+  });
+});
+
+describe.each([390, 1280])("/admin/card-builder pipeline at %ipx", (width) => {
+  const DAY = 86400_000;
+  const at = (daysAgo: number) => new Date(NOW - daysAgo * DAY).toISOString();
+  const PIPE: PreviewListRow[] = [
+    row({ id: "a1111111-2222-4333-8444-555555555555", owner_name: "Viewed Vera", views: 2, devices: 1, last_viewed_at: at(0.1), sent_at: at(1), sent_channel: "text" }),
+    row({ id: "a2222222-2222-4333-8444-555555555555", owner_name: "Sent Sam", sent_at: at(2), sent_channel: "email" }),
+    row({ id: "a3333333-2222-4333-8444-555555555555", owner_name: "Asked Ada", asked_at: at(3) }),
+    row({ id: "a4444444-2222-4333-8444-555555555555", owner_name: "Won Wendy", stage: "won", called: true, called_at: at(5), views: 4 }),
+    row({ id: "a5555555-2222-4333-8444-555555555555", owner_name: "Draft Dee", status: "draft" }),
+  ];
+
+  it("counts every stage at the top, and lists who to chase today, most urgent first", async () => {
+    const page = await open(width, await adminMarkup({ list: { ready: true, rows: PIPE } }), adminCss);
+    const m = await page.evaluate(() => {
+      const vw = window.innerWidth;
+      const counts = Object.fromEntries([...document.querySelectorAll("[data-stage]")].map((li) => [li.getAttribute("data-stage"), (li.querySelector("p") as HTMLElement).innerText]));
+      const tiles = [...document.querySelectorAll("[data-stage]")].map((li) => li.getBoundingClientRect());
+      return {
+        sideways: document.documentElement.scrollWidth > vw,
+        tilesInside: tiles.every((r) => r.left >= 0 && r.right <= vw + 0.5),
+        counts,
+        chase: [...document.querySelectorAll("[data-follow-up]")].map((li) => ({ kind: li.getAttribute("data-follow-up"), text: (li as HTMLElement).innerText, href: li.querySelector("a")!.getAttribute("href") })),
+        sendLinks: document.querySelectorAll("[data-send-link]").length,
+      };
+    });
+    expect(m.sideways).toBe(false);
+    expect(m.tilesInside).toBe(true);
+    expect(m.counts).toEqual({ draft: "1", ready: "1", sent: "1", viewed: "1", called: "0", meeting_booked: "0", won: "1", lost: "0" });
+    expect(m.chase.map((c) => c.kind)).toEqual(["viewed_not_reached", "sent_not_viewed", "asked_no_link"]);
+    expect(m.chase[0].text).toContain("Viewed Vera");
+    expect(m.chase[0].href).toBe("/admin/card-builder/call/a1111111-2222-4333-8444-555555555555");
+    expect(m.chase[1].text).toContain("Sent 2 days ago, not opened.");
+    expect(m.chase[1].href).toBe("/admin/card-builder/send/a2222222-2222-4333-8444-555555555555");
+    expect(m.sendLinks).toBe(5);
+    await page.close();
+  });
+});
+
+// ── The Send screen ─────────────────────────────────────────────────────────
+
+async function sendMarkup(p: PreviewListRow, sender: string | null = "Menash Harooni"): Promise<string> {
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { createElement } = await import("react");
+  const { default: AdminShell } = await import("@/app/admin/AdminShell");
+  const { default: SendView } = await import("@/app/admin/card-builder/send/[id]/SendView");
+  const { buildMessages } = await import("@/lib/prospect-preview/messages");
+  const messages = buildMessages(p, { link: `https://swiftcard.me/p/${p.slug}`, sender });
+  const view = createElement(SendView, { p, messages, now: NOW, senderKnown: !!sender, done: null, error: null });
+  return renderToStaticMarkup(createElement(AdminShell, { email: "hello@swiftcard.me", unread: 0 }, view));
+}
+
+describe.each([390, 1280])("/admin/card-builder/send/<id> at %ipx", (width) => {
+  it("three messages, each opening the founder's own Messages or Mail with the words filled in", async () => {
+    const page = await open(width, await sendMarkup(row({})), adminCss);
+    const m = await page.evaluate(() => {
+      const vw = window.innerWidth;
+      const spill: string[] = [];
+      document.querySelectorAll(".adm-card, form, input, textarea, h1, h2, .sc-btn").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && (r.right > vw + 0.5 || r.left < -0.5)) spill.push(`${el.tagName}.${String(el.className).slice(0, 50)} → ${Math.round(r.left)}..${Math.round(r.right)}`);
+      });
+      const href = (k: string) => (document.querySelector(`[data-send="${k}"]`) as HTMLAnchorElement | null)?.getAttribute("href") ?? null;
+      const words = (k: string) => (document.querySelector(`[data-message="${k}"]`) as HTMLTextAreaElement).value;
+      return { spill, sideways: document.documentElement.scrollWidth > vw, ask: href("ask"), text: href("text"), email: href("email"), askWords: words("ask"), textWords: words("text") };
+    });
+    expect(m.spill).toEqual([]);
+    expect(m.sideways).toBe(false);
+    expect(m.ask).toMatch(/^sms:2125550199\?&body=Hi%20Dana/);
+    expect(m.askWords).not.toContain("swiftcard.me/p/");
+    expect(m.text).toMatch(/^sms:2125550199\?&body=/);
+    expect(m.textWords).toContain("https://swiftcard.me/p/harbor-realty-group-k3x9qa");
+    expect(m.email).toMatch(/^mailto:dana@harborrealtygroup\.com\?subject=Dana%2C%20I%20made%20your%20Harbor%20Realty%20Group%20card&body=/);
+    await page.close();
+  });
+
+  it("a draft can send the first text but not the two with the link", async () => {
+    const page = await open(width, await sendMarkup(row({ status: "draft", email: null }), null), adminCss);
+    const m = await page.evaluate(() => ({
+      sends: [...document.querySelectorAll("[data-send]")].map((a) => a.getAttribute("data-send")),
+      blocked: document.querySelectorAll("[data-blocked]").length,
+      text: document.body.innerText,
+      disabled: [...document.querySelectorAll('form button[type="submit"]')].filter((b) => (b as HTMLButtonElement).disabled).length,
+    }));
+    expect(m.sends).toEqual(["ask"]);
+    expect(m.blocked).toBe(2);
+    expect(m.text).toContain("still a draft");
+    expect(m.text).toContain("add your name before sending");
+    expect(m.disabled).toBe(2);
     await page.close();
   });
 });

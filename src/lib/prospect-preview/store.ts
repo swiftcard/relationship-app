@@ -28,6 +28,10 @@ function toPreview(row: Record<string, unknown>): ProspectPreview {
     address: (row.address as string | null) ?? null,
     website: (row.website as string | null) ?? null,
     specialty: (row.specialty as string | null) ?? null,
+    asked_at: (row.asked_at as string | null) ?? null,
+    sent_at: (row.sent_at as string | null) ?? null,
+    sent_channel: row.sent_channel === "text" || row.sent_channel === "email" ? row.sent_channel : null,
+    stage: (row.stage as string | null) ?? null,
     team_members: readTeam(row.team_members),
     social_links: readSocials(row.social_links),
     sources: readSources(row.sources),
@@ -147,6 +151,39 @@ export async function updateCall(id: string, patch: { called?: boolean; notes?: 
   if (patch.notes !== undefined) row.notes = patch.notes;
   const { error } = await getAdminSupabase().from(PREVIEWS).update(row).eq("id", id);
   return !error;
+}
+
+// ── Sending ─────────────────────────────────────────────────────────────────
+
+/**
+ * The founder pressed a send button (the message itself goes from their own
+ * phone or inbox). "ask" is the first text, which has no link; "text" and
+ * "email" carry the link, and only a published, unexpired preview has one.
+ */
+export async function markSent(id: string, kind: "ask" | "text" | "email", now: Date = new Date()): Promise<"ok" | "not_live" | "failed"> {
+  const db = getAdminSupabase();
+  const at = now.toISOString();
+  if (kind === "ask") {
+    const { data, error } = await db.from(PREVIEWS).update({ asked_at: at, updated_at: at }).eq("id", id).select("id");
+    return !error && data?.length ? "ok" : "failed";
+  }
+  const { data, error } = await db.from(PREVIEWS).update({ sent_at: at, sent_channel: kind, updated_at: at })
+    .eq("id", id).eq("status", "live").gt("expires_at", at).select("id");
+  if (error) return "failed";
+  return data?.length ? "ok" : "not_live";
+}
+
+/** "I didn't send that after all": back to not asked, not sent. */
+export async function clearSent(id: string, now: Date = new Date()): Promise<boolean> {
+  const { error } = await getAdminSupabase().from(PREVIEWS).update({ asked_at: null, sent_at: null, sent_channel: null, updated_at: now.toISOString() }).eq("id", id);
+  return !error;
+}
+
+/** The signed-in admin's own name, for "it's Dana, the founder of SwiftCard". */
+export async function senderName(userId: string): Promise<string | null> {
+  const { data } = await getAdminSupabase().from("profiles").select("name").eq("id", userId).maybeSingle();
+  const name = typeof data?.name === "string" ? data.name.trim() : "";
+  return name || null;
 }
 
 // ── Views ───────────────────────────────────────────────────────────────────
