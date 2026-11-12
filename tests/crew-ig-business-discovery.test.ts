@@ -270,7 +270,7 @@ describe("Instagram LinkedIn Bio: queued API posts, every gate still on", () => 
   it("takes them as found posts: scored with the 0.6 bar, the 30-day account rule applies, nothing drafted below the bar", async () => {
     const store = new MemoryStore();
     await store.patchAgentState(COMMENTS_ID, { enabled: true });
-    await queueDiscovered(store, commentablePosts(await profileOf(MIKE), new Date(), ON_TOPIC));
+    await queueDiscovered(store, commentablePosts(await profileOf(MIKE), NOW, ON_TOPIC));
     const prompts: string[] = [];
     await runAgent({ def: instagramLinkedinBio, store, providers: { claude: commentClaude(prompts), critic: null }, now: () => NOW });
     const [run] = await store.recentRuns(COMMENTS_ID, 1);
@@ -286,7 +286,7 @@ describe("Instagram LinkedIn Bio: queued API posts, every gate still on", () => 
     const store = new MemoryStore();
     await store.patchAgentState(COMMENTS_ID, { enabled: true });
     await store.insertApproval({ agent_id: "contact-instagram", team: "contact", kind: "dm", title: "DM", summary: "", body: "hi", platform: "instagram", target_url: "https://www.instagram.com/mike.mclean_realtor/", person_id: null, debate: null, model_used: null, meta: { author: "mike.mclean_realtor" } });
-    await queueDiscovered(store, commentablePosts(await profileOf(MIKE), new Date(), ON_TOPIC));
+    await queueDiscovered(store, commentablePosts(await profileOf(MIKE), NOW, ON_TOPIC));
     const prompts: string[] = [];
     await runAgent({ def: instagramLinkedinBio, store, providers: { claude: commentClaude(prompts), critic: null }, now: () => NOW });
     const [run] = await store.recentRuns(COMMENTS_ID, 1);
