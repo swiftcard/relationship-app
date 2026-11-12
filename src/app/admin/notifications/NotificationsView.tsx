@@ -18,7 +18,7 @@ import { NOTIFICATION_TABS, notificationsBack, type NotificationTab } from "./ta
 export type NotificationRow = {
   id: string;
   created_at: string;
-  kind: "money" | "leaving" | "agents" | "demos";
+  kind: "money" | "leaving" | "agents" | "demos" | "prospects";
   severity: "urgent" | "important";
   title: string;
   body: string | null;
@@ -27,7 +27,7 @@ export type NotificationRow = {
   read_at: string | null;
 };
 
-const KIND_LABEL: Record<NotificationRow["kind"], string> = { money: "Money", leaving: "Customers leaving", agents: "Agents", demos: "Demos" };
+const KIND_LABEL: Record<NotificationRow["kind"], string> = { money: "Money", leaving: "Customers leaving", agents: "Agents", demos: "Demos", prospects: "Prospects" };
 
 /** Only the admin's own pages and Stripe's dashboard are ever linked. */
 const adminHref = (h: string | null) => (h && /^\/admin(\/|\?|$)/.test(h) ? h : null);

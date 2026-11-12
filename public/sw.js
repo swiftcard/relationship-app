@@ -304,6 +304,11 @@ self.addEventListener("push", (event) => {
       tag: data.tag ?? "swiftcard",
       renotify: !silent,
       silent,
+      // The staff "a prospect is viewing their card, call now" alert
+      // (lib/prospect-preview/alert) stays on a computer's screen until it is
+      // clicked. Nothing else sets `sticky`, so every other notification
+      // behaves exactly as before.
+      requireInteraction: data.sticky === true,
       // nid: the bell row this is about, so the click below can mark it read.
       data: { url: data.url ?? "/dashboard", nid: data.notificationId ?? null },
       actions,

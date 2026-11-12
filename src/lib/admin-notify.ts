@@ -14,7 +14,10 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 
 // "demos" (2026-11-03): an Office demo booked, moved or canceled, and the demo
 // calendar needing attention (lib/demo). The demo emails are sent elsewhere.
-export type AdminNotificationKind = "money" | "leaving" | "agents" | "demos";
+// "prospects" (2026-11-11): a sales prospect really looked at the preview card
+// staff built for them (admin → Card Builder, lib/prospect-preview). The one
+// kind that ALSO pushes, at the owner's request: the point is to call now.
+export type AdminNotificationKind = "money" | "leaving" | "agents" | "demos" | "prospects";
 export type AdminNotificationSeverity = "urgent" | "important";
 
 export type AdminNotification = {
@@ -33,6 +36,7 @@ export const ADMIN_NOTIFICATION_KINDS: { key: AdminNotificationKind; label: stri
   { key: "leaving", label: "Customers leaving" },
   { key: "agents", label: "Agents" },
   { key: "demos", label: "Demos" },
+  { key: "prospects", label: "Prospects" },
 ];
 
 /** One "is cancelling" per subscription per day, whichever writes it first:

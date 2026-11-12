@@ -106,6 +106,13 @@ export async function sendPushToUser(userId: string, payload: {
    * icon's red number used to keep counting news already answered (audit N-01).
    */
   notificationId?: string | null;
+  /**
+   * A desktop browser keeps this on screen until it is clicked
+   * (requireInteraction in public/sw.js) instead of sliding it away after a
+   * few seconds. Only the prospect alert sets it (lib/prospect-preview/alert):
+   * it asks someone to make a phone call NOW. Phones ignore it.
+   */
+  sticky?: boolean;
 }) {
   const admin = getAdminSupabase();
 

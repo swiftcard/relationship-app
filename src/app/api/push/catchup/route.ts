@@ -70,6 +70,9 @@ const RANK: Record<PushCategory, number> = {
   weekly_recap: 0.5,
   // Push-only, sent 10am–7pm local; writes no bell row, so never held.
   getting_started: 0.25,
+  // Staff only, never held by quiet hours (QUIET_EXEMPT), and its row lives in
+  // admin_notifications, not the bell: there is never one to catch up on.
+  prospect_view: 0,
 };
 
 // Team news an admin's phone was sent (lib/team-alerts `push`), and so could

@@ -10,6 +10,8 @@ export const NOTIFICATION_TABS = [
   { key: "leaving", label: "Customers leaving" },
   { key: "agents", label: "Agents" },
   { key: "demos", label: "Demos" },
+  // 2026-11-11: a prospect looked at their Card Builder preview.
+  { key: "prospects", label: "Prospects" },
 ] as const;
 
 /** The kinds "Mark all read" may be scoped to (api/admin/notifications/read). */

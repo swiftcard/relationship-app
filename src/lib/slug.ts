@@ -37,6 +37,8 @@ export const RESERVED_SLUGS = new Set([
   // new top-level page can't be forgotten again.
   "business-card-view-tracking", "download", "email", "faq", "link-in-bio-with-analytics",
   "linkedin-connected", "pin", "review", "splash-preview",
+  // /p/<slug>: the sales preview cards made in admin → Card Builder (2026-11-11).
+  "p",
   // platform/static paths
   "favicon", "robots", "sitemap", "manifest", "icon", "apple-icon",
   "opengraph-image", "_next", "well-known",
