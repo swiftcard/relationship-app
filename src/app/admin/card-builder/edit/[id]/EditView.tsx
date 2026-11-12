@@ -6,7 +6,7 @@ import { Icon } from "../../../_ui/icons";
 import { fmtDate } from "../../../_ui/format";
 import { formatTeam } from "@/lib/prospect-preview/input";
 import { previewState } from "@/lib/prospect-preview/real-view";
-import { MAX_TEAM_MEMBERS, SOCIAL_KEYS, SOCIAL_LABELS, SOURCE_FIELDS, SOURCE_LABELS, type ProspectPreview } from "@/lib/prospect-preview/types";
+import { BUYER_ROLES, BUYER_ROLE_LABELS, MAX_TEAM_MEMBERS, SOCIAL_KEYS, SOCIAL_LABELS, SOURCE_FIELDS, SOURCE_LABELS, type ProspectPreview } from "@/lib/prospect-preview/types";
 import CopyPreviewLink from "../../CopyPreviewLink";
 
 // ── Card Builder: the edit screen (server component, no data loading) ───────
@@ -104,6 +104,30 @@ export default function EditView({ p, appUrl, now, done, error }: {
               <div className="sm:col-span-2">
                 <Field label="Headshot address" hint="Only a picture from their own business website or brokerage profile, and name that page under Sources. Leave empty otherwise." flag={flag("headshot_url")}>
                   <input name="headshot_url" type="url" maxLength={600} defaultValue={p.headshot_url ?? ""} className={input} placeholder="https://" autoComplete="off" />
+                </Field>
+              </div>
+            </div>
+          </Section>
+
+          <Section title="Why this person" hint="Shown on the Call screen. A preview is only built for someone who can buy for the whole office.">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Their role" flag={flag("buyer_role")}>
+                <select name="buyer_role" required defaultValue={p.buyer_role ?? ""} className={input}>
+                  <option value="" disabled>Choose…</option>
+                  {BUYER_ROLES.map((r) => <option key={r} value={r}>{BUYER_ROLE_LABELS[r]}</option>)}
+                </select>
+              </Field>
+              <Field label="Team size" hint="People in the office or on the team. Leave empty if you don't know." flag={flag("team_size")}>
+                <input name="team_size" type="number" min={1} max={10000} defaultValue={p.team_size ?? ""} className={input} />
+              </Field>
+              <div className="sm:col-span-2">
+                <Field label="Why they decide" hint="One sentence, from the source: &quot;Listed as Broker of Record and owner on the About page.&quot;">
+                  <input name="buyer_reason" maxLength={240} defaultValue={p.buyer_reason ?? ""} className={input} autoComplete="off" />
+                </Field>
+              </div>
+              <div className="sm:col-span-2">
+                <Field label="Specific detail" hint="Finishes the sentence &quot;I noticed …&quot;: your new listing on Hicks Street; you cover Park Slope and Windsor Terrace." flag={flag("detail")}>
+                  <input name="detail" maxLength={200} defaultValue={p.detail ?? ""} className={input} autoComplete="off" />
                 </Field>
               </div>
             </div>

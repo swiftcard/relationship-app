@@ -1,6 +1,6 @@
 import {
-  DEFAULT_BRAND_PRIMARY, DEFAULT_BRAND_SECONDARY, DEFAULT_EXPIRY_DAYS, MAX_TEAM_MEMBERS, SOCIAL_KEYS, SOURCE_FIELDS,
-  type FactSources, type PreviewStatus, type SocialLinks, type TeamMember,
+  BUYER_ROLES, DEFAULT_BRAND_PRIMARY, DEFAULT_BRAND_SECONDARY, DEFAULT_EXPIRY_DAYS, MAX_TEAM_MEMBERS, SOCIAL_KEYS, SOURCE_FIELDS,
+  type BuyerRole, type FactSources, type PreviewStatus, type SocialLinks, type TeamMember,
 } from "./types";
 
 // ── Card Builder: reading the create form ───────────────────────────────────
@@ -172,6 +172,10 @@ export type PreviewFields = {
   brand_secondary: string;
   team_members: TeamMember[];
   sources: FactSources;
+  buyer_role: BuyerRole;
+  buyer_reason: string | null;
+  team_size: number | null;
+  detail: string | null;
 };
 
 export type NewPreviewInput = PreviewFields & {
@@ -206,6 +210,15 @@ export function parsePreviewFields(get: (key: string) => unknown): ParsedFields 
   if (!office_name) return { ok: false, error: "Add the office's name." };
   if (!owner_name) return { ok: false, error: "Add the owner's name." };
   if (phone.replace(/\D/g, "").length < 7) return { ok: false, error: "Add the owner's phone number. The alert tells you to call it." };
+
+  // A preview is only for someone who can buy an Office plan.
+  const buyer_role = clean(get("buyer_role"), 40) as BuyerRole;
+  if (!(BUYER_ROLES as readonly string[]).includes(buyer_role)) {
+    return { ok: false, error: "Pick their role. A preview is only built for the person in charge of the team or office: a broker-owner, managing broker, team lead or branch manager." };
+  }
+  const sizeRaw = clean(get("team_size"), 6);
+  const team_size = sizeRaw === "" ? null : Number(sizeRaw);
+  if (team_size !== null && (!Number.isInteger(team_size) || team_size < 1 || team_size > 10000)) return { ok: false, error: "Team size is a whole number of people. Leave it empty if you don't know." };
 
   const email = clean(get("email"), 160).toLowerCase();
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, error: "That email address doesn't look right." };
@@ -256,6 +269,10 @@ export function parsePreviewFields(get: (key: string) => unknown): ParsedFields 
       brand_secondary: cleanHex(get("brand_secondary"), DEFAULT_BRAND_SECONDARY),
       team_members,
       sources,
+      buyer_role,
+      buyer_reason: clean(get("buyer_reason"), 240) || null,
+      team_size,
+      detail: clean(get("detail"), 200) || null,
     },
   };
 }

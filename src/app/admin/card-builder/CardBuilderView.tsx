@@ -9,7 +9,7 @@ import { telHref } from "@/lib/prospect-preview/input";
 import { followUps, STAGE_LABELS, STAGES, stageCounts, stageOf, type Stage } from "@/lib/prospect-preview/pipeline";
 import { previewState } from "@/lib/prospect-preview/real-view";
 import type { PreviewList } from "@/lib/prospect-preview/store";
-import { DEFAULT_BRAND_PRIMARY, DEFAULT_BRAND_SECONDARY, DEFAULT_EXPIRY_DAYS, MAX_TEAM_MEMBERS, type PreviewListRow } from "@/lib/prospect-preview/types";
+import { BUYER_ROLES, BUYER_ROLE_LABELS, DEFAULT_BRAND_PRIMARY, DEFAULT_BRAND_SECONDARY, DEFAULT_EXPIRY_DAYS, MAX_TEAM_MEMBERS, type PreviewListRow } from "@/lib/prospect-preview/types";
 import CalledBox from "./CalledBox";
 import CopyPreviewLink from "./CopyPreviewLink";
 
@@ -44,6 +44,12 @@ function CreateForm() {
       <Field label="Office name"><input name="office_name" required maxLength={120} className={input} autoComplete="off" /></Field>
       <Field label="Owner's name"><input name="owner_name" required maxLength={80} className={input} autoComplete="off" /></Field>
       <Field label="Owner's title"><input name="owner_title" maxLength={80} className={input} placeholder="Broker / Owner" autoComplete="off" /></Field>
+      <Field label="Their role" hint="Only the person in charge of the team or office: they are the one who can buy for everyone.">
+        <select name="buyer_role" required defaultValue="" className={input}>
+          <option value="" disabled>Choose…</option>
+          {BUYER_ROLES.map((r) => <option key={r} value={r}>{BUYER_ROLE_LABELS[r]}</option>)}
+        </select>
+      </Field>
       <Field label="Owner's phone" hint="The alert tells you to call this number."><input name="phone" type="tel" required maxLength={40} className={input} autoComplete="off" /></Field>
       <Field label="Owner's email"><input name="email" type="email" maxLength={160} className={input} autoComplete="off" /></Field>
       <Field label="Logo address" hint="A full https:// link to their logo image. Leave empty to use their initials."><input name="logo_url" type="url" maxLength={600} className={input} placeholder="https://" autoComplete="off" /></Field>

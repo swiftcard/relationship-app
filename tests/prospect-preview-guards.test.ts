@@ -45,9 +45,10 @@ describe("admin-only", () => {
   });
 
   it("both admin pages check the admin themselves (the layout is not the boundary)", () => {
-    for (const f of ["src/app/admin/card-builder/page.tsx", "src/app/admin/card-builder/call/[id]/page.tsx"]) {
+    for (const f of ["page.tsx", "call/[id]/page.tsx", "edit/[id]/page.tsx", "send/[id]/page.tsx", "preview/[id]/page.tsx"].map((x) => `src/app/admin/card-builder/${x}`)) {
       const src = code(f);
-      expect(src, f).toContain("if (!(await requireAdmin())) notFound();");
+      // Either spelling: the pages that sign the messages keep the admin's id.
+      expect(src, f).toMatch(/if \(!\(await requireAdmin\(\)\)\) notFound\(\);|const admin = await requireAdmin\(\);\s*if \(!admin\) notFound\(\);/);
       expect(src.indexOf("requireAdmin()"), f).toBeLessThan(src.search(/listPreviews\(\)|getPreviewById\(/));
     }
   });
@@ -194,7 +195,7 @@ describe("the alert is hard to miss", () => {
   });
 
   it("the Call screen is one tap from the number", () => {
-    const call = read("src/app/admin/card-builder/call/[id]/page.tsx");
+    const call = read("src/app/admin/card-builder/call/[id]/CallView.tsx");
     expect(call).toContain("<a href={telHref(p.phone)} data-call");
   });
 });

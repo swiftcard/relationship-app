@@ -247,7 +247,7 @@ describe("the list: most recently viewed first", () => {
 
 describe("the create form", () => {
   const form = (o: Record<string, string>) => (k: string) => o[k];
-  const base = { office_name: "Harbor Realty Group", owner_name: "Dana Whitfield", phone: "(212) 555-0199" };
+  const base = { office_name: "Harbor Realty Group", owner_name: "Dana Whitfield", phone: "(212) 555-0199", buyer_role: "broker_owner" };
 
   it("makes an unguessable link from the office name, and expires in 14 days by default", () => {
     const r = parsePreviewForm(form(base), new Date(NOW));

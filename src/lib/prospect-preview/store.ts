@@ -1,7 +1,8 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { VIEW_VISIT_WINDOW_MS } from "@/lib/view-window";
 import { expiryFrom, readSocials, readSources, readTeam, type NewPreviewInput, type PreviewFields } from "./input";
-import { DEFAULT_EXPIRY_DAYS, type DeviceType, type FactSources, type LiveAlert, type PreviewListRow, type ProspectPreview } from "./types";
+import { outcomeEffect, type CallOutcome } from "./call";
+import { BUYER_ROLES, DEFAULT_EXPIRY_DAYS, type BuyerRole, type DeviceType, type FactSources, type LiveAlert, type PreviewListRow, type ProspectPreview } from "./types";
 
 // ── Card Builder: the database ──────────────────────────────────────────────
 // Both tables are RLS-on with no policies (supabase/prospect-previews.sql), so
@@ -32,6 +33,12 @@ function toPreview(row: Record<string, unknown>): ProspectPreview {
     sent_at: (row.sent_at as string | null) ?? null,
     sent_channel: row.sent_channel === "text" || row.sent_channel === "email" ? row.sent_channel : null,
     stage: (row.stage as string | null) ?? null,
+    buyer_role: (BUYER_ROLES as readonly unknown[]).includes(row.buyer_role) ? (row.buyer_role as BuyerRole) : null,
+    buyer_reason: (row.buyer_reason as string | null) ?? null,
+    team_size: typeof row.team_size === "number" ? row.team_size : null,
+    detail: (row.detail as string | null) ?? null,
+    call_outcome: (row.call_outcome as string | null) ?? null,
+    call_outcome_at: (row.call_outcome_at as string | null) ?? null,
     team_members: readTeam(row.team_members),
     social_links: readSocials(row.social_links),
     sources: readSources(row.sources),
@@ -150,6 +157,27 @@ export async function updateCall(id: string, patch: { called?: boolean; notes?: 
   }
   if (patch.notes !== undefined) row.notes = patch.notes;
   const { error } = await getAdminSupabase().from(PREVIEWS).update(row).eq("id", id);
+  return !error;
+}
+
+/**
+ * How a call went, from the Call screen's buttons. A ring-out or a voicemail
+ * is logged but doesn't count as reaching them; an outcome that ends the
+ * chase (meeting booked, won, lost) sets the stage. See outcomeEffect.
+ */
+export async function logOutcome(id: string, outcome: CallOutcome, now: Date = new Date()): Promise<boolean> {
+  const at = now.toISOString();
+  const effect = outcomeEffect(outcome);
+  const row: Record<string, unknown> = { call_outcome: outcome, call_outcome_at: at, updated_at: at };
+  if (effect.called) Object.assign(row, { called: true, called_at: at });
+  if (effect.stage !== undefined) row.stage = effect.stage;
+  const { data, error } = await getAdminSupabase().from(PREVIEWS).update(row).eq("id", id).select("id");
+  return !error && !!data?.length;
+}
+
+/** Put a won / lost / booked preview back in play. */
+export async function reopenPreview(id: string, now: Date = new Date()): Promise<boolean> {
+  const { error } = await getAdminSupabase().from(PREVIEWS).update({ stage: null, updated_at: now.toISOString() }).eq("id", id);
   return !error;
 }
 
