@@ -12,7 +12,10 @@ import { cleanHttpsUrl, expiryFrom, formatTeam, newSlug, parsePreviewFields, UUI
 import { paddedLogoSrc } from "@/lib/prospect-preview/card";
 import { scoreFit, type FitEvidence, type FitInput, type FitKey } from "@/lib/prospect-preview/fit";
 import { callBrief } from "@/lib/prospect-preview/call";
-import { checkOutreach, readOutreach, resolveOutreach } from "@/lib/prospect-preview/outreach";
+import { addToQueue, finishBatch, listConnections, listEvents, listQueue, logBatchItem, ownerBackground, recentBatches, settleQueueItem, startBatch } from "@/lib/prospect-preview/desk";
+import { batchBrief, styleNotes } from "@/lib/prospect-preview/learn";
+import { checkOutreach, readOutreach, resolveOutreach, staleNumbers } from "@/lib/prospect-preview/outreach";
+import { connectionsAt, readWarmPath } from "@/lib/prospect-preview/warm";
 import { assessQuality, isVerified } from "@/lib/prospect-preview/quality";
 import { BUYER_ROLE_LABELS, BUYER_ROLES, CURRENT_TOOL_LABELS, CURRENT_TOOLS, DEFAULT_EXPIRY_DAYS, LINK_SLOT, MAX_SPECIFICS, OUTREACH_KEYS, SOCIAL_KEYS, SOURCE_FIELDS, SOURCE_LABELS, TEXT_LIMIT, type BuyerRole, type CurrentTool, type ProspectPreview } from "@/lib/prospect-preview/types";
 import { getAdminSupabase } from "@/lib/supabase-admin";
@@ -246,8 +249,28 @@ async function saveLeads(file: string) {
  * address, website, social_links, specialty, team_members, buyer_role,
  * buyer_second (the SECOND site that confirms the name and role), team_size,
  * detail (the hook's fact), license, current_tool.
+ * Also: linkedin_url (their OWN public profile, https://www.linkedin.com/in/…,
+ * with its page under sources.linkedin_url), `"quiet": true` on a specific
+ * that is true but must never be quoted back to them (a former name, an old
+ * address, a follower count), warm_path { kind: connection | school |
+ * employer, name, text, source_url? }, and batch_id (from batch-start).
  * Leave out anything that wasn't confirmed.
  */
+function extrasFrom(raw: Json): Json {
+  const out: Json = {};
+  if ("warm_path" in raw) {
+    const warm = raw.warm_path === null ? null : readWarmPath(raw.warm_path);
+    if (raw.warm_path !== null && !warm) throw new Error("warm_path needs kind (connection, school or employer), name and text.");
+    if (warm && warm.kind !== "connection" && !warm.source_url) throw new Error("A shared school or employer needs source_url: the public page that says so about them.");
+    out.warm_path = warm;
+  }
+  if (str(raw.batch_id)) {
+    if (!UUID_RE.test(str(raw.batch_id))) throw new Error("batch_id isn't a batch id.");
+    out.batch_id = str(raw.batch_id);
+  }
+  return out;
+}
+
 function fieldsFrom(raw: Json) {
   const flat: Json = { ...raw };
   if (Array.isArray(raw.team_members)) {
@@ -272,6 +295,7 @@ function fieldsFrom(raw: Json) {
   specifics.forEach((sp, i) => {
     flat[`spec_kind_${i}`] = sp.kind; flat[`spec_text_${i}`] = sp.text; flat[`spec_src_${i}`] = sp.source_url;
     flat[`spec_date_${i}`] = sp.dated; flat[`spec_unc_${i}`] = sp.uncertain === true; flat[`spec_own_${i}`] = sp.owner === true;
+    flat[`spec_quiet_${i}`] = sp.quiet === true;
   });
   if (typeof raw.hook_specific === "number") flat.hook_specific = String(raw.hook_specific);
   // The override of the quality gate is the owner's, on the edit screen. Never from here.
@@ -295,9 +319,11 @@ async function quality(id: string) {
   const link = `${APP_URL}/p/${p.slug}`;
   const m = resolveOutreach(p, { link, sender: null });
   return {
-    ok: true, status: p.status, score: q.score, too_generic: q.tooGeneric, overridden_by_owner: p.quality_override,
+    ok: true, status: p.status, office: p.office_name, decision_maker: p.owner_name, score: q.score, too_generic: q.tooGeneric, overridden_by_owner: p.quality_override,
     checks: q.checks.map((c) => ({ check: c.label, done: c.ok, needed_to_publish: c.required, points: `${c.earned}/${c.points}`, ...(c.fix ? { fix: c.fix } : {}) })),
     specifics: p.specifics.map((sp, i) => ({ position: i, text: sp.text, verified: isVerified(sp), confirmed_by_owner: sp.owner === true })),
+    warm_path: p.warm_path ?? null,
+    numbers_flagged_as_possibly_stale: staleNumbers(p),
     could_not_confirm: [
       ...SOURCE_FIELDS.filter((k) => p.sources[k]?.uncertain).map((k) => `${SOURCE_LABELS[k]}: marked uncertain${p.sources[k]?.note ? ` (${p.sources[k]!.note})` : ""}`),
       ...p.specifics.filter((sp) => !isVerified(sp)).map((sp) => `Specific not verified: ${sp.text}`),
@@ -306,8 +332,9 @@ async function quality(id: string) {
     messages: {
       written_for_this_prospect: m.written,
       opens_with_the_hook: m.specific,
-      problems: checkOutreach(p.outreach ?? null, { link, specifics: p.specifics, complete: true }),
-      first_text: m.ask, text_with_link: m.text, email_subject: m.email.subject, email: m.email.body,
+      problems: checkOutreach(p.outreach ?? null, { link, specifics: p.specifics, complete: true, linkedin: !!p.linkedin_url, warmName: p.warm_path?.name ?? null, stale: staleNumbers(p) }),
+      first_text: m.versions?.a ?? m.ask, first_text_second_version: m.versions?.b ?? null,
+      linkedin_profile: p.linkedin_url ?? null, linkedin_connection_note: m.linkedin?.note ?? null, linkedin_message_after_accept: m.linkedin?.dm ?? null, text_with_link: m.text, email_subject: m.email.subject, email: m.email.body,
       call_opener: callBrief(p, { sender: null }).opener, voicemail: m.voicemail,
       nudge_no_view_after_2_days: m.nudge_no_view, nudge_viewed_no_pickup: m.nudge_viewed,
     },
@@ -315,10 +342,17 @@ async function quality(id: string) {
 }
 
 /**
- * { first_text, link_text, email_subject, email_body, call_opener, voicemail,
- *   nudge_no_view, nudge_viewed,
- *   uses: { first_text: <position in specifics>, link_text: …, email_body: …,
- *           call_opener: …, voicemail: …, nudge_no_view: …, nudge_viewed: … } }
+ * { first_text, first_text_b, link_text, email_subject, email_body,
+ *   call_opener, voicemail, nudge_no_view, nudge_viewed,
+ *   linkedin_note, linkedin_dm   (both required when the draft has linkedin_url),
+ *   uses: { first_text: <position in specifics>, first_text_b: …, link_text: …,
+ *           email_body: …, call_opener: …, voicemail: …, nudge_no_view: …,
+ *           nudge_viewed: …, linkedin_dm: … } }
+ * first_text_b is a second version of the first text built on a DIFFERENT
+ * specific. linkedin_note is 200 characters at most, with no link and no pitch.
+ * No follower counts, no number flagged as possibly stale, nothing built on a
+ * specific marked quiet, never "see who opens it". With a warm path, the
+ * first text names it.
  * Write {link} where the preview's link goes (link_text and email_body need
  * it; first_text must not have it). Every message is required, each is built
  * on a VERIFIED specific, and they use different ones where the preview has
@@ -335,7 +369,7 @@ async function setOutreachFor(id: string, file: string) {
   if (unknown.length) throw new Error(`These aren't messages: ${unknown.join(", ")}. Use: ${OUTREACH_KEYS.join(", ")}, and uses.`);
   const outreach = readOutreach({ ...raw, written_at: new Date().toISOString() });
   const link = `${APP_URL}/p/${p.slug}`;
-  const problems = checkOutreach(outreach, { link, specifics: p.specifics, complete: true });
+  const problems = checkOutreach(outreach, { link, specifics: p.specifics, complete: true, linkedin: !!p.linkedin_url, warmName: p.warm_path?.name ?? null, stale: staleNumbers(p) });
   if (problems.length) throw new Error(`Not saved. ${problems.join(" ")} (A text is ${TEXT_LIMIT} characters at most once ${LINK_SLOT} becomes ${link}, which is ${link.length} characters.)`);
   // Only a draft: a published preview's words are changed by a person, on the edit screen.
   const { data, error } = await getAdminSupabase().from("prospect_previews")
@@ -356,13 +390,14 @@ const links = (p: { id: string; slug: string }) => ({
 async function createDraft(file: string) {
   const raw = readJson(file) as Json;
   const fields = fieldsFrom(raw);
+  const extras = extrasFrom(raw);
   const lead = str(raw.crew_lead_id);
   if (lead && !UUID_RE.test(lead)) throw new Error("crew_lead_id isn't a lead id.");
   const s = await standing({ company: fields.office_name, website: fields.website ?? undefined, email: fields.email ?? undefined, phone: fields.phone });
   if (s.preview_id) throw new Error(`This office already has a preview (${s.preview_id}): ${s.reasons.join("; ")}. Use update-draft, or pick another office.`);
   if (s.reasons.some((r) => /do-not-contact|already contacted/.test(r))) throw new Error(`Not building this one: ${s.reasons.join("; ")}.`);
   const { data, error } = await getAdminSupabase().from("prospect_previews")
-    .insert({ ...fields, slug: newSlug(fields.office_name), status: "draft", expires_at: expiryFrom(DEFAULT_EXPIRY_DAYS), crew_lead_id: lead || s.lead_id })
+    .insert({ ...fields, ...extras, slug: newSlug(fields.office_name), status: "draft", expires_at: expiryFrom(DEFAULT_EXPIRY_DAYS), crew_lead_id: lead || s.lead_id })
     .select("id, slug, status").single();
   if (error || !data) throw new Error(error?.message ?? "insert failed");
   return { ok: true, status: data.status, ...links(data as { id: string; slug: string }) };
@@ -370,12 +405,15 @@ async function createDraft(file: string) {
 
 async function updateDraft(id: string, file: string) {
   if (!UUID_RE.test(id)) throw new Error("update-draft wants the preview's id first.");
-  const fields = fieldsFrom(readJson(file) as Json);
+  const raw = readJson(file) as Json;
+  const fields = fieldsFrom(raw);
+  const extras = extrasFrom(raw);
   // Only a draft: a published preview is in front of a prospect and is changed by a person, on the edit screen.
   const { data, error } = await getAdminSupabase().from("prospect_previews")
     .update({ ...fields, updated_at: new Date().toISOString() }).eq("id", id).eq("status", "draft").select("id, slug, status");
   if (error) throw new Error(error.message);
   if (!data?.length) throw new Error("No DRAFT with that id. A published preview is only changed on its edit screen.");
+  if (Object.keys(extras).length) await getAdminSupabase().from("prospect_previews").update(extras).eq("id", id).eq("status", "draft");
   return { ok: true, status: data[0].status, ...links(data[0] as { id: string; slug: string }) };
 }
 
@@ -392,7 +430,7 @@ async function shots(id: string, dir?: string) {
   const { default: PreviewView } = await import("@/app/p/[slug]/PreviewView");
   const logoSrc = paddedLogoSrc(preview, false);
   const { logoResponse } = await import("@/lib/prospect-preview/logo-server");
-  const logo = logoSrc ? await logoResponse(preview.logo_url) : null;
+  const logo = logoSrc ? await logoResponse(preview.logo_url, preview.brand_primary) : null;
   const logoPng = logo?.ok ? Buffer.from(await logo.arrayBuffer()) : null;
   const markup = renderToStaticMarkup(createElement(PreviewView, { preview, calendarUrl: "/demo", logoSrc: logoPng ? logoSrc : null }));
   const css = await appCss();
@@ -445,6 +483,107 @@ async function colors(logo?: string, website?: string) {
   return got ? { ok: true, ...got } : { ok: false, error: "Couldn't read colours from that logo or site. Pick them by eye from the site instead, and mark the colors source uncertain." };
 }
 
+// ── the queue, batches, warm paths and the owner's style ────────────────────
+
+/** What the owner dropped into the Add box and nobody has built yet. */
+async function queue() {
+  const items = await listQueue();
+  return { ok: true, waiting: items.length, items: items.map((q) => ({ id: q.id, input: q.input, owners_own_notes: q.is_notes, added: q.created_at })), note: "An item marked owners_own_notes is the owner's own words: its facts are confirmed by the owner. Settle each one with queue-settle as soon as it is built, skipped or failed." };
+}
+
+/** { outcome: "built" | "skipped" | "failed", preview_id?, note?, batch_id? } */
+async function queueSettle(id: string, file: string) {
+  if (!UUID_RE.test(id)) throw new Error("queue-settle wants the queue item's id first.");
+  const raw = readJson(file) as Json;
+  const outcome = str(raw.outcome);
+  if (outcome !== "built" && outcome !== "skipped" && outcome !== "failed") throw new Error("outcome is built, skipped or failed.");
+  const preview_id = str(raw.preview_id) || null;
+  if (outcome === "built" && (!preview_id || !UUID_RE.test(preview_id))) throw new Error("A built item needs its preview_id.");
+  if (outcome !== "built" && !str(raw.note)) throw new Error("Say why in note: the owner reads it.");
+  const ok = await settleQueueItem(id, outcome, { note: str(raw.note) || null, preview_id, batch_id: UUID_RE.test(str(raw.batch_id)) ? str(raw.batch_id) : null });
+  if (!ok) throw new Error("No queue item with that id.");
+  return { ok: true, id, outcome };
+}
+
+/** One line per prospect, for a run that was handed names instead of the Add box. */
+async function queueAdd(file: string) {
+  const raw = readJson(file) as Json;
+  const lines = Array.isArray(raw.lines) ? (raw.lines as unknown[]).map((l) => str(l)).filter(Boolean) : [];
+  if (!lines.length) throw new Error("queue-add wants { lines: [\"Harbor Realty Group, Brooklyn\", …] }.");
+  return { ok: true, added: await addToQueue(lines.map((input) => ({ input: input.slice(0, 600), is_notes: false }))) };
+}
+
+/**
+ * { label: "<what was typed>", kind: "now" | "tonight", wanted: <count> }
+ * A run with the same label that started in the last day and never finished
+ * is RESUMED: its items come back, and anything already built is not rebuilt.
+ */
+async function batchStart(file: string) {
+  const raw = readJson(file) as Json;
+  const wanted = Number(raw.wanted);
+  if (Number.isFinite(wanted) && wanted > 30) throw new Error("A batch is 30 offices at most. Run a second one for more.");
+  const got = await startBatch({ label: str(raw.label), kind: str(raw.kind) === "tonight" ? "tonight" : "now", wanted: Number.isInteger(wanted) && wanted > 0 ? wanted : null });
+  if (!got) throw new Error("batch-start wants { label, kind, wanted }.");
+  return { ok: true, batch_id: got.batch.id, resumed: got.resumed, already_done: got.batch.items, note: got.resumed ? "This run was started before and didn't finish. Skip every office in already_done and carry on." : "New batch. Log every office with batch-log as soon as its outcome is known." };
+}
+
+/** { office, outcome: "built" | "skipped" | "failed", preview_id?, reason? }: logged the moment it is known, so a run that dies loses nothing. */
+async function batchLog(id: string, file: string) {
+  if (!UUID_RE.test(id)) throw new Error("batch-log wants the batch id first.");
+  const raw = readJson(file) as Json;
+  const outcome = str(raw.outcome);
+  if (!str(raw.office) || (outcome !== "built" && outcome !== "skipped" && outcome !== "failed")) throw new Error("batch-log wants { office, outcome: built | skipped | failed, preview_id?, reason? }.");
+  if (outcome === "built" && !UUID_RE.test(str(raw.preview_id))) throw new Error("A built office needs its preview_id.");
+  if (outcome !== "built" && !str(raw.reason)) throw new Error("Say why in reason, in a few plain words: the owner reads it (\"already contacted\", \"couldn't confirm who is in charge\").");
+  const batch = await logBatchItem(id, { office: str(raw.office), outcome, preview_id: str(raw.preview_id) || null, reason: str(raw.reason) || null });
+  if (!batch) throw new Error("No batch with that id.");
+  return { ok: true, batch_id: id, logged: batch.items.length, built: batch.items.filter((i) => i.outcome === "built").length };
+}
+
+async function briefOf(id: string) {
+  const { listPreviews } = await import("@/lib/prospect-preview/store");
+  const batch = (await recentBatches(30)).find((b) => b.id === id);
+  if (!batch) throw new Error("No batch with that id.");
+  const list = await listPreviews();
+  return batchBrief(batch, list.ready ? list.rows : []);
+}
+
+/** Marks the batch finished. The app then sends the owner ONE push (within a few minutes; an overnight batch waits for 8am). */
+async function batchFinish(id: string) {
+  if (!UUID_RE.test(id)) throw new Error("batch-finish wants the batch id.");
+  if (!(await finishBatch(id))) throw new Error("No batch with that id.");
+  return { ok: true, ...(await briefOf(id)), approve_link: `${APP_URL}/admin/card-builder/approve`, note: "The owner's push is sent by the app, not from here." };
+}
+
+async function batchStatus(id: string) {
+  if (!UUID_RE.test(id)) throw new Error("batch-status wants the batch id.");
+  return { ok: true, ...(await briefOf(id)) };
+}
+
+/**
+ * { company }: who the owner already knows there (from their own LinkedIn
+ * connections export), and the owner's own schools and past employers to look
+ * for in the prospect's public bio.
+ */
+async function warm(file: string) {
+  const raw = readJson(file) as Json;
+  if (!str(raw.company)) throw new Error("warm wants { company }.");
+  const connections = await listConnections();
+  const background = await ownerBackground();
+  return {
+    ok: true, connections_on_file: connections.length,
+    connections_at_this_office: connectionsAt(str(raw.company), connections),
+    owners_schools: background.schools, owners_past_employers: background.employers,
+    note: "A connection marked exact: false is at a firm of the same name and may be another office: say so. A shared school or employer only counts when a public page about the PROSPECT says it; give that page as warm_path.source_url. Never guess one.",
+  };
+}
+
+/** The owner's own corrections, as examples of their voice. Read before writing any message. */
+async function style() {
+  const notes = styleNotes(await listEvents());
+  return { ok: true, ...notes, note: notes.edits.length || notes.sent_as.length ? "Write like the 'after' side. These are the owner's own words." : "No edits yet: there is nothing to learn from. Follow the rules in build-card.md." };
+}
+
 async function run(args: string[]): Promise<Json> {
   const [cmd, a, b] = args;
   switch (cmd) {
@@ -456,6 +595,15 @@ async function run(args: string[]): Promise<Json> {
     case "create-draft": return createDraft(a);
     case "update-draft": return updateDraft(a, b);
     case "set-outreach": return setOutreachFor(a, b);
+    case "queue": return queue();
+    case "queue-add": return queueAdd(a);
+    case "queue-settle": return queueSettle(a, b);
+    case "batch-start": return batchStart(a);
+    case "batch-log": return batchLog(a, b);
+    case "batch-finish": return batchFinish(a);
+    case "batch-status": return batchStatus(a);
+    case "warm": return warm(a);
+    case "style": return style();
     case "shots": return shots(a, b);
     case "colors": return colors(a, b);
     default: throw new Error(`Unknown command "${cmd}". See scripts/card-builder.mjs.`);

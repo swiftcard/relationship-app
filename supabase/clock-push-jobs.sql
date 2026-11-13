@@ -36,7 +36,9 @@ select cron.schedule('trial-notice', '17 * * * *',
 -- Card Builder's "3 follow-ups due today" push to staff (2026-11-13,
 -- lib/prospect-preview/digest.ts). Its own job, so the three above are
 -- untouched. The route decides whether it is morning in New York and whether
--- today's has gone, so the hourly call sends at most one push a day.
+-- today's has gone, so it sends at most one digest a day. Every 5 minutes
+-- (not hourly) because the same call announces a finished /build batch, once,
+-- and "your drafts are ready" shouldn't wait up to an hour.
 select cron.unschedule('prospect-follow-ups') where exists (select 1 from cron.job where jobname = 'prospect-follow-ups');
-select cron.schedule('prospect-follow-ups', '7 * * * *',
+select cron.schedule('prospect-follow-ups', '*/5 * * * *',
   $$select clock_call('prospect-follow-ups', 'https://swiftcard.me/api/push/prospect-follow-ups', 'clock_secret')$$);

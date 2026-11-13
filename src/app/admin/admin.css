@@ -223,3 +223,7 @@
 .sc-admin .adm-prospect-call:hover { background: #E9F7EE; }
 .sc-admin .adm-prospect-more { background: rgba(255, 255, 255, 0.16); color: #fff; }
 .sc-admin .adm-prospect-more:hover { background: rgba(255, 255, 255, 0.28); }
+
+/* Card Builder's three big buttons: the one with something waiting is outlined in the tint. */
+.sc-admin .adm-big-on { box-shadow: inset 0 0 0 2px var(--sc-tint); }
+.sc-admin .adm-big-on [data-count] { color: var(--sc-tint); }

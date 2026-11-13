@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendFollowUpDigest } from "@/lib/prospect-preview/digest";
+import { announceBatches, sendFollowUpDigest } from "@/lib/prospect-preview/digest";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -11,7 +11,8 @@ export const maxDuration = 60;
 // the other morning pushes (.github/workflows/push-catchup.yml), with the same
 // secrets; the function decides whether it is morning in New York, whether
 // anybody is due and whether today's has already gone, so a duplicate or late
-// run sends nothing twice. It never contacts a prospect.
+// run sends nothing twice. The same call announces a finished /build batch
+// ("22 drafts ready to approve"), once each. It never contacts a prospect.
 
 function authorized(req: NextRequest): boolean {
   const auth = req.headers.get("authorization");
@@ -25,5 +26,6 @@ function authorized(req: NextRequest): boolean {
 
 export async function GET(req: NextRequest) {
   if (!authorized(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  return NextResponse.json({ ok: true, ...(await sendFollowUpDigest()) });
+  const batches = await announceBatches().catch(() => ({ announced: 0 }));
+  return NextResponse.json({ ok: true, ...(await sendFollowUpDigest()), ...batches });
 }

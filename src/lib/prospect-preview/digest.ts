@@ -1,7 +1,10 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { sendPushToUser } from "@/lib/push";
 import { localHour } from "@/lib/push-policy";
+import { notifyAdmin } from "@/lib/admin-notify";
 import { adminUserIds } from "./alert";
+import { claimUnannouncedBatches } from "./desk";
+import { batchBrief, batchPush } from "./learn";
 import { followUps, type FollowUp } from "./pipeline";
 import { listPreviews } from "./store";
 
@@ -26,7 +29,7 @@ export const DIGEST_TIMEZONE = "America/New_York";
 export const DIGEST_FIRST_HOUR = 8;
 export const DIGEST_LAST_HOUR = 20;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
-const PATH = "/admin/card-builder#follow-ups";
+const PATH = "/admin/card-builder/follow-up";
 
 export const digestDue = (now: number): boolean => {
   const h = localHour(now, DIGEST_TIMEZONE);
@@ -69,4 +72,43 @@ export async function sendFollowUpDigest(now: number = Date.now()): Promise<Dige
     sendPushToUser(userId, { title, body, url: `${APP_URL}${PATH}`, tag: "prospect-follow-ups", category: "prospect_view" }).then(() => 1).catch(() => 0),
   ));
   return { sent: results.reduce<number>((a, b) => a + b, 0), due: due.length, reason: "sent" };
+}
+
+// ── "22 drafts ready to approve" ────────────────────────────────────────────
+// One push when a /build batch finishes (owner, 2026-11-13). The command-line
+// tool that runs a batch can't push (it holds no push keys, and is pinned to
+// send nothing), so it only marks the batch finished; this, on the same clock
+// as the digest, announces it. An overnight batch that finishes at 3am waits
+// for the morning: it is news, not an alarm.
+
+//
+//   /build now      announced as soon as it finishes, between 8am and 10pm
+//   /build tonight  "ready by 8am": announced from 8am, never the evening it
+//                   was started (a batch typed at 9pm that finishes at 9:40pm
+//                   says so at 8 the next morning, with the day's first coffee)
+
+export const BATCH_PUSH_FIRST_HOUR = 8;
+export const BATCH_PUSH_LAST_HOUR = 22;
+export const TONIGHT_PUSH_LAST_HOUR = 18;
+/** Which kinds of batch may be announced at this hour (New York). */
+export function batchKindsDue(now: number): ("now" | "tonight")[] {
+  const h = localHour(now, DIGEST_TIMEZONE);
+  if (h < BATCH_PUSH_FIRST_HOUR || h >= BATCH_PUSH_LAST_HOUR) return [];
+  return h < TONIGHT_PUSH_LAST_HOUR ? ["now", "tonight"] : ["now"];
+}
+
+export async function announceBatches(now: number = Date.now()): Promise<{ announced: number }> {
+  const batches = await claimUnannouncedBatches(batchKindsDue(now), new Date(now));
+  if (!batches.length) return { announced: 0 };
+  const list = await listPreviews();
+  const rows = list.ready ? list.rows : [];
+  const ids = await adminUserIds();
+  for (const b of batches) {
+    const { title, body } = batchPush(batchBrief(b, rows));
+    await notifyAdmin({ kind: "prospects", title, body, href: "/admin/card-builder", dedupeKey: `prospect-batch:${b.id}` });
+    await Promise.all(ids.map((userId) =>
+      sendPushToUser(userId, { title, body, url: `${APP_URL}/admin/card-builder`, tag: `prospect-batch-${b.id}`, category: "prospect_view" }).catch(() => {}),
+    ));
+  }
+  return { announced: batches.length };
 }

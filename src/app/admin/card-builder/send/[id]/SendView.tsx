@@ -7,6 +7,7 @@ import type { Messages } from "@/lib/prospect-preview/messages";
 import { STAGE_LABELS, stageOf } from "@/lib/prospect-preview/pipeline";
 import { previewState } from "@/lib/prospect-preview/real-view";
 import type { PreviewListRow } from "@/lib/prospect-preview/types";
+import LinkedInButton from "../../LinkedInButton";
 import SendMessage from "./SendMessage";
 
 // ── Card Builder: the Send screen (server component, no data loading) ───────
@@ -16,7 +17,7 @@ import SendMessage from "./SendMessage";
 // page.tsx loads the preview and writes the messages; this draws them, so
 // tests/render can measure the real markup.
 
-const DONE: Record<string, string> = { sent: "Marked as sent.", unsent: "Cleared. It shows as not sent again." };
+const DONE: Record<string, string> = { sent: "Marked as sent.", unsent: "Cleared. It shows as not sent again.", saved: "Saved.", accepted: "Marked as accepted. Their message is ready below, and under Call and follow up." };
 
 export default function SendView({ p, messages, now, senderKnown, done, error }: {
   p: PreviewListRow;
@@ -69,7 +70,16 @@ export default function SendView({ p, messages, now, senderKnown, done, error }:
       )}
 
       <Section title="1. First text, no link" hint={`To ${p.phone}. Asks if they want it. ${p.asked_at ? `Sent ${fmtDateTime(p.asked_at)}.` : "Not sent yet."}`}>
-        <SendMessage id={p.id} kind="ask" to={p.phone} body={messages.ask} button="Open Messages" blocked={null} />
+        <SendMessage key={messages.versions?.picked ?? "one"} id={p.id} kind="ask" to={p.phone} body={messages.ask} button="Open Messages" blocked={null} />
+        {messages.versions && (
+          <form method="post" action={post} className="mt-3" data-version-switch>
+            <input type="hidden" name="action" value="pick" />
+            <input type="hidden" name="pick" value={messages.versions.picked === "a" ? "b" : "a"} />
+            <input type="hidden" name="back" value={here} />
+            <p className="sc-t-footnote adm-muted">This is version {messages.versions.picked.toUpperCase()}. The other one: “{messages.versions.picked === "a" ? messages.versions.b : messages.versions.a}”</p>
+            <button type="submit" className="adm-link sc-t-footnote mt-1">Use that one instead</button>
+          </form>
+        )}
       </Section>
 
       <Section title="2. Text with the link" hint={`To ${p.phone}. ${p.sent_at && p.sent_channel === "text" ? `Sent ${fmtDateTime(p.sent_at)}.` : "Not sent yet."}`}>
@@ -88,6 +98,34 @@ export default function SendView({ p, messages, now, senderKnown, done, error }:
       <Section title="5. Nudge: looked, didn't pick up" hint={`To ${p.phone}. For after you called and got no answer. ${p.nudge_viewed_at ? `Sent ${fmtDateTime(p.nudge_viewed_at)}.` : "Not sent yet."}`}>
         <SendMessage id={p.id} kind="nudge_viewed" to={p.phone} body={messages.nudge_viewed} button="Open Messages" blocked={live ? null : "This one is for after they have looked at their card. Publish the preview first."} />
       </Section>
+
+      {messages.linkedin && p.linkedin_url && (
+        <Section title="6. LinkedIn" hint="By hand: the button copies the words and opens their profile. You paste and send there. SwiftCard never signs in to LinkedIn." id="pp-linkedin">
+          <div className="flex flex-col gap-4">
+            {messages.linkedin.note && (
+              <div className="flex flex-col gap-2">
+                <p className="sc-t-caption adm-faint uppercase tracking-wide">Connection note · {messages.linkedin.note.length} characters · {p.linkedin_sent_at ? `sent ${fmtDateTime(p.linkedin_sent_at)}` : "not sent yet"}</p>
+                <p className="sc-t-subhead whitespace-pre-line" style={{ overflowWrap: "anywhere" }} data-linkedin-words="note">{messages.linkedin.note}</p>
+                <div><LinkedInButton id={p.id} kind="linkedin_note" words={messages.linkedin.note} profile={p.linkedin_url}>Copy the note and open their profile</LinkedInButton></div>
+              </div>
+            )}
+            <form method="post" action={post} className="flex flex-wrap items-center gap-2">
+              <input type="hidden" name="action" value="linkedin_accepted" />
+              <input type="hidden" name="on" value={p.linkedin_accepted_at ? "0" : "1"} />
+              <input type="hidden" name="back" value={here} />
+              <button type="submit" className="sc-btn sc-btn-sm sc-btn-gray" data-accepted>{p.linkedin_accepted_at ? "Not accepted after all" : "They accepted my request"}</button>
+              {p.linkedin_accepted_at && <span className="sc-t-caption adm-muted">Accepted {fmtDateTime(p.linkedin_accepted_at)}.</span>}
+            </form>
+            {messages.linkedin.dm && (
+              <div className="flex flex-col gap-2">
+                <p className="sc-t-caption adm-faint uppercase tracking-wide">Message after they accept · {p.linkedin_dm_at ? `sent ${fmtDateTime(p.linkedin_dm_at)}` : "not sent yet"}</p>
+                <p className="sc-t-subhead whitespace-pre-line" style={{ overflowWrap: "anywhere" }} data-linkedin-words="dm">{messages.linkedin.dm}</p>
+                <div><LinkedInButton id={p.id} kind="linkedin_dm" words={messages.linkedin.dm} profile={p.linkedin_url}>Copy the message and open their profile</LinkedInButton></div>
+              </div>
+            )}
+          </div>
+        </Section>
+      )}
 
       <Section title="Sent it another way?" hint="If you sent a message without these buttons, or pressed one and didn't send, set it straight here.">
         <div className="flex flex-wrap gap-2">

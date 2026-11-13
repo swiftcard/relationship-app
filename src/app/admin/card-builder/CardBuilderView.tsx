@@ -6,18 +6,22 @@ import { StatusBadge } from "../_ui/badges";
 import { Icon } from "../_ui/icons";
 import { fmtDate, fmtDateTime, timeAgo } from "../_ui/format";
 import { telHref } from "@/lib/prospect-preview/input";
-import { smsHref } from "@/lib/prospect-preview/messages";
-import { resolveOutreach } from "@/lib/prospect-preview/outreach";
+import { STAT_LABELS, type BatchBrief, type MessageStat } from "@/lib/prospect-preview/learn";
 import { approvalQueue, followUps, STAGE_LABELS, STAGES, stageCounts, stageOf, type Stage } from "@/lib/prospect-preview/pipeline";
 import { assessQuality } from "@/lib/prospect-preview/quality";
 import { previewState } from "@/lib/prospect-preview/real-view";
 import type { PreviewList } from "@/lib/prospect-preview/store";
-import { BUYER_ROLES, BUYER_ROLE_LABELS, DEFAULT_BRAND_PRIMARY, DEFAULT_BRAND_SECONDARY, DEFAULT_EXPIRY_DAYS, MAX_TEAM_MEMBERS, type PreviewListRow } from "@/lib/prospect-preview/types";
+import type { PreviewListRow } from "@/lib/prospect-preview/types";
 import CalledBox from "./CalledBox";
 import CopyPreviewLink from "./CopyPreviewLink";
-import OneTapSend from "./OneTapSend";
 
 // ── Card Builder (server component, no data loading) ────────────────────────
+// Phone first, three buttons (owner, 2026-11-13: "one clear action per
+// screen"): Approve, Call and follow up, Add, each with its count. The latest
+// batch's brief sits above them while it has drafts waiting. Everything else
+// (the stage counts, every preview, what's working) is under Details; warm
+// paths and the alert settings are under More. The create form moved to Add
+// and the follow-up list to its own screen.
 // page.tsx loads the list; this draws it, so tests/render can measure the real
 // markup with fixtures. Every action is a plain <form method="post"> to
 // /api/admin/card-builder…, so it works before hydration. Delete is two steps
@@ -29,61 +33,6 @@ const DONE: Record<string, { ok: boolean; text: string }> = {
   deleted: { ok: true, text: "Preview deleted. Its link no longer opens." },
   failed: { ok: false, text: "That didn't work. Try again in a minute." },
 };
-
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <label className="block min-w-0">
-      <span className="sc-field-label">{label}</span>
-      {children}
-      {hint && <span className="sc-t-caption adm-muted block mt-1">{hint}</span>}
-    </label>
-  );
-}
-
-const input = "sc-field w-full px-3 py-2";
-
-function CreateForm() {
-  return (
-    <form method="post" action="/api/admin/card-builder" className="grid gap-4 sm:grid-cols-2">
-      <Field label="Office name"><input name="office_name" required maxLength={120} className={input} autoComplete="off" /></Field>
-      <Field label="Owner's name"><input name="owner_name" required maxLength={80} className={input} autoComplete="off" /></Field>
-      <Field label="Owner's title"><input name="owner_title" maxLength={80} className={input} placeholder="Broker / Owner" autoComplete="off" /></Field>
-      <Field label="Their role" hint="Only the person in charge of the team or office: they are the one who can buy for everyone.">
-        <select name="buyer_role" required defaultValue="" className={input}>
-          <option value="" disabled>Choose…</option>
-          {BUYER_ROLES.map((r) => <option key={r} value={r}>{BUYER_ROLE_LABELS[r]}</option>)}
-        </select>
-      </Field>
-      <Field label="Owner's phone" hint="The alert tells you to call this number."><input name="phone" type="tel" required maxLength={40} className={input} autoComplete="off" /></Field>
-      <Field label="Owner's email"><input name="email" type="email" maxLength={160} className={input} autoComplete="off" /></Field>
-      <Field label="Logo address" hint="A full https:// link to their logo image. Leave empty to use their initials."><input name="logo_url" type="url" maxLength={600} className={input} placeholder="https://" autoComplete="off" /></Field>
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="Brand color"><input name="brand_primary" type="color" defaultValue={DEFAULT_BRAND_PRIMARY} className="sc-field w-full h-11 p-1" /></Field>
-        <Field label="Accent color"><input name="brand_secondary" type="color" defaultValue={DEFAULT_BRAND_SECONDARY} className="sc-field w-full h-11 p-1" /></Field>
-      </div>
-      <Field label="Link stays up for (days)"><input name="expires_days" type="number" min={1} max={90} defaultValue={DEFAULT_EXPIRY_DAYS} className={input} /></Field>
-      <div className="sm:col-span-2">
-        <Field label="Team members" hint={`One per line: Name, Title. Up to ${MAX_TEAM_MEMBERS}. Each gets a card in the "Your team" strip.`}>
-          <textarea name="team_members" rows={4} className={input} placeholder={"Dana Whitfield, Senior Agent\nMarcus Lee, Office Manager"} />
-        </Field>
-      </div>
-      <details className="sm:col-span-2">
-        <summary className="adm-link sc-t-footnote cursor-pointer">More options</summary>
-        <div className="grid gap-4 sm:grid-cols-2 mt-3">
-          <Field label="Link name" hint="Leave empty and one is made from the office name, with a random ending so it can't be guessed.">
-            <input name="slug" maxLength={64} className={input} autoComplete="off" />
-          </Field>
-          <Field label="Lead ID" hint="Only if this prospect came from the agents' leads.">
-            <input name="crew_lead_id" maxLength={40} className={input} autoComplete="off" />
-          </Field>
-        </div>
-      </details>
-      <div className="sm:col-span-2">
-        <button type="submit" className="sc-btn sc-btn-filled"><Icon name="plus" className="w-4 h-4" />Create draft</button>
-      </div>
-    </form>
-  );
-}
 
 const STAGE_TONE: Record<Stage, "good" | "bad" | "warn" | "neutral" | "tint"> = {
   draft: "warn", ready: "neutral", sent: "neutral", viewed: "tint", called: "tint", meeting_booked: "good", won: "good", lost: "bad",
@@ -100,52 +49,6 @@ function statusBadge(r: PreviewListRow, now: number) {
       {stage === "draft" && !assessQuality(r).mayPublish && <StatusBadge tone="bad">Too generic</StatusBadge>}
       {r.status === "paused" ? <StatusBadge tone="neutral">Paused</StatusBadge> : r.status === "live" && state === "expired" ? <StatusBadge tone="bad">Expired</StatusBadge> : null}
     </>
-  );
-}
-
-const SCREEN_LABEL = { call: "Call screen", send: "Send", edit: "Edit" } as const;
-
-const SEND_LABEL = { ask: "Send first text", text: "Text the link", nudge_no_view: "Send nudge", nudge_viewed: "Text them" } as const;
-
-/**
- * Who to chase, each with the words already written (for this prospect when
- * /build-card wrote them, the templates otherwise) and one tap to send them
- * from the founder's own phone. A call comes with its voicemail script.
- */
-function FollowUps({ rows, now, linkOf, sender }: { rows: PreviewListRow[]; now: number; linkOf: (slug: string) => string; sender: string | null }) {
-  const list = followUps(rows, now);
-  const byId = new Map(rows.map((r) => [r.id, r]));
-  if (!list.length) return <EmptyState>Nobody to chase today.</EmptyState>;
-  return (
-    <ul className="adm-divide">
-      {list.map((f) => {
-        const r = byId.get(f.id)!;
-        const m = f.send || f.voicemail ? resolveOutreach(r, { link: linkOf(r.slug), sender }) : null;
-        const words = !m ? null : f.send === "ask" ? m.ask : f.send === "text" ? m.text : f.send ? m[f.send] : null;
-        return (
-          <li key={f.id} className="px-4 sm:px-5 py-3 flex flex-col gap-2" data-follow-up={f.kind}>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <p className="sc-t-subhead min-w-0">
-                <span className="font-semibold">{r.owner_name}</span><span className="adm-muted"> · {r.office_name}</span>
-                <span className="block adm-muted">{f.why} {f.next}</span>
-              </p>
-              <div className="flex flex-wrap items-center gap-2 shrink-0 self-start sm:self-auto">
-                {f.send && words && <OneTapSend id={r.id} kind={f.send} href={smsHref(r.phone, words)} className="sc-btn sc-btn-sm sc-btn-filled">{SEND_LABEL[f.send]}</OneTapSend>}
-                {f.voicemail && <a href={telHref(r.phone)} className="sc-btn sc-btn-sm sc-btn-filled" data-follow-call><Icon name="phone" className="w-4 h-4" />Call</a>}
-                <Link href={`/admin/card-builder/${f.screen}/${r.id}`} className="sc-btn sc-btn-sm sc-btn-gray">{SCREEN_LABEL[f.screen]}</Link>
-              </div>
-            </div>
-            {f.send && words && <p className="sc-t-footnote adm-muted whitespace-pre-line" style={{ overflowWrap: "anywhere" }} data-follow-words={f.send}>{words}</p>}
-            {f.voicemail && m && (
-              <details>
-                <summary className="adm-link sc-t-footnote cursor-pointer">Voicemail script</summary>
-                <p className="sc-t-footnote adm-muted mt-1" style={{ overflowWrap: "anywhere" }} data-follow-voicemail>{m.voicemail}</p>
-              </details>
-            )}
-          </li>
-        );
-      })}
-    </ul>
   );
 }
 
@@ -220,7 +123,72 @@ function Row({ r, link, now }: { r: PreviewListRow; link: string; now: number })
   );
 }
 
-export default function CardBuilderView({ list, appUrl, now, made, error, done, calendarSet, sender = null }: {
+function BigButton({ href, count, label, hint, primary }: { href: string; count: number; label: string; hint: string; primary: boolean }) {
+  return (
+    <Link href={href} className={`adm-card rounded-2xl px-4 py-4 flex items-center gap-4 min-h-[88px] ${primary ? "adm-big-on" : ""}`} data-big={label}>
+      <span className="sc-t-title1 font-semibold tabular-nums shrink-0 w-12 text-center" data-count>{count}</span>
+      <span className="min-w-0">
+        <span className="sc-t-headline block">{label}</span>
+        <span className="sc-t-footnote adm-muted block">{hint}</span>
+      </span>
+    </Link>
+  );
+}
+
+/** "Ready to approve": the last batch's drafts, best score first, and who was skipped and why. */
+function Brief({ b }: { b: BatchBrief }) {
+  const n = b.ready.length;
+  return (
+    <Section title={b.finished ? (n ? "Ready to approve" : "Batch finished") : "Batch running"} hint={`“${b.label}”${b.finished ? "" : `: ${b.built} built so far`}`} id="batch-brief">
+      <div className="flex flex-col gap-3 min-w-0" data-brief>
+        {n > 0 ? (
+          <>
+            <p className="sc-t-subhead"><span className="font-semibold">{n === 1 ? "1 draft" : `${n} drafts`}</span> waiting for you, best first:</p>
+            <ol className="sc-t-subhead space-y-1 min-w-0 w-full" data-brief-ready>
+              {b.ready.slice(0, 5).map((r) => (
+                <li key={r.id} className="flex items-baseline justify-between gap-3 min-w-0">
+                  <span className="min-w-0 truncate">{r.office}<span className="adm-muted"> · {r.owner}</span></span>
+                  <span className="shrink-0 tabular-nums">{r.score}{r.tooGeneric ? <span className="adm-bad"> · too generic</span> : null}</span>
+                </li>
+              ))}
+            </ol>
+            {n > 5 && <p className="sc-t-footnote adm-muted">And {n - 5} more.</p>}
+          </>
+        ) : (
+          <p className="sc-t-subhead adm-muted">{b.finished ? (b.built ? "All of its drafts have been dealt with." : "It built no drafts.") : "Drafts appear here as each one is finished."}</p>
+        )}
+        {b.skippedCount > 0 && (
+          <p className="sc-t-footnote adm-muted" data-brief-skipped>
+            <span className="font-semibold">{b.skippedCount} skipped:</span> {b.skipped.map((g) => `${g.reason} (${g.offices.length})`).join("; ")}.
+          </p>
+        )}
+        {n > 0 && <Link href="/admin/card-builder/approve" className="sc-btn sc-btn-filled sc-btn-lg sc-btn-block">Approve them</Link>}
+      </div>
+    </Section>
+  );
+}
+
+function Stats({ stats }: { stats: MessageStat[] }) {
+  if (!stats.length) return <EmptyState>Nothing has been sent yet. Each message you send is counted here, with what happened next.</EmptyState>;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full sc-t-footnote" data-stats>
+        <thead><tr className="adm-muted text-left"><th className="font-medium py-1.5 pr-3">Message</th><th className="font-medium py-1.5 px-2 text-right">Sent</th><th className="font-medium py-1.5 px-2 text-right">Viewed</th><th className="font-medium py-1.5 px-2 text-right">Picked up</th><th className="font-medium py-1.5 pl-2 text-right">Booked</th></tr></thead>
+        <tbody>
+          {stats.map((s) => (
+            <tr key={`${s.message}-${s.variant ?? ""}`}>
+              <td className="py-1.5 pr-3">{STAT_LABELS[s.message] ?? s.message}{s.variant ? `, version ${s.variant.toUpperCase()}` : ""}</td>
+              <td className="py-1.5 px-2 text-right tabular-nums">{s.sent}</td><td className="py-1.5 px-2 text-right tabular-nums">{s.viewed}</td>
+              <td className="py-1.5 px-2 text-right tabular-nums">{s.picked_up}</td><td className="py-1.5 pl-2 text-right tabular-nums">{s.booked}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export default function CardBuilderView({ list, appUrl, now, made, error, done, queueCount = 0, brief = null, stats = [] }: {
   list: PreviewList;
   appUrl: string;
   /** The time the page was made (server), so the view stays pure. */
@@ -228,21 +196,21 @@ export default function CardBuilderView({ list, appUrl, now, made, error, done, 
   made: string | null;
   error: string | null;
   done: string | null;
-  calendarSet: boolean;
-  /** The signed-in admin's own name, for the template wording. */
-  sender?: string | null;
+  /** Prospects waiting in the Add queue for the next /build run. */
+  queueCount?: number;
+  /** The latest batch, when it still has something to say. */
+  brief?: BatchBrief | null;
+  /** What happened after each kind of message (lib/prospect-preview/learn). */
+  stats?: MessageStat[];
 }) {
   const linkOf = (slug: string) => `${appUrl}/p/${slug}`;
   const outcome = done ? DONE[done] ?? null : null;
   const queue = list.ready ? approvalQueue(list.rows, now) : null;
   const toDecide = queue ? queue.waiting.length + queue.send.length : 0;
+  const toChase = list.ready ? followUps(list.rows, now).length : 0;
   return (
     <Stack>
-      <PageHeader
-        title="Card Builder"
-        description="Build a preview card for a prospect, send them the link, and get told the moment they look at it."
-        actions={list.ready ? <Link href="/admin/card-builder/approve" className={`sc-btn ${toDecide ? "sc-btn-filled" : "sc-btn-gray"}`} data-approve-link>{toDecide ? `Approve (${toDecide})` : "Approve"}</Link> : undefined}
-      />
+      <PageHeader title="Card Builder" description="Approve what was built for you, call who looked, add who is next." />
 
       {made && /^[a-z0-9-]{3,64}$/.test(made) && (
         <div className="adm-callout-good rounded-xl px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between" role="status">
@@ -252,11 +220,6 @@ export default function CardBuilderView({ list, appUrl, now, made, error, done, 
       )}
       {error && <p className="adm-callout-danger sc-t-subhead rounded-xl px-4 py-3" role="alert">{error}</p>}
       {outcome && <p className={`${outcome.ok ? "adm-callout-good" : "adm-callout-danger"} sc-t-subhead rounded-xl px-4 py-3`} role="status">{outcome.text}</p>}
-      {!calendarSet && (
-        <p className="adm-callout-warn sc-t-footnote rounded-xl px-4 py-3">
-          The button on every preview opens the SwiftCard demo booking page for now. To send prospects to your own calendar instead, set PROSPECT_CALENDAR_URL.
-        </p>
-      )}
 
       {!list.ready && list.reason === "not_set_up" ? (
         <Section title="Not set up yet">
@@ -264,38 +227,50 @@ export default function CardBuilderView({ list, appUrl, now, made, error, done, 
         </Section>
       ) : (
         <>
-          {list.ready && list.rows.length > 0 && (
-            <>
-              <StageCounts rows={list.rows} />
-              <Section id="follow-ups" title="Follow up today" hint="Viewed but not reached comes first. Then links sent two days ago and not opened, first texts with no reply, and calls with no outcome. Each has its words ready: one tap opens your own Messages." flush>
-                <FollowUps rows={list.rows} now={now} linkOf={linkOf} sender={sender} />
+          {brief && <Brief b={brief} />}
+
+          <nav aria-label="What to do" className="grid gap-3 sm:grid-cols-3" data-big-buttons>
+            <BigButton href="/admin/card-builder/approve" count={toDecide} label="Approve" hint={toDecide ? "Drafts to read, and first texts to send" : "Nothing waiting"} primary={toDecide > 0} />
+            <BigButton href="/admin/card-builder/follow-up" count={toChase} label="Call and follow up" hint={toChase ? "Each with its words ready" : "Nobody to chase today"} primary={toChase > 0} />
+            <BigButton href="/admin/card-builder/add" count={queueCount} label="Add" hint={queueCount ? "In the queue for the next run" : "Names, links or notes"} primary={false} />
+          </nav>
+
+          <details data-section="details">
+            <summary className="adm-link sc-t-subhead cursor-pointer">Details</summary>
+            <div className="mt-4 space-y-6">
+              {list.ready && list.rows.length > 0 && <StageCounts rows={list.rows} />}
+              <Section title="Previews" hint="Most recently viewed first. A view only counts when a person really looked: not a link preview, not a bot, not you." flush>
+                {!list.ready ? (
+                  <EmptyState>The previews couldn&apos;t be loaded just now. Refresh in a minute.</EmptyState>
+                ) : list.rows.length === 0 ? (
+                  <EmptyState>No previews yet. Add one.</EmptyState>
+                ) : (
+                  <ul className="adm-divide">
+                    {list.rows.map((r) => <Row key={r.id} r={r} link={linkOf(r.slug)} now={now} />)}
+                  </ul>
+                )}
               </Section>
-            </>
-          )}
-
-          <Section title="New preview" hint="Starts as a draft. The next screen has every other field (headshot, address, website, social links, sources) and the Publish button.">
-            <CreateForm />
-          </Section>
-
-          <Section title="Previews" hint="Most recently viewed first. A view only counts when a person really looked: not a link preview, not a bot, not you." flush>
-            {!list.ready ? (
-              <EmptyState>The previews couldn&apos;t be loaded just now. Refresh in a minute.</EmptyState>
-            ) : list.rows.length === 0 ? (
-              <EmptyState>No previews yet. Create one above.</EmptyState>
-            ) : (
-              <ul className="adm-divide">
-                {list.rows.map((r) => <Row key={r.id} r={r} link={linkOf(r.slug)} now={now} />)}
-              </ul>
-            )}
-          </Section>
-
-          <Section title="Alerts" hint="When a prospect looks, every admin gets a push that says who, with the number to call. It comes at any hour.">
-            <div className="space-y-3">
-              <p className="sc-t-subhead">Turn notifications on in each place you want the alert: in the SwiftCard app on your phone, and here in this browser on your computer. On a computer it stays on screen until you click it.</p>
-              <EnablePushButton />
-              <p className="sc-t-footnote adm-muted">Your own visits never count or alert: any browser signed in as an admin is ignored, and so is a device marked as internal in Website › Settings. To test, open a preview link on a phone that isn&apos;t signed in to SwiftCard.</p>
+              <Section title="What's working" hint="For each message you sent: how many prospects it went to, and how many of them then viewed their card, picked up, and booked. With only a few sends this is what happened, not proof of what works.">
+                <Stats stats={stats} />
+              </Section>
             </div>
-          </Section>
+          </details>
+
+          <details data-section="more">
+            <summary className="adm-link sc-t-subhead cursor-pointer">More</summary>
+            <div className="mt-4 space-y-6">
+              <Section title="Warm paths" hint="Upload your LinkedIn connections, and prospects where you already know someone are flagged.">
+                <Link href="/admin/card-builder/connections" className="sc-btn sc-btn-gray">Your LinkedIn connections</Link>
+              </Section>
+              <Section title="Alerts" hint="When a prospect looks, every admin gets a push that says who, with the number to call. It comes at any hour.">
+                <div className="space-y-3">
+                  <p className="sc-t-subhead">Turn notifications on in each place you want the alert: in the SwiftCard app on your phone, and here in this browser on your computer. On a computer it stays on screen until you click it.</p>
+                  <EnablePushButton />
+                  <p className="sc-t-footnote adm-muted">Your own visits never count or alert: any browser signed in as an admin is ignored, and so is a device marked as internal in Website › Settings. To test, open a preview link on a phone that isn&apos;t signed in to SwiftCard.</p>
+                </div>
+              </Section>
+            </div>
+          </details>
         </>
       )}
     </Stack>

@@ -49,7 +49,7 @@ export default function SendMessage({ id, kind, to, subject, body, button, block
               void fetch(`/api/admin/card-builder/${id}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "sent", kind }),
+                body: JSON.stringify({ action: "sent", kind, words }),
                 keepalive: true,
               }).then(() => router.refresh()).catch(() => {});
             }}

@@ -4,6 +4,7 @@ import { expiryFrom, readSocials, readSources, readSpecifics, readTeam, type New
 import { outcomeEffect, type CallOutcome } from "./call";
 import type { MessageKind } from "./messages";
 import { readOutreach } from "./outreach";
+import { readWarmPath } from "./warm";
 import { BUYER_ROLES, CURRENT_TOOLS, DEFAULT_EXPIRY_DAYS, HOOK_ANGLES, TYPE_FEELS, type BuyerRole, type CurrentTool, type HookAngle, type TypeFeel, type DeviceType, type FactSources, type LiveAlert, type Outreach, type PreviewListRow, type ProspectPreview } from "./types";
 
 // ── Card Builder: the database ──────────────────────────────────────────────
@@ -57,6 +58,13 @@ function toPreview(row: Record<string, unknown>): ProspectPreview {
     skipped_at: (row.skipped_at as string | null) ?? null,
     nudge_no_view_at: (row.nudge_no_view_at as string | null) ?? null,
     nudge_viewed_at: (row.nudge_viewed_at as string | null) ?? null,
+    linkedin_url: (row.linkedin_url as string | null) ?? null,
+    linkedin_sent_at: (row.linkedin_sent_at as string | null) ?? null,
+    linkedin_accepted_at: (row.linkedin_accepted_at as string | null) ?? null,
+    linkedin_dm_at: (row.linkedin_dm_at as string | null) ?? null,
+    warm_path: readWarmPath(row.warm_path),
+    batch_id: (row.batch_id as string | null) ?? null,
+    demo_booking_id: (row.demo_booking_id as string | null) ?? null,
   };
 }
 
@@ -162,6 +170,20 @@ export async function setOutreach(id: string, outreach: Outreach | null, now: Da
   return !error && !!data?.length;
 }
 
+/** "They accepted my connection request" (one tap), or taking that back. The DM then shows under follow-ups. */
+export async function setLinkedinAccepted(id: string, on: boolean, now: Date = new Date()): Promise<boolean> {
+  const { data, error } = await getAdminSupabase().from(PREVIEWS)
+    .update({ linkedin_accepted_at: on ? now.toISOString() : null, updated_at: now.toISOString() }).eq("id", id).select("id");
+  return !error && !!data?.length;
+}
+
+/** A booking made from the preview page: tied to the prospect, and the stage moves to "meeting booked". */
+export async function markMeetingBooked(id: string, bookingId: string, now: Date = new Date()): Promise<boolean> {
+  const { data, error } = await getAdminSupabase().from(PREVIEWS)
+    .update({ demo_booking_id: bookingId, stage: "meeting_booked", updated_at: now.toISOString() }).eq("id", id).select("id");
+  return !error && !!data?.length;
+}
+
 /** Skip in the Approve queue: the draft stays a draft and leaves the queue (or comes back to it). */
 export async function setSkipped(id: string, on: boolean, now: Date = new Date()): Promise<boolean> {
   const { data, error } = await getAdminSupabase().from(PREVIEWS)
@@ -235,6 +257,11 @@ export async function markSent(id: string, kind: MessageKind, now: Date = new Da
     const { data, error } = await db.from(PREVIEWS).update({ [`${kind}_at`]: at, updated_at: at }).eq("id", id).select("id");
     return !error && data?.length ? "ok" : "failed";
   }
+  // LinkedIn: the owner copied the words and opened the profile. They paste and send there, by hand.
+  if (kind === "linkedin_note" || kind === "linkedin_dm") {
+    const { data, error } = await db.from(PREVIEWS).update({ [kind === "linkedin_note" ? "linkedin_sent_at" : "linkedin_dm_at"]: at, updated_at: at }).eq("id", id).select("id");
+    return !error && data?.length ? "ok" : "failed";
+  }
   if (kind === "ask") {
     const { data, error } = await db.from(PREVIEWS).update({ asked_at: at, updated_at: at }).eq("id", id).select("id");
     return !error && data?.length ? "ok" : "failed";
@@ -247,7 +274,7 @@ export async function markSent(id: string, kind: MessageKind, now: Date = new Da
 
 /** "I didn't send that after all": back to not asked, not sent. */
 export async function clearSent(id: string, now: Date = new Date()): Promise<boolean> {
-  const { error } = await getAdminSupabase().from(PREVIEWS).update({ asked_at: null, sent_at: null, sent_channel: null, nudge_no_view_at: null, nudge_viewed_at: null, updated_at: now.toISOString() }).eq("id", id);
+  const { error } = await getAdminSupabase().from(PREVIEWS).update({ asked_at: null, sent_at: null, sent_channel: null, nudge_no_view_at: null, nudge_viewed_at: null, linkedin_sent_at: null, linkedin_accepted_at: null, linkedin_dm_at: null, updated_at: now.toISOString() }).eq("id", id);
   return !error;
 }
 

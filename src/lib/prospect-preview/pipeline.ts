@@ -43,7 +43,7 @@ export function stageCounts(rows: Staged[]): Record<Stage, number> {
 
 const DAY = 24 * 60 * 60 * 1000;
 
-export type FollowUpKind = "viewed_not_reached" | "sent_not_viewed" | "asked_no_link" | "called_no_outcome" | "ready_not_sent";
+export type FollowUpKind = "viewed_not_reached" | "linkedin_accepted" | "sent_not_viewed" | "asked_no_link" | "called_no_outcome" | "ready_not_sent";
 export type FollowUp = {
   id: string;
   kind: FollowUpKind;
@@ -57,7 +57,7 @@ export type FollowUp = {
    * The message that is ready to go for this one, sent by hand with one tap
    * (lib/prospect-preview/outreach.ts). Absent when the next step is a call.
    */
-  send?: "ask" | "text" | "nudge_no_view" | "nudge_viewed";
+  send?: "ask" | "text" | "nudge_no_view" | "nudge_viewed" | "linkedin_dm";
   /** The next step is a call: have the voicemail script to hand. */
   voicemail?: boolean;
 };
@@ -73,12 +73,14 @@ const ago = (iso: string | null, now: number) => {
 };
 
 type Row = Pick<PreviewListRow, "id" | "status" | "stage" | "called" | "called_at" | "views" | "last_viewed_at" | "sent_at" | "asked_at" | "expires_at" | "updated_at">
-  & Partial<Pick<PreviewListRow, "call_outcome" | "call_outcome_at" | "nudge_no_view_at" | "nudge_viewed_at">>;
+  & Partial<Pick<PreviewListRow, "call_outcome" | "call_outcome_at" | "nudge_no_view_at" | "nudge_viewed_at" | "linkedin_url" | "linkedin_accepted_at" | "linkedin_dm_at">>;
 
 /**
  * Who needs something from you today, most urgent first:
  *
  *   1. viewed but not reached        they looked; call (any age, it only gets colder)
+ *   1b. accepted your LinkedIn request, no message yet: send it (alongside
+ *       whatever else is due for them)
  *   2. sent, not opened after 2 days nudge them, once
  *   3. asked, no link after a day    they haven't said yes; follow up or send it
  *   4. called 2+ days ago, no outcome logged
@@ -96,6 +98,12 @@ export function followUps(rows: Row[], now: number): FollowUp[] {
     const linkNote = expired ? " The link has expired: publish it again first." : expiring ? " The link expires within 2 days." : "";
     const add = (rank: number, kind: FollowUpKind, at: string | null, why: string, next: string, screen: FollowUp["screen"], extra: Pick<FollowUp, "send" | "voicemail"> = {}) =>
       out.push({ id: r.id, kind, why, next, screen, ...extra, rank, at: at ? Date.parse(at) : 0 });
+
+    // They said yes to the connection request: the message written for that
+    // moment is ready. It doesn't replace their other follow-up; it joins it.
+    if (r.linkedin_url && r.linkedin_accepted_at && !r.linkedin_dm_at && stage !== "draft" && !isOutcomeStage(r.stage)) {
+      add(1.5, "linkedin_accepted", r.linkedin_accepted_at, `Accepted your LinkedIn request ${ago(r.linkedin_accepted_at, now)}.`, "Send the message.", "send", { send: "linkedin_dm" });
+    }
 
     if (stage === "viewed") {
       // A ring-out or a voicemail is a try, not a conversation: they stay here.

@@ -27,6 +27,22 @@
 //       text with the link, email, call opener, voicemail and two nudges.
 //       Refused, with what to fix, when a text runs past 160 characters, has
 //       an emoji or says "free", or the messages all lean on one specific.
+//   node scripts/card-builder.mjs queue
+//       What the owner dropped into the Add box and nobody has built yet.
+//   node scripts/card-builder.mjs queue-settle <queue id> <outcome.json>
+//       Mark a queue item built (with its preview id), skipped or failed (with why).
+//   node scripts/card-builder.mjs batch-start <batch.json>
+//       Open a batch, or RESUME the unfinished one with the same label.
+//   node scripts/card-builder.mjs batch-log <batch id> <office.json>
+//       Record one office's outcome the moment it is known.
+//   node scripts/card-builder.mjs batch-finish <batch id>
+//       Close the batch and print its brief. The app sends the owner one push.
+//   node scripts/card-builder.mjs batch-status <batch id>
+//   node scripts/card-builder.mjs warm <office.json>
+//       The owner's own LinkedIn connections at that office, and their schools
+//       and past employers to look for in the prospect's public bio.
+//   node scripts/card-builder.mjs style
+//       The owner's own edits to past messages: the voice to write in.
 //   node scripts/card-builder.mjs quality <preview id>
 //       The personalization checklist and score the edit screen shows, whether
 //       the draft is "too generic", what couldn't be confirmed, and every
@@ -60,7 +76,7 @@ if (!args.length) {
   process.exit(2);
 }
 // File arguments are resolved here, where the caller's working directory is known.
-const FILE_ARG = { check: [1], fit: [1], "save-leads": [1], "create-draft": [1], "update-draft": [2], "set-outreach": [2], shots: [2] };
+const FILE_ARG = { check: [1], fit: [1], "save-leads": [1], "create-draft": [1], "update-draft": [2], "set-outreach": [2], "queue-settle": [2], "queue-add": [1], "batch-start": [1], "batch-log": [2], warm: [1], shots: [2] };
 for (const i of FILE_ARG[args[0]] ?? []) if (args[i]) args[i] = resolve(process.cwd(), args[i]);
 
 const out = join(mkdtempSync(join(tmpdir(), "card-builder-")), "result.json");

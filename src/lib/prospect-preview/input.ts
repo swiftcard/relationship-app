@@ -64,10 +64,18 @@ export const cleanLogoUrl = cleanHttpsUrl;
 export function parseTeam(v: unknown): TeamMember[] {
   if (typeof v !== "string") return [];
   const out: TeamMember[] = [];
-  for (const line of v.split(/\r?\n/)) {
-    const parts = line.split(",");
+  for (const raw of v.split(/\r?\n/)) {
+    // The picture is everything from the last ", https://" to the end of the
+    // line, so an address with commas in it (an image CDN's "w_400,c_fill")
+    // stays whole instead of being cut up and printed as the title.
+    let line = raw;
     let headshot: string | null = null;
-    if (parts.length > 1 && /^\s*https:\/\//i.test(parts[parts.length - 1])) headshot = cleanHttpsUrl(parts.pop());
+    const at = line.search(/,\s*https:\/\/\S+\s*$/i);
+    if (at !== -1) {
+      headshot = cleanHttpsUrl(line.slice(at + 1));
+      line = line.slice(0, at);
+    }
+    const parts = line.split(",");
     const name = clean(parts[0], 80);
     const title = clean(parts.slice(1).join(","), 80);
     if (name) out.push({ name, title, ...(headshot ? { headshot } : {}) });
@@ -142,6 +150,7 @@ export function readSpecifics(v: unknown): Specific[] {
       dated: ISO_DAY.test(dated) && !Number.isNaN(Date.parse(dated)) ? dated : "",
       uncertain: ticked(r.uncertain),
       ...(ticked(r.owner) ? { owner: true } : {}),
+      ...(ticked(r.quiet) ? { quiet: true } : {}),
     });
     if (out.length >= MAX_SPECIFICS) break;
   }
@@ -159,7 +168,7 @@ export function parseSpecifics(get: (key: string) => unknown): { specifics: Spec
   const specifics: Specific[] = [];
   let hook_specific: number | null = null;
   for (let i = 0; i < MAX_SPECIFICS; i++) {
-    const [one] = readSpecifics([{ kind: get(`spec_kind_${i}`), text: get(`spec_text_${i}`), source_url: get(`spec_src_${i}`), dated: get(`spec_date_${i}`), uncertain: get(`spec_unc_${i}`), owner: get(`spec_own_${i}`) }]);
+    const [one] = readSpecifics([{ kind: get(`spec_kind_${i}`), text: get(`spec_text_${i}`), source_url: get(`spec_src_${i}`), dated: get(`spec_date_${i}`), uncertain: get(`spec_unc_${i}`), owner: get(`spec_own_${i}`), quiet: get(`spec_quiet_${i}`) }]);
     if (!one) continue;
     if (i === wanted) hook_specific = specifics.length;
     specifics.push(one);
@@ -235,6 +244,7 @@ export type PreviewFields = {
   hook_specific: number | null;
   hook_angle: HookAngle | null;
   hook_why: string | null;
+  linkedin_url: string | null;
 };
 
 export type NewPreviewInput = PreviewFields & {
@@ -293,6 +303,11 @@ export function parsePreviewFields(get: (key: string) => unknown): ParsedFields 
   if (headshot_url && typeof headshot_url === "object") return headshot_url;
   const website = https("website", "The website");
   if (website && typeof website === "object") return website;
+  const linkedin_url = https("linkedin_url", "Their LinkedIn profile");
+  if (linkedin_url && typeof linkedin_url === "object") return linkedin_url;
+  if (linkedin_url && !/^https:\/\/([a-z]{2,3}\.)?linkedin\.com\/in\/[^/?#]+/i.test(linkedin_url)) {
+    return { ok: false, error: "Their LinkedIn profile is the address of the person's own public profile: https://www.linkedin.com/in/their-name. A company page goes under Social links." };
+  }
 
   const social_links: SocialLinks = {};
   for (const k of SOCIAL_KEYS) {
@@ -338,6 +353,7 @@ export function parsePreviewFields(get: (key: string) => unknown): ParsedFields 
       ...parseSpecifics(get),
       hook_angle: oneOf<HookAngle>(HOOK_ANGLES, clean(get("hook_angle"), 20)),
       hook_why: clean(get("hook_why"), 280) || null,
+      linkedin_url: linkedin_url as string | null,
     },
   };
 }

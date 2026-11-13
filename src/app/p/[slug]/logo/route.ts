@@ -16,5 +16,5 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
   if (!SLUG_RE.test(slug)) return new Response(null, { status: 404 });
   const preview = await getPreviewBySlug(slug);
   if (!preview || previewState(preview) !== "live") return new Response(null, { status: 404 });
-  return logoResponse(preview.logo_url);
+  return logoResponse(preview.logo_url, preview.brand_primary);
 }

@@ -27,14 +27,15 @@ const SPECIFICS = [
 
 const WRITTEN = {
   first_text: "Hi Dana, Menash from SwiftCard. Saw your open house at 88 Hicks St Sunday. I made you a card for it. Want me to send it?",
+  first_text_b: "Hi Dana, Menash from SwiftCard. 11 of your 14 agents give out their own cell. I made Harbor a card for that. Want to see it?",
   link_text: "Dana, here's the card. 11 of your 14 agents hand out their own cell, this keeps those contacts with Harbor: {link}",
   email_subject: "Dana, a card for 14 Garden Pl",
-  email_body: "Hi Dana,\n\nI saw 14 Garden Pl go up at $3.4M. I made a card you could send with it, and you'd see who opens it.\n\nHere it is: {link}\n\nMenash\nFounder, SwiftCard",
+  email_body: "Hi Dana,\n\nI saw 14 Garden Pl go up at $3.4M. I made a card you could send with it, and you'd see when it's opened.\n\nHere it is: {link}\n\nMenash\nFounder, SwiftCard",
   call_opener: "Hi Dana, it's Menash, I sent you the card. With the open house at 88 Hicks on Sunday, do you want everyone who walks in to tap it?",
   voicemail: "Hi Dana, it's Menash from SwiftCard. I counted 11 of your 14 agents giving out their own cell. I made you a card that keeps those contacts with Harbor. Text me back when you have two minutes.",
   nudge_no_view: "Dana, the card I made for Harbor is still up. Worth 20 seconds before Sunday's open house: {link}",
   nudge_viewed: "Dana, saw you opened the card. Tried you just now. Is later today or tomorrow morning better for 5 minutes on 14 Garden Pl?",
-  uses: { first_text: 0, link_text: 2, email_body: 1, call_opener: 0, voicemail: 2, nudge_no_view: 0, nudge_viewed: 1 },
+  uses: { first_text: 0, first_text_b: 2, link_text: 2, email_body: 1, call_opener: 0, voicemail: 2, nudge_no_view: 0, nudge_viewed: 1 },
 };
 const outreach = (over: Record<string, unknown> = {}): Outreach => readOutreach({ ...WRITTEN, ...over })!;
 const ctx = { link: LINK, specifics: SPECIFICS, complete: true };
@@ -49,7 +50,7 @@ const preview = {
 describe("the messages written for one prospect", () => {
   it("a complete, clean set passes: every text is 160 or under with the real link in it", () => {
     expect(checkOutreach(outreach(), ctx)).toEqual([]);
-    for (const k of ["first_text", "link_text", "nudge_no_view", "nudge_viewed"] as const) expect(fillLink(WRITTEN[k], LINK).length).toBeLessThanOrEqual(160);
+    for (const k of ["first_text", "first_text_b", "link_text", "nudge_no_view", "nudge_viewed"] as const) expect(fillLink(WRITTEN[k], LINK).length).toBeLessThanOrEqual(160);
   });
 
   it("a text past 160 characters is refused, counted WITH the link, and the email is not held to it", () => {
@@ -80,7 +81,7 @@ describe("the messages written for one prospect", () => {
     const unverified = [SPECIFICS[0], SPECIFICS[1], spec({ uncertain: true })];
     expect(checkOutreach(outreach(), { ...ctx, specifics: unverified }).join(" ")).toMatch(/built on specific 2, which isn't a verified one/);
     // Two verified specifics: both must appear, and that is enough.
-    const two = { ...all0, link_text: 1 };
+    const two = { ...all0, first_text_b: 1 };
     expect(checkOutreach(outreach({ uses: two }), { ...ctx, specifics: SPECIFICS.slice(0, 2) })).toEqual([]);
   });
 
