@@ -22,9 +22,15 @@
 //   node scripts/card-builder.mjs create-draft <preview.json>
 //   node scripts/card-builder.mjs update-draft <preview id> <preview.json>
 //       Make or change a DRAFT preview. A published one is never touched.
+//   node scripts/card-builder.mjs set-outreach <preview id> <outreach.json>
+//       Save the messages written for this prospect on its DRAFT: first text,
+//       text with the link, email, call opener, voicemail and two nudges.
+//       Refused, with what to fix, when a text runs past 160 characters, has
+//       an emoji or says "free", or the messages all lean on one specific.
 //   node scripts/card-builder.mjs quality <preview id>
 //       The personalization checklist and score the edit screen shows, whether
-//       the draft is "too generic", and the messages that would be written.
+//       the draft is "too generic", what couldn't be confirmed, and every
+//       message as the screens will show it (written, or the template).
 //   node scripts/card-builder.mjs shots <preview id> [out dir]
 //       The preview page as a phone (390px) and a computer (1280px) see it,
 //       as PNG files, plus anything that looks wrong (broken pictures, text
@@ -54,7 +60,7 @@ if (!args.length) {
   process.exit(2);
 }
 // File arguments are resolved here, where the caller's working directory is known.
-const FILE_ARG = { check: [1], fit: [1], "save-leads": [1], "create-draft": [1], "update-draft": [2], shots: [2] };
+const FILE_ARG = { check: [1], fit: [1], "save-leads": [1], "create-draft": [1], "update-draft": [2], "set-outreach": [2], shots: [2] };
 for (const i of FILE_ARG[args[0]] ?? []) if (args[i]) args[i] = resolve(process.cwd(), args[i]);
 
 const out = join(mkdtempSync(join(tmpdir(), "card-builder-")), "result.json");

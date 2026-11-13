@@ -8,6 +8,7 @@ import { formatTeam } from "@/lib/prospect-preview/input";
 import { previewState } from "@/lib/prospect-preview/real-view";
 import { assessQuality } from "@/lib/prospect-preview/quality";
 import {
+  LINK_SLOT, OUTREACH_KEYS, OUTREACH_LABELS, OUTREACH_MAX, OUTREACH_TEXTS, TEXT_LIMIT,
   BUYER_ROLES, BUYER_ROLE_LABELS, CURRENT_TOOLS, CURRENT_TOOL_LABELS, HOOK_ANGLES, HOOK_ANGLE_LABELS, MAX_SPECIFICS, MAX_TEAM_MEMBERS, MIN_SPECIFICS,
   SOCIAL_KEYS, SOCIAL_LABELS, SOURCE_FIELDS, SOURCE_LABELS, SPECIFIC_KINDS, SPECIFIC_LABELS, type ProspectPreview,
 } from "@/lib/prospect-preview/types";
@@ -29,6 +30,7 @@ const DONE: Record<string, string> = {
   colors: "Colors read. Check them on the preview.",
   override_on: "Override on. This preview can be published as it is.",
   override_off: "Override removed.",
+  messages: "Messages saved.",
 };
 
 const input = "sc-field w-full px-3 py-2";
@@ -203,6 +205,9 @@ export default function EditView({ p, appUrl, now, done, error }: {
                     <label className="inline-flex items-center gap-2 sc-t-footnote min-h-[32px]">
                       <input type="checkbox" name={`spec_unc_${i}`} defaultChecked={!!sp?.uncertain} className="w-4 h-4" style={{ accentColor: "var(--sc-tint)" }} />Uncertain
                     </label>
+                    <label className="inline-flex items-center gap-2 sc-t-footnote min-h-[32px]" title="You know this yourself. It needs no page or date.">
+                      <input type="checkbox" name={`spec_own_${i}`} defaultChecked={!!sp?.owner} className="w-4 h-4" style={{ accentColor: "var(--sc-tint)" }} />I confirm it
+                    </label>
                   </div>
                 </li>
               ))}
@@ -284,17 +289,20 @@ export default function EditView({ p, appUrl, now, done, error }: {
             </div>
           </Section>
 
-          <Section title="Sources" hint="The page each fact came from. Tick Uncertain for anything that wasn't confirmed; it is flagged above until you clear it." flush>
+          <Section title="Sources" hint="The page each fact came from. Tick Uncertain for anything that wasn't confirmed; it is flagged above until you clear it. Tick “I confirm it” for a fact you know yourself: it then needs no page." flush>
             <ul className="adm-divide">
               {SOURCE_FIELDS.map((k) => {
                 const s = p.sources[k];
                 return (
-                  <li key={k} className="px-4 sm:px-5 py-3 grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-center" data-source-row>
+                  <li key={k} className="px-4 sm:px-5 py-3 grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)_minmax(0,1fr)_auto_auto] sm:items-center" data-source-row>
                     <p className="sc-t-subhead font-medium">{SOURCE_LABELS[k]}{s?.uncertain && <span className="adm-bad"> · uncertain</span>}</p>
                     <input name={`src_${k}`} type="url" maxLength={600} defaultValue={s?.url ?? ""} placeholder="https:// where it was found" aria-label={`Source for ${SOURCE_LABELS[k]}`} className="sc-field sc-field-fit px-3 py-2 text-sm min-w-0 w-full" autoComplete="off" />
                     <input name={`note_${k}`} maxLength={200} defaultValue={s?.note ?? ""} placeholder="Note" aria-label={`Note about ${SOURCE_LABELS[k]}`} className="sc-field sc-field-fit px-3 py-2 text-sm min-w-0 w-full" autoComplete="off" />
                     <label className="inline-flex items-center gap-2 sc-t-footnote min-h-[32px]">
                       <input type="checkbox" name={`unc_${k}`} defaultChecked={!!s?.uncertain} className="w-4 h-4" style={{ accentColor: "var(--sc-tint)" }} />Uncertain
+                    </label>
+                    <label className="inline-flex items-center gap-2 sc-t-footnote min-h-[32px]">
+                      <input type="checkbox" name={`own_${k}`} defaultChecked={!!s?.owner} className="w-4 h-4" style={{ accentColor: "var(--sc-tint)" }} />I confirm it
                     </label>
                   </li>
                 );
@@ -308,6 +316,27 @@ export default function EditView({ p, appUrl, now, done, error }: {
           </div>
         </Stack>
       </form>
+
+      <Section
+        title="Messages"
+        id="pp-messages"
+        hint={p.outreach
+          ? `Written for ${p.office_name} when the card was built. The Send and Call screens, the Approve queue and Follow up today all use these. Texts stay at ${TEXT_LIMIT} characters or under with the link in; write ${LINK_SLOT} where the link goes.`
+          : `None written for this prospect yet, so the screens use the standard wording. Run /build-card to have them written, or write your own here. Write ${LINK_SLOT} where the link goes.`}
+      >
+        <form method="post" action={post} className="flex flex-col gap-4" data-outreach-form>
+          <input type="hidden" name="action" value="outreach" />
+          <input type="hidden" name="back" value={here} />
+          {OUTREACH_KEYS.map((k) => (
+            <Field key={k} label={OUTREACH_LABELS[k]} hint={OUTREACH_TEXTS.includes(k) ? `A text: ${TEXT_LIMIT} characters at most.` : undefined}>
+              {k === "email_subject"
+                ? <input name={`o_${k}`} maxLength={OUTREACH_MAX[k]} defaultValue={p.outreach?.[k] ?? ""} className={input} autoComplete="off" />
+                : <textarea name={`o_${k}`} maxLength={OUTREACH_MAX[k]} rows={k === "email_body" ? 9 : 3} defaultValue={p.outreach?.[k] ?? ""} className={input} />}
+            </Field>
+          ))}
+          <div><button type="submit" className="sc-btn sc-btn-gray">Save messages</button></div>
+        </form>
+      </Section>
 
       <Section title="More">
         <div className="flex flex-wrap items-start gap-2">

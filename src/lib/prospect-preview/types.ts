@@ -47,7 +47,12 @@ export const SOURCE_LABELS: Record<SourceField, string> = {
   buyer_role: "Decision-maker", buyer_second: "Decision-maker, second source", team_size: "Team size", detail: "The hook",
   license: "License line", current_tool: "What they use today",
 };
-export type FactSource = { url: string; uncertain: boolean; note: string };
+/**
+ * `owner` is the owner of SwiftCard saying "I told you this myself" (pasted
+ * notes, 2026-11-13): it counts as confirmed with no page behind it. Only ever
+ * present when true.
+ */
+export type FactSource = { url: string; uncertain: boolean; note: string; owner?: boolean };
 export type FactSources = Partial<Record<SourceField, FactSource>>;
 
 // ── Personalization (owner's bar, 2026-11-12) ───────────────────────────────
@@ -63,7 +68,8 @@ export const SPECIFIC_LABELS: Record<SpecificKind, string> = {
   listing: "Current listing", sale: "Recent sale", open_house: "Upcoming open house", recruiting: "Recruiting post",
   cell_numbers: "Agents listing personal cells", years: "Years in business", award: "Award", other: "Other",
 };
-export type Specific = { kind: SpecificKind; text: string; source_url: string; dated: string; uncertain: boolean };
+/** `owner`: the owner supplied this fact themselves, so it needs no page or date. Only ever present when true. */
+export type Specific = { kind: SpecificKind; text: string; source_url: string; dated: string; uncertain: boolean; owner?: boolean };
 export const MAX_SPECIFICS = 6;
 /** How many verified specifics a preview needs before it may go out. */
 export const MIN_SPECIFICS = 3;
@@ -84,6 +90,32 @@ export const CURRENT_TOOL_LABELS: Record<CurrentTool, string> = {
   paper: "Paper cards", link_in_bio: "A link in bio", popl: "Popl", linq: "Linq", blinq: "Blinq", hihello: "HiHello", dot: "Dot", other_digital: "Another digital card",
 };
 export const COMPETITOR_TOOLS: readonly CurrentTool[] = ["popl", "linq", "blinq", "hihello", "dot", "other_digital"];
+
+// ── Outreach written for one prospect (2026-11-13) ──────────────────────────
+
+/**
+ * The messages written for THIS prospect when their card was built, by the
+ * /build-card command (never by a paid API call inside the app). The texts
+ * that carry the link hold the placeholder `{link}`, filled in when shown.
+ */
+export const OUTREACH_KEYS = ["first_text", "link_text", "email_subject", "email_body", "call_opener", "voicemail", "nudge_no_view", "nudge_viewed"] as const;
+export type OutreachKey = (typeof OUTREACH_KEYS)[number];
+export const OUTREACH_LABELS: Record<OutreachKey, string> = {
+  first_text: "First text, no link", link_text: "Text with the link", email_subject: "Email subject", email_body: "Email",
+  call_opener: "Call opener", voicemail: "Voicemail script", nudge_no_view: "Nudge: no view after 2 days", nudge_viewed: "Nudge: viewed, didn't pick up",
+};
+/** The ones sent as a text message: 160 characters at most, link included. */
+export const OUTREACH_TEXTS: readonly OutreachKey[] = ["first_text", "link_text", "nudge_no_view", "nudge_viewed"];
+export const OUTREACH_MAX: Record<OutreachKey, number> = {
+  first_text: 320, link_text: 320, email_subject: 120, email_body: 2000, call_opener: 600, voicemail: 600, nudge_no_view: 320, nudge_viewed: 320,
+};
+export const TEXT_LIMIT = 160;
+export const LINK_SLOT = "{link}";
+export type Outreach = Record<OutreachKey, string> & {
+  /** Which of `specifics` (its position) each message is built on. */
+  uses: Partial<Record<OutreachKey, number>>;
+  written_at: string | null;
+};
 
 export const TYPE_FEELS = ["sans", "serif"] as const;
 export type TypeFeel = (typeof TYPE_FEELS)[number];
@@ -146,6 +178,12 @@ export type ProspectPreview = {
   /** Only what a person decides: meeting_booked | won | lost. See lib/prospect-preview/pipeline.ts. */
   stage: string | null;
   crew_lead_id: string | null;
+  /** The messages written for this prospect; null or absent = none, use the templates. */
+  outreach?: Outreach | null;
+  /** The owner pressed Skip in the Approve queue. */
+  skipped_at?: string | null;
+  nudge_no_view_at?: string | null;
+  nudge_viewed_at?: string | null;
 };
 
 export type DeviceType = "phone" | "tablet" | "desktop";

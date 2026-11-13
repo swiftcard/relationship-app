@@ -53,7 +53,17 @@ export type FollowUp = {
   next: string;
   /** Which screen does that. */
   screen: "call" | "send" | "edit";
+  /**
+   * The message that is ready to go for this one, sent by hand with one tap
+   * (lib/prospect-preview/outreach.ts). Absent when the next step is a call.
+   */
+  send?: "ask" | "text" | "nudge_no_view" | "nudge_viewed";
+  /** The next step is a call: have the voicemail script to hand. */
+  voicemail?: boolean;
 };
+
+/** A link that went out this many days ago and was never opened gets a nudge (owner, 2026-11-13). */
+export const NO_VIEW_NUDGE_DAYS = 2;
 
 const daysSince = (iso: string | null, now: number): number => (iso ? Math.floor((now - Date.parse(iso)) / DAY) : 0);
 const days = (n: number) => (n === 1 ? "1 day" : `${n} days`);
@@ -63,13 +73,13 @@ const ago = (iso: string | null, now: number) => {
 };
 
 type Row = Pick<PreviewListRow, "id" | "status" | "stage" | "called" | "called_at" | "views" | "last_viewed_at" | "sent_at" | "asked_at" | "expires_at" | "updated_at">
-  & Partial<Pick<PreviewListRow, "call_outcome" | "call_outcome_at">>;
+  & Partial<Pick<PreviewListRow, "call_outcome" | "call_outcome_at" | "nudge_no_view_at" | "nudge_viewed_at">>;
 
 /**
  * Who needs something from you today, most urgent first:
  *
  *   1. viewed but not reached        they looked; call (any age, it only gets colder)
- *   2. sent, not opened after a day  nudge them
+ *   2. sent, not opened after 2 days nudge them, once
  *   3. asked, no link after a day    they haven't said yes; follow up or send it
  *   4. called 2+ days ago, no outcome logged
  *   5. published a day ago and never sent
@@ -84,26 +94,50 @@ export function followUps(rows: Row[], now: number): FollowUp[] {
     const expired = Date.parse(r.expires_at) <= now;
     const expiring = !expired && Date.parse(r.expires_at) - now <= 2 * DAY;
     const linkNote = expired ? " The link has expired: publish it again first." : expiring ? " The link expires within 2 days." : "";
-    const add = (rank: number, kind: FollowUpKind, at: string | null, why: string, next: string, screen: FollowUp["screen"]) =>
-      out.push({ id: r.id, kind, why, next, screen, rank, at: at ? Date.parse(at) : 0 });
+    const add = (rank: number, kind: FollowUpKind, at: string | null, why: string, next: string, screen: FollowUp["screen"], extra: Pick<FollowUp, "send" | "voicemail"> = {}) =>
+      out.push({ id: r.id, kind, why, next, screen, ...extra, rank, at: at ? Date.parse(at) : 0 });
 
     if (stage === "viewed") {
       // A ring-out or a voicemail is a try, not a conversation: they stay here.
       const tried = r.call_outcome === "voicemail" ? ` Left a voicemail ${ago(r.call_outcome_at ?? null, now)}.` : r.call_outcome === "no_answer" ? ` No answer ${ago(r.call_outcome_at ?? null, now)}.` : "";
-      add(1, "viewed_not_reached", r.last_viewed_at, `Viewed ${ago(r.last_viewed_at, now)}, not reached yet.${tried}`, tried ? "Try again." : "Call them.", "call");
-    } else if (stage === "sent" && daysSince(r.sent_at, now) >= 1) {
-      add(2, "sent_not_viewed", r.sent_at, `Sent ${ago(r.sent_at, now)}, not opened.`, `Send a short nudge.${linkNote}`, "send");
+      // They didn't pick up: one text, once. After that it is the phone again.
+      if (tried && !r.nudge_viewed_at) add(1, "viewed_not_reached", r.last_viewed_at, `Viewed ${ago(r.last_viewed_at, now)}, not reached yet.${tried}`, "Text them, then try again.", "call", { send: "nudge_viewed" });
+      else add(1, "viewed_not_reached", r.last_viewed_at, `Viewed ${ago(r.last_viewed_at, now)}, not reached yet.${tried}${r.nudge_viewed_at ? ` Texted ${ago(r.nudge_viewed_at, now)}.` : ""}`, tried ? "Try again." : "Call them.", "call", { voicemail: true });
+    } else if (stage === "sent" && daysSince(r.sent_at, now) >= NO_VIEW_NUDGE_DAYS && !r.nudge_no_view_at) {
+      add(2, "sent_not_viewed", r.sent_at, `Sent ${ago(r.sent_at, now)}, not opened.`, `Send the nudge.${linkNote}`, "send", expired ? {} : { send: "nudge_no_view" });
     } else if (stage === "ready" && r.asked_at && daysSince(r.asked_at, now) >= 1) {
-      add(3, "asked_no_link", r.asked_at, `Asked ${ago(r.asked_at, now)}, link not sent.`, `Follow up, or send the link.${linkNote}`, "send");
+      add(3, "asked_no_link", r.asked_at, `Asked ${ago(r.asked_at, now)}, link not sent.`, `Follow up, or send the link.${linkNote}`, "send", expired ? {} : { send: "text" });
     } else if (stage === "called" && daysSince(r.called_at, now) >= 2) {
       add(4, "called_no_outcome", r.called_at, `Called ${days(daysSince(r.called_at, now))} ago, no outcome logged.`, "Log how it went, or call again.", "call");
     } else if (stage === "ready" && !r.asked_at && daysSince(r.updated_at, now) >= 1) {
-      add(5, "ready_not_sent", r.updated_at, "Published, never sent.", `Send the first text.${linkNote}`, "send");
+      add(5, "ready_not_sent", r.updated_at, "Published, never sent.", `Send the first text.${linkNote}`, "send", { send: "ask" });
     }
   }
   // Most urgent kind first; within a kind, the most recent event first for
   // "viewed" (the warmest), the oldest first for everything that is overdue.
   return out
     .sort((a, b) => a.rank - b.rank || (a.rank === 1 ? b.at - a.at : a.at - b.at))
-    .map((f) => ({ id: f.id, kind: f.kind, why: f.why, next: f.next, screen: f.screen }));
+    .map((f) => ({ id: f.id, kind: f.kind, why: f.why, next: f.next, screen: f.screen, ...(f.send ? { send: f.send } : {}), ...(f.voicemail ? { voicemail: true } : {}) }));
+}
+
+// ── The Approve queue ───────────────────────────────────────────────────────
+
+type Queued = Staged & Pick<PreviewListRow, "created_at" | "asked_at" | "expires_at"> & Partial<Pick<PreviewListRow, "skipped_at">>;
+
+/**
+ * What the owner works through on their phone (admin › Card Builder › Approve):
+ *
+ *   waiting  drafts nobody has decided on yet, newest first
+ *   send     approved and published, and nothing has gone out yet: the next
+ *            tap opens Messages with the first text
+ *   skipped  drafts the owner passed on; they stay drafts
+ */
+export function approvalQueue<T extends Queued>(rows: T[], now: number): { waiting: T[]; send: T[]; skipped: T[] } {
+  const newest = (a: T, b: T) => b.created_at.localeCompare(a.created_at);
+  const drafts = rows.filter((r) => stageOf(r) === "draft");
+  return {
+    waiting: drafts.filter((r) => !r.skipped_at).sort(newest),
+    send: rows.filter((r) => stageOf(r) === "ready" && !r.asked_at && Date.parse(r.expires_at) > now).sort(newest),
+    skipped: drafts.filter((r) => !!r.skipped_at).sort(newest),
+  };
 }

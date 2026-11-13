@@ -11,15 +11,30 @@ import type { ProspectPreview } from "./types";
 //   text   the text with the link
 //   email  the email with the link
 //
+// Since 2026-11-13 these are the FALLBACK: /build-card writes the outreach for
+// each prospect and saves it on the preview (lib/prospect-preview/outreach.ts),
+// and the screens only come here when none was written. The same file also
+// writes the fallback voicemail script and the two follow-up nudges.
+//
 // Short and plain, and never generic: each one opens with the preview's hook.
 // Pure, so the wording is tested
 // (tests/prospect-preview-pipeline.test.ts).
 
-export type MessageKind = "ask" | "text" | "email";
+export type MessageKind = "ask" | "text" | "email" | "nudge_no_view" | "nudge_viewed";
+export const MESSAGE_KINDS: readonly MessageKind[] = ["ask", "text", "email", "nudge_no_view", "nudge_viewed"];
+export const isMessageKind = (v: unknown): v is MessageKind => (MESSAGE_KINDS as readonly unknown[]).includes(v);
 export type Messages = {
   ask: string;
   text: string;
   email: { subject: string; body: string };
+  /** What to say after the beep. */
+  voicemail: string;
+  /** A text for a link that went out two days ago and was never opened. */
+  nudge_no_view: string;
+  /** A text for someone who looked at their card and then didn't pick up. */
+  nudge_viewed: string;
+  /** Written for this prospect at build time; false = these are the templates. */
+  written: boolean;
   /**
    * Every message opens with this prospect's hook. False when the preview has
    * none: the words then could go to any office, and the Send screen says so.
@@ -102,7 +117,17 @@ export function buildMessages(p: About, opts: { link: string; sender: string | n
     "Founder, SwiftCard",
   ].join("\n");
 
-  return { ask, text, email: { subject: `${first}, I made your ${p.office_name} card`, body }, specific: !!hook };
+  const me = sender ? `${sender}, the founder of SwiftCard` : "the founder of SwiftCard";
+  const voicemail = [
+    `Hi ${first}, it's ${me}.`,
+    ...lead,
+    `I made a digital business card for you${team ? " and the team" : ""} at ${p.office_name} and sent it over.`,
+    "Call or text me back at this number when you have two minutes.",
+  ].join(" ");
+  const nudge_no_view = [`Hi ${first}, ${sender ?? "the founder of SwiftCard"} again. The card I made for ${p.office_name} is up until ${until}:`, opts.link].join("\n");
+  const nudge_viewed = `Hi ${first}, ${sender ? `${sender} from SwiftCard` : "the founder of SwiftCard"}. I just tried you about the ${p.office_name} card. When is a good time for a quick call?`;
+
+  return { ask, text, email: { subject: `${first}, I made your ${p.office_name} card`, body }, voicemail, nudge_no_view, nudge_viewed, written: false, specific: !!hook };
 }
 
 /**

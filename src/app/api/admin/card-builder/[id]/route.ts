@@ -3,8 +3,12 @@ import { requireAdmin } from "@/lib/admin";
 import { pullBrandColors } from "@/lib/prospect-preview/colors-server";
 import { clean, parsePreviewFields, UUID_RE } from "@/lib/prospect-preview/input";
 import { isCallOutcome } from "@/lib/prospect-preview/call";
+import { isMessageKind } from "@/lib/prospect-preview/messages";
+import { checkOutreach, parseOutreachForm } from "@/lib/prospect-preview/outreach";
 import { assessQuality } from "@/lib/prospect-preview/quality";
-import { clearSent, deletePreview, logOutcome, reopenPreview, getPreviewById, markSent, publishPreview, setBrandColors, setQualityOverride, unpublishPreview, updateCall, updatePreview } from "@/lib/prospect-preview/store";
+import { clearSent, deletePreview, logOutcome, reopenPreview, getPreviewById, markSent, publishPreview, setBrandColors, setOutreach, setQualityOverride, setSkipped, unpublishPreview, updateCall, updatePreview } from "@/lib/prospect-preview/store";
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -16,13 +20,20 @@ export const maxDuration = 30;
 //   publish    save, then make the link open (the 14 days start now). HELD when
 //              the preview is too generic (lib/prospect-preview/quality.ts)
 //              and the owner hasn't overridden it: it is saved and stays a draft
+//   approve    the Approve queue's "Approve and publish": publish the draft AS
+//              IT IS (no fields are posted). Held by the same quality gate
+//   skip       on = 1 | 0: the Approve queue's Skip. The draft stays a draft
+//   outreach   the edit screen's Messages section: o_<message> for each of the
+//              messages written for this prospect. Refused with what to fix
+//              when a text runs past 160 characters, has an emoji or says "free"
 //   override   on = 1 | 0: the owner lets a too-generic preview go out anyway
 //   unpublish  back to a draft: the link answers 404 again
 //   outcome    how a call went (outcome = no_answer | voicemail | reached |
 //              meeting_booked | won | lost), which also moves the stage
 //   reopen     put a won / lost / booked preview back in play
-//   sent       a send button was pressed: kind = ask | text | email (the message
-//              itself goes from the founder's own phone or inbox)
+//   sent       a send button was pressed: kind = ask | text | email |
+//              nudge_no_view | nudge_viewed (the message itself goes from the
+//              founder's own phone or inbox; nothing here sends anything)
 //   unsent     "I didn't send that after all"
 //   colors     read the brand colours from the logo (or the site's theme colour)
 //   delete     removes the preview and every view of it; its link then 404s
@@ -32,7 +43,7 @@ export const maxDuration = 30;
 // (?done=…, or ?error=… with what to fix); a JSON caller gets JSON.
 
 function safeBack(v: unknown): string {
-  return typeof v === "string" && /^\/admin\/card-builder(\/(call|edit|send)\/[0-9a-f-]{36})?$/i.test(v) ? v : "/admin/card-builder";
+  return typeof v === "string" && /^\/admin\/card-builder(\/approve|\/(call|edit|send)\/[0-9a-f-]{36})?$/i.test(v) ? v : "/admin/card-builder";
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -50,6 +61,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const url = new URL(safeBack(input.back), req.nextUrl.origin);
     if (error) url.searchParams.set("error", error.slice(0, 300));
     else url.searchParams.set("done", done);
+    // The Approve queue shows which card the answer is about.
+    if (url.pathname.endsWith("/approve")) url.searchParams.set("id", id);
     return NextResponse.redirect(url, 303);
   };
 
@@ -79,6 +92,28 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       await publishPreview(id);
       return reply("published");
     }
+    case "approve": {
+      const p = await getPreviewById(id);
+      if (!p) return reply("failed", 404);
+      // The same gate as the edit screen's Publish: a too-generic draft is held.
+      if (p.status !== "live" && !assessQuality(p).mayPublish) return reply("held", 409);
+      if (p.status !== "live" && !(await publishPreview(id))) return reply("failed", 500);
+      return reply("approved");
+    }
+    case "skip": {
+      const on = input.on !== "0" && input.on !== false;
+      const ok = await setSkipped(id, on);
+      return reply(ok ? (on ? "skipped" : "unskipped") : "failed", ok ? 200 : 500);
+    }
+    case "outreach": {
+      const p = await getPreviewById(id);
+      if (!p) return reply("failed", 404);
+      const outreach = parseOutreachForm((k) => input[k], p.outreach ?? null);
+      const problems = checkOutreach(outreach, { link: `${APP_URL}/p/${p.slug}`, specifics: p.specifics });
+      if (problems.length) return reply("failed", 400, problems.join(" "));
+      const ok = await setOutreach(id, outreach);
+      return reply(ok ? "messages" : "failed", ok ? 200 : 500);
+    }
     case "override": {
       const on = input.on === "1" || input.on === true;
       const ok = await setQualityOverride(id, on);
@@ -99,7 +134,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     }
     case "sent": {
       const kind = input.kind;
-      if (kind !== "ask" && kind !== "text" && kind !== "email") return reply("failed", 400);
+      if (!isMessageKind(kind)) return reply("failed", 400);
       const got = await markSent(id, kind);
       if (got === "not_live") return reply("failed", 409, "That message has the link in it, and the link doesn't open yet. Publish the preview first.");
       return reply(got === "ok" ? "sent" : "failed", got === "ok" ? 200 : 500);

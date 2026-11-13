@@ -1,12 +1,55 @@
 ---
-description: Research one office and build its decision-maker a preview card in Card Builder, as a draft that passes the personalization checklist. Usage - /build-card <office or person, city>
-argument-hint: <office or person, city>   e.g. "Harbor Realty Group, Brooklyn"
+description: Build one decision-maker a preview card in Card Builder, as a draft, from a name and city, a link, or the owner's own notes, and write the outreach for them. Usage - /build-card <office or person and city | a URL | pasted notes>
+argument-hint: <office or person, city | URL | pasted notes>   e.g. "Harbor Realty Group, Brooklyn"
 ---
 
 Build a Card Builder preview, as a **draft**, for: **$ARGUMENTS**
 
+## What you were given
+
+Read the input as one or more of these. Use it as the starting point and
+research the rest.
+
+| You were given | Start by |
+|---|---|
+| **An office or a person, plus a city** | searching for their own site and brokerage profile |
+| **A link** (their website, a LinkedIn company or public profile page, Zillow, StreetEasy, Instagram, a brokerage profile, a Google Business listing) | opening that page and reading it, then following it to their own site and the other sources |
+| **Pasted notes or details from the owner** | taking every fact in them as **confirmed by the owner** (below), then researching what the notes leave out |
+
+A mix is fine ("Dana at Harbor Realty, here's her Zillow, she told me they have
+14 agents"). If the input doesn't let you tell which office or person is meant,
+say what is missing and stop; don't pick one.
+
+**Pick the sources that are best for this prospect.** Their own site first.
+Then whichever of these actually has something about them: their brokerage
+profile, license and NMLS records, Zillow, StreetEasy, their LinkedIn company
+page and public profile page, their Google Business listing, their business
+Instagram, local press (a neighborhood paper, a trade publication, a
+"top producers" list). A team that lives on Instagram and Zillow is researched
+there; a 30-year brokerage is researched on its site and in the press.
+
+### What the owner pasted is confirmed by the owner
+
+A fact the owner typed into the command is theirs: you don't need a page for
+it and it must not trip the "Too generic" gate.
+
+- Put it in the draft as given, and mark it **`"owner": true`** with the
+  owner's own words as the `note`:
+  - a fact with a source slot: `"sources": { "phone": { "owner": true, "note": "Owner: 'her cell is 718-555-0199'" } }`
+  - who runs the office: `"sources": { "buyer_role": { "owner": true, "note": "Owner: 'Dana owns it'" } }`.
+    That alone verifies the decision-maker; no second source is needed for
+    what the owner told you.
+  - a specific: `{ "kind": "other", "text": "…", "owner": true, "dated": "<today>" }`, no `source_url` needed
+- **Only for what they actually wrote.** Something you inferred from their
+  notes, or found while researching, is research: it needs its page, and the
+  two-source rule for the decision-maker applies as before. The tool refuses
+  an `owner` mark with no note.
+- If your research **contradicts** a pasted fact (a different title, another
+  phone number), keep the owner's, and say so in the reply.
+
 The result is a draft only staff can see. **Do not publish it and do not send
-anything to anyone.** The owner reads it, fixes it and publishes it.
+anything to anyone.** The owner approves it in admin › Card Builder › Approve,
+and sends every message by hand from their own phone.
 
 The bar: the preview must look like **the card they would really use**, and
 everything written from it must be about this office and nobody else. The edit
@@ -35,10 +78,11 @@ doesn't.
   Mark it `"uncertain": true` when the page is old, second-hand or ambiguous.
 - **Spelling.** Check every name, letter by letter, against the page it came
   from, before you save and again when you look at the screenshots.
-- **Public business sources only**: their own website, their brokerage
+- **Public business information only**: their own website, their brokerage
   profile, license and NMLS records, Zillow, StreetEasy, their LinkedIn
-  *company* page, their Google Business listing, their business social
-  accounts. Not personal accounts, not people-search sites.
+  company page and the public part of their LinkedIn profile, their Google
+  Business listing, their business social accounts, local press. Not personal
+  accounts, not people-search or data-broker sites, nothing behind a login.
 - **A headshot only from their own business website or their brokerage
   profile.** Never from LinkedIn, Instagram, Facebook or an image search. The
   tool refuses one without such a source. No headshot is fine.
@@ -179,7 +223,8 @@ doesn't.
    with the hook and say why it matters. If any of them could go to another
    brokerage unchanged, the hook is wrong: rewrite `detail` and `hook_why`,
    `update-draft`, and run it again. If the draft is too generic, go back and
-   find what is missing rather than padding it.
+   find what is missing rather than padding it. (At this point the messages
+   are still the standard wording; you write the real ones in step 9.)
 
 7. **Look at it, on a phone and on a computer.** Run
    `node scripts/card-builder.mjs shots <id>`. It renders the real preview page
@@ -193,17 +238,81 @@ doesn't.
    `node scripts/card-builder.mjs update-draft <id> <file.json>`, then run
    `quality` and `shots` again.
 
+9. **Write the outreach for this prospect, yourself, and save it.** Not the
+   standard wording: seven messages written for this office and nobody else,
+   in the owner's voice. You write them here, in this command; the app never
+   calls a paid API to do it. Put them in a JSON file and run
+   `node scripts/card-builder.mjs set-outreach <id> <file.json>`:
+
+   ```json
+   {
+     "first_text": "Hi Dana, Menash from SwiftCard. Saw your open house at 88 Hicks St Sunday. I made you a card for it. Want me to send it?",
+     "link_text": "Dana, here's the card. 11 of your 14 agents hand out their own cell, this keeps those contacts with Harbor: {link}",
+     "email_subject": "Dana, a card for 14 Garden Pl",
+     "email_body": "Hi Dana,\n\n…\n\nHere it is: {link}\n\nMenash\nFounder, SwiftCard",
+     "call_opener": "Hi Dana, it's Menash, I sent you the card. …",
+     "voicemail": "Hi Dana, it's Menash from SwiftCard. …",
+     "nudge_no_view": "Dana, the card I made for Harbor is still up. Worth 20 seconds before Sunday's open house: {link}",
+     "nudge_viewed": "Dana, saw you opened the card. Tried you just now. Is later today or tomorrow morning better for 5 minutes?",
+     "uses": { "first_text": 0, "link_text": 2, "email_body": 1, "call_opener": 0, "voicemail": 2, "nudge_no_view": 0, "nudge_viewed": 1 }
+   }
+   ```
+
+   The seven:
+   - `first_text`: the first text, **no link**. One true thing about them and
+     a question: do they want the card?
+   - `link_text`: the second text, with `{link}`
+   - `email_subject` and `email_body`: the email version, with `{link}`
+   - `call_opener`: what the owner says when they pick up
+   - `voicemail`: what the owner says after the beep, 20 seconds at most
+   - `nudge_no_view`: for a link sent two days ago and never opened
+   - `nudge_viewed`: for someone who looked at the card and didn't pick up
+
+   The rules, which the tool enforces:
+   - **Each message is built on a verified specific, and they use different
+     ones where the draft has them.** `uses` says which (its position in
+     `specifics`, from 0). With three verified specifics, all three must
+     appear across the messages.
+   - **A text is 160 characters at most**, counted with the real link in place
+     of `{link}` (the link is about 50 characters; the tool tells you the
+     count). That is `first_text`, `link_text` and both nudges.
+   - **No emojis. Never the word "free".** No compliment or filler ("love
+     your site", "just checking in", "hope this finds you well").
+   - Write `{link}` where the link goes, never an address.
+
+   And the ones only you can judge:
+   - **It sounds like a founder texting by hand.** Short, plain words, first
+     name, one thought. No "I hope", no "reaching out", no exclamation marks,
+     no sales words ("solution", "streamline", "elevate"), no dashes for drama.
+     Read it aloud: if it sounds like an ad, rewrite it.
+   - Sign with the owner's first name only if you know it (from the pasted
+     notes or an earlier message in this session); otherwise write "the
+     founder of SwiftCard" and say so in the reply.
+   - Nothing in a message that isn't in the draft's verified facts. A message
+     may not introduce a fact.
+
+   If the tool refuses, fix what it lists and run it again. Then run
+   `quality <id>` once more: it returns every message as the screens will
+   show it. Copy them from there into your reply.
+
 ## Reply with
 
-- the **draft link** and the **edit link** the tool returned (both need the
-  owner to be signed in to the admin)
+- **the full outreach, word for word**: the first text, the text with the
+  link, the email (subject and body), the call opener, the voicemail script
+  and both nudges, each with which specific it is built on and, for the
+  texts, its character count
+
+- the **draft link**, the **edit link** and the **approve link** the tool
+  returned (all need the owner to be signed in to the admin)
 - the **personalization score**, and whether it is too generic (and if so,
   exactly which item is missing and what you tried)
-- the specifics, each with its source and date, and **the hook**: the fact,
+- the specifics, each with its source and date (or "confirmed by you"), and **the hook**: the fact,
   why it matters, and which SwiftCard feature it leads to
-- the two sources for the decision-maker
+- the two sources for the decision-maker (or that the owner told you who runs it)
+- anything of the owner's that your research contradicted
 - what they use today, and how that changes the pitch
 - what you **couldn't confirm** and left blank or marked uncertain
 - anything the owner should look at before publishing
 
-The draft is not public and nothing has been sent. Say that last.
+The draft is not public and nothing has been sent: it is waiting in admin ›
+Card Builder › Approve. Say that last.

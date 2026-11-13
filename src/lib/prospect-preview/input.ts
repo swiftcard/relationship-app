@@ -107,17 +107,19 @@ export function readSources(v: unknown): FactSources {
   const out: FactSources = {};
   if (!v || typeof v !== "object") return out;
   for (const k of SOURCE_FIELDS) {
-    const s = (v as Record<string, unknown>)[k] as { url?: unknown; uncertain?: unknown; note?: unknown } | null | undefined;
+    const s = (v as Record<string, unknown>)[k] as { url?: unknown; uncertain?: unknown; note?: unknown; owner?: unknown } | null | undefined;
     if (!s || typeof s !== "object") continue;
     const url = cleanSourceUrl(s.url) ?? "";
     const note = clean(s.note, 200);
     const uncertain = s.uncertain === true;
-    if (url || note || uncertain) out[k] = { url, uncertain, note };
+    const owner = s.owner === true;
+    if (url || note || uncertain || owner) out[k] = { url, uncertain, note, ...(owner ? { owner } : {}) };
   }
   return out;
 }
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const ticked = (v: unknown): boolean => v === true || v === "on" || v === "true";
 const oneOf = <T extends string>(list: readonly T[], v: unknown): T | null => ((list as readonly unknown[]).includes(v) ? (v as T) : null);
 
 /**
@@ -138,7 +140,8 @@ export function readSpecifics(v: unknown): Specific[] {
       text,
       source_url: cleanSourceUrl(r.source_url) ?? "",
       dated: ISO_DAY.test(dated) && !Number.isNaN(Date.parse(dated)) ? dated : "",
-      uncertain: r.uncertain === true || r.uncertain === "on" || r.uncertain === "true",
+      uncertain: ticked(r.uncertain),
+      ...(ticked(r.owner) ? { owner: true } : {}),
     });
     if (out.length >= MAX_SPECIFICS) break;
   }
@@ -147,7 +150,7 @@ export function readSpecifics(v: unknown): Specific[] {
 
 /**
  * The edit screen's rows: spec_kind_<i>, spec_text_<i>, spec_src_<i>,
- * spec_date_<i>, spec_unc_<i>, and hook_specific as the ROW the hook is built
+ * spec_date_<i>, spec_unc_<i>, spec_own_<i>, and hook_specific as the ROW the hook is built
  * on. Empty rows are dropped, so the hook's position is moved with its row.
  */
 export function parseSpecifics(get: (key: string) => unknown): { specifics: Specific[]; hook_specific: number | null } {
@@ -156,7 +159,7 @@ export function parseSpecifics(get: (key: string) => unknown): { specifics: Spec
   const specifics: Specific[] = [];
   let hook_specific: number | null = null;
   for (let i = 0; i < MAX_SPECIFICS; i++) {
-    const [one] = readSpecifics([{ kind: get(`spec_kind_${i}`), text: get(`spec_text_${i}`), source_url: get(`spec_src_${i}`), dated: get(`spec_date_${i}`), uncertain: get(`spec_unc_${i}`) }]);
+    const [one] = readSpecifics([{ kind: get(`spec_kind_${i}`), text: get(`spec_text_${i}`), source_url: get(`spec_src_${i}`), dated: get(`spec_date_${i}`), uncertain: get(`spec_unc_${i}`), owner: get(`spec_own_${i}`) }]);
     if (!one) continue;
     if (i === wanted) hook_specific = specifics.length;
     specifics.push(one);
@@ -245,12 +248,12 @@ type Refusal = { ok: false; error: string };
 export type ParsedFields = { ok: true; value: PreviewFields } | Refusal;
 export type ParsedPreview = { ok: true; value: NewPreviewInput } | Refusal;
 
-/** The sources table of the edit screen: src_<fact>, unc_<fact>, note_<fact>. */
+/** The sources table of the edit screen: src_<fact>, unc_<fact>, note_<fact>, own_<fact>. */
 export function parseSources(get: (key: string) => unknown): FactSources {
   const raw: Record<string, unknown> = {};
   for (const k of SOURCE_FIELDS) {
     const unc = get(`unc_${k}`);
-    raw[k] = { url: get(`src_${k}`), uncertain: unc === "on" || unc === true || unc === "true", note: get(`note_${k}`) };
+    raw[k] = { url: get(`src_${k}`), uncertain: ticked(unc), note: get(`note_${k}`), owner: ticked(get(`own_${k}`)) };
   }
   return readSources(raw);
 }

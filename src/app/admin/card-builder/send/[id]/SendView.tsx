@@ -10,7 +10,8 @@ import type { PreviewListRow } from "@/lib/prospect-preview/types";
 import SendMessage from "./SendMessage";
 
 // ── Card Builder: the Send screen (server component, no data loading) ───────
-// Three messages written from this prospect's details, each with a button
+// The messages for this prospect (written for them at build time, or the
+// templates when none were: lib/prospect-preview/outreach.ts), each with a button
 // that opens the founder's OWN Messages or Mail app. SwiftCard sends nothing.
 // page.tsx loads the preview and writes the messages; this draws them, so
 // tests/render can measure the real markup.
@@ -51,8 +52,11 @@ export default function SendView({ p, messages, now, senderKnown, done, error }:
 
       <p className="adm-callout-warn sc-t-footnote rounded-xl px-4 py-3">
         These go from your own phone number and your own inbox. Each button opens your Messages or Mail app with the words filled in; you press send there. Change any wording here first.
-        {!senderKnown && " Your SwiftCard profile has no name, so the messages say “the founder of SwiftCard”: add your name before sending."}
+        {!senderKnown && !messages.written && " Your SwiftCard profile has no name, so the messages say “the founder of SwiftCard”: add your name before sending."}
       </p>
+      {messages.written
+        ? <p className="adm-callout-good sc-t-footnote rounded-xl px-4 py-3" data-written>Written for {p.office_name} when the card was built. To change the saved wording, use Messages on the <Link className="adm-link" href={`/admin/card-builder/edit/${p.id}#pp-messages`}>edit screen</Link>.</p>
+        : <p className="adm-callout-warn sc-t-footnote rounded-xl px-4 py-3" data-templates>Nothing was written for this prospect, so these are the standard wording. Run /build-card on them to have each one written for {p.office_name}.</p>}
       {!messages.specific && (
         <p className="adm-callout-danger sc-t-subhead rounded-xl px-4 py-3" data-generic-messages>
           <span className="font-semibold">These could go to any office.</span> This preview has no hook, so the messages say nothing true about {p.office_name} in particular. <Link className="adm-link" href={`/admin/card-builder/edit/${p.id}`}>Add the hook</Link> before you send, or rewrite them here.
@@ -75,6 +79,14 @@ export default function SendView({ p, messages, now, senderKnown, done, error }:
       <Section title="3. Email with the link" hint={p.email ? `To ${p.email}. ${p.sent_at && p.sent_channel === "email" ? `Sent ${fmtDateTime(p.sent_at)}.` : "Not sent yet."}` : "No email address on this preview."}>
         <SendMessage id={p.id} kind="email" to={p.email ?? ""} subject={messages.email.subject} body={messages.email.body} button="Open Mail"
           blocked={!p.email ? "Add their email on the edit screen to send this one." : live ? null : noLink} />
+      </Section>
+
+      <Section title="4. Nudge: link not opened" hint={`To ${p.phone}. For a link that went out two days ago and hasn't been opened. ${p.nudge_no_view_at ? `Sent ${fmtDateTime(p.nudge_no_view_at)}.` : "Not sent yet."}`}>
+        <SendMessage id={p.id} kind="nudge_no_view" to={p.phone} body={messages.nudge_no_view} button="Open Messages" blocked={live ? null : noLink} />
+      </Section>
+
+      <Section title="5. Nudge: looked, didn't pick up" hint={`To ${p.phone}. For after you called and got no answer. ${p.nudge_viewed_at ? `Sent ${fmtDateTime(p.nudge_viewed_at)}.` : "Not sent yet."}`}>
+        <SendMessage id={p.id} kind="nudge_viewed" to={p.phone} body={messages.nudge_viewed} button="Open Messages" blocked={live ? null : "This one is for after they have looked at their card. Publish the preview first."} />
       </Section>
 
       <Section title="Sent it another way?" hint="If you sent a message without these buttons, or pressed one and didn't send, set it straight here.">
