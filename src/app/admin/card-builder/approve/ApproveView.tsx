@@ -11,7 +11,9 @@ import { resolveOutreach } from "@/lib/prospect-preview/outreach";
 import { approvalQueue } from "@/lib/prospect-preview/pipeline";
 import { assessQuality, isVerified, type Quality } from "@/lib/prospect-preview/quality";
 import type { PreviewList } from "@/lib/prospect-preview/store";
-import { SOURCE_FIELDS, SOURCE_LABELS, type PreviewListRow } from "@/lib/prospect-preview/types";
+import { SOURCE_FIELDS, SOURCE_LABELS, WARM_LABELS, type PreviewListRow } from "@/lib/prospect-preview/types";
+import { warmPathFor, type Connection } from "@/lib/prospect-preview/warm";
+import LinkedInButton from "../LinkedInButton";
 import OneTapSend from "../OneTapSend";
 
 // ── Card Builder: the Approve queue (server component, no data loading) ─────
@@ -27,6 +29,8 @@ import OneTapSend from "../OneTapSend";
 
 const DONE: Record<string, { ok: boolean; text: string }> = {
   approved: { ok: true, text: "Published. The link opens for 14 days. Nothing has been sent: tap the button on their card to send the first text." },
+  saved: { ok: true, text: "Saved." },
+  accepted: { ok: true, text: "Marked as accepted. The message for them is under Call and follow up." },
   skipped: { ok: true, text: "Skipped. It stays a draft, under Skipped at the bottom." },
   unskipped: { ok: true, text: "Back in the queue." },
   sent: { ok: true, text: "Marked as sent." },
@@ -95,11 +99,30 @@ function Facts({ r, q }: { r: PreviewListRow; q: Quality }) {
   );
 }
 
-function AllWords({ m, opener }: { m: Messages; opener: string | null }) {
+/**
+ * `pickForm`: the id of the Approve form these radio buttons belong to, when
+ * there are two versions of the first text to choose between.
+ */
+function AllWords({ m, opener, pickForm }: { m: Messages; opener: string | null; pickForm?: string }) {
   return (
     <div className="flex flex-col gap-3" data-messages>
       {!m.written && <p className="adm-callout-warn sc-t-footnote rounded-xl px-3 py-2">Standard wording: nothing was written for this prospect.</p>}
-      <Words label="First text, no link" extra={`${m.ask.length} characters`}>{m.ask}</Words>
+      {m.versions && pickForm ? (
+        <fieldset className="flex flex-col gap-2" data-versions>
+          <legend className="sc-t-caption adm-faint uppercase tracking-wide">First text, no link · pick one</legend>
+          {(["a", "b"] as const).map((v) => (
+            <label key={v} className="adm-card rounded-xl px-3 py-2.5 flex items-start gap-3 cursor-pointer">
+              <input type="radio" name="pick" value={v} form={pickForm} defaultChecked={m.versions!.picked === v} className="mt-1 w-5 h-5 shrink-0" style={{ accentColor: "var(--sc-tint)" }} />
+              <span className="sc-t-subhead min-w-0" style={{ overflowWrap: "anywhere" }}>
+                <span className="sc-t-caption adm-muted block">Version {v.toUpperCase()} · {m.versions![v].length} characters</span>
+                {m.versions![v]}
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      ) : (
+        <Words label="First text, no link" extra={`${m.versions ? `version ${m.versions.picked.toUpperCase()} · ` : ""}${m.ask.length} characters`}>{m.ask}</Words>
+      )}
       <Words label="Text with the link" extra={`${m.text.length} characters`}>{m.text}</Words>
       <details>
         <summary className="adm-link sc-t-footnote cursor-pointer">Email, call opener, voicemail and nudges</summary>
@@ -109,13 +132,17 @@ function AllWords({ m, opener }: { m: Messages; opener: string | null }) {
           <Words label="Voicemail">{m.voicemail}</Words>
           <Words label="Nudge: no view after 2 days">{m.nudge_no_view}</Words>
           <Words label="Nudge: viewed, didn't pick up">{m.nudge_viewed}</Words>
+          {m.linkedin?.note && <Words label="LinkedIn connection note" extra={`${m.linkedin.note.length} characters`}>{m.linkedin.note}</Words>}
+          {m.linkedin?.dm && <Words label="LinkedIn message after they accept">{m.linkedin.dm}</Words>}
         </div>
       </details>
     </div>
   );
 }
 
-function Prospect({ r, appUrl, sender, mode, highlight }: { r: PreviewListRow; appUrl: string; sender: string | null; mode: "waiting" | "send"; highlight: boolean }) {
+function Prospect({ r, appUrl, sender, mode, highlight, connections }: { r: PreviewListRow; appUrl: string; sender: string | null; mode: "waiting" | "send"; highlight: boolean; connections: Connection[] }) {
+  const warm = warmPathFor(r, connections);
+  const formId = `ap-${r.id}`;
   const q = assessQuality(r);
   const m = resolveOutreach(r, { link: `${appUrl}/p/${r.slug}`, sender });
   const post = `/api/admin/card-builder/${r.id}`;
@@ -131,6 +158,12 @@ function Prospect({ r, appUrl, sender, mode, highlight }: { r: PreviewListRow; a
           {mode === "send" && <StatusBadge tone="good">Published</StatusBadge>}
         </div>
         <p className="sc-t-subhead adm-muted" style={{ overflowWrap: "anywhere" }}>{[r.owner_title, r.office_name].filter(Boolean).join(" · ")}</p>
+        {warm && (
+          <p className="adm-callout-good sc-t-footnote rounded-xl px-3 py-2 mt-2" data-warm>
+            <span className="font-semibold">Warm path: {WARM_LABELS[warm.kind].toLowerCase()}.</span> {warm.text}
+            {warm.source_url ? <> · <a className="adm-link" href={warm.source_url} target="_blank" rel="noopener noreferrer">source</a></> : null}
+          </p>
+        )}
       </div>
 
       {mode === "send" && (
@@ -142,18 +175,38 @@ function Prospect({ r, appUrl, sender, mode, highlight }: { r: PreviewListRow; a
               ? <OneTapSend id={r.id} kind="email" href={mailtoHref(r.email, m.email.subject, m.email.body)} className="sc-btn sc-btn-gray sc-btn-block">Open Mail</OneTapSend>
               : <Link href={`/admin/card-builder/send/${r.id}`} className="sc-btn sc-btn-gray sc-btn-block">Send screen</Link>}
           </div>
+          {m.linkedin?.note && r.linkedin_url && (
+            <div className="grid grid-cols-2 gap-2" data-linkedin-row>
+              <LinkedInButton id={r.id} kind="linkedin_note" words={m.linkedin.note} profile={r.linkedin_url} className="sc-btn sc-btn-gray sc-btn-block">LinkedIn</LinkedInButton>
+              {r.linkedin_sent_at && !r.linkedin_accepted_at ? (
+                <form method="post" action={post}>
+                  <input type="hidden" name="action" value="linkedin_accepted" />
+                  <input type="hidden" name="back" value={back} />
+                  <button type="submit" className="sc-btn sc-btn-gray sc-btn-block" data-accepted>They accepted</button>
+                </form>
+              ) : <span className="sc-t-caption adm-muted self-center">{r.linkedin_accepted_at ? "Accepted. Their message is under Call and follow up." : "Copies the note and opens their profile."}</span>}
+            </div>
+          )}
+          {m.versions && (
+            <form method="post" action={post}>
+              <input type="hidden" name="action" value="pick" />
+              <input type="hidden" name="pick" value={m.versions.picked === "a" ? "b" : "a"} />
+              <input type="hidden" name="back" value={back} />
+              <button type="submit" className="adm-link sc-t-footnote" data-switch-version>Use version {m.versions.picked === "a" ? "B" : "A"} of the first text instead</button>
+            </form>
+          )}
           <p className="sc-t-caption adm-muted">Opens your own Messages or Mail with the words filled in, and marks it sent here. You press send there. To change the wording first, use the <Link className="adm-link" href={`/admin/card-builder/send/${r.id}`}>Send screen</Link>.</p>
         </div>
       )}
 
       <Thumb r={r} />
       <Facts r={r} q={q} />
-      <AllWords m={m} opener={r.outreach?.call_opener || null} />
+      <AllWords m={m} opener={r.outreach?.call_opener || null} pickForm={mode === "waiting" && q.mayPublish ? formId : undefined} />
 
       {mode === "waiting" && (
         <div className="flex flex-col gap-2" data-decide>
           {q.mayPublish ? (
-            <form method="post" action={post}>
+            <form method="post" action={post} id={formId}>
               <input type="hidden" name="action" value="approve" />
               <input type="hidden" name="back" value={back} />
               <button type="submit" className="sc-btn sc-btn-filled sc-btn-lg sc-btn-block" data-approve>Approve and publish</button>
@@ -179,7 +232,7 @@ function Prospect({ r, appUrl, sender, mode, highlight }: { r: PreviewListRow; a
   );
 }
 
-export default function ApproveView({ list, appUrl, now, sender, done, error, about }: {
+export default function ApproveView({ list, appUrl, now, sender, done, error, about, connections = [] }: {
   list: PreviewList;
   appUrl: string;
   /** The time the page was made (server), so the view stays pure. */
@@ -189,6 +242,8 @@ export default function ApproveView({ list, appUrl, now, sender, done, error, ab
   error: string | null;
   /** The preview the last button was about. */
   about: string | null;
+  /** The owner's own LinkedIn connections, for warm paths. */
+  connections?: Connection[];
 }) {
   const outcome = done ? DONE[done] ?? null : null;
   const queue = list.ready ? approvalQueue(list.rows, now) : null;
@@ -208,7 +263,7 @@ export default function ApproveView({ list, appUrl, now, sender, done, error, ab
             <section aria-labelledby="ap-send" className="flex flex-col gap-3">
               <h2 id="ap-send" className="sc-t-headline">Approved: send the first text ({queue.send.length})</h2>
               <ul className="flex flex-col gap-4">
-                {queue.send.map((r) => <Prospect key={r.id} r={r} appUrl={appUrl} sender={sender} mode="send" highlight={about === r.id} />)}
+                {queue.send.map((r) => <Prospect key={r.id} r={r} appUrl={appUrl} sender={sender} mode="send" highlight={about === r.id} connections={connections} />)}
               </ul>
             </section>
           )}
@@ -219,7 +274,7 @@ export default function ApproveView({ list, appUrl, now, sender, done, error, ab
               <EmptyState>No drafts to approve. Run /build-card or /build-batch to line some up.</EmptyState>
             ) : (
               <ul className="flex flex-col gap-4">
-                {queue.waiting.map((r) => <Prospect key={r.id} r={r} appUrl={appUrl} sender={sender} mode="waiting" highlight={about === r.id} />)}
+                {queue.waiting.map((r) => <Prospect key={r.id} r={r} appUrl={appUrl} sender={sender} mode="waiting" highlight={about === r.id} connections={connections} />)}
               </ul>
             )}
           </section>

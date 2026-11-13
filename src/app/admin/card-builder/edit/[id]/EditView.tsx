@@ -157,6 +157,11 @@ export default function EditView({ p, appUrl, now, done, error }: {
               <Field label="Owner's phone" hint="The alert tells you to call this number." flag={flag("phone")}><input name="phone" type="tel" required maxLength={40} defaultValue={p.phone} className={input} autoComplete="off" /></Field>
               <Field label="Owner's email" flag={flag("email")}><input name="email" type="email" maxLength={160} defaultValue={p.email ?? ""} className={input} autoComplete="off" /></Field>
               <div className="sm:col-span-2">
+                <Field label="Their LinkedIn profile" hint="Their own public profile (linkedin.com/in/…), not the company page. Name where you found it under Sources." flag={flag("linkedin_url")}>
+                  <input name="linkedin_url" type="url" maxLength={600} defaultValue={p.linkedin_url ?? ""} className={input} placeholder="https://www.linkedin.com/in/" autoComplete="off" />
+                </Field>
+              </div>
+              <div className="sm:col-span-2">
                 <Field label="License line" hint="Only if they show one, exactly as they show it: Licensed Real Estate Broker; NMLS #123456. Printed after their title on the card." flag={flag("license")}>
                   <input name="license" maxLength={80} defaultValue={p.license ?? ""} className={input} autoComplete="off" />
                 </Field>
@@ -207,6 +212,9 @@ export default function EditView({ p, appUrl, now, done, error }: {
                     </label>
                     <label className="inline-flex items-center gap-2 sc-t-footnote min-h-[32px]" title="You know this yourself. It needs no page or date.">
                       <input type="checkbox" name={`spec_own_${i}`} defaultChecked={!!sp?.owner} className="w-4 h-4" style={{ accentColor: "var(--sc-tint)" }} />I confirm it
+                    </label>
+                    <label className="inline-flex items-center gap-2 sc-t-footnote min-h-[32px]" title="True and useful to know, and never said back to them: a former name, an old address, a follower count.">
+                      <input type="checkbox" name={`spec_quiet_${i}`} defaultChecked={!!sp?.quiet} className="w-4 h-4" style={{ accentColor: "var(--sc-tint)" }} />Don&apos;t quote
                     </label>
                   </div>
                 </li>

@@ -32,7 +32,7 @@ describe("the Card Builder tool", () => {
   });
 
   it("saves the written messages only on a draft, only when they pass every rule, and never sets the owner's marks by itself", () => {
-    expect(tool).toContain('const problems = checkOutreach(outreach, { link, specifics: p.specifics, complete: true });');
+    expect(tool).toContain('const problems = checkOutreach(outreach, { link, specifics: p.specifics, complete: true, linkedin: !!p.linkedin_url, warmName: p.warm_path?.name ?? null, stale: staleNumbers(p) });');
     expect(tool).toMatch(/if \(problems\.length\) throw new Error\(`Not saved\./);
     expect(tool).toMatch(/\.update\(\{ outreach, updated_at: [^}]+\}\)\.eq\("id", id\)\.eq\("status", "draft"\)/);
     // "Confirmed by the owner" must carry the owner's own words.
@@ -83,11 +83,50 @@ describe("the commands", () => {
 
   it("/build-batch finds, then builds drafts one after another, skips the contacted, and ends with one table; it publishes and sends nothing", () => {
     expect(batch).toContain("$ARGUMENTS");
-    expect(batch.indexOf("find-offices.md")).toBeLessThan(batch.indexOf("build-card.md"));
+    expect(batch.indexOf("3. **Find the offices.**")).toBeGreaterThan(-1);
+    expect(batch.indexOf("3. **Find the offices.**")).toBeLessThan(batch.indexOf("4. **Build a draft for each"));
+    expect(batch).toContain("find-offices.md");
+    expect(batch).toContain("build-card.md");
     expect(batch).toMatch(/One at a time/);
     expect(batch).toMatch(/already contacted, on the do-not-contact\s+list, or already has a preview/);
     expect(batch).toContain("| Office | Decision-maker | Score | Hook | Draft link | Couldn't confirm |");
     expect(batch).toMatch(/Do not publish\s+anything and do not send anything to anyone/);
     expect(batch).toMatch(/don't lower the bar/);
+  });
+
+  it("a batch runs unattended: it never asks, saves and logs as it goes, skips failures, resumes, and tops out at 30", () => {
+    expect(batch).toMatch(/Never ask the owner a question mid-run/);
+    expect(batch).toMatch(/Save each draft as it is done/);
+    expect(batch).toMatch(/A failure is skipped and logged, never fatal/);
+    expect(batch).toMatch(/Rerunning resumes/);
+    expect(batch).toMatch(/30 at most/);
+    for (const cmd of ["card-builder.mjs batch-start", "card-builder.mjs queue", "card-builder.mjs queue-settle", "card-builder.mjs batch-log", "card-builder.mjs batch-finish"]) expect(batch).toContain(cmd);
+    // The queue the owner filled from their phone is built before anything the search finds.
+    expect(batch.indexOf("card-builder.mjs queue`")).toBeLessThan(batch.indexOf("3. **Find the offices.**"));
+    expect(tool).toContain('if (Number.isFinite(wanted) && wanted > 30) throw new Error("A batch is 30 offices at most.');
+  });
+
+  it("/build is one line three ways, and tonight is this session kept awake, not a promise it can't keep", () => {
+    const build1 = readFileSync(".claude/commands/build.md", "utf8");
+    expect(build1).toContain("$ARGUMENTS");
+    for (const way of ["`now` + **one** office", "`now` + an area, a type and a **count**", "`tonight` + an area, a type and a count"]) expect(build1).toContain(way);
+    expect(build1).toContain("build-card.md");
+    expect(build1).toContain("build-batch.md");
+    expect(build1).toMatch(/this session is\s+what does the work/);
+    expect(build1).toContain("caffeinate");
+    expect(build1).toMatch(/never ask a question/);
+    expect(build1).toMatch(/Do not publish anything and do not send anything/);
+  });
+
+  it("/build-card keeps the tone rules, finds a warm path and their LinkedIn profile, and never touches LinkedIn itself", () => {
+    expect(build).toMatch(/Never quote back what reads as watching them/);
+    expect(build).toMatch(/Never use a number you flagged as possibly stale/);
+    expect(build).toMatch(/Only claim what the Office plan does today/);
+    expect(build).toMatch(/never "who"/);
+    expect(build).toContain("card-builder.mjs warm");
+    expect(build).toContain("card-builder.mjs style");
+    expect(build).toContain("first_text_b");
+    expect(build).toMatch(/200 characters at most, with no\s+link and no pitch/);
+    expect(build).toMatch(/Never sign in to LinkedIn, and never send anything\s+there/);
   });
 });

@@ -789,9 +789,20 @@ export function fitTitleFluid(
   // this text in normal flow, and three extra pixels put the QR off the card
   // (caught by card-detail-fit). Uppercase titles have no descenders, so larger
   // glyphs sit comfortably in the same box.
+  //
+  // ...but the line box must still be at least as tall as the GLYPHS. The
+  // width budget above is an estimate, and a title of wide letters ("BRANCH
+  // PRODUCTION MANAGER") grows to a size at which it wraps after all; with the
+  // line box held at the old fixed height, its two lines were drawn on top of
+  // each other (Card Builder, CMG preview, 2026-11-13). So the line is 1.08em
+  // tall, never less than the old box, and the difference is handed back as a
+  // negative bottom margin: ONE line still occupies exactly the old height, and
+  // a second line gets a full line of its own.
+  const box = `${(min * 1.3).toFixed(2)}px`;
   return {
     fontSize: `clamp(${min.toFixed(2)}px, calc((100cqw - ${pad}px) / ${budget}), ${max.toFixed(2)}px)`,
-    lineHeight: `${(min * 1.3).toFixed(2)}px`,
+    lineHeight: `max(${box}, 1.08em)`,
+    marginBottom: `min(0px, calc(${box} - 1.08em))`,
   };
 }
 

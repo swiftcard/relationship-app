@@ -38,14 +38,14 @@ export const SOCIAL_LABELS: Record<SocialKey, string> = {
  * researcher saying "check this before you rely on it"; the edit screen flags
  * those. Keyed by the fact, not the column, so "team" covers the whole list.
  */
-export const SOURCE_FIELDS = ["owner_name", "owner_title", "phone", "email", "logo_url", "headshot_url", "colors", "address", "website", "social_links", "specialty", "team_members", "buyer_role", "buyer_second", "team_size", "detail", "license", "current_tool"] as const;
+export const SOURCE_FIELDS = ["owner_name", "owner_title", "phone", "email", "logo_url", "headshot_url", "colors", "address", "website", "social_links", "specialty", "team_members", "buyer_role", "buyer_second", "team_size", "detail", "license", "current_tool", "linkedin_url", "warm_path"] as const;
 export type SourceField = (typeof SOURCE_FIELDS)[number];
 export const SOURCE_LABELS: Record<SourceField, string> = {
   owner_name: "Owner's name", owner_title: "Owner's title", phone: "Phone", email: "Email", logo_url: "Logo",
   headshot_url: "Headshot", colors: "Brand colors", address: "Office address", website: "Website",
   social_links: "Social links", specialty: "Tagline", team_members: "Team members",
   buyer_role: "Decision-maker", buyer_second: "Decision-maker, second source", team_size: "Team size", detail: "The hook",
-  license: "License line", current_tool: "What they use today",
+  license: "License line", current_tool: "What they use today", linkedin_url: "Their LinkedIn profile", warm_path: "Warm path",
 };
 /**
  * `owner` is the owner of SwiftCard saying "I told you this myself" (pasted
@@ -69,7 +69,12 @@ export const SPECIFIC_LABELS: Record<SpecificKind, string> = {
   cell_numbers: "Agents listing personal cells", years: "Years in business", award: "Award", other: "Other",
 };
 /** `owner`: the owner supplied this fact themselves, so it needs no page or date. Only ever present when true. */
-export type Specific = { kind: SpecificKind; text: string; source_url: string; dated: string; uncertain: boolean; owner?: boolean };
+/**
+ * `quiet`: true and useful to know, and never quoted back to them: a former
+ * name, an old or home address, a follower count. Said in a message it reads
+ * as having been watched (owner, 2026-11-13). Only ever present when true.
+ */
+export type Specific = { kind: SpecificKind; text: string; source_url: string; dated: string; uncertain: boolean; owner?: boolean; quiet?: boolean };
 export const MAX_SPECIFICS = 6;
 /** How many verified specifics a preview needs before it may go out. */
 export const MIN_SPECIFICS = 3;
@@ -78,7 +83,7 @@ export const MIN_SPECIFICS = 3;
 export const HOOK_ANGLES = ["views", "departures", "open_house"] as const;
 export type HookAngle = (typeof HOOK_ANGLES)[number];
 export const HOOK_ANGLE_LABELS: Record<HookAngle, string> = {
-  views: "Knowing who viewed a card",
+  views: "Knowing when a card is opened",
   departures: "Keeping contacts when an agent leaves",
   open_house: "Tracking open-house leads",
 };
@@ -98,16 +103,23 @@ export const COMPETITOR_TOOLS: readonly CurrentTool[] = ["popl", "linq", "blinq"
  * /build-card command (never by a paid API call inside the app). The texts
  * that carry the link hold the placeholder `{link}`, filled in when shown.
  */
-export const OUTREACH_KEYS = ["first_text", "link_text", "email_subject", "email_body", "call_opener", "voicemail", "nudge_no_view", "nudge_viewed"] as const;
+export const OUTREACH_KEYS = ["first_text", "first_text_b", "link_text", "email_subject", "email_body", "call_opener", "voicemail", "nudge_no_view", "nudge_viewed", "linkedin_note", "linkedin_dm"] as const;
 export type OutreachKey = (typeof OUTREACH_KEYS)[number];
 export const OUTREACH_LABELS: Record<OutreachKey, string> = {
-  first_text: "First text, no link", link_text: "Text with the link", email_subject: "Email subject", email_body: "Email",
+  first_text: "First text, no link", first_text_b: "First text, second version", linkedin_note: "LinkedIn connection note", linkedin_dm: "LinkedIn message after they accept", link_text: "Text with the link", email_subject: "Email subject", email_body: "Email",
   call_opener: "Call opener", voicemail: "Voicemail script", nudge_no_view: "Nudge: no view after 2 days", nudge_viewed: "Nudge: viewed, didn't pick up",
 };
 /** The ones sent as a text message: 160 characters at most, link included. */
-export const OUTREACH_TEXTS: readonly OutreachKey[] = ["first_text", "link_text", "nudge_no_view", "nudge_viewed"];
+export const OUTREACH_TEXTS: readonly OutreachKey[] = ["first_text", "first_text_b", "link_text", "nudge_no_view", "nudge_viewed"];
+/** The two sent on LinkedIn, by hand. Only written when their public profile was found. */
+export const OUTREACH_LINKEDIN: readonly OutreachKey[] = ["linkedin_note", "linkedin_dm"];
+/**
+ * A connection request's note. LinkedIn allows 300 characters on a paid
+ * account and 200 on a basic one, so 200 works whichever the owner has.
+ */
+export const LINKEDIN_NOTE_LIMIT = 200;
 export const OUTREACH_MAX: Record<OutreachKey, number> = {
-  first_text: 320, link_text: 320, email_subject: 120, email_body: 2000, call_opener: 600, voicemail: 600, nudge_no_view: 320, nudge_viewed: 320,
+  first_text: 320, first_text_b: 320, linkedin_note: 300, linkedin_dm: 1000, link_text: 320, email_subject: 120, email_body: 2000, call_opener: 600, voicemail: 600, nudge_no_view: 320, nudge_viewed: 320,
 };
 export const TEXT_LIMIT = 160;
 export const LINK_SLOT = "{link}";
@@ -115,6 +127,22 @@ export type Outreach = Record<OutreachKey, string> & {
   /** Which of `specifics` (its position) each message is built on. */
   uses: Partial<Record<OutreachKey, number>>;
   written_at: string | null;
+  /** Which first text the owner picked in Approve. Null = not picked yet: the first one. */
+  first_pick?: "a" | "b" | null;
+};
+
+/** A way in that isn't cold: someone the owner knows there, or something they share. */
+export const WARM_KINDS = ["connection", "school", "employer"] as const;
+export type WarmKind = (typeof WARM_KINDS)[number];
+export const WARM_LABELS: Record<WarmKind, string> = { connection: "You know someone there", school: "Same school", employer: "Same past employer" };
+export type WarmPath = {
+  kind: WarmKind;
+  /** A sentence for the owner: "You're connected to Marcus Lee, Associate Broker there." */
+  text: string;
+  /** The person or place to name in the first text: "Marcus Lee", "Baruch". */
+  name: string;
+  /** Where a shared school or employer was read (a connection comes from the owner's own export). */
+  source_url?: string;
 };
 
 export const TYPE_FEELS = ["sans", "serif"] as const;
@@ -184,6 +212,17 @@ export type ProspectPreview = {
   skipped_at?: string | null;
   nudge_no_view_at?: string | null;
   nudge_viewed_at?: string | null;
+  /** Their own public LinkedIn profile (not the company page). */
+  linkedin_url?: string | null;
+  /** The connection note went (by hand), they accepted, the DM went. */
+  linkedin_sent_at?: string | null;
+  linkedin_accepted_at?: string | null;
+  linkedin_dm_at?: string | null;
+  warm_path?: WarmPath | null;
+  /** The /build batch that made this preview. */
+  batch_id?: string | null;
+  /** The setup call they booked from their preview page (lib/demo). */
+  demo_booking_id?: string | null;
 };
 
 export type DeviceType = "phone" | "tablet" | "desktop";

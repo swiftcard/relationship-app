@@ -15,5 +15,5 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (!UUID_RE.test(id)) return new Response(null, { status: 404 });
   const preview = await getPreviewById(id);
   if (!preview) return new Response(null, { status: 404 });
-  return logoResponse(preview.logo_url);
+  return logoResponse(preview.logo_url, preview.brand_primary);
 }

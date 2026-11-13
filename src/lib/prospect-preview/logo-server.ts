@@ -1,4 +1,5 @@
 import { fetchVCardPhoto } from "@/lib/contact-photo";
+import { logoPlate } from "./colors";
 
 // ── Card Builder: a logo with room around it ────────────────────────────────
 // SERVER ONLY. A logo file taken from a prospect's site is almost always cut
@@ -10,6 +11,13 @@ import { fetchVCardPhoto } from "@/lib/contact-photo";
 // file's own background colour (or leave it clear, when the logo is
 // transparent, so it still sits on any card colour).
 //
+// "Any card colour" had one exception: a see-through logo drawn in the very
+// colour of the card (their brand colour is usually read from the logo).
+// Realty Collective's light-blue mark on a light-blue card all but vanished
+// (owner, 2026-11-13). When the card's colour is given and the logo would
+// blend into it, the margin and everything behind the artwork are filled with
+// a plate, white or near-black, whichever the logo reads best on.
+//
 // Fetched through the SSRF-safe fetcher, like every other address the server
 // is handed (lib/contact-photo).
 
@@ -18,7 +26,7 @@ export const LOGO_MARGIN = 0.18;
 
 export type PaddedLogo = { png: Buffer; width: number; height: number };
 
-export async function padLogoBytes(bytes: Buffer): Promise<PaddedLogo | null> {
+export async function padLogoBytes(bytes: Buffer, ground?: string | null): Promise<PaddedLogo | null> {
   try {
     const sharp = (await import("sharp")).default;
     const src = sharp(bytes).ensureAlpha();
@@ -38,25 +46,33 @@ export async function padLogoBytes(bytes: Buffer): Promise<PaddedLogo | null> {
 
     const pad = Math.max(6, Math.round(Math.min(art.info.width, art.info.height) * LOGO_MARGIN));
     const out = await sharp(art.data).extend({ top: pad, bottom: pad, left: pad, right: pad, background }).png().toBuffer({ resolveWithObject: true });
+    if (clear && ground) {
+      const pixels = await sharp(art.data).ensureAlpha().resize(64, 64, { fit: "inside" }).raw().toBuffer();
+      const plate = logoPlate(pixels, ground);
+      if (plate) {
+        const plated = await sharp(out.data).flatten({ background: plate }).png().toBuffer({ resolveWithObject: true });
+        return { png: plated.data, width: plated.info.width, height: plated.info.height };
+      }
+    }
     return { png: out.data, width: out.info.width, height: out.info.height };
   } catch {
     return null;
   }
 }
 
-export async function paddedLogo(url: string | null): Promise<PaddedLogo | null> {
+export async function paddedLogo(url: string | null, ground?: string | null): Promise<PaddedLogo | null> {
   if (!url || !/^https:\/\//.test(url)) return null;
   const got = await fetchVCardPhoto(url, "logo").catch(() => null);
-  return got ? padLogoBytes(Buffer.from(got.base64, "base64")) : null;
+  return got ? padLogoBytes(Buffer.from(got.base64, "base64"), ground) : null;
 }
 
 /**
  * The answer both logo routes give: the padded PNG, or, when the file can't
  * be read here, a redirect to the file itself so the card still has its logo.
  */
-export async function logoResponse(url: string | null): Promise<Response> {
+export async function logoResponse(url: string | null, ground?: string | null): Promise<Response> {
   if (!url || !/^https:\/\//.test(url)) return new Response(null, { status: 404 });
-  const padded = await paddedLogo(url);
+  const padded = await paddedLogo(url, ground);
   if (!padded) return new Response(null, { status: 302, headers: { Location: url, "Cache-Control": "no-store" } });
   return new Response(new Uint8Array(padded.png), {
     headers: {

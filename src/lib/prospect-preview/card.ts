@@ -1,11 +1,15 @@
 import type { CardData } from "@/components/card-templates/types";
+import { readableOn } from "./colors";
 import type { ProspectPreview, TeamMember } from "./types";
 
 // ── Card Builder: a preview row as a real card ──────────────────────────────
 // Every preview wears the same house style (owner, 2026-11-11): the Logo First
 // template, with the prospect's first brand colour as the card's ground and
 // the second as its accent. The template itself keeps the accent readable
-// against the ground (LogoFirst's readableAccent), so any two colours work.
+// against the ground by brightness (LogoFirst's readableAccent); that let two
+// colours of the same lightness and different hue through (teal on green), so
+// the accent is first made readable here, by contrast ratio (colors.ts
+// readableOn). Any two colours work.
 //
 // A plain module (no server imports): the page, the admin's own look at a
 // preview and the tests all build the same card from it.
@@ -46,9 +50,11 @@ export function logoVersion(url: string): string {
  * the file's edges, so a raw file sits hard against them. The public page of
  * a published preview and staff's look at a draft each have their own route.
  */
-export function paddedLogoSrc(p: Pick<ProspectPreview, "id" | "slug" | "logo_url">, forStaff: boolean): string | null {
+export function paddedLogoSrc(p: Pick<ProspectPreview, "id" | "slug" | "logo_url"> & Partial<Pick<ProspectPreview, "brand_primary">>, forStaff: boolean): string | null {
   if (!p.logo_url) return null;
-  const v = logoVersion(p.logo_url);
+  // The card's colour is part of the picture (a logo that would blend into it
+  // gets a plate behind it), so it is part of the address too.
+  const v = logoVersion(`${p.logo_url}|${p.brand_primary ?? ""}`);
   return forStaff ? `/api/admin/card-builder/${p.id}/logo?v=${v}` : `/p/${p.slug}/logo?v=${v}`;
 }
 
@@ -64,7 +70,7 @@ function base(p: Branded, logoSrc?: string | null): Pick<CardData, "company" | "
     photoUrl: null,
     // What the card's QR points at: this preview, never a card that isn't theirs.
     cardUrl: `${APP_HOST}/p/${p.slug}`,
-    customization: { bgColor: p.brand_primary, accentColor: p.brand_secondary, ...(p.type_feel === "serif" ? { fontFamily: SERIF_STACK } : {}) },
+    customization: { bgColor: p.brand_primary, accentColor: readableOn(p.brand_primary, p.brand_secondary), ...(p.type_feel === "serif" ? { fontFamily: SERIF_STACK } : {}) },
   };
 }
 

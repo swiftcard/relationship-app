@@ -87,6 +87,28 @@ doesn't.
   profile.** Never from LinkedIn, Instagram, Facebook or an image search. The
   tool refuses one without such a source. No headshot is fine.
 
+- **Never quote back what reads as watching them.** A former name, an old or
+  home address, how many followers they have: these may be true and public,
+  and said in a message they are unsettling. Record one as a specific only if
+  it is useful to the owner on a call, and mark it `"quiet": true`; the tool
+  then refuses any message built on it. A listing's address, an open house or
+  a sale they advertise themselves is theirs to be quoted.
+- **Never use a number you flagged as possibly stale.** If the team size, or
+  the count inside a specific, is marked uncertain, no message may contain
+  that number. Say it without the number ("most of your agents"), or confirm
+  it first.
+- **Only claim what the Office plan does today.** Checked against the code:
+  - TRUE: each agent gets an alert **when** their card is opened, with the
+    time, and the city and device. NOT true: "see **who** opens it". A viewer
+    is named only if they already shared their details with that agent.
+    Write "you see when it's opened", never "who".
+  - TRUE: every contact the agents collect goes into one office list the
+    owner can export, and when an agent leaves, **the contacts they had
+    already collected stay on that list**. Don't promise more than that (the
+    agent keeps a copy too, and nothing collected after they leave comes over).
+  - Nothing about pricing, integrations, or anything you haven't seen in
+    this repo's `src/lib/knowledge/docs/`.
+
 ## Steps
 
 1. **Is this office already in hand?** Write `[{ "company", "website" }]` to a
@@ -94,6 +116,19 @@ doesn't.
    the office already has a preview, has been contacted or is on the
    do-not-contact list, stop and report that (to redo an existing draft, use
    `update-draft` with its id). If it gives a `lead_id`, keep it for step 5.
+
+1b. **Is there a warm path?** Write `{ "company": "<office name>" }` to a file
+   and run `node scripts/card-builder.mjs warm <file.json>`. It returns the
+   owner's own LinkedIn connections at that office (from the export they
+   uploaded) and the owner's schools and past employers.
+   - A connection there: `"warm_path": { "kind": "connection", "name": "Marcus Lee", "text": "You're connected on LinkedIn to Marcus Lee, Associate Broker there." }`.
+     If the tool marks it `exact: false`, the firm name matches but it may be
+     another office: say so in `text`.
+   - A shared school or past employer counts **only** when a public page about
+     the prospect says it (their own bio, their brokerage profile, the public
+     part of their LinkedIn profile): `"kind": "school"` or `"employer"`,
+     `"name": "Baruch College"`, and that page as `source_url`. Never guess one.
+   - None: leave `warm_path` out.
 
 2. **Research the card they would really use.** Open the real pages and read
    them (don't rely on search snippets). Collect, each with its source URL:
@@ -117,6 +152,13 @@ doesn't.
      on their site means no `specialty`.
    - their **real links**: website and each business social profile, full
      addresses
+   - **their own public LinkedIn profile** (`"linkedin_url": "https://www.linkedin.com/in/…"`),
+     with the page that links or names it under `sources.linkedin_url`: their
+     own site's LinkedIn icon, their brokerage profile, or a search result
+     whose name, firm and city all match. If you can't be sure it is the same
+     person, leave it out. Read only what the profile shows to someone who
+     isn't signed in. **Never sign in to LinkedIn, and never send anything
+     there**: the owner does that by hand.
    - phone and email: their direct line and own email when their own site or
      brokerage profile publishes them; otherwise the office line. Say which it
      is in the phone source's `note` ("Her mobile, on her profile page")
@@ -238,15 +280,20 @@ doesn't.
    `node scripts/card-builder.mjs update-draft <id> <file.json>`, then run
    `quality` and `shots` again.
 
-9. **Write the outreach for this prospect, yourself, and save it.** Not the
-   standard wording: seven messages written for this office and nobody else,
-   in the owner's voice. You write them here, in this command; the app never
+9. **Write the outreach for this prospect, yourself, and save it.** First run
+   `node scripts/card-builder.mjs style`: it returns the owner's own edits to
+   earlier messages (what was written, and what they changed it to) and the
+   messages they reworded before sending. **Write like the "after" side.**
+   Those are their words; where they cut something, don't put it back.
+
+   Then write, for this office and nobody else, in the owner's voice. You write them here, in this command; the app never
    calls a paid API to do it. Put them in a JSON file and run
    `node scripts/card-builder.mjs set-outreach <id> <file.json>`:
 
    ```json
    {
      "first_text": "Hi Dana, Menash from SwiftCard. Saw your open house at 88 Hicks St Sunday. I made you a card for it. Want me to send it?",
+     "first_text_b": "Hi Dana, Menash from SwiftCard. Most of your agents hand out their own cell. I made Harbor a card that fixes that. Want to see it?",
      "link_text": "Dana, here's the card. 11 of your 14 agents hand out their own cell, this keeps those contacts with Harbor: {link}",
      "email_subject": "Dana, a card for 14 Garden Pl",
      "email_body": "Hi Dana,\n\n…\n\nHere it is: {link}\n\nMenash\nFounder, SwiftCard",
@@ -254,19 +301,31 @@ doesn't.
      "voicemail": "Hi Dana, it's Menash from SwiftCard. …",
      "nudge_no_view": "Dana, the card I made for Harbor is still up. Worth 20 seconds before Sunday's open house: {link}",
      "nudge_viewed": "Dana, saw you opened the card. Tried you just now. Is later today or tomorrow morning better for 5 minutes?",
-     "uses": { "first_text": 0, "link_text": 2, "email_body": 1, "call_opener": 0, "voicemail": 2, "nudge_no_view": 0, "nudge_viewed": 1 }
+     "linkedin_note": "Hi Dana, I'm in Brooklyn too and follow what Harbor does in Brooklyn Heights. I'd like to connect.",
+     "linkedin_dm": "Thanks for connecting, Dana. I saw the open house at 88 Hicks St on Sunday and made you something for it. Can I send it over?",
+     "uses": { "first_text": 0, "first_text_b": 2, "linkedin_dm": 0, "link_text": 2, "email_body": 1, "call_opener": 0, "voicemail": 2, "nudge_no_view": 0, "nudge_viewed": 1 }
    }
    ```
 
-   The seven:
+   The messages:
    - `first_text`: the first text, **no link**. One true thing about them and
-     a question: do they want the card?
+     a question: do they want the card? **When there is a warm path, this one
+     leads with it** ("Marcus Lee and I are connected…", "Fellow Baruch
+     grad…"), and names the person or place.
+   - `first_text_b`: a **second version** of the first text with a different
+     angle, built on a different specific. The owner picks one in Approve.
    - `link_text`: the second text, with `{link}`
    - `email_subject` and `email_body`: the email version, with `{link}`
    - `call_opener`: what the owner says when they pick up
    - `voicemail`: what the owner says after the beep, 20 seconds at most
    - `nudge_no_view`: for a link sent two days ago and never opened
    - `nudge_viewed`: for someone who looked at the card and didn't pick up
+   - `linkedin_note` and `linkedin_dm`, **only when the draft has
+     `linkedin_url`**: a connection note of **200 characters at most, with no
+     link and no pitch** (don't mention SwiftCard, the card, a demo or a
+     price: say who you are to them and why you'd like to connect), and the
+     message for after they accept, which may say what you made and ask to
+     send it. The owner pastes both by hand.
 
    The rules, which the tool enforces:
    - **Each message is built on a verified specific, and they use different
@@ -276,6 +335,8 @@ doesn't.
    - **A text is 160 characters at most**, counted with the real link in place
      of `{link}` (the link is about 50 characters; the tool tells you the
      count). That is `first_text`, `link_text` and both nudges.
+   - No follower counts, no number flagged as possibly stale, nothing built on
+     a `quiet` specific, never "see who opens it" (the rules at the top).
    - **No emojis. Never the word "free".** No compliment or filler ("love
      your site", "just checking in", "hope this finds you well").
    - Write `{link}` where the link goes, never an address.
@@ -297,9 +358,10 @@ doesn't.
 
 ## Reply with
 
-- **the full outreach, word for word**: the first text, the text with the
-  link, the email (subject and body), the call opener, the voicemail script
-  and both nudges, each with which specific it is built on and, for the
+- **the full outreach, word for word**: both versions of the first text, the
+  text with the link, the email (subject and body), the call opener, the
+  voicemail script, both nudges and (when their profile was found) the
+  LinkedIn note and message, each with which specific it is built on and, for the
   texts, its character count
 
 - the **draft link**, the **edit link** and the **approve link** the tool
@@ -310,6 +372,8 @@ doesn't.
   why it matters, and which SwiftCard feature it leads to
 - the two sources for the decision-maker (or that the owner told you who runs it)
 - anything of the owner's that your research contradicted
+- the **warm path**, if there is one, and their **LinkedIn profile** with where
+  you found it (or that you couldn't confirm one)
 - what they use today, and how that changes the pitch
 - what you **couldn't confirm** and left blank or marked uncertain
 - anything the owner should look at before publishing

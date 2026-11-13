@@ -7,6 +7,12 @@ import { BUYER_ROLE_LABELS, COMPETITOR_TOOLS, CURRENT_TOOL_LABELS, HOOK_ANGLE_LA
 // (tests/prospect-preview-call.test.ts). It states nothing we didn't record:
 // no team size means no number is said, no detail means none is mentioned,
 // and it never quotes a price.
+//
+// It also only promises what the Office plan does today (checked against the
+// code, 2026-11-13): a card's owner is told WHEN it is opened, and by whom only
+// when that person already shared their details (lib/card-event-notify.ts);
+// and when an agent leaves, the contacts they had collected stay on the
+// office's list (lib/office-departure.ts). It does not say "see who opens it".
 
 export const CALL_OUTCOMES = ["no_answer", "voicemail", "reached", "meeting_booked", "won", "lost"] as const;
 export type CallOutcome = (typeof CALL_OUTCOMES)[number];
@@ -72,16 +78,16 @@ export function callBrief(p: About, opts: { sender: string | null }): CallBrief 
   const already = tool && COMPETITOR_TOOLS.includes(tool)
     ? {
         they: tool === "other_digital" ? "We already use a digital card." : `We already use ${toolName}.`,
-        you: `Good, so your agents already share that way and there's nothing new to learn. What I built is the office's side of it: every card in ${possessive(p.office_name)} branding on one account, you can see when a client opens one, and the contacts stay with the office when an agent leaves. Put the card I made you next to the one you have and tell me which you'd rather hand a client.`,
+        you: `Good, so your agents already share that way and there's nothing new to learn. What I built is the office's side of it: every card in ${possessive(p.office_name)} branding on one account, each agent is told the moment a client opens their card, and the contacts an agent has collected stay on your office list when they leave. Put the card I made you next to the one you have and tell me which you'd rather hand a client.`,
       }
     : tool === "link_in_bio"
       ? {
           they: "We already have a link in our bio.",
-          you: `Keep it. A link in a bio is for people who already follow you. A card is what you hand the person standing in front of you, and one tap saves you in their phone. Everyone gets one in ${possessive(p.office_name)} branding like the one I made you, and you can see when a client opens it.${p.views > 0 ? " That's how I knew to call: you opened yours." : ""}`,
+          you: `Keep it. A link in a bio is for people who already follow you. A card is what you hand the person standing in front of you, and one tap saves you in their phone. Everyone gets one in ${possessive(p.office_name)} branding like the one I made you, and each of you is told when a client opens yours.${p.views > 0 ? " That's how I knew to call: you opened yours." : ""}`,
         }
       : {
           they: "We already have business cards.",
-          you: `Keep them. This is the one you text or tap. Everyone gets a card in ${possessive(p.office_name)} branding like the one I made you, and you can see when a client opens it.${p.views > 0 ? " That's how I knew to call: you opened yours." : ""}`,
+          you: `Keep them. This is the one you text or tap. Everyone gets a card in ${possessive(p.office_name)} branding like the one I made you, and each of you is told when a client opens yours.${p.views > 0 ? " That's how I knew to call: you opened yours." : ""}`,
         };
 
   return {

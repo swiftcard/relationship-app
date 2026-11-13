@@ -95,6 +95,9 @@ async function open(width: number, markup: string, extraCss = ""): Promise<Page>
      <style>${css}${extraCss}</style><style>body{margin:0}</style></head><body>${markup}</body></html>`,
     { waitUntil: "load" },
   );
+  // Card Builder's main page keeps everything but its three buttons folded
+  // under Details and More; the tests that measure those open them first.
+  await page.evaluate(() => document.querySelectorAll("details[data-section]").forEach((d) => ((d as HTMLDetailsElement).open = true)));
   await page.waitForTimeout(150);
   return page;
 }
@@ -447,33 +450,171 @@ describe.each([390, 1280])("/admin/card-builder pipeline at %ipx", (width) => {
     row({ id: "a5555555-2222-4333-8444-555555555555", owner_name: "Draft Dee", status: "draft" }),
   ];
 
-  it("counts every stage at the top, and lists who to chase today, most urgent first", async () => {
-    const page = await open(width, await adminMarkup({ list: { ready: true, rows: PIPE } }), adminCss);
+  it("three big buttons with their counts, and the stage counts under Details", async () => {
+    const page = await open(width, await adminMarkup({ list: { ready: true, rows: PIPE }, queueCount: 4 }), adminCss);
     const m = await page.evaluate(() => {
       const vw = window.innerWidth;
       const counts = Object.fromEntries([...document.querySelectorAll("[data-stage]")].map((li) => [li.getAttribute("data-stage"), (li.querySelector("p") as HTMLElement).innerText]));
       const tiles = [...document.querySelectorAll("[data-stage]")].map((li) => li.getBoundingClientRect());
+      const big = [...document.querySelectorAll("[data-big]")].map((a) => { const r = a.getBoundingClientRect(); return { label: a.getAttribute("data-big"), href: a.getAttribute("href"), count: (a.querySelector("[data-count]") as HTMLElement).innerText, h: Math.round(r.height), w: Math.round(r.width), top: Math.round(r.top) }; });
       return {
-        sideways: document.documentElement.scrollWidth > vw,
+        sideways: document.documentElement.scrollWidth > vw, vw,
         tilesInside: tiles.every((r) => r.left >= 0 && r.right <= vw + 0.5),
-        counts,
-        chase: [...document.querySelectorAll("[data-follow-up]")].map((li) => ({ kind: li.getAttribute("data-follow-up"), text: (li as HTMLElement).innerText, href: li.querySelector('a[href^="/admin"]')!.getAttribute("href"), tap: li.querySelector("[data-one-tap]")?.getAttribute("href") ?? null, call: li.querySelector("[data-follow-call]")?.getAttribute("href") ?? null })),
+        counts, big,
+        detailsTop: Math.round(document.querySelector('details[data-section="details"]')!.getBoundingClientRect().top),
+        forms: document.querySelectorAll('form[action="/api/admin/card-builder"]').length,
+        followUps: document.querySelectorAll("[data-follow-up]").length,
         sendLinks: document.querySelectorAll("[data-send-link]").length,
       };
     });
     expect(m.sideways).toBe(false);
     expect(m.tilesInside).toBe(true);
     expect(m.counts).toEqual({ draft: "1", ready: "1", sent: "1", viewed: "1", called: "0", meeting_booked: "0", won: "1", lost: "0" });
-    expect(m.chase.map((c) => c.kind)).toEqual(["viewed_not_reached", "sent_not_viewed", "asked_no_link"]);
+    // Approve: the draft and the published-never-sent one. Follow up: viewed, sent 2 days ago, asked 3 days ago.
+    expect(m.big.map((b) => [b.label, b.href, b.count])).toEqual([
+      ["Approve", "/admin/card-builder/approve", "1"],
+      ["Call and follow up", "/admin/card-builder/follow-up", "3"],
+      ["Add", "/admin/card-builder/add", "4"],
+    ]);
+    for (const b of m.big) expect(b.h).toBeGreaterThanOrEqual(80);
+    if (width === 390) for (const b of m.big) expect(b.w).toBeGreaterThan(m.vw * 0.85);
+    // The buttons come before everything that is folded away, and the create form and follow-up list live elsewhere.
+    expect(Math.max(...m.big.map((b) => b.top))).toBeLessThan(m.detailsTop);
+    expect(m.forms).toBe(0);
+    expect(m.followUps).toBe(0);
+    expect(m.sendLinks).toBe(5);
+    await page.close();
+  });
+
+  it("the batch brief sits above the buttons: how many drafts, best first, how many skipped and why", async () => {
+    const brief = {
+      id: "b1", label: "Brooklyn, independent brokerages, 25", kind: "tonight", finished: true, finished_at: "2026-11-11T12:00:00Z", built: 22, skippedCount: 4,
+      ready: [
+        { id: "x1", office: "The Featherstonehaugh-Montgomery International Property Partnership", owner: "Bartholomew Featherstonehaugh-Montgomery", score: 100, tooGeneric: false },
+        { id: "x2", office: "Harbor Realty Group", owner: "Dana Whitfield", score: 94, tooGeneric: false }, { id: "x3", office: "C", owner: "c", score: 90, tooGeneric: false },
+        { id: "x4", office: "D", owner: "d", score: 80, tooGeneric: false }, { id: "x5", office: "E", owner: "e", score: 70, tooGeneric: false }, { id: "x6", office: "F", owner: "f", score: 40, tooGeneric: true },
+      ],
+      skipped: [{ reason: "already contacted", offices: ["A", "B", "C"] }, { reason: "couldn't confirm who is in charge", offices: ["D"] }],
+    };
+    const page = await open(width, await adminMarkup({ list: { ready: true, rows: PIPE }, brief }), adminCss);
+    const m = await page.evaluate(() => {
+      const vw = window.innerWidth;
+      const box = document.querySelector("[data-brief]") as HTMLElement;
+      // Text inside a truncated line is clipped by it, not spilled: measure the line, not what it hides.
+      const spill = [...box.querySelectorAll("*")].filter((el) => !el.parentElement?.closest(".truncate")).filter((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.right > vw + 0.5; }).length;
+      return {
+        sideways: document.documentElement.scrollWidth > vw, spill, text: (document.querySelector("#batch-brief") as HTMLElement).innerText,
+        listed: box.querySelectorAll("[data-brief-ready] li").length,
+        top: Math.round(box.getBoundingClientRect().top), buttonsTop: Math.round(document.querySelector("[data-big-buttons]")!.getBoundingClientRect().top),
+        go: box.querySelector('a[href="/admin/card-builder/approve"]')?.textContent,
+      };
+    });
+    expect(m.sideways).toBe(false);
+    expect(m.spill).toBe(0);
+    expect(m.text).toContain("Ready to approve");
+    expect(m.text).toContain("6 drafts waiting for you, best first:");
+    expect(m.listed).toBe(5);
+    expect(m.text).toContain("And 1 more.");
+    expect(m.text).toContain("4 skipped: already contacted (3); couldn't confirm who is in charge (1).");
+    expect(m.top).toBeLessThan(m.buttonsTop);
+    expect(m.go).toBe("Approve them");
+    await page.close();
+  });
+
+  it("Call and follow up: who to chase, most urgent first, each with its words and one tap", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { createElement } = await import("react");
+    const { default: AdminShell } = await import("@/app/admin/AdminShell");
+    const { default: FollowUpView } = await import("@/app/admin/card-builder/follow-up/FollowUpView");
+    const li = row({ id: "a6666666-2222-4333-8444-555555555555", owner_name: "Linked Lou", sent_at: at(0.5), sent_channel: "text", linkedin_url: "https://www.linkedin.com/in/linked-lou", linkedin_sent_at: at(0.4), linkedin_accepted_at: at(0.1), ...SOLID });
+    const view = createElement(FollowUpView, { list: { ready: true, rows: [...PIPE, li] }, appUrl: "https://swiftcard.me", now: NOW, sender: "Menash Harooni" });
+    const page = await open(width, renderToStaticMarkup(createElement(AdminShell, { email: "hello@swiftcard.me", unread: 0 }, view)), adminCss);
+    const m = await page.evaluate(() => {
+      const vw = window.innerWidth;
+      const spill = [...document.querySelectorAll("[data-follow-up] *")].filter((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.right > vw + 0.5; }).length;
+      return {
+        sideways: document.documentElement.scrollWidth > vw, spill,
+        chase: [...document.querySelectorAll("[data-follow-up]")].map((li) => ({
+          kind: li.getAttribute("data-follow-up"), text: (li as HTMLElement).innerText, href: li.querySelector('a[href^="/admin"]')!.getAttribute("href"),
+          tap: li.querySelector("[data-one-tap]")?.getAttribute("href") ?? null, call: li.querySelector("[data-follow-call]")?.getAttribute("href") ?? null,
+          linkedin: li.querySelector("[data-linkedin]")?.getAttribute("href") ?? null,
+          tallEnough: [...li.querySelectorAll(".sc-btn")].every((b) => b.getBoundingClientRect().height >= 44),
+        })),
+      };
+    });
+    expect(m.sideways).toBe(false);
+    expect(m.spill).toBe(0);
+    expect(m.chase.map((c) => c.kind)).toEqual(["viewed_not_reached", "linkedin_accepted", "sent_not_viewed", "asked_no_link"]);
     expect(m.chase[0].text).toContain("Viewed Vera");
     expect(m.chase[0].href).toBe("/admin/card-builder/call/a1111111-2222-4333-8444-555555555555");
-    expect(m.chase[1].text).toContain("Sent 2 days ago, not opened.");
-    expect(m.chase[1].href).toBe("/admin/card-builder/send/a2222222-2222-4333-8444-555555555555");
     // A call comes with the number; a message comes with its words and one tap to the founder's own Messages.
     expect(m.chase[0].call).toBe("tel:2125550199");
-    expect(m.chase[1].tap).toMatch(/^sms:2125550199\?&body=Hi%20Sent%2C/);
-    expect(m.chase[2].tap).toMatch(/^sms:2125550199\?&body=/);
-    expect(m.sendLinks).toBe(5);
+    // LinkedIn: the words are shown, and the button opens THEIR profile. Nothing is sent from here.
+    expect(m.chase[1].text).toContain("Accepted your LinkedIn request today.");
+    expect(m.chase[1].text).toContain("Thanks for connecting, Dana.");
+    expect(m.chase[1].linkedin).toBe("https://www.linkedin.com/in/linked-lou");
+    expect(m.chase[2].text).toContain("Sent 2 days ago, not opened.");
+    expect(m.chase[2].href).toBe("/admin/card-builder/send/a2222222-2222-4333-8444-555555555555");
+    expect(m.chase[2].tap).toMatch(/^sms:2125550199\?&body=Hi%20Sent%2C/);
+    expect(m.chase[3].tap).toMatch(/^sms:2125550199\?&body=/);
+    for (const c of m.chase) expect(c.tallEnough).toBe(true);
+    await page.close();
+  });
+
+  it("Add: one box to drop names or links in, what is waiting, and the by-hand form folded away", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { createElement } = await import("react");
+    const { default: AdminShell } = await import("@/app/admin/AdminShell");
+    const { default: AddView } = await import("@/app/admin/card-builder/add/AddView");
+    const queue = [
+      { id: "c1111111-2222-4333-8444-555555555555", created_at: at(0.1), input: "Harbor Realty Group, Brooklyn", is_notes: false, status: "queued" as const, note: null, preview_id: null, batch_id: null },
+      { id: "c2222222-2222-4333-8444-555555555555", created_at: at(0.2), input: `https://www.zillow.com/profile/${"a-very-long-profile-name-".repeat(6)}`, is_notes: false, status: "queued" as const, note: null, preview_id: null, batch_id: null },
+      { id: "c3333333-2222-4333-8444-555555555555", created_at: at(0.3), input: "Dana owns Harbor Realty.\nMet her at the REBNY mixer.", is_notes: true, status: "queued" as const, note: null, preview_id: null, batch_id: null },
+    ];
+    const view = createElement(AddView, { queue, now: NOW, done: "queued", error: null, n: "3" });
+    const page = await open(width, renderToStaticMarkup(createElement(AdminShell, { email: "hello@swiftcard.me", unread: 0 }, view)), adminCss);
+    const m = await page.evaluate(() => {
+      const vw = window.innerWidth;
+      const spill = [...document.querySelectorAll("[data-queue-form] *, [data-queued], [data-queued] *")].filter((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.right > vw + 0.5; }).length;
+      const form = document.querySelector("[data-queue-form]") as HTMLFormElement;
+      const add = form.querySelector('button[type="submit"]')!.getBoundingClientRect();
+      return {
+        sideways: document.documentElement.scrollWidth > vw, spill, method: form.method, action: form.getAttribute("action"),
+        fields: [...form.querySelectorAll("textarea")].map((t) => t.getAttribute("name")), addH: Math.round(add.height),
+        queued: document.querySelectorAll("[data-queued]").length, removes: document.querySelectorAll('[data-queued] input[name="action"][value="remove"]').length,
+        byHandOpen: (document.querySelector("[data-by-hand]") as HTMLDetailsElement).open, byHandForm: !!document.querySelector('[data-by-hand] form[action="/api/admin/card-builder"]'),
+        text: document.body.innerText,
+      };
+    });
+    expect(m.sideways).toBe(false);
+    expect(m.spill).toBe(0);
+    expect(m).toMatchObject({ method: "post", action: "/api/admin/card-builder/queue", queued: 3, removes: 3, byHandOpen: false, byHandForm: true });
+    expect(m.fields).toEqual(["lines", "notes"]);
+    expect(m.addH).toBeGreaterThanOrEqual(44);
+    expect(m.text).toContain("Added 3 prospects to the queue.");
+    expect(m.text).toContain("Waiting to be built (3)");
+    expect(m.text).toContain("Your notes");
+    await page.close();
+  });
+
+  it("Warm paths: the upload, what is on file, and that it is private", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { createElement } = await import("react");
+    const { default: AdminShell } = await import("@/app/admin/AdminShell");
+    const { default: ConnectionsView } = await import("@/app/admin/card-builder/connections/ConnectionsView");
+    const view = createElement(ConnectionsView, { meta: { count: 1482, at: "2026-11-10T15:00:00Z" }, background: { schools: ["Baruch College"], employers: ["Compass"] }, done: "uploaded", error: null, n: "1482" });
+    const page = await open(width, renderToStaticMarkup(createElement(AdminShell, { email: "hello@swiftcard.me", unread: 0 }, view)), adminCss);
+    const m = await page.evaluate(() => {
+      const form = document.querySelector("[data-upload-form]") as HTMLFormElement;
+      return {
+        sideways: document.documentElement.scrollWidth > window.innerWidth, method: form.method, enctype: form.enctype, file: form.querySelector('input[type="file"]')!.getAttribute("accept"),
+        schools: (document.querySelector('[data-background-form] textarea[name="schools"]') as HTMLTextAreaElement).value, text: document.body.innerText,
+      };
+    });
+    expect(m).toMatchObject({ sideways: false, method: "post", enctype: "multipart/form-data", file: ".csv,text/csv", schools: "Baruch College" });
+    expect(m.text).toContain("1482 connections on file");
+    expect(m.text).toContain("the file is read once and not kept");
+    expect(m.text).toContain("nothing here signs in to LinkedIn");
     await page.close();
   });
 });
@@ -619,6 +760,9 @@ const SOLID = {
   },
   outreach: {
     first_text: "Hi Dana, Menash from SwiftCard. Saw your open house at 88 Hicks St Sunday. I made you a card for it. Want me to send it?",
+    first_text_b: "Hi Dana, Menash from SwiftCard. 14 Garden Pl just went up. I made you a card to send with it. Want to see it?",
+    linkedin_note: "Hi Dana, I'm in Brooklyn too and follow what Harbor does in Brooklyn Heights. I'd like to connect.",
+    linkedin_dm: "Thanks for connecting, Dana. I saw the open house at 88 Hicks St and made you something for it. Can I send it over?",
     link_text: "Dana, here's the card for 14 Garden Pl: {link}",
     email_subject: "Dana, a card for 14 Garden Pl", email_body: "Hi Dana,\n\nHere it is: {link}\n\nMenash",
     call_opener: "Hi Dana, it's Menash, I sent you the card for Sunday's open house.", voicemail: "Hi Dana, it's Menash from SwiftCard. Text me back when you have two minutes.",
@@ -742,6 +886,45 @@ describe.each([390, 1280])("/admin/card-builder/approve at %ipx", (width) => {
     await page.close();
   });
 
+  it("two first texts to pick from before approving; a warm path is flagged; LinkedIn is copy-and-open, by hand", async () => {
+    const connections = [{ first_name: "Marcus", last_name: "Lee", url: "https://www.linkedin.com/in/marcus-lee", company: "Harbor Realty Group", position: "Associate Broker", connected_on: "2026-01-02", company_key: "harbor realty group" }];
+    const withLi = QUEUE.map((r) => (r.id.startsWith("b1") || r.id.startsWith("b3") ? { ...r, linkedin_url: "https://www.linkedin.com/in/dana-whitfield", linkedin_sent_at: r.id.startsWith("b3") ? "2026-11-11T12:00:00Z" : null } : r));
+    const page = await open(width, await approveMarkup(withLi, { connections }), adminCss);
+    const m = await page.evaluate(() => {
+      const vw = window.innerWidth;
+      const waiting = document.querySelector("#p-b1111111-2222-4333-8444-555555555555") as HTMLElement;
+      const sending = document.querySelector("#p-b3333333-2222-4333-8444-555555555555") as HTMLElement;
+      const radios = [...waiting.querySelectorAll('input[type="radio"][name="pick"]')] as HTMLInputElement[];
+      const form = waiting.querySelector("[data-approve]")!.closest("form")!;
+      const spill = [...document.querySelectorAll("[data-versions] *, [data-warm], [data-linkedin-row] *")].filter((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.right > vw + 0.5; }).length;
+      return {
+        spill, sideways: document.documentElement.scrollWidth > vw,
+        radios: radios.map((r) => ({ value: r.value, checked: r.checked, belongsToApprove: r.form === form })),
+        versions: (waiting.querySelector("[data-versions]") as HTMLElement).innerText,
+        warm: (waiting.querySelector("[data-warm]") as HTMLElement).innerText,
+        waitingLinkedin: waiting.querySelectorAll("[data-linkedin]").length,
+        linkedin: sending.querySelector('[data-linkedin="linkedin_note"]')?.getAttribute("href"), target: sending.querySelector("[data-linkedin]")?.getAttribute("target"),
+        accepted: sending.querySelector("[data-accepted]")?.closest("form")?.querySelector('input[name="action"]')?.getAttribute("value"),
+        switcher: sending.querySelector("[data-switch-version]")?.textContent,
+        coldWarm: !!document.querySelector("#p-b2222222-2222-4333-8444-555555555555 [data-warm]"),
+      };
+    });
+    expect(m.spill).toBe(0);
+    expect(m.sideways).toBe(false);
+    expect(m.radios).toEqual([{ value: "a", checked: true, belongsToApprove: true }, { value: "b", checked: false, belongsToApprove: true }]);
+    expect(m.versions).toContain("Saw your open house at 88 Hicks St Sunday.");
+    expect(m.versions).toContain("14 Garden Pl just went up.");
+    expect(m.warm).toContain("Warm path: you know someone there. You're connected on LinkedIn to Marcus Lee, Associate Broker there.");
+    // Nothing can go out on LinkedIn before it is approved either.
+    expect(m.waitingLinkedin).toBe(0);
+    expect(m.linkedin).toBe("https://www.linkedin.com/in/dana-whitfield");
+    expect(m.target).toBe("_blank");
+    expect(m.accepted).toBe("linkedin_accepted");
+    expect(m.switcher).toBe("Use version B of the first text instead");
+    expect(m.coldWarm).toBe(false);
+    await page.close();
+  });
+
   it("with nothing waiting, says how to line some up", async () => {
     const page = await open(width, await approveMarkup([]), adminCss);
     expect(await page.evaluate(() => document.body.innerText)).toContain("Run /build-card or /build-batch");
@@ -809,7 +992,7 @@ describe.each([390, 1280])("written messages on the Send, Call and edit screens 
     });
     expect(m.spill).toEqual([]);
     expect(m.sideways).toBe(false);
-    expect(m.fields).toEqual(["o_first_text", "o_link_text", "o_email_subject", "o_email_body", "o_call_opener", "o_voicemail", "o_nudge_no_view", "o_nudge_viewed"]);
+    expect(m.fields).toEqual(["o_first_text", "o_first_text_b", "o_link_text", "o_email_subject", "o_email_body", "o_call_opener", "o_voicemail", "o_nudge_no_view", "o_nudge_viewed", "o_linkedin_note", "o_linkedin_dm"]);
     expect(m.first).toContain("Saw your open house at 88 Hicks St Sunday.");
     expect(m).toMatchObject({ ownSpecific: true, ownOther: false });
     await page.close();

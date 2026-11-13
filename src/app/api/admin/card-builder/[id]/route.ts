@@ -4,9 +4,10 @@ import { pullBrandColors } from "@/lib/prospect-preview/colors-server";
 import { clean, parsePreviewFields, UUID_RE } from "@/lib/prospect-preview/input";
 import { isCallOutcome } from "@/lib/prospect-preview/call";
 import { isMessageKind } from "@/lib/prospect-preview/messages";
-import { checkOutreach, parseOutreachForm } from "@/lib/prospect-preview/outreach";
+import { recordEvents } from "@/lib/prospect-preview/desk";
+import { checkOutreach, outreachEdits, parseOutreachForm, resolveOutreach, staleNumbers } from "@/lib/prospect-preview/outreach";
 import { assessQuality } from "@/lib/prospect-preview/quality";
-import { clearSent, deletePreview, logOutcome, reopenPreview, getPreviewById, markSent, publishPreview, setBrandColors, setOutreach, setQualityOverride, setSkipped, unpublishPreview, updateCall, updatePreview } from "@/lib/prospect-preview/store";
+import { clearSent, deletePreview, logOutcome, reopenPreview, getPreviewById, markSent, publishPreview, setBrandColors, setLinkedinAccepted, setOutreach, setQualityOverride, setSkipped, unpublishPreview, updateCall, updatePreview } from "@/lib/prospect-preview/store";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
@@ -21,7 +22,11 @@ export const maxDuration = 30;
 //              the preview is too generic (lib/prospect-preview/quality.ts)
 //              and the owner hasn't overridden it: it is saved and stays a draft
 //   approve    the Approve queue's "Approve and publish": publish the draft AS
-//              IT IS (no fields are posted). Held by the same quality gate
+//              IT IS (no fields are posted). Held by the same quality gate.
+//              pick = a | b saves which first text the owner chose
+//   pick       pick = a | b on its own (a published preview, before sending)
+//   linkedin_accepted  on = 1 | 0: they accepted the connection request, so
+//              the message for that moment shows under follow-ups
 //   skip       on = 1 | 0: the Approve queue's Skip. The draft stays a draft
 //   outreach   the edit screen's Messages section: o_<message> for each of the
 //              messages written for this prospect. Refused with what to fix
@@ -43,7 +48,7 @@ export const maxDuration = 30;
 // (?done=…, or ?error=… with what to fix); a JSON caller gets JSON.
 
 function safeBack(v: unknown): string {
-  return typeof v === "string" && /^\/admin\/card-builder(\/approve|\/(call|edit|send)\/[0-9a-f-]{36})?$/i.test(v) ? v : "/admin/card-builder";
+  return typeof v === "string" && /^\/admin\/card-builder(\/approve|\/follow-up|\/(call|edit|send)\/[0-9a-f-]{36})?$/i.test(v) ? v : "/admin/card-builder";
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -92,9 +97,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       await publishPreview(id);
       return reply("published");
     }
+    case "pick":
     case "approve": {
       const p = await getPreviewById(id);
       if (!p) return reply("failed", 404);
+      // Which of the two first texts goes out. Saved before publishing, so the
+      // send button that appears next already carries the chosen words.
+      const pick = input.pick === "a" || input.pick === "b" ? input.pick : null;
+      if (pick && p.outreach?.first_text_b && p.outreach.first_pick !== pick) {
+        if (!(await setOutreach(id, { ...p.outreach, first_pick: pick }))) return reply("failed", 500);
+        await recordEvents([{ preview_id: id, kind: "pick", message: "first_text", variant: pick, before: null, after: pick === "b" ? p.outreach.first_text_b : p.outreach.first_text }]);
+      }
+      if (input.action === "pick") return reply("saved");
       // The same gate as the edit screen's Publish: a too-generic draft is held.
       if (p.status !== "live" && !assessQuality(p).mayPublish) return reply("held", 409);
       if (p.status !== "live" && !(await publishPreview(id))) return reply("failed", 500);
@@ -109,9 +123,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       const p = await getPreviewById(id);
       if (!p) return reply("failed", 404);
       const outreach = parseOutreachForm((k) => input[k], p.outreach ?? null);
-      const problems = checkOutreach(outreach, { link: `${APP_URL}/p/${p.slug}`, specifics: p.specifics });
+      const problems = checkOutreach(outreach, { link: `${APP_URL}/p/${p.slug}`, specifics: p.specifics, stale: staleNumbers(p) });
       if (problems.length) return reply("failed", 400, problems.join(" "));
       const ok = await setOutreach(id, outreach);
+      // What the owner changed is how the next drafts learn their voice.
+      if (ok) await recordEvents(outreachEdits(p.outreach ?? null, outreach).map((e) => ({ preview_id: id, kind: "edit" as const, message: e.message, variant: null, before: e.before, after: e.after })));
       return reply(ok ? "messages" : "failed", ok ? 200 : 500);
     }
     case "override": {
@@ -137,7 +153,22 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       if (!isMessageKind(kind)) return reply("failed", 400);
       const got = await markSent(id, kind);
       if (got === "not_live") return reply("failed", 409, "That message has the link in it, and the link doesn't open yet. Publish the preview first.");
+      if (got === "ok") {
+        // What went, and (when the owner reworded it on the Send screen) what it was changed from.
+        const p = await getPreviewById(id);
+        if (p) {
+          const m = resolveOutreach(p, { link: `${APP_URL}/p/${p.slug}`, sender: null });
+          const saved = kind === "ask" ? m.ask : kind === "text" ? m.text : kind === "email" ? m.email.body : kind === "linkedin_note" ? m.linkedin?.note ?? "" : kind === "linkedin_dm" ? m.linkedin?.dm ?? "" : m[kind];
+          const words = typeof input.words === "string" ? input.words.trim().slice(0, 4000) : "";
+          await recordEvents([{ preview_id: id, kind: "sent", message: kind, variant: kind === "ask" && m.versions ? m.versions.picked : null, before: m.written ? saved : null, after: words || (m.written ? saved : null) }]);
+        }
+      }
       return reply(got === "ok" ? "sent" : "failed", got === "ok" ? 200 : 500);
+    }
+    case "linkedin_accepted": {
+      const on = input.on !== "0" && input.on !== false;
+      const ok = await setLinkedinAccepted(id, on);
+      return reply(ok ? (on ? "accepted" : "saved") : "failed", ok ? 200 : 500);
     }
     case "unsent": {
       const ok = await clearSent(id);

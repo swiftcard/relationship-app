@@ -138,7 +138,7 @@ describe("sent by hand, from the founder's own phone and inbox", () => {
     expect(store).toMatch(/sent_at: at, sent_channel: kind/);
     expect(store).toMatch(/\.eq\("status", "live"\)\.gt\("expires_at", at\)/);
     const button = readFileSync("src/app/admin/card-builder/send/[id]/SendMessage.tsx", "utf8");
-    expect(button).toContain('JSON.stringify({ action: "sent", kind })');
+    expect(button).toContain('JSON.stringify({ action: "sent", kind, words })');
     expect(button).toContain("keepalive: true");
     const page = readFileSync("src/app/admin/card-builder/send/[id]/page.tsx", "utf8");
     expect(page).toMatch(/const admin = await requireAdmin\(\);\s*if \(!admin\) notFound\(\)/);

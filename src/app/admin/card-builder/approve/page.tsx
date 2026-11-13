@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
+import { listConnections } from "@/lib/prospect-preview/desk";
 import { listPreviews, senderName } from "@/lib/prospect-preview/store";
 import ApproveView from "./ApproveView";
 
@@ -18,6 +19,6 @@ export default async function ApprovePage({ searchParams }: { searchParams: Prom
   const admin = await requireAdmin();
   if (!admin) notFound();
   const sp = await searchParams;
-  const [list, sender] = await Promise.all([listPreviews(), senderName(admin.id)]);
-  return <ApproveView list={list} appUrl={APP_URL} now={new Date().getTime()} sender={sender} done={sp.done ?? null} error={sp.error ?? null} about={sp.id ?? null} />;
+  const [list, sender, connections] = await Promise.all([listPreviews(), senderName(admin.id), listConnections().catch(() => [])]);
+  return <ApproveView connections={connections} list={list} appUrl={APP_URL} now={new Date().getTime()} sender={sender} done={sp.done ?? null} error={sp.error ?? null} about={sp.id ?? null} />;
 }

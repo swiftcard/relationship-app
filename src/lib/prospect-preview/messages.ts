@@ -20,8 +20,8 @@ import type { ProspectPreview } from "./types";
 // Pure, so the wording is tested
 // (tests/prospect-preview-pipeline.test.ts).
 
-export type MessageKind = "ask" | "text" | "email" | "nudge_no_view" | "nudge_viewed";
-export const MESSAGE_KINDS: readonly MessageKind[] = ["ask", "text", "email", "nudge_no_view", "nudge_viewed"];
+export type MessageKind = "ask" | "text" | "email" | "nudge_no_view" | "nudge_viewed" | "linkedin_note" | "linkedin_dm";
+export const MESSAGE_KINDS: readonly MessageKind[] = ["ask", "text", "email", "nudge_no_view", "nudge_viewed", "linkedin_note", "linkedin_dm"];
 export const isMessageKind = (v: unknown): v is MessageKind => (MESSAGE_KINDS as readonly unknown[]).includes(v);
 export type Messages = {
   ask: string;
@@ -35,6 +35,13 @@ export type Messages = {
   nudge_viewed: string;
   /** Written for this prospect at build time; false = these are the templates. */
   written: boolean;
+  /**
+   * Both versions of the first text, when two were written, and which one
+   * `ask` is ("a" until the owner picks). Null with the templates.
+   */
+  versions: { a: string; b: string; picked: "a" | "b" } | null;
+  /** The connection note and the message for after they accept. Only ever written for a prospect, never a template. */
+  linkedin: { note: string; dm: string } | null;
   /**
    * Every message opens with this prospect's hook. False when the preview has
    * none: the words then could go to any office, and the Send screen says so.
@@ -127,7 +134,7 @@ export function buildMessages(p: About, opts: { link: string; sender: string | n
   const nudge_no_view = [`Hi ${first}, ${sender ?? "the founder of SwiftCard"} again. The card I made for ${p.office_name} is up until ${until}:`, opts.link].join("\n");
   const nudge_viewed = `Hi ${first}, ${sender ? `${sender} from SwiftCard` : "the founder of SwiftCard"}. I just tried you about the ${p.office_name} card. When is a good time for a quick call?`;
 
-  return { ask, text, email: { subject: `${first}, I made your ${p.office_name} card`, body }, voicemail, nudge_no_view, nudge_viewed, written: false, specific: !!hook };
+  return { ask, text, email: { subject: `${first}, I made your ${p.office_name} card`, body }, voicemail, nudge_no_view, nudge_viewed, written: false, versions: null, linkedin: null, specific: !!hook };
 }
 
 /**

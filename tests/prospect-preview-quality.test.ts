@@ -182,7 +182,7 @@ describe("every message and the opener lead with the hook", () => {
     const popl = callBrief({ ...good, current_tool: "popl" }, { sender: null });
     expect(popl.currentTool).toBe("Popl");
     expect(popl.objections[0].they).toBe("We already use Popl.");
-    expect(popl.objections[0].you).toMatch(/contacts stay with the office when an agent leaves/);
+    expect(popl.objections[0].you).toMatch(/contacts an agent has collected stay on your office list when they leave/);
     expect(callBrief({ ...good, current_tool: null }, { sender: null }).objections[0].they).toBe("We already have business cards.");
     expect(callBrief({ ...good, current_tool: "paper" }, { sender: null }).objections).toHaveLength(2);
     for (const o of popl.objections) expect(o.you).not.toMatch(/\$|per month|pricing/i);
