@@ -31,6 +31,8 @@ export type CallBrief = {
   /** People on the team, when it was researched; null when it wasn't (the cards on the preview are a sample, not a headcount). */
   teamSize: number | null;
   opener: string;
+  /** The opener was written for this prospect when the card was built (not the template). */
+  written: boolean;
   /** The opener leads with this prospect's hook. False = it could be said to anyone: fix the hook first. */
   specific: boolean;
   /** What the hook leads to ("Keeping contacts when an agent leaves"); null without one. */
@@ -41,7 +43,7 @@ export type CallBrief = {
 };
 
 type About = Pick<PreviewListRow, "owner_name" | "office_name" | "buyer_role" | "buyer_reason" | "team_size" | "detail" | "views" | "team_strip_scrolled" | "sent_at">
-  & Partial<Pick<PreviewListRow, "hook_why" | "hook_angle" | "current_tool">>;
+  & Partial<Pick<PreviewListRow, "hook_why" | "hook_angle" | "current_tool" | "outreach">>;
 
 const firstName = (name: string) => name.trim().split(/\s+/)[0] || name.trim();
 const sentence = (s: string) => (/[.!?]$/.test(s) ? s : `${s}.`);
@@ -59,7 +61,9 @@ export function callBrief(p: About, opts: { sender: string | null }): CallBrief 
   const tool = p.current_tool ?? null;
   const toolName = tool ? CURRENT_TOOL_LABELS[tool] : null;
 
-  const opener = p.views > 0
+  // Written for this prospect at build time (lib/prospect-preview/outreach.ts): it wins over the template.
+  const written = (p.outreach?.call_opener ?? "").trim();
+  const opener = written ? written : p.views > 0
     ? `Hi ${first}, it's ${me}.${noticed} ${hook ? "That's why I sent you" : "I sent you"} the card I made for you and the team at ${p.office_name}. ${p.team_strip_scrolled ? "Did the team's cards look right to you?" : "Did you get a chance to look at it?"}`
     : `Hi ${first}, it's ${me}.${noticed} ${hook ? "So I" : "I"} ${p.sent_at ? "sent you" : "made"} a digital business card for you and the team at ${p.office_name}. Do you have two minutes?`;
 
@@ -84,7 +88,8 @@ export function callBrief(p: About, opts: { sender: string | null }): CallBrief 
     whyBuyer,
     teamSize,
     opener,
-    specific: !!hook,
+    written: !!written,
+    specific: !!hook || !!written,
     angle: hook && p.hook_angle ? HOOK_ANGLE_LABELS[p.hook_angle] : null,
     currentTool: toolName,
     objections: [

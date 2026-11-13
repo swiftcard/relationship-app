@@ -85,7 +85,7 @@ describe("logging how the call went", () => {
       id: "p1", status: "live", stage: null, called: false, called_at: null, views: 1, last_viewed_at: "2026-11-10T15:00:00Z", sent_at: null, asked_at: null,
       expires_at: "2026-11-20T00:00:00Z", updated_at: "2026-11-10T15:00:00Z", call_outcome: "voicemail", call_outcome_at: "2026-11-10T16:00:00Z",
     }], now);
-    expect(f).toMatchObject({ kind: "viewed_not_reached", why: "Viewed yesterday, not reached yet. Left a voicemail today.", next: "Try again." });
+    expect(f).toMatchObject({ kind: "viewed_not_reached", why: "Viewed yesterday, not reached yet. Left a voicemail today.", next: "Text them, then try again.", send: "nudge_viewed" });
   });
 
   it("the Call screen's page checks the admin itself and the buttons are plain forms", () => {

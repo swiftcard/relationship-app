@@ -6,13 +6,16 @@ import { StatusBadge } from "../_ui/badges";
 import { Icon } from "../_ui/icons";
 import { fmtDate, fmtDateTime, timeAgo } from "../_ui/format";
 import { telHref } from "@/lib/prospect-preview/input";
-import { followUps, STAGE_LABELS, STAGES, stageCounts, stageOf, type Stage } from "@/lib/prospect-preview/pipeline";
+import { smsHref } from "@/lib/prospect-preview/messages";
+import { resolveOutreach } from "@/lib/prospect-preview/outreach";
+import { approvalQueue, followUps, STAGE_LABELS, STAGES, stageCounts, stageOf, type Stage } from "@/lib/prospect-preview/pipeline";
 import { assessQuality } from "@/lib/prospect-preview/quality";
 import { previewState } from "@/lib/prospect-preview/real-view";
 import type { PreviewList } from "@/lib/prospect-preview/store";
 import { BUYER_ROLES, BUYER_ROLE_LABELS, DEFAULT_BRAND_PRIMARY, DEFAULT_BRAND_SECONDARY, DEFAULT_EXPIRY_DAYS, MAX_TEAM_MEMBERS, type PreviewListRow } from "@/lib/prospect-preview/types";
 import CalledBox from "./CalledBox";
 import CopyPreviewLink from "./CopyPreviewLink";
+import OneTapSend from "./OneTapSend";
 
 // ── Card Builder (server component, no data loading) ────────────────────────
 // page.tsx loads the list; this draws it, so tests/render can measure the real
@@ -102,7 +105,14 @@ function statusBadge(r: PreviewListRow, now: number) {
 
 const SCREEN_LABEL = { call: "Call screen", send: "Send", edit: "Edit" } as const;
 
-function FollowUps({ rows, now }: { rows: PreviewListRow[]; now: number }) {
+const SEND_LABEL = { ask: "Send first text", text: "Text the link", nudge_no_view: "Send nudge", nudge_viewed: "Text them" } as const;
+
+/**
+ * Who to chase, each with the words already written (for this prospect when
+ * /build-card wrote them, the templates otherwise) and one tap to send them
+ * from the founder's own phone. A call comes with its voicemail script.
+ */
+function FollowUps({ rows, now, linkOf, sender }: { rows: PreviewListRow[]; now: number; linkOf: (slug: string) => string; sender: string | null }) {
   const list = followUps(rows, now);
   const byId = new Map(rows.map((r) => [r.id, r]));
   if (!list.length) return <EmptyState>Nobody to chase today.</EmptyState>;
@@ -110,13 +120,28 @@ function FollowUps({ rows, now }: { rows: PreviewListRow[]; now: number }) {
     <ul className="adm-divide">
       {list.map((f) => {
         const r = byId.get(f.id)!;
+        const m = f.send || f.voicemail ? resolveOutreach(r, { link: linkOf(r.slug), sender }) : null;
+        const words = !m ? null : f.send === "ask" ? m.ask : f.send === "text" ? m.text : f.send ? m[f.send] : null;
         return (
-          <li key={f.id} className="px-4 sm:px-5 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between" data-follow-up={f.kind}>
-            <p className="sc-t-subhead min-w-0">
-              <span className="font-semibold">{r.owner_name}</span><span className="adm-muted"> · {r.office_name}</span>
-              <span className="block adm-muted">{f.why} {f.next}</span>
-            </p>
-            <Link href={`/admin/card-builder/${f.screen}/${r.id}`} className="sc-btn sc-btn-sm sc-btn-gray shrink-0 self-start sm:self-auto">{SCREEN_LABEL[f.screen]}</Link>
+          <li key={f.id} className="px-4 sm:px-5 py-3 flex flex-col gap-2" data-follow-up={f.kind}>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="sc-t-subhead min-w-0">
+                <span className="font-semibold">{r.owner_name}</span><span className="adm-muted"> · {r.office_name}</span>
+                <span className="block adm-muted">{f.why} {f.next}</span>
+              </p>
+              <div className="flex flex-wrap items-center gap-2 shrink-0 self-start sm:self-auto">
+                {f.send && words && <OneTapSend id={r.id} kind={f.send} href={smsHref(r.phone, words)} className="sc-btn sc-btn-sm sc-btn-filled">{SEND_LABEL[f.send]}</OneTapSend>}
+                {f.voicemail && <a href={telHref(r.phone)} className="sc-btn sc-btn-sm sc-btn-filled" data-follow-call><Icon name="phone" className="w-4 h-4" />Call</a>}
+                <Link href={`/admin/card-builder/${f.screen}/${r.id}`} className="sc-btn sc-btn-sm sc-btn-gray">{SCREEN_LABEL[f.screen]}</Link>
+              </div>
+            </div>
+            {f.send && words && <p className="sc-t-footnote adm-muted whitespace-pre-line" style={{ overflowWrap: "anywhere" }} data-follow-words={f.send}>{words}</p>}
+            {f.voicemail && m && (
+              <details>
+                <summary className="adm-link sc-t-footnote cursor-pointer">Voicemail script</summary>
+                <p className="sc-t-footnote adm-muted mt-1" style={{ overflowWrap: "anywhere" }} data-follow-voicemail>{m.voicemail}</p>
+              </details>
+            )}
           </li>
         );
       })}
@@ -195,7 +220,7 @@ function Row({ r, link, now }: { r: PreviewListRow; link: string; now: number })
   );
 }
 
-export default function CardBuilderView({ list, appUrl, now, made, error, done, calendarSet }: {
+export default function CardBuilderView({ list, appUrl, now, made, error, done, calendarSet, sender = null }: {
   list: PreviewList;
   appUrl: string;
   /** The time the page was made (server), so the view stays pure. */
@@ -204,12 +229,20 @@ export default function CardBuilderView({ list, appUrl, now, made, error, done, 
   error: string | null;
   done: string | null;
   calendarSet: boolean;
+  /** The signed-in admin's own name, for the template wording. */
+  sender?: string | null;
 }) {
   const linkOf = (slug: string) => `${appUrl}/p/${slug}`;
   const outcome = done ? DONE[done] ?? null : null;
+  const queue = list.ready ? approvalQueue(list.rows, now) : null;
+  const toDecide = queue ? queue.waiting.length + queue.send.length : 0;
   return (
     <Stack>
-      <PageHeader title="Card Builder" description="Build a preview card for a prospect, send them the link, and get told the moment they look at it." />
+      <PageHeader
+        title="Card Builder"
+        description="Build a preview card for a prospect, send them the link, and get told the moment they look at it."
+        actions={list.ready ? <Link href="/admin/card-builder/approve" className={`sc-btn ${toDecide ? "sc-btn-filled" : "sc-btn-gray"}`} data-approve-link>{toDecide ? `Approve (${toDecide})` : "Approve"}</Link> : undefined}
+      />
 
       {made && /^[a-z0-9-]{3,64}$/.test(made) && (
         <div className="adm-callout-good rounded-xl px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between" role="status">
@@ -234,8 +267,8 @@ export default function CardBuilderView({ list, appUrl, now, made, error, done, 
           {list.ready && list.rows.length > 0 && (
             <>
               <StageCounts rows={list.rows} />
-              <Section title="Follow up today" hint="Viewed but not reached comes first. Then links sent a day ago and not opened, first texts with no reply, and calls with no outcome." flush>
-                <FollowUps rows={list.rows} now={now} />
+              <Section id="follow-ups" title="Follow up today" hint="Viewed but not reached comes first. Then links sent two days ago and not opened, first texts with no reply, and calls with no outcome. Each has its words ready: one tap opens your own Messages." flush>
+                <FollowUps rows={list.rows} now={now} linkOf={linkOf} sender={sender} />
               </Section>
             </>
           )}

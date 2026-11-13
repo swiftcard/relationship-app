@@ -32,3 +32,11 @@ $$);
 select cron.unschedule('trial-notice') where exists (select 1 from cron.job where jobname = 'trial-notice');
 select cron.schedule('trial-notice', '17 * * * *',
   $$select clock_call('trial-notice', 'https://swiftcard.me/api/billing/trial-notice', 'clock_secret')$$);
+
+-- Card Builder's "3 follow-ups due today" push to staff (2026-11-13,
+-- lib/prospect-preview/digest.ts). Its own job, so the three above are
+-- untouched. The route decides whether it is morning in New York and whether
+-- today's has gone, so the hourly call sends at most one push a day.
+select cron.unschedule('prospect-follow-ups') where exists (select 1 from cron.job where jobname = 'prospect-follow-ups');
+select cron.schedule('prospect-follow-ups', '7 * * * *',
+  $$select clock_call('prospect-follow-ups', 'https://swiftcard.me/api/push/prospect-follow-ups', 'clock_secret')$$);

@@ -45,7 +45,7 @@ describe("admin-only", () => {
   });
 
   it("both admin pages check the admin themselves (the layout is not the boundary)", () => {
-    for (const f of ["page.tsx", "call/[id]/page.tsx", "edit/[id]/page.tsx", "send/[id]/page.tsx", "preview/[id]/page.tsx"].map((x) => `src/app/admin/card-builder/${x}`)) {
+    for (const f of ["page.tsx", "approve/page.tsx", "call/[id]/page.tsx", "edit/[id]/page.tsx", "send/[id]/page.tsx", "preview/[id]/page.tsx"].map((x) => `src/app/admin/card-builder/${x}`)) {
       const src = code(f);
       // Either spelling: the pages that sign the messages keep the admin's id.
       expect(src, f).toMatch(/if \(!\(await requireAdmin\(\)\)\) notFound\(\);|const admin = await requireAdmin\(\);\s*if \(!admin\) notFound\(\);/);

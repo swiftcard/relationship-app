@@ -2,7 +2,9 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { VIEW_VISIT_WINDOW_MS } from "@/lib/view-window";
 import { expiryFrom, readSocials, readSources, readSpecifics, readTeam, type NewPreviewInput, type PreviewFields } from "./input";
 import { outcomeEffect, type CallOutcome } from "./call";
-import { BUYER_ROLES, CURRENT_TOOLS, DEFAULT_EXPIRY_DAYS, HOOK_ANGLES, TYPE_FEELS, type BuyerRole, type CurrentTool, type HookAngle, type TypeFeel, type DeviceType, type FactSources, type LiveAlert, type PreviewListRow, type ProspectPreview } from "./types";
+import type { MessageKind } from "./messages";
+import { readOutreach } from "./outreach";
+import { BUYER_ROLES, CURRENT_TOOLS, DEFAULT_EXPIRY_DAYS, HOOK_ANGLES, TYPE_FEELS, type BuyerRole, type CurrentTool, type HookAngle, type TypeFeel, type DeviceType, type FactSources, type LiveAlert, type Outreach, type PreviewListRow, type ProspectPreview } from "./types";
 
 // ── Card Builder: the database ──────────────────────────────────────────────
 // Both tables are RLS-on with no policies (supabase/prospect-previews.sql), so
@@ -51,6 +53,10 @@ function toPreview(row: Record<string, unknown>): ProspectPreview {
     team_members: readTeam(row.team_members),
     social_links: readSocials(row.social_links),
     sources: readSources(row.sources),
+    outreach: readOutreach(row.outreach),
+    skipped_at: (row.skipped_at as string | null) ?? null,
+    nudge_no_view_at: (row.nudge_no_view_at as string | null) ?? null,
+    nudge_viewed_at: (row.nudge_viewed_at as string | null) ?? null,
   };
 }
 
@@ -150,6 +156,19 @@ export async function setQualityOverride(id: string, on: boolean, now: Date = ne
   return !error && !!data?.length;
 }
 
+/** The messages written for this prospect (the edit screen's Messages section). Null clears them: back to the templates. */
+export async function setOutreach(id: string, outreach: Outreach | null, now: Date = new Date()): Promise<boolean> {
+  const { data, error } = await getAdminSupabase().from(PREVIEWS).update({ outreach, updated_at: now.toISOString() }).eq("id", id).select("id");
+  return !error && !!data?.length;
+}
+
+/** Skip in the Approve queue: the draft stays a draft and leaves the queue (or comes back to it). */
+export async function setSkipped(id: string, on: boolean, now: Date = new Date()): Promise<boolean> {
+  const { data, error } = await getAdminSupabase().from(PREVIEWS)
+    .update({ skipped_at: on ? now.toISOString() : null, updated_at: now.toISOString() }).eq("id", id).eq("status", "draft").select("id");
+  return !error && !!data?.length;
+}
+
 /** Take a published preview back to a draft: its link answers 404 again. */
 export async function unpublishPreview(id: string, now: Date = new Date()): Promise<boolean> {
   const { data, error } = await getAdminSupabase().from(PREVIEWS).update({ status: "draft", updated_at: now.toISOString() }).eq("id", id).select("id");
@@ -207,9 +226,15 @@ export async function reopenPreview(id: string, now: Date = new Date()): Promise
  * phone or inbox). "ask" is the first text, which has no link; "text" and
  * "email" carry the link, and only a published, unexpired preview has one.
  */
-export async function markSent(id: string, kind: "ask" | "text" | "email", now: Date = new Date()): Promise<"ok" | "not_live" | "failed"> {
+export async function markSent(id: string, kind: MessageKind, now: Date = new Date()): Promise<"ok" | "not_live" | "failed"> {
   const db = getAdminSupabase();
   const at = now.toISOString();
+  // A nudge is a follow-up to something already sent: it is noted, and the
+  // stage (which is worked out from asked_at / sent_at / views) doesn't move.
+  if (kind === "nudge_no_view" || kind === "nudge_viewed") {
+    const { data, error } = await db.from(PREVIEWS).update({ [`${kind}_at`]: at, updated_at: at }).eq("id", id).select("id");
+    return !error && data?.length ? "ok" : "failed";
+  }
   if (kind === "ask") {
     const { data, error } = await db.from(PREVIEWS).update({ asked_at: at, updated_at: at }).eq("id", id).select("id");
     return !error && data?.length ? "ok" : "failed";
@@ -222,7 +247,7 @@ export async function markSent(id: string, kind: "ask" | "text" | "email", now: 
 
 /** "I didn't send that after all": back to not asked, not sent. */
 export async function clearSent(id: string, now: Date = new Date()): Promise<boolean> {
-  const { error } = await getAdminSupabase().from(PREVIEWS).update({ asked_at: null, sent_at: null, sent_channel: null, updated_at: now.toISOString() }).eq("id", id);
+  const { error } = await getAdminSupabase().from(PREVIEWS).update({ asked_at: null, sent_at: null, sent_channel: null, nudge_no_view_at: null, nudge_viewed_at: null, updated_at: now.toISOString() }).eq("id", id);
   return !error;
 }
 

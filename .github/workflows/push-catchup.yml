@@ -88,6 +88,27 @@ jobs:
           echo
           [ "$code" = "200" ]
 
+      # Same schedule, same secret: Card Builder's "3 follow-ups due today"
+      # push to staff (lib/prospect-preview/digest.ts). Due from 8am New York
+      # time, once a day, and only when somebody is due; it claims the day
+      # before sending, so reruns are no-ops. It never contacts a prospect.
+      # It never fails this workflow: the health check alerts on this job's
+      # failures, and those must mean the customers' pushes above.
+      - name: Card Builder follow-ups due today
+        if: always()
+        continue-on-error: true
+        env:
+          SECRET: ${{ secrets.PUSH_CATCHUP_SECRET }}
+        run: |
+          body=$(mktemp)
+          code=$(curl -sS --max-time 90 -o "$body" -w "%{http_code}" \
+            -H "Authorization: Bearer $SECRET" \
+            https://swiftcard.me/api/push/prospect-follow-ups)
+          echo "HTTP $code"
+          cat "$body"
+          echo
+          [ "$code" = "200" ]
+
       # Same schedule, same secret: the Office demo clock's backup. pg_cron
       # runs /api/demo/tick every 5 minutes (supabase/demo-bookings.sql); this
       # only matters if that stops. Every step there is safe to run twice.

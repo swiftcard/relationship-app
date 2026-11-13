@@ -25,7 +25,12 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
   return <div className="flex gap-3"><dt className="adm-faint w-28 shrink-0">{label}</dt><dd className="min-w-0" style={{ overflowWrap: "anywhere" }}>{children}</dd></div>;
 }
 
-export default function CallView({ p, brief, appUrl, now, done }: { p: PreviewListRow; brief: CallBrief; appUrl: string; now: number; done: string | null }) {
+export default function CallView({ p, brief, voicemail, appUrl, now, done }: {
+  p: PreviewListRow; brief: CallBrief;
+  /** What to say after the beep (written for this prospect, or the template). */
+  voicemail?: string | null;
+  appUrl: string; now: number; done: string | null;
+}) {
   const live = previewState(p, now) === "live";
   const here = `/admin/card-builder/call/${p.id}`;
   const post = `/api/admin/card-builder/${p.id}`;
@@ -81,10 +86,16 @@ export default function CallView({ p, brief, appUrl, now, done }: { p: PreviewLi
         </dl>
       </Section>
 
-      <Section title="Open with" hint="A suggestion. Say it your way.">
+      <Section title="Open with" hint={brief.written ? `Written for ${p.office_name}. Say it your way.` : "A suggestion. Say it your way."}>
         {!brief.specific && <p className="adm-callout-danger sc-t-footnote rounded-xl px-4 py-3 mb-3" data-generic-opener>This opener could be said to any office: the preview has no hook. Add one on the edit screen, or open with something true from the list above.</p>}
         <p className="sc-t-body" data-opener>{brief.opener}</p>
       </Section>
+
+      {voicemail && (
+        <Section title="If you get voicemail" hint="Then tap “Left a voicemail” below, and the follow-up text is ready on Card Builder.">
+          <p className="sc-t-body" data-voicemail>{voicemail}</p>
+        </Section>
+      )}
 
       <Section title="If they say" flush>
         <ul className="adm-divide">

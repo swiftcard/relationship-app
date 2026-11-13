@@ -32,8 +32,12 @@ export type Quality = {
   mayPublish: boolean;
 };
 
-/** A specific counts once it has its words, its source and its date, and nobody marked it uncertain. */
-export const isVerified = (s: Specific | null | undefined): boolean => !!s && !!s.text && !!s.source_url && !!s.dated && !s.uncertain;
+/**
+ * A specific counts once it has its words, its source and its date, and nobody
+ * marked it uncertain. One the owner supplied themselves (`owner`, pasted
+ * notes) is confirmed by them and needs no page or date (owner, 2026-11-13).
+ */
+export const isVerified = (s: Specific | null | undefined): boolean => !!s && !!s.text && !s.uncertain && (s.owner === true || (!!s.source_url && !!s.dated));
 
 const host = (url: string | undefined): string => {
   try { return new URL(url ?? "").hostname.replace(/^www\./, "").toLowerCase(); } catch { return ""; }
@@ -47,6 +51,8 @@ const host = (url: string | undefined): string => {
  */
 export function buyerVerified(p: Pick<ProspectPreview, "sources" | "buyer_role">): boolean {
   const a = p.sources.buyer_role, b = p.sources.buyer_second;
+  // The owner told us who runs the office: that is their own knowledge, not research to double-check.
+  if (p.buyer_role && a?.owner && !a.uncertain) return true;
   if (!p.buyer_role || !a?.url || !b?.url || a.uncertain || b.uncertain) return false;
   return !!host(a.url) && !!host(b.url) && host(a.url) !== host(b.url);
 }
@@ -62,7 +68,7 @@ function distinctive(text: string): { numbers: Set<string>; words: Set<string> }
 }
 
 /** Praise that could be pasted to any office. */
-const FILLER = /\b(great|amazing|awesome|impressive|beautiful|incredible|love(?:d)?|fantastic|wonderful|stunning|big fan)\b[^.!?]{0,40}\b(website|site|work|team|listings?|brand|company|office|agency|business|presence|reputation)\b|\bhope (this|you)\b|\bjust (checking|reaching|wanted)\b|\btouch(ing)? base\b|\bcame across\b/i;
+export const FILLER = /\b(great|amazing|awesome|impressive|beautiful|incredible|love(?:d)?|fantastic|wonderful|stunning|big fan)\b[^.!?]{0,40}\b(website|site|work|team|listings?|brand|company|office|agency|business|presence|reputation)\b|\bhope (this|you)\b|\bjust (checking|reaching|wanted)\b|\btouch(ing)? base\b|\bcame across\b/i;
 /** A service area on its own is a location, not a hook. */
 const AREA_ONLY = /^(you|your (team|office|agents))\s+(cover|covers|serve|serves|work in|works in|specialize in|specializes in|are (based|located) in|operate in)\b/i;
 
@@ -101,7 +107,7 @@ export function assessQuality(p: Assessed): Quality {
   const verified = p.specifics.filter(isVerified).length;
   const unfinished = p.specifics.length - verified;
   const hook = hookProblems(p);
-  const sourced = (k: keyof ProspectPreview["sources"]) => !!p.sources[k]?.url && !p.sources[k]?.uncertain;
+  const sourced = (k: keyof ProspectPreview["sources"]) => (!!p.sources[k]?.url || p.sources[k]?.owner === true) && !p.sources[k]?.uncertain;
 
   const check = (key: string, label: string, ok: boolean, points: number, fix: string, required = false, earned = ok ? points : 0): QualityCheck =>
     ({ key, label, ok, required, points, earned, fix: ok ? null : fix });

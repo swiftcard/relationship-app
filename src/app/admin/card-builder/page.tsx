@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
-import { listPreviews } from "@/lib/prospect-preview/store";
+import { listPreviews, senderName } from "@/lib/prospect-preview/store";
 import CardBuilderView from "./CardBuilderView";
 
 export const metadata = { title: "Card Builder — SwiftCard Admin" };
@@ -16,9 +16,10 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
 export default async function CardBuilderPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   // The admin layout is NOT a security boundary; every data page checks.
-  if (!(await requireAdmin())) notFound();
+  const admin = await requireAdmin();
+  if (!admin) notFound();
   const sp = await searchParams;
-  const list = await listPreviews();
+  const [list, sender] = await Promise.all([listPreviews(), senderName(admin.id)]);
   const now = new Date();
   return (
     <CardBuilderView
@@ -28,6 +29,7 @@ export default async function CardBuilderPage({ searchParams }: { searchParams: 
       made={sp.made ?? null}
       error={sp.error ?? null}
       done={sp.done ?? null}
+      sender={sender}
       calendarSet={/^https:\/\/\S+$/.test((process.env.PROSPECT_CALENDAR_URL ?? "").trim())}
     />
   );

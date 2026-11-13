@@ -457,7 +457,7 @@ describe.each([390, 1280])("/admin/card-builder pipeline at %ipx", (width) => {
         sideways: document.documentElement.scrollWidth > vw,
         tilesInside: tiles.every((r) => r.left >= 0 && r.right <= vw + 0.5),
         counts,
-        chase: [...document.querySelectorAll("[data-follow-up]")].map((li) => ({ kind: li.getAttribute("data-follow-up"), text: (li as HTMLElement).innerText, href: li.querySelector("a")!.getAttribute("href") })),
+        chase: [...document.querySelectorAll("[data-follow-up]")].map((li) => ({ kind: li.getAttribute("data-follow-up"), text: (li as HTMLElement).innerText, href: li.querySelector('a[href^="/admin"]')!.getAttribute("href"), tap: li.querySelector("[data-one-tap]")?.getAttribute("href") ?? null, call: li.querySelector("[data-follow-call]")?.getAttribute("href") ?? null })),
         sendLinks: document.querySelectorAll("[data-send-link]").length,
       };
     });
@@ -469,6 +469,10 @@ describe.each([390, 1280])("/admin/card-builder pipeline at %ipx", (width) => {
     expect(m.chase[0].href).toBe("/admin/card-builder/call/a1111111-2222-4333-8444-555555555555");
     expect(m.chase[1].text).toContain("Sent 2 days ago, not opened.");
     expect(m.chase[1].href).toBe("/admin/card-builder/send/a2222222-2222-4333-8444-555555555555");
+    // A call comes with the number; a message comes with its words and one tap to the founder's own Messages.
+    expect(m.chase[0].call).toBe("tel:2125550199");
+    expect(m.chase[1].tap).toMatch(/^sms:2125550199\?&body=Hi%20Sent%2C/);
+    expect(m.chase[2].tap).toMatch(/^sms:2125550199\?&body=/);
     expect(m.sendLinks).toBe(5);
     await page.close();
   });
@@ -520,7 +524,7 @@ describe.each([390, 1280])("/admin/card-builder/send/<id> at %ipx", (width) => {
       disabled: [...document.querySelectorAll('form button[type="submit"]')].filter((b) => (b as HTMLButtonElement).disabled).length,
     }));
     expect(m.sends).toEqual(["ask"]);
-    expect(m.blocked).toBe(2);
+    expect(m.blocked).toBe(4);
     expect(m.text).toContain("still a draft");
     expect(m.text).toContain("add your name before sending");
     expect(m.disabled).toBe(2);
@@ -585,6 +589,229 @@ describe.each([390, 1280])("/admin/card-builder/call/<id> at %ipx", (width) => {
     expect(brief).toContain("Not recorded. Confirm they run the office before you pitch.");
     expect(brief).toContain("Not known");
     expect(brief).toContain("None recorded. Don't open with a compliment: find one true thing first.");
+    await page.close();
+  });
+});
+
+// ── The Approve queue ───────────────────────────────────────────────────────
+
+async function approveMarkup(rows: PreviewListRow[], props: Record<string, unknown> = {}): Promise<string> {
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { createElement } = await import("react");
+  const { default: AdminShell } = await import("@/app/admin/AdminShell");
+  const { default: ApproveView } = await import("@/app/admin/card-builder/approve/ApproveView");
+  const view = createElement(ApproveView, { list: { ready: true, rows }, appUrl: "https://swiftcard.me", now: NOW, sender: "Menash Harooni", done: null, error: null, about: null, ...props } as React.ComponentProps<typeof ApproveView>);
+  return renderToStaticMarkup(createElement(AdminShell, { email: "hello@swiftcard.me", unread: 0 }, view));
+}
+
+const SOLID = {
+  specifics: [
+    { kind: "open_house" as const, text: "Open house at 88 Hicks St, Sunday Nov 16, 1-3pm", source_url: "https://harborrealty.com/open-houses", dated: "2026-11-16", uncertain: false },
+    { kind: "listing" as const, text: "Listed 14 Garden Pl, a 4-bedroom brownstone, at $3.4M", source_url: "https://harborrealty.com/listings/14-garden-pl", dated: "2026-11-03", uncertain: false },
+    { kind: "other" as const, text: "14 agents, and Dana wants them all on one card", source_url: "", dated: "", uncertain: false, owner: true },
+  ],
+  detail: "your open house at 88 Hicks St this Sunday", hook_specific: 0, hook_angle: "open_house" as const,
+  hook_why: "Everyone who walks through can tap your card instead of signing a sheet.",
+  sources: {
+    buyer_role: { url: "https://harborrealty.com/about", uncertain: false, note: "" },
+    buyer_second: { url: "https://appext20.dos.ny.gov/nydos/details.do?id=1", uncertain: false, note: "" },
+    email: { url: "https://harborrealty.com/about", uncertain: true, note: "Office address, not hers" },
+  },
+  outreach: {
+    first_text: "Hi Dana, Menash from SwiftCard. Saw your open house at 88 Hicks St Sunday. I made you a card for it. Want me to send it?",
+    link_text: "Dana, here's the card for 14 Garden Pl: {link}",
+    email_subject: "Dana, a card for 14 Garden Pl", email_body: "Hi Dana,\n\nHere it is: {link}\n\nMenash",
+    call_opener: "Hi Dana, it's Menash, I sent you the card for Sunday's open house.", voicemail: "Hi Dana, it's Menash from SwiftCard. Text me back when you have two minutes.",
+    nudge_no_view: "Dana, the card is still up: {link}", nudge_viewed: "Dana, tried you just now. Is tomorrow morning better?",
+    uses: {}, written_at: "2026-11-11T12:00:00Z",
+  },
+};
+
+describe.each([390, 1280])("/admin/card-builder/approve at %ipx", (width) => {
+  const QUEUE: PreviewListRow[] = [
+    row({ id: "b1111111-2222-4333-8444-555555555555", status: "draft", ...SOLID }),
+    row({
+      id: "b2222222-2222-4333-8444-555555555555", status: "draft", owner_name: "Bartholomew Featherstonehaugh-Montgomery",
+      office_name: "The Featherstonehaugh-Montgomery International Property Partnership", owner_title: "Founding Managing Partner and Principal Broker",
+    }),
+    row({ id: "b3333333-2222-4333-8444-555555555555", status: "live", owner_name: "Ready Rae", ...SOLID }),
+    row({ id: "b4444444-2222-4333-8444-555555555555", status: "draft", owner_name: "Skipped Sal", skipped_at: "2026-11-10T15:00:00Z" }),
+    row({ id: "b5555555-2222-4333-8444-555555555555", status: "live", owner_name: "Sent Sam", sent_at: "2026-11-10T15:00:00Z", sent_channel: "text" }),
+  ];
+
+  it("one card per prospect, nothing spills, and the card they would get is really drawn", async () => {
+    const page = await open(width, await approveMarkup(QUEUE), adminCss);
+    await page.waitForTimeout(300);
+    const m = await page.evaluate(() => {
+      const vw = window.innerWidth;
+      const spill: string[] = [];
+      document.querySelectorAll("[data-approve-card], [data-approve-card] *:not([inert] *)").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && (r.right > vw + 0.5 || r.left < -0.5)) spill.push(`${el.tagName}.${String(el.className).slice(0, 50)} → ${Math.round(r.left)}..${Math.round(r.right)}`);
+      });
+      const cards = [...document.querySelectorAll("[data-approve-card]")] as HTMLElement[];
+      const thumb = document.querySelector("[data-thumb] [inert] > div > div") as HTMLElement | null;
+      return {
+        spill, sideways: document.documentElement.scrollWidth > vw,
+        modes: cards.map((c) => c.getAttribute("data-approve-card")),
+        names: cards.map((c) => c.querySelector("h2")!.textContent),
+        thumbDrawn: !!thumb && getComputedStyle(thumb).opacity === "1" && thumb.getBoundingClientRect().width > 100,
+        skipped: [...document.querySelectorAll("[data-skipped]")].map((li) => (li as HTMLElement).innerText),
+        text: document.body.innerText,
+      };
+    });
+    expect(m.spill).toEqual([]);
+    expect(m.sideways).toBe(false);
+    // Approved-and-unsent first, then the drafts; a sent one and a skipped one are not cards.
+    expect(m.modes).toEqual(["send", "waiting", "waiting"]);
+    expect(m.names).toEqual(["Ready Rae", "Dana Whitfield", "Bartholomew Featherstonehaugh-Montgomery"]);
+    expect(m.thumbDrawn).toBe(true);
+    expect(m.skipped).toHaveLength(1);
+    expect(m.skipped[0]).toContain("Skipped Sal");
+    expect(m.text).not.toContain("Sent Sam");
+    await page.close();
+  });
+
+  it("a ready draft: score, specifics with sources, the written messages, and three buttons a thumb can hit", async () => {
+    const page = await open(width, await approveMarkup(QUEUE), adminCss);
+    const m = await page.evaluate(() => {
+      const card = document.querySelector("#p-b1111111-2222-4333-8444-555555555555") as HTMLElement;
+      const box = (sel: string) => { const r = card.querySelector(sel)!.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; };
+      return {
+        text: card.innerText,
+        sources: [...card.querySelectorAll("[data-specifics] a")].map((a) => a.getAttribute("href")),
+        approve: (card.querySelector("[data-approve]") as HTMLButtonElement).closest("form")!.querySelector('input[name="action"]')!.getAttribute("value"),
+        approveBox: box("[data-approve]"), editBox: box("[data-edit]"), skipBox: box("[data-skip]"),
+        edit: card.querySelector("[data-edit]")!.getAttribute("href"),
+        oneTaps: card.querySelectorAll("[data-one-tap]").length,
+        cardWidth: Math.round(card.getBoundingClientRect().width),
+      };
+    });
+    expect(m.text).toContain("of 100");
+    expect(m.text).not.toContain("Too generic");
+    expect(m.text).toContain("I saw your open house at 88 Hicks St this Sunday.");
+    expect(m.text).toContain("confirmed by you");
+    expect(m.sources).toEqual(["https://harborrealty.com/open-houses", "https://harborrealty.com/listings/14-garden-pl"]);
+    expect(m.text).toContain("Saw your open house at 88 Hicks St Sunday. I made you a card for it. Want me to send it?");
+    expect(m.text).toContain("Dana, here's the card for 14 Garden Pl: https://swiftcard.me/p/harbor-realty-group-k3x9qa");
+    expect(m.text).not.toContain("Standard wording");
+    expect(m.text).toContain("Couldn't confirm or left out");
+    expect(m.approve).toBe("approve");
+    expect(m.edit).toBe("/admin/card-builder/edit/b1111111-2222-4333-8444-555555555555");
+    // Nothing can be sent before it is approved.
+    expect(m.oneTaps).toBe(0);
+    for (const b of [m.approveBox, m.editBox, m.skipBox]) expect(b.h).toBeGreaterThanOrEqual(44);
+    if (width === 390) expect(m.approveBox.w).toBeGreaterThan(m.cardWidth * 0.8);
+    await page.close();
+  });
+
+  it("a too-generic draft can't be approved here, and says its messages are the standard wording", async () => {
+    const page = await open(width, await approveMarkup(QUEUE), adminCss);
+    const m = await page.evaluate(() => {
+      const card = document.querySelector("#p-b2222222-2222-4333-8444-555555555555") as HTMLElement;
+      return { text: card.innerText, approve: !!card.querySelector("[data-approve]"), held: !!card.querySelector("[data-held]"), edit: !!card.querySelector("[data-edit]"), skip: !!card.querySelector("[data-skip]") };
+    });
+    expect(m).toMatchObject({ approve: false, held: true, edit: true, skip: true });
+    expect(m.text).toContain("Too generic");
+    expect(m.text).toContain("Standard wording");
+    await page.close();
+  });
+
+  it("once approved, the next tap opens the founder's own Messages or Mail with the words filled in", async () => {
+    const page = await open(width, await approveMarkup(QUEUE, { done: "approved", about: "b3333333-2222-4333-8444-555555555555" }), adminCss);
+    const m = await page.evaluate(() => {
+      const card = document.querySelector("#p-b3333333-2222-4333-8444-555555555555") as HTMLElement;
+      const tap = (k: string) => card.querySelector(`[data-one-tap="${k}"]`) as HTMLAnchorElement | null;
+      const r = tap("ask")!.getBoundingClientRect();
+      return {
+        ask: tap("ask")!.getAttribute("href"), text: tap("text")!.getAttribute("href"), email: tap("email")!.getAttribute("href"),
+        askH: Math.round(r.height), askTop: Math.round(r.top + window.scrollY),
+        thumbTop: Math.round(card.querySelector("[data-thumb]")!.getBoundingClientRect().top + window.scrollY),
+        decide: !!card.querySelector("[data-decide]"), justNow: card.hasAttribute("data-just-now"),
+        banner: (document.querySelector('[role="status"]') as HTMLElement).innerText,
+      };
+    });
+    expect(decodeURIComponent(m.ask!)).toBe("sms:2125550199?&body=Hi Dana, Menash from SwiftCard. Saw your open house at 88 Hicks St Sunday. I made you a card for it. Want me to send it?");
+    expect(decodeURIComponent(m.text!)).toContain("https://swiftcard.me/p/harbor-realty-group-k3x9qa");
+    expect(m.email).toMatch(/^mailto:dana@harborrealtygroup\.com\?subject=Dana%2C%20a%20card%20for%2014%20Garden%20Pl&body=/);
+    expect(m.askH).toBeGreaterThanOrEqual(44);
+    // The send button comes before the picture: it is the next thing to tap.
+    expect(m.askTop).toBeLessThan(m.thumbTop);
+    expect(m).toMatchObject({ decide: false, justNow: true });
+    expect(m.banner).toContain("Nothing has been sent");
+    await page.close();
+  });
+
+  it("with nothing waiting, says how to line some up", async () => {
+    const page = await open(width, await approveMarkup([]), adminCss);
+    expect(await page.evaluate(() => document.body.innerText)).toContain("Run /build-card or /build-batch");
+    await page.close();
+  });
+});
+
+describe.each([390, 1280])("written messages on the Send, Call and edit screens at %ipx", (width) => {
+  it("the Send screen shows the written words and both nudges; the Call screen the written opener and a voicemail script", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { createElement } = await import("react");
+    const { default: AdminShell } = await import("@/app/admin/AdminShell");
+    const { default: SendView } = await import("@/app/admin/card-builder/send/[id]/SendView");
+    const { default: CallView } = await import("@/app/admin/card-builder/call/[id]/CallView");
+    const { resolveOutreach } = await import("@/lib/prospect-preview/outreach");
+    const { callBrief } = await import("@/lib/prospect-preview/call");
+    const p = row({ ...SOLID });
+    const messages = resolveOutreach(p, { link: `https://swiftcard.me/p/${p.slug}`, sender: "Menash Harooni" });
+    const shell = (view: React.ReactElement) => renderToStaticMarkup(createElement(AdminShell, { email: "hello@swiftcard.me", unread: 0 }, view));
+
+    const send = await open(width, shell(createElement(SendView, { p, messages, now: NOW, senderKnown: true, done: null, error: null })), adminCss);
+    const s = await send.evaluate(() => ({
+      sideways: document.documentElement.scrollWidth > window.innerWidth,
+      kinds: [...document.querySelectorAll("[data-send]")].map((a) => a.getAttribute("data-send")),
+      ask: (document.querySelector('[data-message="ask"]') as HTMLTextAreaElement).value,
+      written: !!document.querySelector("[data-written]"), templates: !!document.querySelector("[data-templates]"),
+    }));
+    expect(s.sideways).toBe(false);
+    expect(s.kinds).toEqual(["ask", "text", "email", "nudge_no_view", "nudge_viewed"]);
+    expect(s.ask).toContain("Saw your open house at 88 Hicks St Sunday.");
+    expect(s).toMatchObject({ written: true, templates: false });
+    await send.close();
+
+    const call = await open(width, shell(createElement(CallView, { p, brief: callBrief(p, { sender: "Menash Harooni" }), voicemail: messages.voicemail, appUrl: "https://swiftcard.me", now: NOW, done: null })), adminCss);
+    const c = await call.evaluate(() => ({
+      sideways: document.documentElement.scrollWidth > window.innerWidth,
+      opener: (document.querySelector("[data-opener]") as HTMLElement).innerText,
+      voicemail: (document.querySelector("[data-voicemail]") as HTMLElement).innerText,
+      generic: !!document.querySelector("[data-generic-opener]"),
+    }));
+    expect(c.sideways).toBe(false);
+    expect(c.opener).toBe("Hi Dana, it's Menash, I sent you the card for Sunday's open house.");
+    expect(c.voicemail).toContain("Text me back when you have two minutes.");
+    expect(c.generic).toBe(false);
+    await call.close();
+  });
+
+  it("the edit screen has every message to change, and nothing spills", async () => {
+    const page = await open(width, await editMarkup(row({ status: "draft", ...SOLID })), adminCss);
+    const m = await page.evaluate(() => {
+      const vw = window.innerWidth;
+      const form = document.querySelector("[data-outreach-form]") as HTMLFormElement;
+      const spill: string[] = [];
+      document.querySelectorAll("[data-outreach-form] *, [data-source-row] *, [data-specific-row] *").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && (r.right > vw + 0.5 || r.left < -0.5)) spill.push(`${el.tagName}[${el.getAttribute("name") ?? ""}] → ${Math.round(r.left)}..${Math.round(r.right)}`);
+      });
+      return {
+        spill, sideways: document.documentElement.scrollWidth > vw,
+        fields: [...form.querySelectorAll("textarea, input:not([type=hidden])")].map((f) => f.getAttribute("name")),
+        first: (form.querySelector('[name="o_first_text"]') as HTMLTextAreaElement).value,
+        ownSpecific: (document.querySelector('[name="spec_own_2"]') as HTMLInputElement).checked,
+        ownOther: (document.querySelector('[name="spec_own_0"]') as HTMLInputElement).checked,
+      };
+    });
+    expect(m.spill).toEqual([]);
+    expect(m.sideways).toBe(false);
+    expect(m.fields).toEqual(["o_first_text", "o_link_text", "o_email_subject", "o_email_body", "o_call_opener", "o_voicemail", "o_nudge_no_view", "o_nudge_viewed"]);
+    expect(m.first).toContain("Saw your open house at 88 Hicks St Sunday.");
+    expect(m).toMatchObject({ ownSpecific: true, ownOther: false });
     await page.close();
   });
 });

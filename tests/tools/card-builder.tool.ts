@@ -11,9 +11,10 @@ import { pullBrandColors } from "@/lib/prospect-preview/colors-server";
 import { cleanHttpsUrl, expiryFrom, formatTeam, newSlug, parsePreviewFields, UUID_RE } from "@/lib/prospect-preview/input";
 import { paddedLogoSrc } from "@/lib/prospect-preview/card";
 import { scoreFit, type FitEvidence, type FitInput, type FitKey } from "@/lib/prospect-preview/fit";
-import { buildMessages } from "@/lib/prospect-preview/messages";
-import { assessQuality } from "@/lib/prospect-preview/quality";
-import { BUYER_ROLE_LABELS, BUYER_ROLES, CURRENT_TOOL_LABELS, CURRENT_TOOLS, DEFAULT_EXPIRY_DAYS, MAX_SPECIFICS, SOCIAL_KEYS, SOURCE_FIELDS, type BuyerRole, type CurrentTool, type ProspectPreview } from "@/lib/prospect-preview/types";
+import { callBrief } from "@/lib/prospect-preview/call";
+import { checkOutreach, readOutreach, resolveOutreach } from "@/lib/prospect-preview/outreach";
+import { assessQuality, isVerified } from "@/lib/prospect-preview/quality";
+import { BUYER_ROLE_LABELS, BUYER_ROLES, CURRENT_TOOL_LABELS, CURRENT_TOOLS, DEFAULT_EXPIRY_DAYS, LINK_SLOT, MAX_SPECIFICS, OUTREACH_KEYS, SOCIAL_KEYS, SOURCE_FIELDS, SOURCE_LABELS, TEXT_LIMIT, type BuyerRole, type CurrentTool, type ProspectPreview } from "@/lib/prospect-preview/types";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 
 // ── Card Builder's command-line tool ────────────────────────────────────────
@@ -31,6 +32,10 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 //     disqualified (corporate decides, under 5 people, no named leader, only
 //     a general line and address) is never saved as a lead
 //   - the quality gate's override belongs to the owner: nothing here sets it
+//   - "confirmed by the owner" is only for what the owner themselves supplied:
+//     it must carry their words as its note
+//   - the messages it saves are complete, 160 characters or under for a text,
+//     with no emoji and no "free", and only ever on a draft
 //   - nothing is published and nothing is sent
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL && !/localhost|127\.0\.0\.1/.test(process.env.NEXT_PUBLIC_APP_URL) ? process.env.NEXT_PUBLIC_APP_URL : "https://swiftcard.me";
@@ -232,7 +237,11 @@ async function saveLeads(file: string) {
  *   hook_why?,
  *   team_members?: [{ name, title?, headshot? }],
  *   social_links?: { linkedin?, instagram?, facebook?, x?, youtube?, tiktok?, zillow? },
- *   sources?: { <fact>: { url, uncertain?, note? } } }
+ *   sources?: { <fact>: { url, uncertain?, note?, owner? } } }
+ * `"owner": true` on a source or a specific means the OWNER OF SWIFTCARD
+ * supplied that fact themselves (pasted notes): it is confirmed by them and
+ * needs no page. Its `note` must quote what they wrote. Never set it on
+ * something that was researched.
  * Facts: owner_name, owner_title, phone, email, logo_url, headshot_url, colors,
  * address, website, social_links, specialty, team_members, buyer_role,
  * buyer_second (the SECOND site that confirms the name and role), team_size,
@@ -253,6 +262,8 @@ function fieldsFrom(raw: Json) {
     flat[`src_${k}`] = sources[k]?.url;
     flat[`unc_${k}`] = sources[k]?.uncertain === true;
     flat[`note_${k}`] = sources[k]?.note;
+    flat[`own_${k}`] = sources[k]?.owner === true;
+    if (sources[k]?.owner === true && !str(sources[k]?.note)) throw new Error(`sources.${k} is marked confirmed by the owner but has no note. Put the owner's own words in "note", or give the page it came from instead.`);
   }
   if (typeof raw.team_size === "number") flat.team_size = String(raw.team_size);
   if (raw.specifics !== undefined && !Array.isArray(raw.specifics)) throw new Error("specifics is a list.");
@@ -260,7 +271,7 @@ function fieldsFrom(raw: Json) {
   if (specifics.length > MAX_SPECIFICS) throw new Error(`At most ${MAX_SPECIFICS} specifics. Keep the strongest.`);
   specifics.forEach((sp, i) => {
     flat[`spec_kind_${i}`] = sp.kind; flat[`spec_text_${i}`] = sp.text; flat[`spec_src_${i}`] = sp.source_url;
-    flat[`spec_date_${i}`] = sp.dated; flat[`spec_unc_${i}`] = sp.uncertain === true;
+    flat[`spec_date_${i}`] = sp.dated; flat[`spec_unc_${i}`] = sp.uncertain === true; flat[`spec_own_${i}`] = sp.owner === true;
   });
   if (typeof raw.hook_specific === "number") flat.hook_specific = String(raw.hook_specific);
   // The override of the quality gate is the owner's, on the edit screen. Never from here.
@@ -270,25 +281,75 @@ function fieldsFrom(raw: Json) {
   return parsed.value;
 }
 
-/** The checklist as the edit screen shows it, and the messages that would be written. */
+/**
+ * The checklist as the edit screen shows it, and every message as the screens
+ * will show it: the ones written for this prospect (set-outreach), or the
+ * templates where none were.
+ */
 async function quality(id: string) {
   if (!UUID_RE.test(id)) throw new Error("quality wants the preview's id.");
   const { getPreviewById } = await import("@/lib/prospect-preview/store");
   const p = await getPreviewById(id);
   if (!p) throw new Error("No preview with that id.");
   const q = assessQuality(p);
-  const m = buildMessages(p, { link: `${APP_URL}/p/${p.slug}`, sender: null });
+  const link = `${APP_URL}/p/${p.slug}`;
+  const m = resolveOutreach(p, { link, sender: null });
   return {
     ok: true, status: p.status, score: q.score, too_generic: q.tooGeneric, overridden_by_owner: p.quality_override,
     checks: q.checks.map((c) => ({ check: c.label, done: c.ok, needed_to_publish: c.required, points: `${c.earned}/${c.points}`, ...(c.fix ? { fix: c.fix } : {}) })),
-    messages: { opens_with_the_hook: m.specific, first_text: m.ask, text_with_link: m.text, email_subject: m.email.subject, email: m.email.body },
+    specifics: p.specifics.map((sp, i) => ({ position: i, text: sp.text, verified: isVerified(sp), confirmed_by_owner: sp.owner === true })),
+    could_not_confirm: [
+      ...SOURCE_FIELDS.filter((k) => p.sources[k]?.uncertain).map((k) => `${SOURCE_LABELS[k]}: marked uncertain${p.sources[k]?.note ? ` (${p.sources[k]!.note})` : ""}`),
+      ...p.specifics.filter((sp) => !isVerified(sp)).map((sp) => `Specific not verified: ${sp.text}`),
+      ...q.checks.filter((c) => !c.ok).map((c) => `Missing: ${c.label}`),
+    ],
+    messages: {
+      written_for_this_prospect: m.written,
+      opens_with_the_hook: m.specific,
+      problems: checkOutreach(p.outreach ?? null, { link, specifics: p.specifics, complete: true }),
+      first_text: m.ask, text_with_link: m.text, email_subject: m.email.subject, email: m.email.body,
+      call_opener: callBrief(p, { sender: null }).opener, voicemail: m.voicemail,
+      nudge_no_view_after_2_days: m.nudge_no_view, nudge_viewed_no_pickup: m.nudge_viewed,
+    },
   };
+}
+
+/**
+ * { first_text, link_text, email_subject, email_body, call_opener, voicemail,
+ *   nudge_no_view, nudge_viewed,
+ *   uses: { first_text: <position in specifics>, link_text: …, email_body: …,
+ *           call_opener: …, voicemail: …, nudge_no_view: …, nudge_viewed: … } }
+ * Write {link} where the preview's link goes (link_text and email_body need
+ * it; first_text must not have it). Every message is required, each is built
+ * on a VERIFIED specific, and they use different ones where the preview has
+ * them. A text is 160 characters at most with the link in. No emojis, no
+ * "free". Refused with every problem listed; nothing is saved until it is clean.
+ */
+async function setOutreachFor(id: string, file: string) {
+  if (!UUID_RE.test(id)) throw new Error("set-outreach wants the preview's id first.");
+  const { getPreviewById } = await import("@/lib/prospect-preview/store");
+  const p = await getPreviewById(id);
+  if (!p) throw new Error("No preview with that id.");
+  const raw = readJson(file) as Json;
+  const unknown = Object.keys(raw).filter((k) => k !== "uses" && !(OUTREACH_KEYS as readonly string[]).includes(k));
+  if (unknown.length) throw new Error(`These aren't messages: ${unknown.join(", ")}. Use: ${OUTREACH_KEYS.join(", ")}, and uses.`);
+  const outreach = readOutreach({ ...raw, written_at: new Date().toISOString() });
+  const link = `${APP_URL}/p/${p.slug}`;
+  const problems = checkOutreach(outreach, { link, specifics: p.specifics, complete: true });
+  if (problems.length) throw new Error(`Not saved. ${problems.join(" ")} (A text is ${TEXT_LIMIT} characters at most once ${LINK_SLOT} becomes ${link}, which is ${link.length} characters.)`);
+  // Only a draft: a published preview's words are changed by a person, on the edit screen.
+  const { data, error } = await getAdminSupabase().from("prospect_previews")
+    .update({ outreach, updated_at: new Date().toISOString() }).eq("id", id).eq("status", "draft").select("id, slug, status");
+  if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error("No DRAFT with that id. A published preview's messages are only changed on its edit screen.");
+  return { ok: true, status: data[0].status, saved: OUTREACH_KEYS.length, ...links(data[0] as { id: string; slug: string }) };
 }
 
 const links = (p: { id: string; slug: string }) => ({
   id: p.id,
   draft_link: `${APP_URL}/admin/card-builder/preview/${p.id}`,
   edit_link: `${APP_URL}/admin/card-builder/edit/${p.id}`,
+  approve_link: `${APP_URL}/admin/card-builder/approve#p-${p.id}`,
   public_link_once_published: `${APP_URL}/p/${p.slug}`,
 });
 
@@ -394,6 +455,7 @@ async function run(args: string[]): Promise<Json> {
     case "save-leads": return saveLeads(a);
     case "create-draft": return createDraft(a);
     case "update-draft": return updateDraft(a, b);
+    case "set-outreach": return setOutreachFor(a, b);
     case "shots": return shots(a, b);
     case "colors": return colors(a, b);
     default: throw new Error(`Unknown command "${cmd}". See scripts/card-builder.mjs.`);

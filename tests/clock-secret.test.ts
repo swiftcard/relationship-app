@@ -18,6 +18,7 @@ const CLOCK_ROUTES = [
   "src/app/api/push/activation/route.ts",
   "src/app/api/account/purge-due/route.ts",
   "src/app/api/billing/trial-notice/route.ts",
+  "src/app/api/push/prospect-follow-ups/route.ts",
 ];
 
 describe("the database clock's own secret", () => {
@@ -35,7 +36,7 @@ describe("the database clock's own secret", () => {
     const sql = read("supabase/clock-push-jobs.sql");
     const calls = [...sql.matchAll(/clock_call\('([^']+)', 'https:\/\/swiftcard\.me(\/api\/[^']+)', '([^']+)'/g)];
     expect(calls.map((c) => c[2]).sort()).toEqual([
-      "/api/account/purge-due", "/api/billing/trial-notice", "/api/push/activation", "/api/push/catchup", "/api/push/recap",
+      "/api/account/purge-due", "/api/billing/trial-notice", "/api/push/activation", "/api/push/catchup", "/api/push/prospect-follow-ups", "/api/push/recap",
     ]);
     for (const c of calls) expect(c[3]).toBe("clock_secret");
     expect(sql).not.toMatch(/'push_catchup_secret'\)/);
