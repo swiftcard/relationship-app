@@ -23,19 +23,20 @@
 // Signed-in screens need SUPABASE_SERVICE_ROLE_KEY to seed throwaway Free and
 // Pro accounts (CI has it; a laptop usually does not, and then only the
 // signed-out part runs). Everything seeded is deleted in the finally block.
+import { localBase, seededAdmin } from "./lib/qa-local.mjs";
 import { chromium } from "playwright";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { newAndroidContext, nativeCalls, pressBack, ANDROID_DEVICES, ANDROID_AUDIT, NOT_ON_ANDROID, SELLING } from "./lib/android-shell.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1").replace(/\/$/, "");
-const BASE = (process.env.BASE || "https://swiftcard.me").replace(/\/$/, "");
+const BASE = localBase(process.env.BASE);
 const OUT = process.env.OUT || "qa-out/android-shell";
 mkdirSync(OUT, { recursive: true });
 // Secrets: the environment first (GitHub Actions), .env.local second (a laptop).
 const env = existsSync(`${ROOT}/.env.local`) ? readFileSync(`${ROOT}/.env.local`, "utf8") : "";
 const g = (k) => process.env[k] ?? process.env[k.replace(/^NEXT_PUBLIC_/, "")] ?? (env.match(new RegExp("^" + k + "=(.*)$", "m")) || [])[1]?.trim().replace(/^["']|["']$/g, "");
 const SB = g("NEXT_PUBLIC_SUPABASE_URL"), SVC = g("SUPABASE_SERVICE_ROLE_KEY");
-const adm = (p, i) => fetch(SB + p, { ...i, headers: { apikey: SVC, Authorization: "Bearer " + SVC, "Content-Type": "application/json", ...(i?.headers ?? {}) } });
+const adm = seededAdmin((p, i) => fetch(SB + p, { ...i, headers: { apikey: SVC, Authorization: "Bearer " + SVC, "Content-Type": "application/json", ...(i?.headers ?? {}) } }));
 
 const DEVICES = (process.env.DEVICES || "pixel-8,small-360").split(",").map((s) => s.trim()).filter(Boolean);
 const ONLY = process.env.ONLY || "";

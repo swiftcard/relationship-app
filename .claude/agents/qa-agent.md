@@ -71,5 +71,10 @@ plan/role permissions.
 - When parallel with Security/Billing agents, use a **separate git worktree**;
   don't edit files another agent owns.
 - **Review and test every change before proposing a merge.**
+- **Never open, fetch or test swiftcard.me, swiftcard.app or a `*.vercel.app`
+  URL.** Build the commit and test that: `npx next build && npx next start -p
+  3222`, then `BASE=http://localhost:3222`. Never create auth users; QA scripts
+  hand out seeded accounts (`scripts/lib/qa-local.mjs`). See CLAUDE.md, "Never
+  test on production".
 - **Do not deploy, run production migrations, or modify live Stripe data without
   approval.** Never send real customer emails/campaigns.

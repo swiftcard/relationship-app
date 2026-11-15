@@ -11,23 +11,24 @@
 //
 // ⚠️ It writes to whatever project .env.local points at. Every row it creates
 // is removed at the end, including on failure.
+import { localBase, seededAdmin } from "./lib/qa-local.mjs";
 import { chromium } from "playwright";
 import { readFileSync, mkdirSync } from "node:fs";
 import { markInternal } from "./qa-internal.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 const OUT = process.env.OUT || "app-store/screenshots/_raw";
-const BASE = process.env.BASE || "https://swiftcard.me";
+const BASE = localBase(process.env.BASE);
 mkdirSync(OUT, { recursive: true });
 
 const env = readFileSync(`${ROOT}/.env.local`, "utf8");
 const g = (k) => (env.match(new RegExp("^" + k + "=(.*)$", "m")) || [])[1]?.trim().replace(/^["']|["']$/g, "");
 const SB = g("NEXT_PUBLIC_SUPABASE_URL"), SVC = g("SUPABASE_SERVICE_ROLE_KEY");
 
-const adm = (p, i) => fetch(SB + p, {
+const adm = seededAdmin((p, i) => fetch(SB + p, {
   ...i,
   headers: { apikey: SVC, Authorization: "Bearer " + SVC, "Content-Type": "application/json", ...(i?.headers ?? {}) },
-});
+}));
 
 const stamp = Date.now().toString().slice(-8);
 // A real-looking slug: it shows on the Share options frame twice, and
@@ -43,7 +44,7 @@ let userId = null, cardId = null, browser;
 // uses, so the App Store set, the website and the demo card all tell one
 // story. Her headshot ships in this repo (public/showcase/lena.jpg), which is
 // why the screenshots can show a real face without licensing a stock photo.
-const SITE = "https://swiftcard.me";
+const SITE = BASE;
 const PHOTO = `${SITE}/showcase/lena.jpg`;
 // Warm brown, the accent of the "Linen" Look the links page now wears, so the
 // card and the links page read as one set rather than two designs. The old

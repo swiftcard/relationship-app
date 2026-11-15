@@ -23,10 +23,11 @@
  *        SPLASH_V2=1 node scripts/verify-splash.mjs   (as a build carrying the v2 launch image)
  *        SPLASH_V3=1 node scripts/verify-splash.mjs   (as a build carrying the v3 launch image)
  */
+import { localBase } from "./lib/qa-local.mjs";
 import { chromium } from "playwright";
 import { markInternal } from "./qa-internal.mjs";
 
-const BASE = process.argv[2] || "http://127.0.0.1:3111";
+const BASE = localBase(process.argv[2], "http://127.0.0.1:3111");
 const UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) SwiftCardApp" +
   (process.env.SPLASH_V3 ? " SwiftCardSplash/3" : process.env.SPLASH_V2 ? " SwiftCardSplash/2" : "");

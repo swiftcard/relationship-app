@@ -7,10 +7,11 @@
 // ubuntu-latest — so every CI run failed before loading a single page, and the
 // paint check reported "invisible content" when the site was perfectly fine. A
 // check that cries wolf is worse than no check.
+import { localBase } from "./lib/qa-local.mjs";
 import { chromium } from "playwright";
 import { markInternal } from "./qa-internal.mjs";
 
-const BASE = process.env.SWEEP_BASE || "https://swiftcard.me";
+const BASE = localBase(process.env.SWEEP_BASE);
 const PAGES = ["/", "/pricing", "/templates", "/compare", "/testimonials", "/preview", "/cards/new", "/login", "/checkout?plan=pro", "/upgrade", "/privacy", "/contact"];
 
 // Exit non-zero when anything is invisible, so CI can gate a deploy on it.

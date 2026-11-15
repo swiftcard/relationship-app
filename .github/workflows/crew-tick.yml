@@ -34,7 +34,7 @@ jobs:
         id: tick
         env:
           CREW_TICK_SECRET: ${{ secrets.CREW_TICK_SECRET }}
-          BASE: https://swiftcard.me
+          SITE: https://swiftcard.me
         run: |
           if [ -z "$CREW_TICK_SECRET" ]; then
             echo "CREW_TICK_SECRET is not set yet; nothing to do."
@@ -42,7 +42,7 @@ jobs:
             exit 0
           fi
           code=$(curl -sS -o tick.json -w '%{http_code}' --max-time 320 -X POST \
-            -H "Authorization: Bearer $CREW_TICK_SECRET" "$BASE/api/crew/tick" || echo 000)
+            -H "Authorization: Bearer $CREW_TICK_SECRET" "$SITE/api/crew/tick" || echo 000)
           cat tick.json 2>/dev/null || true
           echo
           echo "code=$code" >> "$GITHUB_OUTPUT"

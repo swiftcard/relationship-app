@@ -5,11 +5,12 @@
 // person actually waits for: TTFB, FCP, LCP, CLS, total blocking time, JS bytes,
 // request count, and console errors. Cold cache every run. Read-only, and its
 // traffic is marked internal so it never lands in the product funnel.
+import { localBase } from "./lib/qa-local.mjs";
 import { chromium, devices } from "playwright";
 import { writeFileSync } from "node:fs";
 import { markInternal } from "./qa-internal.mjs";
 
-const BASE = process.env.BASE || "https://swiftcard.me";
+const BASE = localBase(process.env.BASE);
 const PAGES = (process.env.PAGES || "/,/pricing,/templates,/login,/cards/new,/card/demo-sales,/links/demo-sales,/blog,/compare").split(",");
 const RUNS = Number(process.env.RUNS || 2);
 

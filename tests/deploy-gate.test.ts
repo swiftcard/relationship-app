@@ -49,14 +49,15 @@ describe("the deploy gate", () => {
     expect(health.indexOf("const dbMs = Date.now() - t0;")).toBeLessThan(health.indexOf("checkApnsCredentials()"));
   });
 
-  it("the nightly QA and the paint check test only a build that is live", () => {
-    for (const [file, job] of [["nightly-qa", "qa"], ["paint-check", "paint"]] as const) {
-      const wf = read(`.github/workflows/${file}.yml`);
-      expect(wf, file).toContain("run: node scripts/wait-for-live.mjs");
-      expect(wf, file).toContain("DEPLOY_SHA: ${{ github.event.deployment.sha }}");
-      expect(wf, file).toContain("live: ${{ steps.wait.outputs.live }}");
-      expect(wf, file).toMatch(new RegExp(`\\n  ${job}:\\n    needs: live\\n    if: needs\\.live\\.outputs\\.live == 'true'\\n`));
-    }
+  // Until 2026-11-15 the nightly QA and the paint check waited for a deploy to
+  // be live and then drove swiftcard.me with a real browser, once per deploy.
+  // That traffic took the site over Vercel's limits. They now test a build on
+  // the runner and have nothing to wait for (tests/qa-local-only.test.ts).
+  it("the QA run no longer waits for, or touches, the live site", () => {
+    const wf = read(".github/workflows/nightly-qa.yml");
+    expect(wf).not.toContain("wait-for-live.mjs");
+    expect(wf).not.toMatch(/^\s*deployment_status:/m);
+    expect(wf).toContain("BASE: http://localhost:3222");
   });
 
   it("the watchdog soaks a release only once it is live", () => {

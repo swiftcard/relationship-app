@@ -16,10 +16,11 @@
  * Credentials are the App Store Connect demo accounts; set
  * IAP_REVIEW_PW in the environment (never committed: the repo is public).
  */
+import { localBase } from "./lib/qa-local.mjs";
 import { chromium } from "playwright";
 import { markInternal } from "./qa-internal.mjs";
 
-const BASE = process.argv[2] || "https://swiftcard.me";
+const BASE = localBase(process.argv[2]);
 const PW = process.env.IAP_REVIEW_PW;
 if (!PW) { console.error("Set IAP_REVIEW_PW (the App Review demo password) — it is never kept in the repo."); process.exit(1); }
 const FREE = "applereview-free@swiftcard.me";

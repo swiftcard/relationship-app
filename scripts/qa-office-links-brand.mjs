@@ -16,13 +16,14 @@
 //
 // Seeds its own office, owner and teammate; deletes all of it in a finally.
 // Never touches an account it did not create. Exits non-zero on any failure.
+import { localBase, seededAdmin } from "./lib/qa-local.mjs";
 import { chromium } from "playwright";
 import { existsSync, readFileSync, mkdirSync } from "node:fs";
 import { markInternal } from "./qa-internal.mjs";
 import { signInByLink } from "./lib/qa-sign-in.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
-const BASE = process.env.BASE || "http://localhost:3222";
+const BASE = localBase(process.env.BASE, "http://localhost:3222");
 const OUT = process.env.OUT || "qa-office-links-out";
 mkdirSync(OUT, { recursive: true });
 
@@ -31,7 +32,7 @@ mkdirSync(OUT, { recursive: true });
 const env = existsSync(`${ROOT}/.env.local`) ? readFileSync(`${ROOT}/.env.local`, "utf8") : "";
 const g = (k) => process.env[k] ?? process.env[k.replace(/^NEXT_PUBLIC_/, "")] ?? (env.match(new RegExp("^" + k + "=(.*)$", "m")) || [])[1]?.trim().replace(/^["']|["']$/g, "");
 const SB = g("NEXT_PUBLIC_SUPABASE_URL"), SVC = g("SUPABASE_SERVICE_ROLE_KEY");
-const adm = (p, i) => fetch(SB + p, { ...i, headers: { apikey: SVC, Authorization: "Bearer " + SVC, "Content-Type": "application/json", ...(i?.headers ?? {}) } });
+const adm = seededAdmin((p, i) => fetch(SB + p, { ...i, headers: { apikey: SVC, Authorization: "Bearer " + SVC, "Content-Type": "application/json", ...(i?.headers ?? {}) } }));
 
 const stamp = Date.now().toString().slice(-8);
 const password = `Qa!aA1${stamp}x`;

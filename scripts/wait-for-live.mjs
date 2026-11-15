@@ -28,7 +28,9 @@ import { appendFileSync } from "node:fs";
 const BASE = (process.env.BASE || process.env.HEALTH_BASE_URL || "https://swiftcard.me").replace(/\/$/, "");
 const SHA = (process.env.DEPLOY_SHA || "").trim().toLowerCase();
 const WAIT_MINUTES = Number(process.env.WAIT_MINUTES || 45);
-const POLL_SECONDS = Number(process.env.POLL_SECONDS || 20);
+// 60s, not 20: every poll is a function call on the live site, and a held
+// deploy is polled for up to 45 minutes.
+const POLL_SECONDS = Number(process.env.POLL_SECONDS || 60);
 const REPO = process.env.GITHUB_REPOSITORY || "";
 const TOKEN = process.env.GITHUB_TOKEN || "";
 

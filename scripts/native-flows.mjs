@@ -18,17 +18,18 @@
 // it exists BEFORE the sc-boot script runs, which is the whole point — that
 // script is what decides "/" is the app rather than the marketing site, and a
 // simulation that patches it after load would test nothing.
+import { localBase, seededAdmin } from "./lib/qa-local.mjs";
 import { chromium } from "playwright";
 import { readFileSync } from "node:fs";
 import { markInternal } from "./qa-internal.mjs";
 
-const BASE = process.env.BASE || "http://127.0.0.1:3111";
+const BASE = localBase(process.env.BASE, "http://127.0.0.1:3111");
 const env = readFileSync(".env.local", "utf8");
 const g = (k) => (env.match(new RegExp("^" + k + "=(.*)$", "m")) || [])[1]?.trim().replace(/^["']|["']$/g, "");
 const SB = g("NEXT_PUBLIC_SUPABASE_URL"), ANON = g("NEXT_PUBLIC_SUPABASE_ANON_KEY"), SVC = g("SUPABASE_SERVICE_ROLE_KEY");
 const REF = new URL(SB).hostname.split(".")[0];
 
-const adm = (p, i) => fetch(SB + p, { ...i, headers: { apikey: SVC, Authorization: "Bearer " + SVC, "Content-Type": "application/json", ...(i?.headers ?? {}) } });
+const adm = seededAdmin((p, i) => fetch(SB + p, { ...i, headers: { apikey: SVC, Authorization: "Bearer " + SVC, "Content-Type": "application/json", ...(i?.headers ?? {}) } }));
 
 const fails = [];
 const ok = [];

@@ -1,4 +1,4 @@
-// node scripts/qa-share-preview.mjs   env: BASE=<url> (default https://swiftcard.me)  OUT=<dir>
+// node scripts/qa-share-preview.mjs   env: BASE=<a local build, default http://localhost:3222>  OUT=<dir>
 //                                       CARDS=a,b,c (optional — check these slugs instead of listing)
 //
 // "Any time a card link is sent and there is a preview, the preview looks
@@ -24,6 +24,7 @@
 //
 // Read-only: lists cards with the service key, renders ?embed=card (which
 // mounts no view tracker, so no owner gets a phantom view), writes nothing.
+import { localBase } from "./lib/qa-local.mjs";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
@@ -32,7 +33,7 @@ const sharp = require("sharp");
 const { chromium } = require("playwright");
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1").replace(/\/$/, "");
-const BASE = (process.env.BASE || "https://swiftcard.me").replace(/\/$/, "");
+const BASE = localBase(process.env.BASE);
 const OUT = process.env.OUT || "qa-share-preview-out";
 mkdirSync(OUT, { recursive: true });
 const env = existsSync(`${ROOT}/.env.local`) ? readFileSync(`${ROOT}/.env.local`, "utf8") : "";

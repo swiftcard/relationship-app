@@ -1,5 +1,5 @@
 // node scripts/qa-card-builder.mjs
-//   env: BASE=<public site, default https://swiftcard.me>
+//   env: BASE=<a local build, default http://localhost:3222>
 //        ADMIN_BASE=<where the admin is driven, default BASE>
 //        QA_ADMIN_EMAIL=<the throwaway admin's address; must be in that server's ADMIN_EMAILS>
 //        OUT=<dir>
@@ -35,6 +35,7 @@
 //
 // EVERYTHING IT WRITES IS DELETED in `finally`, and the last check is that
 // nothing is left.
+import { localBase, seededAdmin } from "./lib/qa-local.mjs";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createECDH, createHash, randomBytes, randomUUID } from "node:crypto";
 import { chromium } from "playwright";
@@ -42,15 +43,15 @@ import { signInByLink } from "./lib/qa-sign-in.mjs";
 import { markInternal } from "./qa-internal.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
-const BASE = (process.env.BASE || "https://swiftcard.me").replace(/\/$/, "");
-const ADMIN_BASE = (process.env.ADMIN_BASE || BASE).replace(/\/$/, "");
+const BASE = localBase(process.env.BASE);
+const ADMIN_BASE = localBase(process.env.ADMIN_BASE, BASE);
 const OUT = process.env.OUT || "qa-card-builder-out";
 mkdirSync(OUT, { recursive: true });
 const env = existsSync(`${ROOT}/.env.local`) ? readFileSync(`${ROOT}/.env.local`, "utf8") : "";
 const g = (k) => process.env[k] ?? process.env[k.replace(/^NEXT_PUBLIC_/, "")] ?? (env.match(new RegExp("^" + k + "=(.*)$", "m")) || [])[1]?.trim().replace(/^["']|["']$/g, "");
 const SB = g("NEXT_PUBLIC_SUPABASE_URL"), SVC = g("SUPABASE_SERVICE_ROLE_KEY");
 if (!SB || !SVC) { console.error("missing SUPABASE url / service role key"); process.exit(2); }
-const adm = (p, i) => fetch(SB + p, { ...i, headers: { apikey: SVC, Authorization: "Bearer " + SVC, "Content-Type": "application/json", ...(i?.headers ?? {}) } });
+const adm = seededAdmin((p, i) => fetch(SB + p, { ...i, headers: { apikey: SVC, Authorization: "Bearer " + SVC, "Content-Type": "application/json", ...(i?.headers ?? {}) } }));
 const rows = async (p) => { const r = await adm(p); const j = await r.json().catch(() => null); return Array.isArray(j) ? j : []; };
 const patch = (p, body) => adm(p, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify(body) });
 const del = (p) => adm(p, { method: "DELETE", headers: { Prefer: "return=minimal" } });

@@ -138,18 +138,23 @@ describe("the wiring", () => {
 });
 
 // Owner, 2026-11-15: "Add these as automated tests so they run on every deploy."
-describe("Card Builder is driven end to end on every deploy", () => {
+// The same day the owner ruled that nothing is tested on production (our QA
+// traffic had got swiftcard.me switched off), so it runs on a build of each
+// change that touches the app, and nightly; never on the live site.
+describe("Card Builder is driven end to end on every change to the app", () => {
   const read = (p: string) => readFileSync(p, "utf8");
   const wf = read(".github/workflows/nightly-qa.yml");
   const qa = read("scripts/qa-card-builder.mjs");
-  it("the after-deploy run starts it, and its failures reach the one incident issue", () => {
-    expect(wf).toContain("deployment_status:");
-    expect(wf).toContain("ADMIN_BASE=http://localhost:3222 OUT=nightly/card-builder node scripts/qa-card-builder.mjs || true");
+  it("the QA run starts it on the local build, and its failures reach the one incident issue", () => {
+    expect(wf).not.toMatch(/^\s*deployment_status:/m);
+    expect(wf).toContain("ADMIN_BASE: http://localhost:3222");
+    expect(wf).toContain("BASE: http://localhost:3222");
+    expect(wf).toContain("OUT=nightly/card-builder node scripts/qa-card-builder.mjs || true");
     expect(read("scripts/qa-nightly-summary.mjs")).toContain('"nightly/card-builder/failures.json"');
   });
   it("swiftcard.me's admin list is never touched: the throwaway admin exists only on the build started beside it", () => {
     expect(wf).toContain("QA_ADMIN_EMAIL: qa-cb-ci-${{ github.run_id }}@swiftcard-test.invalid");
-    expect(wf).toContain('ADMIN_EMAILS="$QA_ADMIN_EMAIL" npx next start -p 3222');
+    expect(wf).toContain('ADMIN_EMAILS="$QA_ADMIN_EMAIL" nohup npx next start -p 3222');
     expect(qa).toContain('if (!/@swiftcard-test\\.invalid$/.test(adminEmail))');
     expect(read("src/lib/admin.ts")).toContain("const ADMIN_EMAILS = (process.env.ADMIN_EMAILS ?? \"\")");
   });
