@@ -93,6 +93,21 @@ describe("the sweep", () => {
     expect(purged).toHaveLength(0);
   });
 
+  it("retries a listing that fails once, then sweeps normally", async () => {
+    let calls = 0;
+    const users = [{ id: "qa-1", email: "qa-1@swiftcard-test.invalid", created_at: at(NOW - 2 * DAY) }];
+    const admin = {
+      auth: { admin: { listUsers: async () => (++calls === 1 ? { data: null, error: {} } : { data: { users }, error: null }) } },
+    } as never;
+    expect(await purgeLeftoverQaAccounts(admin, NOW)).toBe(1);
+    expect(calls).toBe(2);
+  });
+
+  it("a listing error with an empty message still says what it was", async () => {
+    const admin = { auth: { admin: { listUsers: async () => ({ data: null, error: { name: "AuthRetryableFetchError", status: 0 } }) } } } as never;
+    await expect(purgeLeftoverQaAccounts(admin, NOW)).rejects.toThrow(/AuthRetryableFetchError/);
+  });
+
   it("runs from the daily cron, reported on failure", () => {
     const cron = readFileSync("src/app/api/reminders/route.ts", "utf8");
     expect(cron).toContain("qaAccountsPurged = await purgeLeftoverQaAccounts(supabase);");
