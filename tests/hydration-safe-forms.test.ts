@@ -23,6 +23,13 @@ describe("ProfileForm saves the DOM, not stale state", () => {
     expect(src).toMatch(/<textarea\s+name="about"\s+placeholder="A short bio/);
   });
 
+  it("the bio textarea is uncontrolled so hydration cannot wipe pre-hydration typing", () => {
+    const m = src.match(/<textarea\s+name="about"[\s\S]*?\/>/);
+    expect(m).not.toBeNull();
+    expect(m![0]).toMatch(/defaultValue=/);
+    expect(m![0]).not.toMatch(/\svalue=/);
+  });
+
   it("every text field the form state tracks has a matching name attribute", () => {
     // `handle` keys state by e.target.name, so a field without a name could
     // never have updated state either — this catches both problems at once.

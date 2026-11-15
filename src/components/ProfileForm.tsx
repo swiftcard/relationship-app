@@ -318,7 +318,10 @@ export default function ProfileForm({ profile, linkedinEnabled = false }: { prof
         <textarea
           name="about"
           placeholder="A short bio, what you do, or your services. This appears on your public card."
-          value={customization.about ?? ""}
+          // Uncontrolled on purpose: a controlled value is re-applied by React
+          // at hydration and wiped a bio typed before React attached (nightly
+          // flow, 2026-10-27). The DOM is the truth; submit reads it.
+          defaultValue={profile.customization?.about ?? ""}
           onChange={(e) => setCustomization((prev) => ({ ...prev, about: e.target.value }))}
           rows={3}
           className="w-full bg-white border border-slate-200 text-slate-900 placeholder-slate-400 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#1D4ED8] transition-colors shadow-sm resize-none"
