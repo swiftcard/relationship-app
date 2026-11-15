@@ -26,6 +26,9 @@ export function hostLabel(url: string): string {
   return u.hostname.replace(/^www\./i, "").toLowerCase();
 }
 
+/** Fictional sites used by the marketing demos — never worth a lookup. */
+const DEMO_HOSTS = new Set(["coastlinehomes.com"]);
+
 /** The host to ask for a site's icon: lowercased, no "www." — one cache entry
  *  per site, and the icon is the same for both. Null for anything that is not
  *  a plausible public hostname. */
@@ -60,6 +63,9 @@ export function faviconFor(url: string): string | null {
   const u = toUrl(url);
   if (!u) return null;
   const host = iconHost(u.hostname);
+  // The marketing demos use a made-up business; it has no icon, so asking
+  // would be a guaranteed 404 on every demo page. The monogram is the answer.
+  if (host && DEMO_HOSTS.has(host)) return null;
   return host ? `/api/link-icon?host=${encodeURIComponent(host)}` : null;
 }
 
