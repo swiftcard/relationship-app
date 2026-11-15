@@ -113,7 +113,7 @@ export default function BlogWriterView({ batch, log, posts, research, msg, tone,
           </form>
         </div>
       </section>
-      <ChatAutoRefresh active={writing} everyMs={5000} forMs={15 * 60_000} />
+      <ChatAutoRefresh active={writing} everyMs={10_000} forMs={15 * 60_000} />
 
       {batch?.status === "failed" && batch.error && (
         <p className="rounded-lg border border-red-800 bg-red-950/40 px-3 py-2 text-sm text-red-200">The last Generate didn&apos;t finish: {batch.error}</p>

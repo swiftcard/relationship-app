@@ -1,5 +1,6 @@
 "use client";
 
+import { isOwnStorageUrl } from "@/lib/own-storage";
 import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useDialogA11y } from "@/lib/use-dialog-a11y";
@@ -87,7 +88,12 @@ async function fetchHeadshotPhoto(url: string, kind: ContactImageKind): Promise<
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 4000);
-    const res = await fetch(`/api/img-proxy?url=${encodeURIComponent(url)}`, { signal: ctrl.signal });
+    // Our own storage is read directly (lib/own-storage); the proxy is for
+    // other hosts, and the fallback if the direct read fails.
+    const viaProxy = () => fetch(`/api/img-proxy?url=${encodeURIComponent(url)}`, { signal: ctrl.signal });
+    const res = isOwnStorageUrl(url)
+      ? await fetch(url, { mode: "cors", signal: ctrl.signal }).then((r) => (r.ok ? r : viaProxy()), () => viaProxy())
+      : await viaProxy();
     clearTimeout(timer);
     if (!res.ok) return null;
     const blob = await res.blob();

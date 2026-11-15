@@ -71,7 +71,8 @@ describe("the feed", () => {
   });
 
   it("refreshes while on screen, and not at all while hidden", () => {
-    expect(bell).toMatch(/setInterval\(poll, 30000\)/);
+    expect(bell).toMatch(/const BELL_POLL_MS = 60_000;/);
+    expect(bell).toMatch(/setInterval\(poll, BELL_POLL_MS\)/);
     expect(bell).toMatch(/if \(document\.visibilityState === "hidden"\) return;/);
   });
 

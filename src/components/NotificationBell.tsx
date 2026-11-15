@@ -83,6 +83,9 @@ function timeAgo(iso: string) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+/** How often an on-screen, closed bell asks for news. */
+const BELL_POLL_MS = 60_000;
+
 export default function NotificationBell({
   initialNotifications,
   cardLabels,
@@ -195,7 +198,12 @@ export default function NotificationBell({
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
 
-    const id = setInterval(poll, 30000);
+    // Once a minute (was every 30 seconds, until 2026-11): every poll is a
+    // function run, and an open dashboard made 2,880 of them a day. Nothing
+    // waits on this timer: a push announces a view the moment it happens,
+    // opening the app or coming back to the tab polls at once (above), and
+    // opening the bell reads the list fresh.
+    const id = setInterval(poll, BELL_POLL_MS);
     return () => {
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVisible);

@@ -4,6 +4,7 @@ import { isRateLimited } from "@/lib/rate-limit";
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { clientIpFromHeaders } from "@/lib/client-ip";
 import { isPaidProfile, PLAN_COLUMNS } from "@/lib/effective-plan";
+import { IMMUTABLE_CACHE_SECONDS } from "@/lib/upload-rules";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
@@ -183,7 +184,8 @@ export async function POST(req: Request) {
 
   const { error: uploadError } = await admin.storage
     .from("card-uploads")
-    .upload(path, body, { contentType, upsert: true });
+    // A year: the name is time-stamped and never rewritten (lib/upload-rules).
+    .upload(path, body, { contentType, upsert: true, cacheControl: IMMUTABLE_CACHE_SECONDS });
 
   if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 });
 

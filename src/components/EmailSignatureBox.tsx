@@ -43,6 +43,7 @@ import { escapeHtml } from "@/lib/escape";
 import { toPngExact } from "@/lib/capture-exact";
 import { capturePainted } from "@/lib/capture-verify";
 import { SIGNATURE_CAPTURE_VERSION } from "@/lib/share-capture-version";
+import { directCaptureUpload } from "@/lib/direct-upload";
 
 async function fetchAsDataUrl(url: string): Promise<string | null> {
   try {
@@ -334,10 +335,12 @@ export default function EmailSignatureBox({ cardData, template, name, company, c
       const raster = () => toPngExact(el, opts).catch(() => null);
       if (!(await capturePainted(el, cardData.name ?? "", dataUrl, w, raster))) { setCapture("error"); return null; }
       if (!aliveRef.current) return null;
-      const res = await fetch("/api/card-signature", {
+      // Straight to storage first (lib/direct-upload); the route below is the
+      // fallback and is unchanged.
+      const stored = (await directCaptureUpload("signature", dataUrl, username, SIGNATURE_CAPTURE_VERSION)) || (await fetch("/api/card-signature", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dataUrl, username, v: SIGNATURE_CAPTURE_VERSION }),
-      });
-      if (!res.ok) { setCapture("error"); return null; }
+      })).ok;
+      if (!stored) { setCapture("error"); return null; }
 
       const url = `${storageUrl}?t=${Date.now()}`;
       lastUrlRef.current = url;

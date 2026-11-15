@@ -80,8 +80,11 @@ async function open(engine: Browser, width = 390, theme: "light" | "dark" = "lig
       const ext = /image\/png/.test(req.postDataBuffer()?.toString("latin1") ?? "") ? "png" : "jpg";
       const url = `${ORIGIN}/storage/card-uploads/u1/create-${++stamp}.${ext}`;
       uploads.push(url);
-      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ url }) });
+      // /api/upload/sign (pictures go straight to storage, 2026-11) answers
+      // with where to PUT the file; the older /api/upload ignores the extras.
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ url, signedUrl: `${ORIGIN}/storage-put/create-${stamp}.${ext}`, path: `u1/create-${stamp}.${ext}` }) });
     }
+    if (u.startsWith(`${ORIGIN}/storage-put/`)) return route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
     if (u.startsWith(`${ORIGIN}/storage/`) || u.startsWith(`${ORIGIN}/logo.png`)) return route.fulfill({ status: 200, contentType: "image/png", body: PNG, headers: { "Access-Control-Allow-Origin": "*" } });
     if (u.startsWith(`${ORIGIN}/api/img-proxy`)) return route.fulfill({ status: 200, contentType: "image/png", body: PNG });
     if (u.startsWith(ORIGIN)) {
@@ -344,6 +347,8 @@ for (const engineName of ["chromium", "webkit"] as const) {
     it("an upload that never answers says so instead of spinning", async () => {
       const w = await open(engine);
       try {
+        // Both roads: the signed one a picture takes first, and the older one.
+        await w.ctx.route(`${ORIGIN}/api/upload/sign`, () => { /* never answered */ });
         await w.ctx.route(`${ORIGIN}/api/upload`, () => { /* never answered */ });
         await w.page.evaluate(() => (window as unknown as { mountBox: () => void }).mountBox());
         await w.page.locator('input[type="file"]').setInputFiles({ name: "photo.png", mimeType: "image/png", buffer: Buffer.from(PNG40.split(",")[1], "base64") });
