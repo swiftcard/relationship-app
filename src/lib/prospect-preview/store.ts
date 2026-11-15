@@ -65,6 +65,7 @@ function toPreview(row: Record<string, unknown>): ProspectPreview {
     warm_path: readWarmPath(row.warm_path),
     batch_id: (row.batch_id as string | null) ?? null,
     demo_booking_id: (row.demo_booking_id as string | null) ?? null,
+    alert_user_id: typeof row.alert_user_id === "string" ? row.alert_user_id : null,
   };
 }
 
@@ -177,10 +178,17 @@ export async function setLinkedinAccepted(id: string, on: boolean, now: Date = n
   return !error && !!data?.length;
 }
 
-/** A booking made from the preview page: tied to the prospect, and the stage moves to "meeting booked". */
+/**
+ * A booking made from the preview page: tied to the prospect, and the stage
+ * moves to "meeting booked". The booking page is public (anyone holding the
+ * link can press it), so this only ever moves a preview that is still in
+ * play: one already booked, won or lost is left exactly as the owner set it.
+ * True only when it changed something.
+ */
 export async function markMeetingBooked(id: string, bookingId: string, now: Date = new Date()): Promise<boolean> {
   const { data, error } = await getAdminSupabase().from(PREVIEWS)
-    .update({ demo_booking_id: bookingId, stage: "meeting_booked", updated_at: now.toISOString() }).eq("id", id).select("id");
+    .update({ demo_booking_id: bookingId, stage: "meeting_booked", updated_at: now.toISOString() })
+    .eq("id", id).is("demo_booking_id", null).or("stage.is.null,stage.not.in.(meeting_booked,won,lost)").select("id");
   return !error && !!data?.length;
 }
 

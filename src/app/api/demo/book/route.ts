@@ -4,7 +4,8 @@ import { isRateLimited } from "@/lib/rate-limit";
 import { clientIp } from "@/lib/client-ip";
 import { isLikelyBot } from "@/lib/bot-detection";
 import { reportError } from "@/lib/report-error";
-import { DEMO_DURATION_MS, DEMO_MIN_FILL_MS } from "@/lib/demo/config";
+import { DEMO_MIN_FILL_MS, DEMO_RULES, PREVIEW_CALL_MIN } from "@/lib/demo/config";
+import { previewForRef } from "@/lib/prospect-preview/booking";
 import { parseBookingBody } from "@/lib/demo/input";
 import { bookDemo } from "@/lib/demo/service";
 import { bookingsLastDay, queueMessages, upcomingForEmail } from "@/lib/demo/store";
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
 
   // The honeypot: a person never sees or fills it. Say yes and keep nothing.
   if (input.trap) {
-    const end = new Date(input.start.getTime() + DEMO_DURATION_MS).toISOString();
+    const end = new Date(input.start.getTime() + DEMO_RULES.durationMin * 60_000).toISOString();
     return NextResponse.json({ ok: true, booking: { id: input.id, start: input.start.toISOString(), end, meetUrl: null, email: input.details.email, calendarInvite: false } });
   }
   if (isLikelyBot(req.headers.get("user-agent"))) return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -59,11 +60,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "already_booked", start: already.starts_at, timezone: already.timezone }, { status: 409 });
     }
 
+    // Booked from a Card Builder preview (/demo?ref=<slug>): a 15-minute setup
+    // call tied to that prospect. A ref that is not a live preview is ignored.
+    const preview = input.ref ? await previewForRef(input.ref) : null;
+
     const d = input.details;
     const result = await bookDemo({
       id: input.id, name: d.name, email: d.email, phone: d.phone, company: d.company, teamSize: d.teamSize,
       role: d.role || null, crm: d.crm || null, notes: d.notes || null,
-      start: input.start, timezone: input.timezone, smsOptIn: d.smsOptIn, source: input.source,
+      start: input.start, timezone: input.timezone, smsOptIn: d.smsOptIn, source: preview ? "preview" : input.source,
+      ...(preview ? { durationMin: PREVIEW_CALL_MIN, preview } : {}),
       ipHash: createHash("sha256").update(`demo:${ip}`).digest("hex").slice(0, 32),
     }, now);
 

@@ -100,6 +100,28 @@ jobs:
         run: OUT=nightly/android-shell node scripts/qa-android-shell.mjs || true
       - name: Every screen, both widths, all plans
         run: OUT=nightly/sweep node scripts/qa-sweep.mjs || true
+      # Card Builder used end to end, the way the owner uses it (2026-11-15: "I'm
+      # not going to test this by hand"): the three buttons, the queue, Approve
+      # with version A or B, the Messages / Mail / LinkedIn buttons, a prospect
+      # opening the preview signed out, the alert, banner and push, every call
+      # outcome, and the preview's button through to a booked 15-minute call
+      # that is then canceled. The admin half runs on a build of this same
+      # commit started here, whose only admin is a throwaway address, so
+      # swiftcard.me's own admin list is never touched; the preview page and
+      # the booking run against swiftcard.me itself. The push keys are made for
+      # this run and thrown away with it.
+      - name: Card Builder end to end
+        env:
+          QA_ADMIN_EMAIL: qa-cb-ci-${{ github.run_id }}@swiftcard-test.invalid
+        run: |
+          mkdir -p nightly/card-builder
+          eval "$(node -e "const k=require('web-push').generateVAPIDKeys();console.log('export NEXT_PUBLIC_VAPID_PUBLIC_KEY='+k.publicKey+' VAPID_PRIVATE_KEY='+k.privateKey)")"
+          export OAUTH_SECRET="$(openssl rand -hex 32)"
+          npx next build > nightly/card-builder/build.log 2>&1 || true
+          ADMIN_EMAILS="$QA_ADMIN_EMAIL" npx next start -p 3222 > nightly/card-builder/server.log 2>&1 &
+          for i in $(seq 1 45); do curl -s -o /dev/null --max-time 5 http://localhost:3222/login && break; sleep 2; done
+          ADMIN_BASE=http://localhost:3222 OUT=nightly/card-builder node scripts/qa-card-builder.mjs || true
+          pkill -f "next start" || true
       - name: Summarise
         id: sum
         run: |

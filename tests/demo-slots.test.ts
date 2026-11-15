@@ -3,7 +3,7 @@ import { openDemoSlots, isOpenDemoSlot } from "@/lib/demo/slots";
 import { planReminders, withinTextHours } from "@/lib/demo/reminders";
 import { zonedWallTimeToUtc, zonedParts } from "@/lib/tz-days";
 import { fmtRange, fmtWhen, fmtWithNewYork, dayKey } from "@/lib/demo/format";
-import { teamSizeFor } from "@/lib/demo/config";
+import { bookingMinutes, demoLength, teamSizeFor } from "@/lib/demo/config";
 
 // Owner, 2026-11-03: demos Monday to Friday, 10 AM to 5 PM New York time, 30
 // minutes each; reminders halfway, the night before and the day of, in the
@@ -201,5 +201,39 @@ describe("how a demo time reads", () => {
     expect(teamSizeFor(10)).toBe("6–15");
     expect(teamSizeFor(25)).toBe("16–50");
     expect(teamSizeFor(51)).toBe("51+");
+  });
+});
+
+// Owner, 2026-11-15: a setup call booked from a Card Builder preview is 15 minutes.
+describe("15-minute setup calls (booked from a preview)", () => {
+  const now = ny(2026, 11, 9, 8);
+  it("are every quarter hour, 10:00 to 4:45, the same days and the same no-same-day rule", () => {
+    const slots = openDemoSlots(now, [], 15);
+    for (const s of slots) {
+      const p = zonedParts(s, NY);
+      expect([1, 2, 3, 4, 5]).toContain(p.dow);
+      expect(p.min % 15).toBe(0);
+      expect(p.h * 60 + p.min).toBeGreaterThanOrEqual(10 * 60);
+      expect(p.h * 60 + p.min).toBeLessThanOrEqual(16 * 60 + 45);
+    }
+    const tuesday = slots.filter((s) => zonedParts(s, NY).d === 10);
+    expect(tuesday).toHaveLength(28);
+    expect(slots.some((s) => zonedParts(s, NY).d === 9)).toBe(false);
+  });
+  it("a booked 30-minute demo closes both quarter hours it covers, and nothing else", () => {
+    const demo = { start: ny(2026, 11, 10, 11).getTime(), end: ny(2026, 11, 10, 11, 30).getTime() };
+    expect(isOpenDemoSlot(ny(2026, 11, 10, 11), now, [demo], 15)).toBe(false);
+    expect(isOpenDemoSlot(ny(2026, 11, 10, 11, 15), now, [demo], 15)).toBe(false);
+    expect(isOpenDemoSlot(ny(2026, 11, 10, 10, 45), now, [demo], 15)).toBe(true);
+    expect(isOpenDemoSlot(ny(2026, 11, 10, 11, 30), now, [demo], 15)).toBe(true);
+  });
+  it("a quarter-hour start is never a 30-minute demo, and only 15 and 30 exist", () => {
+    expect(isOpenDemoSlot(ny(2026, 11, 10, 11, 15), now)).toBe(false);
+    expect(demoLength(15)).toBe(15);
+    expect(demoLength("15")).toBe(15);
+    expect(demoLength(5)).toBe(30);
+    expect(demoLength(undefined)).toBe(30);
+    expect(bookingMinutes({ starts_at: "2026-11-10T15:00:00Z", ends_at: "2026-11-10T15:15:00Z" })).toBe(15);
+    expect(bookingMinutes({ starts_at: "2026-11-10T15:00:00Z", ends_at: "2026-11-10T15:30:00Z" })).toBe(30);
   });
 });

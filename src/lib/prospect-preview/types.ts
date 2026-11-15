@@ -223,6 +223,9 @@ export type ProspectPreview = {
   batch_id?: string | null;
   /** The setup call they booked from their preview page (lib/demo). */
   demo_booking_id?: string | null;
+  /** Null on every real preview. Set only by the automated test: its alerts
+   *  go to this one account, not to every admin (supabase/prospect-previews-qa.sql). */
+  alert_user_id?: string | null;
 };
 
 export type DeviceType = "phone" | "tablet" | "desktop";

@@ -121,11 +121,16 @@ describe("the page shows the card and one button, and never sells", () => {
     expect(view).toContain("Preview made by SwiftCard.");
   });
 
-  it("has exactly one link, and it goes to the calendar", () => {
+  it("has exactly one link, and it goes to the Office demo booking with this preview's slug", () => {
     expect(view.split("<a\n").length - 1 + (view.split("<a ").length - 1)).toBe(1);
-    expect(view).toContain("href={calendarUrl}");
+    expect(view).toContain("href={bookUrl}");
     expect(view).not.toMatch(/<Link|<form|<button/);
-    expect(read("src/app/p/[slug]/page.tsx")).toContain("process.env.PROSPECT_CALENDAR_URL");
+    const page = read("src/app/p/[slug]/page.tsx");
+    expect(page).toContain("const bookUrl = (slug: string) => `/demo?ref=${encodeURIComponent(slug)}`;");
+    // Owner, 2026-11-15: no separate calendar link, and nothing asks for one.
+    for (const f of ["src/app/p/[slug]/page.tsx", "src/app/p/[slug]/PreviewView.tsx", "src/app/admin/card-builder/CardBuilderView.tsx", "tests/tools/card-builder.tool.ts"]) {
+      expect(read(f), f).not.toContain("PROSPECT_CALENDAR_URL");
+    }
   });
 
   it("no pricing, plans, feature list or sign-up", () => {

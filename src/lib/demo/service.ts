@@ -1,7 +1,8 @@
 import { notifyAdmin } from "@/lib/admin-notify";
 import { reportError } from "@/lib/report-error";
+import { previewCallBooked, previewCallCanceled } from "@/lib/prospect-preview/booking";
 import { autoTextable } from "@/lib/sms-number";
-import { DEMO_DURATION_MS, DEMO_RULES, DEMO_TIME_ZONE } from "./config";
+import { DEMO_RULES, DEMO_TIME_ZONE, bookingMinutes, demoLength } from "./config";
 import { fmtWhenShort } from "./format";
 import { planReminders, withinTextHours } from "./reminders";
 import { isOpenDemoSlot, openDemoSlots, type Busy } from "./slots";
@@ -28,15 +29,15 @@ async function busyWindow(now: Date, { fresh = false, exceptId }: { fresh?: bool
   const from = now;
   const to = new Date(now.getTime() + (DEMO_RULES.horizonDays + 1) * DAY_MS);
   // A move leaves its own booking out of the database's blocks. The calendar
-  // still shows its event, but on the 30-minute grid that block only ever
-  // covers the time it is moving away from.
+  // still shows its event, but on the grid that block only ever covers the
+  // time it is moving away from.
   const [booked, fb] = await Promise.all([bookedBusy(from, to, exceptId), freeBusy(from, to, { fresh })]);
   return { busy: [...booked, ...(fb.ok ? fb.busy : [])], calendar: fb.ok ? "ok" : fb.reason };
 }
 
-export async function listOpenSlots(now = new Date()): Promise<{ slots: Date[]; calendar: CalendarState }> {
+export async function listOpenSlots(now = new Date(), durationMin: number = DEMO_RULES.durationMin): Promise<{ slots: Date[]; calendar: CalendarState }> {
   const { busy, calendar } = await busyWindow(now);
-  return { slots: openDemoSlots(now, busy), calendar };
+  return { slots: openDemoSlots(now, busy, demoLength(durationMin)), calendar };
 }
 
 export type BookInput = {
@@ -54,6 +55,10 @@ export type BookInput = {
   smsOptIn: boolean;
   source: string;
   ipHash: string | null;
+  /** 15 for a setup call booked from a preview; a demo's 30 otherwise. */
+  durationMin?: number;
+  /** The Card Builder preview this was booked from. */
+  preview?: { id: string; alert_user_id?: string | null } | null;
 };
 
 export type BookResult =
@@ -116,17 +121,18 @@ export async function bookDemo(input: BookInput, now = new Date()): Promise<Book
     return { ok: false, error: "save_failed" };
   }
 
+  const minutes = demoLength(input.durationMin);
   const { busy } = await busyWindow(now, { fresh: true });
-  if (!isOpenDemoSlot(input.start, now, busy)) {
+  if (!isOpenDemoSlot(input.start, now, busy, minutes)) {
     // On the grid and in the hours, but busy: someone (or the owner) has it.
-    const onGrid = isOpenDemoSlot(input.start, now, []);
+    const onGrid = isOpenDemoSlot(input.start, now, [], minutes);
     return { ok: false, error: onGrid ? "slot_taken" : "not_open" };
   }
 
   const tok = newManageToken();
   const row: DemoBooking = {
     id: input.id, status: "confirmed",
-    starts_at: input.start.toISOString(), ends_at: new Date(input.start.getTime() + DEMO_DURATION_MS).toISOString(),
+    starts_at: input.start.toISOString(), ends_at: new Date(input.start.getTime() + minutes * 60_000).toISOString(),
     name: input.name, email: input.email, phone: input.phone, company: input.company, team_size: input.teamSize,
     role: input.role, crm: input.crm, notes: input.notes, timezone: input.timezone, sms_opt_in: input.smsOptIn,
     source: input.source, manage_token_hash: tok.hash, manage_token_enc: tok.enc,
@@ -134,6 +140,7 @@ export async function bookDemo(input: BookInput, now = new Date()): Promise<Book
     calendar_error: null, calendar_checked_at: null, attendee_response: null, reconfirmed_at: null,
     canceled_at: null, canceled_by: null, cancel_reason: null, ip_hash: input.ipHash,
     created_at: now.toISOString(), updated_at: now.toISOString(),
+    ...(input.preview ? { prospect_preview_id: input.preview.id } : {}),
   };
   const saved = await insertBooking(row);
   if (!saved.ok) {
@@ -163,6 +170,8 @@ export async function bookDemo(input: BookInput, now = new Date()): Promise<Book
     href: "/admin/demos",
     dedupeKey: `demo:new:${booking.id}`,
   });
+  // Booked from a Card Builder preview: "meeting booked" there, and a push.
+  if (input.preview) await previewCallBooked(input.preview, booking);
   return { ok: true, booking, replay: false };
 }
 
@@ -192,6 +201,7 @@ export async function cancelDemo(b: DemoBooking, by: CanceledBy, reason: string 
     href: "/admin/demos",
     dedupeKey: `demo:canceled:${b.id}`,
   });
+  if (b.prospect_preview_id) await previewCallCanceled(b.prospect_preview_id, b.id, now);
   return next;
 }
 
@@ -199,13 +209,15 @@ export type MoveResult = { ok: true; booking: DemoBooking } | { ok: false; error
 
 export async function rescheduleDemo(b: DemoBooking, newStart: Date, now = new Date()): Promise<MoveResult> {
   if (b.status !== "confirmed" || new Date(b.starts_at).getTime() <= now.getTime()) return { ok: false, error: "not_movable" };
+  // A move keeps the booking's own length: a 15-minute setup call stays 15.
+  const minutes = bookingMinutes(b);
   const { busy } = await busyWindow(now, { fresh: true, exceptId: b.id });
-  if (!isOpenDemoSlot(newStart, now, busy)) {
-    return { ok: false, error: isOpenDemoSlot(newStart, now, []) ? "slot_taken" : "not_open" };
+  if (!isOpenDemoSlot(newStart, now, busy, minutes)) {
+    return { ok: false, error: isOpenDemoSlot(newStart, now, [], minutes) ? "slot_taken" : "not_open" };
   }
   const patch: Partial<DemoBooking> = {
     starts_at: newStart.toISOString(),
-    ends_at: new Date(newStart.getTime() + DEMO_DURATION_MS).toISOString(),
+    ends_at: new Date(newStart.getTime() + minutes * 60_000).toISOString(),
     reconfirmed_at: null,
   };
   const saved = await updateBooking(b.id, patch);

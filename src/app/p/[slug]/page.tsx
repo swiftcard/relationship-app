@@ -31,11 +31,9 @@ async function load(raw: string) {
   return preview && previewState(preview) === "live" ? preview : null;
 }
 
-/** Where the one button goes. https only; the booking page if it isn't set. */
-function calendarUrl(): string {
-  const v = (process.env.PROSPECT_CALENDAR_URL ?? "").trim();
-  return /^https:\/\/\S+$/.test(v) ? v : "/demo";
-}
+/** Where the one button goes: the Office demo booking, told which preview it
+ *  came from (owner, 2026-11-15; lib/prospect-preview/booking.ts). */
+const bookUrl = (slug: string) => `/demo?ref=${encodeURIComponent(slug)}`;
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -74,7 +72,7 @@ export default async function ProspectPreviewPage({ params }: { params: Promise<
   return (
     <>
       <PreviewBeacon slug={preview.slug} />
-      <PreviewView preview={preview} calendarUrl={calendarUrl()} logoSrc={paddedLogoSrc(preview, false)} />
+      <PreviewView preview={preview} bookUrl={bookUrl(preview.slug)} logoSrc={paddedLogoSrc(preview, false)} />
     </>
   );
 }

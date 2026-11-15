@@ -38,9 +38,18 @@ export async function adminUserIds(): Promise<string[]> {
   return [...new Set((data ?? []).map((p) => p.id as string))];
 }
 
+/**
+ * Whose devices hear about this preview: every admin, unless it is the
+ * automated test's own throwaway preview, which names the one account to tell
+ * so a deploy never rings the owner's phone (supabase/prospect-previews-qa.sql).
+ */
+export async function alertTargets(preview: { alert_user_id?: string | null }): Promise<string[]> {
+  return preview.alert_user_id ? [preview.alert_user_id] : adminUserIds();
+}
+
 export async function alertAdminsOfView(v: {
   viewId: string;
-  preview: { id: string; owner_name: string; office_name: string; phone: string };
+  preview: { id: string; owner_name: string; office_name: string; phone: string; alert_user_id?: string | null };
 }): Promise<void> {
   const { title, body } = alertText(v.preview);
   const path = callScreenPath(v.preview.id);
@@ -49,7 +58,7 @@ export async function alertAdminsOfView(v: {
   // on a night when no device can be reached. Never throws (lib/admin-notify).
   await notifyAdmin({ kind: "prospects", severity: "urgent", title, body, href: path, dedupeKey: `prospect-view:${v.viewId}` });
 
-  const ids = await adminUserIds();
+  const ids = await alertTargets(v.preview);
   await Promise.all(ids.map((userId) =>
     sendPushToUser(userId, {
       title,

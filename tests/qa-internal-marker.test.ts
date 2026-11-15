@@ -34,7 +34,19 @@ describe("every browser-driving script marks its traffic internal", () => {
       expect(src).toContain('from "./qa-internal.mjs"');
       // At least as many markInternal calls as newContext calls: a second
       // context added later without the marker is exactly the regression.
-      const contexts = (src.match(/newContext\(/g) ?? []).length;
+      // One named exception: Card Builder's test opens a prospect's preview in
+      // a browser that is NOT marked, because a marked browser's view is never
+      // counted (lib/prospect-preview/real-view) and counting it is the test.
+      // That browser opens /p/<slug> and nothing else, and /p feeds neither sink.
+      const unmarked = f === "qa-card-builder.mjs" ? 1 : 0;
+      if (unmarked) {
+        expect(src).toContain("const prospectCtx = await browser.newContext(");
+        const opens = src.match(/\bprospect\.goto\([^)]*\)/g) ?? [];
+        expect(opens.length).toBeGreaterThan(0);
+        for (const o of opens) expect(o, "the unmarked browser may only open a preview page").toContain("/p/${slug}`");
+        expect(src).not.toMatch(/\bprospect\.(click|fill)\(|prospect\.locator\([^)]*\)\.click\(/);
+      }
+      const contexts = (src.match(/newContext\(/g) ?? []).length - unmarked;
       const marks = (src.match(/markInternal\(/g) ?? []).length;
       expect(marks, `${f}: ${contexts} contexts, ${marks} marked`).toBeGreaterThanOrEqual(contexts);
     });

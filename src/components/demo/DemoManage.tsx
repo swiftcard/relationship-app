@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { waitForHuman } from "@/lib/human-gate";
-import { DEMO_RULES, DEMO_TIME_ZONE } from "@/lib/demo/config";
+import { DEMO_RULES, DEMO_TIME_ZONE, PREVIEW_CALL_MIN } from "@/lib/demo/config";
 import { fmtLongDay, fmtRange, fmtTime, fmtWhen, tzAbbr } from "@/lib/demo/format";
 import DemoTimePicker from "./DemoTimePicker";
 import { useDemoSlots } from "./useDemoSlots";
@@ -40,7 +40,9 @@ export default function DemoManage() {
   const [slot, setSlot] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const autoConfirm = useRef(false);
-  const slots = useDemoSlots(mode === "reschedule");
+  // A 15-minute setup call moves on the 15-minute grid; a demo on its own.
+  const minutes = view ? Math.round((Date.parse(view.end) - Date.parse(view.start)) / 60_000) : DEMO_RULES.durationMin;
+  const slots = useDemoSlots(mode === "reschedule", minutes === PREVIEW_CALL_MIN ? `len=${PREVIEW_CALL_MIN}` : "");
 
   const call = useCallback(async (t: string, body: Record<string, unknown>) => {
     const res = await fetch("/api/demo/manage", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: t, ...body }) });
@@ -160,7 +162,7 @@ export default function DemoManage() {
       )}
 
       <div className={`mt-5 rounded-2xl border p-5 ${view.status === "canceled" ? "border-slate-200 bg-slate-50" : "border-blue-100 bg-blue-50/60"}`}>
-        <p className="text-[0.6875rem] font-bold uppercase tracking-[0.08em] text-blue-700">SwiftCard Office demo · {DEMO_RULES.durationMin} min</p>
+        <p className="text-[0.6875rem] font-bold uppercase tracking-[0.08em] text-blue-700">SwiftCard Office demo · {minutes} min</p>
         <p className={`mt-1.5 font-bold text-[1.125rem] leading-snug ${view.status === "canceled" ? "text-slate-500 line-through" : "text-slate-900"}`}>{fmtLongDay(start, tz)}</p>
         <p className={`text-[0.9375rem] tabular-nums ${view.status === "canceled" ? "text-slate-400 line-through" : "text-slate-700"}`}>{fmtRange(start, end, tz)}</p>
         {showNy && <p className="text-slate-500 text-[0.8125rem] mt-0.5">{fmtTime(start, DEMO_TIME_ZONE)} New York time</p>}

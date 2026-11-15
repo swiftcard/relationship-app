@@ -1,6 +1,6 @@
 import { escapeHtml, safeUrlAttr } from "@/lib/escape";
 import { toGsm7 } from "@/lib/messaging";
-import { DEMO_RULES, DEMO_TIME_ZONE } from "./config";
+import { DEMO_TIME_ZONE, bookingMinutes } from "./config";
 import { fmtLongDay, fmtRange, fmtTime, fmtWhen, fmtWhenShort, tzAbbr, tzLabel } from "./format";
 import { manageUrl } from "./token";
 import type { DemoBooking, MessageKind } from "./store";
@@ -85,7 +85,7 @@ function prospectDetails(b: DemoBooking): string {
   const rows: [string, string][] = [
     ["When", whenCell(b, b.timezone)],
     ["Where", b.meet_url ? link(b.meet_url, "Google Meet") : "Google Meet (link to follow)"],
-    ["Length", `${DEMO_RULES.durationMin} minutes`],
+    ["Length", `${bookingMinutes(b)} minutes`],
   ];
   return details(rows);
 }
