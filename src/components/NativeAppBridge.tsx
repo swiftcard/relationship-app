@@ -76,6 +76,57 @@ export default function NativeAppBridge() {
     return () => { cancelled = true; remove?.(); };
   }, []);
 
+  // ── Status-bar icons follow the APP's theme ────────────────────────────
+  // Without an explicit style Android picks the icon colour from the PHONE's
+  // dark mode, so a light app on a dark phone shows white icons on white. The
+  // layout script marks a light theme with data-sc-theme="light"; no attribute
+  // means dark. SystemBars: LIGHT = dark icons (for a light screen).
+  useEffect(() => {
+    if (detectNativePlatform() !== "android") return;
+    let stopped = false;
+    let last = "";
+    const apply = async () => {
+      const want = document.documentElement.getAttribute("data-sc-theme") === "light" ? "LIGHT" : "DARK";
+      if (want === last) return;
+      last = want;
+      try {
+        const { SystemBars, SystemBarsStyle } = await import("@capacitor/core");
+        if (stopped) return;
+        await SystemBars.setStyle({ style: want === "LIGHT" ? SystemBarsStyle.Light : SystemBarsStyle.Dark });
+      } catch { last = ""; /* older shell without the plugin: nothing to set */ }
+    };
+    void apply();
+    const mo = new MutationObserver(() => { void apply(); });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-sc-theme"] });
+    return () => { stopped = true; mo.disconnect(); };
+  }, []);
+
+  // ── New-tab links to our own site leave for the browser on Android too ─────
+  // On iPhone the shell's createWebViewWith hands a target="_blank" link to
+  // UIApplication.open. The Android shell has no equivalent: the WebView would
+  // load "View live" (/api/self-view → the public card) inside the app, where
+  // the bounce above then has to undo it. So catch the tap here and hand the
+  // link to the browser through the same ACTION_VIEW plugin. Only swiftcard.me
+  // links — the plugin's allow-list refuses every other host anyway.
+  useEffect(() => {
+    if (detectNativePlatform() !== "android") return;
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0) return;
+      const a = (e.target as Element | null)?.closest?.("a[target=_blank]") as HTMLAnchorElement | null;
+      if (!a || !a.href) return;
+      let u: URL;
+      try { u = new URL(a.href, window.location.href); } catch { return; }
+      if (u.protocol !== "https:" || (u.hostname !== "swiftcard.me" && u.hostname !== "www.swiftcard.me")) return;
+      e.preventDefault();
+      const dest = u.pathname + u.search + u.hash;
+      import("@/lib/external-purchase")
+        .then(({ openLinkInDefaultBrowser }) => openLinkInDefaultBrowser(dest))
+        .catch(() => false);
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
+  }, []);
+
   useEffect(() => {
     if (!detectNativeApp()) return;
 

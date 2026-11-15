@@ -114,7 +114,10 @@ async function dismiss(page) {
 // The status-bar icons must follow the APP's theme, not the phone's: dark
 // icons on a light screen, light icons on a dark one.
 async function checkStatusBar(page, name) {
-  const dark = await page.evaluate(() => document.documentElement.classList.contains("dark") || document.documentElement.dataset.theme === "dark");
+  // The app's theme signal is <html data-sc-theme="light">; no attribute means
+  // dark (app/layout.tsx). This used to look for a "dark" class the app never
+  // sets, so it read every screen as light.
+  const dark = await page.evaluate(() => document.documentElement.getAttribute("data-sc-theme") !== "light");
   const calls = (await nativeCalls(page, "SystemBars")).filter((c) => c.method === "setStyle");
   const last = calls.at(-1)?.options?.style;
   const want = dark ? "DARK" : "LIGHT";
