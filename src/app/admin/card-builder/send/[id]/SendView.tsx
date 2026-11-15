@@ -106,7 +106,7 @@ export default function SendView({ p, messages, now, senderKnown, done, error }:
               <div className="flex flex-col gap-2">
                 <p className="sc-t-caption adm-faint uppercase tracking-wide">Connection note · {messages.linkedin.note.length} characters · {p.linkedin_sent_at ? `sent ${fmtDateTime(p.linkedin_sent_at)}` : "not sent yet"}</p>
                 <p className="sc-t-subhead whitespace-pre-line" style={{ overflowWrap: "anywhere" }} data-linkedin-words="note">{messages.linkedin.note}</p>
-                <div><LinkedInButton id={p.id} kind="linkedin_note" words={messages.linkedin.note} profile={p.linkedin_url}>Copy the note and open their profile</LinkedInButton></div>
+                <div><LinkedInButton id={p.id} kind="linkedin_note" words={messages.linkedin.note} profile={p.linkedin_url}>Copy note, open their profile</LinkedInButton></div>
               </div>
             )}
             <form method="post" action={post} className="flex flex-wrap items-center gap-2">
@@ -120,7 +120,7 @@ export default function SendView({ p, messages, now, senderKnown, done, error }:
               <div className="flex flex-col gap-2">
                 <p className="sc-t-caption adm-faint uppercase tracking-wide">Message after they accept · {p.linkedin_dm_at ? `sent ${fmtDateTime(p.linkedin_dm_at)}` : "not sent yet"}</p>
                 <p className="sc-t-subhead whitespace-pre-line" style={{ overflowWrap: "anywhere" }} data-linkedin-words="dm">{messages.linkedin.dm}</p>
-                <div><LinkedInButton id={p.id} kind="linkedin_dm" words={messages.linkedin.dm} profile={p.linkedin_url}>Copy the message and open their profile</LinkedInButton></div>
+                <div><LinkedInButton id={p.id} kind="linkedin_dm" words={messages.linkedin.dm} profile={p.linkedin_url}>Copy message, open their profile</LinkedInButton></div>
               </div>
             )}
           </div>
