@@ -47,16 +47,16 @@ function Card({ data }: { data: ReturnType<typeof ownerCard> }) {
   );
 }
 
-export default function PreviewView({ preview, calendarUrl, logoSrc }: {
+export default function PreviewView({ preview, bookUrl, logoSrc }: {
   preview: ProspectPreview;
-  calendarUrl: string;
+  /** The booking page for this preview: /demo?ref=<slug>. */
+  bookUrl: string;
   /** The logo with its margin added (card.ts paddedLogoSrc). Without it the raw file is drawn. */
   logoSrc?: string | null;
 }) {
   const theme = cardPageTheme(preview.brand_primary, HOUSE_TEMPLATE);
   const first = preview.owner_name.split(/\s+/)[0] || preview.owner_name;
   const team = preview.team_members;
-  const external = /^https:/.test(calendarUrl);
   const faces = team.some((m) => m.headshot);
   // Named, not linked: the page has one thing to tap, and it is the button.
   const found = SOCIAL_KEYS.filter((k) => preview.social_links[k]).map((k) => SOCIAL_LABELS[k]);
@@ -117,8 +117,7 @@ export default function PreviewView({ preview, calendarUrl, logoSrc }: {
         </section>
 
         <a
-          href={calendarUrl}
-          {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+          href={bookUrl}
           data-claim
           className="block w-full text-center rounded-2xl px-5 py-4 text-base font-semibold"
           style={{ background: theme.accent, color: theme.accentText }}

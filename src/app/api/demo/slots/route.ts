@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { isRateLimited } from "@/lib/rate-limit";
 import { clientIp } from "@/lib/client-ip";
 import { reportError } from "@/lib/report-error";
-import { DEMO_RULES, DEMO_TIME_ZONE } from "@/lib/demo/config";
+import { DEMO_RULES, DEMO_TIME_ZONE, PREVIEW_CALL_MIN, demoLength } from "@/lib/demo/config";
+import { prefillFor, previewForRef } from "@/lib/prospect-preview/booking";
 import { listOpenSlots } from "@/lib/demo/service";
 
 export const runtime = "nodejs";
@@ -18,9 +19,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
   try {
-    const { slots } = await listOpenSlots(new Date());
+    // ?ref=<preview slug>: a setup call from a Card Builder preview, 15 minutes,
+    // with the form filled in from that preview. ?len=15: the same grid, for
+    // moving a call that is already 15 minutes (the manage page).
+    const preview = await previewForRef(req.nextUrl.searchParams.get("ref"));
+    const durationMin = preview ? PREVIEW_CALL_MIN : req.nextUrl.searchParams.has("len") ? demoLength(req.nextUrl.searchParams.get("len")) : DEMO_RULES.durationMin;
+    const { slots } = await listOpenSlots(new Date(), durationMin);
     return NextResponse.json(
-      { slots: slots.map((d) => d.toISOString()), durationMin: DEMO_RULES.durationMin, businessTimeZone: DEMO_TIME_ZONE },
+      { slots: slots.map((d) => d.toISOString()), durationMin, businessTimeZone: DEMO_TIME_ZONE, ...(preview ? { prefill: prefillFor(preview) } : {}) },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (e) {

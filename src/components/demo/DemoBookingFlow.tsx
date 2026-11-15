@@ -89,8 +89,12 @@ export default function DemoBookingFlow({ variant, seats, onClose, headingId = "
   const bodyRef = useRef<HTMLDivElement>(null);
   const firstRender = useRef(true);
 
+  // /demo?ref=<slug>: opened from a Card Builder preview. Read once the page is
+  // in a browser (null until then), so the first request already carries it.
+  const [ref, setRef] = useState<string | null>(variant === "page" ? null : "");
   // Open times load as soon as the flow opens, so they are ready by step 2.
-  const slots = useDemoSlots(true);
+  const slots = useDemoSlots(ref !== null, ref ? `ref=${encodeURIComponent(ref)}` : "");
+  const minutes = slots.durationMin ?? DEMO_RULES.durationMin;
   const seatsAtOpen = useRef(seats);
 
   // Once, when the flow opens: a booking id (a second Confirm press is the same
@@ -102,9 +106,12 @@ export default function DemoBookingFlow({ variant, seats, onClose, headingId = "
     let saved: Partial<Draft> | null = null;
     try { saved = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || "null") as Partial<Draft> | null; } catch { /* storage blocked */ }
     const zone = browserZone();
+    let fromPreview = "";
+    try { fromPreview = (new URLSearchParams(window.location.search).get("ref") ?? "").slice(0, 120); } catch { /* no address */ }
     // Deferred a frame so the restore isn't a synchronous render cascade.
     const raf = requestAnimationFrame(() => {
       setTz(zone);
+      if (variant === "page") setRef(fromPreview);
       if (saved && typeof saved === "object") {
         const restored = saved;
         setDraft((d) => ({
@@ -116,7 +123,25 @@ export default function DemoBookingFlow({ variant, seats, onClose, headingId = "
       }
     });
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [variant]);
+
+  // Opened from a preview: start with what that page already shows them. Only
+  // fields still empty are filled, so nothing a person typed is replaced.
+  const prefill = slots.prefill;
+  useEffect(() => {
+    if (!prefill) return;
+    const raf = requestAnimationFrame(() => {
+      setDraft((d) => ({
+        ...d,
+        name: d.name || prefill.name,
+        company: d.company || prefill.company,
+        email: d.email || prefill.email,
+        phone: d.phone || prefill.phone,
+        teamSize: (TEAM_SIZES as readonly string[]).includes(prefill.teamSize) ? prefill.teamSize : d.teamSize,
+      }));
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [prefill]);
 
   useEffect(() => {
     if (step === "done") return;
@@ -158,6 +183,7 @@ export default function DemoBookingFlow({ variant, seats, onClose, headingId = "
         body: JSON.stringify({
           id: idRef.current, ...draft, start: slot, timezone: tz, website: trap,
           elapsedMs: Date.now() - openedAt.current, source: variant === "page" ? "page" : "pricing",
+          ...(ref ? { ref } : {}),
         }),
       });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; fields?: Record<string, string>; booking?: Booked; start?: string; timezone?: string };
@@ -197,7 +223,7 @@ export default function DemoBookingFlow({ variant, seats, onClose, headingId = "
 
   const stepIndex = STEPS.findIndex((s) => s.key === step);
   const start = slot ? new Date(slot) : null;
-  const end = start ? new Date(start.getTime() + DEMO_RULES.durationMin * 60_000) : null;
+  const end = start ? new Date(start.getTime() + minutes * 60_000) : null;
   const showNy = !!start && (fmtTime(start, tz) !== fmtTime(start, DEMO_TIME_ZONE) || tzAbbr(start, tz) !== tzAbbr(start, DEMO_TIME_ZONE));
   const scroll = variant === "dialog";
 
@@ -211,7 +237,7 @@ export default function DemoBookingFlow({ variant, seats, onClose, headingId = "
             <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.8125rem] text-slate-500">
               <span className="inline-flex items-center gap-1.5">
                 <svg viewBox="0 0 20 20" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden><circle cx="10" cy="10" r="7.25" /><path d="M10 6v4l2.5 1.5" strokeLinecap="round" /></svg>
-                {DEMO_RULES.durationMin} min
+                {minutes} min
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden><path d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" strokeLinecap="round" strokeLinejoin="round" /></svg>

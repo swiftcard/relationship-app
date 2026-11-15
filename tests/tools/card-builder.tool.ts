@@ -432,7 +432,7 @@ async function shots(id: string, dir?: string) {
   const { logoResponse } = await import("@/lib/prospect-preview/logo-server");
   const logo = logoSrc ? await logoResponse(preview.logo_url, preview.brand_primary) : null;
   const logoPng = logo?.ok ? Buffer.from(await logo.arrayBuffer()) : null;
-  const markup = renderToStaticMarkup(createElement(PreviewView, { preview, calendarUrl: "/demo", logoSrc: logoPng ? logoSrc : null }));
+  const markup = renderToStaticMarkup(createElement(PreviewView, { preview, bookUrl: "/demo", logoSrc: logoPng ? logoSrc : null }));
   const css = await appCss();
   const outDir = dir || join(tmpdir(), "card-builder-shots");
   mkdirSync(outDir, { recursive: true });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { detectNativeApp, useIsNativeApp } from "@/lib/platform";
 import SiteNav from "@/components/site/SiteNav";
@@ -23,6 +23,14 @@ export default function DemoPage() {
   useEffect(() => {
     if (detectNativeApp()) router.replace("/dashboard");
   }, [router]);
+  // /demo?ref=<slug>: opened from a Card Builder preview, where the call is a
+  // 15-minute setup call (the flow asks the server; this only words the page).
+  const [fromPreview, setFromPreview] = useState(false);
+  useEffect(() => {
+    const has = new URLSearchParams(window.location.search).has("ref");
+    const raf = requestAnimationFrame(() => setFromPreview(has));
+    return () => cancelAnimationFrame(raf);
+  }, []);
   const native = useIsNativeApp();
   if (native) return null;
 
@@ -39,7 +47,9 @@ export default function DemoPage() {
                 See SwiftCard Office <span className="hp-fill">in action.</span>
               </h1>
               <p className="hp-lede !text-[1.05rem] mt-5 max-w-[460px]">
-                A 30-minute walkthrough on Google Meet: matching cards for your whole team, every lead in one place, and the numbers per person. Bring your questions.
+                {fromPreview
+                  ? "A 15-minute setup call on Google Meet: we turn the preview you saw into matching cards for your whole team. Bring your questions."
+                  : "A 30-minute walkthrough on Google Meet: matching cards for your whole team, every lead in one place, and the numbers per person. Bring your questions."}
               </p>
               <ul className="mt-8 space-y-3 text-[0.9375rem] text-slate-700">
                 {["Pick any open weekday time", "Get a Google Meet link and a calendar invite", "Reminders before the call, and an easy way to reschedule"].map((t) => (

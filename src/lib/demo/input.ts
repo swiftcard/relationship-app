@@ -49,6 +49,8 @@ export type ParsedBooking = {
   trap: string;
   elapsedMs: number;
   source: string;
+  /** A Card Builder preview's slug (/demo?ref=…), unchecked: the API looks it up. */
+  ref: string;
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -84,6 +86,7 @@ export function parseBookingBody(body: unknown): { ok: true; value: ParsedBookin
       trap: cleanLine(b.website, 200),
       elapsedMs: Number(b.elapsedMs) || 0,
       source: cleanLine(b.source, 20) === "page" ? "page" : "pricing",
+      ref: cleanLine(b.ref, 120),
     },
   };
 }

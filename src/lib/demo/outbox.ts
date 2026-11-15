@@ -3,6 +3,7 @@ import { isOptedOut, sendRawEmail, sendSms } from "@/lib/messaging";
 import { INBOX_ADDRESS } from "@/lib/email-senders";
 import { reportError } from "@/lib/report-error";
 import { autoTextable } from "@/lib/sms-number";
+import { isTestAddress } from "./config";
 import { buildDemoEmail, buildDemoText } from "./emails";
 import { withinTextHours } from "./reminders";
 import { reconcileWithCalendar } from "./service";
@@ -38,6 +39,9 @@ async function claim(row: DemoMessage, now: Date): Promise<boolean> {
 }
 
 async function deliver(row: DemoMessage, b: DemoBooking, now: Date): Promise<Outcome> {
+  // A booking the automated test made: an email there can only bounce, and
+  // the owner is not told about a demo that is not one.
+  if (isTestAddress(b.email)) return { sent: false, skip: "test_address" };
   const isReminder = REMINDER_KINDS.includes(row.kind);
   if (isReminder || row.kind === "meet_link") {
     if (b.status !== "confirmed") return { sent: false, skip: "canceled" };

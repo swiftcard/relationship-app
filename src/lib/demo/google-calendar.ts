@@ -1,7 +1,7 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { decryptToken, encryptToken } from "@/lib/token-crypto";
 import { youtubeClient } from "@/lib/agent-connections";
-import { DEMO_CALENDAR_EMAIL_DEFAULT, DEMO_TIME_ZONE } from "./config";
+import { DEMO_CALENDAR_EMAIL_DEFAULT, DEMO_TIME_ZONE, isTestAddress } from "./config";
 import type { Busy } from "./slots";
 
 // ── The owner's Google Calendar, for demos ──────────────────────────────────
@@ -202,7 +202,8 @@ export async function createDemoEvent(input: DemoEventInput): Promise<EventResul
     description: input.description,
     start: { dateTime: input.start.toISOString(), timeZone: DEMO_TIME_ZONE },
     end: { dateTime: input.end.toISOString(), timeZone: DEMO_TIME_ZONE },
-    attendees: [{ email: input.attendee.email, displayName: input.attendee.name }],
+    // No invitation to an address that cannot exist (the automated test).
+    attendees: isTestAddress(input.attendee.email) ? [] : [{ email: input.attendee.email, displayName: input.attendee.name }],
     guestsCanInviteOthers: false,
     guestsCanModify: false,
     reminders: { useDefault: true },

@@ -28,7 +28,7 @@ export default async function StaffPreviewPage({ params }: { params: Promise<{ i
         {p.status === "live" ? "This is what the prospect sees at their link." : "Only SwiftCard staff can see this. The prospect's link doesn't open until the preview is published."}
       </p>
       <div className="rounded-2xl overflow-hidden" data-staff-preview>
-        <PreviewView preview={p} calendarUrl="#" logoSrc={paddedLogoSrc(p, true)} />
+        <PreviewView preview={p} bookUrl="#" logoSrc={paddedLogoSrc(p, true)} />
       </div>
     </Stack>
   );

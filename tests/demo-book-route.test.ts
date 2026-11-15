@@ -18,6 +18,9 @@ const st = vi.hoisted(() => ({
   events: [] as Row[],
   notified: [] as Row[],
   afterFns: [] as (() => unknown)[],
+  previews: {} as Record<string, { id: string }>,
+  previewBooked: [] as Row[],
+  previewCanceled: [] as Row[],
 }));
 
 vi.mock("next/server", async (orig) => ({ ...(await orig<typeof import("next/server")>()), after: (fn: () => unknown) => { st.afterFns.push(fn); } }));
@@ -25,6 +28,12 @@ vi.mock("@/lib/rate-limit", () => ({ isRateLimited: async () => st.rateLimited }
 vi.mock("@/lib/report-error", () => ({ reportError: async () => {} }));
 vi.mock("@/lib/admin-notify", () => ({ notifyAdmin: async (n: Row) => { st.notified.push(n); } }));
 vi.mock("@/lib/token-crypto", () => ({ encryptToken: (s: string) => `enc:${s}`, decryptToken: (s: string) => s.replace(/^enc:/, "") }));
+vi.mock("@/lib/prospect-preview/booking", () => ({
+  previewForRef: async (ref: unknown) => st.previews[String(ref)] ?? null,
+  prefillFor: () => ({ name: "Dana Reyes", company: "Harbor Realty", email: "", phone: "(212) 555-0101", teamSize: "6–15" }),
+  previewCallBooked: async (preview: { id: string }, booking: Row) => { st.previewBooked.push({ previewId: preview.id, bookingId: booking.id }); },
+  previewCallCanceled: async (previewId: string, bookingId: string) => { st.previewCanceled.push({ previewId, bookingId }); },
+}));
 vi.mock("@/lib/demo/outbox", () => ({ drainDue: async () => ({ sent: 0, skipped: 0, retry: 0 }) }));
 vi.mock("@/lib/demo/google-calendar", () => ({
   freeBusy: async () => (st.calendar === "ok" ? { ok: true, busy: st.busy } : { ok: false, reason: st.calendar === "fail" ? "unavailable" : "not_connected" }),
@@ -74,6 +83,7 @@ const post = (b: Row, ua = UA) => new NextRequest("https://swiftcard.me/api/demo
 beforeEach(() => {
   st.bookings.length = 0; st.messages.length = 0; st.events.length = 0; st.notified.length = 0; st.afterFns.length = 0;
   st.rateLimited = false; st.busy = []; st.calendar = "ok";
+  st.previews = {}; st.previewBooked.length = 0; st.previewCanceled.length = 0;
 });
 
 describe("booking a demo", () => {
@@ -177,5 +187,72 @@ describe("booking a demo", () => {
     const sms = st.messages.filter((m) => m.kind === "sms_day_of");
     expect(sms).toHaveLength(1);
     expect(sms[0].booking_id).toBe(st.bookings[0].id);
+  });
+});
+
+// Owner, 2026-11-15: the button on a Card Builder preview books through this
+// same flow. /demo?ref=<slug> → a 15-minute setup call tied to that preview.
+describe("a setup call booked from a Card Builder preview", () => {
+  const quarter = () => openDemoSlots(new Date(), [], 15).find((d) => d.getUTCMinutes() % 30 === 15)!.toISOString();
+
+  it("is 15 minutes, on the quarter hour, tied to the preview, and tells Card Builder", async () => {
+    st.previews["harbor-realty-x7k2"] = { id: "11111111-1111-4111-8111-111111111111" };
+    const { POST } = await import("@/app/api/demo/book/route");
+    const start = quarter();
+    const res = await POST(post(body({ start, ref: "harbor-realty-x7k2", source: "page" })));
+    expect(res.status).toBe(200);
+    const j = await res.json();
+    expect(Date.parse(j.booking.end) - Date.parse(j.booking.start)).toBe(15 * 60_000);
+    expect(st.bookings[0]).toMatchObject({ source: "preview", prospect_preview_id: "11111111-1111-4111-8111-111111111111" });
+    expect(st.previewBooked).toEqual([{ previewId: "11111111-1111-4111-8111-111111111111", bookingId: st.bookings[0].id }]);
+    // The same confirmation, owner email and bell row as any demo.
+    expect(st.messages.map((m) => m.kind).slice(0, 2)).toEqual(["confirmation", "owner_new"]);
+    expect(st.notified[0]).toMatchObject({ kind: "demos" });
+  });
+
+  it("pressing Confirm twice rings the phone once", async () => {
+    st.previews["harbor-realty-x7k2"] = { id: "11111111-1111-4111-8111-111111111111" };
+    const { POST } = await import("@/app/api/demo/book/route");
+    const b = body({ start: quarter(), ref: "harbor-realty-x7k2" });
+    await POST(post(b)); await POST(post(b));
+    expect(st.bookings).toHaveLength(1);
+    expect(st.previewBooked).toHaveLength(1);
+  });
+
+  it("a ref that is not a live preview books an ordinary demo: no quarter hours, no preview touched", async () => {
+    const { POST } = await import("@/app/api/demo/book/route");
+    const off = await POST(post(body({ start: quarter(), ref: "made-up-000000" })));
+    expect(off.status).toBe(400);
+    expect((await off.json()).error).toBe("not_open");
+    const ok = await POST(post(body({ ref: "made-up-000000" })));
+    expect(ok.status).toBe(200);
+    expect(st.bookings[0]).toMatchObject({ source: "pricing" });
+    expect(st.bookings[0].prospect_preview_id).toBeUndefined();
+    expect(st.previewBooked).toHaveLength(0);
+  });
+
+  it("a 15-minute call and a 30-minute demo cannot overlap", async () => {
+    st.previews["harbor-realty-x7k2"] = { id: "11111111-1111-4111-8111-111111111111" };
+    const { POST } = await import("@/app/api/demo/book/route");
+    const start = quarter(); // e.g. 10:15, inside the 10:00 demo
+    const demoStart = new Date(Date.parse(start) - 15 * 60_000).toISOString();
+    expect((await POST(post(body({ start: demoStart, email: "demo@example.com" })))).status).toBe(200);
+    const r = await POST(post(body({ start, ref: "harbor-realty-x7k2", email: "call@example.com" })));
+    expect(r.status).toBe(409);
+    expect((await r.json()).error).toBe("slot_taken");
+  });
+
+  it("canceling it puts the preview back in play; moving it keeps it 15 minutes", async () => {
+    st.previews["harbor-realty-x7k2"] = { id: "11111111-1111-4111-8111-111111111111" };
+    const { POST } = await import("@/app/api/demo/book/route");
+    const { cancelDemo, rescheduleDemo } = await import("@/lib/demo/service");
+    await POST(post(body({ start: quarter(), ref: "harbor-realty-x7k2" })));
+    const b = st.bookings[0] as never as import("@/lib/demo/store").DemoBooking;
+    const later = openDemoSlots(new Date(), [], 15).filter((d) => d.getUTCMinutes() % 30 === 15)[3];
+    const moved = await rescheduleDemo(b, later);
+    expect(moved.ok).toBe(true);
+    if (moved.ok) expect(Date.parse(moved.booking.ends_at) - Date.parse(moved.booking.starts_at)).toBe(15 * 60_000);
+    await cancelDemo(st.bookings[0] as never as import("@/lib/demo/store").DemoBooking, "prospect");
+    expect(st.previewCanceled).toEqual([{ previewId: "11111111-1111-4111-8111-111111111111", bookingId: b.id }]);
   });
 });

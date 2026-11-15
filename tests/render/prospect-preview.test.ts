@@ -102,11 +102,11 @@ async function open(width: number, markup: string, extraCss = ""): Promise<Page>
   return page;
 }
 
-async function previewMarkup(preview: ProspectPreview, calendarUrl = "https://cal.example.com/swiftcard/setup"): Promise<string> {
+async function previewMarkup(preview: ProspectPreview, bookUrl = "/demo?ref=harbor-realty-x7k2"): Promise<string> {
   const { renderToStaticMarkup } = await import("react-dom/server");
   const { createElement } = await import("react");
   const { default: PreviewView } = await import("@/app/p/[slug]/PreviewView");
-  return renderToStaticMarkup(createElement(PreviewView, { preview, calendarUrl }));
+  return renderToStaticMarkup(createElement(PreviewView, { preview, bookUrl }));
 }
 
 describe.each([390, 1280])("/p/<slug> at %ipx", (width) => {
@@ -146,7 +146,7 @@ describe.each([390, 1280])("/p/<slug> at %ipx", (width) => {
     await page.close();
   });
 
-  it("the one button is fully on screen, big enough to tap, and goes to the calendar", async () => {
+  it("the one button is fully on screen, big enough to tap, and goes to the booking page", async () => {
     const page = await open(width, await previewMarkup(PREVIEW));
     const b = await page.evaluate(() => {
       // The cards are real templates, so they contain phone and email links;
@@ -157,7 +157,7 @@ describe.each([390, 1280])("/p/<slug> at %ipx", (width) => {
       return { links: links.length, href: a.getAttribute("href"), text: a.textContent, left: r.left, right: r.right, height: r.height, vw: window.innerWidth, oneLine: r.height < 70 };
     });
     expect(b.links).toBe(1);
-    expect(b.href).toBe("https://cal.example.com/swiftcard/setup");
+    expect(b.href).toBe("/demo?ref=harbor-realty-x7k2");
     expect(b.text).toBe("Claim your team's cards, 15-min setup call");
     expect(b.left).toBeGreaterThanOrEqual(0);
     expect(b.right).toBeLessThanOrEqual(b.vw);
@@ -188,7 +188,7 @@ describe("/p/<slug> with nothing optional filled in", () => {
     expect(m.sideways).toBe(false);
     expect(m.strip).toBe(false);
     expect(m.text).not.toContain("Your team");
-    // Our own booking page opens in the same tab; an outside calendar in a new one.
+    // Our own booking page opens in the same tab.
     expect(m.target).toBeNull();
     await page.close();
   });
@@ -379,7 +379,7 @@ async function adminMarkup(props: Record<string, unknown>): Promise<string> {
   const { default: AdminShell } = await import("@/app/admin/AdminShell");
   const { default: CardBuilderView } = await import("@/app/admin/card-builder/CardBuilderView");
   const view = createElement(CardBuilderView, {
-    list: { ready: true, rows: ROWS }, appUrl: "https://swiftcard.me", now: NOW, made: null, error: null, done: null, calendarSet: true, ...props,
+    list: { ready: true, rows: ROWS }, appUrl: "https://swiftcard.me", now: NOW, made: null, error: null, done: null, ...props,
   } as React.ComponentProps<typeof CardBuilderView>);
   return renderToStaticMarkup(createElement(AdminShell, { email: "hello@swiftcard.me", unread: 2 }, view));
 }

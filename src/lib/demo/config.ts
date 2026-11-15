@@ -30,6 +30,21 @@ export const DEMO_RULES = {
 
 export const DEMO_DURATION_MS = DEMO_RULES.durationMin * 60 * 1000;
 
+/** Owner, 2026-11-15: a setup call booked from a Card Builder preview
+ *  (swiftcard.me/p/<slug> → /demo?ref=<slug>) is 15 minutes, on a 15-minute
+ *  grid inside the same hours. Everything else about it is the Office demo. */
+export const PREVIEW_CALL_MIN = 15;
+
+/** The only lengths a booking can have. Anything else reads as the demo's. */
+export function demoLength(min: unknown): number {
+  return Number(min) === PREVIEW_CALL_MIN ? PREVIEW_CALL_MIN : DEMO_RULES.durationMin;
+}
+
+/** A booking's own length in minutes, from its two times. */
+export function bookingMinutes(b: { starts_at: string; ends_at: string }): number {
+  return demoLength(Math.round((Date.parse(b.ends_at) - Date.parse(b.starts_at)) / 60_000));
+}
+
 /** What the owner's calendar and inbox are: the one Workspace mailbox. */
 export const DEMO_CALENDAR_EMAIL_DEFAULT = "hello@swiftcard.me";
 
@@ -62,6 +77,13 @@ export const DEMO_LIMITS = {
 /** The minimum time between the details form opening and Confirm. A person
  *  cannot type a name, an email, a phone and a company faster than this. */
 export const DEMO_MIN_FILL_MS = 4000;
+
+/** An address on the reserved .invalid domain (RFC 2606): no mailbox can ever
+ *  exist there. The automated tests book with one, so nothing is emailed to it
+ *  or about it, and Google is not asked to invite it. */
+export function isTestAddress(email: string): boolean {
+  return /@[^@\s]*\.invalid$/i.test(email.trim());
+}
 
 export function isValidEmail(v: string): boolean {
   return /^[^\s@<>()",;:]+@[^\s@<>()",;:]+\.[a-z]{2,}$/i.test(v.trim());

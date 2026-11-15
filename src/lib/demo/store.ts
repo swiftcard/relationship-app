@@ -38,6 +38,8 @@ export type DemoBooking = {
   canceled_by: string | null;
   cancel_reason: string | null;
   ip_hash: string | null;
+  /** The Card Builder preview a setup call was booked from (null for a demo). */
+  prospect_preview_id?: string | null;
   created_at: string;
   updated_at: string;
 };
