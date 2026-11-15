@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     if (user) return NextResponse.json({ exists: true });
   } catch { /* not signed in — fall through to the email check */ }
 
-  if (await isRateLimited(`acct-exists:${clientIp(req)}`, 30, 10 * 60 * 1000)) {
+  if (await isRateLimited(`acct-exists:${clientIp(req)}`, 120, 10 * 60 * 1000)) {
     // Fail OPEN (exists:false) so a throttled check never suppresses a genuine
     // new-visitor signup nudge.
     return NextResponse.json({ exists: false });

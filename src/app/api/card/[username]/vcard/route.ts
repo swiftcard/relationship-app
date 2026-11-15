@@ -6,6 +6,8 @@ import { isPaidPlan, PLAN_LIMITS } from "@/lib/plan";
 import { cardHeadshot } from "@/lib/card-media";
 import { fetchVCardPhoto } from "@/lib/contact-photo";
 import { renderInitialsPhoto } from "@/lib/contact-initials-photo";
+import { isRateLimited } from "@/lib/rate-limit";
+import { clientIp } from "@/lib/client-ip";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
@@ -22,10 +24,17 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 // kill-switch via isCardActive (offline / deleted-owner / plan-limit) so a card
 // that isn't publicly live can't be exported here either. buildVCard performs
 // RFC-6350 escaping, so visitor/owner-supplied fields can't inject vCard lines.
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ username: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ username: string }> }) {
   const { username: rawUsername } = await params;
   const username = rawUsername.toLowerCase();
   if (!username) return NextResponse.json({ error: "Missing card" }, { status: 400 });
+
+  // Public, and each call is three database reads plus a photo fetch. 300 per
+  // 10 minutes per address per card is more than a conference hall saving one
+  // contact, and stops a script from looping it.
+  if (await isRateLimited(`vcard:${clientIp(req)}:${username}`, 300, 10 * 60 * 1000)) {
+    return NextResponse.json({ error: "Too many requests. Please wait a few minutes." }, { status: 429 });
+  }
 
   if (!(await isCardActive(username))) {
     return NextResponse.json({ error: "Card not available" }, { status: 404 });

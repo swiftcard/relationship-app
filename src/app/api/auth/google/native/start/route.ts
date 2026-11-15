@@ -7,6 +7,8 @@ import {
   isHandoffHash,
   signNativeGoogleState,
 } from "@/lib/native-google-login";
+import { isRateLimited } from "@/lib/rate-limit";
+import { clientIp } from "@/lib/client-ip";
 
 export const runtime = "nodejs";
 
@@ -38,6 +40,13 @@ export async function GET(request: Request) {
   if (fallback) {
     console.warn(`[native-google-login] fell back to the Supabase-brokered flow: ${fallback.slice(0, 40)}`);
     return new Response(null, { status: 204 });
+  }
+
+  // Public and unauthenticated: 120 starts per 10 minutes per address is far
+  // above a whole office signing in at once, and stops a loop from running
+  // this function all day. Same redirect the app already handles on error.
+  if (await isRateLimited(`native-google-start:${clientIp(request)}`, 120, 10 * 60 * 1000)) {
+    return NextResponse.redirect(`${NATIVE_AUTH_CALLBACK}?error=oauth&reason=rate`);
   }
 
   const hs = query.get("hs");

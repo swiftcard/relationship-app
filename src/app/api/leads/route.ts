@@ -133,7 +133,12 @@ export async function POST(req: NextRequest) {
     // card_owner is normalized so "Alice " vs "alice" can't mint fresh buckets.
     const ip = clientIp(req);
     const rateKey = `${ip}:${card_owner.trim().toLowerCase()}`;
-    if (await isRateLimited(rateKey)) {
+    // 20 per 10 minutes, not the limiter's default 3 (2026-11-15): an open
+    // house or a brokerage office is many real people behind ONE address,
+    // and the fourth visitor to share their details with the same agent
+    // inside ten minutes was being turned away. The per-card ceiling below
+    // and the bot check are what stop a flood.
+    if (await isRateLimited(rateKey, 20, 10 * 60 * 1000)) {
       return NextResponse.json({ error: "Too many submissions. Please wait a few minutes." }, { status: 429 });
     }
     // …and one ceiling per CARD, whatever the IP. Rotating addresses defeated

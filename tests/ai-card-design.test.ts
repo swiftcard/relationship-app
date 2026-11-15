@@ -207,7 +207,7 @@ describe("the route's doors: paid, or a first card — Copy stays paid", () => {
 
   it("a visitor with no account yet: rate-limited per IP before any model call", () => {
     const call = route.indexOf("aiComplete(");
-    const ip = route.indexOf("isRateLimited(`design-generate:ip:${clientIp(request)}`, 15");
+    const ip = route.indexOf("isRateLimited(`design-generate:ip:${clientIp(request)}`, 60");
     expect(ip).toBeGreaterThan(-1);
     expect(ip).toBeLessThan(call);
   });
