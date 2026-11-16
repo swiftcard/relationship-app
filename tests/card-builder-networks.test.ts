@@ -37,4 +37,10 @@ describe("a network as a key that names no address", () => {
     expect(networkKey("unknown")).toBeNull();
     expect(networkKey("198.51.100.7")).not.toContain("198");
   });
+  it("a local, private or shared address is nobody's network (a local build sees everyone as 127.0.0.1)", () => {
+    for (const ip of ["127.0.0.1", "::ffff:127.0.0.1", "::1", "10.1.2.3", "172.16.0.9", "172.31.255.1", "192.168.1.20", "100.64.0.1", "169.254.1.1", "fd12:3456::1", "fe80::1", "0.0.0.0"]) {
+      expect(networkKey(ip), ip).toBeNull();
+    }
+    for (const ip of ["172.32.0.1", "100.128.0.1", "8.8.8.8", "2601:1c0::1"]) expect(networkKey(ip), ip).not.toBeNull();
+  });
 });
