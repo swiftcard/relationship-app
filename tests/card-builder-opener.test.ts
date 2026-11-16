@@ -181,3 +181,9 @@ describe("the call, and the alert text", () => {
 it("the link preview's title says the card is theirs", () => {
   expect(ogTitle("Dana Whitfield")).toBe("Dana's card, made for you");
 });
+
+it("'leads with' is a verb, not a sales word; 'more leads' is a pitch", () => {
+  const ctx2 = { owner_name: "Eric Berman", facts: ["over 100 verified five-star reviews across Google, Zillow"] };
+  expect(checkOpenerText("Hey Eric, Menash here. Over 100 five-star reviews on Google and Zillow is a lot to bury in a bio, so I made you a card that leads with them. It's yours if you want it:", ctx2)).toEqual([]);
+  expect(checkOpenerText("Hey Eric, Menash here. Over 100 five-star reviews on Google and Zillow should get you more leads, so I made you a card that shows them off. It's yours if you want it:", ctx2).join(" ")).toMatch(/a feature/);
+});

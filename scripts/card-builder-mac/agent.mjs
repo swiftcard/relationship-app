@@ -28,7 +28,8 @@
 //   node scripts/card-builder-mac/agent.mjs --dry-run  decide, never send or build
 
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
@@ -107,20 +108,55 @@ async function nextBatch() {
   return data?.[0] ?? null;
 }
 
+/**
+ * The folder the research runs in. NOT the repo: the repo holds .env.local and
+ * other secrets, and the research reads pages anyone can write, so a page
+ * could try to talk it into reading a secret and fetching an address with it
+ * in. Here there is nothing to steal: copies of the commands and the product
+ * docs, and a two-line stand-in for the Card Builder tool that runs the real
+ * one (which reads its own keys; the research never sees them).
+ */
+const RUN_DIR = join(homedir(), ".swiftcard-card-builder", "run");
+function prepareRunDir() {
+  rmSync(RUN_DIR, { recursive: true, force: true });
+  mkdirSync(join(RUN_DIR, "scripts"), { recursive: true });
+  mkdirSync(join(RUN_DIR, "work", "shots"), { recursive: true });
+  cpSync(join(ROOT, ".claude", "commands"), join(RUN_DIR, ".claude", "commands"), { recursive: true });
+  cpSync(join(ROOT, "src", "lib", "knowledge", "docs"), join(RUN_DIR, "src", "lib", "knowledge", "docs"), { recursive: true });
+  writeFileSync(join(RUN_DIR, "scripts", "card-builder.mjs"), [
+    "// Stand-in: runs the real Card Builder tool, with file arguments read from here.",
+    `import { spawnSync } from "node:child_process";`,
+    `const r = spawnSync(process.execPath, [${JSON.stringify(join(ROOT, "scripts", "card-builder.mjs"))}, ...process.argv.slice(2)], { stdio: "inherit", cwd: process.cwd() });`,
+    "process.exit(r.status ?? 1);",
+  ].join("\n"));
+}
+
+const WORK_NOTE = " Write every JSON file under ./work/ (this run has no other scratch folder), and pass ./work/shots as the out dir to the shots command.";
+
 function runClaude(prompt) {
   return new Promise((done) => {
+    prepareRunDir();
     const claude = env.CLAUDE_BIN || "claude";
     const child = spawn(claude, [
       "-p", prompt,
+      "--append-system-prompt", WORK_NOTE.trim(),
       "--permission-mode", "default",
-      // The research reads pages anyone can write, so a page could try to give
-      // it orders. It can therefore only run the Card Builder tool (which makes
-      // drafts and never sends), read, search, and write its JSON files in the
-      // temp folder: never edit this repo (this file included), never run
-      // anything else. Everything else is refused, not asked about.
-      "--allowedTools", "Bash(node scripts/card-builder.mjs:*) Read(./.claude/**) Read(./src/lib/**) Read(./docs/**) Read(//tmp/**) Read(//private/tmp/**) Read(//private/var/folders/**) WebFetch WebSearch Write(//tmp/**) Write(//private/tmp/**) Write(//private/var/folders/**)",
-      "--disallowedTools", "Edit NotebookEdit Read(./.env*) Write(./**) Bash(git:*) Bash(curl:*) Bash(rm:*)",
-    ], { cwd: ROOT, env, stdio: ["ignore", "pipe", "pipe"] });
+      // Only this folder's settings (none) and no MCP servers: nothing the
+      // owner allowed in their own Claude settings (merging PRs, say) carries over.
+      "--setting-sources", "project",
+      "--strict-mcp-config",
+      // It may run the Card Builder tool (which makes drafts and never sends),
+      // read this folder, search and read the web, and write its files in
+      // ./work (WORK_NOTE tells it so). Everything else is refused,
+      // not asked about.
+      "--allowedTools", "Bash(node scripts/card-builder.mjs:*) Read(./**) Write(./work/**) WebFetch WebSearch",
+      "--disallowedTools", "Edit NotebookEdit Grep Glob Bash(git:*) Bash(curl:*) Bash(rm:*)",
+    ], {
+      cwd: RUN_DIR,
+      // No keys in its environment either: the real tool reads its own from .env.local.
+      env: { PATH: env.PATH, HOME: env.HOME, USER: env.USER, TMPDIR: env.TMPDIR, LANG: env.LANG || "en_US.UTF-8" },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     state.child = child;
     // Keep the Mac awake while it works, and no longer.
     const awake = spawn("/usr/bin/caffeinate", ["-i", "-w", String(child.pid)], { stdio: "ignore" });
@@ -153,7 +189,10 @@ async function batches() {
   const { data: after } = await db.from("prospect_batches").select("*").eq("id", b.id).maybeSingle();
   if (!after || after.status === "finished") { state.stalls.delete(b.id); state.note = "idle"; return; }
   const built = builtOf(after);
+  const maxChunks = Math.ceil((after.wanted ?? 10) / CHUNK) * 3;
   if (built >= (after.wanted ?? 0)) { await finishBatch(b.id, null); state.stalls.delete(b.id); }
+  // A hard ceiling, kept in the database so a restart can't reset it: three times the runs the count needs.
+  else if ((after.chunks ?? 0) >= maxChunks) { await finishBatch(b.id, `stopped after ${after.chunks} runs with ${built} of ${after.wanted} built`); state.stalls.delete(b.id); }
   else if (built === before && (after.items?.length ?? 0) === (b.items?.length ?? 0)) {
     // Two runs in a row that did nothing at all: stop rather than loop all night.
     const stalls = (state.stalls.get(b.id) ?? 0) + 1;
@@ -179,9 +218,12 @@ async function finish(row, patch, previewPatch) {
 
 async function sendOne() {
   // A send that was interrupted (the Mac slept mid-send) is never retried: a double text is worse than a missed one.
-  await db.from("prospect_outbox").update({ status: "failed", error: "interrupted while sending" }).eq("status", "sending").lt("claimed_at", new Date(Date.now() - 15 * 60_000).toISOString());
+  // It may have gone: the owner is told to check Messages, and the number can't be queued again without that (outbox.ts maybe_sent).
+  await db.from("prospect_outbox").update({ status: "failed", error: "interrupted while sending: it may have gone" }).eq("status", "sending").lt("claimed_at", new Date(Date.now() - 15 * 60_000).toISOString());
 
   const s = readSenderSettings(await getSetting("sender"));
+  // The gap survives a restart: it is read back from the heartbeat the last run wrote.
+  if (state.nextSendAt === null) { const hb = await getSetting("mac_agent"); state.nextSendAt = typeof hb?.next_send_at === "string" ? hb.next_send_at : ""; }
   const notBefore = state.nextSendAt ? new Date(state.nextSendAt) : null;
   const count = await sentToday(s.tz);
   const d = sendDecision(s, { now: new Date(), sentToday: count, notBefore });
@@ -196,11 +238,17 @@ async function sendOne() {
   const { data: claimed } = await db.from("prospect_outbox").update({ status: "sending", claimed_at: new Date().toISOString() }).eq("id", row.id).eq("status", "queued").select("id");
   if (!claimed?.length) return;
 
-  const { data: p } = await db.from("prospect_previews").select("id, status, expires_at, sent_at, slug, not_imessage_at").eq("id", row.preview_id).maybeSingle();
+  const { data: p } = await db.from("prospect_previews").select("id, status, expires_at, sent_at, slug, not_imessage_at, email").eq("id", row.preview_id).maybeSingle();
   if (!p || p.status !== "live" || Date.parse(p.expires_at) <= Date.now()) return finish(row, { status: "canceled", error: "the card isn't live" });
   if (p.sent_at) return finish(row, { status: "canceled", error: "already sent another way" });
-  const { data: dnc } = await db.from("crew_suppression").select("value").eq("value", `tel:${row.phone}`).limit(1);
+  // Checked again right before sending: the list may have changed since it was queued. By number, email and the email's domain.
+  const email = String(p.email ?? "").trim().toLowerCase();
+  const dncValues = [`tel:${row.phone}`, ...(email.includes("@") ? [email, `@${email.split("@")[1]}`] : [])];
+  const { data: dnc } = await db.from("crew_suppression").select("value").in("value", dncValues).limit(1);
   if (dnc?.length) return finish(row, { status: "canceled", error: "on the do-not-contact list" });
+  // One opener per person: anything else to this number that went, or may have.
+  const { data: twin } = await db.from("prospect_outbox").select("id, status, error").eq("phone", row.phone).neq("id", row.id).in("status", ["sending", "sent", "failed"]).limit(20);
+  if ((twin ?? []).some((t) => t.status !== "failed" || /may have/.test(String(t.error ?? "")))) return finish(row, { status: "canceled", error: "this number was already texted" });
   if (p.not_imessage_at || (await knownNotIMessage(row.phone))) {
     return finish(row, { status: "not_imessage", error: "only ever an SMS conversation on this Mac" }, { not_imessage_at: new Date().toISOString() });
   }
@@ -212,6 +260,18 @@ async function sendOne() {
   } catch (e) {
     const msg = String(e?.stderr || e?.message || e).slice(0, 200);
     log("send refused", row.phone, msg);
+    // A timeout can come AFTER Messages took the text. If it is in the
+    // Messages database, it went: record it as sent, never as failed (a
+    // failed row could be queued again and text them twice).
+    await new Promise((r) => setTimeout(r, 5000));
+    const went = await outcomeOf(row.phone, started);
+    if (went === "sent" || went === "delivered" || went === "pending" || went === "sms") {
+      const at = new Date().toISOString();
+      await finish(row, { status: "sent", sent_at: at, error: `Messages reported an error but the text went (${msg.slice(0, 80)})` }, { sent_at: at, sent_channel: "text", updated_at: at });
+      await db.from("prospect_message_events").insert({ preview_id: row.preview_id, kind: "sent", message: "opener", variant: row.hook, before: row.body, after: row.body });
+      return;
+    }
+    if (went === "unknown") return finish(row, { status: "failed", error: `may have gone: ${msg}` });
     return finish(row, { status: /buddy|participant|invalid|not.*registered/i.test(msg) ? "not_imessage" : "failed", error: msg }, /buddy|participant|registered/i.test(msg) ? { not_imessage_at: new Date().toISOString() } : null);
   }
 
@@ -223,6 +283,13 @@ async function sendOne() {
     if (outcome === "failed" || outcome === "delivered") break;
   }
   const at = new Date().toISOString();
+  if (outcome === "sms") {
+    // It went, as a green text (the phone fell back to SMS). True, so it is recorded as sent; nothing more goes to this number from the Mac.
+    log("went as SMS", row.phone);
+    await finish(row, { status: "sent", sent_at: at, error: "went as an SMS, not iMessage" }, { sent_at: at, sent_channel: "text", not_imessage_at: at, updated_at: at });
+    await db.from("prospect_message_events").insert({ preview_id: row.preview_id, kind: "sent", message: "opener", variant: row.hook, before: row.body, after: row.body });
+    return;
+  }
   if (outcome === "failed") {
     log("not on iMessage", row.phone);
     return finish(row, { status: "not_imessage", error: "Messages couldn't deliver it on iMessage" }, { not_imessage_at: at });
@@ -237,7 +304,8 @@ async function sendOne() {
 
 async function listen() {
   if (state.chatRow === null) { state.chatRow = await latestRowId(); return; }
-  const { data } = await db.from("prospect_outbox").select("phone").eq("status", "sent").gte("sent_at", new Date(Date.now() - 60 * 86_400_000).toISOString()).limit(2000);
+  // Every number a send was attempted to, whatever came of it: a "stop" from any of them counts.
+  const { data } = await db.from("prospect_outbox").select("phone").not("claimed_at", "is", null).gte("created_at", new Date(Date.now() - 90 * 86_400_000).toISOString()).limit(5000);
   const phones = [...new Set((data ?? []).map((r) => r.phone))];
   const replies = await repliesFrom(phones, state.chatRow);
   for (const r of replies) {

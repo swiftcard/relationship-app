@@ -61,6 +61,6 @@ describe("the owner's settings", () => {
 });
 
 describe("a reply that means stop", () => {
-  it.each(["Stop", "STOP", "unsubscribe", "Remove me please", "Don't text me", "wrong number", "not interested, thanks"])("%s", (t) => expect(STOP_RE.test(t)).toBe(true));
-  it.each(["Who is this?", "Thanks, looks great", "Can you call me tomorrow", "I'll stop by the office"])("not: %s", (t) => expect(STOP_RE.test(t)).toBe(false));
+  it.each(["Stop", "STOP", "Stop.", "Please stop texting me", "unsubscribe", "Remove me please", "Don't text me", "wrong number", "not interested, thanks"])("%s", (t) => expect(STOP_RE.test(t)).toBe(true));
+  it.each(["Who is this?", "Thanks, looks great", "Can you call me tomorrow", "I'll stop by the office", "End of day works for me", "Cancel my 3pm, call at 4 instead"])("not: %s", (t) => expect(STOP_RE.test(t)).toBe(false));
 });

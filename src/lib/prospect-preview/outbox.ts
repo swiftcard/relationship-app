@@ -26,10 +26,11 @@ export type OutboxRow = {
   status: OutboxStatus; claimed_at: string | null; sent_at: string | null; error: string | null;
 };
 
-export type QueueResult = "queued" | "already" | "not_live" | "no_opener" | "not_mobile" | "not_imessage" | "do_not_contact" | "failed";
+export type QueueResult = "queued" | "already" | "maybe_sent" | "not_live" | "no_opener" | "not_mobile" | "not_imessage" | "do_not_contact" | "failed";
 export const QUEUE_RESULT_TEXT: Record<QueueResult, string> = {
   queued: "Queued. Your Mac sends it in your sending hours.",
-  already: "Already queued or sent.",
+  already: "Already queued or sent to this number.",
+  maybe_sent: "An earlier send to this number was interrupted and may have gone. Check your Messages before sending again.",
   not_live: "Publish the card first: the text carries its link.",
   no_opener: "No opening text was written for them yet.",
   not_mobile: "Their number isn't a mobile, so it can't get an iMessage.",
@@ -60,14 +61,32 @@ export async function queueOpener(p: ProspectPreview, appUrl: string, segment: s
     if (kind) await db().from("prospect_previews").update({ phone_kind: kind }).eq("id", p.id);
   }
   if (kind === "office") return "not_mobile";
-  const { data: dnc } = await db().from("crew_suppression").select("value").eq("value", suppressionKey(e164)).limit(1);
-  if (dnc?.length) return "do_not_contact";
+  if (await doNotContact(e164, p.email)) return "do_not_contact";
+  // One opener per PERSON, not per preview: the same number on another preview
+  // that was already texted (by the Mac or by hand) is not texted again.
+  const { data: others } = await db().from("prospect_previews").select("id, phone, sent_at").neq("id", p.id).not("sent_at", "is", null).ilike("phone", `%${e164.slice(-4)}`).limit(50);
+  if ((others ?? []).some((o) => nanp(String(o.phone)) === e164)) return "already";
+  const { data: earlier } = await db().from(OUTBOX).select("status, error").eq("phone", e164).in("status", ["queued", "sending", "sent", "failed"]).limit(20);
+  if ((earlier ?? []).some((r) => r.status !== "failed")) return "already";
+  if ((earlier ?? []).some((r) => r.status === "failed" && /^interrupted|may have/i.test(String(r.error ?? "")))) return "maybe_sent";
   const { error } = await db().from(OUTBOX).insert({
     preview_id: p.id, phone: e164, body: openerMessage(text, `${appUrl}/p/${p.slug}`), hook: openerHook(p.openers), segment, status: "queued",
   });
   // The partial unique index allows one live row per prospect: a second queue is "already".
   if (error) return error.code === "23505" ? "already" : "failed";
   return "queued";
+}
+
+/**
+ * On the do-not-contact list by number (tel:+1…), by email, or by the email's
+ * whole domain (@brokerage.com): the list is mostly emails and domains.
+ */
+export async function doNotContact(e164: string, email: string | null): Promise<boolean> {
+  const values = [suppressionKey(e164)];
+  const e = (email ?? "").trim().toLowerCase();
+  if (e.includes("@")) values.push(e, `@${e.split("@")[1]}`);
+  const { data } = await db().from("crew_suppression").select("value").in("value", values).limit(1);
+  return !!data?.length;
 }
 
 export async function listOutbox(limit = 200): Promise<OutboxRow[]> {
@@ -111,9 +130,18 @@ type Network = { key: string; at: string; from: string };
 export const OWNER_NETWORK_DAYS = 30;
 const MAX_NETWORKS = 24;
 
+/**
+ * How long a network stays "the owner's". The Mac's is home and is refreshed
+ * every few minutes, so 30 days is only a ceiling. A network the owner merely
+ * opened the admin on (a phone on a carrier that shares addresses, a café, a
+ * prospect's own office) lasts 12 hours, so it can't hide a real prospect's
+ * views for long.
+ */
+export const ADMIN_NETWORK_HOURS = 12;
 export function readNetworks(v: unknown, now: number = Date.now()): Network[] {
   if (!Array.isArray(v)) return [];
-  return v.filter((n): n is Network => !!n && typeof n.key === "string" && typeof n.at === "string" && now - Date.parse(n.at) < OWNER_NETWORK_DAYS * 86_400_000);
+  return v.filter((n): n is Network => !!n && typeof n.key === "string" && typeof n.at === "string"
+    && now - Date.parse(n.at) < (n.from === "mac" ? OWNER_NETWORK_DAYS * 86_400_000 : ADMIN_NETWORK_HOURS * 3_600_000));
 }
 
 /** Remember the network `ip` belongs to. Writes at most once an hour per network. */
@@ -123,7 +151,9 @@ export async function rememberOwnerNetwork(ip: string, from: string, now: Date =
   const list = readNetworks(await getSetting("owner_networks"), now.getTime());
   const had = list.find((n) => n.key === key);
   if (had && now.getTime() - Date.parse(had.at) < 3_600_000) return;
-  const next = [{ key, at: now.toISOString(), from }, ...list.filter((n) => n.key !== key)].slice(0, MAX_NETWORKS);
+  // A network the Mac vouched for stays the Mac's: an admin visit never shortens it.
+  const source = had?.from === "mac" ? "mac" : from;
+  const next = [{ key, at: now.toISOString(), from: source }, ...list.filter((n) => n.key !== key)].slice(0, MAX_NETWORKS);
   await setSetting("owner_networks", next);
 }
 

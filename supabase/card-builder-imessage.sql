@@ -68,6 +68,9 @@ create table if not exists public.prospect_outbox (
 );
 -- One live opener per prospect: queued, being sent, or sent. Canceled and failed rows don't block a retry.
 create unique index if not exists prospect_outbox_one_per_prospect on public.prospect_outbox (preview_id) where status in ('queued', 'sending', 'sent');
+-- And one per PERSON: the same number on two previews (built twice, in two
+-- batches) never gets two openers.
+create unique index if not exists prospect_outbox_one_per_phone on public.prospect_outbox (phone) where status in ('queued', 'sending', 'sent');
 create index if not exists prospect_outbox_status_idx on public.prospect_outbox (status, created_at);
 create index if not exists prospect_outbox_sent_idx on public.prospect_outbox (sent_at desc) where status = 'sent';
 

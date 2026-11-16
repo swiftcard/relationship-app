@@ -62,7 +62,8 @@ export async function knownNotIMessage(e164) {
 }
 
 /**
- * What became of the message just sent to `e164`: "delivered", "failed"
+ * What became of the message just sent to `e164`: "delivered", "sms" (it went,
+ * but as a green text), "failed"
  * (Messages couldn't deliver it on iMessage), "sent" (left this Mac, delivery
  * not confirmed yet) or "unknown" (chat.db can't be read).
  */
@@ -75,7 +76,8 @@ export async function outcomeOf(e164, sinceMs) {
   if (rows === null) return "unknown";
   const m = rows[0];
   if (!m) return "unknown";
-  if (Number(m.error) !== 0 || (m.service && m.service !== "iMessage")) return "failed";
+  if (Number(m.error) !== 0) return "failed";
+  if (m.service && m.service !== "iMessage") return "sms";
   if (Number(m.delivered) === 1) return "delivered";
   return Number(m.sent) === 1 ? "sent" : "pending";
 }
@@ -96,5 +98,10 @@ export async function latestRowId() {
   return rows?.[0]?.id ?? 0;
 }
 
-/** "Stop", "unsubscribe", "remove me", "don't text me", "wrong number": they never hear from us again. */
-export const STOP_RE = /^\s*(stop|stop all|unsubscribe|cancel|end|quit|remove( me)?|take me off|do ?n[o']t (text|message|contact)|not interested|wrong number|leave me alone)\b/i;
+/**
+ * "Stop", "unsubscribe", "remove me", "don't text me", "wrong number": they
+ * never hear from us again. The one-word carrier keywords only count as the
+ * WHOLE reply, so "End of day works" or "Cancel my 3pm, call at 4" is a hot
+ * lead, not an opt-out.
+ */
+export const STOP_RE = /^\s*(?:(?:stop|stop all|unsubscribe|cancel|end|quit|stopall)\s*[.!]*\s*$|(?:please\s+)?(?:stop texting|remove me|take me off|do ?n[o']t (?:text|message|contact)|not interested|wrong number|leave me alone|unsubscribe me)\b)/i;

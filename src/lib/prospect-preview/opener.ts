@@ -138,7 +138,8 @@ const BANNED: [RegExp, string][] = [
   [/\b(touch(ing)? base|circle back|just checking in|following up)\b/i, "filler"],
   [/\b(game[- ]?changer|revolutionary|cutting[- ]edge|next[- ]level|amazing|incredible|awesome|exclusive|act now|limited time|guarantee)/i, "hype"],
   [/\b(free|price|pricing|cost|discount|trial|\$\d|subscription|sign up|signup|demo|book a call)\b/i, "a price or a pitch"],
-  [/\b(nfc|qr|crm|integrat\w*|features?|leads?|analytics|dashboard|app)\b/i, "a feature"],
+  // "leads" the noun (a sales pitch), not the verb ("a card that leads with them").
+  [/\b(nfc|qr|crm|integrat\w*|features?|analytics|dashboard|app|lead (capture|gen\w*)|(more|new|capture|collect|get) leads)\b/i, "a feature"],
   [/\bswift ?card\b/i, "the company name (it's a text from Menash, not from a company)"],
   [/\b(track\w*|notif\w*|alerts?|see when|who opens|opens? it|opened|views?|viewed|watching)\b/i, "tracking"],
 ];
