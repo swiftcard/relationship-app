@@ -350,7 +350,7 @@ describe("learning from the owner", () => {
     const route = code("src/app/api/admin/card-builder/[id]/route.ts");
     expect(route).toMatch(/outreachEdits\(p\.outreach \?\? null, outreach\)\.map\(\(e\) => \(\{ preview_id: id, kind: "edit" as const/);
     expect(route).toContain('kind: "pick", message: "first_text", variant: pick');
-    expect(route).toContain('kind: "sent", message: kind, variant: kind === "ask" && m.versions ? m.versions.picked : null');
+    expect(route).toContain('kind: "sent", message: kind, variant: kind === "opener" ? openerHook(p.openers) : kind === "ask" && m.versions ? m.versions.picked : null');
   });
 
   it("the style notes are the owner's own words: their edits, their picks, and what they reworded before sending", () => {

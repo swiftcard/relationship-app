@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
 import { listEvents, listQueue, recentBatches } from "@/lib/prospect-preview/desk";
-import { batchBrief, messageStats, type BatchBrief } from "@/lib/prospect-preview/learn";
+import { batchBrief, messageStats, openerStats, type BatchBrief } from "@/lib/prospect-preview/learn";
 import { listPreviews } from "@/lib/prospect-preview/store";
 import CardBuilderView from "./CardBuilderView";
 
@@ -21,11 +21,11 @@ export default async function CardBuilderPage({ searchParams }: { searchParams: 
   // The admin layout is NOT a security boundary; every data page checks.
   if (!(await requireAdmin())) notFound();
   const sp = await searchParams;
-  const [list, queue, batches, events] = await Promise.all([listPreviews(), listQueue().catch(() => []), recentBatches(3).catch(() => []), listEvents().catch(() => [])]);
+  const [list, queue, batches, events] = await Promise.all([listPreviews(), listQueue().catch(() => []), recentBatches(50).catch(() => []), listEvents().catch(() => [])]);
   const now = new Date();
   const rows = list.ready ? list.rows : [];
   let brief: BatchBrief | null = null;
-  for (const b of batches) {
+  for (const b of batches.filter((x) => x.status !== "requested").slice(0, 3)) {
     const made = batchBrief(b, rows);
     const fresh = now.getTime() - Date.parse(b.finished_at ?? b.created_at) < BRIEF_DAYS * 24 * 60 * 60 * 1000;
     // Running, or finished with drafts still waiting (or just finished, to say what was skipped).
@@ -42,6 +42,7 @@ export default async function CardBuilderPage({ searchParams }: { searchParams: 
       queueCount={queue.length}
       brief={brief}
       stats={messageStats(events, rows)}
+      openRates={openerStats(events, rows, new Map(batches.map((b) => [b.id, b.label])))}
     />
   );
 }

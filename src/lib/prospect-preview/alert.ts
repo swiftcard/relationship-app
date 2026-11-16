@@ -2,7 +2,10 @@ import { adminEmailList } from "@/lib/admin";
 import { notifyAdmin } from "@/lib/admin-notify";
 import { sendPushToUser } from "@/lib/push";
 import { getAdminSupabase } from "@/lib/supabase-admin";
+import { sendSms } from "@/lib/messaging";
+import { openAlertText } from "./opener";
 import { alertText } from "./real-view";
+import type { ProspectPreview } from "./types";
 
 // ── Card Builder: "[Owner] is viewing their card. Call [phone]." ────────────
 //
@@ -47,9 +50,18 @@ export async function alertTargets(preview: { alert_user_id?: string | null }): 
   return preview.alert_user_id ? [preview.alert_user_id] : adminUserIds();
 }
 
+/**
+ * 4. a TEXT to the owner's own phone (OWNER_ALERT_PHONE), on the first alert
+ *    of a preview in a day (owner, 2026-11-16): name, company, the number to
+ *    tap, the opener they got, three talking points and a first line for the
+ *    call that doesn't give away that we saw them open it (opener.ts). Not
+ *    for the automated test's preview, which must never reach a real phone.
+ */
 export async function alertAdminsOfView(v: {
   viewId: string;
-  preview: { id: string; owner_name: string; office_name: string; phone: string; alert_user_id?: string | null };
+  preview: Pick<ProspectPreview, "id" | "owner_name" | "office_name" | "phone"> & Partial<ProspectPreview>;
+  /** No alert has rung for this preview in the last 24 hours: the text goes too. */
+  firstToday?: boolean;
 }): Promise<void> {
   const { title, body } = alertText(v.preview);
   const path = callScreenPath(v.preview.id);
@@ -71,4 +83,15 @@ export async function alertAdminsOfView(v: {
       sticky: true,
     }).catch(() => {}),
   ));
+
+  const ownerPhone = process.env.OWNER_ALERT_PHONE;
+  if (v.firstToday && ownerPhone && !v.preview.alert_user_id) {
+    await sendSms(ownerPhone, openAlertText({ specifics: [], team_size: null, sources: {}, current_tool: null, hook_why: null, ...v.preview }, { sentText: await lastOpenerSent(v.preview.id) })).catch(() => {});
+  }
+}
+
+/** The opener this prospect was actually sent (the Mac or a Send tap records it). */
+async function lastOpenerSent(previewId: string): Promise<string | null> {
+  const { data } = await getAdminSupabase().from("prospect_message_events").select("after").eq("preview_id", previewId).eq("kind", "sent").eq("message", "opener").order("at", { ascending: false }).limit(1);
+  return (data?.[0]?.after as string | null | undefined) ?? null;
 }

@@ -6,7 +6,8 @@ import { StatusBadge } from "../_ui/badges";
 import { Icon } from "../_ui/icons";
 import { fmtDate, fmtDateTime, timeAgo } from "../_ui/format";
 import { telHref } from "@/lib/prospect-preview/input";
-import { STAT_LABELS, type BatchBrief, type MessageStat } from "@/lib/prospect-preview/learn";
+import { STAT_LABELS, type BatchBrief, type MessageStat, type OpenRate } from "@/lib/prospect-preview/learn";
+import { OPENER_HOOK_LABELS, isOpenerHook } from "@/lib/prospect-preview/opener";
 import { approvalQueue, followUps, STAGE_LABELS, STAGES, stageCounts, stageOf, type Stage } from "@/lib/prospect-preview/pipeline";
 import { assessQuality } from "@/lib/prospect-preview/quality";
 import { previewState } from "@/lib/prospect-preview/real-view";
@@ -188,7 +189,28 @@ function Stats({ stats }: { stats: MessageStat[] }) {
   );
 }
 
-export default function CardBuilderView({ list, appUrl, now, made, error, done, queueCount = 0, brief = null, stats = [] }: {
+/** Owner, 2026-11-16: "track open rate by hook and segment in the admin so we learn what works". */
+function OpenRates({ title, rows, label }: { title: string; rows: OpenRate[]; label: (k: string) => string }) {
+  if (!rows.length) return null;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full sc-t-footnote" data-open-rates={title}>
+        <thead><tr className="adm-muted text-left"><th className="font-medium py-1.5 pr-3">{title}</th><th className="font-medium py-1.5 px-2 text-right">Sent</th><th className="font-medium py-1.5 px-2 text-right">Opened</th><th className="font-medium py-1.5 pl-2 text-right">Rate</th></tr></thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.key}>
+              <td className="py-1.5 pr-3">{label(r.key)}</td>
+              <td className="py-1.5 px-2 text-right tabular-nums">{r.sent}</td><td className="py-1.5 px-2 text-right tabular-nums">{r.opened}</td>
+              <td className="py-1.5 pl-2 text-right tabular-nums">{Math.round((100 * r.opened) / r.sent)}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export default function CardBuilderView({ list, appUrl, now, made, error, done, queueCount = 0, brief = null, stats = [], openRates = { byHook: [], bySegment: [] } }: {
   list: PreviewList;
   appUrl: string;
   /** The time the page was made (server), so the view stays pure. */
@@ -202,6 +224,8 @@ export default function CardBuilderView({ list, appUrl, now, made, error, done, 
   brief?: BatchBrief | null;
   /** What happened after each kind of message (lib/prospect-preview/learn). */
   stats?: MessageStat[];
+  /** Openers sent, and how many of those prospects then really opened their card. */
+  openRates?: { byHook: OpenRate[]; bySegment: OpenRate[] };
 }) {
   const linkOf = (slug: string) => `${appUrl}/p/${slug}`;
   const outcome = done ? DONE[done] ?? null : null;
@@ -234,6 +258,10 @@ export default function CardBuilderView({ list, appUrl, now, made, error, done, 
             <BigButton href="/admin/card-builder/follow-up" count={toChase} label="Call and follow up" hint={toChase ? "Each with its words ready" : "Nobody to chase today"} primary={toChase > 0} />
             <BigButton href="/admin/card-builder/add" count={queueCount} label="Add" hint={queueCount ? "In the queue for the next run" : "Names, links or notes"} primary={false} />
           </nav>
+          <p className="sc-t-subhead flex flex-wrap gap-x-4 gap-y-1" data-more-links>
+            <Link href="/admin/card-builder/batch" className="adm-link" data-new-batch-link>New batch (up to 100)</Link>
+            <Link href="/admin/card-builder/sender" className="adm-link">iMessage sender</Link>
+          </p>
 
           <details data-section="details">
             <summary className="adm-link sc-t-subhead cursor-pointer">Details</summary>
@@ -252,6 +280,13 @@ export default function CardBuilderView({ list, appUrl, now, made, error, done, 
               </Section>
               <Section title="What's working" hint="For each message you sent: how many prospects it went to, and how many of them then viewed their card, picked up, and booked. With only a few sends this is what happened, not proof of what works.">
                 <Stats stats={stats} />
+                {(openRates.byHook.length > 0 || openRates.bySegment.length > 0) && (
+                  <div className="mt-4 space-y-4" data-opener-rates>
+                    <p className="sc-t-footnote adm-muted">Opening texts: how many went out, and how many of those people then really opened their card.</p>
+                    <OpenRates title="Hook" rows={openRates.byHook} label={(k) => (isOpenerHook(k) ? OPENER_HOOK_LABELS[k] : k)} />
+                    <OpenRates title="Segment" rows={openRates.bySegment} label={(k) => k} />
+                  </div>
+                )}
               </Section>
             </div>
           </details>

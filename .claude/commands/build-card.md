@@ -159,6 +159,13 @@ doesn't.
      person, leave it out. Read only what the profile shows to someone who
      isn't signed in. **Never sign in to LinkedIn, and never send anything
      there**: the owner does that by hand.
+   - **their mobile number** first: the opening text goes to it over iMessage,
+     and only a cell can get one. Look for "cell", "mobile" or "c:" on their
+     own profile page, their brokerage profile, Zillow or Realtor.com. Put
+     `"phone_kind": "mobile"` in the draft only when a page says it is their
+     cell; `"office"` for a main line or desk phone; leave it out when unsure.
+     `create-draft` checks it with Twilio where it can and corrects it. (Run
+     `node scripts/card-builder.mjs phone-type <phone>` to ask on its own.)
    - phone and email: their direct line and own email when their own site or
      brokerage profile publishes them; otherwise the office line. Say which it
      is in the phone source's `note` ("Her mobile, on her profile page")
@@ -356,7 +363,81 @@ doesn't.
    `quality <id>` once more: it returns every message as the screens will
    show it. Copy them from there into your reply.
 
+10. **Write the opening text. Spend most of your effort here.** This is the
+   one text that goes from the owner's own number over iMessage, with the
+   link, and the owner's words for it are: *"The only goal is one tap on the
+   link. The card is a gift I already made for them, with their face and their
+   name on it. People always want to see themselves. If it sounds generic,
+   nobody taps."*
+
+   Write **five**, each on a **different hook**, then score each one. Hooks
+   (`hook`), each built on a verified specific (`uses`, its position):
+
+   | hook | the detail that proves you looked |
+   |---|---|
+   | `listing` | a listing, **by street name** ("your listing on Cedar Ln") |
+   | `team` | their team **and its size** ("you and the 14 agents on your Manhasset team"); may use `team_size` instead of a specific when it isn't marked uncertain |
+   | `reviews` | their review count, as the page shows it ("your 212 Zillow reviews") |
+   | `niche` | their niche or neighborhood, said the way they say it ("North Shore co-ops", "first-time buyers in Astoria") |
+   | `recent` | a recent closing or news item ("the Plandome Rd sale last month", "the Newsday piece on your team") |
+   | `warm` | only with a warm path: the person you both know |
+
+   Fewer than five only when the facts can't carry five different hooks
+   without inventing one (three at the least). **Never invent a fact to
+   reach five.** No reviews on any page means no `reviews` opener.
+
+   Every opener:
+   - **starts `Hey <First name>, Menash here.`** (or `Hi <First>, it's Menash.`):
+     they don't have his number
+   - names **one** real, specific detail from the facts. Never a compliment.
+   - says he **made them a card** that shows that thing off. Casual: no pitch,
+     no features, no price, never the company name, **never anything about
+     tracking, views, alerts or knowing when it's opened**
+   - is **2–3 short sentences after the greeting, about 150–220 characters**
+     (130–230 at the outside), one paragraph, **no link**: the tool puts the
+     link alone on the last line
+   - sounds like a real person texting a professional contact: no emojis, no
+     exclamation marks, no hype
+   - never says "reaching out", "hope this finds you well", "quick question",
+     "platform", "solution", "boost", "elevate", "#1", "free", "demo"
+   - **swap test:** if it would still make sense sent to someone else, rewrite it
+
+   The owner's examples of the voice (don't copy them):
+
+   > Hey Dana, Menash here. Saw your listing on Cedar Ln in Great Neck, so I made you a card that shows it off with your reviews and contact info. It's yours if you want it:
+
+   > Hi Mike, it's Menash. I put together cards for you and the 14 agents on your Manhasset team so everyone matches. Figured you'd want to see it:
+
+   Ending on "it's yours if you want it:" or "figured you'd want to see it:"
+   works because the link is the next line. Read `style` first (step 9): the
+   owner's edits to earlier openers are the best guide to the voice.
+
+   Then **score each one 1 to 10** on three things, honestly, as the person
+   receiving it would:
+   - `specificity`: could only be about them; the detail is concrete (a street, a number, a place)
+   - `human`: reads like Menash typed it on his phone, not like a template
+   - `curiosity`: makes them want to see the card *now*
+
+   A 10 is rare. If your best scores under 21 in total, rewrite before saving.
+   Save with `node scripts/card-builder.mjs set-openers <id> <file.json>`:
+
+   ```json
+   { "candidates": [
+     { "hook": "listing", "uses": 1, "text": "Hey Dana, Menash here. Saw your listing on Garden Pl in Brooklyn Heights, so I made you a card that shows it off with your photo and number. It's yours if you want it:", "scores": { "specificity": 9, "human": 8, "curiosity": 8 } },
+     { "hook": "team", "uses": null, "text": "…", "scores": { … } }
+   ] }
+   ```
+
+   The tool refuses a set with any rule broken, including **any number or
+   name that isn't in the verified facts**, and lists what to fix. The best
+   total becomes the default and the runner-up the alternate; the owner can
+   edit either on the review screen.
+
 ## Reply with
+
+- **the opening texts**, ranked, each with its hook, its three scores and its
+  character count, and which is the default and which the alternate; and
+  whether their number is a mobile
 
 - **the full outreach, word for word**: both versions of the first text, the
   text with the link, the email (subject and body), the call opener, the

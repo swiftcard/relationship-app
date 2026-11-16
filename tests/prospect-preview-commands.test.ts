@@ -94,16 +94,17 @@ describe("the commands", () => {
     expect(batch).toMatch(/don't lower the bar/);
   });
 
-  it("a batch runs unattended: it never asks, saves and logs as it goes, skips failures, resumes, and tops out at 30", () => {
+  it("a batch runs unattended: it never asks, saves and logs as it goes, skips failures, resumes, and tops out at 100", () => {
     expect(batch).toMatch(/Never ask the owner a question mid-run/);
     expect(batch).toMatch(/Save each draft as it is done/);
     expect(batch).toMatch(/A failure is skipped and logged, never fatal/);
     expect(batch).toMatch(/Rerunning resumes/);
-    expect(batch).toMatch(/30 at most/);
+    // Owner, 2026-11-16: "generate 50–100 prospects on demand".
+    expect(batch).toMatch(/100 at most/);
     for (const cmd of ["card-builder.mjs batch-start", "card-builder.mjs queue", "card-builder.mjs queue-settle", "card-builder.mjs batch-log", "card-builder.mjs batch-finish"]) expect(batch).toContain(cmd);
     // The queue the owner filled from their phone is built before anything the search finds.
     expect(batch.indexOf("card-builder.mjs queue`")).toBeLessThan(batch.indexOf("3. **Find the offices.**"));
-    expect(tool).toContain('if (Number.isFinite(wanted) && wanted > 30) throw new Error("A batch is 30 offices at most.');
+    expect(tool).toContain('if (Number.isFinite(wanted) && wanted > MAX_BATCH) throw new Error(`A batch is ${MAX_BATCH} at most.');
   });
 
   it("/build is one line three ways, and tonight is this session kept awake, not a promise it can't keep", () => {

@@ -27,12 +27,22 @@
 //       text with the link, email, call opener, voicemail and two nudges.
 //       Refused, with what to fix, when a text runs past 160 characters, has
 //       an emoji or says "free", or the messages all lean on one specific.
-//   node scripts/card-builder.mjs queue
-//       What the owner dropped into the Add box and nobody has built yet.
+//   node scripts/card-builder.mjs set-openers <preview id> <openers.json>
+//       Save the opening texts (five, on different hooks, each scored): the
+//       one text with the link that goes from the owner's own number. Refused,
+//       with what to fix, when one breaks a rule (lib/prospect-preview/opener.ts).
+//   node scripts/card-builder.mjs phone-type <phone>
+//       Is it a mobile? Only a mobile can get the opener over iMessage.
+//   node scripts/card-builder.mjs queue [--batch <batch id>]
+//       What the owner dropped into the Add box and nobody has built yet, or
+//       a CSV batch's rows.
 //   node scripts/card-builder.mjs queue-settle <queue id> <outcome.json>
 //       Mark a queue item built (with its preview id), skipped or failed (with why).
 //   node scripts/card-builder.mjs batch-start <batch.json>
 //       Open a batch, or RESUME the unfinished one with the same label.
+//       { "batch_id": "…" } opens one made with "New batch" in the admin.
+//   node scripts/card-builder.mjs batch-candidates <batch id> <candidates.json>
+//       Keep the offices found for a batch, best first, for the next chunk.
 //   node scripts/card-builder.mjs batch-log <batch id> <office.json>
 //       Record one office's outcome the moment it is known.
 //   node scripts/card-builder.mjs batch-finish <batch id>
@@ -76,7 +86,7 @@ if (!args.length) {
   process.exit(2);
 }
 // File arguments are resolved here, where the caller's working directory is known.
-const FILE_ARG = { check: [1], fit: [1], "save-leads": [1], "create-draft": [1], "update-draft": [2], "set-outreach": [2], "queue-settle": [2], "queue-add": [1], "batch-start": [1], "batch-log": [2], warm: [1], shots: [2] };
+const FILE_ARG = { check: [1], fit: [1], "save-leads": [1], "create-draft": [1], "update-draft": [2], "set-outreach": [2], "queue-settle": [2], "queue-add": [1], "batch-start": [1], "batch-log": [2], warm: [1], shots: [2], "set-openers": [2], "batch-candidates": [2] };
 for (const i of FILE_ARG[args[0]] ?? []) if (args[i]) args[i] = resolve(process.cwd(), args[i]);
 
 const out = join(mkdtempSync(join(tmpdir(), "card-builder-")), "result.json");

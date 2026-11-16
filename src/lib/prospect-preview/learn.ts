@@ -19,7 +19,7 @@ export type MessageEvent = { at: string; preview_id: string; kind: "edit" | "pic
 export type MessageStat = { message: string; variant: string | null; sent: number; viewed: number; picked_up: number; booked: number };
 
 export const STAT_LABELS: Record<string, string> = {
-  ask: "First text", text: "Text with the link", email: "Email", nudge_no_view: "Nudge: not opened", nudge_viewed: "Nudge: didn't pick up",
+  opener: "Opening text (with the link)", ask: "First text", text: "Text with the link", email: "Email", nudge_no_view: "Nudge: not opened", nudge_viewed: "Nudge: didn't pick up",
   linkedin_note: "LinkedIn note", linkedin_dm: "LinkedIn message",
 };
 
@@ -75,7 +75,18 @@ export function styleNotes(events: MessageEvent[], limit = 20): StyleNotes {
 // ── The batch brief ─────────────────────────────────────────────────────────
 
 export type BatchItem = { office: string; outcome: "built" | "skipped" | "failed"; preview_id?: string | null; reason?: string | null; at?: string };
-export type Batch = { id: string; created_at: string; label: string; kind: "now" | "tonight"; wanted: number | null; status: "running" | "finished"; finished_at: string | null; items: BatchItem[]; announced_at: string | null };
+/**
+ * requested: made with "New batch" in the admin, waiting for the Mac to pick it up (at run_after)
+ * running:   being built (by the Mac, or a /build session)
+ * finished:  done; its brief and its one push follow
+ */
+export type BatchCandidate = { office: string; person?: string | null; city?: string | null; website?: string | null; lead_id?: string | null; score?: number | null };
+export type Batch = {
+  id: string; created_at: string; label: string; kind: "now" | "tonight"; wanted: number | null; status: "requested" | "running" | "finished"; finished_at: string | null; items: BatchItem[]; announced_at: string | null;
+  run_after?: string | null; started_at?: string | null; chunks?: number; error?: string | null;
+  /** The offices found for it, best first, so a later chunk carries on down the same list. */
+  candidates?: BatchCandidate[];
+};
 
 export function readBatchItems(v: unknown): BatchItem[] {
   if (!Array.isArray(v)) return [];
@@ -132,4 +143,37 @@ export function batchPush(b: BatchBrief): { title: string; body: string } {
     title: n === 1 ? "1 draft ready to approve" : `${n} drafts ready to approve`,
     body: [best ? `Best: ${best.office}, ${best.score} of 100.` : `${b.built} built.`, b.skippedCount ? `${b.skippedCount} skipped.` : ""].filter(Boolean).join(" ").slice(0, 170),
   };
+}
+
+// ── Openers: which hook gets the tap, and for whom (owner, 2026-11-16) ──────
+
+export type OpenRate = { key: string; sent: number; opened: number };
+
+/**
+ * For every opener sent (the first one per prospect), did they really open
+ * their card afterwards? Counted by the opener's hook (listing, team, …) and
+ * by segment (the batch that found them: "realtors in Great Neck"). Same
+ * caveat as messageStats: with few sends this is what happened, not proof.
+ */
+export function openerStats(events: MessageEvent[], rows: PreviewListRow[], batchLabels: Map<string, string>): { byHook: OpenRate[]; bySegment: OpenRate[] } {
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const first = new Map<string, MessageEvent>();
+  for (const e of [...events].sort((a, b) => a.at.localeCompare(b.at))) {
+    if (e.kind === "sent" && e.message === "opener" && !first.has(e.preview_id)) first.set(e.preview_id, e);
+  }
+  const hook = new Map<string, OpenRate>(), seg = new Map<string, OpenRate>();
+  const bump = (m: Map<string, OpenRate>, key: string, opened: boolean) => {
+    const s = m.get(key) ?? { key, sent: 0, opened: 0 };
+    s.sent++; if (opened) s.opened++;
+    m.set(key, s);
+  };
+  for (const e of first.values()) {
+    const r = byId.get(e.preview_id);
+    if (!r) continue;
+    const opened = !!r.last_viewed_at && r.last_viewed_at >= e.at;
+    bump(hook, e.variant ?? "unknown", opened);
+    bump(seg, (r.batch_id && batchLabels.get(r.batch_id)) || "One at a time", opened);
+  }
+  const sort = (m: Map<string, OpenRate>) => [...m.values()].sort((a, b) => b.sent - a.sent || a.key.localeCompare(b.key));
+  return { byHook: sort(hook), bySegment: sort(seg) };
 }

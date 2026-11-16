@@ -15,6 +15,9 @@ import { SOURCE_FIELDS, SOURCE_LABELS, WARM_LABELS, type PreviewListRow } from "
 import { warmPathFor, type Connection } from "@/lib/prospect-preview/warm";
 import LinkedInButton from "../LinkedInButton";
 import OneTapSend from "../OneTapSend";
+import CopyText from "../CopyText";
+import { OPENER_HOOK_LABELS, openerMessage, openerText, scoreTotal } from "@/lib/prospect-preview/opener";
+import { QUEUE_RESULT_TEXT, type QueueResult } from "@/lib/prospect-preview/outbox";
 
 // ── Card Builder: the Approve queue (server component, no data loading) ─────
 // Built for a phone held in one hand (owner, 2026-11-13: "AI does the work and
@@ -34,6 +37,8 @@ const DONE: Record<string, { ok: boolean; text: string }> = {
   skipped: { ok: true, text: "Skipped. It stays a draft, under Skipped at the bottom." },
   unskipped: { ok: true, text: "Back in the queue." },
   sent: { ok: true, text: "Marked as sent." },
+  approved_queued: { ok: true, text: "Published and queued. Your Mac texts it from your number in your sending hours." },
+  queued: { ok: true, text: "Queued. Your Mac texts it from your number in your sending hours." },
   held: { ok: false, text: "Not published: that draft is too generic. Open Edit to see what it needs." },
   failed: { ok: false, text: "That didn't work. Try again in a minute." },
 };
@@ -99,6 +104,64 @@ function Facts({ r, q }: { r: PreviewListRow; q: Quality }) {
   );
 }
 
+/** A flag the owner should see before sending: the number can't take an iMessage, or hasn't been checked. */
+function phoneFlag(r: PreviewListRow): string | null {
+  if (r.not_imessage_at) return "Not on iMessage: your Mac couldn't deliver to this number. Call, or use the email.";
+  if (r.phone_kind === "office") return "No mobile number: this is an office line, so it can't get a text.";
+  if (!r.phone_kind) return "Number not checked yet: it's checked when you queue it.";
+  if (r.phone_kind === "unknown") return "Couldn't tell if this is a mobile (it may be a Google Voice line).";
+  return null;
+}
+
+/**
+ * The opening text: the one that goes, editable, the runner-up one tap away,
+ * and every version with its hook and its scores. Owner, 2026-11-16: "the
+ * opening text is the most important part of the whole system".
+ */
+function Opener({ r, link }: { r: PreviewListRow; link: string }) {
+  const o = r.openers;
+  const text = openerText(o);
+  if (!o || !text) return <p className="adm-callout-warn sc-t-footnote rounded-xl px-3 py-2" data-no-opener>No opening text was written for them yet. Run /build-card on them again, or write one on the edit screen&apos;s messages.</p>;
+  const post = `/api/admin/card-builder/${r.id}`;
+  const best = o.candidates[o.pick];
+  const alt = o.alt !== null ? o.candidates[o.alt] : null;
+  const flag = phoneFlag(r);
+  return (
+    <div className="flex flex-col gap-2" data-opener>
+      <p className="sc-t-caption adm-faint uppercase tracking-wide">Opening text<span className="normal-case tracking-normal"> · {OPENER_HOOK_LABELS[best.hook].toLowerCase()} · {o.edited ? "your edit" : `${scoreTotal(best)} of 30`} · {text.length} characters, then the link</span></p>
+      <form method="post" action={post} className="flex flex-col gap-2">
+        <input type="hidden" name="action" value="opener" />
+        <input type="hidden" name="back" value="/admin/card-builder/approve" />
+        <textarea name="text" defaultValue={text} rows={4} maxLength={400} aria-label={`Opening text for ${r.owner_name}`} className="sc-field w-full px-3 py-2 sc-t-subhead" />
+        <p className="sc-t-footnote adm-muted break-all">then, on its own line: {link}</p>
+        <button type="submit" className="adm-link sc-t-footnote self-start">Save my edit</button>
+      </form>
+      {flag && <p className="adm-callout-warn sc-t-footnote rounded-xl px-3 py-2" data-phone-flag>{flag}</p>}
+      {alt && (
+        <form method="post" action={post} className="adm-card rounded-xl px-3 py-2.5 flex flex-col gap-1.5" data-opener-alt>
+          <input type="hidden" name="action" value="opener_pick" />
+          <input type="hidden" name="i" value={o.alt ?? ""} />
+          <input type="hidden" name="back" value="/admin/card-builder/approve" />
+          <span className="sc-t-caption adm-muted">Runner-up · {OPENER_HOOK_LABELS[alt.hook].toLowerCase()} · {scoreTotal(alt)} of 30</span>
+          <span className="sc-t-subhead" style={{ overflowWrap: "anywhere" }}>{alt.text}</span>
+          <button type="submit" className="adm-link sc-t-footnote self-start">Use this one instead</button>
+        </form>
+      )}
+      <details>
+        <summary className="adm-link sc-t-footnote cursor-pointer">All {o.candidates.length} versions, with scores</summary>
+        <ol className="mt-2 flex flex-col gap-2">
+          {o.candidates.map((c, i) => (
+            <li key={i} className="sc-t-footnote" style={{ overflowWrap: "anywhere" }}>
+              <span className="adm-muted">{OPENER_HOOK_LABELS[c.hook]} · specific {c.scores.specificity}, human {c.scores.human}, curiosity {c.scores.curiosity} = {scoreTotal(c)}{i === o.pick ? " · default" : ""}</span>
+              <br />{c.text}
+            </li>
+          ))}
+        </ol>
+      </details>
+    </div>
+  );
+}
+
 /**
  * `pickForm`: the id of the Approve form these radio buttons belong to, when
  * there are two versions of the first text to choose between.
@@ -148,6 +211,7 @@ function Prospect({ r, appUrl, sender, mode, highlight, connections }: { r: Prev
   const post = `/api/admin/card-builder/${r.id}`;
   const back = "/admin/card-builder/approve";
   const first = firstName(r.owner_name);
+  const link = `${appUrl}/p/${r.slug}`;
   return (
     <li id={`p-${r.id}`} className="adm-card px-4 py-4 flex flex-col gap-4 scroll-mt-4" data-approve-card={mode} {...(highlight ? { "data-just-now": "" } : {})}>
       <div className="min-w-0">
@@ -166,8 +230,25 @@ function Prospect({ r, appUrl, sender, mode, highlight, connections }: { r: Prev
         )}
       </div>
 
+      {mode === "send" && openerText(r.openers) && (
+        <div className="flex flex-col gap-2" data-send-opener>
+          <div className="grid grid-cols-2 gap-2">
+            <OneTapSend id={r.id} kind="opener" href={smsHref(r.phone, openerMessage(openerText(r.openers)!, link))} className="sc-btn sc-btn-filled sc-btn-block">Send from my phone</OneTapSend>
+            <CopyText text={openerMessage(openerText(r.openers)!, link)} />
+          </div>
+          {r.phone_kind !== "office" && !r.not_imessage_at && (
+            <form method="post" action={post}>
+              <input type="hidden" name="action" value="queue" />
+              <input type="hidden" name="back" value={back} />
+              <button type="submit" className="sc-btn sc-btn-gray sc-btn-block" data-queue>Queue for my Mac to send</button>
+            </form>
+          )}
+        </div>
+      )}
       {mode === "send" && (
-        <div className="flex flex-col gap-2" data-send-now>
+        <details open={!openerText(r.openers)} data-send-other>
+        <summary className="adm-link sc-t-footnote cursor-pointer">{openerText(r.openers) ? "Other ways to send: two texts, email, LinkedIn" : "Send"}</summary>
+        <div className="flex flex-col gap-2 mt-2" data-send-now>
           <OneTapSend id={r.id} kind="ask" href={smsHref(r.phone, m.ask)} className="sc-btn sc-btn-filled sc-btn-lg sc-btn-block">Text {first}: open Messages</OneTapSend>
           <div className="grid grid-cols-2 gap-2">
             <OneTapSend id={r.id} kind="text" href={smsHref(r.phone, m.text)} className="sc-btn sc-btn-gray sc-btn-block">Text the link</OneTapSend>
@@ -197,10 +278,12 @@ function Prospect({ r, appUrl, sender, mode, highlight, connections }: { r: Prev
           )}
           <p className="sc-t-caption adm-muted">Opens your own Messages or Mail with the words filled in, and marks it sent here. You press send there. To change the wording first, use the <Link className="adm-link" href={`/admin/card-builder/send/${r.id}`}>Send screen</Link>.</p>
         </div>
+        </details>
       )}
 
       <Thumb r={r} />
       <Facts r={r} q={q} />
+      <Opener r={r} link={link} />
       <AllWords m={m} opener={r.outreach?.call_opener || null} pickForm={mode === "waiting" && q.mayPublish ? formId : undefined} />
 
       {mode === "waiting" && (
@@ -211,7 +294,16 @@ function Prospect({ r, appUrl, sender, mode, highlight, connections }: { r: Prev
               <input type="hidden" name="back" value={back} />
               <button type="submit" className="sc-btn sc-btn-filled sc-btn-lg sc-btn-block" data-approve>Approve and publish</button>
             </form>
-          ) : (
+          ) : null}
+          {q.mayPublish && openerText(r.openers) && r.phone_kind !== "office" && !r.not_imessage_at ? (
+            <form method="post" action={post}>
+              <input type="hidden" name="action" value="approve" />
+              <input type="hidden" name="queue" value="1" />
+              <input type="hidden" name="back" value={back} />
+              <button type="submit" className="sc-btn sc-btn-gray sc-btn-block" data-approve-queue>Approve and queue the text</button>
+            </form>
+          ) : null}
+          {q.mayPublish ? null : (
             <p className="adm-callout-danger sc-t-footnote rounded-xl px-3 py-2" data-held>
               <span className="font-semibold">Can&apos;t be approved yet.</span> {q.blockers.length === 1 ? "One thing is" : `${q.blockers.length} things are`} missing. Edit shows what, and has the override.
             </p>
@@ -232,7 +324,18 @@ function Prospect({ r, appUrl, sender, mode, highlight, connections }: { r: Prev
   );
 }
 
-export default function ApproveView({ list, appUrl, now, sender, done, error, about, connections = [] }: {
+const TALLY_TEXT: Record<string, string> = { ...QUEUE_RESULT_TEXT, too_generic: "Too generic to publish" };
+/** "queued:12,not_mobile:2" → "12 queued for your Mac. Not queued: 2, their number isn't a mobile…" */
+export function tallyText(raw: string | null): string | null {
+  if (!raw) return null;
+  const parts = raw.split(",").map((p) => p.split(":")).filter(([k, n]) => k && Number(n) > 0).map(([k, n]) => [k, Number(n)] as const);
+  if (!parts.length) return "Nothing was waiting that could be approved.";
+  const queued = parts.find(([k]) => k === "queued")?.[1] ?? 0;
+  const rest = parts.filter(([k]) => k !== "queued").map(([k, n]) => `${n}: ${(TALLY_TEXT[k as QueueResult] ?? k).replace(/\.$/, "").toLowerCase()}`);
+  return [`${queued} published and queued for your Mac.`, rest.length ? `Left as they were: ${rest.join("; ")}.` : ""].filter(Boolean).join(" ");
+}
+
+export default function ApproveView({ list, appUrl, now, sender, done, error, about, connections = [], tally = null }: {
   list: PreviewList;
   appUrl: string;
   /** The time the page was made (server), so the view stays pure. */
@@ -244,13 +347,15 @@ export default function ApproveView({ list, appUrl, now, sender, done, error, ab
   about: string | null;
   /** The owner's own LinkedIn connections, for warm paths. */
   connections?: Connection[];
+  /** After "Approve all": what happened to each draft, counted. */
+  tally?: string | null;
 }) {
-  const outcome = done ? DONE[done] ?? null : null;
+  const outcome = done === "all" ? { ok: true, text: tallyText(tally) ?? "Done." } : done ? DONE[done] ?? null : null;
   const queue = list.ready ? approvalQueue(list.rows, now) : null;
   return (
     <Stack className="max-w-xl mx-auto w-full">
       <BackLink href="/admin/card-builder">Card Builder</BackLink>
-      <PageHeader title="Approve" description="Each draft, ready to read. Approve it and the next tap opens your Messages with the first text. Nothing is ever sent for you." />
+      <PageHeader title="Approve" description="Each draft, ready to read, with the opening text it gets. Approve it, then send the text from your phone or queue it for your Mac. Nothing is sent until you say so." />
 
       {outcome && <p className={`${outcome.ok ? "adm-callout-good" : "adm-callout-danger"} sc-t-subhead rounded-xl px-4 py-3`} role={outcome.ok ? "status" : "alert"}>{outcome.text}</p>}
       {error && <p className="adm-callout-danger sc-t-subhead rounded-xl px-4 py-3" role="alert">{error}</p>}
@@ -270,6 +375,18 @@ export default function ApproveView({ list, appUrl, now, sender, done, error, ab
 
           <section aria-labelledby="ap-wait" className="flex flex-col gap-3">
             <h2 id="ap-wait" className="sc-t-headline">Waiting for you ({queue.waiting.length})</h2>
+            {(() => {
+              const ready = queue.waiting.filter((r) => assessQuality(r).mayPublish && openerText(r.openers)).length;
+              return ready > 1 ? (
+                <details className="adm-card rounded-xl px-3 py-2.5" data-approve-all>
+                  <summary className="sc-t-subhead font-semibold cursor-pointer">Approve all {ready}</summary>
+                  <p className="sc-t-footnote adm-muted mt-2">Publishes every draft below that passes the check and has an opening text, and queues each text for your Mac. It sends them from your number in your sending hours, a few minutes apart, up to your daily cap. Office lines and numbers not on iMessage are left for you.</p>
+                  <form method="post" action="/api/admin/card-builder/approve-all" className="mt-2">
+                    <button type="submit" className="sc-btn sc-btn-filled sc-btn-block">Yes, approve and queue all {ready}</button>
+                  </form>
+                </details>
+              ) : null;
+            })()}
             {queue.waiting.length === 0 ? (
               <EmptyState>No drafts to approve. Run /build-card or /build-batch to line some up.</EmptyState>
             ) : (

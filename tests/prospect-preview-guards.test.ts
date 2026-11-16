@@ -90,11 +90,12 @@ describe("the preview page is unlisted", () => {
   it("the link preview shows the owner's name and logo, under a title that matches", () => {
     const og = read("src/lib/prospect-preview/og.tsx");
     expect(og).toContain("{p.owner_name}</div>");
-    expect(og).toContain("const logo = await embedLogo(p.logo_url);");
+    expect(og).toContain("const [logo, face] = await Promise.all([embedLogo(p.logo_url), embedHeadshot(p.headshot_url)]);");
     // The logo address is typed in by staff but fetched on a public route.
     expect(og).toContain('fetchVCardPhoto(url, "logo")');
     expect(og).not.toMatch(/\bfetch\(/);
-    expect(page).toContain("const title = `${p.owner_name} · ${p.office_name}`;");
+    // Owner, 2026-11-16: "an og:title like 'Dana's card, made for you.'"
+    expect(page).toContain("const title = ogTitle(p.owner_name);");
     // Named explicitly: a page that sets openGraph loses the automatic image.
     expect(page).toContain("/opengraph-image?v=${previewVersion(p)}");
   });
