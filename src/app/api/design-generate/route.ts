@@ -55,7 +55,10 @@ export async function POST(request: NextRequest) {
   let useModel = true;
   if (!user) {
     // A visitor building their first card, before the account exists.
-    if (await isRateLimited(`design-generate:ip:${clientIp(request)}`, 15, HOUR)) return tooFast();
+    // 60 an hour per address (was 15 until 2026-11-15): a whole office setting
+    // up cards on one Wi-Fi shares this budget. The all-visitor ceiling below
+    // is what protects the model bill.
+    if (await isRateLimited(`design-generate:ip:${clientIp(request)}`, 60, HOUR)) return tooFast();
     // The app never sends anything to the provider for someone it hasn't asked.
     useModel = !isShellRequest(request);
     // One ceiling across ALL visitors, so a bot farm rotating IPs can't run up

@@ -1,0 +1,174 @@
+name: Nightly database backup
+
+# WHY: Supabase's free plan keeps NO backups. If a table is dropped, a bad
+# migration runs or the project is lost, there is nothing to restore from.
+# This takes a full copy of the database every night, compresses it, encrypts
+# it, and keeps it as a workflow artifact for 90 days (GitHub's maximum).
+#
+# THE REPO IS PUBLIC, so anyone signed in to GitHub can download this
+# artifact. The encryption is the ONLY thing protecting customer data in it.
+# Nothing unencrypted is ever uploaded, and the run fails rather than upload
+# if the passphrase is missing or short. Lose BACKUP_PASSPHRASE and every
+# backup is unreadable; leak it and every backup is public. Keep it in a
+# password manager, nowhere else.
+#
+# It connects through Supabase's SESSION pooler, because the direct database
+# address is IPv6-only and GitHub's runners are IPv4-only. Read-only: pg_dump
+# reads, it never writes. It makes no request to swiftcard.me.
+#
+# Secrets (GitHub -> Settings -> Secrets and variables -> Actions):
+#   SUPABASE_DB_URL    Supabase -> Connect -> "Session pooler" connection
+#                      string, with the database password filled in. Port
+#                      5432, host ending in .pooler.supabase.com.
+#   BACKUP_PASSPHRASE  A long random passphrase (20+ characters).
+#
+# NOT in the backup: uploaded files (photos, logos, card images live in
+# Supabase Storage, not the database) and the values of Supabase Vault
+# secrets, which only the original project can decrypt.
+#
+# Restore steps: docs/BACKUP-RESTORE.md.
+
+on:
+  schedule:
+    - cron: "40 8 * * *"         # 03:40-04:40 New York, the quietest hour
+  workflow_dispatch:
+
+# Never on pull_request: a stranger's pull request must not be able to run a
+# job that holds the database password (tests/db-backup.test.ts).
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check the two secrets exist and look right
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_DB_URL" ]; then echo "::error::SUPABASE_DB_URL is not set. No backup was taken."; exit 1; fi
+          if [ "${#BACKUP_PASSPHRASE}" -lt 20 ]; then echo "::error::BACKUP_PASSPHRASE is missing or shorter than 20 characters. Refusing to upload a weakly protected backup."; exit 1; fi
+          case "$SUPABASE_DB_URL" in
+            *pooler.supabase.com:5432*) ;;
+            *) echo "::error::SUPABASE_DB_URL must be the SESSION pooler string (host ends in pooler.supabase.com, port 5432). The direct address is IPv6-only and port 6543 cannot run pg_dump."; exit 1 ;;
+          esac
+
+      # The server is Postgres 17; pg_dump must be the same major version or
+      # newer, and the runner ships an older one.
+      - name: Install the Postgres 17 client
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -qq postgresql-client-17
+          /usr/lib/postgresql/17/bin/pg_dump --version
+
+      - name: Dump, compress and encrypt
+        id: dump
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+          PG=/usr/lib/postgresql/17/bin
+          STAMP="$(date -u +%Y-%m-%d)"
+          WORK="$RUNNER_TEMP/backup"
+          mkdir -p "$WORK/plain" out
+
+          # 1. The app's own tables: structure and rows.
+          "$PG/pg_dump" "$SUPABASE_DB_URL" --format=custom --compress=9 \
+            --schema=public --no-owner --no-privileges \
+            --file "$WORK/plain/public.dump"
+
+          # 2. Accounts and the storage file index: rows only. A new Supabase
+          #    project already has these tables, so restoring structure would
+          #    collide; the rows are what cannot be recreated.
+          "$PG/pg_dump" "$SUPABASE_DB_URL" --format=custom --compress=9 \
+            --data-only --schema=auth --schema=storage \
+            --exclude-table=auth.schema_migrations --exclude-table=storage.migrations \
+            --no-owner --no-privileges \
+            --file "$WORK/plain/auth-storage-data.dump"
+
+          # 3. The scheduled jobs, as readable SQL, for reference when
+          #    rebuilding. Best effort: never fail the backup over it.
+          psql_out="$WORK/plain/cron-jobs.txt"
+          "$PG/psql" "$SUPABASE_DB_URL" -At -c "select jobname || E'\t' || schedule || E'\t' || command from cron.job order by jobname" > "$psql_out" 2>/dev/null || echo "cron.job could not be read" > "$psql_out"
+
+          # Prove the dumps are readable and not empty BEFORE trusting them.
+          TABLES="$("$PG/pg_restore" --list "$WORK/plain/public.dump" | grep -c ' TABLE DATA ' || true)"
+          USERS_OK="$("$PG/pg_restore" --list "$WORK/plain/auth-storage-data.dump" | grep -c 'TABLE DATA auth users' || true)"
+          echo "public tables with data in the dump: $TABLES"
+          if [ "$TABLES" -lt 50 ]; then echo "::error::Only $TABLES tables in the dump; expected about 100. Treating the backup as failed."; exit 1; fi
+          if [ "$USERS_OK" -lt 1 ]; then echo "::error::auth.users is not in the dump. Treating the backup as failed."; exit 1; fi
+
+          # One file, encrypted with AES-256. The passphrase goes in on a file
+          # descriptor so it is never in the process list or the log.
+          tar -C "$WORK/plain" -cf "$WORK/swiftcard-db-$STAMP.tar" .
+          gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 --s2k-digest-algo SHA512 --s2k-count 65011712 \
+            --passphrase-fd 3 --output "out/swiftcard-db-$STAMP.tar.gpg" "$WORK/swiftcard-db-$STAMP.tar" 3<<<"$BACKUP_PASSPHRASE"
+
+          # Round trip: decrypt what was just written and compare, so a backup
+          # that cannot be opened is caught tonight and not on the day it is needed.
+          gpg --batch --quiet --pinentry-mode loopback --decrypt --passphrase-fd 3 "out/swiftcard-db-$STAMP.tar.gpg" 3<<<"$BACKUP_PASSPHRASE" | cmp - "$WORK/swiftcard-db-$STAMP.tar"
+
+          rm -rf "$WORK"
+          ls -lh out
+          echo "stamp=$STAMP" >> "$GITHUB_OUTPUT"
+          echo "size=$(du -h out/*.gpg | cut -f1)" >> "$GITHUB_OUTPUT"
+          echo "tables=$TABLES" >> "$GITHUB_OUTPUT"
+
+      - name: Keep the encrypted backup for 90 days
+        uses: actions/upload-artifact@v4
+        with:
+          name: swiftcard-db-${{ steps.dump.outputs.stamp }}
+          path: out/*.tar.gpg
+          retention-days: 90
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Summary
+        run: |
+          echo "Encrypted backup of ${{ steps.dump.outputs.tables }} tables, ${{ steps.dump.outputs.size }}, kept 90 days." >> "$GITHUB_STEP_SUMMARY"
+          echo "Restore steps: docs/BACKUP-RESTORE.md" >> "$GITHUB_STEP_SUMMARY"
+
+      # ONE issue while backups are failing, closed by the first good night,
+      # the same way uptime.yml and nightly-qa.yml do it.
+      - name: Open, update or close the incident
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          OUTCOME: ${{ job.status }}
+        with:
+          script: |
+            const TITLE = '🔴 Nightly database backup failing';
+            const { owner, repo } = context.repo;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const open = await github.rest.issues.listForRepo({ owner, repo, state: 'open', labels: 'backup', per_page: 20 });
+            const existing = open.data.find((i) => i.title === TITLE);
+            if (process.env.OUTCOME !== 'success') {
+              const body = [
+                'Last night\'s database backup did not complete, so there is no fresh copy to restore from.',
+                '',
+                `[Open the failed run](${runUrl}) and read the first red step. The usual causes: a secret was removed or the database password changed (update \`SUPABASE_DB_URL\`).`,
+                '',
+                `Last checked: ${new Date().toISOString()}`,
+                '',
+                '<sub>Opened by `.github/workflows/db-backup.yml`. It edits this one issue and closes it after the next good backup.</sub>',
+              ].join('\n');
+              if (existing) await github.rest.issues.update({ owner, repo, issue_number: existing.number, body });
+              else await github.rest.issues.create({ owner, repo, title: TITLE, body, labels: ['backup'] });
+            } else if (existing) {
+              await github.rest.issues.createComment({ owner, repo, issue_number: existing.number, body: `✅ Backup succeeded on ${new Date().toISOString()}. [run](${runUrl})` });
+              await github.rest.issues.update({ owner, repo, issue_number: existing.number, state: 'closed' });
+            }

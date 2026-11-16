@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { openIdTokenTicket } from "@/lib/native-google-login";
+import { isRateLimited } from "@/lib/rate-limit";
+import { clientIp } from "@/lib/client-ip";
 
 export const runtime = "nodejs";
 
@@ -16,6 +18,12 @@ export const runtime = "nodejs";
  * the web GIS button does.
  */
 export async function POST(request: Request) {
+  // Guessing tickets is hopeless (they are sealed), but an unauthenticated
+  // POST should not be free to hammer. 120 per 10 minutes per address; the
+  // answer is the same opaque failure the app already handles.
+  if (await isRateLimited(`native-google-redeem:${clientIp(request)}`, 120, 10 * 60 * 1000)) {
+    return NextResponse.json({ error: "invalid_ticket" }, { status: 429, headers: { "Cache-Control": "no-store" } });
+  }
   const body = (await request.json().catch(() => null)) as
     | { ticket?: unknown; secret?: unknown }
     | null;

@@ -15,10 +15,22 @@ import { withSentryConfig } from "@sentry/nextjs";
 const securityHeaders = [
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
   { key: "X-Frame-Options", value: "SAMEORIGIN" },
-  { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+  // base-uri and object-src (2026-11-15) close two classic injection routes
+  // (a planted <base> tag re-pointing every relative link, and plugin embeds)
+  // and touch nothing the app uses: it has no <base>, <object> or <embed>.
+  // Still no script-src/style-src/connect-src, on purpose (see above).
+  { key: "Content-Security-Policy", value: "frame-ancestors 'self'; base-uri 'self'; object-src 'none'" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=(self), browsing-topics=()" },
+  // Stops Flash/Acrobat-era clients reading the site through a cross-domain
+  // policy file. Nothing serves one; this says so explicitly.
+  { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
+  // Deliberately NOT set: Cross-Origin-Opener-Policy (the Google and LinkedIn
+  // sign-in windows talk back to the page that opened them) and a full
+  // script/connect CSP (Stripe, Google, Supabase, PostHog, Sentry and the two
+  // app WebViews would each need allow-listing, and it cannot be tested
+  // without production). tests/security-pass-2026-11-15.test.ts pins this list.
 ];
 
 const nextConfig: NextConfig = {

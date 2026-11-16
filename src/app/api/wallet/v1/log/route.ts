@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isRateLimited } from "@/lib/rate-limit";
+import { clientIp } from "@/lib/client-ip";
 
 // Apple's device log sink: POST /v1/log {"logs": ["...", "..."]}
 //
@@ -13,6 +15,9 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
+  // Still always 200 (see above), but past 60 posts in 10 minutes from one
+  // address nothing more is read or written.
+  if (await isRateLimited(`wallet-log:${clientIp(req)}`, 60, 10 * 60 * 1000)) return NextResponse.json({});
   try {
     const body = (await req.json()) as { logs?: unknown };
     const logs = Array.isArray(body.logs) ? body.logs : [];

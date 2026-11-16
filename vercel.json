@@ -1,6 +1,15 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": [
     "pdx1"
+  ],
+  "routes": [
+    {
+      "src": "^/(?:(?:.*/)?\\.(?:env[^/]*|git[^/]*|svn|hg|aws|ssh|htaccess|htpasswd)(?:/.*)?|.*\\.(?:php\\d?|phtml|asp|aspx|jsp|cgi)(?:/.*)?|wp-(?:admin|login|content|includes|json|config)(?:[./].*)?|(?:wordpress|phpmyadmin|cgi-bin|actuator)(?:/.*)?|(?:api/)?graphql(?:/.*)?|api/config(?:/.*)?)$",
+      "mitigate": {
+        "action": "deny"
+      }
+    }
   ],
   "crons": [
     {

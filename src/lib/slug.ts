@@ -46,6 +46,12 @@ export const RESERVED_SLUGS = new Set([
   "about", "app", "blog", "docs", "help", "home", "index", "jobs", "legal",
   "logout", "new", "news", "partners", "press", "signin", "signup", "signout",
   "static", "status", "support", "team",
+  // Paths vulnerability scanners probe all day. vercel.json denies them at
+  // Vercel's firewall before any function runs (2026-11-15), so a card at one
+  // of these could never be opened. tests/scanner-paths.test.ts keeps the
+  // two lists in step.
+  "graphql", "wp-admin", "wp-login", "wp-content", "wp-includes", "wp-json",
+  "wp-config", "wordpress", "phpmyadmin", "cgi-bin", "actuator",
 ]);
 
 export function isReservedSlug(slug: string): boolean {
