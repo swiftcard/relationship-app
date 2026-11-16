@@ -1,5 +1,6 @@
 "use client";
 
+import { isOwnStorageUrl } from "@/lib/own-storage";
 import { useEffect, useState } from "react";
 import { PHOTO_TONE_SAMPLE, toneFromPixels } from "@/lib/photo-tone";
 
@@ -21,8 +22,12 @@ export function usePhotoTone(url: string | null | undefined): string | null {
   const [read, setRead] = useState<{ url: string; tone: string | null } | null>(null);
   useEffect(() => {
     if (!url || toneCache.has(url)) return;
-    const src = /^https:\/\//.test(url)
-      ? `/api/img-proxy?url=${encodeURIComponent(url)}&w=96`
+    const proxied = /^https:\/\//.test(url) ? `/api/img-proxy?url=${encodeURIComponent(url)}&w=96` : null;
+    // A photo in our own storage is read directly (it answers CORS, see
+    // lib/own-storage); the proxy is then only the retry if that fails.
+    const direct = proxied !== null && isOwnStorageUrl(url);
+    const src = proxied !== null
+      ? (direct ? url : proxied)
       // blob:/data: (a just-picked file) and same-origin paths (the
       // marketing demo's /marketing/ photos) are read directly.
       : /^(blob:|data:image\/|\/(?!\/))/.test(url) ? url : null;
@@ -46,7 +51,9 @@ export function usePhotoTone(url: string | null | undefined): string | null {
       toneCache.set(url, tone);
       if (live) setRead({ url, tone });
     };
+    let retried = false;
     img.onerror = () => {
+      if (direct && proxied && !retried) { retried = true; img.src = proxied; return; }
       toneCache.set(url, null);
       if (live) setRead({ url, tone: null });
     };

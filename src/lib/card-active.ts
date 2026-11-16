@@ -116,11 +116,13 @@ export async function cardWithinPlanLimit(
 // the Free allowance.)
 export async function isCardActive(username: string): Promise<boolean> {
   const admin = getAdminSupabase();
-  // select("*") so is_offline is picked up when present and simply absent on a
-  // pre-migration schema (an explicit column list would error there instead).
+  // Only the three columns this reads. It runs on every card view, lead and
+  // tracked tap, and used to pull the whole card (its design included) each
+  // time. is_offline is named outright: the column is in the live schema
+  // (checked 2026-11-15), and leaving it out would reopen an offline card.
   const { data: cardRow } = await admin
     .from("cards")
-    .select("*")
+    .select("id, user_id, is_offline")
     .eq("username", username)
     .maybeSingle();
 

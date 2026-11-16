@@ -3,9 +3,14 @@
 // One uploader, two very different transports, because a video cannot ride the
 // same road as a photo:
 //
-//   • Photos go through /api/upload as multipart. That route decodes, rotates
-//     and re-encodes with sharp, so the stored file is a sane size — a phone
-//     photo arrives at 3-5 MB and 4000px.
+//   • Photos are resized HERE, in the browser, and go straight to storage
+//     through a signed URL from /api/upload/sign (lib/direct-upload). A phone
+//     photo is 3-5 MB and 4000px; sending that through a function was billed
+//     as incoming transfer on every upload (2026-11). When the browser cannot
+//     resize, or storage cannot be reached, or the visitor is a guest, the
+//     photo takes the original road: /api/upload as multipart, where sharp
+//     decodes, rotates and re-encodes it. Either way the stored file is the
+//     same sane size.
 //   • Videos go straight to storage through a signed URL from
 //     /api/upload/link-video. The platform caps a function's request body at
 //     ~4.5 MB and even a ten-second clip is bigger, so nothing large may pass
@@ -21,6 +26,8 @@
 // letting a caller invent a path.
 
 import { isTimeout, timeoutSignal } from "@/lib/time-limit";
+import { DirectUploadRefused, directImageUpload } from "@/lib/direct-upload";
+import { IMMUTABLE_CACHE_SECONDS } from "@/lib/upload-rules";
 
 export const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 export const VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
@@ -67,9 +74,20 @@ export async function uploadMedia(file: File, field: UploadField, { timeoutMs }:
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !d?.signedUrl || !d?.url) throw new UploadError(r.status, d?.error);
-    const put = await fetch(d.signedUrl, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+    const put = await fetch(d.signedUrl, { method: "PUT", headers: { "Content-Type": file.type, "Cache-Control": `max-age=${IMMUTABLE_CACHE_SECONDS}` }, body: file });
     if (!put.ok) throw new UploadError(put.status);
     return { url: d.url, type: "video" };
+  }
+
+  // One clock for both roads, so `timeoutMs` still bounds the whole upload.
+  const signal = timeoutMs ? timeoutSignal(timeoutMs) : undefined;
+  try {
+    const direct = await directImageUpload(file, field, { signal });
+    if (direct) return { url: direct.url, type: "image" };
+  } catch (e) {
+    if (e instanceof DirectUploadRefused) throw new UploadError(e.status, e.message);
+    if (timeoutMs && (isTimeout(e) || signal?.aborted)) throw new UploadError(408, TOOK_TOO_LONG_MESSAGE);
+    throw e;
   }
 
   const fd = new FormData();
@@ -80,7 +98,7 @@ export async function uploadMedia(file: File, field: UploadField, { timeoutMs }:
   fd.append("defer", "true");
   let r: Response;
   try {
-    r = await fetch("/api/upload", { method: "POST", body: fd, signal: timeoutMs ? timeoutSignal(timeoutMs) : undefined });
+    r = await fetch("/api/upload", { method: "POST", body: fd, signal });
   } catch (e) {
     if (timeoutMs && isTimeout(e)) throw new UploadError(408, TOOK_TOO_LONG_MESSAGE);
     throw e;

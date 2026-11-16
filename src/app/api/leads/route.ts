@@ -184,10 +184,11 @@ export async function POST(req: NextRequest) {
     // first and fall back to the legacy profile-slug match. Without this,
     // notifications/emails silently skipped every non-primary card.
     const ownerSelect = `id, name, email, phone, company, ${PLAN_COLUMNS}`;
-    // select("*") so the is_offline kill-switch is actually present on the row —
-    // an explicit column list would silently omit it (and would error outright on
-    // a pre-migration schema), leaving lead capture open on an offline card.
-    const { data: cardRow } = await admin.from("cards").select("*").eq("username", card_owner).maybeSingle();
+    // Only the columns read below, with the is_offline kill-switch named
+    // outright: without it lead capture would stay open on an offline card.
+    // (It was select("*") while the column was still being rolled out; it is
+    // in the live schema, checked 2026-11-15.)
+    const { data: cardRow } = await admin.from("cards").select("id, user_id, name, email, phone, company, is_offline").eq("username", card_owner).maybeSingle();
     const { data: ownerProfile } = cardRow?.user_id
       ? await admin.from("profiles").select(ownerSelect).eq("id", cardRow.user_id).maybeSingle()
       : await admin.from("profiles").select(ownerSelect).eq("username", card_owner).maybeSingle();

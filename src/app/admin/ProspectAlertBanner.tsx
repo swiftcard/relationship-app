@@ -23,7 +23,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export type BannerAlert = { view_id: string; preview_id: string; owner_name: string; office_name: string; phone: string; viewed_at: string };
 
-const POLL_MS = 10_000;
+const POLL_MS = 20_000;
 const DISMISSED_KEY = "sc_prospect_alerts_dismissed";
 
 const telHref = (phone: string) => `tel:${phone.trim().startsWith("+") ? "+" : ""}${phone.replace(/\D/g, "")}`;

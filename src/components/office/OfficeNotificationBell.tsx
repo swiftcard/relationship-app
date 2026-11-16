@@ -81,7 +81,8 @@ export default function OfficeNotificationBell({
     };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
-    const id = setInterval(poll, 30000);
+    // Once a minute, like the main bell (was every 30 seconds until 2026-11).
+    const id = setInterval(poll, 60_000);
     return () => {
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVisible);

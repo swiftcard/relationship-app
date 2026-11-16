@@ -141,7 +141,10 @@ describe("the Create box", () => {
     // quietly dropped as "saved only on your computer".
     expect(box).toContain("e.status === 408");
     const upload = readFileSync("src/lib/upload-media.ts", "utf8");
-    expect(upload).toContain("signal: timeoutMs ? timeoutSignal(timeoutMs) : undefined");
+    // One signal bounds both roads: straight to storage, then the older route.
+    expect(upload).toContain("const signal = timeoutMs ? timeoutSignal(timeoutMs) : undefined;");
+    expect(upload).toContain("directImageUpload(file, field, { signal })");
+    expect(upload).toContain('fetch("/api/upload", { method: "POST", body: fd, signal })');
     expect(upload).toContain("throw new UploadError(408, TOOK_TOO_LONG_MESSAGE)");
     const lib = readFileSync("src/lib/link-anything.ts", "utf8");
     expect(lib).toMatch(/export async function snapshotPng\(html: string, budgetMs = SNAP_BUDGET_MS\)/);

@@ -58,7 +58,7 @@ export default function CrewView({ data, tab: tabParam, msg, tone, filter, edit 
         <>
           <Nav d={data} tab={tab} />
           <View d={data} tab={tab} filter={filter} edit={edit} />
-          <ChatAutoRefresh active={data.summary.running > 0} everyMs={5000} forMs={300_000} />
+          <ChatAutoRefresh active={data.summary.running > 0} everyMs={10_000} forMs={300_000} />
         </>
       )}
     </div>

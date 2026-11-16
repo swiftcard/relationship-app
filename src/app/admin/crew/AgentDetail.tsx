@@ -143,7 +143,7 @@ export default function AgentDetail({ x, edit, msg, tone }: { x: Detail; edit?: 
           </div>
         ))}
       </Technical>
-      <ChatAutoRefresh active={r.status.kind === "running"} everyMs={5000} forMs={300_000} />
+      <ChatAutoRefresh active={r.status.kind === "running"} everyMs={10_000} forMs={300_000} />
     </div>
   );
 }

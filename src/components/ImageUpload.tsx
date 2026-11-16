@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import type { AspectOption } from "@/components/CropperLazy";
+import { commitDirectUpload, directImageUpload } from "@/lib/direct-upload";
 
 // Deferred: the cropper only renders after a visitor picks a file (see the
 // rawSrc-gated block below) — most page loads using this component never
@@ -148,6 +149,18 @@ export default function ImageUpload({ field, currentUrl, label, hint, shape = "s
     setErrorMsg("");
   }
 
+  // The crop is already an 800px JPEG. A photo is stored as it is; a logo is
+  // re-wrapped as PNG, which is what /api/upload stores a logo as. Without
+  // `defer` the URL is then saved to the account or card by the commit step.
+  // null means "use /api/upload".
+  async function uploadDirect(jpeg: Blob): Promise<string | null> {
+    const up = await directImageUpload(jpeg, field, { resize: field === "logo" });
+    if (!up) return null;
+    if (defer) return up.url;
+    const saved = await commitDirectUpload(up.path, field, cardId);
+    return saved.ok && saved.url ? saved.url : null;
+  }
+
   async function applyCrop(canvas: HTMLCanvasElement) {
     if (!rawSrc || uploadStatus === "uploading") return;
     setUploadStatus("uploading");
@@ -164,6 +177,18 @@ export default function ImageUpload({ field, currentUrl, label, hint, shape = "s
         setRawSrc(null);
         setUploadStatus("idle");
         onUploaded(dataUrl);
+        return;
+      }
+
+      // Straight to storage first (lib/direct-upload); /api/upload below is
+      // the fallback and behaves exactly as it always has.
+      const directUrl = await uploadDirect(blob).catch(() => null);
+      if (directUrl) {
+        setPreview(directUrl);
+        URL.revokeObjectURL(rawSrc);
+        setRawSrc(null);
+        setUploadStatus("idle");
+        onUploaded(directUrl);
         return;
       }
 

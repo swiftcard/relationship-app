@@ -14,6 +14,7 @@ import { warmSharePreview } from "@/lib/share-preview";
 import { capturePainted } from "@/lib/capture-verify";
 import { toPngExact } from "@/lib/capture-exact";
 import { SHARE_CAPTURE_VERSION } from "@/lib/share-capture-version";
+import { directCaptureUpload } from "@/lib/direct-upload";
 
 const ClassicPro    = dynamic(() => import("@/components/card-templates/ClassicPro"),    { ssr: false });
 const ModernBold    = dynamic(() => import("@/components/card-templates/ModernBold"),    { ssr: false });
@@ -284,10 +285,13 @@ export default function ShareCardCapture({
         dataUrl = await renderOnce().catch(() => null);
       }
       if (!dataUrl) return;
-      const res = await fetch("/api/card-share-image", {
+      // Straight to storage first (lib/direct-upload): the picture is around
+      // a megabyte and used to pass through a function on every save. The
+      // route below is the fallback and is unchanged.
+      const stored = (await directCaptureUpload("share", dataUrl, username, SHARE_CAPTURE_VERSION)) || (await fetch("/api/card-share-image", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dataUrl, username, v: SHARE_CAPTURE_VERSION }),
-      });
-      if (res.ok) {
+      })).ok;
+      if (stored) {
         try { localStorage.setItem(hashKey, contentSig); } catch { /* ignore */ }
         // The edge may be holding the stand-in render for this version (the
         // Share button warmed it before this capture existed). One fetch is
