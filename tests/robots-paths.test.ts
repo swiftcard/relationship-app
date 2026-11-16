@@ -32,6 +32,15 @@ describe("robots.txt never blocks a public page (Search Console 'Blocked by robo
     }
   });
 
+  it("the exact four URLs Search Console listed as blocked are now crawlable", () => {
+    for (const p of ["/rounsavillehoward-rbcomtractorrehab", "/rafalgabrysiak", "/cards/new?src=card_cta", "/cards/new?src=for_car_salespeople"]) {
+      expect(allowed(p), p).toBe(true);
+    }
+    // ...and the two Card Builder ones are kept out of the index by the header,
+    // which applies to /cards/new whatever its query string.
+    expect(NOINDEX_PATHS).toContain("/cards");
+  });
+
   it("still blocks the private app, APIs and short-link redirects", () => {
     for (const p of ["/dashboard", "/dashboard/x", "/admin", "/admin/users", "/api/health", "/settings/devices", "/r/abc", "/go/abc", "/office/admin"]) {
       expect(allowed(p), p).toBe(false);
