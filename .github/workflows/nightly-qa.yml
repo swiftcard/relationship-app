@@ -151,6 +151,10 @@ jobs:
         run: OUT=nightly/android-shell node scripts/qa-android-shell.mjs || true
       - name: Every screen, both widths, all plans
         if: steps.gate.outputs.run == 'true'
+        # Backstop: a hang here used to run out the whole job's clock and
+        # cancel every later check. Normally ~9 minutes.
+        timeout-minutes: 25
+        continue-on-error: true
         run: OUT=nightly/sweep node scripts/qa-sweep.mjs || true
       # Card Builder used end to end, the way the owner uses it (2026-11-15: "I'm
       # not going to test this by hand"): the three buttons, the queue, Approve
