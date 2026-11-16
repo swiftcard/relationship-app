@@ -1,30 +1,15 @@
 import type { MetadataRoute } from "next";
+import { disallowRules } from "@/lib/robots-paths";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
+// The rules and why each is an exact segment, not a prefix: src/lib/robots-paths.ts.
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: [
-        "/dashboard",
-        "/contacts",
-        "/admin",
-        "/settings",
-        "/onboarding",
-        "/profile",
-        // NOT /templates — it's a PUBLIC marketing gallery linked from the main
-        // nav and footer (it isn't in the src/proxy.ts auth matcher), so blocking
-        // it here was hiding an indexable page from search.
-        "/cards",
-        "/office",
-        "/api",
-        "/auth",
-        "/join",
-        "/account-deleted",
-        "/r",
-      ],
+      disallow: disallowRules(),
     },
     sitemap: `${APP_URL}/sitemap.xml`,
   };
