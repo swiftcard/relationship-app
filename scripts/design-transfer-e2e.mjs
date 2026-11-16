@@ -9,9 +9,10 @@
 // session, folded into the @supabase/ssr cookie (base64-<base64url(JSON)>,
 // chunked at ~3180 chars exactly like the library does) so the route's
 // createClient() sees a normal signed-in user. No test backdoors in prod.
+import { localBase } from "./lib/qa-local.mjs";
 import { readFileSync } from "node:fs";
 
-const APP = "https://swiftcard.me";
+const APP = localBase(process.env.BASE);
 const EMAIL = "applereview@swiftcard.me";
 const PASSWORD = process.env.DEMO_PASSWORD;
 if (!PASSWORD) { console.error("Set DEMO_PASSWORD (the App Review demo password) — it is never kept in the repo."); process.exit(1); }

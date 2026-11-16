@@ -656,6 +656,33 @@ describe.each([390, 1280])("/admin/card-builder/send/<id> at %ipx", (width) => {
     await page.close();
   });
 
+  // The LinkedIn buttons carry the longest labels on the screen and a button
+  // never wraps: "Copy the message and open their profile" ran 7px off a phone
+  // (found by the Card Builder QA run, 2026-11-15).
+  it("with LinkedIn messages written, both LinkedIn buttons stay on the screen", async () => {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { createElement } = await import("react");
+    const { default: AdminShell } = await import("@/app/admin/AdminShell");
+    const { default: SendView } = await import("@/app/admin/card-builder/send/[id]/SendView");
+    const { buildMessages } = await import("@/lib/prospect-preview/messages");
+    const p = row({ linkedin_url: "https://www.linkedin.com/in/dana-example" } as Partial<PreviewListRow>);
+    const messages = {
+      ...buildMessages(p, { link: `https://swiftcard.me/p/${p.slug}`, sender: "Menash Harooni" }),
+      linkedin: { note: "Hi Dana, I work with real estate offices nearby. Glad to connect.", dm: "Thanks for connecting, Dana. Want me to send what I made for your office?" },
+    };
+    const view = createElement(SendView, { p, messages, now: NOW, senderKnown: true, done: null, error: null });
+    const page = await open(width, renderToStaticMarkup(createElement(AdminShell, { email: "hello@swiftcard.me", unread: 0 }, view)), adminCss);
+    const m = await page.evaluate(() => {
+      const vw = window.innerWidth;
+      const buttons = [...document.querySelectorAll("[data-linkedin]")].map((el) => Math.round(el.getBoundingClientRect().right));
+      return { vw, buttons, sideways: document.documentElement.scrollWidth > vw };
+    });
+    expect(m.buttons).toHaveLength(2);
+    for (const right of m.buttons) expect(right).toBeLessThanOrEqual(m.vw);
+    expect(m.sideways).toBe(false);
+    await page.close();
+  });
+
   it("a draft can send the first text but not the two with the link", async () => {
     const page = await open(width, await sendMarkup(row({ status: "draft", email: null }), null), adminCss);
     const m = await page.evaluate(() => ({

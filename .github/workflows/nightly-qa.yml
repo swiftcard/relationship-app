@@ -1,144 +1,197 @@
-name: Nightly production QA (real browser, every plan)
-# WHY: the 15-minute uptime probe asks production questions over HTTP. This
-# drives it — signs in, saves, reloads, signs out, walks every screen at phone
-# and laptop width as Free, Pro and Office, and pushes a view and a visit
-# through the real analytics and notification endpoints — with throwaway
-# accounts it deletes afterwards. It runs every night and after every
-# production deploy, and keeps ONE issue open while anything is wrong.
+name: QA in a real browser (local build, every plan)
+# WHAT THIS IS. The whole product driven in a real browser: signs in, saves,
+# reloads, signs out, walks every screen at phone and laptop width as Free, Pro
+# and Office, and pushes a view and a visit through the real analytics and
+# notification endpoints.
+#
+# WHERE IT RUNS. On a build of this commit started on the runner
+# (`next build && next start` on localhost:3222). NEVER on swiftcard.me and
+# never on a Vercel preview. Until 2026-11-15 it drove the live site, nightly
+# AND after every production deploy: about 150 runs in 30 days, each one a few
+# thousand requests and 13 accounts made and deleted. That traffic is what took
+# swiftcard.me over Vercel's limits and got it switched off (product_events
+# showed exactly 109 internal events per run; the spike days were the days with
+# the most deploys). scripts/lib/qa-local.mjs now refuses any swiftcard or
+# vercel.app address, hands out a fixed set of seeded accounts instead of
+# making new ones, and answers image uploads in the browser.
+#
+# WHEN. Only when something it could catch has changed (the `paths` below),
+# plus once a night against main. A newer push cancels the run before it.
 on:
   schedule:
     - cron: "0 9 * * *"          # 05:00 New York, before the day starts
-  deployment_status:
+  pull_request:
+    paths:
+      - "src/**"
+      - "public/**"
+      - "scripts/qa-*.mjs"
+      - "scripts/lib/**"
+      - "scripts/site-invisible-sweep.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - "next.config.ts"
+      - ".github/workflows/nightly-qa.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "public/**"
+      - "scripts/qa-*.mjs"
+      - "scripts/lib/**"
+      - "scripts/site-invisible-sweep.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - "next.config.ts"
+      - ".github/workflows/nightly-qa.yml"
   workflow_dispatch:
 concurrency:
-  group: nightly-qa
-  cancel-in-progress: false
+  group: qa-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
   issues: write
 jobs:
-  # Deployment Checks hold a production build until CI passes, but GitHub
-  # reports "success" when it is BUILT. Test it once swiftcard.me serves it,
-  # never the older build still live in the meantime. Scheduled and manual
-  # runs have no commit to wait for and go straight on.
-  live:
-    if: >-
-      github.event_name != 'deployment_status' ||
-      (github.event.deployment_status.state == 'success' &&
-       contains(github.event.deployment_status.environment, 'roduction'))
-    runs-on: ubuntu-latest
-    timeout-minutes: 50
-    outputs:
-      live: ${{ steps.wait.outputs.live }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Wait until swiftcard.me serves this deploy
-        id: wait
-        env:
-          DEPLOY_SHA: ${{ github.event.deployment.sha }}
-          GITHUB_TOKEN: ${{ github.token }}
-        run: node scripts/wait-for-live.mjs
-
   qa:
-    needs: live
-    if: needs.live.outputs.live == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
+    # The seeded accounts are one shared set, so only one QA job uses them at a
+    # time, whichever branch it is for. A second one waits its turn.
+    concurrency:
+      group: qa-seeded-accounts
+      cancel-in-progress: false
     env:
-      BASE: https://swiftcard.me
-      HEALTH_BASE_URL: https://swiftcard.me
-      # The owner's personal card (see uptime.yml — same list, same reason).
+      BASE: http://localhost:3222
+      ADMIN_BASE: http://localhost:3222
+      SWEEP_BASE: http://localhost:3222
+      QA_POOL_RECLAIM: "1"
+      # The owner's personal card (the link-preview check reads real cards'
+      # data, and renders them on the local build).
       HEALTH_REAL_CARDS: "aaronlavi"
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      QA_ADMIN_EMAIL: qa-cb-ci-${{ github.run_id }}@swiftcard-test.invalid
     steps:
+      # A pull request from a fork gets no secrets, and without them there is
+      # no database to run against. Skip cleanly instead of failing.
+      - name: Check the database secrets are available
+        id: gate
+        run: |
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ] || [ -z "$NEXT_PUBLIC_SUPABASE_URL" ]; then
+            echo "No Supabase secrets in this run (a fork?). Skipping QA."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == 'true'
       - uses: actions/setup-node@v4
+        if: steps.gate.outputs.run == 'true'
         with:
           node-version: 24
           cache: npm
       - run: npm ci
+        if: steps.gate.outputs.run == 'true'
       - run: npx playwright install --with-deps chromium
+        if: steps.gate.outputs.run == 'true'
+      # The site under test: this commit, built and served on the runner. The
+      # push keys and the OAuth secret are made for this run and thrown away
+      # with it; the only admin is the throwaway address above, so the real
+      # admin list is never touched.
+      - name: Build this commit and start it on localhost:3222
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          mkdir -p nightly
+          eval "$(node -e "const k=require('web-push').generateVAPIDKeys();console.log('export NEXT_PUBLIC_VAPID_PUBLIC_KEY='+k.publicKey+' VAPID_PRIVATE_KEY='+k.privateKey)")"
+          export OAUTH_SECRET="$(openssl rand -hex 32)"
+          npx next build > nightly/build.log 2>&1 || { tail -50 nightly/build.log; exit 1; }
+          ADMIN_EMAILS="$QA_ADMIN_EMAIL" nohup npx next start -p 3222 > nightly/server.log 2>&1 &
+          for i in $(seq 1 45); do curl -s -o /dev/null --max-time 5 http://localhost:3222/login && break; sleep 2; done
+          curl -sf -o /dev/null --max-time 10 http://localhost:3222/login
       # Every script keeps going after a failure and writes JSON; the summary
       # step decides. `|| true` so one red script never hides the others.
       - name: Analytics + notifications end to end
+        if: steps.gate.outputs.run == 'true'
         run: OUT=nightly/probe node scripts/qa-prod-probe.mjs || true
       # Real cards' link previews, as a messenger gets them: the name, and
       # every logo and photo the card shows, actually in the picture
       # (owner, 2026-10-06: "it'll miss my name or it'll miss my logo").
       - name: Link previews show the name, logo and photo
+        if: steps.gate.outputs.run == 'true'
         run: OUT=nightly/share-preview node scripts/qa-share-preview.mjs || true
       # A card opened once opens again with no signal, Save Contact still
       # works, and anything else shows the no-signal screen (owner,
       # 2026-10-06: "they need to have access to still get my card").
       - name: Cards open with no signal
+        if: steps.gate.outputs.run == 'true'
         run: OUT=nightly/offline node scripts/qa-offline.mjs || true
       # Who gets which notification — bell, team inbox and phone — for Free,
       # Pro, an Office owner/admin/employee and a lapsed Office owner.
       - name: Notifications for every plan and account type
+        if: steps.gate.outputs.run == 'true'
         run: OUT=nightly/notifications node scripts/qa-notifications.mjs || true
-      - name: Health + speed budget
-        run: node scripts/health-check.mjs > nightly/health.json || true
       - name: Flows
+        if: steps.gate.outputs.run == 'true'
         run: OUT=nightly/flows node scripts/qa-flows.mjs || true
       - name: Office Swift Links branding
+        if: steps.gate.outputs.run == 'true'
         run: |
           mkdir -p nightly/office-links
           if OUT=nightly/office-links node scripts/qa-office-links-brand.mjs > nightly/office-links/log.txt 2>&1; then echo "[]" > nightly/office-links/failures.json; else grep -E "^FAIL" nightly/office-links/log.txt | node -e 'const l=require("fs").readFileSync(0,"utf8").split("\n").filter(Boolean);console.log(JSON.stringify(l.length?l:["script exited non-zero — see log"]))' > nightly/office-links/failures.json; fi
       - name: Office admin + member (iPhone shell)
+        if: steps.gate.outputs.run == 'true'
         run: OUT=nightly/office-shell node scripts/qa-office-shell.mjs || true
-      # The Android app is the live site in a WebView — and until 2026-10-08
+      # The Android app is the site in a WebView — and until 2026-10-08
       # nothing looked at the site AS the Android app. Status/nav bars,
       # Apple wording, anything that sells (the Android app sells nothing),
       # the back key, new-tab links, splash and status-bar style.
       - name: Android app (every screen, Free + Pro, both themes)
+        if: steps.gate.outputs.run == 'true'
         run: OUT=nightly/android-shell node scripts/qa-android-shell.mjs || true
       - name: Every screen, both widths, all plans
+        if: steps.gate.outputs.run == 'true'
+        # Backstop: a hang here used to run out the whole job's clock and
+        # cancel every later check. Normally ~9 minutes.
+        timeout-minutes: 25
+        continue-on-error: true
         run: OUT=nightly/sweep node scripts/qa-sweep.mjs || true
       # Card Builder used end to end, the way the owner uses it (2026-11-15: "I'm
       # not going to test this by hand"): the three buttons, the queue, Approve
       # with version A or B, the Messages / Mail / LinkedIn buttons, a prospect
       # opening the preview signed out, the alert, banner and push, every call
       # outcome, and the preview's button through to a booked 15-minute call
-      # that is then canceled. The admin half runs on a build of this same
-      # commit started here, whose only admin is a throwaway address, so
-      # swiftcard.me's own admin list is never touched; the preview page and
-      # the booking run against swiftcard.me itself. The push keys are made for
-      # this run and thrown away with it.
+      # that is then canceled. All of it on the local build.
       - name: Card Builder end to end
-        env:
-          QA_ADMIN_EMAIL: qa-cb-ci-${{ github.run_id }}@swiftcard-test.invalid
+        if: steps.gate.outputs.run == 'true'
+        run: OUT=nightly/card-builder node scripts/qa-card-builder.mjs || true
+      # Content that renders but cannot be seen (the failure that hid the
+      # SwiftLink live preview for ~12 days). This was paint-check.yml, which
+      # swept the live site after every deploy; same sweep, local build.
+      - name: Nothing is rendered but invisible
+        if: steps.gate.outputs.run == 'true'
         run: |
-          mkdir -p nightly/card-builder
-          eval "$(node -e "const k=require('web-push').generateVAPIDKeys();console.log('export NEXT_PUBLIC_VAPID_PUBLIC_KEY='+k.publicKey+' VAPID_PRIVATE_KEY='+k.privateKey)")"
-          export OAUTH_SECRET="$(openssl rand -hex 32)"
-          npx next build > nightly/card-builder/build.log 2>&1 || true
-          ADMIN_EMAILS="$QA_ADMIN_EMAIL" npx next start -p 3222 > nightly/card-builder/server.log 2>&1 &
-          for i in $(seq 1 45); do curl -s -o /dev/null --max-time 5 http://localhost:3222/login && break; sleep 2; done
-          ADMIN_BASE=http://localhost:3222 OUT=nightly/card-builder node scripts/qa-card-builder.mjs || true
-          pkill -f "next start" || true
+          mkdir -p nightly/paint
+          if node scripts/site-invisible-sweep.mjs > nightly/paint/log.txt 2>&1; then echo "[]" > nightly/paint/failures.json; else grep -E "FINDINGS|LOAD-FAILED" nightly/paint/log.txt | node -e 'const l=require("fs").readFileSync(0,"utf8").split("\n").filter(Boolean);console.log(JSON.stringify(l.length?l:["script exited non-zero — see log"]))' > nightly/paint/failures.json; fi
       - name: Summarise
         id: sum
+        if: steps.gate.outputs.run == 'true'
         run: |
           node scripts/qa-nightly-summary.mjs
           echo "healthy=$(node -e "console.log(require('./nightly/summary.json').healthy)")" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true'
         with:
           name: nightly-qa-${{ github.run_id }}
           path: nightly
           retention-days: 14
       # Hands the same verdict to the Agents tab (src/lib/crew), whose Watchdog
-      # agents turn each new failure into a plain-words Fix card. Best effort:
-      # it can never fail or slow the QA run, and it's a no-op until
+      # agents turn each new failure into a plain-words Fix card. One small
+      # POST of the result, main only; it is not a test of the live site. Best
+      # effort: it can never fail or slow the QA run, and it's a no-op until
       # CREW_TICK_SECRET exists.
       - name: Share the result with the Agents tab
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true' && github.event_name != 'pull_request'
         continue-on-error: true
         env:
           CREW_TICK_SECRET: ${{ secrets.CREW_TICK_SECRET }}
@@ -146,27 +199,30 @@ jobs:
           if [ -z "$CREW_TICK_SECRET" ] || [ ! -f nightly/summary.json ]; then exit 0; fi
           curl -sS --max-time 30 -X POST -H "Authorization: Bearer $CREW_TICK_SECRET" -H "Content-Type: application/json" \
             --data @nightly/summary.json "https://swiftcard.me/api/crew/ingest?source=nightly&run=${{ github.run_id }}" || true
-      # The QA accounts above are deleted, but their rendered card images were
-      # not, and they filled Supabase storage past the free plan (2.8 GB by
-      # 2026-10-20). Removes only qa-*.png older than 6 hours whose account is
-      # gone; see the SAFETY notes in the script.
+      # Safety net for card images a run before 2026-11-15 left in storage
+      # (2.8 GB by 2026-10-20). Uploads are now answered in the browser, so
+      # this should find nothing. Removes only qa-*.png older than 6 hours
+      # whose account is gone; see the SAFETY notes in the script.
       - name: Remove card images left by deleted QA accounts
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true' && github.event_name != 'pull_request'
         continue-on-error: true
         run: node scripts/cleanup-qa-images.mjs --go
+      # One issue, on main only. A pull request shows its own red check.
       - name: Open, update or close the incident
+        if: steps.gate.outputs.run == 'true' && github.event_name != 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
             const s = JSON.parse(fs.readFileSync('nightly/summary.json', 'utf8'));
-            const TITLE = '🔴 Nightly production QA failing';
+            const TITLE = '🔴 QA failing (real browser, local build)';
             const { owner, repo } = context.repo;
             const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
             const open = await github.rest.issues.listForRepo({ owner, repo, state: 'open', labels: 'nightly-qa', per_page: 20 });
-            const existing = open.data.find((i) => i.title === TITLE);
+            // The issue kept its old title while it tested the live site; adopt it.
+            const existing = open.data.find((i) => i.title === TITLE || i.title === '🔴 Nightly production QA failing');
             const body = [
-              `**${s.failedCount} finding(s)** against https://swiftcard.me — [run + screenshots](${runUrl})`,
+              `**${s.failedCount} finding(s)** on a local build of \`${context.sha.slice(0, 7)}\` — [run + screenshots](${runUrl})`,
               '',
               ...s.sections.map((sec) => sec.failures.length
                 ? `### ❌ ${sec.name}\n${sec.failures.map((f) => `- ${f}`).join('\n')}`
@@ -174,15 +230,15 @@ jobs:
               '',
               `Last run: ${s.at}`,
               '',
-              '<sub>Opened automatically by `.github/workflows/nightly-qa.yml`. It edits this one issue rather than opening more, and closes it the first night everything passes.</sub>',
+              '<sub>Opened automatically by `.github/workflows/nightly-qa.yml`. It edits this one issue rather than opening more, and closes it the first run everything passes.</sub>',
             ].join('\n');
             if (!s.healthy) {
-              if (existing) await github.rest.issues.update({ owner, repo, issue_number: existing.number, body });
+              if (existing) await github.rest.issues.update({ owner, repo, issue_number: existing.number, title: TITLE, body });
               else await github.rest.issues.create({ owner, repo, title: TITLE, body, labels: ['nightly-qa', 'bug'] });
             } else if (existing) {
               await github.rest.issues.createComment({ owner, repo, issue_number: existing.number, body: `✅ Every check passed on ${s.at} — closing. [run](${runUrl})` });
               await github.rest.issues.update({ owner, repo, issue_number: existing.number, state: 'closed' });
             }
       - name: Fail the run when anything failed
-        if: steps.sum.outputs.healthy != 'true'
+        if: steps.gate.outputs.run == 'true' && steps.sum.outputs.healthy != 'true'
         run: exit 1

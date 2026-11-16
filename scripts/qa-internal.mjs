@@ -22,9 +22,25 @@
 //
 // Every script that opens a browser context must pass it through here —
 // tests/qa-internal-marker.test.ts fails CI otherwise.
-const HOSTS = ["https://swiftcard.me", "https://www.swiftcard.me", "http://localhost", "http://127.0.0.1"];
+//
+// Since 2026-11-15 it is also the choke point for the local-only rule: every
+// browser a script opens passes through here, so this is where a run pointed at
+// swiftcard.me or a Vercel deployment is stopped, and where uploads are
+// answered in the browser instead of reaching storage (lib/qa-local.mjs).
+// `realUploads: true` lets ONE flow that is about the upload itself through.
+import { assertLocalBase, stubUploads } from "./lib/qa-local.mjs";
 
-export async function markInternal(ctx, base) {
+const HOSTS = ["http://localhost", "http://127.0.0.1"];
+
+export async function markInternal(ctx, base, { realUploads = false } = {}) {
+  for (const b of [base, process.env.BASE, process.env.SWEEP_BASE, process.env.ADMIN_BASE]) {
+    if (typeof b === "string" && b) assertLocalBase(b);
+  }
+  // A wall inside the browser too: a link, redirect or image that points at
+  // the live site (the app writes canonical swiftcard.me links) is cut off
+  // here, so no page a script opens can send a request to production.
+  await ctx.route(/^https?:\/\/(?:[a-z0-9-]+\.)*(?:swiftcard\.(?:me|app)|vercel\.app)(?::\d+)?\//i, (route) => route.abort("blockedbyclient"));
+  if (!realUploads) await stubUploads(ctx, base || process.env.BASE);
   await ctx.addInitScript(() => {
     try { localStorage.setItem("sc_evt_internal", "1"); } catch { /* storage blocked */ }
   });

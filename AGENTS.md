@@ -50,12 +50,13 @@ change is the difference between shipping a fix and shipping a regression.
 | Every screen, both widths | `npm run qa:sweep` | Loads every page logged-out / Free / Pro at 390px and 1280px: JS errors, 4xx/5xx, overflow, covered controls, broken images, dead links. |
 | The app actually used | `npm run qa:flows` | Drives it: save → reload persistence, double-submit, validation, sign-out, back/forward, empty account, mobile tabs. |
 
-The last two seed their own throwaway accounts against the real Supabase project
-and delete them in a `finally` block. They need `.env.local`, so they are
-developer/pre-release tools, not CI steps. Point them at a production build
-(`npx next build && npx next start -p 3222`, then `BASE=http://localhost:3222`) —
-`next dev`'s indicator sits on top of the bottom-left tab and the dev overlay
-covers footer links, and both look exactly like product defects.
+The last two run on a build on this machine, never on the live site: start one
+with `npx next build && npx next start -p 3222`, then `BASE=http://localhost:3222`
+(`next dev`'s indicator sits on top of the bottom-left tab and the dev overlay
+covers footer links, and both look exactly like product defects). They use a
+fixed set of seeded QA accounts in the real Supabase project and hand them back
+emptied; they do not make or delete accounts. They need `.env.local` locally;
+in CI the same scripts run in `.github/workflows/nightly-qa.yml`.
 
 **A source scan cannot see layout, and neither can a type.** If your change moves
 a pixel, run `test:render`. If it changes what a button does, run `qa:flows`.
@@ -88,6 +89,35 @@ a pixel, run `test:render`. If it changes what a button does, run `qa:flows`.
   `git add -A` or `git commit -a` — you will commit someone else's half-finished
   feature. `git status` before and after.
 
+# Tests, verification and agents never touch production
+
+In November 2026 Vercel switched swiftcard.me off for going over its limits
+(1.54M CDN requests, 887K function invocations and 12.66 GB of origin transfer
+in 30 days). The traffic was our own: the QA workflow drove the live site with
+a real browser nightly **and after every production deploy**, about 150 runs in
+30 days, each making and deleting about 13 accounts (roughly 1,950 in one
+billing cycle). `product_events` showed exactly 109 internal events per run,
+and every spike day was a day with many deploys.
+
+- **Never run a test, a verification step, a QA script or an agent against
+  swiftcard.me, swiftcard.app or a `*.vercel.app` URL.** Build the commit and
+  run against it: `npx next build && npx next start -p 3222`, then
+  `BASE=http://localhost:3222`.
+- **Never create a real auth user for testing.** QA scripts get accounts from
+  `seededAdmin()` in `scripts/lib/qa-local.mjs`: a fixed set of 12, reused and
+  emptied between runs.
+- **Never upload test images to storage.** `markInternal()` answers uploads in
+  the browser (`stubUploads`).
+- Three walls enforce it: `localBase()` ends a script pointed anywhere else,
+  `scripts/claude-no-production.mjs` (a Claude Code hook in
+  `.claude/settings.json`) stops an agent's browser, fetch or shell command,
+  and `tests/qa-local-only.test.ts` fails CI if a script or workflow goes
+  around them.
+- What still talks to production, on purpose: the uptime probe
+  (`uptime.yml`, a few dozen plain GETs), the scheduled job callers
+  (`push-catchup.yml`, `trial-notice.yml`, `crew-tick.yml`), and one read of
+  `/api/health` to confirm which commit is live. Nothing else.
+
 # The guards that are always on (do not switch one off)
 
 The owner has had the same things fixed more than once — a bug that came back,
@@ -97,9 +127,9 @@ of them is removed or quietly weakened.
 
 | Guard | Runs | What it catches |
 |---|---|---|
-| **Vercel Deployment Checks** (Project Settings → Build and Deployment → Deployment Checks: `verify`, `render`) + `scripts/wait-for-live.mjs` | every push to `main` | a change going live before its tests pass. The production build is made at once but swiftcard.me keeps the previous one until CI's `verify` and `render` jobs are green. The post-deploy checks wait until `/api/health` names their commit, so they test what is live. Pinned by `tests/deploy-gate.test.ts`. |
+| **Vercel Deployment Checks** (Project Settings → Build and Deployment → Deployment Checks: `verify`, `render`) + `scripts/wait-for-live.mjs` | every push to `main` | a change going live before its tests pass. The production build is made at once but swiftcard.me keeps the previous one until CI's `verify` and `render` jobs are green. The deploy watchdog waits until `/api/health` names its commit, so it watches what is live. Pinned by `tests/deploy-gate.test.ts`. |
 | `.github/workflows/uptime.yml` → `scripts/health-check.mjs` | every 15 min | outage, blank card, expired Apple secret, **speed budget** (median full-response time per key route, DB latency) |
-| `.github/workflows/nightly-qa.yml` | nightly 05:00 NY + after every production deploy | real Chromium against production: flows, every screen at both widths for Free/Pro/Office, Office admin + member, **analytics and notifications end to end** (`scripts/qa-prod-probe.mjs`), **Card Builder used end to end** (`scripts/qa-card-builder.mjs`: Approve, the send buttons, a prospect's view, the alert and push, every call outcome, the preview's button through to a booked and canceled call; its admin half runs on a build started beside the live site with a throwaway admin), **real cards' link previews: name, logo and photo actually in the picture** (`scripts/qa-share-preview.mjs`) |
+| `.github/workflows/nightly-qa.yml` | nightly 05:00 NY + on pushes and pull requests that change the app (`paths`) | real Chromium against **a build of that commit on the runner, never production**: flows, every screen at both widths for Free/Pro/Office, Office admin + member, **analytics and notifications end to end** (`scripts/qa-prod-probe.mjs`), **Card Builder used end to end** (`scripts/qa-card-builder.mjs`), **real cards' link previews: name, logo and photo actually in the picture** (`scripts/qa-share-preview.mjs`), **content that renders but cannot be seen** (`scripts/site-invisible-sweep.mjs`, formerly `paint-check.yml`) |
 | `.github/workflows/deploy-watchdog.yml` | on every deploy, **when enabled** | error-rate spike → automatic rollback (needs the Sentry secrets). Found switched off in GitHub (Actions → "Deploy watchdog (auto-rollback)", disabled by hand 2026-08-17) on 2026-10-09; no test can see that switch, so check it there. |
 | `ci.yml` + the tripwire tests (`one-notification-per-visit`, `view-visit-window`, `analytics-*`, `trial-eligibility`, `proxy-auth-hop`) | every push | the recurring bugs, pinned at source |
 | `.githooks/pre-push` (installed by `npm install` via `scripts/install-hooks.mjs`) | before every push leaves the machine | a type or lint error reaching `main`. CI was red for 26 pushes in Sept 2026 over one lint error nobody saw, and while red its Test job never ran. Pinned by `tests/push-guard.test.ts`. |
@@ -125,7 +155,5 @@ code on it (`tests/deploy-gate.test.ts`).
 
 Both workflows keep ONE issue open while something is wrong (labels `uptime`,
 `nightly-qa`) and close it when it passes; GitHub emails the owner on open.
-`paint-check.yml` does the same for invisible content (one 🫥 issue, closed
-the first deploy the sweep passes).
 Every QA script reads secrets from the environment first and `.env.local`
 second, which is what lets CI run them — keep it that way.

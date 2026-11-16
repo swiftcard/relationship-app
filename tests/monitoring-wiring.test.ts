@@ -24,11 +24,18 @@ describe("always-on production guards", () => {
     for (const m of hc.matchAll(/"\/[^"]*": (\d+)/g)) expect(Number(m[1])).toBeLessThanOrEqual(5000);
   });
 
-  it("the nightly real-browser run is scheduled AND fires after every production deploy", () => {
+  // It used to fire after every production deploy too, against the live site.
+  // That was about 150 real-browser runs a month on swiftcard.me and is what
+  // got the site switched off for exceeding Vercel's limits (November 2026).
+  // Same scripts, same schedule; the site under test is now a build on the
+  // runner, and the after-deploy trigger is a run per change to the app.
+  it("the nightly real-browser run is scheduled AND runs on every change to the app, on a local build", () => {
     const wf = read(".github/workflows/nightly-qa.yml");
     expect(wf).toMatch(/- cron: "0 9 \* \* \*"/);
-    expect(wf).toContain("deployment_status:");
-    for (const s of ["qa-prod-probe.mjs", "health-check.mjs", "qa-flows.mjs", "qa-office-links-brand.mjs", "qa-office-shell.mjs", "qa-android-shell.mjs", "qa-sweep.mjs", "qa-share-preview.mjs", "qa-offline.mjs", "qa-nightly-summary.mjs"]) {
+    expect(wf).not.toMatch(/^\s*deployment_status:/m);
+    expect(wf).toMatch(/push:\n\s+branches: \[main\]/);
+    expect(wf).toContain("BASE: http://localhost:3222");
+    for (const s of ["qa-prod-probe.mjs", "site-invisible-sweep.mjs", "qa-flows.mjs", "qa-office-links-brand.mjs", "qa-office-shell.mjs", "qa-android-shell.mjs", "qa-sweep.mjs", "qa-share-preview.mjs", "qa-offline.mjs", "qa-nightly-summary.mjs"]) {
       expect(wf, s).toContain(`scripts/${s}`);
     }
     expect(wf).toContain("labels: 'nightly-qa'");

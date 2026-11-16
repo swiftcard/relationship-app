@@ -13,13 +13,14 @@
 //
 // Seeds its own Pro account, drives it, deletes it. Never touches an account it
 // did not create. Exits non-zero when a flow fails, so CI can gate on it.
+import { localBase, seededAdmin } from "./lib/qa-local.mjs";
 import { chromium } from "playwright";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { markInternal } from "./qa-internal.mjs";
 import { signInByLink } from "./lib/qa-sign-in.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
-const BASE = process.env.BASE || "http://localhost:3111";
+const BASE = localBase(process.env.BASE, "http://localhost:3111");
 const OUT = process.env.OUT || "qa-flows-out";
 mkdirSync(OUT, { recursive: true });
 
@@ -28,7 +29,7 @@ mkdirSync(OUT, { recursive: true });
 const env = existsSync(`${ROOT}/.env.local`) ? readFileSync(`${ROOT}/.env.local`, "utf8") : "";
 const g = (k) => process.env[k] ?? process.env[k.replace(/^NEXT_PUBLIC_/, "")] ?? (env.match(new RegExp("^" + k + "=(.*)$", "m")) || [])[1]?.trim().replace(/^["']|["']$/g, "");
 const SB = g("NEXT_PUBLIC_SUPABASE_URL"), SVC = g("SUPABASE_SERVICE_ROLE_KEY");
-const adm = (p, i) => fetch(SB + p, { ...i, headers: { apikey: SVC, Authorization: "Bearer " + SVC, "Content-Type": "application/json", ...(i?.headers ?? {}) } });
+const adm = seededAdmin((p, i) => fetch(SB + p, { ...i, headers: { apikey: SVC, Authorization: "Bearer " + SVC, "Content-Type": "application/json", ...(i?.headers ?? {}) } }));
 
 const stamp = Date.now().toString().slice(-8);
 const password = `Qa!aA1${stamp}x`;
@@ -70,12 +71,12 @@ async function seed() {
 // broken login. One sign-in, reused, is also what a real session looks like.
 let storageState = null;
 
-async function newPage({ signedIn = true, userAgent } = {}) {
+async function newPage({ signedIn = true, userAgent, realUploads = false } = {}) {
   const ctx = await markInternal(await browser.newContext({
     viewport: { width: 1280, height: 900 },
     ...(userAgent ? { userAgent } : {}),
     ...(signedIn && storageState ? { storageState } : {}),
-  }));
+  }), BASE, { realUploads });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => fail("js-error", `${page.url().replace(BASE, "")} — ${e.message.split("\n")[0].slice(0, 140)}`));
   return { ctx, page };
@@ -1007,7 +1008,10 @@ FLOWS["signature-copy"] = async () => {
 // anywhere; in texts the link previews as the thing itself. Real page, real
 // upload, real share link, real link preview — then the uploads are deleted.
 FLOWS["create-link"] = async () => {
-  const { ctx, page } = await newPage();
+  // The one flow that is ABOUT the upload: the share link is made from the
+  // stored picture, so a stubbed upload would test nothing. One 100-byte PNG,
+  // deleted in `finally`.
+  const { ctx, page } = await newPage({ realUploads: true });
   const uploaded = [];
   page.on("response", async (r) => {
     if (!r.url().includes("/api/upload") || r.request().method() !== "POST") return;
@@ -1054,7 +1058,11 @@ FLOWS["create-link"] = async () => {
       const u = new URL(shown);
       if (u.pathname === "/api/self-view") { hop = u; share = `${u.origin}${u.searchParams.get("to") || ""}`; }
     } catch {}
-    const m = new RegExp(`^${BASE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/${uname}/p/(\\d{13}[jpg])$`).exec(share);
+    // The app writes share links on its canonical address (swiftcard.me)
+    // whatever host served the page. The link is checked as written; every
+    // request below goes to the local build, never to the live site.
+    const local = (u) => String(u || "").replace(/^https:\/\/(www\.)?swiftcard\.me(?=\/|$)/, BASE);
+    const m = new RegExp(`^${BASE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/${uname}/p/(\\d{13}[jpg])$`).exec(local(share));
     if (!preview || !preview.text.includes("QA Signature Name")) fail("create-link", "the linked preview lost the signature's words");
     else if (!m) fail("create-link", `every part should open a /${uname}/p/<id> share link — got ${JSON.stringify(shown)} (the preview picture was not made?)`);
     else if (!hop && /swiftcard\.me/.test(BASE)) fail("create-link", `the preview opens the share link directly, not through /api/self-view — the owner's own click would count as a view (${JSON.stringify(shown)})`);
@@ -1076,17 +1084,17 @@ FLOWS["create-link"] = async () => {
     // The share link: the card, with the linked picture as its link preview.
     if (m) {
       if (hop) {
-        const via = await page.request.get(shown, { maxRedirects: 0 });
+        const via = await page.request.get(local(shown), { maxRedirects: 0 });
         const to = via.headers()["location"] || "";
         if (via.status() !== 303 || new URL(to, shown).pathname !== `/${uname}/p/${m[1]}`) fail("create-link", `the preview's self-view hop answered ${via.status()} → ${JSON.stringify(to)} instead of the share link`);
       }
-      const res = await page.request.get(share);
+      const res = await page.request.get(local(share));
       const html = await res.text();
       const og = /<meta property="og:image" content="([^"]+)"/.exec(html)?.[1]?.replace(/&amp;/g, "&");
       if (res.status() !== 200) fail("create-link", `the share link answered ${res.status()}`);
       else if (!og || !og.includes(`/${uname}/p/${m[1]}/opengraph-image`)) fail("create-link", `the share link's preview image isn't the linked picture: ${JSON.stringify(og)}`);
       else {
-        const img = await page.request.get(og);
+        const img = await page.request.get(local(og));
         const type = img.headers()["content-type"] || "";
         if (img.status() !== 200 || !/^image\//.test(type)) fail("create-link", `the preview image answered ${img.status()} ${type}`);
         else if (img.headers()["x-sc-preview"] !== "linked") fail("create-link", `the preview fell back to the card instead of the linked picture (${img.headers()["x-sc-preview"] || "no marker"})`);
@@ -1107,7 +1115,7 @@ FLOWS["create-link"] = async () => {
           Object.defineProperty(Navigator.prototype, "webdriver", { get: () => false, configurable: true });
         });
         const sent = visitor.page.waitForRequest((r) => r.url().includes("/api/card-events") && r.method() === "POST" && /"viewed_card"/.test(r.postData() || ""), { timeout: 30000 }).catch(() => null);
-        await visitor.page.goto(share, { waitUntil: "domcontentloaded" });
+        await visitor.page.goto(local(share), { waitUntil: "domcontentloaded" });
         const req = await sent;
         const body = req ? JSON.parse(req.postData() || "{}") : null;
         const res = req ? await req.response() : null;
@@ -1185,7 +1193,13 @@ FLOWS["signup-ui"] = async () => {
     if (!/don.t match/i.test(mismatch)) fail("signup-ui", `mismatched passwords showed no "Passwords don't match." (got: ${JSON.stringify(mismatch)})`);
     if (!page.url().includes("/login")) { fail("signup-ui", "mismatched passwords still created an account"); return; }
 
-    // 3. The real thing.
+    // 3. The real thing. It makes a real account through the form, so it only
+    // runs when asked (QA_SIGNUP=1): no account is made or deleted per run
+    // (CLAUDE.md, 2026-11-15). Steps 1 and 2 above always run.
+    if (process.env.QA_SIGNUP !== "1") {
+      pass("signup-ui", "typo caught, mismatch caught; the real signup is skipped unless QA_SIGNUP=1 (no accounts are created per run)");
+      return;
+    }
     await page.fill("#auth-confirm-password", "");
     await typeInto(page, "#auth-confirm-password", password);
     await page.click('button[type="submit"]');

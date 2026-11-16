@@ -1,4 +1,4 @@
-// node scripts/qa-notifications.mjs      env: BASE=<url> (default https://swiftcard.me)  OUT=<dir>
+// node scripts/qa-notifications.mjs      env: BASE=<a local build, default http://localhost:3222>  OUT=<dir>
 //
 // WHO GETS WHICH NOTIFICATION, end to end against production, for every plan
 // and account type — run every night and after every deploy
@@ -32,20 +32,21 @@
 // `finally` — profiles unlinked from their office FIRST, because
 // profiles.office_id has no cascade and an office still referenced cannot be
 // deleted (246 offices leaked that way before 2026-10-02).
+import { localBase, seededAdmin } from "./lib/qa-local.mjs";
 import { chromium } from "playwright";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { markInternal } from "./qa-internal.mjs";
 import { signInByLink } from "./lib/qa-sign-in.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1").replace(/\/$/, "");
-const BASE = process.env.BASE || "https://swiftcard.me";
+const BASE = localBase(process.env.BASE);
 const OUT = process.env.OUT || "qa-notifications-out";
 mkdirSync(OUT, { recursive: true });
 const env = existsSync(`${ROOT}/.env.local`) ? readFileSync(`${ROOT}/.env.local`, "utf8") : "";
 const g = (k) => process.env[k] ?? process.env[k.replace(/^NEXT_PUBLIC_/, "")] ?? (env.match(new RegExp("^" + k + "=(.*)$", "m")) || [])[1]?.trim().replace(/^["']|["']$/g, "");
 const SB = g("NEXT_PUBLIC_SUPABASE_URL"), SVC = g("SUPABASE_SERVICE_ROLE_KEY");
 if (!SB || !SVC) { console.error("missing SUPABASE url / service role key"); process.exit(2); }
-const adm = (p, i) => fetch(SB + p, { ...i, headers: { apikey: SVC, Authorization: "Bearer " + SVC, "Content-Type": "application/json", ...(i?.headers ?? {}) } });
+const adm = seededAdmin((p, i) => fetch(SB + p, { ...i, headers: { apikey: SVC, Authorization: "Bearer " + SVC, "Content-Type": "application/json", ...(i?.headers ?? {}) } }));
 const json = async (p) => { const r = await adm(p); const j = await r.json().catch(() => null); return Array.isArray(j) ? j : []; };
 
 const UA_HUMAN = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";

@@ -59,10 +59,13 @@ describe("the marker helper sets both markers", () => {
     expect(helper).toContain('localStorage.setItem("sc_evt_internal", "1")');
     expect(read("src/lib/events.ts")).toContain('const INTERNAL_KEY = "sc_evt_internal"');
   });
-  it("plants the sc_internal cookie the website sink reads, for production and local hosts", () => {
+  // Local hosts only: since 2026-11-15 no script may open the live site at
+  // all (tests/qa-local-only.test.ts), so there is no production cookie to plant.
+  it("plants the sc_internal cookie the website sink reads, for local hosts", () => {
     expect(helper).toContain('name: "sc_internal"');
-    expect(helper).toContain("https://swiftcard.me");
+    expect(helper).not.toContain("https://swiftcard.me");
     expect(helper).toContain("http://localhost");
+    expect(helper).toContain("http://127.0.0.1");
   });
 });
 

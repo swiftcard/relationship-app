@@ -1,4 +1,4 @@
-// node scripts/qa-offline.mjs   env: BASE=<url> (default https://swiftcard.me)  OUT=<dir>
+// node scripts/qa-offline.mjs   env: BASE=<a local build, default http://localhost:3222>  OUT=<dir>
 //                                     QA_OFFLINE_CARD=<slug> (default demo-sales)
 //                                     QA_OFFLINE_NAME=<name on it> (default Alex Morgan)
 //
@@ -17,6 +17,7 @@
 // Read-only: every write the page would make (the view, link taps, the
 // signup nudge's analytics) is answered here and never reaches production,
 // and Vercel/PostHog beacons are dropped. Writes ${OUT}/failures.json.
+import { localBase } from "./lib/qa-local.mjs";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { markInternal } from "./qa-internal.mjs";
@@ -24,7 +25,7 @@ import { markInternal } from "./qa-internal.mjs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 
-const BASE = (process.env.BASE || "https://swiftcard.me").replace(/\/$/, "");
+const BASE = localBase(process.env.BASE);
 const OUT = process.env.OUT || "qa-offline-out";
 const CARD = (process.env.QA_OFFLINE_CARD || "demo-sales").toLowerCase();
 const NAME = process.env.QA_OFFLINE_NAME || "Alex Morgan";

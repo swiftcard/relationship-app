@@ -16,13 +16,14 @@
 //
 // Seeds its own office, owner and teammate; deletes all of it in a finally.
 // Never touches an account it did not create. Exits non-zero on any failure.
+import { isSeedId, localBase, QA_SEED_DOMAIN, seededAdmin } from "./lib/qa-local.mjs";
 import { chromium } from "playwright";
 import { existsSync, readFileSync, mkdirSync } from "node:fs";
 import { markInternal } from "./qa-internal.mjs";
 import { signInByLink } from "./lib/qa-sign-in.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
-const BASE = process.env.BASE || "http://localhost:3222";
+const BASE = localBase(process.env.BASE, "http://localhost:3222");
 const OUT = process.env.OUT || "qa-office-links-out";
 mkdirSync(OUT, { recursive: true });
 
@@ -31,7 +32,7 @@ mkdirSync(OUT, { recursive: true });
 const env = existsSync(`${ROOT}/.env.local`) ? readFileSync(`${ROOT}/.env.local`, "utf8") : "";
 const g = (k) => process.env[k] ?? process.env[k.replace(/^NEXT_PUBLIC_/, "")] ?? (env.match(new RegExp("^" + k + "=(.*)$", "m")) || [])[1]?.trim().replace(/^["']|["']$/g, "");
 const SB = g("NEXT_PUBLIC_SUPABASE_URL"), SVC = g("SUPABASE_SERVICE_ROLE_KEY");
-const adm = (p, i) => fetch(SB + p, { ...i, headers: { apikey: SVC, Authorization: "Bearer " + SVC, "Content-Type": "application/json", ...(i?.headers ?? {}) } });
+const adm = seededAdmin((p, i) => fetch(SB + p, { ...i, headers: { apikey: SVC, Authorization: "Bearer " + SVC, "Content-Type": "application/json", ...(i?.headers ?? {}) } }));
 
 const stamp = Date.now().toString().slice(-8);
 const password = `Qa!aA1${stamp}x`;
@@ -167,7 +168,15 @@ async function cleanup() {
       const o = await (await adm(`/rest/v1/offices?owner_id=eq.${uid}&select=id`)).json().catch(() => []);
       const pr = await (await adm(`/rest/v1/profiles?id=eq.${uid}&select=id`)).json().catch(() => []);
       const au = await adm(`/auth/v1/admin/users/${uid}`);
-      left += (Array.isArray(o) ? o.length : 0) + (Array.isArray(pr) ? pr.length : 0) + (au.status === 200 ? 1 : 0);
+      // A seeded QA account is kept on purpose: "deleting" it empties it and
+      // parks it (lib/qa-local). What must be gone is what it owned; the
+      // account itself only counts as left behind if it was not handed back.
+      let stillThere = au.status === 200;
+      if (stillThere && isSeedId(uid)) {
+        const user = await au.json().catch(() => ({}));
+        stillThere = !String(user.email ?? "").endsWith(QA_SEED_DOMAIN);
+      }
+      left += (Array.isArray(o) ? o.length : 0) + (Array.isArray(pr) ? pr.length : 0) + (stillThere ? 1 : 0);
     }
     if (!left) { console.log("\ncleaned up seeded office, cards and accounts (verified)"); return; }
     if (attempt === 3) {

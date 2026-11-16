@@ -13,7 +13,7 @@ const SECTIONS = [
   ["Link previews (name, logo, photo)", "nightly/share-preview/failures.json", (j) => j],
   ["Cards open with no signal", "nightly/offline/failures.json", (j) => j],
   ["Card Builder end to end (admin screens, preview view, alert, booking)", "nightly/card-builder/failures.json", (j) => j],
-  ["Production health + speed budget", "nightly/health.json", (j) => (j.results ?? []).filter((r) => !r.ok).map((r) => `${r.name}: ${r.detail}`)],
+  ["Nothing is rendered but invisible (paint check)", "nightly/paint/failures.json", (j) => j],
 ];
 const sections = SECTIONS.map(([name, file, pick]) => {
   if (!existsSync(file)) return { name, failures: [`no output written (${file}) — the script crashed`] };

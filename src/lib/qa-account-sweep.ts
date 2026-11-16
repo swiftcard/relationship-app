@@ -24,9 +24,16 @@ const MAX_PAGES = 50;
 
 type Admin = ReturnType<typeof getAdminSupabase>;
 
-export function isLeftoverQaAccount(u: { email?: string | null; created_at?: string | null }, nowMs: number): boolean {
+export function isLeftoverQaAccount(
+  u: { email?: string | null; created_at?: string | null; app_metadata?: Record<string, unknown> | null },
+  nowMs: number,
+): boolean {
   const email = (u.email ?? "").toLowerCase();
   if (!email.endsWith(QA_EMAIL_DOMAIN)) return false;
+  // The fixed, reused QA accounts (scripts/lib/qa-local.mjs). They are old on
+  // purpose and carry a QA address while a run has one out: removing one would
+  // bring back the create-and-delete churn they exist to end (2026-11-15).
+  if (u.app_metadata?.qa_seed === true) return false;
   const created = u.created_at ? Date.parse(u.created_at) : NaN;
   return Number.isFinite(created) && nowMs - created >= QA_ACCOUNT_MAX_AGE_MS;
 }
