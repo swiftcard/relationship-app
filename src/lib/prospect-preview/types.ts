@@ -230,6 +230,9 @@ export type ProspectPreview = {
   alert_user_id?: string | null;
   /** The opening texts written for them (lib/prospect-preview/opener.ts): five, scored, the best is the default. */
   openers?: Openers | null;
+  /** The one follow-up text written 48 hours after an unopened send (lib/card-builder-jobs/followups.ts), with {link}. Never sent by itself. */
+  followup_text?: string | null;
+  followup_at?: string | null;
   /** What kind of line `phone` is. Only a mobile can get an iMessage. Null = not checked. */
   phone_kind?: PhoneKind | null;
   /** The Mac sender found this number is not on iMessage: nothing more is sent to it from there. */

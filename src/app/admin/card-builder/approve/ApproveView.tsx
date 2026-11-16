@@ -18,6 +18,7 @@ import OneTapSend from "../OneTapSend";
 import CopyText from "../CopyText";
 import { OPENER_HOOK_LABELS, openerMessage, openerText, scoreTotal } from "@/lib/prospect-preview/opener";
 import { QUEUE_RESULT_TEXT, type QueueResult } from "@/lib/prospect-preview/outbox";
+import type { FailedJob } from "@/lib/card-builder-jobs/jobs";
 
 // ── Card Builder: the Approve queue (server component, no data loading) ─────
 // Built for a phone held in one hand (owner, 2026-11-13: "AI does the work and
@@ -37,8 +38,9 @@ const DONE: Record<string, { ok: boolean; text: string }> = {
   skipped: { ok: true, text: "Skipped. It stays a draft, under Skipped at the bottom." },
   unskipped: { ok: true, text: "Back in the queue." },
   sent: { ok: true, text: "Marked as sent." },
-  approved_queued: { ok: true, text: "Published and queued. Your Mac texts it from your number in your sending hours." },
-  queued: { ok: true, text: "Queued. Your Mac texts it from your number in your sending hours." },
+  approved_queued: { ok: true, text: "Published and scheduled for 9 AM their time. Your Mac then texts it from your number, in your sending hours." },
+  queued: { ok: true, text: "Scheduled for 9 AM their time. Your Mac then texts it from your number, in your sending hours." },
+  retried: { ok: true, text: "Trying it again. It runs within 5 minutes." },
   held: { ok: false, text: "Not published: that draft is too generic. Open Edit to see what it needs." },
   failed: { ok: false, text: "That didn't work. Try again in a minute." },
 };
@@ -335,7 +337,7 @@ export function tallyText(raw: string | null): string | null {
   return [`${queued} published and queued for your Mac.`, rest.length ? `Left as they were: ${rest.join("; ")}.` : ""].filter(Boolean).join(" ");
 }
 
-export default function ApproveView({ list, appUrl, now, sender, done, error, about, connections = [], tally = null }: {
+export default function ApproveView({ list, appUrl, now, sender, done, error, about, connections = [], tally = null, failed = [] }: {
   list: PreviewList;
   appUrl: string;
   /** The time the page was made (server), so the view stays pure. */
@@ -349,6 +351,8 @@ export default function ApproveView({ list, appUrl, now, sender, done, error, ab
   connections?: Connection[];
   /** After "Approve all": what happened to each draft, counted. */
   tally?: string | null;
+  /** Prospects the server's batch run gave up on after its retries, with why. */
+  failed?: FailedJob[];
 }) {
   const outcome = done === "all" ? { ok: true, text: tallyText(tally) ?? "Done." } : done ? DONE[done] ?? null : null;
   const queue = list.ready ? approvalQueue(list.rows, now) : null;
@@ -380,7 +384,7 @@ export default function ApproveView({ list, appUrl, now, sender, done, error, ab
               return ready > 1 ? (
                 <details className="adm-card rounded-xl px-3 py-2.5" data-approve-all>
                   <summary className="sc-t-subhead font-semibold cursor-pointer">Approve all {ready}</summary>
-                  <p className="sc-t-footnote adm-muted mt-2">Publishes every draft below that passes the check and has an opening text, and queues each text for your Mac. It sends them from your number in your sending hours, a few minutes apart, up to your daily cap. Office lines and numbers not on iMessage are left for you.</p>
+                  <p className="sc-t-footnote adm-muted mt-2">Publishes every draft below that passes the check and has an opening text, and schedules each text for 9 AM in the prospect&apos;s time zone. Your Mac then sends them from your number in your sending hours, a few minutes apart, up to your daily cap. Office lines and numbers not on iMessage are left for you.</p>
                   <form method="post" action="/api/admin/card-builder/approve-all" className="mt-2">
                     <button type="submit" className="sc-btn sc-btn-filled sc-btn-block">Yes, approve and queue all {ready}</button>
                   </form>
@@ -395,6 +399,24 @@ export default function ApproveView({ list, appUrl, now, sender, done, error, ab
               </ul>
             )}
           </section>
+
+          {failed.length > 0 && (
+            <Section title={`Couldn't be built (${failed.length})`} hint="The batch run tried each of these four times. The reason is below; Try again runs it once more." flush>
+              <ul className="adm-divide">
+                {failed.map((j) => (
+                  <li key={j.id} className="px-4 sm:px-5 py-3 flex flex-col gap-1.5" data-failed-job>
+                    <p className="sc-t-subhead min-w-0" style={{ overflowWrap: "anywhere" }}><span className="font-semibold">{j.input ?? "Finding offices"}</span>{j.batch_label ? <span className="adm-muted"> · {j.batch_label}</span> : null}</p>
+                    <p className="sc-t-footnote adm-muted" style={{ overflowWrap: "anywhere" }}>{j.last_error ?? "No reason was recorded."}</p>
+                    <form method="post" action="/api/admin/card-builder/jobs">
+                      <input type="hidden" name="action" value="retry" />
+                      <input type="hidden" name="id" value={j.id} />
+                      <button type="submit" className="sc-btn sc-btn-sm sc-btn-gray">Try again</button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
 
           {queue.skipped.length > 0 && (
             <Section title={`Skipped (${queue.skipped.length})`} hint="Still drafts. Nobody outside SwiftCard can open them." flush>

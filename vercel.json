@@ -19,6 +19,22 @@
     {
       "path": "/api/wallet/sweep",
       "schedule": "30 7 * * *"
+    },
+    {
+      "path": "/api/card-builder/worker",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/card-builder/release",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/card-builder/follow-ups",
+      "schedule": "15 * * * *"
+    },
+    {
+      "path": "/api/db-autopilot",
+      "schedule": "20 13 * * *"
     }
   ]
 }

@@ -273,8 +273,8 @@ describe("the morning push", () => {
     const route = code("src/app/api/push/prospect-follow-ups/route.ts");
     expect(route.indexOf("if (!authorized(req))")).toBeLessThan(route.indexOf("sendFollowUpDigest()"));
     expect(read(".github/workflows/push-catchup.yml")).toContain("https://swiftcard.me/api/push/prospect-follow-ups");
-    // Still two daily Vercel crons: the Hobby plan fails every deploy on a third.
-    expect(JSON.parse(read("vercel.json")).crons).toHaveLength(2);
+    // The digest stays on the GitHub clock; vercel.json holds the Pro plan's crons (tests/push-quiet-hours-catchup.test.ts).
+    expect(JSON.parse(read("vercel.json")).crons.some((c: { path: string }) => c.path.includes("prospect-follow-ups"))).toBe(false);
   });
 });
 

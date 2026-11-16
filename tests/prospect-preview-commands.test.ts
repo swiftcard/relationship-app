@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 // (scripts/card-builder.mjs → tests/tools/card-builder.tool.ts). The tool
 // writes to the real database from a laptop, so what it can never do is pinned.
 
-const tool = readFileSync("tests/tools/card-builder.tool.ts", "utf8");
+const tool = (readFileSync("tests/tools/card-builder.tool.ts", "utf8") + readFileSync("src/lib/prospect-preview/draft-core.ts", "utf8"));
 const find = readFileSync(".claude/commands/find-offices.md", "utf8");
 const build = readFileSync(".claude/commands/build-card.md", "utf8");
 const batch = readFileSync(".claude/commands/build-batch.md", "utf8");

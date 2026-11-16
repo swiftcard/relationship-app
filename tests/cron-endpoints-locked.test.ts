@@ -26,6 +26,10 @@ const ENDPOINTS: { path: string; methods: Method[] }[] = [
   // vercel.json crons
   { path: "/api/reminders", methods: ["GET"] },
   { path: "/api/wallet/sweep", methods: ["GET"] },
+  { path: "/api/card-builder/worker", methods: ["GET"] },
+  { path: "/api/card-builder/release", methods: ["GET"] },
+  { path: "/api/card-builder/follow-ups", methods: ["GET"] },
+  { path: "/api/db-autopilot", methods: ["GET"] },
   // the Supabase clock and the GitHub schedules
   { path: "/api/push/catchup", methods: ["GET"] },
   { path: "/api/push/recap", methods: ["GET"] },

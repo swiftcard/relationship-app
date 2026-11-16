@@ -3,7 +3,9 @@
 // Runs on the owner's Mac, all the time (launchd: install.sh), and does the
 // three things that have to happen on that Mac:
 //
-//   1. BATCHES. "New batch" in the admin makes a requested batch. This picks
+//   1. BATCHES (only a batch set to engine 'mac': since 2026-11-16 the server
+//      builds new batches itself, every 5 minutes, see lib/card-builder-jobs).
+//      "New batch" in the admin makes a requested batch. This picks
 //      it up (now, or at 11pm for "run overnight") and runs Claude Code's
 //      /build-batch on it, ten prospects per run, until it is done. A run that
 //      dies loses nothing: each draft is saved as it is finished.
@@ -106,7 +108,8 @@ const builtOf = (b) => (Array.isArray(b.items) ? b.items.filter((i) => i?.outcom
 
 async function nextBatch() {
   // Only batches made with "New batch" (they have run_after); a /build session in a terminal runs its own.
-  const { data } = await db.from("prospect_batches").select("*").in("status", ["requested", "running"]).not("run_after", "is", null)
+  // Since 2026-11-16 new batches run on the server (engine 'server', lib/card-builder-jobs): only one set to 'mac' is built here.
+  const { data } = await db.from("prospect_batches").select("*").in("status", ["requested", "running"]).eq("engine", "mac").not("run_after", "is", null)
     .lte("run_after", new Date().toISOString()).order("created_at", { ascending: true }).limit(1);
   return data?.[0] ?? null;
 }

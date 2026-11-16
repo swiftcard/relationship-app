@@ -83,9 +83,9 @@ describe("trial charge notice — the schedule that makes it land on time", () =
     expect(wf).toContain("/api/billing/trial-notice");
 
     const vercel = JSON.parse(readFileSync("vercel.json", "utf8")) as { crons?: { path: string }[] };
-    // An hourly entry here does not warn — it makes every later deployment fail
-    // validation with cron_jobs_limits_reached.
-    expect((vercel.crons ?? []).length).toBeLessThanOrEqual(2);
+    // The project moved to Vercel Pro on 2026-11-16 (100 crons, any
+    // schedule); this job still runs from GitHub, which works and is free.
+    expect((vercel.crons ?? []).length).toBeLessThanOrEqual(100);
     expect((vercel.crons ?? []).some((c) => c.path.includes("trial-notice"))).toBe(false);
   });
 

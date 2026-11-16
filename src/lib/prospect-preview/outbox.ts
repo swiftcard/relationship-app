@@ -5,6 +5,7 @@ import { networkKey } from "./network-key";
 import { lookupPhoneKind, nanp } from "./phone-type";
 import { previewState } from "./real-view";
 import { readSenderSettings, type SenderSettings } from "./send-window";
+import { nextSendAt, recipientTimeZone } from "./send-at";
 import type { ProspectPreview } from "./types";
 
 // ── Card Builder: the outbox the Mac sends from (owner, 2026-11-16) ─────────
@@ -20,15 +21,17 @@ import type { ProspectPreview } from "./types";
 const db = () => getAdminSupabase();
 const OUTBOX = "prospect_outbox";
 
-export type OutboxStatus = "queued" | "sending" | "sent" | "failed" | "not_imessage" | "canceled";
+export type OutboxStatus = "scheduled" | "queued" | "sending" | "sent" | "failed" | "not_imessage" | "canceled";
 export type OutboxRow = {
   id: string; created_at: string; preview_id: string; phone: string; body: string; hook: string | null; segment: string | null;
   status: OutboxStatus; claimed_at: string | null; sent_at: string | null; error: string | null;
+  /** 9 AM their time (send-at.ts). A scheduled row becomes queued, for the Mac, after this. */
+  send_at?: string | null;
 };
 
 export type QueueResult = "queued" | "already" | "maybe_sent" | "not_live" | "no_opener" | "not_mobile" | "not_imessage" | "do_not_contact" | "failed";
 export const QUEUE_RESULT_TEXT: Record<QueueResult, string> = {
-  queued: "Queued. Your Mac sends it in your sending hours.",
+  queued: "Scheduled for 9 AM their time. Your Mac sends it then, in your sending hours.",
   already: "Already queued or sent to this number.",
   maybe_sent: "An earlier send to this number was interrupted and may have gone. Check your Messages before sending again.",
   not_live: "Publish the card first: the text carries its link.",
@@ -66,11 +69,14 @@ export async function queueOpener(p: ProspectPreview, appUrl: string, segment: s
   // that was already texted (by the Mac or by hand) is not texted again.
   const { data: others } = await db().from("prospect_previews").select("id, phone, sent_at").neq("id", p.id).not("sent_at", "is", null).ilike("phone", `%${e164.slice(-4)}`).limit(50);
   if ((others ?? []).some((o) => nanp(String(o.phone)) === e164)) return "already";
-  const { data: earlier } = await db().from(OUTBOX).select("status, error").eq("phone", e164).in("status", ["queued", "sending", "sent", "failed"]).limit(20);
+  const { data: earlier } = await db().from(OUTBOX).select("status, error").eq("phone", e164).in("status", ["scheduled", "queued", "sending", "sent", "failed"]).limit(20);
   if ((earlier ?? []).some((r) => r.status !== "failed")) return "already";
   if ((earlier ?? []).some((r) => r.status === "failed" && /^interrupted|may have/i.test(String(r.error ?? "")))) return "maybe_sent";
+  // Not straight to the Mac: it waits for 9 AM in their time zone, and the
+  // release clock (lib/card-builder-jobs/release.ts) hands it over then.
+  const sendAt = nextSendAt(new Date(), recipientTimeZone(p.address, (await senderSettings()).tz));
   const { error } = await db().from(OUTBOX).insert({
-    preview_id: p.id, phone: e164, body: openerMessage(text, `${appUrl}/p/${p.slug}`), hook: openerHook(p.openers), segment, status: "queued",
+    preview_id: p.id, phone: e164, body: openerMessage(text, `${appUrl}/p/${p.slug}`), hook: openerHook(p.openers), segment, status: "scheduled", send_at: sendAt.toISOString(),
   });
   // The partial unique index allows one live row per prospect: a second queue is "already".
   if (error) return error.code === "23505" ? "already" : "failed";
@@ -96,7 +102,7 @@ export async function listOutbox(limit = 200): Promise<OutboxRow[]> {
 
 /** Only something not yet sent can be taken back. */
 export async function cancelOutbox(id: string): Promise<boolean> {
-  const { data, error } = await db().from(OUTBOX).update({ status: "canceled" }).eq("id", id).eq("status", "queued").select("id");
+  const { data, error } = await db().from(OUTBOX).update({ status: "canceled" }).eq("id", id).in("status", ["scheduled", "queued"]).select("id");
   return !error && !!data?.length;
 }
 
