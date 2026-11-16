@@ -76,6 +76,70 @@ export default function NativeAppBridge() {
     return () => { cancelled = true; remove?.(); };
   }, []);
 
+  // ── Android status-bar icons follow the APP's theme ───────────────────
+  //
+  // The app draws edge to edge, so the status bar sits on the page's own
+  // background. Never told a style, Android picks the icon colour from the
+  // PHONE's dark mode: a phone in dark mode put white icons on the app's
+  // light (default) screen, where they vanish. data-sc-theme="light" on
+  // <html> means light and its absence means dark (app/layout.tsx boot
+  // script, ThemeToggle, ForceLightTheme), so that attribute is the one
+  // signal, watched for changes. Capacitor's naming: LIGHT = dark icons for
+  // a light background, DARK = light icons for a dark one.
+  useEffect(() => {
+    if (detectNativePlatform() !== "android") return;
+    let last: "LIGHT" | "DARK" | null = null;
+    const apply = () => {
+      const style = document.documentElement.getAttribute("data-sc-theme") === "light" ? "LIGHT" : "DARK";
+      if (style === last) return;
+      last = style;
+      import("@capacitor/core")
+        .then(({ SystemBars, SystemBarsStyle }) =>
+          SystemBars.setStyle({ style: style === "LIGHT" ? SystemBarsStyle.Light : SystemBarsStyle.Dark }))
+        .catch(() => { last = null; /* older shell without the plugin: the phone's default stays */ });
+    };
+    apply();
+    let watch: MutationObserver | null = null;
+    try {
+      watch = new MutationObserver(apply);
+      watch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-sc-theme"] });
+    } catch { /* ignore */ }
+    return () => { watch?.disconnect(); };
+  }, []);
+
+  // ── Android: the owner's own "View Live Link" leaves for the browser ──
+  //
+  // swiftcard.me is the shell's own origin, so Capacitor loads a
+  // target=_blank link to it INSIDE the WebView. For the /api/self-view hop
+  // (lib/self-pass — the dashboard's "View Live Link", "Open Swift Links")
+  // that put the owner's public card in the app until the public-page bounce
+  // below caught it. Hand it straight to the default browser instead, the
+  // way iPhone users reach Safari. Deliberately ONLY the self-view hop: a
+  // blanket rule for every same-origin new-tab link would also send
+  // /pricing or /upgrade out to a browser checkout, which Android must never
+  // do (tests/android-no-selling.test.ts).
+  useEffect(() => {
+    if (detectNativePlatform() !== "android") return;
+    const onClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || !(e.target instanceof Element)) return;
+      const a = e.target.closest<HTMLAnchorElement>('a[target="_blank"][href]');
+      if (!a) return;
+      let url: URL;
+      try { url = new URL(a.href, window.location.href); } catch { return; }
+      const own = url.host === window.location.host || /^(www\.)?swiftcard\.me$/i.test(url.host);
+      if (!own || url.pathname !== "/api/self-view") return;
+      e.preventDefault();
+      const href = a.href;
+      import("@/lib/external-purchase")
+        .then(({ openLinkInDefaultBrowser }) => openLinkInDefaultBrowser(url.pathname + url.search))
+        .catch(() => false)
+        // No plugin (or the system declined): what the link did before.
+        .then((opened) => { if (!opened) window.open(href, "_blank", "noopener"); });
+    };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, []);
+
   useEffect(() => {
     if (!detectNativeApp()) return;
 
