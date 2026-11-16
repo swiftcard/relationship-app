@@ -15,6 +15,8 @@
 //      as a green SMS.
 //   3. LISTENING. A reply of "stop" (or "remove me", "wrong number"…) puts the
 //      number on the do-not-contact list at once.
+//   4. POP-UPS. When the server alerts on a real open, a window on this screen
+//      names them and offers "Call" (popup.mjs).
 //
 // It also tells the server which networks are the owner's own (a hash, never
 // the address), so the link preview Messages draws on this Mac, or the owner
@@ -33,6 +35,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
+import { showOpenPopup } from "./popup.mjs";
 import { knownNotIMessage, latestRowId, outcomeOf, repliesFrom, sendIMessage, STOP_RE } from "./imessage.mjs";
 // Shared with the server: the very same rules (Node strips the types).
 import { localClock, nextGapMs, readSenderSettings, sendDecision } from "../../src/lib/prospect-preview/send-window.ts";
@@ -70,7 +73,7 @@ async function setSetting(key, value) {
   await db.from("card_builder_settings").upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
 }
 
-const state = { note: "starting", nextSendAt: null, child: null, lastNetworks: 0, chatRow: null, stalls: new Map() };
+const state = { popupSince: undefined, note: "starting", nextSendAt: null, child: null, lastNetworks: 0, chatRow: null, stalls: new Map() };
 
 async function heartbeat() {
   await setSetting("mac_agent", { at: new Date().toISOString(), note: state.note, next_send_at: state.nextSendAt, version: VERSION });
@@ -318,10 +321,39 @@ async function listen() {
   }
 }
 
+// ── 4. A pop-up on this screen when a prospect opens their card ─────────────
+
+const POPUP_FILE = join(homedir(), ".swiftcard-card-builder", "popups.json");
+
+async function popups() {
+  // From where the last pass left off; on the very first run, from now (never a pile of old alerts).
+  let since = state.popupSince;
+  if (since === undefined) {
+    try { since = JSON.parse(readFileSync(POPUP_FILE, "utf8")).since; } catch { since = null; }
+    if (typeof since !== "string") { since = new Date().toISOString(); savePopupSince(since); }
+    state.popupSince = since;
+  }
+  const { data, error } = await db.from("prospect_preview_views")
+    .select("id, viewed_at, preview_id, prospect_previews(owner_name, office_name, phone, alert_user_id)")
+    .eq("alerted", true).gt("viewed_at", since).order("viewed_at", { ascending: true }).limit(20);
+  if (error || !data?.length) return;
+  const shown = new Set();
+  for (const v of data) {
+    const p = v.prospect_previews;
+    // The automated test's own preview never reaches the owner's screen (alert.ts: alert_user_id).
+    if (p && !p.alert_user_id && !shown.has(v.preview_id) && !DRY) { shown.add(v.preview_id); showOpenPopup(p, log); log("popup", p.owner_name); }
+  }
+  state.popupSince = data[data.length - 1].viewed_at;
+  savePopupSince(state.popupSince);
+}
+function savePopupSince(since) {
+  try { mkdirSync(dirname(POPUP_FILE), { recursive: true }); writeFileSync(POPUP_FILE, JSON.stringify({ since })); } catch { /* next pass tries again */ }
+}
+
 // ── The loop ────────────────────────────────────────────────────────────────
 
 async function pass() {
-  const steps = [["networks", rememberNetworks], ["listen", listen], ["send", sendOne], ["heartbeat", heartbeat]];
+  const steps = [["networks", rememberNetworks], ["listen", listen], ["popups", popups], ["send", sendOne], ["heartbeat", heartbeat]];
   for (const [name, step] of steps) {
     try { await step(); } catch (e) { log(name, "failed:", e?.message ?? e); }
   }

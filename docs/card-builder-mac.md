@@ -12,6 +12,7 @@ One small program does both: `scripts/card-builder-mac/agent.mjs`.
 | **Batches** | Picks up a batch made with *Card Builder › New batch* (now, or 11pm for "overnight") and runs `/build-batch batch <id> chunk 10` with Claude Code until the count is reached. Each draft is saved as it is finished, so a run that dies loses nothing. Two runs in a row that build nothing end the batch with a note. |
 | **Sending** | Takes one approved opener from `prospect_outbox` when *Card Builder › iMessage sender* allows it (days, hours, daily cap, a random gap of a few minutes), sends it through Messages **on iMessage only**, then reads the Messages database to see whether it went. A number that isn't on iMessage is marked and skipped; it is never sent as SMS on purpose (if the phone falls back to green on its own, that is recorded as sent and the number is marked). |
 | **Listening** | A reply of "stop", "remove me", "wrong number"… puts the number on the do-not-contact list and takes anything queued for it back out. |
+| **Pop-up** | When a prospect really opens their card (the same open the server texts and pushes about), a window on this screen names them and their company, shows their number, and offers **Call** (FaceTime › Call with iPhone). It stays up for 15 minutes. |
 | **Own networks** | Tells the server which networks are the owner's (a hash, never the address), so the preview Messages draws on this Mac, or the owner opening a link at home, never counts as the prospect looking. |
 
 It reads the Supabase keys from `.env.local` and talks to the database, never
