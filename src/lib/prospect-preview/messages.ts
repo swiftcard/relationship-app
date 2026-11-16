@@ -20,8 +20,9 @@ import type { ProspectPreview } from "./types";
 // Pure, so the wording is tested
 // (tests/prospect-preview-pipeline.test.ts).
 
-export type MessageKind = "ask" | "text" | "email" | "nudge_no_view" | "nudge_viewed" | "linkedin_note" | "linkedin_dm";
-export const MESSAGE_KINDS: readonly MessageKind[] = ["ask", "text", "email", "nudge_no_view", "nudge_viewed", "linkedin_note", "linkedin_dm"];
+/** "opener": the one text with the link, sent from the owner's own number (lib/prospect-preview/opener.ts). */
+export type MessageKind = "opener" | "ask" | "text" | "email" | "nudge_no_view" | "nudge_viewed" | "linkedin_note" | "linkedin_dm";
+export const MESSAGE_KINDS: readonly MessageKind[] = ["opener", "ask", "text", "email", "nudge_no_view", "nudge_viewed", "linkedin_note", "linkedin_dm"];
 export const isMessageKind = (v: unknown): v is MessageKind => (MESSAGE_KINDS as readonly unknown[]).includes(v);
 export type Messages = {
   ask: string;

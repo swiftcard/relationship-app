@@ -1,5 +1,5 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
-import { readBatchItems, type Batch, type BatchItem, type MessageEvent } from "./learn";
+import { readBatchItems, type Batch, type BatchCandidate, type BatchItem, type MessageEvent } from "./learn";
 import { readBackground, type Connection, type OwnerBackground } from "./warm";
 
 // ── Card Builder: the queue, the batches, the connections and the events ────
@@ -40,9 +40,14 @@ export async function addToQueue(items: { input: string; is_notes: boolean }[]):
   return error ? 0 : data?.length ?? 0;
 }
 
-export async function listQueue(status: QueueItem["status"] | "all" = "queued"): Promise<QueueItem[]> {
+/**
+ * `batch`: only that batch's rows (a CSV batch). Without it, only the
+ * owner's own drops from the Add box, never another batch's CSV rows.
+ */
+export async function listQueue(status: QueueItem["status"] | "all" = "queued", batch?: string | null): Promise<QueueItem[]> {
   let q = db().from("prospect_queue").select("*").order("created_at", { ascending: true }).limit(500);
   if (status !== "all") q = q.eq("status", status);
+  q = batch ? q.eq("batch_id", batch) : status === "queued" ? q.is("batch_id", null) : q;
   const { data } = await q;
   return (data ?? []) as QueueItem[];
 }
@@ -62,7 +67,51 @@ export async function settleQueueItem(id: string, outcome: "built" | "skipped" |
 
 // ── Batches ─────────────────────────────────────────────────────────────────
 
-const toBatch = (r: Record<string, unknown>): Batch => ({ ...(r as unknown as Batch), items: readBatchItems(r.items) });
+const toBatch = (r: Record<string, unknown>): Batch => ({ ...(r as unknown as Batch), items: readBatchItems(r.items), candidates: readCandidates(r.candidates) });
+
+export function readCandidates(v: unknown): BatchCandidate[] {
+  if (!Array.isArray(v)) return [];
+  const s = (x: unknown, n: number) => (typeof x === "string" && x.trim() ? x.trim().slice(0, n) : null);
+  return v.flatMap((raw) => {
+    const r = (raw ?? {}) as Record<string, unknown>;
+    const office = s(r.office, 160);
+    return office ? [{ office, person: s(r.person, 120), city: s(r.city, 120), website: s(r.website, 300), lead_id: s(r.lead_id, 40), score: typeof r.score === "number" ? r.score : null }] : [];
+  }).slice(0, 300);
+}
+
+/** "New batch" in the admin: waits for the Mac agent, which starts it at run_after. CSV rows go in the queue, tied to it. */
+export async function requestBatch(input: { label: string; kind: "now" | "tonight"; wanted: number; rows: string[]; runAfter: Date }): Promise<Batch | null> {
+  const { data, error } = await db().from("prospect_batches").insert({ label: input.label, kind: input.kind, wanted: input.wanted, status: "requested", run_after: input.runAfter.toISOString() }).select("*").single();
+  if (error || !data) return null;
+  if (input.rows.length) {
+    const { error: qErr } = await db().from("prospect_queue").insert(input.rows.map((line) => ({ input: line, is_notes: false, batch_id: data.id })));
+    if (qErr) { await db().from("prospect_batches").delete().eq("id", data.id); return null; }
+  }
+  return toBatch(data);
+}
+
+/** Open a batch by its id (the Mac's runs): a requested one becomes running, and every chunk is counted. */
+export async function claimBatch(id: string, now: Date = new Date()): Promise<Batch | null> {
+  const { data } = await db().from("prospect_batches").select("*").eq("id", id).maybeSingle();
+  if (!data) return null;
+  const patch: Record<string, unknown> = { chunks: (Number(data.chunks) || 0) + 1 };
+  if (data.status === "requested") Object.assign(patch, { status: "running", started_at: now.toISOString() });
+  const { data: saved } = await db().from("prospect_batches").update(patch).eq("id", id).select("*").single();
+  return saved ? toBatch(saved) : toBatch(data);
+}
+
+/** Replace the list of offices found for a batch. */
+export async function setCandidates(id: string, candidates: BatchCandidate[]): Promise<boolean> {
+  const { data, error } = await db().from("prospect_batches").update({ candidates: readCandidates(candidates) }).eq("id", id).select("id");
+  return !error && !!data?.length;
+}
+
+/** A requested batch that hasn't started can be taken back. */
+export async function cancelBatch(id: string): Promise<boolean> {
+  const { data, error } = await db().from("prospect_batches").delete().eq("id", id).eq("status", "requested").select("id");
+  if (!error && data?.length) await db().from("prospect_queue").delete().eq("batch_id", id).eq("status", "queued");
+  return !error && !!data?.length;
+}
 
 /** A run that was started with the same words in the last day and never finished is the same run: rerunning resumes it. */
 export const BATCH_RESUME_MS = 24 * 60 * 60 * 1000;

@@ -6,6 +6,7 @@ import { resolveGeo } from "@/lib/request-geo";
 import { describeDevice } from "@/lib/visit-device";
 import { attachVisitIdentity, resolveVisitIdentity } from "@/lib/visit-identity";
 import { alertAdminsOfView } from "@/lib/prospect-preview/alert";
+import { isOwnerNetwork } from "@/lib/prospect-preview/outbox";
 import { SLUG_RE } from "@/lib/prospect-preview/input";
 import { decideRealView, deviceTypeOf, shouldAlert } from "@/lib/prospect-preview/real-view";
 import { alertsInLastDay, getPreviewBySlug, markAlerted, markTeamStripScrolled, recordView } from "@/lib/prospect-preview/store";
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
     purposeHeader: req.headers.get("sec-purpose") ?? req.headers.get("purpose") ?? req.headers.get("x-purpose"),
     internalCookie: req.cookies.get("sc_internal")?.value === "1",
     adminSession: !!(await requireAdmin().catch(() => null)),
+    ownNetwork: preview ? await isOwnerNetwork(ip).catch(() => false) : false,
     isHosting: geo?.isHosting === true,
     preview,
   });
@@ -70,10 +72,11 @@ export async function POST(req: NextRequest) {
   });
   if (!view || view.repeat) return res;
 
-  if (shouldAlert({ firstFromDevice: view.firstFromDevice, alertsToday: await alertsInLastDay(preview.id) })) {
+  const alertsToday = await alertsInLastDay(preview.id);
+  if (shouldAlert({ firstFromDevice: view.firstFromDevice, alertsToday })) {
     // Marked before sending, so a slow push can never ring twice for one view.
     await markAlerted(view.viewId);
-    await alertAdminsOfView({ viewId: view.viewId, preview }).catch(() => {});
+    await alertAdminsOfView({ viewId: view.viewId, preview, firstToday: alertsToday === 0 }).catch(() => {});
   }
   return res;
 }

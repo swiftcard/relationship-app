@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { PUBLIC_PAGE_META } from "@/lib/universal-links";
 import { paddedLogoSrc, previewVersion } from "@/lib/prospect-preview/card";
 import { SLUG_RE } from "@/lib/prospect-preview/input";
+import { ogTitle } from "@/lib/prospect-preview/opener";
 import { previewState } from "@/lib/prospect-preview/real-view";
 import { getPreviewBySlug } from "@/lib/prospect-preview/store";
 import PreviewBeacon from "./PreviewBeacon";
@@ -41,8 +42,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const hidden = { robots: { index: false, follow: false }, itunes: null } as const;
   if (!p) return { title: "SwiftCard", ...hidden };
 
-  const title = `${p.owner_name} · ${p.office_name}`;
-  const description = `A digital business card made for ${p.owner_name} at ${p.office_name}. Tap to see it.`;
+  // Owner, 2026-11-16: the preview in iMessage says it is THEIRS: "Dana's card, made for you".
+  const title = ogTitle(p.owner_name);
+  const description = `${p.owner_name} · ${p.office_name}`;
   // Named explicitly: once a page sets openGraph itself, Next no longer adds
   // the opengraph-image file beside it. The ?v= changes whenever what the
   // picture shows changes, so a messenger never keeps an old one.

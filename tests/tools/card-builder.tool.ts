@@ -19,6 +19,12 @@ import { connectionsAt, readWarmPath } from "@/lib/prospect-preview/warm";
 import { assessQuality, isVerified } from "@/lib/prospect-preview/quality";
 import { BUYER_ROLE_LABELS, BUYER_ROLES, CURRENT_TOOL_LABELS, CURRENT_TOOLS, DEFAULT_EXPIRY_DAYS, LINK_SLOT, MAX_SPECIFICS, OUTREACH_KEYS, SOCIAL_KEYS, SOURCE_FIELDS, SOURCE_LABELS, TEXT_LIMIT, type BuyerRole, type CurrentTool, type ProspectPreview } from "@/lib/prospect-preview/types";
 import { getAdminSupabase } from "@/lib/supabase-admin";
+import { MAX_BATCH } from "@/lib/prospect-preview/batch-input";
+import { claimBatch, readCandidates, setCandidates } from "@/lib/prospect-preview/desk";
+import { checkOpeners, openerMessage, openerText, rankOpeners, readOpeners, scoreTotal, OPENER_HOOK_LABELS } from "@/lib/prospect-preview/opener";
+import { suppressionKey } from "@/lib/prospect-preview/outbox";
+import { lookupPhoneKind, nanp } from "@/lib/prospect-preview/phone-type";
+import { PHONE_KINDS, type PhoneKind } from "@/lib/prospect-preview/types";
 
 // ── Card Builder's command-line tool ────────────────────────────────────────
 // Run by scripts/card-builder.mjs (never by `npm test`). It is a vitest file
@@ -39,6 +45,8 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 //     it must carry their words as its note
 //   - the messages it saves are complete, 160 characters or under for a text,
 //     with no emoji and no "free", and only ever on a draft
+//   - the opening texts it saves pass every rule in lib/prospect-preview/opener.ts
+//   - nobody who is already a SwiftCard user is built for
 //   - nothing is published and nothing is sent
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL && !/localhost|127\.0\.0\.1/.test(process.env.NEXT_PUBLIC_APP_URL) ? process.env.NEXT_PUBLIC_APP_URL : "https://swiftcard.me";
@@ -68,6 +76,28 @@ async function standing(c: Candidate): Promise<Standing> {
     if (ids?.length) {
       const { data: touches } = await db.from("crew_touches").select("kind, at").in("person_id", ids.map((i) => i.person_id as string)).neq("kind", "lead_listed").limit(5);
       if (touches?.length) { skip = true; reasons.push(`already contacted by the agents (${[...new Set(touches.map((t) => t.kind as string))].join(", ")})`); }
+    }
+  }
+
+  // Already one of ours: a SwiftCard account or card with this email or number (owner, 2026-11-16: "skip anyone already a user").
+  if (email) {
+    const [{ data: prof }, { data: card }] = await Promise.all([
+      db.from("profiles").select("id").ilike("email", email).limit(1),
+      db.from("cards").select("id").ilike("email", email).limit(1),
+    ]);
+    if (prof?.length || card?.length) { skip = true; reasons.push("already a SwiftCard user"); }
+  }
+  if (phone.length === 10) {
+    const tail = `%${phone.slice(-4)}`;
+    const [{ data: prof }, { data: card }] = await Promise.all([
+      db.from("profiles").select("phone").ilike("phone", tail).limit(200),
+      db.from("cards").select("phone").ilike("phone", tail).limit(200),
+    ]);
+    if ([...(prof ?? []), ...(card ?? [])].some((r) => digits(r.phone) === phone) && !reasons.includes("already a SwiftCard user")) { skip = true; reasons.push("already a SwiftCard user"); }
+    const e164 = nanp(phone);
+    if (e164) {
+      const { data } = await db.from("crew_suppression").select("value").eq("value", suppressionKey(e164)).limit(1);
+      if (data?.length && !reasons.includes("on the do-not-contact list")) { skip = true; reasons.push("on the do-not-contact list"); }
     }
   }
 
@@ -264,6 +294,10 @@ function extrasFrom(raw: Json): Json {
     if (warm && warm.kind !== "connection" && !warm.source_url) throw new Error("A shared school or employer needs source_url: the public page that says so about them.");
     out.warm_path = warm;
   }
+  if ("phone_kind" in raw) {
+    if (raw.phone_kind !== null && !(PHONE_KINDS as readonly unknown[]).includes(raw.phone_kind)) throw new Error(`phone_kind is one of ${PHONE_KINDS.join(", ")}.`);
+    out.phone_kind = raw.phone_kind as PhoneKind | null;
+  }
   if (str(raw.batch_id)) {
     if (!UUID_RE.test(str(raw.batch_id))) throw new Error("batch_id isn't a batch id.");
     out.batch_id = str(raw.batch_id);
@@ -323,6 +357,8 @@ async function quality(id: string) {
     checks: q.checks.map((c) => ({ check: c.label, done: c.ok, needed_to_publish: c.required, points: `${c.earned}/${c.points}`, ...(c.fix ? { fix: c.fix } : {}) })),
     specifics: p.specifics.map((sp, i) => ({ position: i, text: sp.text, verified: isVerified(sp), confirmed_by_owner: sp.owner === true })),
     warm_path: p.warm_path ?? null,
+    phone_kind: p.phone_kind ?? null,
+    openers: p.openers ? { problems: checkOpeners(p.openers, p, staleNumbers(p)), default: openerText(p.openers), all: p.openers.candidates.map((c) => ({ hook: c.hook, total: scoreTotal(c), text: c.text })) } : "not written yet: run set-openers",
     numbers_flagged_as_possibly_stale: staleNumbers(p),
     could_not_confirm: [
       ...SOURCE_FIELDS.filter((k) => p.sources[k]?.uncertain).map((k) => `${SOURCE_LABELS[k]}: marked uncertain${p.sources[k]?.note ? ` (${p.sources[k]!.note})` : ""}`),
@@ -395,12 +431,15 @@ async function createDraft(file: string) {
   if (lead && !UUID_RE.test(lead)) throw new Error("crew_lead_id isn't a lead id.");
   const s = await standing({ company: fields.office_name, website: fields.website ?? undefined, email: fields.email ?? undefined, phone: fields.phone });
   if (s.preview_id) throw new Error(`This office already has a preview (${s.preview_id}): ${s.reasons.join("; ")}. Use update-draft, or pick another office.`);
-  if (s.reasons.some((r) => /do-not-contact|already contacted/.test(r))) throw new Error(`Not building this one: ${s.reasons.join("; ")}.`);
+  if (s.reasons.some((r) => /do-not-contact|already contacted|already a SwiftCard user/.test(r))) throw new Error(`Not building this one: ${s.reasons.join("; ")}.`);
+  // Is it a mobile? Asked of the line-type lookup when it is set up here; what the research said otherwise.
+  const looked = fields.phone ? await lookupPhoneKind(fields.phone) : null;
+  if (looked) extras.phone_kind = looked;
   const { data, error } = await getAdminSupabase().from("prospect_previews")
     .insert({ ...fields, ...extras, slug: newSlug(fields.office_name), status: "draft", expires_at: expiryFrom(DEFAULT_EXPIRY_DAYS), crew_lead_id: lead || s.lead_id })
     .select("id, slug, status").single();
   if (error || !data) throw new Error(error?.message ?? "insert failed");
-  return { ok: true, status: data.status, ...links(data as { id: string; slug: string }) };
+  return { ok: true, status: data.status, phone_kind: extras.phone_kind ?? null, ...(extras.phone_kind && extras.phone_kind !== "mobile" ? { flag: "No mobile number: this prospect can't get an iMessage. Look for their own cell on their profile pages; if there is none, the draft stays, flagged." } : {}), ...links(data as { id: string; slug: string }) };
 }
 
 async function updateDraft(id: string, file: string) {
@@ -486,8 +525,11 @@ async function colors(logo?: string, website?: string) {
 // ── the queue, batches, warm paths and the owner's style ────────────────────
 
 /** What the owner dropped into the Add box and nobody has built yet. */
-async function queue() {
-  const items = await listQueue();
+async function queue(args: string[] = []) {
+  const i = args.indexOf("--batch");
+  const batch = i === -1 ? null : args[i + 1] ?? "";
+  if (batch !== null && !UUID_RE.test(batch)) throw new Error("--batch wants the batch id.");
+  const items = await listQueue("queued", batch);
   return { ok: true, waiting: items.length, items: items.map((q) => ({ id: q.id, input: q.input, owners_own_notes: q.is_notes, added: q.created_at })), note: "An item marked owners_own_notes is the owner's own words: its facts are confirmed by the owner. Settle each one with queue-settle as soon as it is built, skipped or failed." };
 }
 
@@ -520,8 +562,22 @@ async function queueAdd(file: string) {
  */
 async function batchStart(file: string) {
   const raw = readJson(file) as Json;
+  // A batch made with "New batch" in the admin: opened by its id, never by its words.
+  if (str(raw.batch_id)) {
+    if (!UUID_RE.test(str(raw.batch_id))) throw new Error("batch_id isn't a batch id.");
+    const b = await claimBatch(str(raw.batch_id));
+    if (!b) throw new Error("No batch with that id.");
+    const built = b.items.filter((i) => i.outcome === "built").length;
+    const done = new Set(b.items.map((i) => i.office.toLowerCase()));
+    return {
+      ok: true, batch_id: b.id, label: b.label, kind: b.kind, wanted: b.wanted, status: b.status, chunk: b.chunks ?? 1,
+      built_so_far: built, still_wanted: Math.max(0, (b.wanted ?? 0) - built), already_done: b.items,
+      candidates_left: (b.candidates ?? []).filter((c) => !done.has(c.office.toLowerCase())),
+      note: "Skip every office in already_done. Work down candidates_left before searching for more; save new finds with batch-candidates.",
+    };
+  }
   const wanted = Number(raw.wanted);
-  if (Number.isFinite(wanted) && wanted > 30) throw new Error("A batch is 30 offices at most. Run a second one for more.");
+  if (Number.isFinite(wanted) && wanted > MAX_BATCH) throw new Error(`A batch is ${MAX_BATCH} at most. Run a second one for more.`);
   const got = await startBatch({ label: str(raw.label), kind: str(raw.kind) === "tonight" ? "tonight" : "now", wanted: Number.isInteger(wanted) && wanted > 0 ? wanted : null });
   if (!got) throw new Error("batch-start wants { label, kind, wanted }.");
   return { ok: true, batch_id: got.batch.id, resumed: got.resumed, already_done: got.batch.items, note: got.resumed ? "This run was started before and didn't finish. Skip every office in already_done and carry on." : "New batch. Log every office with batch-log as soon as its outcome is known." };
@@ -578,6 +634,56 @@ async function warm(file: string) {
   };
 }
 
+/** [{ office, person?, city?, website?, lead_id?, score? }], best first: the offices found for a batch, so the next chunk carries on down the list. */
+async function batchCandidates(id: string, file: string) {
+  if (!UUID_RE.test(id)) throw new Error("batch-candidates wants the batch id first.");
+  const list = readJson(file);
+  if (!Array.isArray(list)) throw new Error("batch-candidates wants a JSON list of { office, person, city, website, lead_id, score }.");
+  const clean = readCandidates(list);
+  if (!(await setCandidates(id, clean))) throw new Error("No batch with that id.");
+  return { ok: true, batch_id: id, saved: clean.length };
+}
+
+/**
+ * { phone }: is it a mobile? The line-type lookup (lib/prospect-preview/phone-type.ts) when it is set up
+ * here (about a cent); otherwise says it couldn't tell. Only a mobile can get
+ * the opener over iMessage.
+ */
+async function phoneType(phone: string) {
+  if (!str(phone)) throw new Error("phone-type wants a phone number.");
+  const kind = await lookupPhoneKind(phone);
+  return { ok: true, phone, e164: nanp(phone), phone_kind: kind, note: kind ? (kind === "mobile" ? "A mobile: it can get an iMessage." : "Not a mobile. Look for their own cell on their profile pages before giving up.") : "Couldn't check here (the line-type lookup isn't set up on this machine). Say what the page called it: phone_kind mobile only when the page says it is their cell or mobile." };
+}
+
+/**
+ * { candidates: [{ hook, text, uses, scores: { specificity, human, curiosity } }] }
+ * The opening texts for this prospect: five on five different hooks where the
+ * facts allow (three at least), each scored 1–10 on the three. Saved only on a
+ * draft, and only when every one passes every rule. The best total becomes the
+ * default and the runner-up the alternate.
+ */
+async function setOpenersFor(id: string, file: string) {
+  if (!UUID_RE.test(id)) throw new Error("set-openers wants the preview's id first.");
+  const { getPreviewById, setOpeners } = await import("@/lib/prospect-preview/store");
+  const p = await getPreviewById(id);
+  if (!p) throw new Error("No preview with that id.");
+  if (p.status !== "draft") throw new Error("Only a draft's openers are written here. A published one is edited on the review screen.");
+  const raw = readJson(file) as Json;
+  const read = readOpeners({ candidates: raw.candidates });
+  const given = Array.isArray(raw.candidates) ? raw.candidates.length : 0;
+  if (!read) throw new Error("No usable openers. Each needs hook, text, uses and scores { specificity, human, curiosity } of 1 to 10.");
+  if (read.candidates.length !== given) throw new Error(`${given - read.candidates.length} of the openers are missing a hook (${Object.keys(OPENER_HOOK_LABELS).join(", ")}), text or a 1–10 score.`);
+  const openers = rankOpeners(read.candidates);
+  const problems = checkOpeners(openers, p, staleNumbers(p));
+  if (problems.length) throw new Error(`Not saved. ${problems.join(" ")}`);
+  if (!(await setOpeners(id, openers))) throw new Error("That didn't save.");
+  const link = `${APP_URL}/p/${p.slug}`;
+  return {
+    ok: true, id, default: openerMessage(openerText(openers)!, link),
+    ranked: openers.candidates.map((c, i) => ({ position: i, hook: c.hook, total: scoreTotal(c), ...c.scores, default: i === openers.pick, alternate: i === openers.alt, text: c.text, characters: c.text.length })).sort((a, b) => b.total - a.total),
+  };
+}
+
 /** The owner's own corrections, as examples of their voice. Read before writing any message. */
 async function style() {
   const notes = styleNotes(await listEvents());
@@ -595,7 +701,10 @@ async function run(args: string[]): Promise<Json> {
     case "create-draft": return createDraft(a);
     case "update-draft": return updateDraft(a, b);
     case "set-outreach": return setOutreachFor(a, b);
-    case "queue": return queue();
+    case "queue": return queue(args.slice(1));
+    case "set-openers": return setOpenersFor(a, b);
+    case "phone-type": return phoneType(a);
+    case "batch-candidates": return batchCandidates(a, b);
     case "queue-add": return queueAdd(a);
     case "queue-settle": return queueSettle(a, b);
     case "batch-start": return batchStart(a);

@@ -7,7 +7,9 @@ import { isMessageKind } from "@/lib/prospect-preview/messages";
 import { recordEvents } from "@/lib/prospect-preview/desk";
 import { checkOutreach, outreachEdits, parseOutreachForm, resolveOutreach, staleNumbers } from "@/lib/prospect-preview/outreach";
 import { assessQuality } from "@/lib/prospect-preview/quality";
-import { clearSent, deletePreview, logOutcome, reopenPreview, getPreviewById, markSent, publishPreview, setBrandColors, setLinkedinAccepted, setOutreach, setQualityOverride, setSkipped, unpublishPreview, updateCall, updatePreview } from "@/lib/prospect-preview/store";
+import { checkOpenerText, openerFacts, openerHook, openerMessage, openerText } from "@/lib/prospect-preview/opener";
+import { QUEUE_RESULT_TEXT, queueOpener, segmentOf } from "@/lib/prospect-preview/outbox";
+import { clearSent, deletePreview, logOutcome, reopenPreview, getPreviewById, markSent, publishPreview, setBrandColors, setLinkedinAccepted, setOpeners, setOutreach, setQualityOverride, setSkipped, unpublishPreview, updateCall, updatePreview } from "@/lib/prospect-preview/store";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
@@ -24,6 +26,12 @@ export const maxDuration = 30;
 //   approve    the Approve queue's "Approve and publish": publish the draft AS
 //              IT IS (no fields are posted). Held by the same quality gate.
 //              pick = a | b saves which first text the owner chose
+//              queue = 1 also puts their opener in the Mac's outbox
+//   opener     text = the owner's rewording of the opening text. Refused, with
+//              what to fix, when it breaks a rule (lib/prospect-preview/opener.ts)
+//   opener_pick  i = which written opener is the default (the old one becomes
+//              the alternate); clears an edit
+//   queue      put their opener in the Mac's outbox (lib/prospect-preview/outbox.ts)
 //   pick       pick = a | b on its own (a published preview, before sending)
 //   linkedin_accepted  on = 1 | 0: they accepted the connection request, so
 //              the message for that moment shows under follow-ups
@@ -48,7 +56,7 @@ export const maxDuration = 30;
 // (?done=…, or ?error=… with what to fix); a JSON caller gets JSON.
 
 function safeBack(v: unknown): string {
-  return typeof v === "string" && /^\/admin\/card-builder(\/approve|\/follow-up|\/(call|edit|send)\/[0-9a-f-]{36})?$/i.test(v) ? v : "/admin/card-builder";
+  return typeof v === "string" && /^\/admin\/card-builder(\/approve|\/follow-up|\/sender|\/(call|edit|send)\/[0-9a-f-]{36})?$/i.test(v) ? v : "/admin/card-builder";
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -112,7 +120,39 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       // The same gate as the edit screen's Publish: a too-generic draft is held.
       if (p.status !== "live" && !assessQuality(p).mayPublish) return reply("held", 409);
       if (p.status !== "live" && !(await publishPreview(id))) return reply("failed", 500);
+      if (input.queue === "1" || input.queue === true) {
+        const live = await getPreviewById(id);
+        const got = live ? await queueOpener(live, APP_URL, await segmentOf(live)) : "failed";
+        return got === "queued" ? reply("approved_queued") : reply("approved", 200, `Published, but not queued: ${QUEUE_RESULT_TEXT[got]}`);
+      }
       return reply("approved");
+    }
+    case "opener": {
+      const p = await getPreviewById(id);
+      if (!p?.openers) return reply("failed", 404);
+      const text = typeof input.text === "string" ? input.text.replace(/\s+/g, " ").trim().slice(0, 400) : "";
+      const current = openerText(p.openers) ?? "";
+      if (text === current) return reply("saved");
+      const problems = checkOpenerText(text, { owner_name: p.owner_name, facts: openerFacts(p), stale: staleNumbers(p) });
+      if (problems.length) return reply("failed", 400, problems.join(" "));
+      const ok = await setOpeners(id, { ...p.openers, edited: text });
+      if (ok) await recordEvents([{ preview_id: id, kind: "edit", message: "opener", variant: openerHook(p.openers), before: current, after: text }]);
+      return reply(ok ? "saved" : "failed", ok ? 200 : 500);
+    }
+    case "opener_pick": {
+      const p = await getPreviewById(id);
+      const i = Number(input.i);
+      if (!p?.openers || !Number.isInteger(i) || !p.openers.candidates[i]) return reply("failed", 400);
+      if (i === p.openers.pick) return reply("saved");
+      const ok = await setOpeners(id, { ...p.openers, pick: i, alt: p.openers.pick, edited: null });
+      if (ok) await recordEvents([{ preview_id: id, kind: "pick", message: "opener", variant: p.openers.candidates[i].hook, before: null, after: p.openers.candidates[i].text }]);
+      return reply(ok ? "saved" : "failed", ok ? 200 : 500);
+    }
+    case "queue": {
+      const p = await getPreviewById(id);
+      if (!p) return reply("failed", 404);
+      const got = await queueOpener(p, APP_URL, await segmentOf(p));
+      return got === "queued" || got === "already" ? reply(got === "queued" ? "queued" : "saved") : reply("failed", 409, QUEUE_RESULT_TEXT[got]);
     }
     case "skip": {
       const on = input.on !== "0" && input.on !== false;
@@ -158,9 +198,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         const p = await getPreviewById(id);
         if (p) {
           const m = resolveOutreach(p, { link: `${APP_URL}/p/${p.slug}`, sender: null });
-          const saved = kind === "ask" ? m.ask : kind === "text" ? m.text : kind === "email" ? m.email.body : kind === "linkedin_note" ? m.linkedin?.note ?? "" : kind === "linkedin_dm" ? m.linkedin?.dm ?? "" : m[kind];
+          const opener = openerText(p.openers);
+          const saved = kind === "opener" ? (opener ? openerMessage(opener, `${APP_URL}/p/${p.slug}`) : "") : kind === "ask" ? m.ask : kind === "text" ? m.text : kind === "email" ? m.email.body : kind === "linkedin_note" ? m.linkedin?.note ?? "" : kind === "linkedin_dm" ? m.linkedin?.dm ?? "" : m[kind as "nudge_no_view" | "nudge_viewed"];
           const words = typeof input.words === "string" ? input.words.trim().slice(0, 4000) : "";
-          await recordEvents([{ preview_id: id, kind: "sent", message: kind, variant: kind === "ask" && m.versions ? m.versions.picked : null, before: m.written ? saved : null, after: words || (m.written ? saved : null) }]);
+          await recordEvents([{ preview_id: id, kind: "sent", message: kind, variant: kind === "opener" ? openerHook(p.openers) : kind === "ask" && m.versions ? m.versions.picked : null, before: m.written || kind === "opener" ? saved : null, after: words || (m.written || kind === "opener" ? saved : null) }]);
         }
       }
       return reply(got === "ok" ? "sent" : "failed", got === "ok" ? 200 : 500);

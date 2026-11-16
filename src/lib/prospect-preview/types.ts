@@ -1,3 +1,5 @@
+import type { Openers } from "./opener";
+
 // ── Card Builder: the shapes ────────────────────────────────────────────────
 // A preview card staff build for a sales prospect (admin → Card Builder), the
 // page it lives on (/p/<slug>) and the real views of it. Rows are typed by
@@ -226,7 +228,17 @@ export type ProspectPreview = {
   /** Null on every real preview. Set only by the automated test: its alerts
    *  go to this one account, not to every admin (supabase/prospect-previews-qa.sql). */
   alert_user_id?: string | null;
+  /** The opening texts written for them (lib/prospect-preview/opener.ts): five, scored, the best is the default. */
+  openers?: Openers | null;
+  /** What kind of line `phone` is. Only a mobile can get an iMessage. Null = not checked. */
+  phone_kind?: PhoneKind | null;
+  /** The Mac sender found this number is not on iMessage: nothing more is sent to it from there. */
+  not_imessage_at?: string | null;
 };
+
+/** mobile: can get a text. office: a landline, a switchboard, a fixed VoIP line. unknown: couldn't tell (a Google Voice number, say). */
+export const PHONE_KINDS = ["mobile", "office", "unknown"] as const;
+export type PhoneKind = (typeof PHONE_KINDS)[number];
 
 export type DeviceType = "phone" | "tablet" | "desktop";
 

@@ -38,6 +38,12 @@ export type RealViewInput = {
   internalCookie: boolean;
   /** The browser is signed in as a site admin. */
   adminSession: boolean;
+  /**
+   * The request came from a network the owner's own devices use (the Mac
+   * that sends the openers, any device signed in to the admin): the owner
+   * pasting their own link, or Messages drawing its preview (outbox.ts).
+   */
+  ownNetwork?: boolean;
   /** The address belongs to a cloud host (lib/request-geo isHosting). */
   isHosting: boolean;
   preview: { status: string; expires_at: string } | null;
@@ -61,7 +67,7 @@ export function decideRealView(input: RealViewInput): RealViewVerdict {
   const ua = (input.userAgent ?? "").trim();
   if (!ua || isLikelyBot(ua)) return "bot";
   if (input.purposeHeader && PREFETCH_RE.test(input.purposeHeader)) return "prefetch";
-  if (input.internalCookie || input.adminSession) return "internal";
+  if (input.internalCookie || input.adminSession || input.ownNetwork) return "internal";
   if (input.isHosting) return "hosting";
   return "record";
 }

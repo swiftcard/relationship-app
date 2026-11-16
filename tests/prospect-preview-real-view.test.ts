@@ -55,6 +55,11 @@ describe("the bot filter: nothing that fetches a link without a person counts", 
     expect(decideRealView(input({ userAgent: ua }))).toBe("bot");
   });
 
+  it("a view from the owner's own network is the owner, not the prospect", () => {
+    expect(decideRealView(input({ ownNetwork: true }))).toBe("internal");
+    expect(decideRealView(input({ ownNetwork: false }))).toBe("record");
+  });
+
   it("a request that names no browser at all is a script", () => {
     expect(decideRealView(input({ userAgent: null }))).toBe("bot");
     expect(decideRealView(input({ userAgent: "   " }))).toBe("bot");

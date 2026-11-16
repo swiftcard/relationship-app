@@ -45,8 +45,26 @@ async function embedLogo(url: string | null): Promise<{ src: string; aspect: num
   }
 }
 
+/**
+ * Their own face, cropped to a square, when the card has one. Owner,
+ * 2026-11-16: "the iMessage preview should show their own face". The source
+ * rules (their own site or brokerage profile only) were applied when it was saved.
+ */
+async function embedHeadshot(url: string | null): Promise<string | null> {
+  if (!url || !/^https:\/\//.test(url)) return null;
+  try {
+    const got = await fetchVCardPhoto(url, "headshot");
+    if (!got) return null;
+    const sharp = (await import("sharp")).default;
+    const square = await sharp(Buffer.from(got.base64, "base64")).rotate().resize(320, 320, { fit: "cover", position: "attention" }).jpeg({ quality: 86 }).toBuffer();
+    return `data:image/jpeg;base64,${square.toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
 export async function renderPreviewOg(p: ProspectPreview): Promise<Response> {
-  const logo = await embedLogo(p.logo_url);
+  const [logo, face] = await Promise.all([embedLogo(p.logo_url), embedHeadshot(p.headshot_url)]);
   const ground = p.brand_primary;
   const dark = yiq(ground) < 150;
   const ink = dark ? "#FFFFFF" : "#141B26";
@@ -64,7 +82,10 @@ export async function renderPreviewOg(p: ProspectPreview): Promise<Response> {
     (
       <div style={{ width: "100%", height: "100%", display: "flex", background: ground, color: ink, fontFamily: "sans-serif" }}>
         <div style={{ width: 400, height: "100%", display: "flex", alignItems: "center", justifyContent: "center", padding: 56 }}>
-          {logo && logoBox ? (
+          {face ? (
+            // eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text
+            <img src={face} width={290} height={290} style={{ borderRadius: 145, objectFit: "cover", border: `6px solid ${rule}` }} />
+          ) : logo && logoBox ? (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "#FFFFFF", borderRadius: 28, padding: 24 }}>
               {/* eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text */}
               <img src={logo.src} width={logoBox.width} height={logoBox.height} style={{ objectFit: "contain" }} />
@@ -79,7 +100,15 @@ export async function renderPreviewOg(p: ProspectPreview): Promise<Response> {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "56px 64px" }}>
           <div style={{ fontSize: nameSize, fontWeight: 700, lineHeight: 1.05, letterSpacing: -1.5 }}>{p.owner_name}</div>
           {p.owner_title ? <div style={{ marginTop: 16, fontSize: 36, color: accent, fontWeight: 600 }}>{p.owner_title}</div> : null}
-          <div style={{ marginTop: 10, fontSize: 32, color: soft }}>{p.office_name}</div>
+          <div style={{ marginTop: 10, display: "flex", alignItems: "center" }}>
+            {face && logo ? (
+              <div style={{ display: "flex", background: "#FFFFFF", borderRadius: 12, padding: 8, marginRight: 16 }}>
+                {/* eslint-disable-next-line @next/next/no-img-element, jsx-a11y/alt-text */}
+                <img src={logo.src} height={44} width={Math.round(44 * Math.min(logo.aspect, 4))} style={{ objectFit: "contain" }} />
+              </div>
+            ) : null}
+            <div style={{ fontSize: 32, color: soft }}>{p.office_name}</div>
+          </div>
           <div style={{ marginTop: 40, display: "flex", flexDirection: "column" }}>
             {details.map((d) => (
               <div key={d} style={{ fontSize: 30, color: soft, marginTop: 8 }}>{d}</div>
@@ -93,11 +122,11 @@ export async function renderPreviewOg(p: ProspectPreview): Promise<Response> {
 
   // Says what was drawn, like the customers' preview does, so a missing logo
   // is visible from outside (curl -I).
-  const missing = p.logo_url && !logo;
+  const missing = (p.logo_url && !logo) || (p.headshot_url && !face);
   return new Response(image.body, {
     headers: {
       "Content-Type": "image/png",
-      "X-SC-Preview": missing ? "prospect; missing=logo" : "prospect",
+      "X-SC-Preview": missing ? `prospect; missing=${[p.logo_url && !logo ? "logo" : "", p.headshot_url && !face ? "headshot" : ""].filter(Boolean).join(",")}` : face ? "prospect; face" : "prospect",
       // A picture whose logo failed to load must not be frozen for a day.
       "Cache-Control": missing ? "public, max-age=60, s-maxage=60" : "public, max-age=600, s-maxage=3600, stale-while-revalidate=86400",
       "X-Robots-Tag": "noindex",

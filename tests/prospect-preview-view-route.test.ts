@@ -13,16 +13,22 @@ const state = vi.hoisted(() => ({
   admin: false,
   hosting: false,
   limited: false,
+  /** The owner's own networks (lib/prospect-preview/outbox.ts), as raw addresses for the fake. */
+  ownNetworks: [] as string[],
   views: [] as { id: string; previewId: string; deviceId: string; deviceType: string; deviceLabel: string | null; first: boolean; alerted: boolean; strip: boolean }[],
-  alerts: [] as { viewId: string; previewId: string }[],
+  alerts: [] as { viewId: string; previewId: string; firstToday?: boolean }[],
 }));
 
 vi.mock("@/lib/admin", () => ({ requireAdmin: async () => (state.admin ? { id: "admin-1", email: "owner@swiftcard.me" } : null) }));
 vi.mock("@/lib/rate-limit", () => ({ isRateLimited: async () => state.limited }));
 vi.mock("@/lib/request-geo", () => ({ resolveGeo: async () => ({ isHosting: state.hosting }) }));
 vi.mock("@/lib/prospect-preview/alert", () => ({
-  alertAdminsOfView: async (v: { viewId: string; preview: { id: string } }) => { state.alerts.push({ viewId: v.viewId, previewId: v.preview.id }); },
+  alertAdminsOfView: async (v: { viewId: string; preview: { id: string }; firstToday?: boolean }) => { state.alerts.push({ viewId: v.viewId, previewId: v.preview.id, firstToday: v.firstToday }); },
 }));
+vi.mock("@/lib/prospect-preview/outbox", async () => {
+  const { networkKey } = await import("@/lib/prospect-preview/network-key");
+  return { isOwnerNetwork: async (ip: string) => state.ownNetworks.some((n) => networkKey(n) === networkKey(ip)) };
+});
 // The store, in memory, with the same contract as the real one: one row per
 // device per visit, and "first from this device" true exactly once.
 vi.mock("@/lib/prospect-preview/store", () => ({
@@ -67,6 +73,7 @@ beforeEach(() => {
   state.limited = false;
   state.views = [];
   state.alerts = [];
+  state.ownNetworks = [];
 });
 
 describe("a real view", () => {
@@ -76,7 +83,7 @@ describe("a real view", () => {
     expect(state.views).toHaveLength(1);
     expect(state.views[0]).toMatchObject({ previewId: "preview-1", deviceId: "device-aaaaaaaa", deviceType: "phone", alerted: true });
     expect(state.views[0].deviceLabel).toMatch(/^iPhone/);
-    expect(state.alerts).toEqual([{ viewId: "view-1", previewId: "preview-1" }]);
+    expect(state.alerts).toEqual([{ viewId: "view-1", previewId: "preview-1", firstToday: true }]);
   });
 
   it("the same device again is the same visit: no second row, no second alert", async () => {
@@ -143,6 +150,34 @@ describe("what never counts, and never rings", () => {
     await nothing(beacon({ ua: "WhatsApp/2.23.20.0 A" }));
     await nothing(beacon({ ua: "facebookexternalhit/1.1 Facebot Twitterbot/1.0" }));
     await nothing(beacon({ ua: "Mozilla/5.0 (X11; Linux x86_64) HeadlessChrome/141.0.0.0 Safari/537.36" }));
+  });
+
+  // Owner, 2026-11-16: "link-preview crawlers (iMessage/Apple, facebookexternalhit,
+  // Twitterbot, and my own devices when I paste the link) must NOT count as a
+  // view or trigger an alert. Only a real human open fires the alert. Test this."
+  it.each([
+    ["iMessage / Apple's link preview", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_1) AppleWebKit/601.2.4 (KHTML, like Gecko) Version/9.0.1 Safari/601.2.4 facebookexternalhit/1.1 Facebot Twitterbot/1.0"],
+    ["facebookexternalhit", "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)"],
+    ["Twitterbot", "Twitterbot/1.0"],
+    ["Applebot", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1.1 Safari/605.1.15 (Applebot/0.1; +http://www.apple.com/go/applebot)"],
+    ["Slack", "Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)"],
+  ])("%s: no view, no alert", async (_who, ua) => {
+    await nothing(beacon({ ua, device: "device-aaaaaaaa" }));
+  });
+
+  it("the owner's own device on their own network, signed in or not: no view, no alert", async () => {
+    state.ownNetworks = ["198.51.100.7"];
+    await nothing(beacon({ device: "device-owner-phone", headers: { "x-real-ip": "198.51.100.7" } }));
+    // IPv6: any address in the same home /64 is the same network.
+    state.ownNetworks = ["2601:1c0:4a00:1234::1"];
+    await nothing(beacon({ device: "device-owner-ipad", headers: { "x-real-ip": "2601:1c0:4a00:1234:9f2e:11ff:fe22:abcd" } }));
+  });
+
+  it("the prospect on their own network still counts and rings, with the owner's text", async () => {
+    state.ownNetworks = ["198.51.100.7"];
+    await POST(beacon({ device: "device-prospect", headers: { "x-real-ip": "203.0.113.9" } }));
+    expect(state.views).toHaveLength(1);
+    expect(state.alerts).toEqual([{ viewId: "view-1", previewId: "preview-1", firstToday: true }]);
   });
 
   it("a request with no User-Agent", async () => {

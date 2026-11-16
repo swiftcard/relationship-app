@@ -1035,3 +1035,60 @@ describe("/admin/card-builder before its storage exists", () => {
     await page.close();
   });
 });
+
+// ── The opening text on Approve (owner, 2026-11-16) ─────────────────────────
+
+describe.each([390, 1280])("/admin/card-builder/approve with opening texts, at %ipx", (width) => {
+  const OPENERS = {
+    candidates: [
+      { hook: "listing" as const, uses: 1, text: "Hey Dana, Menash here. Saw your listing on Garden Pl in Brooklyn Heights, so I made you a card that shows it off with your photo and number. It's yours if you want it:", scores: { specificity: 9, human: 8, curiosity: 9 } },
+      { hook: "team" as const, uses: 2, text: "Hi Dana, it's Menash. I put together cards for you and the 14 agents at Harbor Realty Group so everyone matches when they hand one out. Figured you'd want to see it:", scores: { specificity: 8, human: 8, curiosity: 7 } },
+      { hook: "recent" as const, uses: 0, text: "Hey Dana, Menash here. Saw the open house on Hicks St this Sunday, so I made you a card your visitors can save instead of signing a sheet. It's yours if you want it:", scores: { specificity: 8, human: 7, curiosity: 7 } },
+    ],
+    pick: 0, alt: 1, edited: null, written_at: "2026-11-16T12:00:00Z",
+  };
+  const QUEUE: PreviewListRow[] = [
+    row({ id: "c1111111-2222-4333-8444-555555555555", status: "live", owner_name: "Ready Rae", ...SOLID, openers: OPENERS, phone_kind: "mobile" }),
+    row({ id: "c2222222-2222-4333-8444-555555555555", status: "draft", ...SOLID, openers: OPENERS, phone_kind: "mobile" }),
+    row({ id: "c3333333-2222-4333-8444-555555555555", status: "draft", owner_name: "Office Ollie", ...SOLID, openers: OPENERS, phone_kind: "office" }),
+  ];
+
+  it("the opener is editable, the runner-up is one tap away, nothing spills, and Approve all is there", async () => {
+    const page = await open(width, await approveMarkup(QUEUE), adminCss);
+    const m = await page.evaluate(() => {
+      const vw = window.innerWidth;
+      const spill: string[] = [];
+      document.querySelectorAll("[data-approve-card], [data-approve-card] *:not([inert] *), [data-approve-all]").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && (r.right > vw + 0.5 || r.left < -0.5)) spill.push(`${el.tagName}.${String(el.className).slice(0, 50)}`);
+      });
+      const ready = document.querySelector("#p-c1111111-2222-4333-8444-555555555555") as HTMLElement;
+      const draft = document.querySelector("#p-c2222222-2222-4333-8444-555555555555") as HTMLElement;
+      const office = document.querySelector("#p-c3333333-2222-4333-8444-555555555555") as HTMLElement;
+      return {
+        spill, sideways: document.documentElement.scrollWidth > vw,
+        textarea: (draft.querySelector("[data-opener] textarea") as HTMLTextAreaElement).value,
+        alt: (draft.querySelector("[data-opener-alt]") as HTMLElement).innerText,
+        sendHref: ready.querySelector('[data-one-tap="opener"]')?.getAttribute("href") ?? "",
+        copy: !!ready.querySelector("[data-copy-text]"), queue: !!ready.querySelector("[data-queue]"),
+        approveQueue: !!draft.querySelector("[data-approve-queue]"), officeQueue: !!office.querySelector("[data-approve-queue]"),
+        officeFlag: (office.querySelector("[data-phone-flag]") as HTMLElement | null)?.innerText ?? "",
+        approveAll: (document.querySelector("[data-approve-all] summary") as HTMLElement | null)?.innerText ?? "",
+      };
+    });
+    expect(m.spill).toEqual([]);
+    expect(m.sideways).toBe(false);
+    expect(m.textarea).toBe(OPENERS.candidates[0].text);
+    expect(m.alt).toContain("Use this one instead");
+    // The link alone on the last line of the text that opens in Messages.
+    const body = decodeURIComponent(m.sendHref.split("body=")[1] ?? "").split("\n");
+    expect(body).toHaveLength(2);
+    expect(body[0]).toBe(OPENERS.candidates[0].text);
+    expect(body[1]).toMatch(/^https:\/\/swiftcard\.me\/p\/[a-z0-9-]+$/);
+    expect(m.copy && m.queue && m.approveQueue).toBe(true);
+    expect(m.officeQueue).toBe(false);
+    expect(m.officeFlag).toMatch(/No mobile number/);
+    expect(m.approveAll).toBe("Approve all 2");
+    await page.close();
+  });
+});

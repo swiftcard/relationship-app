@@ -1,14 +1,36 @@
 ---
 description: Find offices, then build a draft preview card with written outreach for each of the best ones, one after another, unattended, and end with one summary table. Usage - /build-batch <area, type, count>
-argument-hint: <area, type, count>   e.g. "Brooklyn, independent brokerages, 5"
+argument-hint: <area, type, count> | batch <batch id> chunk <n>   e.g. "Brooklyn, independent brokerages, 5"
 ---
 
 Build a batch of Card Builder drafts for: **$ARGUMENTS**
 
 Read the three parts as *area*, *type of office* and *how many drafts*. If the
 type is missing, look for all three kinds (independent brokerages, agent teams,
-mortgage branches). If the count is missing, build 5. **30 at most** in one
-batch; asked for more, build 30 and say so.
+mortgage branches). If the count is missing, build 5. **100 at most** in one
+batch; asked for more, build 100 and say so.
+
+## Started from the admin's "New batch" (`batch <id> chunk <n>`)
+
+The owner asked for this batch in admin › Card Builder › New batch, and the
+Mac agent (scripts/card-builder-mac/agent.mjs) runs this command once per
+chunk, so a batch of 100 never has to fit in one session:
+
+- **Open it by id:** write `{ "batch_id": "<id>" }` and run `batch-start`.
+  It returns the target (`label`), `wanted`, `built_so_far`,
+  `already_done` and `candidates_left` (offices an earlier chunk found).
+- **CSV batch:** `node scripts/card-builder.mjs queue --batch <id>` lists its
+  rows. Build those (step 2's way, settling each) and search for nobody else.
+- **Target batch:** work down `candidates_left` first. When it runs short,
+  find more (step 3) and save them, best first, with
+  `node scripts/card-builder.mjs batch-candidates <id> <file.json>`
+  (`[{ "office", "person", "city", "website", "lead_id", "score" }]`, the
+  whole list, old ones included).
+- **Build at most <n> in this run, then stop** with a one-line summary.
+  Call `batch-finish` only when `wanted` is reached or there is nobody left
+  to find; otherwise the next chunk carries on.
+- Every draft gets its **opening texts** (build-card step 10). A draft
+  without them doesn't count as built.
 
 Everything this makes is a **draft only staff can see. Do not publish
 anything and do not send anything to anyone.** The owner approves each one in
@@ -79,9 +101,15 @@ The owner starts this and walks away, sometimes for the night.
      `{ "office": "…", "outcome": "built", "preview_id": "…" }` or
      `{ "office": "…", "outcome": "skipped" | "failed", "reason": "…" }` and
      run `node scripts/card-builder.mjs batch-log <batch id> <file.json>`.
-     Reasons are for the owner: "already contacted", "on the do-not-contact
-     list", "couldn't confirm who is in charge", "fewer than 3 verified
-     specifics", "no direct phone or email", "their site wouldn't load".
+     Reasons are for the owner, and the batch page groups them, so use
+     exactly these words where they fit: "already contacted", "already a
+     SwiftCard user", "on the do-not-contact list", "couldn't confirm who is in
+     charge", **"no mobile number"**, **"nothing specific to say"**, "their
+     site wouldn't load".
+   - **Flag, don't pad.** No mobile number for the decision-maker on any
+     public page: log `skipped`, "no mobile number", and move on (the opener
+     goes over iMessage). Fewer than 3 verified specifics, or nothing an
+     opener could name: "nothing specific to say".
    - **A draft that can't be finished doesn't count toward the count.** If an
      office can't reach 3 verified specifics, or its decision-maker can't be
      confirmed on a second site, or `create-draft` refuses it, log why and

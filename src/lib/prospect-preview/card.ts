@@ -99,7 +99,7 @@ export function memberCard(p: Branded, m: TeamMember, logoSrc?: string | null): 
 
 /** A short hash of everything the link-preview picture shows, for its ?v=. */
 export function previewVersion(p: ProspectPreview): string {
-  const s = [p.owner_name, p.owner_title, p.license, p.office_name, p.phone, p.email, p.logo_url, p.brand_primary, p.brand_secondary].join("|");
+  const s = [p.owner_name, p.owner_title, p.license, p.office_name, p.phone, p.email, p.logo_url, p.brand_primary, p.brand_secondary, p.headshot_url, "og2"].join("|");
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
   return (h >>> 0).toString(36);

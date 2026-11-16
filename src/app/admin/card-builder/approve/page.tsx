@@ -20,5 +20,5 @@ export default async function ApprovePage({ searchParams }: { searchParams: Prom
   if (!admin) notFound();
   const sp = await searchParams;
   const [list, sender, connections] = await Promise.all([listPreviews(), senderName(admin.id), listConnections().catch(() => [])]);
-  return <ApproveView connections={connections} list={list} appUrl={APP_URL} now={new Date().getTime()} sender={sender} done={sp.done ?? null} error={sp.error ?? null} about={sp.id ?? null} />;
+  return <ApproveView connections={connections} list={list} appUrl={APP_URL} now={new Date().getTime()} sender={sender} done={sp.done ?? null} error={sp.error ?? null} about={sp.id ?? null} tally={sp.tally ?? null} />;
 }

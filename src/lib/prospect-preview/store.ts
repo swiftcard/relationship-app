@@ -5,6 +5,8 @@ import { outcomeEffect, type CallOutcome } from "./call";
 import type { MessageKind } from "./messages";
 import { readOutreach } from "./outreach";
 import { readWarmPath } from "./warm";
+import { readOpeners, type Openers } from "./opener";
+import { PHONE_KINDS, type PhoneKind } from "./types";
 import { BUYER_ROLES, CURRENT_TOOLS, DEFAULT_EXPIRY_DAYS, HOOK_ANGLES, TYPE_FEELS, type BuyerRole, type CurrentTool, type HookAngle, type TypeFeel, type DeviceType, type FactSources, type LiveAlert, type Outreach, type PreviewListRow, type ProspectPreview } from "./types";
 
 // ── Card Builder: the database ──────────────────────────────────────────────
@@ -66,6 +68,9 @@ function toPreview(row: Record<string, unknown>): ProspectPreview {
     batch_id: (row.batch_id as string | null) ?? null,
     demo_booking_id: (row.demo_booking_id as string | null) ?? null,
     alert_user_id: typeof row.alert_user_id === "string" ? row.alert_user_id : null,
+    openers: readOpeners(row.openers),
+    phone_kind: (PHONE_KINDS as readonly unknown[]).includes(row.phone_kind) ? (row.phone_kind as PhoneKind) : null,
+    not_imessage_at: (row.not_imessage_at as string | null) ?? null,
   };
 }
 
@@ -168,6 +173,12 @@ export async function setQualityOverride(id: string, on: boolean, now: Date = ne
 /** The messages written for this prospect (the edit screen's Messages section). Null clears them: back to the templates. */
 export async function setOutreach(id: string, outreach: Outreach | null, now: Date = new Date()): Promise<boolean> {
   const { data, error } = await getAdminSupabase().from(PREVIEWS).update({ outreach, updated_at: now.toISOString() }).eq("id", id).select("id");
+  return !error && !!data?.length;
+}
+
+/** The opening texts /build-card wrote, or the owner's edit and pick of them (the review screen). */
+export async function setOpeners(id: string, openers: Openers | null, now: Date = new Date()): Promise<boolean> {
+  const { data, error } = await getAdminSupabase().from(PREVIEWS).update({ openers, updated_at: now.toISOString() }).eq("id", id).select("id");
   return !error && !!data?.length;
 }
 
@@ -274,7 +285,8 @@ export async function markSent(id: string, kind: MessageKind, now: Date = new Da
     const { data, error } = await db.from(PREVIEWS).update({ asked_at: at, updated_at: at }).eq("id", id).select("id");
     return !error && data?.length ? "ok" : "failed";
   }
-  const { data, error } = await db.from(PREVIEWS).update({ sent_at: at, sent_channel: kind, updated_at: at })
+  // The opener carries the link like "text" does; both are a text message.
+  const { data, error } = await db.from(PREVIEWS).update({ sent_at: at, sent_channel: kind === "email" ? "email" : "text", updated_at: at })
     .eq("id", id).eq("status", "live").gt("expires_at", at).select("id");
   if (error) return "failed";
   return data?.length ? "ok" : "not_live";
