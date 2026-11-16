@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 // ── Held, not lost ───────────────────────────────────────────────────────────
@@ -378,15 +378,16 @@ describe("the window is exactly quiet hours", () => {
     expect(wf).toMatch(/SECRET: \$\{\{ secrets\.PUSH_CATCHUP_SECRET \}\}/);
   });
 
-  it("keeps vercel.json inside the Hobby plan's two daily cron jobs", () => {
+  it("keeps vercel.json inside the Pro plan's cron limits", () => {
+    // The project was on Hobby (two daily jobs; a third made every deploy fail
+    // with cron_jobs_limits_reached) until 2026-11-16, when it moved to Pro:
+    // up to 100 cron jobs, any schedule. A bad entry still fails the deploy
+    // silently, so each one must be a five-field expression for a real route.
     const vercel = JSON.parse(readFileSync(join(process.cwd(), "vercel.json"), "utf8"));
-    expect(vercel.crons.length).toBeLessThanOrEqual(2);
+    expect(vercel.crons.length).toBeLessThanOrEqual(100);
     for (const c of vercel.crons as { path: string; schedule: string }[]) {
-      // A daily schedule pins the hour and the minute: "0 18 * * *" is fine,
-      // anything with a "*" in those two fields runs more than once a day.
-      const [minute, hour] = c.schedule.split(" ");
-      expect(minute, c.path).not.toContain("*");
-      expect(hour, c.path).not.toContain("*");
+      expect(c.schedule.split(" "), c.path).toHaveLength(5);
+      expect(existsSync(join(process.cwd(), "src/app", c.path, "route.ts")), c.path).toBe(true);
     }
   });
 });

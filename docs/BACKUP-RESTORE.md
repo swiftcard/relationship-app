@@ -39,6 +39,14 @@ instead of a GitHub artifact. The dump and encryption steps stay the same.
 GitHub -> the repository -> Settings -> Secrets and variables -> Actions ->
 New repository secret.
 
+> **As set up on 2026-11-16:** `SUPABASE_DB_URL` signs in as `swiftcard_backup`
+> (a login role with `pg_read_all_data`, `BYPASSRLS` and read-only
+> transactions, so it can read every row and change nothing) through
+> `aws-1-us-west-2.pooler.supabase.com:5432`, not as `postgres`. Its
+> password was generated locally and only ever stored in that secret. To
+> rotate it: generate a new one, `alter role swiftcard_backup password '…'`
+> in the SQL editor, and update the secret.
+
 | Secret | Value |
 |---|---|
 | `SUPABASE_DB_URL` | Supabase dashboard -> **Connect** (top bar) -> **Session pooler** -> copy the URI and replace `[YOUR-PASSWORD]` with the database password. It looks like `postgresql://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres`. It must be the session pooler on port 5432: the direct address is IPv6-only and GitHub cannot reach it, and the transaction pooler (port 6543) cannot run `pg_dump`. If the password contains `@ : / ? #` or spaces, percent-encode them. Forgotten the password: Supabase -> Project Settings -> Database -> Reset database password (then update this secret; the app itself does not use that password). |

@@ -180,7 +180,7 @@ export function checkOutreach(o: Outreach | null, ctx: {
   return out;
 }
 
-type About = Parameters<typeof buildMessages>[0] & Pick<ProspectPreview, "outreach"> & Partial<Pick<ProspectPreview, "linkedin_url">>;
+type About = Parameters<typeof buildMessages>[0] & Pick<ProspectPreview, "outreach"> & Partial<Pick<ProspectPreview, "linkedin_url" | "followup_text">>;
 
 /**
  * The messages to show for one preview: what was written for this prospect,
@@ -189,8 +189,10 @@ type About = Parameters<typeof buildMessages>[0] & Pick<ProspectPreview, "outrea
 export function resolveOutreach(p: About, opts: { link: string; sender: string | null }): Messages {
   const t = buildMessages(p, opts);
   const o = p.outreach ?? null;
-  if (!o) return t;
-  const pick = (k: OutreachKey, fallback: string) => (o[k] ? fillLink(o[k], opts.link) : fallback);
+  // The follow-up written 48 hours after an unopened send (lib/card-builder-jobs/followups.ts) is the nudge to send.
+  const followup = p.followup_text ? fillLink(p.followup_text, opts.link) : null;
+  if (!o) return followup ? { ...t, nudge_no_view: followup } : t;
+  const pick = (k: OutreachKey, fallback: string) => (k === "nudge_no_view" && followup ? followup : o[k] ? fillLink(o[k], opts.link) : fallback);
   const a = pick("first_text", t.ask);
   const versions = o.first_text && o.first_text_b ? { a, b: o.first_text_b, picked: o.first_pick === "b" ? "b" as const : "a" as const } : null;
   return {
