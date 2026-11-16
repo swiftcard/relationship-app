@@ -19,7 +19,7 @@ describe("security headers", () => {
     expect(header("Referrer-Policy")).toBe("strict-origin-when-cross-origin");
     expect(header("X-Permitted-Cross-Domain-Policies")).toBe("none");
     expect(header("Permissions-Policy")).toContain("camera=(self)"); // the card scanner
-    expect(cfg).toContain('return [{ source: "/:path*", headers: securityHeaders }];');
+    expect(cfg).toContain('{ source: "/:path*", headers: securityHeaders },');
   });
 
   it("the CSP blocks framing, <base> hijacking and plugins, and nothing the app loads", () => {

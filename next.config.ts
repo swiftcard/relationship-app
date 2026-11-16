@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
+import { NOINDEX_PATHS } from "./src/lib/robots-paths";
 
 // Security headers applied to every response. Deliberately conservative so
 // nothing legitimate breaks:
@@ -63,7 +64,12 @@ const nextConfig: NextConfig = {
     "/card/[username]/opengraph-image": ["./public/og/**", "./public/brand-icon-192.png"],
   },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // Private app and one-off pages stay out of search even when linked:
+      // robots.txt only stops crawling, not indexing. See src/lib/robots-paths.ts.
+      ...NOINDEX_PATHS.map((p) => ({ source: `${p}/:path*`, headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] })),
+    ];
   },
   async redirects() {
     return [
