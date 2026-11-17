@@ -237,7 +237,7 @@ try {
       call_opener: "Hi Quinn, it's Sam from SwiftCard. I sent you a card I made for your office. 7 of your 9 agents list their own cell, and that is what it is for.",
       voicemail: "Hi Quinn, Sam from SwiftCard. I made a card for your office and texted you the link. Call me back at this number when you have a minute.",
       nudge_no_view: "Quinn, the card I made for your office is still here when you have a minute: {link}",
-      nudge_viewed: "Quinn, saw you had a look at the card. Want me to set it up for all 9 agents?",
+      nudge_viewed: "Quinn, want me to set the card up for all 9 agents? It takes a few minutes on a call.",
       linkedin_note: "Hi Quinn, I work with real estate offices in Brooklyn and saw you are hiring agents. Would be glad to connect.",
       linkedin_dm: "Thanks for connecting, Quinn. I put together something for your office after seeing your About page. Want me to send it?",
       first_pick: "a",
