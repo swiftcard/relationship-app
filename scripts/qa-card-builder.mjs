@@ -102,7 +102,7 @@ const tapWithoutLeaving = async (page, selector) => {
   await page.evaluate(() => {
     if (window.__qaHeld) return;
     window.__qaHeld = true;
-    document.addEventListener("click", (e) => { if (e.target instanceof Element && e.target.closest("a[data-one-tap],a[data-send],a[data-linkedin]")) e.preventDefault(); }, true);
+    document.addEventListener("click", (e) => { if (e.target instanceof Element && e.target.closest("a[data-one-tap],a[data-send],a[data-linkedin],a[data-google-voice]")) e.preventDefault(); }, true);
   });
   await page.locator(selector).first().click();
 };
@@ -342,6 +342,12 @@ try {
     const dm = admin.locator('[data-follow-up="linkedin_accepted"]', { hasText: OFFICE });
     pass(await dm.count() === 1 && ((await dm.locator("[data-follow-words]").textContent()) ?? "").startsWith("Thanks for connecting, Quinn"), "\"They accepted\": the LinkedIn message shows under Call and follow up with its words");
     pass(!(await sideways(admin)), "Call and follow up fits a phone");
+
+    // Google Voice (owner, 2026-11-17): its list loads with today's count and fits a phone.
+    // "They said stop" is NOT pressed here: it writes the do-not-contact list, which is shared.
+    await admin.goto(`${ADMIN_BASE}/admin/card-builder/google-voice`, { waitUntil: "domcontentloaded" });
+    pass(/ of \d+$/.test(((await admin.locator("[data-gv-today]").textContent()) ?? "").trim()), "Send from Google Voice: today's count against the cap is shown");
+    pass(!(await sideways(admin)), "Send from Google Voice fits a phone");
 
     await admin.goto(`${ADMIN_BASE}/admin/card-builder/approve`, { waitUntil: "domcontentloaded" });
     await tapWithoutLeaving(admin, `#p-${previewId} [data-one-tap="ask"]`);

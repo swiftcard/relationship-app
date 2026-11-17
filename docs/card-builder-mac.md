@@ -67,3 +67,32 @@ Try it without sending or building anything: `node scripts/card-builder-mac/agen
   retried as SMS. Delete it in Messages if it bothers you.
 - **An interrupted send is never retried** (the Mac slept mid-send): a double
   text is worse than a missed one. It shows as *Failed: interrupted*.
+
+## Google Voice: the second way to send (2026-11-17)
+
+Some openers go from the owner's Google Voice number instead of iMessage. The
+owner sends each one **by hand**: SwiftCard never drives Google Voice (no
+browser automation, no scraping, no unofficial API), the same rule as LinkedIn.
+
+- **Per batch:** *New batch › Send with: iMessage (my Mac) or Google Voice*. A
+  Google Voice batch's prospects never go into `prospect_outbox`; once approved
+  they wait in *Card Builder › Send from Google Voice*.
+- **Per prospect:** on Approve, "Send this one from Google Voice instead" (and
+  back). Switching to Google Voice takes back anything queued on the Mac.
+- **Not on iMessage:** "Send from Google Voice" becomes the main button. Never
+  for an office line.
+- **The button** copies the opener with its link and opens
+  `voice.google.com/u/0/messages?itemId=t.+1…` (the address the web app uses
+  for a one-number conversation; not documented by Google) in a new tab. On
+  iPhone the same web address: the Google Voice app has no documented "text
+  this number" link. The tap records `sent_channel = 'google_voice'`.
+- **One text per number** still holds both ways: a number texted from Google
+  Voice has its Mac rows canceled and is never queued; a number the Mac texted
+  (or that is queued for it) never shows in the Google Voice list.
+- **Stop replies** come to Google Voice, where this Mac can't read them: the
+  owner taps **They said stop** (Google Voice list or the Call screen), which
+  adds `tel:+1…` to the do-not-contact list and cancels anything queued.
+- **Daily cap:** *iMessage sender › Google Voice texts a day, at most*
+  (default 20). Google can restrict a personal Voice number that texts many
+  new people.
+- SQL: `supabase/card-builder-google-voice.sql`.

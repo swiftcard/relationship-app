@@ -6,7 +6,7 @@ import type { MessageKind } from "./messages";
 import { readOutreach } from "./outreach";
 import { readWarmPath } from "./warm";
 import { readOpeners, type Openers } from "./opener";
-import { PHONE_KINDS, type PhoneKind } from "./types";
+import { PHONE_KINDS, SENT_CHANNELS, type PhoneKind, type SentChannel } from "./types";
 import { BUYER_ROLES, CURRENT_TOOLS, DEFAULT_EXPIRY_DAYS, HOOK_ANGLES, TYPE_FEELS, type BuyerRole, type CurrentTool, type HookAngle, type TypeFeel, type DeviceType, type FactSources, type LiveAlert, type Outreach, type PreviewListRow, type ProspectPreview } from "./types";
 
 // ── Card Builder: the database ──────────────────────────────────────────────
@@ -36,7 +36,7 @@ function toPreview(row: Record<string, unknown>): ProspectPreview {
     specialty: (row.specialty as string | null) ?? null,
     asked_at: (row.asked_at as string | null) ?? null,
     sent_at: (row.sent_at as string | null) ?? null,
-    sent_channel: row.sent_channel === "text" || row.sent_channel === "email" ? row.sent_channel : null,
+    sent_channel: (SENT_CHANNELS as readonly unknown[]).includes(row.sent_channel) ? (row.sent_channel as SentChannel) : null,
     stage: (row.stage as string | null) ?? null,
     buyer_role: (BUYER_ROLES as readonly unknown[]).includes(row.buyer_role) ? (row.buyer_role as BuyerRole) : null,
     buyer_reason: (row.buyer_reason as string | null) ?? null,
@@ -71,6 +71,7 @@ function toPreview(row: Record<string, unknown>): ProspectPreview {
     openers: readOpeners(row.openers),
     phone_kind: (PHONE_KINDS as readonly unknown[]).includes(row.phone_kind) ? (row.phone_kind as PhoneKind) : null,
     not_imessage_at: (row.not_imessage_at as string | null) ?? null,
+    send_with: row.send_with === "imessage" || row.send_with === "google_voice" ? row.send_with : null,
   };
 }
 
@@ -267,7 +268,7 @@ export async function reopenPreview(id: string, now: Date = new Date()): Promise
  * phone or inbox). "ask" is the first text, which has no link; "text" and
  * "email" carry the link, and only a published, unexpired preview has one.
  */
-export async function markSent(id: string, kind: MessageKind, now: Date = new Date()): Promise<"ok" | "not_live" | "failed"> {
+export async function markSent(id: string, kind: MessageKind, now: Date = new Date(), channel: "google_voice" | null = null): Promise<"ok" | "not_live" | "failed"> {
   const db = getAdminSupabase();
   const at = now.toISOString();
   // A nudge is a follow-up to something already sent: it is noted, and the
@@ -286,10 +287,22 @@ export async function markSent(id: string, kind: MessageKind, now: Date = new Da
     return !error && data?.length ? "ok" : "failed";
   }
   // The opener carries the link like "text" does; both are a text message.
-  const { data, error } = await db.from(PREVIEWS).update({ sent_at: at, sent_channel: kind === "email" ? "email" : "text", updated_at: at })
+  // From Google Voice it is still a text, but from a different number: kept apart, so the
+  // stats, the one-text-per-number rule and the Call screen know where the thread is.
+  const sentChannel: SentChannel = kind === "email" ? "email" : channel === "google_voice" ? "google_voice" : "text";
+  const { data, error } = await db.from(PREVIEWS).update({ sent_at: at, sent_channel: sentChannel, updated_at: at })
     .eq("id", id).eq("status", "live").gt("expires_at", at).select("id");
   if (error) return "failed";
   return data?.length ? "ok" : "not_live";
+}
+
+/**
+ * How this prospect's opener goes (Approve's "Send with Google Voice instead"),
+ * or null to follow their batch again.
+ */
+export async function setSendWith(id: string, sendWith: "imessage" | "google_voice" | null, now: Date = new Date()): Promise<boolean> {
+  const { data, error } = await getAdminSupabase().from(PREVIEWS).update({ send_with: sendWith, updated_at: now.toISOString() }).eq("id", id).select("id");
+  return !error && !!data?.length;
 }
 
 /** "I didn't send that after all": back to not asked, not sent. */

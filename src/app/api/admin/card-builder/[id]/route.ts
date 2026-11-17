@@ -8,8 +8,10 @@ import { recordEvents } from "@/lib/prospect-preview/desk";
 import { checkOutreach, outreachEdits, parseOutreachForm, resolveOutreach, staleNumbers } from "@/lib/prospect-preview/outreach";
 import { assessQuality } from "@/lib/prospect-preview/quality";
 import { checkOpenerText, openerFacts, openerHook, openerMessage, openerSentVariant, openerText } from "@/lib/prospect-preview/opener";
-import { QUEUE_RESULT_TEXT, queueOpener, segmentOf } from "@/lib/prospect-preview/outbox";
-import { clearSent, deletePreview, logOutcome, reopenPreview, getPreviewById, markSent, publishPreview, setBrandColors, setLinkedinAccepted, setOpeners, setOutreach, setQualityOverride, setSkipped, unpublishPreview, updateCall, updatePreview } from "@/lib/prospect-preview/store";
+import { cancelQueuedFor, QUEUE_RESULT_TEXT, queueOpener, segmentOf, suppressNumber } from "@/lib/prospect-preview/outbox";
+import { isSendWith } from "@/lib/prospect-preview/google-voice";
+import { nanp } from "@/lib/prospect-preview/phone-type";
+import { setSendWith, clearSent, deletePreview, logOutcome, reopenPreview, getPreviewById, markSent, publishPreview, setBrandColors, setLinkedinAccepted, setOpeners, setOutreach, setQualityOverride, setSkipped, unpublishPreview, updateCall, updatePreview } from "@/lib/prospect-preview/store";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://swiftcard.me";
 
@@ -47,6 +49,15 @@ export const maxDuration = 30;
 //   sent       a send button was pressed: kind = ask | text | email |
 //              nudge_no_view | nudge_viewed (the message itself goes from the
 //              founder's own phone or inbox; nothing here sends anything)
+//              channel = google_voice: it went from the owner's Google Voice
+//              number, pasted by hand (GoogleVoiceButton). An opener or link
+//              sent by hand takes back anything the Mac had queued for that number.
+//   send_with  value = imessage | google_voice | "" (follow the batch): how
+//              this one prospect's opener goes. Google Voice takes back
+//              anything queued for them on the Mac
+//   stop       "They said stop": their number goes on the do-not-contact list
+//              and anything queued for it is canceled (the Mac can't see
+//              replies that come to Google Voice)
 //   unsent     "I didn't send that after all"
 //   colors     read the brand colours from the logo (or the site's theme colour)
 //   delete     removes the preview and every view of it; its link then 404s
@@ -56,7 +67,7 @@ export const maxDuration = 30;
 // (?done=…, or ?error=… with what to fix); a JSON caller gets JSON.
 
 function safeBack(v: unknown): string {
-  return typeof v === "string" && /^\/admin\/card-builder(\/approve|\/follow-up|\/sender|\/(call|edit|send)\/[0-9a-f-]{36})?$/i.test(v) ? v : "/admin/card-builder";
+  return typeof v === "string" && /^\/admin\/card-builder(\/approve|\/follow-up|\/sender|\/google-voice|\/(call|edit|send)\/[0-9a-f-]{36})?$/i.test(v) ? v : "/admin/card-builder";
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -191,7 +202,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     case "sent": {
       const kind = input.kind;
       if (!isMessageKind(kind)) return reply("failed", 400);
-      const got = await markSent(id, kind);
+      const channel = input.channel === "google_voice" ? "google_voice" : null;
+      const got = await markSent(id, kind, new Date(), channel);
       if (got === "not_live") return reply("failed", 409, "That message has the link in it, and the link doesn't open yet. Publish the preview first.");
       if (got === "ok") {
         // What went, and (when the owner reworded it on the Send screen) what it was changed from.
@@ -203,10 +215,27 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
           const words = typeof input.words === "string" ? input.words.trim().slice(0, 4000) : "";
           // An opener records whose words went: the model's (its hook) or the owner's edit ("edit:<hook>"), saved or reworded here.
           const variant = kind === "opener" ? openerSentVariant(p.openers, !!words && words !== saved) : kind === "ask" && m.versions ? m.versions.picked : null;
-          await recordEvents([{ preview_id: id, kind: "sent", message: kind, variant, before: m.written || kind === "opener" ? saved : null, after: words || (m.written || kind === "opener" ? saved : null) }]);
+          await recordEvents([{ preview_id: id, kind: "sent", message: kind, variant, before: m.written || kind === "opener" ? saved : null, after: words || (m.written || kind === "opener" ? saved : null), channel: channel ?? (kind === "email" ? "email" : kind.startsWith("linkedin") ? null : "text") }]);
+          // One text per number: what went by hand is never sent again by the Mac.
+          if (kind === "opener" || kind === "text") await cancelQueuedFor(nanp(p.phone), channel === "google_voice" ? "texted from Google Voice" : "texted by hand", id);
         }
       }
       return reply(got === "ok" ? "sent" : "failed", got === "ok" ? 200 : 500);
+    }
+    case "send_with": {
+      const v = input.value === "" || input.value === null ? null : input.value;
+      if (v !== null && !isSendWith(v)) return reply("failed", 400);
+      const ok = await setSendWith(id, v);
+      if (ok && v === "google_voice") await cancelQueuedFor(null, "switched to Google Voice", id);
+      return reply(ok ? (v === "google_voice" ? "send_gv" : "send_imessage") : "failed", ok ? 200 : 500);
+    }
+    case "stop": {
+      const p = await getPreviewById(id);
+      if (!p) return reply("failed", 404);
+      const e164 = nanp(p.phone);
+      if (!e164) return reply("failed", 400, "That number can't be read, so it can't go on the list. Add it by hand in Crew's do-not-contact list.");
+      const ok = await suppressNumber(e164, `said stop to ${p.sent_channel === "google_voice" ? "a Google Voice text" : "a text"}, marked by hand`);
+      return reply(ok ? "stopped" : "failed", ok ? 200 : 500);
     }
     case "linkedin_accepted": {
       const on = input.on !== "0" && input.on !== false;

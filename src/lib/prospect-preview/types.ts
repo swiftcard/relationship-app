@@ -204,7 +204,8 @@ export type ProspectPreview = {
   asked_at: string | null;
   /** The link went out, and how (the latest send). */
   sent_at: string | null;
-  sent_channel: "text" | "email" | null;
+  /** google_voice: the opener went from the owner's Google Voice number, pasted by hand (google-voice.ts). */
+  sent_channel: SentChannel | null;
   /** Only what a person decides: meeting_booked | won | lost. See lib/prospect-preview/pipeline.ts. */
   stage: string | null;
   crew_lead_id: string | null;
@@ -237,7 +238,12 @@ export type ProspectPreview = {
   phone_kind?: PhoneKind | null;
   /** The Mac sender found this number is not on iMessage: nothing more is sent to it from there. */
   not_imessage_at?: string | null;
+  /** How their opener goes, chosen for this one prospect. Null = their batch's choice (prospect_batches.send_with), else iMessage. */
+  send_with?: "imessage" | "google_voice" | null;
 };
+
+export const SENT_CHANNELS = ["text", "email", "google_voice"] as const;
+export type SentChannel = (typeof SENT_CHANNELS)[number];
 
 /** mobile: can get a text. office: a landline, a switchboard, a fixed VoIP line. unknown: couldn't tell (a Google Voice number, say). */
 export const PHONE_KINDS = ["mobile", "office", "unknown"] as const;

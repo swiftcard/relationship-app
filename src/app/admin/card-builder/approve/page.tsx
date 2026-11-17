@@ -3,6 +3,8 @@ import { requireAdmin } from "@/lib/admin";
 import { listConnections } from "@/lib/prospect-preview/desk";
 import { listPreviews, senderName } from "@/lib/prospect-preview/store";
 import { failedJobs } from "@/lib/card-builder-jobs/jobs";
+import { sendContext } from "@/lib/prospect-preview/outbox";
+import { approvalQueue } from "@/lib/prospect-preview/pipeline";
 import ApproveView from "./ApproveView";
 
 export const metadata = { title: "Approve — SwiftCard Admin" };
@@ -21,5 +23,9 @@ export default async function ApprovePage({ searchParams }: { searchParams: Prom
   if (!admin) notFound();
   const sp = await searchParams;
   const [list, sender, connections, failed] = await Promise.all([listPreviews(), senderName(admin.id), listConnections().catch(() => []), failedJobs().catch(() => [])]);
-  return <ApproveView connections={connections} list={list} appUrl={APP_URL} now={new Date().getTime()} sender={sender} done={sp.done ?? null} error={sp.error ?? null} about={sp.id ?? null} tally={sp.tally ?? null} failed={failed} />;
+  const now = new Date();
+  // Each card's way out (iMessage or Google Voice) and the numbers that mustn't get a button.
+  const rows = list.ready ? list.rows : [];
+  const ctx = await sendContext(approvalQueue(rows, now.getTime()).send, rows, now);
+  return <ApproveView connections={connections} list={list} appUrl={APP_URL} now={now.getTime()} sender={sender} done={sp.done ?? null} error={sp.error ?? null} about={sp.id ?? null} tally={sp.tally ?? null} failed={failed} ctx={ctx} />;
 }

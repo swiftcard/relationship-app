@@ -7,6 +7,7 @@ import { previewState } from "./real-view";
 import { readSenderSettings, type SenderSettings } from "./send-window";
 import { nextSendAt, recipientTimeZone } from "./send-at";
 import type { ProspectPreview } from "./types";
+import { gvSentToday, numberBlocks, type NumberBlock, type OutboxBit, type SendWith } from "./google-voice";
 
 // ── Card Builder: the outbox the Mac sends from (owner, 2026-11-16) ─────────
 // "Approve" on the review screen can queue a prospect's opener here. The Mac
@@ -29,7 +30,7 @@ export type OutboxRow = {
   send_at?: string | null;
 };
 
-export type QueueResult = "queued" | "already" | "maybe_sent" | "not_live" | "no_opener" | "not_mobile" | "not_imessage" | "do_not_contact" | "failed";
+export type QueueResult = "queued" | "already" | "maybe_sent" | "not_live" | "no_opener" | "not_mobile" | "not_imessage" | "do_not_contact" | "google_voice" | "failed";
 export const QUEUE_RESULT_TEXT: Record<QueueResult, string> = {
   queued: "Scheduled for 9 AM their time. Your Mac sends it then, in your sending hours.",
   already: "Already queued or sent to this number.",
@@ -39,6 +40,7 @@ export const QUEUE_RESULT_TEXT: Record<QueueResult, string> = {
   not_mobile: "Their number isn't a mobile, so it can't get an iMessage.",
   not_imessage: "That number isn't on iMessage.",
   do_not_contact: "They're on the do-not-contact list.",
+  google_voice: "This one is set to go from Google Voice. Switch it to iMessage first.",
   failed: "That didn't save. Try again in a minute.",
 };
 
@@ -55,6 +57,10 @@ export async function queueOpener(p: ProspectPreview, appUrl: string, segment: s
   if (previewState(p) !== "live") return "not_live";
   const text = openerText(p.openers);
   if (!text) return "no_opener";
+  // Already went another way (by hand, or from Google Voice): never a second opener.
+  if (p.sent_at) return "already";
+  // A Google Voice prospect never goes into the Mac's outbox; the owner switches it first.
+  if ((await sendWithOf(p)) === "google_voice") return "google_voice";
   const e164 = nanp(p.phone);
   if (!e164) return "not_mobile";
   if (p.not_imessage_at) return "not_imessage";
@@ -93,6 +99,104 @@ export async function doNotContact(e164: string, email: string | null): Promise<
   if (e.includes("@")) values.push(e, `@${e.split("@")[1]}`);
   const { data } = await db().from("crew_suppression").select("value").in("value", values).limit(1);
   return !!data?.length;
+}
+
+/**
+ * Take back everything not yet sent to this number (and, with `previewId`,
+ * to that prospect): it was texted another way, or they said stop. A row the
+ * Mac is already sending can't be stopped from here; the Mac checks sent_at
+ * and the do-not-contact list again right before it sends.
+ */
+export async function cancelQueuedFor(e164: string | null, reason: string, previewId?: string): Promise<number> {
+  let n = 0;
+  if (e164) {
+    const { data } = await db().from(OUTBOX).update({ status: "canceled", error: reason }).eq("phone", e164).in("status", ["scheduled", "queued"]).select("id");
+    n += data?.length ?? 0;
+  }
+  if (previewId) {
+    const { data } = await db().from(OUTBOX).update({ status: "canceled", error: reason }).eq("preview_id", previewId).in("status", ["scheduled", "queued"]).select("id");
+    n += data?.length ?? 0;
+  }
+  return n;
+}
+
+/**
+ * "They said stop" (owner, 2026-11-17): the Mac can't see replies that come
+ * to Google Voice, so the owner taps it. The number goes on the
+ * do-not-contact list and anything queued for it is taken back.
+ */
+export async function suppressNumber(e164: string, reason: string): Promise<boolean> {
+  const { error } = await db().from("crew_suppression").upsert({ value: suppressionKey(e164), reason: reason.slice(0, 200), source: "manual", channel: "sms" }, { onConflict: "value" });
+  if (error) return false;
+  await cancelQueuedFor(e164, "they asked not to be texted");
+  return true;
+}
+
+/** The batch's "Send with", or the prospect's own choice. */
+export async function sendWithOf(p: Pick<ProspectPreview, "batch_id" | "send_with">): Promise<SendWith> {
+  if (p.send_with) return p.send_with;
+  if (!p.batch_id) return "imessage";
+  const { data } = await db().from("prospect_batches").select("send_with").eq("id", p.batch_id).maybeSingle();
+  return data?.send_with === "google_voice" ? "google_voice" : "imessage";
+}
+
+/** Each batch's "Send with", for the batches these previews came from. A missing column (SQL not run yet) reads as iMessage. */
+export async function batchSendWith(ids: (string | null | undefined)[]): Promise<Map<string, SendWith>> {
+  const want = [...new Set(ids.filter((x): x is string => !!x))];
+  const out = new Map<string, SendWith>();
+  for (let i = 0; i < want.length; i += 200) {
+    const { data, error } = await db().from("prospect_batches").select("id, send_with").in("id", want.slice(i, i + 200));
+    if (error) break;
+    for (const b of data ?? []) if (b.send_with === "google_voice") out.set(b.id as string, "google_voice");
+  }
+  return out;
+}
+
+/**
+ * For the prospects about to be shown a send button: which numbers mustn't
+ * get one (do-not-contact, already texted anywhere, waiting on the Mac).
+ * `all` is every preview, so a twin card with the same number counts.
+ */
+export async function numberBlocksFor(
+  rows: Pick<ProspectPreview, "id" | "phone" | "email">[],
+  all: Pick<ProspectPreview, "id" | "phone" | "sent_at">[],
+): Promise<Map<string, NumberBlock>> {
+  const phones = [...new Set(rows.map((r) => nanp(r.phone)).filter((x): x is string => !!x))];
+  if (!phones.length) return new Map();
+  const emails = rows.flatMap((r) => { const e = (r.email ?? "").trim().toLowerCase(); return e.includes("@") ? [e, `@${e.split("@")[1]}`] : []; });
+  const outbox: OutboxBit[] = [];
+  const dnc = new Set<string>();
+  for (let i = 0; i < phones.length; i += 100) {
+    const part = phones.slice(i, i + 100);
+    const [{ data: o }, { data: d }] = await Promise.all([
+      db().from(OUTBOX).select("phone, status, error, preview_id").in("phone", part).limit(2000),
+      db().from("crew_suppression").select("value").in("value", part.map(suppressionKey)).limit(2000),
+    ]);
+    outbox.push(...((o ?? []) as OutboxBit[]));
+    for (const v of d ?? []) dnc.add(String(v.value));
+  }
+  const uniqueEmails = [...new Set(emails)];
+  for (let i = 0; i < uniqueEmails.length; i += 100) {
+    const { data: d } = await db().from("crew_suppression").select("value").in("value", uniqueEmails.slice(i, i + 100)).limit(2000);
+    for (const v of d ?? []) dnc.add(String(v.value));
+  }
+  return numberBlocks(rows, { all, outbox, dnc });
+}
+
+/**
+ * What a screen with send buttons needs: each prospect's way out, the
+ * numbers among `showing` that mustn't be texted, and today's Google Voice
+ * count against the owner's cap. Never throws: a failed lookup shows the
+ * buttons as before (the Mac still checks everything again before it sends).
+ */
+export async function sendContext(showing: ProspectPreview[], all: ProspectPreview[], now: Date = new Date()) {
+  const [batchWays, blocks, settings] = await Promise.all([
+    batchSendWith(all.map((r) => r.batch_id)).catch(() => new Map<string, SendWith>()),
+    numberBlocksFor(showing, all).catch(() => new Map<string, NumberBlock>()),
+    senderSettings().catch(() => readSenderSettings(null)),
+  ]);
+  const gvToday = gvSentToday(all, settings.tz, now);
+  return { batchSendWith: batchWays, blocks, gvCapReached: gvToday >= settings.gv_daily_cap, gvToday, gvCap: settings.gv_daily_cap };
 }
 
 export async function listOutbox(limit = 200): Promise<OutboxRow[]> {

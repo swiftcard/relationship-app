@@ -16,6 +16,8 @@ import { warmPathFor, type Connection } from "@/lib/prospect-preview/warm";
 import LinkedInButton from "../LinkedInButton";
 import OneTapSend from "../OneTapSend";
 import CopyText from "../CopyText";
+import GoogleVoiceButton from "../GoogleVoiceButton";
+import { googleVoiceHref, mainSendButton, NUMBER_BLOCK_TEXT, sendWithFor, type NumberBlock, type SendWith } from "@/lib/prospect-preview/google-voice";
 import { OPENER_HOOK_LABELS, openerMessage, openerText, scoreTotal } from "@/lib/prospect-preview/opener";
 import { QUEUE_RESULT_TEXT, type QueueResult } from "@/lib/prospect-preview/outbox";
 import type { FailedJob } from "@/lib/card-builder-jobs/jobs";
@@ -38,6 +40,9 @@ const DONE: Record<string, { ok: boolean; text: string }> = {
   skipped: { ok: true, text: "Skipped. It stays a draft, under Skipped at the bottom." },
   unskipped: { ok: true, text: "Back in the queue." },
   sent: { ok: true, text: "Marked as sent." },
+  send_gv: { ok: true, text: "This one goes from Google Voice now. After you approve it, it waits in your Google Voice list." },
+  send_imessage: { ok: true, text: "This one goes by iMessage now." },
+  stopped: { ok: true, text: "On the do-not-contact list. Nothing more goes to that number, and anything queued for it was taken back." },
   approved_queued: { ok: true, text: "Published and scheduled for 9 AM their time. Your Mac then texts it from your number, in your sending hours." },
   queued: { ok: true, text: "Scheduled for 9 AM their time. Your Mac then texts it from your number, in your sending hours." },
   retried: { ok: true, text: "Trying it again. It runs within 5 minutes." },
@@ -108,7 +113,7 @@ function Facts({ r, q }: { r: PreviewListRow; q: Quality }) {
 
 /** A flag the owner should see before sending: the number can't take an iMessage, or hasn't been checked. */
 function phoneFlag(r: PreviewListRow): string | null {
-  if (r.not_imessage_at) return "Not on iMessage: your Mac couldn't deliver to this number. Call, or use the email.";
+  if (r.not_imessage_at) return "Not on iMessage: your Mac couldn't deliver to this number. Send it from Google Voice, call, or use the email.";
   if (r.phone_kind === "office") return "No mobile number: this is an office line, so it can't get a text.";
   if (!r.phone_kind) return "Number not checked yet: it's checked when you queue it.";
   if (r.phone_kind === "unknown") return "Couldn't tell if this is a mobile (it may be a Google Voice line).";
@@ -207,7 +212,61 @@ function AllWords({ m, opener, pickForm }: { m: Messages; opener: string | null;
   );
 }
 
-function Prospect({ r, appUrl, sender, mode, highlight, connections }: { r: PreviewListRow; appUrl: string; sender: string | null; mode: "waiting" | "send"; highlight: boolean; connections: Connection[] }) {
+/** How the opener goes, and what stands in a number's way. Empty when nothing was loaded (the tests' fixtures, an old page). */
+export type SendContext = { batchSendWith: ReadonlyMap<string, SendWith>; blocks: ReadonlyMap<string, NumberBlock>; gvCapReached: boolean };
+const NO_CONTEXT: SendContext = { batchSendWith: new Map(), blocks: new Map(), gvCapReached: false };
+
+/** "Send this one with Google Voice instead", and back. Never offered for an office line: it can't take a text. */
+function SwitchWay({ r, way, post, back }: { r: PreviewListRow; way: SendWith; post: string; back: string }) {
+  if (r.phone_kind === "office") return null;
+  const to: SendWith = way === "google_voice" ? "imessage" : "google_voice";
+  return (
+    <form method="post" action={post}>
+      <input type="hidden" name="action" value="send_with" />
+      <input type="hidden" name="value" value={to} />
+      <input type="hidden" name="back" value={back} />
+      <button type="submit" className="adm-link sc-t-footnote" data-switch-way={to}>{to === "google_voice" ? "Send this one from Google Voice instead" : "Send this one by iMessage (my Mac) instead"}</button>
+    </form>
+  );
+}
+
+function SendOpener({ r, link, ctx, post, back }: { r: PreviewListRow; link: string; ctx: SendContext; post: string; back: string }) {
+  const words = openerMessage(openerText(r.openers)!, link);
+  const way = sendWithFor(r, ctx.batchSendWith);
+  const main = mainSendButton(r, ctx.batchSendWith);
+  const block = ctx.blocks.get(r.id);
+  const filled = "sc-btn sc-btn-filled sc-btn-block", gray = "sc-btn sc-btn-gray sc-btn-block";
+  const phone = <OneTapSend id={r.id} kind="opener" href={smsHref(r.phone, words)} className={main === "google_voice" ? gray : filled}>Send from my phone</OneTapSend>;
+  const gv = <GoogleVoiceButton id={r.id} words={words} href={googleVoiceHref(r.phone)} disabled={ctx.gvCapReached} className={main === "google_voice" ? filled : gray} />;
+  return (
+    <div className="flex flex-col gap-2" data-send-opener data-send-with={way}>
+      {block && <p className="adm-callout-warn sc-t-footnote rounded-xl px-3 py-2" data-number-block={block}>{NUMBER_BLOCK_TEXT[block]}</p>}
+      {block === "do_not_contact" || block === "texted" ? null : (
+        <>
+          {main === "none" ? (
+            <div className="grid grid-cols-2 gap-2">{phone}<CopyText text={words} /></div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2">{main === "google_voice" ? <>{gv}{phone}</> : <>{phone}{gv}</>}</div>
+              <CopyText text={words} />
+            </>
+          )}
+          {main === "google_voice" && <p className="sc-t-caption adm-muted" data-gv-hint>Copies the text and opens Google Voice on {r.phone}. Paste it and press send there.</p>}
+          {way === "imessage" && r.phone_kind !== "office" && !r.not_imessage_at && block !== "with_mac" && (
+            <form method="post" action={post}>
+              <input type="hidden" name="action" value="queue" />
+              <input type="hidden" name="back" value={back} />
+              <button type="submit" className="sc-btn sc-btn-gray sc-btn-block" data-queue>Queue for my Mac to send</button>
+            </form>
+          )}
+        </>
+      )}
+      {block !== "do_not_contact" && block !== "texted" && <SwitchWay r={r} way={way} post={post} back={back} />}
+    </div>
+  );
+}
+
+function Prospect({ r, appUrl, sender, mode, highlight, connections, ctx = NO_CONTEXT }: { r: PreviewListRow; appUrl: string; sender: string | null; mode: "waiting" | "send"; highlight: boolean; connections: Connection[]; ctx?: SendContext }) {
   const warm = warmPathFor(r, connections);
   const formId = `ap-${r.id}`;
   const q = assessQuality(r);
@@ -234,21 +293,7 @@ function Prospect({ r, appUrl, sender, mode, highlight, connections }: { r: Prev
         )}
       </div>
 
-      {mode === "send" && openerText(r.openers) && (
-        <div className="flex flex-col gap-2" data-send-opener>
-          <div className="grid grid-cols-2 gap-2">
-            <OneTapSend id={r.id} kind="opener" href={smsHref(r.phone, openerMessage(openerText(r.openers)!, link))} className="sc-btn sc-btn-filled sc-btn-block">Send from my phone</OneTapSend>
-            <CopyText text={openerMessage(openerText(r.openers)!, link)} />
-          </div>
-          {r.phone_kind !== "office" && !r.not_imessage_at && (
-            <form method="post" action={post}>
-              <input type="hidden" name="action" value="queue" />
-              <input type="hidden" name="back" value={back} />
-              <button type="submit" className="sc-btn sc-btn-gray sc-btn-block" data-queue>Queue for my Mac to send</button>
-            </form>
-          )}
-        </div>
-      )}
+      {mode === "send" && openerText(r.openers) && <SendOpener r={r} link={link} ctx={ctx} post={post} back={back} />}
       {mode === "send" && (
         <details open={!openerText(r.openers)} data-send-other>
         <summary className="adm-link sc-t-footnote cursor-pointer">{openerText(r.openers) ? "Other ways to send: two texts, email, LinkedIn" : "Send"}</summary>
@@ -299,7 +344,7 @@ function Prospect({ r, appUrl, sender, mode, highlight, connections }: { r: Prev
               <button type="submit" className="sc-btn sc-btn-filled sc-btn-lg sc-btn-block" data-approve>Approve and publish</button>
             </form>
           ) : null}
-          {q.mayPublish && openerText(r.openers) && r.phone_kind !== "office" && !r.not_imessage_at ? (
+          {q.mayPublish && openerText(r.openers) && r.phone_kind !== "office" && !r.not_imessage_at && sendWithFor(r, ctx.batchSendWith) === "imessage" ? (
             <form method="post" action={post}>
               <input type="hidden" name="action" value="approve" />
               <input type="hidden" name="queue" value="1" />
@@ -321,7 +366,8 @@ function Prospect({ r, appUrl, sender, mode, highlight, connections }: { r: Prev
               <button type="submit" className="sc-btn sc-btn-gray sc-btn-block" data-skip>Skip</button>
             </form>
           </div>
-          {q.mayPublish && <p className="sc-t-caption adm-muted">Approving opens their link for 14 days. It sends nothing.</p>}
+          {q.mayPublish && <p className="sc-t-caption adm-muted">Approving opens their link for 14 days. It sends nothing.{sendWithFor(r, ctx.batchSendWith) === "google_voice" && r.phone_kind !== "office" ? " This one goes from Google Voice: it then waits in your Google Voice list." : ""}</p>}
+          {openerText(r.openers) && <SwitchWay r={r} way={sendWithFor(r, ctx.batchSendWith)} post={post} back={back} />}
         </div>
       )}
     </li>
@@ -329,17 +375,19 @@ function Prospect({ r, appUrl, sender, mode, highlight, connections }: { r: Prev
 }
 
 const TALLY_TEXT: Record<string, string> = { ...QUEUE_RESULT_TEXT, too_generic: "Too generic to publish" };
+const GV_TALLY = "google_voice";
 /** "queued:12,not_mobile:2" → "12 queued for your Mac. Not queued: 2, their number isn't a mobile…" */
 export function tallyText(raw: string | null): string | null {
   if (!raw) return null;
   const parts = raw.split(",").map((p) => p.split(":")).filter(([k, n]) => k && Number(n) > 0).map(([k, n]) => [k, Number(n)] as const);
   if (!parts.length) return "Nothing was waiting that could be approved.";
   const queued = parts.find(([k]) => k === "queued")?.[1] ?? 0;
-  const rest = parts.filter(([k]) => k !== "queued").map(([k, n]) => `${n}: ${(TALLY_TEXT[k as QueueResult] ?? k).replace(/\.$/, "").toLowerCase()}`);
-  return [`${queued} published and queued for your Mac.`, rest.length ? `Left as they were: ${rest.join("; ")}.` : ""].filter(Boolean).join(" ");
+  const gv = parts.find(([k]) => k === GV_TALLY)?.[1] ?? 0;
+  const rest = parts.filter(([k]) => k !== "queued" && k !== GV_TALLY).map(([k, n]) => `${n}: ${(TALLY_TEXT[k as QueueResult] ?? k).replace(/\.$/, "").toLowerCase()}`);
+  return [`${queued} published and queued for your Mac.`, gv ? `${gv} published and waiting in your Google Voice list.` : "", rest.length ? `Left as they were: ${rest.join("; ")}.` : ""].filter(Boolean).join(" ");
 }
 
-export default function ApproveView({ list, appUrl, now, sender, done, error, about, connections = [], tally = null, failed = [] }: {
+export default function ApproveView({ list, appUrl, now, sender, done, error, about, connections = [], tally = null, failed = [], ctx = NO_CONTEXT }: {
   list: PreviewList;
   appUrl: string;
   /** The time the page was made (server), so the view stays pure. */
@@ -355,6 +403,8 @@ export default function ApproveView({ list, appUrl, now, sender, done, error, ab
   tally?: string | null;
   /** Prospects the server's batch run gave up on after its retries, with why. */
   failed?: FailedJob[];
+  /** Each prospect's way out (iMessage or Google Voice), numbers that mustn't be texted, today's Google Voice cap. */
+  ctx?: SendContext;
 }) {
   const outcome = done === "all" ? { ok: true, text: tallyText(tally) ?? "Done." } : done ? DONE[done] ?? null : null;
   const queue = list.ready ? approvalQueue(list.rows, now) : null;
@@ -374,7 +424,7 @@ export default function ApproveView({ list, appUrl, now, sender, done, error, ab
             <section aria-labelledby="ap-send" className="flex flex-col gap-3">
               <h2 id="ap-send" className="sc-t-headline">Approved: send the first text ({queue.send.length})</h2>
               <ul className="flex flex-col gap-4">
-                {queue.send.map((r) => <Prospect key={r.id} r={r} appUrl={appUrl} sender={sender} mode="send" highlight={about === r.id} connections={connections} />)}
+                {queue.send.map((r) => <Prospect key={r.id} r={r} appUrl={appUrl} sender={sender} mode="send" highlight={about === r.id} connections={connections} ctx={ctx} />)}
               </ul>
             </section>
           )}
@@ -386,7 +436,7 @@ export default function ApproveView({ list, appUrl, now, sender, done, error, ab
               return ready > 1 ? (
                 <details className="adm-card rounded-xl px-3 py-2.5" data-approve-all>
                   <summary className="sc-t-subhead font-semibold cursor-pointer">Approve all {ready}</summary>
-                  <p className="sc-t-footnote adm-muted mt-2">Publishes every draft below that passes the check and has an opening text, and schedules each text for 9 AM in the prospect&apos;s time zone. Your Mac then sends them from your number in your sending hours, a few minutes apart, up to your daily cap. Office lines and numbers not on iMessage are left for you.</p>
+                  <p className="sc-t-footnote adm-muted mt-2">Publishes every draft below that passes the check and has an opening text, and schedules each text for 9 AM in the prospect&apos;s time zone. Your Mac then sends them from your number in your sending hours, a few minutes apart, up to your daily cap. Office lines and numbers not on iMessage are left for you. Prospects set to Google Voice are published and wait in your Google Voice list, never on the Mac.</p>
                   <form method="post" action="/api/admin/card-builder/approve-all" className="mt-2">
                     <button type="submit" className="sc-btn sc-btn-filled sc-btn-block">Yes, approve and queue all {ready}</button>
                   </form>
@@ -397,7 +447,7 @@ export default function ApproveView({ list, appUrl, now, sender, done, error, ab
               <EmptyState>No drafts to approve. Run /build-card or /build-batch to line some up.</EmptyState>
             ) : (
               <ul className="flex flex-col gap-4">
-                {queue.waiting.map((r) => <Prospect key={r.id} r={r} appUrl={appUrl} sender={sender} mode="waiting" highlight={about === r.id} connections={connections} />)}
+                {queue.waiting.map((r) => <Prospect key={r.id} r={r} appUrl={appUrl} sender={sender} mode="waiting" highlight={about === r.id} connections={connections} ctx={ctx} />)}
               </ul>
             )}
           </section>

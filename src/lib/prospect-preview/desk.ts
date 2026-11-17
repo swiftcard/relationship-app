@@ -80,8 +80,9 @@ export function readCandidates(v: unknown): BatchCandidate[] {
 }
 
 /** "New batch" in the admin: waits for the Mac agent, which starts it at run_after. CSV rows go in the queue, tied to it. */
-export async function requestBatch(input: { label: string; kind: "now" | "tonight"; wanted: number; rows: string[]; runAfter: Date; engine?: "server" | "mac" }): Promise<Batch | null> {
-  const { data, error } = await db().from("prospect_batches").insert({ label: input.label, kind: input.kind, wanted: input.wanted, status: "requested", run_after: input.runAfter.toISOString(), engine: input.engine ?? "server" }).select("*").single();
+export async function requestBatch(input: { label: string; kind: "now" | "tonight"; wanted: number; rows: string[]; runAfter: Date; engine?: "server" | "mac"; sendWith?: "imessage" | "google_voice" }): Promise<Batch | null> {
+  // send_with is only written for Google Voice, so an iMessage batch still saves before its SQL is run.
+  const { data, error } = await db().from("prospect_batches").insert({ label: input.label, kind: input.kind, wanted: input.wanted, status: "requested", run_after: input.runAfter.toISOString(), engine: input.engine ?? "server", ...(input.sendWith === "google_voice" ? { send_with: "google_voice" } : {}) }).select("*").single();
   if (error || !data) return null;
   if (input.rows.length) {
     const { error: qErr } = await db().from("prospect_queue").insert(input.rows.map((line) => ({ input: line, is_notes: false, batch_id: data.id })));
@@ -213,7 +214,11 @@ export async function recordEvents(events: Omit<MessageEvent, "at">[]): Promise<
   if (!events.length) return;
   try {
     const rows = events.map((e) => ({ ...e, before: e.before?.slice(0, 4000) ?? null, after: e.after?.slice(0, 4000) ?? null }));
-    const { error } = await db().from("prospect_message_events").insert(rows);
+    let { error } = await db().from("prospect_message_events").insert(rows);
+    // Before supabase/card-builder-google-voice.sql the table has no channel column: keep the event, drop the channel.
+    if (error && /channel/i.test(error.message) && rows.some((r) => "channel" in r)) {
+      ({ error } = await db().from("prospect_message_events").insert(rows.map((r) => { const copy: Record<string, unknown> = { ...r }; delete copy.channel; return copy; })));
+    }
     if (error) console.error("[card-builder events]", error.message);
   } catch (e) {
     console.error("[card-builder events]", e instanceof Error ? e.message : e);
@@ -221,6 +226,10 @@ export async function recordEvents(events: Omit<MessageEvent, "at">[]): Promise<
 }
 
 export async function listEvents(limit = 2000): Promise<MessageEvent[]> {
-  const { data } = await db().from("prospect_message_events").select("at, preview_id, kind, message, variant, before, after").order("at", { ascending: false }).limit(limit);
-  return (data ?? []) as MessageEvent[];
+  const cols = "at, preview_id, kind, message, variant, before, after";
+  const { data, error } = await db().from("prospect_message_events").select(`${cols}, channel`).order("at", { ascending: false }).limit(limit);
+  if (!error) return (data ?? []) as MessageEvent[];
+  // The channel column comes with supabase/card-builder-google-voice.sql: without it, read the rest.
+  const { data: old } = await db().from("prospect_message_events").select(cols).order("at", { ascending: false }).limit(limit);
+  return (old ?? []) as MessageEvent[];
 }

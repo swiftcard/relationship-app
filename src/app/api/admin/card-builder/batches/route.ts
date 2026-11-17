@@ -18,6 +18,9 @@ export const runtime = "nodejs";
 //           the batch for free; otherwise the server's worker
 //           (lib/card-builder-jobs, every 5 minutes) does, now or at 11pm
 //           New York time, and takes over if the Mac drops off. Contacts nobody.
+//           send_with = imessage | google_voice: how its approved openers go.
+//           A Google Voice batch never goes into the Mac's outbox; its
+//           prospects wait in the owner's "Send from Google Voice" list.
 //   cancel  id = a batch that hasn't started yet
 //
 // Plain <form method="post">s: answers with a 303 back to the Batches page.
