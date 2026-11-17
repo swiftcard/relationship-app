@@ -481,7 +481,7 @@ describe("a Sheet row changes outreach only when the owner says so", () => {
     expect(String(office[0][2])).toContain("https://leegroup.test/team"); // the domain takes no mail: the website
     const missing = ctx.notes.filter((l) => l.includes("not on the Sheet"));
     expect(missing).toHaveLength(2);
-    for (const l of missing) expect(l).not.toMatch(/@|555/); // ids and reasons only
+    for (const l of missing) expect(l).not.toMatch(/@|555[\s-]?0100/); // ids and reasons only (the phone number itself, never a random uuid that happens to hold "555")
   });
 });
 
