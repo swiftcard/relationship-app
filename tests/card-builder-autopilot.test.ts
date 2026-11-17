@@ -128,6 +128,12 @@ describe("Mac first: free on the Mac while it's on, the server only when it isn'
     expect(agent).toMatch(/dropMovedBatch/);
     expect(agent).toMatch(/after\.engine !== "mac"/);
   });
+  it("lets the Mac's Claude Code write its JSON files (Edit rules govern writes; a Write rule is ignored)", () => {
+    const agent = read("scripts/card-builder-mac/agent.mjs");
+    expect(agent).toMatch(/"--allowedTools", "[^"]*Edit\(\.\/work\/\*\*\)/);
+    expect(agent).not.toMatch(/Write\(\.\/work/);
+    expect(agent).not.toMatch(/"--disallowedTools", "[^"]*\bEdit\b/);
+  });
 });
 
 describe("what a server card costs, by model", () => {

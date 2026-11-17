@@ -157,8 +157,11 @@ function runClaude(prompt) {
       // read this folder, search and read the web, and write its files in
       // ./work (WORK_NOTE tells it so). Everything else is refused,
       // not asked about.
-      "--allowedTools", "Bash(node scripts/card-builder.mjs:*) Read(./**) Write(./work/**) WebFetch WebSearch",
-      "--disallowedTools", "Edit NotebookEdit Grep Glob Bash(git:*) Bash(curl:*) Bash(rm:*)",
+      // File writes are governed by Edit(path) rules (they cover Write too): a
+      // Write(path) rule is ignored, and disallowing Edit blocked every write,
+      // so no batch could even open its JSON file (found 2026-11-17).
+      "--allowedTools", "Bash(node scripts/card-builder.mjs:*) Read(./**) Edit(./work/**) WebFetch WebSearch",
+      "--disallowedTools", "NotebookEdit Grep Glob Bash(git:*) Bash(curl:*) Bash(rm:*)",
     ], {
       cwd: RUN_DIR,
       // No keys in its environment either: the real tool reads its own from .env.local.
