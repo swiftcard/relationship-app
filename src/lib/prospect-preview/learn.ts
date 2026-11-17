@@ -1,3 +1,4 @@
+import { openerStatKey, openerStatLabel } from "./opener";
 import { stageOf } from "./pipeline";
 import { assessQuality } from "./quality";
 import type { PreviewListRow } from "./types";
@@ -150,20 +151,25 @@ export function batchPush(b: BatchBrief): { title: string; body: string } {
 // ── Openers: which hook gets the tap, and for whom (owner, 2026-11-16) ──────
 
 export type OpenRate = { key: string; sent: number; opened: number };
+export type SegmentHookRate = { segment: string; hook: string; sent: number; opened: number };
+export type OpenerStats = { byHook: OpenRate[]; bySegment: OpenRate[]; bySegmentHook: SegmentHookRate[] };
 
 /**
  * For every opener sent (the first one per prospect), did they really open
  * their card afterwards? Counted by the opener's hook (listing, team, …) and
- * by segment (the batch that found them: "realtors in Great Neck"). Same
- * caveat as messageStats: with few sends this is what happened, not proof.
+ * by segment (the batch that found them: "realtors in Great Neck"), and by
+ * hook within each segment. When the owner's own edit went out instead of
+ * the model's words, it counts under "edit" (Your edit), never under the hook
+ * (opener.ts openerSentVariant). Same caveat as messageStats: with few sends
+ * this is what happened, not proof.
  */
-export function openerStats(events: MessageEvent[], rows: PreviewListRow[], batchLabels: Map<string, string>): { byHook: OpenRate[]; bySegment: OpenRate[] } {
+export function openerStats(events: MessageEvent[], rows: PreviewListRow[], batchLabels: Map<string, string>): OpenerStats {
   const byId = new Map(rows.map((r) => [r.id, r]));
   const first = new Map<string, MessageEvent>();
   for (const e of [...events].sort((a, b) => a.at.localeCompare(b.at))) {
     if (e.kind === "sent" && e.message === "opener" && !first.has(e.preview_id)) first.set(e.preview_id, e);
   }
-  const hook = new Map<string, OpenRate>(), seg = new Map<string, OpenRate>();
+  const hook = new Map<string, OpenRate>(), seg = new Map<string, OpenRate>(), segHook = new Map<string, SegmentHookRate>();
   const bump = (m: Map<string, OpenRate>, key: string, opened: boolean) => {
     const s = m.get(key) ?? { key, sent: 0, opened: 0 };
     s.sent++; if (opened) s.opened++;
@@ -173,9 +179,43 @@ export function openerStats(events: MessageEvent[], rows: PreviewListRow[], batc
     const r = byId.get(e.preview_id);
     if (!r) continue;
     const opened = !!r.last_viewed_at && r.last_viewed_at >= e.at;
-    bump(hook, e.variant ?? "unknown", opened);
-    bump(seg, (r.batch_id && batchLabels.get(r.batch_id)) || "One at a time", opened);
+    const k = openerStatKey(e.variant);
+    const segment = (r.batch_id && batchLabels.get(r.batch_id)) || "One at a time";
+    bump(hook, k, opened);
+    bump(seg, segment, opened);
+    const sh = segHook.get(`${segment}\u0000${k}`) ?? { segment, hook: k, sent: 0, opened: 0 };
+    sh.sent++; if (opened) sh.opened++;
+    segHook.set(`${segment}\u0000${k}`, sh);
   }
   const sort = (m: Map<string, OpenRate>) => [...m.values()].sort((a, b) => b.sent - a.sent || a.key.localeCompare(b.key));
-  return { byHook: sort(hook), bySegment: sort(seg) };
+  return { byHook: sort(hook), bySegment: sort(seg), bySegmentHook: [...segHook.values()].sort((a, b) => a.segment.localeCompare(b.segment) || b.sent - a.sent || a.hook.localeCompare(b.hook)) };
+}
+
+// ── What the writer is told about it (owner, 2026-11-17) ────────────────────
+// The open rates go back to whoever writes the next openers: /build-card reads
+// them from `card-builder.mjs style`, the server's writeOpener gets them with
+// the facts. A rate on fewer than 10 sends is noise, and is said to be.
+
+export const FEW_SENDS = 10;
+export type ResultRow = { hook?: string; segment?: string; label: string; sent: number; opened: number; rate: string };
+export type OpenerResults = {
+  by_hook: ResultRow[];
+  by_segment: ResultRow[];
+  /** The hooks in the segment this prospect is in (their batch, or "One at a time"). */
+  this_segment: { segment: string; by_hook: ResultRow[] } | null;
+  how_to_use: string;
+};
+
+const rate = (sent: number, opened: number) => (sent < FEW_SENDS ? "too few to tell" : `${Math.round((100 * opened) / sent)}% opened`);
+
+/** The open rates as the writer reads them. `segment` is this prospect's segment, when known. */
+export function openerResults(stats: OpenerStats, segment: string | null = null): OpenerResults {
+  const hookRow = (key: string, sent: number, opened: number): ResultRow => ({ hook: key, label: openerStatLabel(key), sent, opened, rate: rate(sent, opened) });
+  const inSeg = segment ? stats.bySegmentHook.filter((r) => r.segment === segment) : [];
+  return {
+    by_hook: stats.byHook.map((r) => hookRow(r.key, r.sent, r.opened)),
+    by_segment: stats.bySegment.map((r) => ({ segment: r.key, label: r.key, sent: r.sent, opened: r.opened, rate: rate(r.sent, r.opened) })),
+    this_segment: segment ? { segment, by_hook: inSeg.map((r) => hookRow(r.hook, r.sent, r.opened)) } : null,
+    how_to_use: "Sends are the first opener each prospect got; opened means they really opened their card after it. \"edit\" (Your edit) is the owner's own rewording, not a hook. Lean toward hooks that are getting opened in this prospect's segment, when this prospect's verified facts can carry them. A rate marked \"too few to tell\" is noise: don't lean on it. Never invent a fact to use a hook.",
+  };
 }

@@ -8,9 +8,10 @@ import type { ProspectPreview, Specific } from "./types";
 // it. People always want to see themselves."
 //
 // /build-card writes FIVE openers per prospect, each on a different hook,
-// and scores each 1 to 10 on specificity, sounding human and curiosity. The
-// best is the default and the runner-up the alternate. The owner can edit the
-// default on the review screen. Every candidate and every edit passes the
+// and scores each 1 to 10 on specificity, sounding human and curiosity. A
+// separate judge then ranks them as the recipient would (opener-judge.ts): its
+// first choice that passes every rule is the default and its next the
+// alternate. The owner can edit the default on the review screen. Every candidate and every edit passes the
 // rules below, which are the owner's, word for word where they could be:
 //
 //   • starts "Hey <First name>, Menash here." (or "Hi <First>, it's Menash.")
@@ -51,12 +52,19 @@ export type OpenerCandidate = {
   /** Which of `specifics` (its position) it is built on. Null only for `team` (built on the team size) and `warm`. */
   uses: number | null;
   scores: OpenerScores;
+  /**
+   * The independent judge's view (opener-judge.ts): its rank, 1 = the one it
+   * would tap, and its one-line reason. The writer's scores stay for display.
+   */
+  judge?: { rank: number; reason: string } | null;
 };
 export type Openers = {
   candidates: OpenerCandidate[];
-  /** The default (best total) and the runner-up, as positions in `candidates`. */
+  /** The default and the runner-up, as positions in `candidates`: the judge's top two that pass every rule (the writer's best totals when no judge ran). */
   pick: number;
   alt: number | null;
+  /** Who chose the default: the separate judge pass, or (it couldn't run) the writer's own scores. */
+  picked_by?: "judge" | "writer";
   /** The owner's own rewording of the default, when they changed it. */
   edited: string | null;
   written_at: string | null;
@@ -94,7 +102,9 @@ export function readOpeners(v: unknown): Openers | null {
     const text = clean(c.text, 400);
     if (!isOpenerHook(c.hook) || !text || scores.specificity === null || scores.human === null || scores.curiosity === null) continue;
     const uses = typeof c.uses === "number" && Number.isInteger(c.uses) && c.uses >= 0 && c.uses < 20 ? c.uses : null;
-    candidates.push({ hook: c.hook, text, uses, scores: scores as OpenerScores });
+    const j = (c.judge ?? null) as Record<string, unknown> | null;
+    const judge = j && typeof j.rank === "number" && Number.isInteger(j.rank) && j.rank >= 1 && j.rank <= 8 ? { rank: j.rank, reason: clean(j.reason, 200) } : null;
+    candidates.push({ hook: c.hook, text, uses, scores: scores as OpenerScores, ...(judge ? { judge } : {}) });
     if (candidates.length >= 8) break;
   }
   if (!candidates.length) return null;
@@ -102,10 +112,11 @@ export function readOpeners(v: unknown): Openers | null {
   const pick = typeof r.pick === "number" && candidates[r.pick] ? r.pick : order[0];
   const alt = typeof r.alt === "number" && candidates[r.alt] && r.alt !== pick ? r.alt : order.find((i) => i !== pick) ?? null;
   const edited = clean(r.edited, 400) || null;
-  return { candidates, pick, alt, edited, written_at: typeof r.written_at === "string" ? r.written_at : null };
+  const picked_by = r.picked_by === "judge" || r.picked_by === "writer" ? r.picked_by : undefined;
+  return { candidates, pick, alt, edited, written_at: typeof r.written_at === "string" ? r.written_at : null, ...(picked_by ? { picked_by } : {}) };
 }
 
-/** What a new set looks like once ranked: the best is the default, the runner-up the alternate. */
+/** What a new set looks like ranked by the writer's own scores (before the judge, or when it couldn't run): the best is the default, the runner-up the alternate. */
 export function rankOpeners(candidates: OpenerCandidate[], now: Date = new Date()): Openers {
   const order = ranked(candidates);
   return { candidates, pick: order[0], alt: order[1] ?? null, edited: null, written_at: now.toISOString() };
@@ -117,6 +128,23 @@ export function openerText(o: Openers | null | undefined): string | null {
   return o.edited || o.candidates[o.pick]?.text || null;
 }
 export const openerHook = (o: Openers | null | undefined): OpenerHook | null => (o ? o.candidates[o.pick]?.hook ?? null : null);
+
+// ── Whose words went out (owner, 2026-11-17) ────────────────────────────────
+// A sent opener is credited to its hook only when the model's words went. When
+// the owner's own edit went (saved on Approve, or reworded at the last moment
+// on the Send screen), the sent event's variant is "edit:<hook>", and the open
+// rates count it under "Your edit", never under the hook.
+
+export const EDIT_VARIANT = "edit";
+/** The variant a sent opener is recorded with: its hook, or "edit:<hook>" when the owner's words went out. */
+export function openerSentVariant(o: Openers | null | undefined, reworded = false): string | null {
+  const hook = openerHook(o);
+  if (!hook) return null;
+  return o?.edited || reworded ? `${EDIT_VARIANT}:${hook}` : hook;
+}
+/** What the open rates count a sent opener under: its hook, or "edit" for the owner's words. */
+export const openerStatKey = (variant: string | null | undefined): string => (!variant ? "unknown" : variant === EDIT_VARIANT || variant.startsWith(`${EDIT_VARIANT}:`) ? EDIT_VARIANT : variant);
+export const openerStatLabel = (key: string): string => (key === EDIT_VARIANT ? "Your edit" : isOpenerHook(key) ? OPENER_HOOK_LABELS[key] : key);
 
 /** The text as it is sent: the words, then the link alone on the last line. */
 export const openerMessage = (text: string, link: string): string => `${text.trim()}\n${link}`;
@@ -274,8 +302,9 @@ export function checkOpeners(o: Openers | null, p: Checked, stale: string[] = []
       out.push(`${label}: it fails the swap test. It would still make sense sent to someone else: name the street, the number or the place.`);
     }
   });
-  const best = o.candidates[o.pick];
-  if (best && total(best.scores) < OPENER_MIN_BEST_TOTAL) out.push(`The best opener scores ${total(best.scores)} of 30. Below ${OPENER_MIN_BEST_TOTAL} none is good enough: rewrite them.`);
+  // The writer's own best total (the judge may have picked another as the default).
+  const best = o.candidates.length ? Math.max(...o.candidates.map((c) => total(c.scores))) : null;
+  if (best !== null && best < OPENER_MIN_BEST_TOTAL) out.push(`The best opener scores ${best} of 30. Below ${OPENER_MIN_BEST_TOTAL} none is good enough: rewrite them.`);
   return out;
 }
 

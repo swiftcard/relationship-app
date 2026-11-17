@@ -1,6 +1,6 @@
 import { getAdminSupabase } from "@/lib/supabase-admin";
 import { getSetting, setSetting } from "./desk";
-import { openerHook, openerMessage, openerText } from "./opener";
+import { openerMessage, openerSentVariant, openerText } from "./opener";
 import { networkKey } from "./network-key";
 import { lookupPhoneKind, nanp } from "./phone-type";
 import { previewState } from "./real-view";
@@ -76,7 +76,7 @@ export async function queueOpener(p: ProspectPreview, appUrl: string, segment: s
   // release clock (lib/card-builder-jobs/release.ts) hands it over then.
   const sendAt = nextSendAt(new Date(), recipientTimeZone(p.address, (await senderSettings()).tz));
   const { error } = await db().from(OUTBOX).insert({
-    preview_id: p.id, phone: e164, body: openerMessage(text, `${appUrl}/p/${p.slug}`), hook: openerHook(p.openers), segment, status: "scheduled", send_at: sendAt.toISOString(),
+    preview_id: p.id, phone: e164, body: openerMessage(text, `${appUrl}/p/${p.slug}`), hook: openerSentVariant(p.openers), segment, status: "scheduled", send_at: sendAt.toISOString(),
   });
   // The partial unique index allows one live row per prospect: a second queue is "already".
   if (error) return error.code === "23505" ? "already" : "failed";

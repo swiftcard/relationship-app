@@ -56,6 +56,16 @@ export function commandText(name: "build-card" | "find-offices"): string {
   return raw;
 }
 
+/** A project agent's instructions (.claude/agents/<name>.md), without its front matter. Traced into the function by next.config.ts. */
+export function agentText(name: "opener-judge"): string {
+  const key = `agent:${name}`;
+  const hit = docCache.get(key);
+  if (hit) return hit;
+  const raw = readFileSync(join(process.cwd(), ".claude", "agents", `${name}.md`), "utf8").replace(/^---[\s\S]*?---\s*/, "");
+  docCache.set(key, raw);
+  return raw;
+}
+
 export type Usage = { input: number; output: number; cacheRead: number; cacheWrite: number; searches: number; fetches: number };
 const addUsage = (a: Usage, u: Anthropic.Beta.Messages.BetaUsage | undefined): Usage => ({
   input: a.input + (u?.input_tokens ?? 0),

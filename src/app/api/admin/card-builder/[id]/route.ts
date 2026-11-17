@@ -7,7 +7,7 @@ import { isMessageKind } from "@/lib/prospect-preview/messages";
 import { recordEvents } from "@/lib/prospect-preview/desk";
 import { checkOutreach, outreachEdits, parseOutreachForm, resolveOutreach, staleNumbers } from "@/lib/prospect-preview/outreach";
 import { assessQuality } from "@/lib/prospect-preview/quality";
-import { checkOpenerText, openerFacts, openerHook, openerMessage, openerText } from "@/lib/prospect-preview/opener";
+import { checkOpenerText, openerFacts, openerHook, openerMessage, openerSentVariant, openerText } from "@/lib/prospect-preview/opener";
 import { QUEUE_RESULT_TEXT, queueOpener, segmentOf } from "@/lib/prospect-preview/outbox";
 import { clearSent, deletePreview, logOutcome, reopenPreview, getPreviewById, markSent, publishPreview, setBrandColors, setLinkedinAccepted, setOpeners, setOutreach, setQualityOverride, setSkipped, unpublishPreview, updateCall, updatePreview } from "@/lib/prospect-preview/store";
 
@@ -201,7 +201,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
           const opener = openerText(p.openers);
           const saved = kind === "opener" ? (opener ? openerMessage(opener, `${APP_URL}/p/${p.slug}`) : "") : kind === "ask" ? m.ask : kind === "text" ? m.text : kind === "email" ? m.email.body : kind === "linkedin_note" ? m.linkedin?.note ?? "" : kind === "linkedin_dm" ? m.linkedin?.dm ?? "" : m[kind as "nudge_no_view" | "nudge_viewed"];
           const words = typeof input.words === "string" ? input.words.trim().slice(0, 4000) : "";
-          await recordEvents([{ preview_id: id, kind: "sent", message: kind, variant: kind === "opener" ? openerHook(p.openers) : kind === "ask" && m.versions ? m.versions.picked : null, before: m.written || kind === "opener" ? saved : null, after: words || (m.written || kind === "opener" ? saved : null) }]);
+          // An opener records whose words went: the model's (its hook) or the owner's edit ("edit:<hook>"), saved or reworded here.
+          const variant = kind === "opener" ? openerSentVariant(p.openers, !!words && words !== saved) : kind === "ask" && m.versions ? m.versions.picked : null;
+          await recordEvents([{ preview_id: id, kind: "sent", message: kind, variant, before: m.written || kind === "opener" ? saved : null, after: words || (m.written || kind === "opener" ? saved : null) }]);
         }
       }
       return reply(got === "ok" ? "sent" : "failed", got === "ok" ? 200 : 500);

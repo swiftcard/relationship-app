@@ -63,7 +63,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/card/[username]/opengraph-image": ["./public/og/**", "./public/brand-icon-192.png"],
     // Card Builder's server runs use the project commands as their rules (lib/card-builder-jobs/llm.ts).
-    "/api/card-builder/worker": ["./.claude/commands/build-card.md", "./.claude/commands/find-offices.md"],
+    "/api/card-builder/worker": ["./.claude/commands/build-card.md", "./.claude/commands/find-offices.md", "./.claude/agents/opener-judge.md"],
     "/api/card-builder/follow-ups": ["./.claude/commands/build-card.md"],
   },
   async headers() {

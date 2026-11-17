@@ -30,7 +30,12 @@
 //   node scripts/card-builder.mjs set-openers <preview id> <openers.json>
 //       Save the opening texts (five, on different hooks, each scored): the
 //       one text with the link that goes from the owner's own number. Refused,
-//       with what to fix, when one breaks a rule (lib/prospect-preview/opener.ts).
+//       with what to fix, when one breaks a rule (lib/prospect-preview/opener.ts),
+//       or without the opener-judge's ranking ("judge"), which sets the default.
+//   node scripts/card-builder.mjs judge-input <preview id> <openers.json>
+//       Step 10b: exactly what the opener-judge agent is shown (the verified
+//       facts and the texts, numbered; no hooks, no scores). Its JSON answer
+//       goes in the openers file as "judge"; set-openers refuses without it.
 //   node scripts/card-builder.mjs phone-type <phone>
 //       Is it a mobile? Only a mobile can get the opener over iMessage.
 //   node scripts/card-builder.mjs queue [--batch <batch id>]
@@ -51,8 +56,10 @@
 //   node scripts/card-builder.mjs warm <office.json>
 //       The owner's own LinkedIn connections at that office, and their schools
 //       and past employers to look for in the prospect's public bio.
-//   node scripts/card-builder.mjs style
-//       The owner's own edits to past messages: the voice to write in.
+//   node scripts/card-builder.mjs style [preview id]
+//       The owner's own edits to past messages: the voice to write in. And
+//       how earlier openers did: sent and opened by hook and by segment
+//       ("too few to tell" under 10 sends), this prospect's segment first.
 //   node scripts/card-builder.mjs quality <preview id>
 //       The personalization checklist and score the edit screen shows, whether
 //       the draft is "too generic", what couldn't be confirmed, and every
@@ -86,7 +93,7 @@ if (!args.length) {
   process.exit(2);
 }
 // File arguments are resolved here, where the caller's working directory is known.
-const FILE_ARG = { check: [1], fit: [1], "save-leads": [1], "create-draft": [1], "update-draft": [2], "set-outreach": [2], "queue-settle": [2], "queue-add": [1], "batch-start": [1], "batch-log": [2], warm: [1], shots: [2], "set-openers": [2], "batch-candidates": [2] };
+const FILE_ARG = { check: [1], fit: [1], "save-leads": [1], "create-draft": [1], "update-draft": [2], "set-outreach": [2], "queue-settle": [2], "queue-add": [1], "batch-start": [1], "batch-log": [2], warm: [1], shots: [2], "set-openers": [2], "judge-input": [2], "batch-candidates": [2] };
 for (const i of FILE_ARG[args[0]] ?? []) if (args[i]) args[i] = resolve(process.cwd(), args[i]);
 
 const out = join(mkdtempSync(join(tmpdir(), "card-builder-")), "result.json");
