@@ -375,3 +375,45 @@ describe("the native half is wired up", () => {
     expect(handler).toMatch(/window\.history\.back\(\)/);
   });
 });
+
+// The three findings the Android shell QA (scripts/qa-android-shell.mjs) kept
+// filing on main, 2026-11-16: status-bar-style-unset, back-ignored-by-sheet,
+// new-tab-stays-in-app.
+describe("the Android app looks and behaves like an Android app", () => {
+  const bridge = () => code(read("src/components/NativeAppBridge.tsx"));
+
+  it("tells the status bar the APP's theme, from the attribute the theme lives in", () => {
+    // Untold, Android colours the icons from the PHONE's dark mode: white
+    // icons on the app's light screen. data-sc-theme="light" is the theme
+    // (absent = dark); there is no .dark class to read.
+    const src = bridge();
+    expect(src).toMatch(/SystemBars\.setStyle\(/);
+    expect(src).toMatch(/getAttribute\("data-sc-theme"\) === "light"/);
+    expect(src).toMatch(/attributeFilter: \["data-sc-theme"\]/);
+  });
+
+  it("the QA reads the theme the same way the app does", () => {
+    const qa = read("scripts/qa-android-shell.mjs");
+    expect(qa).toMatch(/getAttribute\("data-sc-theme"\) !== "light"/);
+  });
+
+  it("back closes the notification panels: they answer Escape", () => {
+    // NativeAppBridge's back handler turns back into an Escape while a
+    // [role="dialog"] is open; a panel that ignores Escape stays open.
+    for (const p of ["src/components/NotificationBell.tsx", "src/components/office/OfficeNotificationBell.tsx"]) {
+      const src = code(read(p));
+      expect(src, p).toMatch(/useDialogA11y\(open, \(\) => setOpen\(false\), panelRef\)/);
+      expect(src, p).toMatch(/ref=\{panelRef\}\s+role="dialog"/);
+    }
+  });
+
+  it("the owner's own View Live Link is handed to the browser, and only that hop", () => {
+    const src = bridge();
+    const block = src.slice(src.indexOf('a[target="_blank"][href]'), src.indexOf('addEventListener("click", onClick, true)'));
+    expect(block).toMatch(/url\.pathname !== "\/api\/self-view"/);
+    expect(block).toMatch(/openLinkInDefaultBrowser/);
+    // Never a blanket same-origin rule: that would send /pricing or /upgrade
+    // out to a browser checkout from the Android app.
+    expect(block).not.toMatch(/pricing|upgrade/);
+  });
+});

@@ -1070,7 +1070,12 @@ FLOWS["create-link"] = async () => {
     else if (new Set(preview.hrefs).size !== 1) fail("create-link", `parts open different links: ${JSON.stringify([...new Set(preview.hrefs)])}`);
     else if (preview.hrefs.some((h) => h.includes("example.com"))) fail("create-link", "an old link survived");
     else if (!preview.imgs.every((s) => /^https:\/\//.test(s || ""))) fail("create-link", `a pasted picture was not stored: ${JSON.stringify(preview.imgs)}`);
-    if (uploaded.length !== 2) fail("create-link", `expected 2 uploads (the pasted picture + the preview picture), saw ${uploaded.length}`);
+    // Count only Create's own pictures (card-uploads/<id>/create-<ts>.<ext>).
+    // Since #179 the Swift Signature box on the same page stores its automatic
+    // capture through /api/upload/sign too (card-signatures/<username>.png), so
+    // counting every /api/upload* answer saw 3 where Create made 2.
+    const created = uploaded.filter((u) => /\/card-uploads\/[^?]*\/create-\d+\.(?:png|jpe?g|webp|gif)(?:\?|$)/i.test(u));
+    if (created.length !== 2) fail("create-link", `expected 2 uploads (the pasted picture + the preview picture), saw ${created.length}: ${JSON.stringify(created.map((u) => u.split("/").pop()))}`);
     await copy.click();
     await page.locator(`${side} button`, { hasText: "Copied ✓ Paste it anywhere" }).waitFor({ timeout: 8000 }).catch(() => {});
     const clip = await page.evaluate(async () => {

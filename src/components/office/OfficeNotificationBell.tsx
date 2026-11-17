@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { officeNotificationPath } from "@/lib/office-notification-links";
+import { useDialogA11y } from "@/lib/use-dialog-a11y";
 
 // The /office/admin team-inbox bell. A DISTINCT component from the personal
 // NotificationBell: it polls /api/office/notifications (office_notifications
@@ -38,6 +39,10 @@ export default function OfficeNotificationBell({
   const [notifications, setNotifications] = useState(initialNotifications);
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [bulkPending, setBulkPending] = useState<"markAll" | "clearRead" | null>(null);
+  // Escape (and so the Android back key, which NativeAppBridge turns into an
+  // Escape while a dialog is open) closes the panel; focus goes in and back.
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialogA11y(open, () => setOpen(false), panelRef);
   const openRef = useRef(open);
   useEffect(() => { openRef.current = open; }, [open]);
 
@@ -216,6 +221,7 @@ export default function OfficeNotificationBell({
           <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
           {/* Centred on the page, like the personal bell (owner, 2026-09-29). */}
           <div
+            ref={panelRef}
             role="dialog"
             aria-label="Team notifications"
             className="sc-drop-in fixed z-[61] left-0 right-0 mx-auto top-[calc(env(safe-area-inset-top)+86px)] w-[min(360px,calc(100vw-1.5rem))] max-h-[70vh] sc-glass border border-gray-800 rounded-2xl shadow-2xl shadow-black/20 overflow-hidden flex flex-col"
