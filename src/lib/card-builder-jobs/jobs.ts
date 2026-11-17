@@ -9,7 +9,8 @@ import { isVerified } from "@/lib/prospect-preview/quality";
 import { getPreviewById, setOpeners, setOutreach } from "@/lib/prospect-preview/store";
 import { LINK_SLOT, TEXT_LIMIT } from "@/lib/prospect-preview/types";
 import { connectionsAt } from "@/lib/prospect-preview/warm";
-import { commandText, dollarsOf, jsonIn, NO_USAGE, say, turn, type Conversation, type Usage } from "./llm";
+import { macStatus, type MacStatus } from "@/lib/prospect-preview/outbox";
+import { commandText, dollarsOf, jsonIn, modelOf, NO_USAGE, say, turn, type Conversation, type Usage } from "./llm";
 
 // ── Card Builder's job queue (owner, 2026-11-16) ────────────────────────────
 // "Run overnight, and by morning every prospect is at ready_for_review."
@@ -114,7 +115,7 @@ export async function batchProgress(batchIds: string[]): Promise<BatchProgress> 
 
 // ── The worker ──────────────────────────────────────────────────────────────
 
-export type RunResult = { claimed: number; advanced: number; ready: number; skipped: number; failed: number; retrying: number; released: number; batchesStarted: number; batchesFinished: number; dollars: number; stoppedEarly: boolean };
+export type RunResult = { claimed: number; advanced: number; ready: number; skipped: number; failed: number; retrying: number; released: number; batchesTakenOver: number; batchesStarted: number; batchesFinished: number; dollars: number; stoppedEarly: boolean };
 
 /**
  * One run of the clock. Takes due jobs `concurrency` at a time and carries
@@ -126,9 +127,11 @@ export async function runWorker(opts: { deadline: number; concurrency?: number; 
   const now = opts.now ?? Date.now;
   const concurrency = opts.concurrency ?? 3;
   const reserve = opts.reserveMs ?? STEP_TIMEOUT_MS + 60_000;
-  const r: RunResult = { claimed: 0, advanced: 0, ready: 0, skipped: 0, failed: 0, retrying: 0, released: 0, batchesStarted: 0, batchesFinished: 0, dollars: 0, stoppedEarly: false };
+  const r: RunResult = { claimed: 0, advanced: 0, ready: 0, skipped: 0, failed: 0, retrying: 0, released: 0, batchesTakenOver: 0, batchesStarted: 0, batchesFinished: 0, dollars: 0, stoppedEarly: false };
 
-  r.batchesStarted = await startDueBatches();
+  const mac = await macStatus().catch((): MacStatus => ({ at: null, note: null, next_send_at: null }));
+  r.batchesTakenOver = await takeOverFromMac(mac, now());
+  r.batchesStarted = await startDueBatches(mac, now());
   await failExhausted();
 
   const timeLeft = () => opts.deadline - now();
@@ -167,7 +170,7 @@ async function carry(job: Job, r: RunResult, mayStartStep: () => boolean): Promi
       const out = await runStep(current, controller.signal);
       clearTimeout(timer);
       r.dollars += out.dollars ?? 0;
-      const data = { ...current.data, ...(out.data ?? {}), usage: addCost(current.data.usage, out.usage, current.step) };
+      const data = { ...current.data, ...(out.data ?? {}), usage: addCost(current.data.usage, out.usage, current.step, current.data.model) };
       const next = nextStep(current.step);
       const done = next === "ready_for_review";
       const fields = { step: next, status: done ? "done" : "running", attempts: done ? current.attempts : 1, last_error: null, data, preview_id: out.preview_id ?? current.preview_id,
@@ -202,9 +205,10 @@ async function carry(job: Job, r: RunResult, mayStartStep: () => boolean): Promi
 export const nextStep = (s: Step): Step => (s === "find" ? "ready_for_review" : STEPS[STEPS.indexOf(s) + 1] ?? "ready_for_review");
 const stepLabel = (s: Step) => ({ find: "Finding offices", research: "Research", build_card: "Building the card", write_opener: "Writing the opener", ready_for_review: "Ready" })[s];
 
-function addCost(prev: unknown, u: Usage | undefined, step: Step): Json {
+function addCost(prev: unknown, u: Usage | undefined, step: Step, model: unknown): Json {
   const before = (prev && typeof prev === "object" ? prev : {}) as Json;
-  return u ? { ...before, [step]: { ...u, dollars: Math.round(dollarsOf(u) * 1000) / 1000 } } : before;
+  const m = modelOf(model);
+  return u ? { ...before, [step]: { ...u, model: m, dollars: Math.round(dollarsOf(u, m) * 1000) / 1000 } } : before;
 }
 
 async function patch(id: string, fields: Json): Promise<void> {
@@ -219,11 +223,61 @@ async function failExhausted(): Promise<void> {
   for (const j of (data ?? []) as Job[]) await settleProspect(j, "failed", j.last_error ?? "failed");
 }
 
-/** A requested server batch whose time has come: running. */
-async function startDueBatches(): Promise<number> {
-  const { data } = await db().from("prospect_batches").select("id").eq("status", "requested").eq("engine", "server").lte("run_after", new Date().toISOString()).limit(20);
-  for (const b of data ?? []) await claimBatch(b.id as string);
-  return data?.length ?? 0;
+// ── Mac first (owner, 2026-11-16) ───────────────────────────────────────────
+// "Let the Mac build again for free whenever the Mac is on." The Mac builds
+// in Claude Code on the owner's own plan (no API bill); the server pays per
+// card. So a batch goes to the Mac when the Mac agent has checked in within
+// the last few minutes, and the server only builds when it hasn't: at the
+// batch's start, and again whenever the Mac drops off mid-batch (asleep, lid
+// shut, off), when the server takes the batch over and builds what is left.
+
+/** Checked in this recently: the Mac takes the batch. */
+export const MAC_READY_MS = 3 * 60_000;
+/** Silent this long: the Mac is gone, and the server takes its batches over. */
+export const MAC_GONE_MS = 10 * 60_000;
+export const macReady = (s: MacStatus, now: number = Date.now()) => !!s.at && now - Date.parse(s.at) < MAC_READY_MS;
+export const macGone = (s: MacStatus, now: number = Date.now()) => !s.at || now - Date.parse(s.at) > MAC_GONE_MS;
+
+/** A batch nobody has started, given to the Mac: its untouched server jobs go. */
+async function handToMac(batchId: string): Promise<boolean> {
+  const { count: touched } = await db().from(JOBS).select("id", { count: "exact", head: true }).eq("batch_id", batchId).or("attempts.gt.0,status.neq.pending");
+  if (touched) return false;
+  const { data } = await db().from("prospect_batches").update({ engine: "mac" }).eq("id", batchId).eq("engine", "server").eq("status", "requested").select("id");
+  if (!data?.length) return false;
+  await db().from(JOBS).delete().eq("batch_id", batchId).eq("status", "pending").eq("attempts", 0);
+  return true;
+}
+
+/** The Mac went quiet with batches still open: the server builds the rest. */
+async function takeOverFromMac(mac: MacStatus, now: number): Promise<number> {
+  if (!macGone(mac, now)) return 0;
+  const { data } = await db().from("prospect_batches").select("id, status, run_after").eq("engine", "mac").in("status", ["requested", "running"])
+    .not("run_after", "is", null).lte("run_after", new Date(now).toISOString()).limit(20);
+  let n = 0;
+  for (const b of data ?? []) {
+    const { data: moved } = await db().from("prospect_batches").update({ engine: "server" }).eq("id", b.id).eq("engine", "mac").select("id");
+    if (!moved?.length) continue;
+    n++;
+    if (b.status === "requested") await claimBatch(b.id as string);
+    const { count: rows } = await db().from("prospect_queue").select("id", { count: "exact", head: true }).eq("batch_id", b.id);
+    const { count: open } = await db().from("prospect_queue").select("id", { count: "exact", head: true }).eq("batch_id", b.id).eq("status", "queued");
+    // Every row it was given is already settled: nothing left to build.
+    if (rows && !open) { await finishBatch(b.id as string); continue; }
+    await enqueueBatch({ id: b.id as string, run_after: new Date(now).toISOString() });
+  }
+  return n;
+}
+
+/** A requested server batch whose time has come: the Mac's if it is on, otherwise running here. */
+async function startDueBatches(mac: MacStatus, now: number): Promise<number> {
+  const { data } = await db().from("prospect_batches").select("id").eq("status", "requested").eq("engine", "server").lte("run_after", new Date(now).toISOString()).limit(20);
+  let n = 0;
+  for (const b of data ?? []) {
+    if (macReady(mac, now) && (await handToMac(b.id as string))) continue;
+    await claimBatch(b.id as string);
+    n++;
+  }
+  return n;
 }
 
 /** A running server batch with nothing left to do: finished. The existing clock then sends the owner one push. */
@@ -269,7 +323,7 @@ async function research(job: Job, signal: AbortSignal): Promise<StepOut> {
   const connections = await listConnections();
   const background = await ownerBackground();
   const guessCompany = input.split(/[,·]/).slice(0, 2).join(" ");
-  const convo: Conversation = { messages: [], usage: { ...NO_USAGE } };
+  const convo: Conversation = { messages: [], usage: { ...NO_USAGE }, model: modelOf(job.data.model) };
   say(convo, [
     SERVER_MODE,
     "",
@@ -308,7 +362,7 @@ async function research(job: Job, signal: AbortSignal): Promise<StepOut> {
         await logOutcome(job, { office: str(json.office) || input.slice(0, 120), outcome: "skipped", reason });
         throw new Skip(reason);
       }
-      return { data: { research: json.preview, office: str((json.preview as Json).office_name) }, usage, dollars: dollarsOf(usage) };
+      return { data: { research: json.preview, office: str((json.preview as Json).office_name) }, usage, dollars: dollarsOf(usage, convo.model) };
     }
     if (round >= 2) throw new Error(problem ?? "no usable answer");
     say(convo, `Not saved. ${problem} Fix exactly that and answer again with the whole JSON (keep researching only if you must).`);
@@ -362,7 +416,7 @@ async function writeOpener(job: Job, signal: AbortSignal): Promise<StepOut> {
     specifics: p.specifics.map((s, i) => ({ position: i, kind: s.kind, text: s.text, verified: isVerified(s), quiet: s.quiet === true, dated: s.dated })),
     numbers_flagged_as_possibly_stale: stale,
   };
-  const convo: Conversation = { messages: [], usage: { ...NO_USAGE } };
+  const convo: Conversation = { messages: [], usage: { ...NO_USAGE }, model: modelOf(job.data.model) };
   say(convo, [
     SERVER_MODE,
     "",
@@ -407,7 +461,7 @@ async function writeOpener(job: Job, signal: AbortSignal): Promise<StepOut> {
       }
     }
     if (savedOpeners && (outreachNote !== null || round >= 2)) {
-      return { data: { openers: "written", outreach: outreachNote ?? "left on the templates: it didn't pass the checks in three tries" }, usage: convo.usage, dollars: dollarsOf(convo.usage) };
+      return { data: { openers: "written", outreach: outreachNote ?? "left on the templates: it didn't pass the checks in three tries" }, usage: convo.usage, dollars: dollarsOf(convo.usage, convo.model) };
     }
     if (round >= 2) throw new Error(`the opening texts didn't pass the checks in three tries: ${problems.slice(0, 3).join(" ")}`.slice(0, 400));
     say(convo, `Not saved yet.${savedOpeners ? " (The openers ARE saved; only fix the outreach.)" : ""} Fix every one of these and answer again with the whole JSON:\n- ${problems.join("\n- ")}`);
@@ -417,10 +471,13 @@ async function writeOpener(job: Job, signal: AbortSignal): Promise<StepOut> {
 
 /** A target batch: find the offices (find-offices), then make a prospect row and a job for each. */
 async function find(job: Job, signal: AbortSignal): Promise<StepOut> {
-  const { data: b } = await db().from("prospect_batches").select("id, label, wanted, candidates").eq("id", job.batch_id).maybeSingle();
+  const { data: b } = await db().from("prospect_batches").select("id, label, wanted, candidates, items").eq("id", job.batch_id).maybeSingle();
   if (!b) throw new Skip("the batch was removed");
-  const wanted = Math.max(1, Number(b.wanted) || 5);
-  const convo: Conversation = { messages: [], usage: { ...NO_USAGE } };
+  // A batch taken over from the Mac counts what the Mac already built.
+  const built = Array.isArray(b.items) ? (b.items as Json[]).filter((i) => i?.outcome === "built").length : 0;
+  const wanted = Math.max(1, Number(b.wanted) || 5) - built;
+  if (wanted <= 0) return { data: { found: 0 } };
+  const convo: Conversation = { messages: [], usage: { ...NO_USAGE }, model: modelOf(job.data.model) };
   say(convo, [
     SERVER_MODE,
     "",
@@ -446,13 +503,13 @@ async function find(job: Job, signal: AbortSignal): Promise<StepOut> {
   }
   const take = fresh.slice(0, wanted);
   await setCandidates(b.id as string, [...take, ...fresh.slice(wanted), ...readCandidates(b.candidates)]);
-  if (!take.length) return { data: { found: 0 }, usage: convo.usage, dollars: dollarsOf(convo.usage) };
+  if (!take.length) return { data: { found: 0 }, usage: convo.usage, dollars: dollarsOf(convo.usage, convo.model) };
   const lines = take.map((c) => [c.person ? `${c.person}, ${c.office}` : c.office, c.city, c.website].filter(Boolean).join(" · "));
   const { data: rows, error } = await db().from("prospect_queue").insert(lines.map((input) => ({ input, is_notes: false, batch_id: b.id }))).select("id");
   if (error || !rows) throw new Error(`saving the offices: ${error?.message ?? "no rows"}`);
-  const { error: jErr } = await db().from(JOBS).insert(rows.map((r) => ({ prospect_id: r.id, batch_id: b.id, step: "research", run_after: new Date().toISOString() })));
+  const { error: jErr } = await db().from(JOBS).insert(rows.map((r) => ({ prospect_id: r.id, batch_id: b.id, step: "research", run_after: new Date().toISOString(), ...(job.data.model ? { data: { model: modelOf(job.data.model) } } : {}) })));
   if (jErr) throw new Error(`queueing the offices: ${jErr.message}`);
-  return { data: { found: take.length }, usage: convo.usage, dollars: dollarsOf(convo.usage) };
+  return { data: { found: take.length }, usage: convo.usage, dollars: dollarsOf(convo.usage, convo.model) };
 }
 
 // ── Keeping the queue row and the batch page in step ────────────────────────

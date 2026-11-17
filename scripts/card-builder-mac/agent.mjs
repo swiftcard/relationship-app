@@ -3,8 +3,10 @@
 // Runs on the owner's Mac, all the time (launchd: install.sh), and does the
 // three things that have to happen on that Mac:
 //
-//   1. BATCHES (only a batch set to engine 'mac': since 2026-11-16 the server
-//      builds new batches itself, every 5 minutes, see lib/card-builder-jobs).
+//   1. BATCHES (only a batch set to engine 'mac'). Mac first: while this agent
+//      checks in, batches are built here for free on the owner's Claude plan;
+//      when it stops checking in, the server builds them (lib/card-builder-jobs)
+//      and takes over any batch this Mac left half done.
 //      "New batch" in the admin makes a requested batch. This picks
 //      it up (now, or at 11pm for "run overnight") and runs Claude Code's
 //      /build-batch on it, ten prospects per run, until it is done. A run that
@@ -75,7 +77,7 @@ async function setSetting(key, value) {
   await db.from("card_builder_settings").upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
 }
 
-const state = { popupSince: undefined, note: "starting", nextSendAt: null, child: null, lastNetworks: 0, chatRow: null, stalls: new Map() };
+const state = { popupSince: undefined, note: "starting", nextSendAt: null, child: null, childBatch: null, lastNetworks: 0, chatRow: null, stalls: new Map() };
 
 async function heartbeat() {
   await setSetting("mac_agent", { at: new Date().toISOString(), note: state.note, next_send_at: state.nextSendAt, version: VERSION });
@@ -108,7 +110,7 @@ const builtOf = (b) => (Array.isArray(b.items) ? b.items.filter((i) => i?.outcom
 
 async function nextBatch() {
   // Only batches made with "New batch" (they have run_after); a /build session in a terminal runs its own.
-  // Since 2026-11-16 new batches run on the server (engine 'server', lib/card-builder-jobs): only one set to 'mac' is built here.
+  // Mac first (2026-11-16): a batch is set to 'mac' while this agent is checking in, and to 'server' (lib/card-builder-jobs) when it isn't; only 'mac' ones are built here.
   const { data } = await db.from("prospect_batches").select("*").in("status", ["requested", "running"]).eq("engine", "mac").not("run_after", "is", null)
     .lte("run_after", new Date().toISOString()).order("created_at", { ascending: true }).limit(1);
   return data?.[0] ?? null;
@@ -191,9 +193,13 @@ async function batches() {
   state.note = `building "${b.label}" (${before} of ${b.wanted} so far)`;
   await heartbeat();
   log("chunk start", b.id, b.label, before, "/", b.wanted);
+  state.childBatch = b.id;
   const { code, tail } = await runClaude(`/build-batch batch ${b.id} chunk ${CHUNK}`);
+  state.childBatch = null;
   const { data: after } = await db.from("prospect_batches").select("*").eq("id", b.id).maybeSingle();
   if (!after || after.status === "finished") { state.stalls.delete(b.id); state.note = "idle"; return; }
+  // The server took it over while this Mac was asleep or off (lib/card-builder-jobs, "Mac first"): it is the server's now.
+  if (after.engine !== "mac") { state.stalls.delete(b.id); state.note = "idle"; log("batch moved to the server", b.id); return; }
   const built = builtOf(after);
   const maxChunks = Math.ceil((after.wanted ?? 10) / CHUNK) * 3;
   if (built >= (after.wanted ?? 0)) { await finishBatch(b.id, null); state.stalls.delete(b.id); }
@@ -355,8 +361,15 @@ function savePopupSince(since) {
 
 // ── The loop ────────────────────────────────────────────────────────────────
 
+/** A chunk whose batch the server took over (this Mac slept past the hand-off): stop it, so no office is built twice. */
+async function dropMovedBatch() {
+  if (!state.child || !state.childBatch) return;
+  const { data } = await db.from("prospect_batches").select("engine").eq("id", state.childBatch).maybeSingle();
+  if (data && data.engine !== "mac") { log("the server took over", state.childBatch, "- stopping this chunk"); state.child.kill("SIGTERM"); }
+}
+
 async function pass() {
-  const steps = [["networks", rememberNetworks], ["listen", listen], ["popups", popups], ["send", sendOne], ["heartbeat", heartbeat]];
+  const steps = [["networks", rememberNetworks], ["listen", listen], ["popups", popups], ["send", sendOne], ["heartbeat", heartbeat], ["moved", dropMovedBatch]];
   for (const [name, step] of steps) {
     try { await step(); } catch (e) { log(name, "failed:", e?.message ?? e); }
   }

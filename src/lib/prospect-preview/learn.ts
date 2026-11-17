@@ -84,6 +84,8 @@ export type BatchCandidate = { office: string; person?: string | null; city?: st
 export type Batch = {
   id: string; created_at: string; label: string; kind: "now" | "tonight"; wanted: number | null; status: "requested" | "running" | "finished"; finished_at: string | null; items: BatchItem[]; announced_at: string | null;
   run_after?: string | null; started_at?: string | null; chunks?: number; error?: string | null;
+  /** Who builds it: the owner's Mac (free, on his Claude plan) or the server (paid per card). */
+  engine?: "server" | "mac";
   /** The offices found for it, best first, so a later chunk carries on down the same list. */
   candidates?: BatchCandidate[];
 };
