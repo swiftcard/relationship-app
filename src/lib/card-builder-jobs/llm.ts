@@ -11,10 +11,11 @@ import Anthropic from "@anthropic-ai/sdk";
 // command-line tool uses before anything is saved.
 //
 // Key: CREW_ANTHROPIC_API_KEY (already in Vercel for the agents), or
-// ANTHROPIC_API_KEY. Model: Claude Opus 5.5 with the server-side refusal
-// fallback. Cost per prospect is recorded on its job row (data.usage).
+// ANTHROPIC_API_KEY. Model: Claude Sonnet 5.5 (the owner's pick on 2026-11-17:
+// about half Opus's cost per card at similar quality in a side-by-side test);
+// a job pinned to Opus gets the server-side refusal fallback. Cost per prospect is recorded on its job row (data.usage).
 
-export const MODEL = "claude-opus-5-5";
+export const MODEL = "claude-sonnet-5-5";
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
 // The models a job may be pinned to (job.data.model), to compare what a card
