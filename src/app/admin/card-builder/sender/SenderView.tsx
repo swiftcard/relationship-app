@@ -20,7 +20,7 @@ const DONE: Record<string, { ok: boolean; text: string }> = {
 };
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const STATUS: Record<OutboxRow["status"], { tone: "good" | "bad" | "warn" | "neutral" | "tint"; text: string }> = {
-  queued: { tone: "neutral", text: "Queued" }, sending: { tone: "tint", text: "Sending" }, sent: { tone: "good", text: "Sent" },
+  scheduled: { tone: "tint", text: "Scheduled" }, queued: { tone: "neutral", text: "Queued" }, sending: { tone: "tint", text: "Sending" }, sent: { tone: "good", text: "Sent" },
   failed: { tone: "bad", text: "Failed" }, not_imessage: { tone: "warn", text: "Not on iMessage" }, canceled: { tone: "neutral", text: "Taken out" },
 };
 const input = "sc-field w-full px-3 py-2";
@@ -81,10 +81,10 @@ export default function SenderView({ settings: s, mac, outbox, now, done }: { se
               <li key={o.id} className="px-4 sm:px-5 py-3 flex flex-col gap-1.5" data-outbox-row>
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge tone={STATUS[o.status].tone}>{STATUS[o.status].text}</StatusBadge>
-                  <span className="sc-t-footnote adm-muted">{o.sent_at ? `sent ${fmtDateTime(o.sent_at)}` : `queued ${timeAgo(o.created_at, now)}`}{o.hook ? ` · ${o.hook}` : ""}{o.error ? ` · ${o.error}` : ""}</span>
+                  <span className="sc-t-footnote adm-muted">{o.sent_at ? `sent ${fmtDateTime(o.sent_at)}` : o.status === "scheduled" && o.send_at ? `goes to your Mac ${fmtDateTime(o.send_at)} (9 AM their time)` : `queued ${timeAgo(o.created_at, now)}`}{o.hook ? ` · ${o.hook}` : ""}{o.error ? ` · ${o.error}` : ""}</span>
                 </div>
                 <p className="sc-t-subhead whitespace-pre-line" style={{ overflowWrap: "anywhere" }}>{o.body}</p>
-                {o.status === "queued" && (
+                {(o.status === "queued" || o.status === "scheduled") && (
                   <form method="post" action="/api/admin/card-builder/sender">
                     <input type="hidden" name="action" value="cancel" />
                     <input type="hidden" name="id" value={o.id} />

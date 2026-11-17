@@ -3,6 +3,8 @@ import { requireAdmin } from "@/lib/admin";
 import { batchRunAfter, parseBatchForm } from "@/lib/prospect-preview/batch-input";
 import { cancelBatch, requestBatch } from "@/lib/prospect-preview/desk";
 import { UUID_RE } from "@/lib/prospect-preview/input";
+import { enqueueBatch, macReady } from "@/lib/card-builder-jobs/jobs";
+import { macStatus } from "@/lib/prospect-preview/outbox";
 
 export const runtime = "nodejs";
 
@@ -12,8 +14,10 @@ export const runtime = "nodejs";
 //
 //   new     target = who to find ("realtors in Great Neck"), or csv = a file of
 //           prospects; count = 1 to 100; when = now | tonight. Makes a
-//           REQUESTED batch. The Mac agent starts it (now, or 11pm New York
-//           time) and runs /build-batch on it in chunks. Contacts nobody.
+//           REQUESTED batch. Mac first: if the owner's Mac is on, it builds
+//           the batch for free; otherwise the server's worker
+//           (lib/card-builder-jobs, every 5 minutes) does, now or at 11pm
+//           New York time, and takes over if the Mac drops off. Contacts nobody.
 //   cancel  id = a batch that hasn't started yet
 //
 // Plain <form method="post">s: answers with a 303 back to the Batches page.
@@ -46,6 +50,18 @@ export async function POST(req: NextRequest) {
   }
   const parsed = parseBatchForm((k) => form.get(k), csv);
   if (!parsed.ok) return back({ error: parsed.error });
-  const batch = await requestBatch({ ...parsed.value, runAfter: batchRunAfter(parsed.value.kind) });
-  return batch ? back({ done: parsed.value.kind === "tonight" ? "tonight" : "now" }) : back({ error: "That didn't save. Try again in a minute." });
+  // Mac first: a batch for right now goes to the Mac when it is on (free); otherwise, and for
+  // tonight, the server queues it and the worker decides at the start time (lib/card-builder-jobs).
+  const onMac = parsed.value.kind === "now" && macReady(await macStatus().catch(() => ({ at: null, note: null, next_send_at: null })));
+  const batch = await requestBatch({ ...parsed.value, runAfter: batchRunAfter(parsed.value.kind), engine: onMac ? "mac" : "server" });
+  if (!batch) return back({ error: "That didn't save. Try again in a minute." });
+  if (onMac) return back({ done: "now_mac" });
+  // Every job it needs, queued now and due at its start time: the server's worker clock does the rest (lib/card-builder-jobs).
+  try {
+    await enqueueBatch({ id: batch.id, run_after: batch.run_after ?? null });
+  } catch {
+    await cancelBatch(batch.id);
+    return back({ error: "That didn't save. Try again in a minute." });
+  }
+  return back({ done: parsed.value.kind === "tonight" ? "tonight" : "now" });
 }

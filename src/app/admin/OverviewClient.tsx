@@ -41,6 +41,10 @@ export type OverviewData = {
   agents?: AgentsHealthData | null;
 };
 
+// Supabase free plan limit, and when the nightly check alerts (lib/db-autopilot.ts). Literal here: this is a client file.
+const DB_LIMIT_MB = 500;
+const DB_ALERT_BYTES = 400 * 1048576;
+
 async function getJson<T>(url: string): Promise<T | null> {
   try {
     const r = await fetch(url);
@@ -50,8 +54,10 @@ async function getJson<T>(url: string): Promise<T | null> {
   }
 }
 
-export default function OverviewClient({ retention, initial }: {
+export default function OverviewClient({ retention, initial, dbBytes = null }: {
   retention: OverviewRetention;
+  /** The database's size (admin_database_size), against Supabase free's 500 MB. Admin only: this page is. */
+  dbBytes?: number | null;
   /** Fixture data for tests/render; the page itself always fetches. */
   initial?: OverviewData & { updatedAt: number };
 }) {
@@ -96,6 +102,11 @@ export default function OverviewClient({ retention, initial }: {
           </>
         }
       />
+      {dbBytes !== null && (
+        <p className={`${dbBytes >= DB_ALERT_BYTES ? "adm-callout-warn rounded-xl px-3 py-2" : "adm-muted"} sc-t-footnote`} data-db-size>
+          Database: {Math.round(dbBytes / 1048576)} MB of {DB_LIMIT_MB} MB ({Math.round((dbBytes / (DB_LIMIT_MB * 1048576)) * 100)}%).{dbBytes >= DB_ALERT_BYTES ? " Past 400 MB: time to clear old data or upgrade Supabase." : " Old page views are rolled up nightly."}
+        </p>
+      )}
       {/* updatedAt is set together with data, so "3h ago" counts from the load. */}
       {!data ? <PageSkeleton /> : <OverviewBody data={data} retention={retention} now={updatedAt} />}
     </Stack>

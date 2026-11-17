@@ -80,8 +80,8 @@ export function readCandidates(v: unknown): BatchCandidate[] {
 }
 
 /** "New batch" in the admin: waits for the Mac agent, which starts it at run_after. CSV rows go in the queue, tied to it. */
-export async function requestBatch(input: { label: string; kind: "now" | "tonight"; wanted: number; rows: string[]; runAfter: Date }): Promise<Batch | null> {
-  const { data, error } = await db().from("prospect_batches").insert({ label: input.label, kind: input.kind, wanted: input.wanted, status: "requested", run_after: input.runAfter.toISOString() }).select("*").single();
+export async function requestBatch(input: { label: string; kind: "now" | "tonight"; wanted: number; rows: string[]; runAfter: Date; engine?: "server" | "mac" }): Promise<Batch | null> {
+  const { data, error } = await db().from("prospect_batches").insert({ label: input.label, kind: input.kind, wanted: input.wanted, status: "requested", run_after: input.runAfter.toISOString(), engine: input.engine ?? "server" }).select("*").single();
   if (error || !data) return null;
   if (input.rows.length) {
     const { error: qErr } = await db().from("prospect_queue").insert(input.rows.map((line) => ({ input: line, is_notes: false, batch_id: data.id })));

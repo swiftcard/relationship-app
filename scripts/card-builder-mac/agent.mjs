@@ -3,7 +3,11 @@
 // Runs on the owner's Mac, all the time (launchd: install.sh), and does the
 // three things that have to happen on that Mac:
 //
-//   1. BATCHES. "New batch" in the admin makes a requested batch. This picks
+//   1. BATCHES (only a batch set to engine 'mac'). Mac first: while this agent
+//      checks in, batches are built here for free on the owner's Claude plan;
+//      when it stops checking in, the server builds them (lib/card-builder-jobs)
+//      and takes over any batch this Mac left half done.
+//      "New batch" in the admin makes a requested batch. This picks
 //      it up (now, or at 11pm for "run overnight") and runs Claude Code's
 //      /build-batch on it, ten prospects per run, until it is done. A run that
 //      dies loses nothing: each draft is saved as it is finished.
@@ -15,6 +19,8 @@
 //      as a green SMS.
 //   3. LISTENING. A reply of "stop" (or "remove me", "wrong number"…) puts the
 //      number on the do-not-contact list at once.
+//   4. POP-UPS. When the server alerts on a real open, a window on this screen
+//      names them and offers "Call" (popup.mjs).
 //
 // It also tells the server which networks are the owner's own (a hash, never
 // the address), so the link preview Messages draws on this Mac, or the owner
@@ -33,6 +39,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
+import { showOpenPopup } from "./popup.mjs";
 import { knownNotIMessage, latestRowId, outcomeOf, repliesFrom, sendIMessage, STOP_RE } from "./imessage.mjs";
 // Shared with the server: the very same rules (Node strips the types).
 import { localClock, nextGapMs, readSenderSettings, sendDecision } from "../../src/lib/prospect-preview/send-window.ts";
@@ -70,7 +77,7 @@ async function setSetting(key, value) {
   await db.from("card_builder_settings").upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" });
 }
 
-const state = { note: "starting", nextSendAt: null, child: null, lastNetworks: 0, chatRow: null, stalls: new Map() };
+const state = { popupSince: undefined, note: "starting", nextSendAt: null, child: null, childBatch: null, lastNetworks: 0, chatRow: null, stalls: new Map() };
 
 async function heartbeat() {
   await setSetting("mac_agent", { at: new Date().toISOString(), note: state.note, next_send_at: state.nextSendAt, version: VERSION });
@@ -103,7 +110,8 @@ const builtOf = (b) => (Array.isArray(b.items) ? b.items.filter((i) => i?.outcom
 
 async function nextBatch() {
   // Only batches made with "New batch" (they have run_after); a /build session in a terminal runs its own.
-  const { data } = await db.from("prospect_batches").select("*").in("status", ["requested", "running"]).not("run_after", "is", null)
+  // Mac first (2026-11-16): a batch is set to 'mac' while this agent is checking in, and to 'server' (lib/card-builder-jobs) when it isn't; only 'mac' ones are built here.
+  const { data } = await db.from("prospect_batches").select("*").in("status", ["requested", "running"]).eq("engine", "mac").not("run_after", "is", null)
     .lte("run_after", new Date().toISOString()).order("created_at", { ascending: true }).limit(1);
   return data?.[0] ?? null;
 }
@@ -149,8 +157,11 @@ function runClaude(prompt) {
       // read this folder, search and read the web, and write its files in
       // ./work (WORK_NOTE tells it so). Everything else is refused,
       // not asked about.
-      "--allowedTools", "Bash(node scripts/card-builder.mjs:*) Read(./**) Write(./work/**) WebFetch WebSearch",
-      "--disallowedTools", "Edit NotebookEdit Grep Glob Bash(git:*) Bash(curl:*) Bash(rm:*)",
+      // File writes are governed by Edit(path) rules (they cover Write too): a
+      // Write(path) rule is ignored, and disallowing Edit blocked every write,
+      // so no batch could even open its JSON file (found 2026-11-17).
+      "--allowedTools", "Bash(node scripts/card-builder.mjs:*) Read(./**) Edit(./work/**) WebFetch WebSearch",
+      "--disallowedTools", "NotebookEdit Grep Glob Bash(git:*) Bash(curl:*) Bash(rm:*)",
     ], {
       cwd: RUN_DIR,
       // No keys in its environment either: the real tool reads its own from .env.local.
@@ -185,9 +196,13 @@ async function batches() {
   state.note = `building "${b.label}" (${before} of ${b.wanted} so far)`;
   await heartbeat();
   log("chunk start", b.id, b.label, before, "/", b.wanted);
+  state.childBatch = b.id;
   const { code, tail } = await runClaude(`/build-batch batch ${b.id} chunk ${CHUNK}`);
+  state.childBatch = null;
   const { data: after } = await db.from("prospect_batches").select("*").eq("id", b.id).maybeSingle();
   if (!after || after.status === "finished") { state.stalls.delete(b.id); state.note = "idle"; return; }
+  // The server took it over while this Mac was asleep or off (lib/card-builder-jobs, "Mac first"): it is the server's now.
+  if (after.engine !== "mac") { state.stalls.delete(b.id); state.note = "idle"; log("batch moved to the server", b.id); return; }
   const built = builtOf(after);
   const maxChunks = Math.ceil((after.wanted ?? 10) / CHUNK) * 3;
   if (built >= (after.wanted ?? 0)) { await finishBatch(b.id, null); state.stalls.delete(b.id); }
@@ -318,10 +333,46 @@ async function listen() {
   }
 }
 
+// ── 4. A pop-up on this screen when a prospect opens their card ─────────────
+
+const POPUP_FILE = join(homedir(), ".swiftcard-card-builder", "popups.json");
+
+async function popups() {
+  // From where the last pass left off; on the very first run, from now (never a pile of old alerts).
+  let since = state.popupSince;
+  if (since === undefined) {
+    try { since = JSON.parse(readFileSync(POPUP_FILE, "utf8")).since; } catch { since = null; }
+    if (typeof since !== "string") { since = new Date().toISOString(); savePopupSince(since); }
+    state.popupSince = since;
+  }
+  const { data, error } = await db.from("prospect_preview_views")
+    .select("id, viewed_at, preview_id, prospect_previews(owner_name, office_name, phone, alert_user_id)")
+    .eq("alerted", true).gt("viewed_at", since).order("viewed_at", { ascending: true }).limit(20);
+  if (error || !data?.length) return;
+  const shown = new Set();
+  for (const v of data) {
+    const p = v.prospect_previews;
+    // The automated test's own preview never reaches the owner's screen (alert.ts: alert_user_id).
+    if (p && !p.alert_user_id && !shown.has(v.preview_id) && !DRY) { shown.add(v.preview_id); showOpenPopup(p, log); log("popup", p.owner_name); }
+  }
+  state.popupSince = data[data.length - 1].viewed_at;
+  savePopupSince(state.popupSince);
+}
+function savePopupSince(since) {
+  try { mkdirSync(dirname(POPUP_FILE), { recursive: true }); writeFileSync(POPUP_FILE, JSON.stringify({ since })); } catch { /* next pass tries again */ }
+}
+
 // ── The loop ────────────────────────────────────────────────────────────────
 
+/** A chunk whose batch the server took over (this Mac slept past the hand-off): stop it, so no office is built twice. */
+async function dropMovedBatch() {
+  if (!state.child || !state.childBatch) return;
+  const { data } = await db.from("prospect_batches").select("engine").eq("id", state.childBatch).maybeSingle();
+  if (data && data.engine !== "mac") { log("the server took over", state.childBatch, "- stopping this chunk"); state.child.kill("SIGTERM"); }
+}
+
 async function pass() {
-  const steps = [["networks", rememberNetworks], ["listen", listen], ["send", sendOne], ["heartbeat", heartbeat]];
+  const steps = [["networks", rememberNetworks], ["listen", listen], ["popups", popups], ["send", sendOne], ["heartbeat", heartbeat], ["moved", dropMovedBatch]];
   for (const [name, step] of steps) {
     try { await step(); } catch (e) { log(name, "failed:", e?.message ?? e); }
   }

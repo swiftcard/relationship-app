@@ -100,7 +100,7 @@ describe("the quality gate", () => {
     expect(route).toContain('if (saved.status !== "live" && !assessQuality(saved).mayPublish) return reply("held", 409);');
     expect(route.indexOf('reply("held", 409)')).toBeLessThan(route.indexOf("await publishPreview(id);"));
     expect(route).toContain('case "override": {');
-    const tool = readFileSync("tests/tools/card-builder.tool.ts", "utf8");
+    const tool = (readFileSync("tests/tools/card-builder.tool.ts", "utf8") + readFileSync("src/lib/prospect-preview/draft-core.ts", "utf8"));
     expect(tool).toContain('if ("quality_override" in raw) throw new Error(');
     expect(tool).not.toContain("setQualityOverride");
     // The save itself never touches the override: PreviewFields has no such key.
@@ -287,7 +287,7 @@ describe("scoring an office's fit", () => {
   });
 
   it("the tool refuses to save a disqualified office and ignores a score handed to it", () => {
-    const tool = readFileSync("tests/tools/card-builder.tool.ts", "utf8");
+    const tool = (readFileSync("tests/tools/card-builder.tool.ts", "utf8") + readFileSync("src/lib/prospect-preview/draft-core.ts", "utf8"));
     expect(tool).toContain("if (scored.disqualified.length) { disqualified.push(");
     expect(tool).toContain("score: scored.score,");
     expect(tool).not.toMatch(/Number\(l\.fit\)/);

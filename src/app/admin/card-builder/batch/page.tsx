@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin";
 import { recentBatches } from "@/lib/prospect-preview/desk";
 import { macStatus } from "@/lib/prospect-preview/outbox";
+import { batchProgress } from "@/lib/card-builder-jobs/jobs";
 import BatchView from "./BatchView";
 
 export const metadata = { title: "New batch — SwiftCard Admin" };
@@ -16,5 +17,6 @@ export default async function BatchPage({ searchParams }: { searchParams: Promis
   if (!(await requireAdmin())) notFound();
   const sp = await searchParams;
   const [batches, mac] = await Promise.all([recentBatches(12).catch(() => []), macStatus().catch(() => ({ at: null, note: null, next_send_at: null }))]);
-  return <BatchView batches={batches} mac={mac} now={new Date().getTime()} done={sp.done ?? null} error={sp.error ?? null} />;
+  const progress = await batchProgress(batches.map((b) => b.id)).catch(() => ({}));
+  return <BatchView batches={batches} mac={mac} now={new Date().getTime()} done={sp.done ?? null} error={sp.error ?? null} progress={progress} />;
 }
