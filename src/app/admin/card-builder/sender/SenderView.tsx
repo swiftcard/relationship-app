@@ -81,7 +81,7 @@ export default function SenderView({ settings: s, mac, outbox, now, done }: { se
               <li key={o.id} className="px-4 sm:px-5 py-3 flex flex-col gap-1.5" data-outbox-row>
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge tone={STATUS[o.status].tone}>{STATUS[o.status].text}</StatusBadge>
-                  <span className="sc-t-footnote adm-muted">{o.sent_at ? `sent ${fmtDateTime(o.sent_at)}` : o.status === "scheduled" && o.send_at ? `goes to your Mac ${fmtDateTime(o.send_at)} (9 AM their time)` : `queued ${timeAgo(o.created_at, now)}`}{o.hook ? ` · ${o.hook}` : ""}{o.error ? ` · ${o.error}` : ""}</span>
+                  <span className="sc-t-footnote adm-muted">{o.sent_at ? `sent ${fmtDateTime(o.sent_at)}` : o.status === "scheduled" && o.send_at ? `goes to your Mac ${fmtDateTime(o.send_at)} (9 AM their time)` : `queued ${timeAgo(o.created_at, now)}`}{o.hook ? ` · ${o.hook.startsWith("edit:") ? "your edit" : o.hook}` : ""}{o.error ? ` · ${o.error}` : ""}</span>
                 </div>
                 <p className="sc-t-subhead whitespace-pre-line" style={{ overflowWrap: "anywhere" }}>{o.body}</p>
                 {(o.status === "queued" || o.status === "scheduled") && (

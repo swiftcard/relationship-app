@@ -35,7 +35,7 @@ const WRITTEN = {
   call_opener: "Hi Dana, it's Menash. I sent you a card for Sunday's open house at 88 Hicks. Do you have two minutes?",
   voicemail: "Hi Dana, it's Menash from SwiftCard. Most of your agents give out their own cell, and I made Harbor a card for that. Text me back.",
   nudge_no_view: "Dana, the card for Sunday's open house is still up: {link}",
-  nudge_viewed: "Dana, tried you just now about 14 Garden Pl. Is tomorrow morning better for 5 minutes?",
+  nudge_viewed: "Dana, tried you earlier about 14 Garden Pl. Is tomorrow morning better for 5 minutes?",
   linkedin_note: "Hi Dana, I'm in Brooklyn too and follow what Harbor does in Brooklyn Heights. I'd like to connect.",
   linkedin_dm: "Thanks for connecting, Dana. I saw the open house at 88 Hicks St on Sunday and made you something for it. Can I send it over?",
   uses: { first_text: 0, first_text_b: 2, link_text: 1, email_body: 1, call_opener: 0, voicemail: 2, nudge_no_view: 0, nudge_viewed: 1, linkedin_dm: 0 },
@@ -350,7 +350,9 @@ describe("learning from the owner", () => {
     const route = code("src/app/api/admin/card-builder/[id]/route.ts");
     expect(route).toMatch(/outreachEdits\(p\.outreach \?\? null, outreach\)\.map\(\(e\) => \(\{ preview_id: id, kind: "edit" as const/);
     expect(route).toContain('kind: "pick", message: "first_text", variant: pick');
-    expect(route).toContain('kind: "sent", message: kind, variant: kind === "opener" ? openerHook(p.openers) : kind === "ask" && m.versions ? m.versions.picked : null');
+    // A sent opener records whose words went (opener.ts openerSentVariant); the first text still records its version.
+    expect(route).toContain('const variant = kind === "opener" ? openerSentVariant(p.openers, !!words && words !== saved) : kind === "ask" && m.versions ? m.versions.picked : null;');
+    expect(route).toContain('kind: "sent", message: kind, variant,');
   });
 
   it("the style notes are the owner's own words: their edits, their picks, and what they reworded before sending", () => {

@@ -288,10 +288,11 @@ doesn't.
    `quality` and `shots` again.
 
 9. **Write the outreach for this prospect, yourself, and save it.** First run
-   `node scripts/card-builder.mjs style`: it returns the owner's own edits to
+   `node scripts/card-builder.mjs style <id>`: it returns the owner's own edits to
    earlier messages (what was written, and what they changed it to) and the
    messages they reworded before sending. **Write like the "after" side.**
-   Those are their words; where they cut something, don't put it back.
+   Those are their words; where they cut something, don't put it back. It
+   also returns `opener_results` (how earlier opening texts did), for step 10.
 
    Then write, for this office and nobody else, in the owner's voice. You write them here, in this command; the app never
    calls a paid API to do it. Put them in a JSON file and run
@@ -307,7 +308,7 @@ doesn't.
      "call_opener": "Hi Dana, it's Menash, I sent you the card. …",
      "voicemail": "Hi Dana, it's Menash from SwiftCard. …",
      "nudge_no_view": "Dana, the card I made for Harbor is still up. Worth 20 seconds before Sunday's open house: {link}",
-     "nudge_viewed": "Dana, saw you opened the card. Tried you just now. Is later today or tomorrow morning better for 5 minutes?",
+     "nudge_viewed": "Dana, I tried you earlier about the card I made for Harbor. Is later today or tomorrow morning better for 5 minutes?",
      "linkedin_note": "Hi Dana, I'm in Brooklyn too and follow what Harbor does in Brooklyn Heights. I'd like to connect.",
      "linkedin_dm": "Thanks for connecting, Dana. I saw the open house at 88 Hicks St on Sunday and made you something for it. Can I send it over?",
      "uses": { "first_text": 0, "first_text_b": 2, "linkedin_dm": 0, "link_text": 2, "email_body": 1, "call_opener": 0, "voicemail": 2, "nudge_no_view": 0, "nudge_viewed": 1 }
@@ -326,7 +327,11 @@ doesn't.
    - `call_opener`: what the owner says when they pick up
    - `voicemail`: what the owner says after the beep, 20 seconds at most
    - `nudge_no_view`: for a link sent two days ago and never opened
-   - `nudge_viewed`: for someone who looked at the card and didn't pick up
+   - `nudge_viewed`: for someone who looked at the card and didn't pick up.
+     **Never say or hint that you saw them open it** ("saw you opened the
+     card", "just now"): they must never learn it's tracked. Give a reason to
+     talk instead. The same goes for both nudges, the call opener and the
+     voicemail; the tool refuses any of them that gives it away.
    - `linkedin_note` and `linkedin_dm`, **only when the draft has
      `linkedin_url`**: a connection note of **200 characters at most, with no
      link and no pitch** (don't mention SwiftCard, the card, a demo or a
@@ -386,6 +391,18 @@ doesn't.
    without inventing one (three at the least). **Never invent a fact to
    reach five.** No reviews on any page means no `reviews` opener.
 
+   **Lean toward what's getting opened.** `style <id>` (step 9) returns
+   `opener_results`: for each hook, how many prospects got an opener on it
+   and how many then really opened their card, overall (`by_hook`), by
+   segment (`by_segment`), and in this prospect's own segment
+   (`this_segment`, their batch, or "One at a time"). When a hook is getting
+   opened in this segment and this prospect's verified facts can carry it,
+   write that one with extra care and make it your strongest. A rate marked
+   "too few to tell" (under 10 sends) is noise: don't lean on it. `edit` is
+   the owner's own rewording, not a hook: read those words in `sent_as`.
+   **Never invent a fact to use a hook that's doing well**, and still write
+   five different hooks.
+
    Every opener:
    - **starts `Hey <First name>, Menash here.`** (or `Hi <First>, it's Menash.`):
      they don't have his number
@@ -409,7 +426,7 @@ doesn't.
    > Hi Mike, it's Menash. I put together cards for you and the 14 agents on your Manhasset team so everyone matches. Figured you'd want to see it:
 
    Ending on "it's yours if you want it:" or "figured you'd want to see it:"
-   works because the link is the next line. Read `style` first (step 9): the
+   works because the link is the next line. Read `style <id>` first (step 9): the
    owner's edits to earlier openers are the best guide to the voice.
 
    Then **score each one 1 to 10** on three things, honestly, as the person
@@ -419,7 +436,8 @@ doesn't.
    - `curiosity`: makes them want to see the card *now*
 
    A 10 is rare. If your best scores under 21 in total, rewrite before saving.
-   Save with `node scripts/card-builder.mjs set-openers <id> <file.json>`:
+   Your scores are shown to the owner, but **they don't pick the default**:
+   step 10b does. Put the openers in a JSON file:
 
    ```json
    { "candidates": [
@@ -428,16 +446,42 @@ doesn't.
    ] }
    ```
 
+10b. **Have them judged, independently, then save.** You wrote and scored
+   them, so you are the wrong one to pick. Run
+   `node scripts/card-builder.mjs judge-input <id> <file.json>`: it prints the
+   prompt for the judge, which is only this prospect's verified facts and the
+   texts, numbered (no hooks, no scores). Give that prompt, **word for word
+   and nothing else**, to the `opener-judge` agent (`.claude/agents/opener-judge.md`;
+   the server uses the same rubric). It reads each text as the prospect would
+   on a lock screen from an unknown number and ranks them by "would I tap the
+   link", with one reason each. Put its JSON answer in your file as `"judge"`:
+
+   ```json
+   { "candidates": [ … as above … ],
+     "judge": { "ranking": [ { "n": 2, "reason": "…" }, { "n": 1, "reason": "…" }, … ] } }
+   ```
+
+   Don't edit the judge's answer, and don't change a text after judging (if
+   you must, run `judge-input` and the agent again). Then save with
+   `node scripts/card-builder.mjs set-openers <id> <file.json>`.
+
+   Only if the `opener-judge` agent has failed twice (an error, or no
+   readable answer both times), put `"judge": { "unavailable": "<why>" }` in
+   the file instead. Never write a ranking yourself. `set-openers` then saves
+   your own best as the default, Approve says the judge couldn't run, and you
+   say why in the reply.
+
    The tool refuses a set with any rule broken, including **any number or
-   name that isn't in the verified facts**, and lists what to fix. The best
-   total becomes the default and the runner-up the alternate; the owner can
-   edit either on the review screen.
+   name that isn't in the verified facts**, and lists what to fix, and refuses
+   it without the judge's ranking. The judge's first choice that passes every
+   rule becomes the default and its next the alternate; its reasons show in
+   Approve beside your scores. The owner can edit either on the review screen.
 
 ## Reply with
 
-- **the opening texts**, ranked, each with its hook, its three scores and its
-  character count, and which is the default and which the alternate; and
-  whether their number is a mobile
+- **the opening texts**, in the judge's order, each with its hook, your three
+  scores, the judge's reason and its character count, and which is the
+  default and which the alternate; and whether their number is a mobile
 
 - **the full outreach, word for word**: both versions of the first text, the
   text with the link, the email (subject and body), the call opener, the

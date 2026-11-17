@@ -6,8 +6,8 @@ import { StatusBadge } from "../_ui/badges";
 import { Icon } from "../_ui/icons";
 import { fmtDate, fmtDateTime, timeAgo } from "../_ui/format";
 import { telHref } from "@/lib/prospect-preview/input";
-import { STAT_LABELS, type BatchBrief, type MessageStat, type OpenRate } from "@/lib/prospect-preview/learn";
-import { OPENER_HOOK_LABELS, isOpenerHook } from "@/lib/prospect-preview/opener";
+import { messageStatLabel, type BatchBrief, type MessageStat, type OpenRate } from "@/lib/prospect-preview/learn";
+import { openerStatLabel } from "@/lib/prospect-preview/opener";
 import { approvalQueue, followUps, STAGE_LABELS, STAGES, stageCounts, stageOf, type Stage } from "@/lib/prospect-preview/pipeline";
 import { assessQuality } from "@/lib/prospect-preview/quality";
 import { previewState } from "@/lib/prospect-preview/real-view";
@@ -178,7 +178,7 @@ function Stats({ stats }: { stats: MessageStat[] }) {
         <tbody>
           {stats.map((s) => (
             <tr key={`${s.message}-${s.variant ?? ""}`}>
-              <td className="py-1.5 pr-3">{STAT_LABELS[s.message] ?? s.message}{s.variant ? `, version ${s.variant.toUpperCase()}` : ""}</td>
+              <td className="py-1.5 pr-3">{messageStatLabel(s.message, s.variant)}</td>
               <td className="py-1.5 px-2 text-right tabular-nums">{s.sent}</td><td className="py-1.5 px-2 text-right tabular-nums">{s.viewed}</td>
               <td className="py-1.5 px-2 text-right tabular-nums">{s.picked_up}</td><td className="py-1.5 pl-2 text-right tabular-nums">{s.booked}</td>
             </tr>
@@ -283,7 +283,7 @@ export default function CardBuilderView({ list, appUrl, now, made, error, done, 
                 {(openRates.byHook.length > 0 || openRates.bySegment.length > 0) && (
                   <div className="mt-4 space-y-4" data-opener-rates>
                     <p className="sc-t-footnote adm-muted">Opening texts: how many went out, and how many of those people then really opened their card.</p>
-                    <OpenRates title="Hook" rows={openRates.byHook} label={(k) => (isOpenerHook(k) ? OPENER_HOOK_LABELS[k] : k)} />
+                    <OpenRates title="Hook" rows={openRates.byHook} label={openerStatLabel} />
                     <OpenRates title="Segment" rows={openRates.bySegment} label={(k) => k} />
                   </div>
                 )}

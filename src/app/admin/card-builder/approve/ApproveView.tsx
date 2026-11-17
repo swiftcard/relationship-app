@@ -150,12 +150,14 @@ function Opener({ r, link }: { r: PreviewListRow; link: string }) {
         </form>
       )}
       <details>
-        <summary className="adm-link sc-t-footnote cursor-pointer">All {o.candidates.length} versions, with scores</summary>
+        <summary className="adm-link sc-t-footnote cursor-pointer">All {o.candidates.length} versions, with scores{o.picked_by === "judge" ? " and the judge's reasons" : ""}</summary>
+        {o.picked_by && <p className="mt-2 sc-t-footnote adm-muted" data-picked-by={o.picked_by}>{o.picked_by === "judge" ? "The default was picked by a separate judge that saw only their facts and the texts, read as they'd see it on a lock screen. The scores are the writer's own." : "The judge couldn't run, so the default is the writer's own best score."}</p>}
         <ol className="mt-2 flex flex-col gap-2">
-          {o.candidates.map((c, i) => (
+          {o.candidates.map((c, i) => ({ c, i })).sort((a, b) => (a.c.judge?.rank ?? 99) - (b.c.judge?.rank ?? 99) || a.i - b.i).map(({ c, i }) => (
             <li key={i} className="sc-t-footnote" style={{ overflowWrap: "anywhere" }}>
-              <span className="adm-muted">{OPENER_HOOK_LABELS[c.hook]} · specific {c.scores.specificity}, human {c.scores.human}, curiosity {c.scores.curiosity} = {scoreTotal(c)}{i === o.pick ? " · default" : ""}</span>
+              <span className="adm-muted">{c.judge ? `Judge's #${c.judge.rank} · ` : ""}{OPENER_HOOK_LABELS[c.hook]} · specific {c.scores.specificity}, human {c.scores.human}, curiosity {c.scores.curiosity} = {scoreTotal(c)}{i === o.pick ? " · default" : ""}</span>
               <br />{c.text}
+              {c.judge?.reason && <><br /><span className="adm-muted" data-judge-reason>Judge: {c.judge.reason}</span></>}
             </li>
           ))}
         </ol>

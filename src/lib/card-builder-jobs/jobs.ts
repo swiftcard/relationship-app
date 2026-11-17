@@ -3,14 +3,16 @@ import { claimBatch, finishBatch, listConnections, listEvents, logBatchItem, own
 import { pullBrandColors } from "@/lib/prospect-preview/colors-server";
 import { createDraftFrom, extrasFrom, fieldsFrom, standing, type Json } from "@/lib/prospect-preview/draft-core";
 import { styleNotes, type BatchCandidate } from "@/lib/prospect-preview/learn";
-import { checkOpeners, rankOpeners, readOpeners } from "@/lib/prospect-preview/opener";
+import { checkOpeners, openerFacts, rankOpeners, readOpeners } from "@/lib/prospect-preview/opener";
+import { judgeOpeners, JUDGE_MAX_TOKENS } from "@/lib/prospect-preview/opener-judge";
+import { loadOpenerResults } from "@/lib/prospect-preview/opener-results";
 import { checkOutreach, readOutreach, staleNumbers } from "@/lib/prospect-preview/outreach";
 import { isVerified } from "@/lib/prospect-preview/quality";
 import { getPreviewById, setOpeners, setOutreach } from "@/lib/prospect-preview/store";
 import { LINK_SLOT, TEXT_LIMIT } from "@/lib/prospect-preview/types";
 import { connectionsAt } from "@/lib/prospect-preview/warm";
 import { macStatus, type MacStatus } from "@/lib/prospect-preview/outbox";
-import { commandText, dollarsOf, jsonIn, modelOf, NO_USAGE, say, turn, type Conversation, type Usage } from "./llm";
+import { agentText, commandText, dollarsOf, jsonIn, modelOf, NO_USAGE, say, turn, type Conversation, type Usage } from "./llm";
 
 // ── Card Builder's job queue (owner, 2026-11-16) ────────────────────────────
 // "Run overnight, and by morning every prospect is at ready_for_review."
@@ -400,7 +402,10 @@ async function buildCard(job: Job): Promise<StepOut> {
   }
 }
 
-/** The opening texts (step 10) and the outreach (step 9), written and checked until clean. */
+/** The independent judge of the openers runs on Sonnet, with no web: it only reads the facts and the texts. */
+export const JUDGE_MODEL = "claude-sonnet-5-5" as const;
+
+/** The opening texts (step 10, then the judge of step 10b) and the outreach (step 9), written and checked until clean. */
 async function writeOpener(job: Job, signal: AbortSignal): Promise<StepOut> {
   if (!job.preview_id) throw new Error("no draft to write for");
   const p = await getPreviewById(job.preview_id);
@@ -409,6 +414,7 @@ async function writeOpener(job: Job, signal: AbortSignal): Promise<StepOut> {
   const link = `${process.env.NEXT_PUBLIC_APP_URL && !/localhost/.test(process.env.NEXT_PUBLIC_APP_URL) ? process.env.NEXT_PUBLIC_APP_URL : "https://swiftcard.me"}/p/${p.slug}`;
   const stale = staleNumbers(p);
   const style = styleNotes(await listEvents());
+  const results = await loadOpenerResults(p);
   const facts = {
     office_name: p.office_name, owner_name: p.owner_name, owner_title: p.owner_title, license: p.license, address: p.address, specialty: p.specialty,
     team_size: p.team_size, team_size_uncertain: p.sources.team_size?.uncertain === true, team_members: p.team_members, current_tool: p.current_tool,
@@ -420,12 +426,14 @@ async function writeOpener(job: Job, signal: AbortSignal): Promise<StepOut> {
   say(convo, [
     SERVER_MODE,
     "",
-    "The draft below is saved. Your part is build-card's steps 9 and 10: write this prospect's outreach and their opening texts, in the owner's voice, from these facts and nothing else.",
+    "The draft below is saved. Your part is build-card's steps 9 and 10: write this prospect's outreach and their opening texts, in the owner's voice, from these facts and nothing else. Step 10b (the independent judge that picks the default) is done by the server after you: don't rank or pick, just score each one honestly.",
     `The link will be ${link} (${link.length} characters): write ${LINK_SLOT} where it goes. A text is ${TEXT_LIMIT} characters at most with the link in.`,
     "",
     "The draft's facts:", JSON.stringify(facts),
     "",
     "The owner's own edits (what `card-builder.mjs style` returns; write like the 'after' side):", JSON.stringify(style),
+    "",
+    "How earlier openers did (step 10: lean toward hooks that are getting opened in this segment, never invent a fact to use one):", JSON.stringify(results),
     "",
     "Answer with ONE ```json block and nothing after it:",
     '{ "openers": { "candidates": [ { "hook", "uses", "text", "scores": { "specificity", "human", "curiosity" } } ] }, "outreach": { "first_text", "first_text_b", "link_text", "email_subject", "email_body", "call_opener", "voicemail", "nudge_no_view", "nudge_viewed", ("linkedin_note", "linkedin_dm" only when linkedin_url is set), "uses": { … } } }',
@@ -435,6 +443,8 @@ async function writeOpener(job: Job, signal: AbortSignal): Promise<StepOut> {
   let reply = await turn(convo, { system, web: false, effort: "high", signal });
   let savedOpeners = false;
   let outreachNote: string | null = null;
+  let judgeNote: string | null = null;
+  const judgeConvo: Conversation = { messages: [], usage: { ...NO_USAGE }, model: JUDGE_MODEL };
   for (let round = 0; ; round++) {
     const json = jsonIn(reply);
     const problems: string[] = [];
@@ -446,11 +456,19 @@ async function writeOpener(job: Job, signal: AbortSignal): Promise<StepOut> {
         if (!read) problems.push("Openers: no usable openers. Each needs hook, text, uses and scores { specificity, human, curiosity } of 1 to 10.");
         else if (read.candidates.length !== given) problems.push(`Openers: ${given - read.candidates.length} of them are missing a hook, text or a 1–10 score.`);
         else {
-          const openers = rankOpeners(read.candidates);
-          const bad = checkOpeners(openers, p, stale);
+          const ranked = rankOpeners(read.candidates);
+          const bad = checkOpeners(ranked, p, stale);
           if (bad.length) problems.push(...bad.map((b) => `Openers: ${b}`));
-          else if (await setOpeners(p.id, openers)) savedOpeners = true;
-          else problems.push("Openers: that didn't save.");
+          else {
+            // The independent pick: a separate pass that sees only the facts and the texts (opener-judge.ts).
+            const judged = await judgeOpeners(ranked, { owner_name: p.owner_name, facts: openerFacts(p), stale }, async (message, retry) => {
+              say(judgeConvo, retry ? "That couldn't be read. Answer again with only the JSON object, ranking every text exactly once." : message);
+              return turn(judgeConvo, { system: agentText("opener-judge"), web: false, effort: "medium", signal, maxTokens: JUDGE_MAX_TOKENS });
+            }, jsonIn);
+            judgeNote = judged.note;
+            if (await setOpeners(p.id, judged.openers)) savedOpeners = true;
+            else problems.push("Openers: that didn't save.");
+          }
         }
       }
       if (outreachNote === null && json.outreach && typeof json.outreach === "object") {
@@ -461,7 +479,11 @@ async function writeOpener(job: Job, signal: AbortSignal): Promise<StepOut> {
       }
     }
     if (savedOpeners && (outreachNote !== null || round >= 2)) {
-      return { data: { openers: "written", outreach: outreachNote ?? "left on the templates: it didn't pass the checks in three tries" }, usage: convo.usage, dollars: dollarsOf(convo.usage, convo.model) };
+      const judgeDollars = dollarsOf(judgeConvo.usage, JUDGE_MODEL);
+      return {
+        data: { openers: "written", opener_pick: judgeNote, outreach: outreachNote ?? "left on the templates: it didn't pass the checks in three tries", judge: { ...judgeConvo.usage, model: JUDGE_MODEL, dollars: Math.round(judgeDollars * 1000) / 1000 } },
+        usage: convo.usage, dollars: dollarsOf(convo.usage, convo.model) + judgeDollars,
+      };
     }
     if (round >= 2) throw new Error(`the opening texts didn't pass the checks in three tries: ${problems.slice(0, 3).join(" ")}`.slice(0, 400));
     say(convo, `Not saved yet.${savedOpeners ? " (The openers ARE saved; only fix the outreach.)" : ""} Fix every one of these and answer again with the whole JSON:\n- ${problems.join("\n- ")}`);

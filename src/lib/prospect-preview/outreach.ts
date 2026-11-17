@@ -1,4 +1,5 @@
 import { buildMessages, type Messages } from "./messages";
+import { revealsOpen } from "./opener";
 import { FILLER, isVerified } from "./quality";
 import { LINK_SLOT, LINKEDIN_NOTE_LIMIT, OUTREACH_KEYS, OUTREACH_LABELS, OUTREACH_LINKEDIN, OUTREACH_MAX, OUTREACH_TEXTS, TEXT_LIMIT, type Outreach, type OutreachKey, type ProspectPreview, type Specific } from "./types";
 
@@ -103,6 +104,9 @@ export function staleNumbers(p: Pick<ProspectPreview, "team_size" | "sources" | 
  * a verified specific); the edit screen saves a partial set, and whatever is
  * missing falls back to its template.
  */
+/** The messages sent or said after the card went out, where "I saw you opened it" could slip in. */
+export const REVEALS_OPEN_KEYS: OutreachKey[] = ["nudge_viewed", "nudge_no_view", "call_opener", "voicemail"];
+
 export function checkOutreach(o: Outreach | null, ctx: {
   link: string; specifics: Specific[]; complete?: boolean;
   /** Their public LinkedIn profile was found, so the two LinkedIn messages are expected. */
@@ -129,6 +133,8 @@ export function checkOutreach(o: Outreach | null, ctx: {
     for (const n of ctx.stale ?? []) {
       if (new RegExp(`(^|[^\\d.,$#])${n}(?![\\d]|[.,]\\d)`).test(counts)) out.push(`${label}: it uses ${n}, a number that was flagged as possibly out of date. Leave the number out, or confirm it first.`);
     }
+    // The same leak the opener and the 48-hour follow-up refuse: nothing that tells them we saw them open it.
+    if (REVEALS_OPEN_KEYS.includes(k) && revealsOpen(words)) out.push(`${label}: it gives away that you saw them open the card ("saw you opened it", "just now"…). Never let them know it's tracked: say why you're texting or calling instead.`);
     if (EMOJI.test(words)) out.push(`${label}: no emojis.`);
     if (FREE.test(words)) out.push(`${label}: don't say "free".`);
     if (FILLER.test(words)) out.push(`${label}: that reads as a compliment or filler that could go to any office. Say the fact and why it matters.`);

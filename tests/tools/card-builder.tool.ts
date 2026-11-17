@@ -22,7 +22,8 @@ import { getAdminSupabase } from "@/lib/supabase-admin";
 import { createDraftFrom, extrasFrom, fieldsFrom, links, standing, type Json } from "@/lib/prospect-preview/draft-core";
 import { MAX_BATCH } from "@/lib/prospect-preview/batch-input";
 import { claimBatch, readCandidates, setCandidates } from "@/lib/prospect-preview/desk";
-import { checkOpeners, openerMessage, openerText, rankOpeners, readOpeners, scoreTotal, OPENER_HOOK_LABELS } from "@/lib/prospect-preview/opener";
+import { checkOpeners, openerFacts, openerMessage, openerText, rankOpeners, readOpeners, scoreTotal, OPENER_HOOK_LABELS } from "@/lib/prospect-preview/opener";
+import { applyJudge, judgeMessage, readJudgeInFile } from "@/lib/prospect-preview/opener-judge";
 import { lookupPhoneKind, nanp } from "@/lib/prospect-preview/phone-type";
 
 // ── Card Builder's command-line tool ────────────────────────────────────────
@@ -498,21 +499,52 @@ async function setOpenersFor(id: string, file: string) {
   const given = Array.isArray(raw.candidates) ? raw.candidates.length : 0;
   if (!read) throw new Error("No usable openers. Each needs hook, text, uses and scores { specificity, human, curiosity } of 1 to 10.");
   if (read.candidates.length !== given) throw new Error(`${given - read.candidates.length} of the openers are missing a hook (${Object.keys(OPENER_HOOK_LABELS).join(", ")}), text or a 1–10 score.`);
-  const openers = rankOpeners(read.candidates);
-  const problems = checkOpeners(openers, p, staleNumbers(p));
+  const ranked = rankOpeners(read.candidates);
+  const problems = checkOpeners(ranked, p, staleNumbers(p));
   if (problems.length) throw new Error(`Not saved. ${problems.join(" ")}`);
+  // Step 10b: the independent judge's ranking (the opener-judge agent's JSON, as "judge") sets the default.
+  // Or, only when the agent couldn't be had (two failed tries), { "unavailable": "<why>" }: the writer's own ranking is saved, and says so.
+  const judged = readJudgeInFile(raw.judge, ranked.candidates.map((c) => c.text));
+  if (!judged) throw new Error("Not saved: no usable \"judge\" in the file. Run step 10b: `judge-input <id> <file.json>`, give its prompt to the opener-judge agent, and put its JSON answer ({ \"ranking\": [ { \"n\", \"reason\" } ] }, every text ranked once) in the file as \"judge\". If you changed any text since, run judge-input again. Only if the agent failed twice: \"judge\": { \"unavailable\": \"<why>\" }.");
+  const openers = "verdict" in judged
+    ? applyJudge(ranked, judged.verdict, { owner_name: p.owner_name, facts: openerFacts(p), stale: staleNumbers(p) })
+    : { ...ranked, picked_by: "writer" as const };
   if (!(await setOpeners(id, openers))) throw new Error("That didn't save.");
   const link = `${APP_URL}/p/${p.slug}`;
   return {
-    ok: true, id, default: openerMessage(openerText(openers)!, link),
-    ranked: openers.candidates.map((c, i) => ({ position: i, hook: c.hook, total: scoreTotal(c), ...c.scores, default: i === openers.pick, alternate: i === openers.alt, text: c.text, characters: c.text.length })).sort((a, b) => b.total - a.total),
+    ok: true, id, default: openerMessage(openerText(openers)!, link), picked_by: openers.picked_by, ...("unavailable" in judged ? { judge_unavailable: judged.unavailable } : {}),
+    ranked: openers.candidates.map((c, i) => ({ position: i, hook: c.hook, judge_rank: c.judge?.rank ?? null, judge_reason: c.judge?.reason ?? null, total: scoreTotal(c), ...c.scores, default: i === openers.pick, alternate: i === openers.alt, text: c.text, characters: c.text.length })).sort((a, b) => (a.judge_rank ?? 99) - (b.judge_rank ?? 99) || b.total - a.total),
   };
 }
 
-/** The owner's own corrections, as examples of their voice. Read before writing any message. */
-async function style() {
+/**
+ * Step 10b: exactly what the opener-judge agent is shown (the prospect's
+ * verified facts and the candidate texts, numbered; no hooks, no scores).
+ */
+async function judgeInput(id: string, file: string) {
+  if (!UUID_RE.test(id)) throw new Error("judge-input wants the preview's id first.");
+  const { getPreviewById } = await import("@/lib/prospect-preview/store");
+  const p = await getPreviewById(id);
+  if (!p) throw new Error("No preview with that id.");
+  const raw = readJson(file) as Json;
+  const read = readOpeners({ candidates: raw.candidates });
+  if (!read) throw new Error("No usable openers in that file.");
+  return { ok: true, prompt: judgeMessage(openerFacts(p), read.candidates.map((c) => c.text)), note: "Give this prompt, word for word and nothing else, to the opener-judge agent. Put its JSON answer in the openers file as \"judge\", then run set-openers." };
+}
+
+/**
+ * The owner's own corrections, as examples of their voice, and how earlier
+ * openers did (sent and opened, by hook and by segment). Read before writing
+ * any message. With a preview id, `opener_results.this_segment` is that
+ * prospect's segment.
+ */
+async function style(id?: string) {
   const notes = styleNotes(await listEvents());
-  return { ok: true, ...notes, note: notes.edits.length || notes.sent_as.length ? "Write like the 'after' side. These are the owner's own words." : "No edits yet: there is nothing to learn from. Follow the rules in build-card.md." };
+  const { loadOpenerResults } = await import("@/lib/prospect-preview/opener-results");
+  let p: Pick<ProspectPreview, "batch_id"> | null = null;
+  if (id && UUID_RE.test(id)) { const { getPreviewById } = await import("@/lib/prospect-preview/store"); p = await getPreviewById(id); }
+  const opener_results = await loadOpenerResults(p);
+  return { ok: true, ...notes, opener_results, note: notes.edits.length || notes.sent_as.length ? "Write like the 'after' side. These are the owner's own words." : "No edits yet: there is nothing to learn from. Follow the rules in build-card.md." };
 }
 
 async function run(args: string[]): Promise<Json> {
@@ -528,6 +560,7 @@ async function run(args: string[]): Promise<Json> {
     case "set-outreach": return setOutreachFor(a, b);
     case "queue": return queue(args.slice(1));
     case "set-openers": return setOpenersFor(a, b);
+    case "judge-input": return judgeInput(a, b);
     case "phone-type": return phoneType(a);
     case "batch-candidates": return batchCandidates(a, b);
     case "queue-add": return queueAdd(a);
@@ -537,7 +570,7 @@ async function run(args: string[]): Promise<Json> {
     case "batch-finish": return batchFinish(a);
     case "batch-status": return batchStatus(a);
     case "warm": return warm(a);
-    case "style": return style();
+    case "style": return style(a);
     case "shots": return shots(a, b);
     case "colors": return colors(a, b);
     default: throw new Error(`Unknown command "${cmd}". See scripts/card-builder.mjs.`);

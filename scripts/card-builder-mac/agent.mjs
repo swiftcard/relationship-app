@@ -130,6 +130,9 @@ function prepareRunDir() {
   mkdirSync(join(RUN_DIR, "scripts"), { recursive: true });
   mkdirSync(join(RUN_DIR, "work", "shots"), { recursive: true });
   cpSync(join(ROOT, ".claude", "commands"), join(RUN_DIR, ".claude", "commands"), { recursive: true });
+  // /build-card's step 10b hands the openers to this one agent (and only this one: the others are not for batch runs).
+  mkdirSync(join(RUN_DIR, ".claude", "agents"), { recursive: true });
+  cpSync(join(ROOT, ".claude", "agents", "opener-judge.md"), join(RUN_DIR, ".claude", "agents", "opener-judge.md"));
   cpSync(join(ROOT, "src", "lib", "knowledge", "docs"), join(RUN_DIR, "src", "lib", "knowledge", "docs"), { recursive: true });
   writeFileSync(join(RUN_DIR, "scripts", "card-builder.mjs"), [
     "// Stand-in: runs the real Card Builder tool, with file arguments read from here.",
@@ -154,13 +157,14 @@ function runClaude(prompt) {
       "--setting-sources", "project",
       "--strict-mcp-config",
       // It may run the Card Builder tool (which makes drafts and never sends),
+      // hand the openers to the opener-judge agent (step 10b; Read only),
       // read this folder, search and read the web, and write its files in
       // ./work (WORK_NOTE tells it so). Everything else is refused,
       // not asked about.
       // File writes are governed by Edit(path) rules (they cover Write too): a
       // Write(path) rule is ignored, and disallowing Edit blocked every write,
       // so no batch could even open its JSON file (found 2026-11-17).
-      "--allowedTools", "Bash(node scripts/card-builder.mjs:*) Read(./**) Edit(./work/**) WebFetch WebSearch",
+      "--allowedTools", "Bash(node scripts/card-builder.mjs:*) Read(./**) Edit(./work/**) WebFetch WebSearch Agent(opener-judge)",
       "--disallowedTools", "NotebookEdit Grep Glob Bash(git:*) Bash(curl:*) Bash(rm:*)",
     ], {
       cwd: RUN_DIR,

@@ -34,7 +34,7 @@ const WRITTEN = {
   call_opener: "Hi Dana, it's Menash, I sent you the card. With the open house at 88 Hicks on Sunday, do you want everyone who walks in to tap it?",
   voicemail: "Hi Dana, it's Menash from SwiftCard. I counted 11 of your 14 agents giving out their own cell. I made you a card that keeps those contacts with Harbor. Text me back when you have two minutes.",
   nudge_no_view: "Dana, the card I made for Harbor is still up. Worth 20 seconds before Sunday's open house: {link}",
-  nudge_viewed: "Dana, saw you opened the card. Tried you just now. Is later today or tomorrow morning better for 5 minutes on 14 Garden Pl?",
+  nudge_viewed: "Dana, I tried you earlier about the card. Is later today or tomorrow morning better for 5 minutes on 14 Garden Pl?",
   uses: { first_text: 0, first_text_b: 2, link_text: 2, email_body: 1, call_opener: 0, voicemail: 2, nudge_no_view: 0, nudge_viewed: 1 },
 };
 const outreach = (over: Record<string, unknown> = {}): Outreach => readOutreach({ ...WRITTEN, ...over })!;
