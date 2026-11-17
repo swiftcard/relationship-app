@@ -10,15 +10,16 @@ import type { BatchProgress } from "@/lib/card-builder-jobs/jobs";
 
 // ── Card Builder: New batch (server component, no data loading) ─────────────
 // Owner, 2026-11-16: "enter a target or a CSV and a count (up to 100), then
-// run now or run overnight". Since 2026-11-16 the server builds it: one job
-// per prospect, worked every 5 minutes (lib/card-builder-jobs); drafts land
-// in Approve as each is done. The Mac only sends what the owner approves.
+// run now or run overnight". Mac first: the owner's Mac builds it for free
+// while it is on; otherwise the server does, one job per prospect every 5
+// minutes (lib/card-builder-jobs). Drafts land in Approve as each is done.
 // Prospects with no mobile number or nothing specific to say are flagged in
 // the batch's list, never padded.
 
 const DONE: Record<string, string> = {
-  now: "Batch started. It runs on the server within 5 minutes, and drafts appear in Approve as each one is finished.",
-  tonight: "Batch set for tonight. It starts at 11pm and every prospect is waiting in Approve by morning; you get one push when it's done.",
+  now_mac: "Batch started on your Mac, free. Drafts appear in Approve as each one is finished. If the Mac goes to sleep, the server finishes the rest.",
+  now: "Your Mac is off, so this batch runs on the server (paid per card) within 5 minutes. Drafts appear in Approve as each one is finished.",
+  tonight: "Batch set for tonight. At 11pm it runs on your Mac if the Mac is on (free), otherwise on the server, and every prospect is waiting in Approve by morning; you get one push when it's done.",
   canceled: "Batch taken back.",
 };
 
@@ -26,7 +27,7 @@ const input = "sc-field w-full px-3 py-2";
 
 function statusOf(b: Batch, now: number): { tone: "good" | "warn" | "neutral" | "tint"; text: string } {
   if (b.status === "finished") return { tone: "good", text: "Finished" };
-  if (b.status === "running") return { tone: "tint", text: "Running" };
+  if (b.status === "running") return { tone: "tint", text: b.engine === "mac" ? "Running on your Mac" : "Running on the server" };
   return b.run_after && Date.parse(b.run_after) > now ? { tone: "neutral", text: `Starts ${fmtDateTime(b.run_after)}` } : { tone: "tint", text: "Starting" };
 }
 
@@ -47,7 +48,7 @@ export default function BatchView({ batches, mac, now, done, error, progress = {
       {done && DONE[done] && <p className="adm-callout-good sc-t-subhead rounded-xl px-4 py-3" role="status">{DONE[done]}</p>}
       {error && <p className="adm-callout-danger sc-t-subhead rounded-xl px-4 py-3" role="alert">{error}</p>}
       <p className={`${on ? "adm-callout-good" : "adm-callout-warn"} sc-t-footnote rounded-xl px-3 py-2`} data-mac>
-        {on ? <>Your Mac is on, ready to send what you approve{mac.note ? `: ${mac.note}` : "."}</> : <>Your Mac hasn&apos;t checked in{mac.at ? ` since ${timeAgo(mac.at, now)}` : " yet"}. Batches build without it; it&apos;s only needed to send the texts you approve (setup steps in the Card Builder Mac guide).</>}
+        {on ? <>Your Mac is on: batches build on it for free, and it sends what you approve{mac.note ? `: ${mac.note}` : "."}</> : <>Your Mac hasn&apos;t checked in{mac.at ? ` since ${timeAgo(mac.at, now)}` : " yet"}. Batches build on the server meanwhile (paid per card); while the Mac is on they build on it for free, and it sends the texts you approve (setup steps in the Card Builder Mac guide).</>}
       </p>
 
       <Section title="Who to find">
