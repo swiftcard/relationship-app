@@ -17,6 +17,21 @@ import Anthropic from "@anthropic-ai/sdk";
 export const MODEL = "claude-opus-5-5";
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
+// The models a job may be pinned to (job.data.model), to compare what a card
+// costs and how good it is. Anything else means the default above.
+export const MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"] as const;
+export type ModelId = (typeof MODELS)[number];
+export const modelOf = (v: unknown): ModelId => ((MODELS as readonly string[]).includes(v as string) ? (v as ModelId) : MODEL);
+
+/** List prices, dollars per million tokens (input, output, cache read, 5-minute cache write). */
+const PRICES: Record<ModelId, [number, number, number, number]> = {
+  "claude-opus-5-5": [4, 20, 0.2, 5],
+  "claude-sonnet-5-5": [2, 10, 0.1, 2.5],
+  // Haiku 5.5 is $0.10/$0.50 up to a 100K-token prompt and $0.50/$2.50 above;
+  // research prompts carry whole web pages, so the higher tier (an upper bound).
+  "claude-haiku-5-5": [0.5, 2.5, 0.05, 0.625],
+};
+
 export function hasKey(): boolean {
   return !!(process.env.CREW_ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY);
 }
@@ -52,8 +67,11 @@ const addUsage = (a: Usage, u: Anthropic.Beta.Messages.BetaUsage | undefined): U
 });
 export const NO_USAGE: Usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, searches: 0, fetches: 0 };
 
-/** Dollars, at Opus 5.5 list prices plus $10 per 1,000 searches. */
-export const dollarsOf = (u: Usage) => (u.input * 4 + u.output * 20 + u.cacheRead * 0.2 + u.cacheWrite * 5) / 1e6 + u.searches * 0.01;
+/** Dollars, at the model's list prices plus $10 per 1,000 searches. */
+export const dollarsOf = (u: Usage, model: ModelId = MODEL) => {
+  const [i, o, r, w] = PRICES[model];
+  return (u.input * i + u.output * o + u.cacheRead * r + u.cacheWrite * w) / 1e6 + u.searches * 0.01;
+};
 
 /** The answer: the text after the last tool block (web search narrates in between). */
 function finalText(content: Anthropic.Beta.Messages.BetaContentBlock[]): string {
@@ -74,7 +92,7 @@ export function jsonIn(text: string): Record<string, unknown> | null {
   }
 }
 
-export type Conversation = { messages: Anthropic.Beta.Messages.BetaMessageParam[]; usage: Usage };
+export type Conversation = { messages: Anthropic.Beta.Messages.BetaMessageParam[]; usage: Usage; model?: ModelId };
 
 /**
  * One turn of a conversation, resumed through pause_turn (the server's own
@@ -85,18 +103,23 @@ export async function turn(convo: Conversation, opts: {
   system: string; web: boolean; effort: "low" | "medium" | "high"; signal: AbortSignal; maxTokens?: number;
   schema?: Record<string, unknown>;
 }): Promise<string> {
-  const tools: Anthropic.Beta.Messages.BetaToolUnion[] = opts.web
+  const model = convo.model ?? MODEL;
+  const haiku = model === "claude-haiku-5-5";
+  // Haiku has the basic web tools (no dynamic filtering) and no server-side fallback.
+  const tools: Anthropic.Beta.Messages.BetaToolUnion[] = !opts.web ? [] : haiku
     ? [
+        { type: "web_search_20250305", name: "web_search", max_uses: 15 },
+        { type: "web_fetch_20250910", name: "web_fetch", max_uses: 25, max_content_tokens: 20_000 },
+      ]
+    : [
         { type: "web_search_20260209", name: "web_search", max_uses: 15 },
         { type: "web_fetch_20260209", name: "web_fetch", max_uses: 25, max_content_tokens: 20_000 },
-      ]
-    : [];
+      ];
   for (let resumes = 0; ; resumes++) {
     const stream = api().beta.messages.stream({
-      model: MODEL,
+      model,
       max_tokens: opts.maxTokens ?? 32_000,
-      betas: [FALLBACK_BETA],
-      fallbacks: "default",
+      ...(model === "claude-opus-5-5" ? { betas: [FALLBACK_BETA], fallbacks: "default" as const } : {}),
       system: [{ type: "text", text: opts.system, cache_control: { type: "ephemeral" } }],
       messages: convo.messages,
       thinking: { type: "adaptive" },
