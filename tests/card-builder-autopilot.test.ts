@@ -139,7 +139,8 @@ describe("Mac first: free on the Mac while it's on, the server only when it isn'
 describe("what a server card costs, by model", () => {
   const u = { ...NO_USAGE, input: 1_000_000, output: 1_000_000 };
   it("prices Opus 5.5, Sonnet 5.5 and Haiku 5.5 at their list prices", () => {
-    expect(dollarsOf(u)).toBeCloseTo(24);
+    expect(dollarsOf(u, "claude-opus-5-5")).toBeCloseTo(24);
+    expect(dollarsOf(u)).toBeCloseTo(12); // the default is Sonnet
     expect(dollarsOf(u, "claude-sonnet-5-5")).toBeCloseTo(12);
     expect(dollarsOf(u, "claude-haiku-5-5")).toBeCloseTo(3);
   });
@@ -147,5 +148,8 @@ describe("what a server card costs, by model", () => {
     expect(modelOf("claude-sonnet-5-5")).toBe("claude-sonnet-5-5");
     expect(modelOf("gpt-4")).toBe(MODEL);
     expect(modelOf(undefined)).toBe(MODEL);
+    // The server builds on Sonnet unless a job is pinned (owner's pick, 2026-11-17).
+    expect(MODEL).toBe("claude-sonnet-5-5");
+    expect(modelOf("claude-opus-5-5")).toBe("claude-opus-5-5");
   });
 });
