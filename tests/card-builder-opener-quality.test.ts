@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { openerResults, openerStats, FEW_SENDS, type MessageEvent } from "@/lib/prospect-preview/learn";
+import { messageStatLabel, openerResults, openerStats, FEW_SENDS, type MessageEvent } from "@/lib/prospect-preview/learn";
 import { checkOpeners, checkOpenerText, openerFacts, openerSentVariant, openerStatKey, openerStatLabel, openerText, rankOpeners, readOpeners, revealsOpen, type OpenerCandidate } from "@/lib/prospect-preview/opener";
-import { applyJudge, judgeMessage, judgeOpeners, judgeOrder, readJudgeVerdict } from "@/lib/prospect-preview/opener-judge";
+import { applyJudge, judgeMessage, judgeOpeners, judgeOrder, JUDGE_MAX_TOKENS, readJudgeInFile, readJudgeVerdict } from "@/lib/prospect-preview/opener-judge";
 import { checkOutreach, readOutreach, REVEALS_OPEN_KEYS } from "@/lib/prospect-preview/outreach";
 import type { PreviewListRow, ProspectPreview, Specific } from "@/lib/prospect-preview/types";
 
@@ -134,7 +134,7 @@ describe("1. an independent judge picks the default", () => {
     expect(build).toContain("`opener-judge` agent");
     expect(build.indexOf("judge-input")).toBeLessThan(build.indexOf("set-openers <id> <file.json>"));
     const tool = code("tests/tools/card-builder.tool.ts");
-    expect(tool).toMatch(/readJudgeVerdict\(raw\.judge/);
+    expect(tool).toMatch(/readJudgeInFile\(raw\.judge/);
     expect(tool).toMatch(/judgeMessage\(openerFacts\(p\)/);
     // The Mac's batch runs can reach that one agent.
     const mac = read("scripts/card-builder-mac/agent.mjs");
@@ -249,5 +249,50 @@ describe("4. nothing after the card says 'saw you opened it'", () => {
     expect(build).toMatch(/\*\*Never say or hint that you saw them open it\*\*/);
     expect(build).not.toMatch(/"nudge_viewed": "[^"]*just now/);
     for (const m of build.matchAll(/"(nudge_viewed|nudge_no_view|call_opener|voicemail)": "([^"]*)"/g)) expect(revealsOpen(m[2]), m[1]).toBe(false);
+  });
+});
+
+// ── Follow-up fixes (owner, 2026-11-17) ─────────────────────────────────────
+
+describe("follow-up: the judge can be unavailable on the Mac without losing the prospect", () => {
+  it("set-openers takes the agent's ranking, or { unavailable } alone, and refuses anything else", () => {
+    const shown = judgeOrder(TEXTS);
+    const ranking = shown.map((_, n) => ({ n: n + 1, reason: `r${n}` }));
+    expect(readJudgeInFile({ ranking }, TEXTS)).toHaveProperty("verdict");
+    expect(readJudgeInFile({ unavailable: "  agent timed out \n twice " }, TEXTS)).toEqual({ unavailable: "agent timed out twice" });
+    expect(readJudgeInFile(undefined, TEXTS)).toBeNull();
+    expect(readJudgeInFile({}, TEXTS)).toBeNull();
+    expect(readJudgeInFile({ unavailable: "   " }, TEXTS)).toBeNull();
+    expect(readJudgeInFile({ unavailable: 1 }, TEXTS)).toBeNull();
+    // A broken ranking can't slip through by also saying "unavailable".
+    expect(readJudgeInFile({ ranking: ranking.slice(1), unavailable: "x" }, TEXTS)).toBeNull();
+    expect(readJudgeInFile({ ranking: ranking.slice(1) }, TEXTS)).toBeNull();
+  });
+
+  it("the tool saves the writer's own ranking when the judge was unavailable, and build-card says when that's allowed", () => {
+    const tool = readFileSync("tests/tools/card-builder.tool.ts", "utf8");
+    expect(tool).toContain("readJudgeInFile(raw.judge");
+    expect(tool).toContain('{ ...ranked, picked_by: "writer" as const }');
+    const cmd = readFileSync(".claude/commands/build-card.md", "utf8");
+    expect(cmd).toMatch(/failed twice[\s\S]{0,200}"unavailable"/);
+  });
+});
+
+describe("follow-up: the server gives the judge room to think", () => {
+  it("the judge's turn has 16,000 tokens, not 4,000", () => {
+    expect(JUDGE_MAX_TOKENS).toBeGreaterThanOrEqual(16_000);
+    const jobs = readFileSync("src/lib/card-builder-jobs/jobs.ts", "utf8");
+    expect(jobs).toContain("maxTokens: JUDGE_MAX_TOKENS");
+    expect(jobs).not.toContain("maxTokens: 4000");
+  });
+});
+
+describe("follow-up: the per-message table names an opener's hook, not its raw variant", () => {
+  it("opener rows read as the hook or 'your edit'; the first text keeps version A or B", () => {
+    expect(messageStatLabel("opener", "listing")).toBe("Opening text (with the link), a listing, by street");
+    expect(messageStatLabel("opener", "edit:listing")).toBe("Opening text (with the link), your edit");
+    expect(messageStatLabel("ask", "b")).toBe("First text, version B");
+    expect(messageStatLabel("email", null)).toBe("Email");
+    expect(readFileSync("src/app/admin/card-builder/CardBuilderView.tsx", "utf8")).toContain("messageStatLabel(s.message, s.variant)");
   });
 });

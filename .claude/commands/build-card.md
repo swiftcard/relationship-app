@@ -465,6 +465,12 @@ doesn't.
    you must, run `judge-input` and the agent again). Then save with
    `node scripts/card-builder.mjs set-openers <id> <file.json>`.
 
+   Only if the `opener-judge` agent has failed twice (an error, or no
+   readable answer both times), put `"judge": { "unavailable": "<why>" }` in
+   the file instead. Never write a ranking yourself. `set-openers` then saves
+   your own best as the default, Approve says the judge couldn't run, and you
+   say why in the reply.
+
    The tool refuses a set with any rule broken, including **any number or
    name that isn't in the verified facts**, and lists what to fix, and refuses
    it without the judge's ranking. The judge's first choice that passes every

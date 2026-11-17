@@ -4,7 +4,7 @@ import { pullBrandColors } from "@/lib/prospect-preview/colors-server";
 import { createDraftFrom, extrasFrom, fieldsFrom, standing, type Json } from "@/lib/prospect-preview/draft-core";
 import { styleNotes, type BatchCandidate } from "@/lib/prospect-preview/learn";
 import { checkOpeners, openerFacts, rankOpeners, readOpeners } from "@/lib/prospect-preview/opener";
-import { judgeOpeners } from "@/lib/prospect-preview/opener-judge";
+import { judgeOpeners, JUDGE_MAX_TOKENS } from "@/lib/prospect-preview/opener-judge";
 import { loadOpenerResults } from "@/lib/prospect-preview/opener-results";
 import { checkOutreach, readOutreach, staleNumbers } from "@/lib/prospect-preview/outreach";
 import { isVerified } from "@/lib/prospect-preview/quality";
@@ -463,7 +463,7 @@ async function writeOpener(job: Job, signal: AbortSignal): Promise<StepOut> {
             // The independent pick: a separate pass that sees only the facts and the texts (opener-judge.ts).
             const judged = await judgeOpeners(ranked, { owner_name: p.owner_name, facts: openerFacts(p), stale }, async (message, retry) => {
               say(judgeConvo, retry ? "That couldn't be read. Answer again with only the JSON object, ranking every text exactly once." : message);
-              return turn(judgeConvo, { system: agentText("opener-judge"), web: false, effort: "medium", signal, maxTokens: 4000 });
+              return turn(judgeConvo, { system: agentText("opener-judge"), web: false, effort: "medium", signal, maxTokens: JUDGE_MAX_TOKENS });
             }, jsonIn);
             judgeNote = judged.note;
             if (await setOpeners(p.id, judged.openers)) savedOpeners = true;

@@ -24,6 +24,13 @@ export const STAT_LABELS: Record<string, string> = {
   linkedin_note: "LinkedIn note", linkedin_dm: "LinkedIn message",
 };
 
+/** A row's name in the per-message table: an opener's variant is its hook or "Your edit"; the first text's is version A or B. */
+export function messageStatLabel(message: string, variant: string | null): string {
+  const name = STAT_LABELS[message] ?? message;
+  if (!variant) return name;
+  return message === "opener" ? `${name}, ${openerStatLabel(openerStatKey(variant)).toLowerCase()}` : `${name}, version ${variant.toUpperCase()}`;
+}
+
 /**
  * Per message (and per version of the first text): how many prospects it went
  * to, and of those how many then really viewed their card, were reached on a

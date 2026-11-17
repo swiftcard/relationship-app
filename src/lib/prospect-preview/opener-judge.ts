@@ -36,6 +36,13 @@ export function judgeMessage(facts: string[], texts: string[]): string {
   ].join("\n");
 }
 
+/**
+ * How much room the server gives the judge's answer. Adaptive thinking counts
+ * toward it, and running out silently falls back to the writer's pick, so it
+ * is generous: only what is used is paid for.
+ */
+export const JUDGE_MAX_TOKENS = 16_000;
+
 export type JudgeVerdict = {
   /** Candidate positions, best first. */
   order: number[];
@@ -99,4 +106,20 @@ export async function judgeOpeners(o: Openers, ctx: OpenerContext, ask: (message
     }
   }
   return { openers: { ...o, picked_by: "writer" }, note: "the judge's answer couldn't be read twice; the writer's own best is the default" };
+}
+
+/**
+ * What /build-card's step 10b put in the openers file as "judge": the agent's
+ * ranking, or, only when the opener-judge agent couldn't be had (two failed
+ * tries), `{ "unavailable": "<why>" }`, so a Mac batch never loses a prospect
+ * over the second pass. Anything else is null: set-openers refuses it.
+ */
+export type JudgeInFile = { verdict: JudgeVerdict } | { unavailable: string };
+export function readJudgeInFile(v: unknown, texts: string[]): JudgeInFile | null {
+  const verdict = readJudgeVerdict(v, texts);
+  if (verdict) return { verdict };
+  const r = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+  if (!r || Object.keys(r).length !== 1 || typeof r.unavailable !== "string") return null;
+  const why = r.unavailable.replace(/\s+/g, " ").trim().slice(0, 200);
+  return why ? { unavailable: why } : null;
 }

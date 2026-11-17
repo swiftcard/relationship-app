@@ -23,7 +23,7 @@ import { createDraftFrom, extrasFrom, fieldsFrom, links, standing, type Json } f
 import { MAX_BATCH } from "@/lib/prospect-preview/batch-input";
 import { claimBatch, readCandidates, setCandidates } from "@/lib/prospect-preview/desk";
 import { checkOpeners, openerFacts, openerMessage, openerText, rankOpeners, readOpeners, scoreTotal, OPENER_HOOK_LABELS } from "@/lib/prospect-preview/opener";
-import { applyJudge, judgeMessage, readJudgeVerdict } from "@/lib/prospect-preview/opener-judge";
+import { applyJudge, judgeMessage, readJudgeInFile } from "@/lib/prospect-preview/opener-judge";
 import { lookupPhoneKind, nanp } from "@/lib/prospect-preview/phone-type";
 
 // ── Card Builder's command-line tool ────────────────────────────────────────
@@ -503,14 +503,17 @@ async function setOpenersFor(id: string, file: string) {
   const problems = checkOpeners(ranked, p, staleNumbers(p));
   if (problems.length) throw new Error(`Not saved. ${problems.join(" ")}`);
   // Step 10b: the independent judge's ranking (the opener-judge agent's JSON, as "judge") sets the default.
-  const verdict = readJudgeVerdict(raw.judge, ranked.candidates.map((c) => c.text));
-  if (!verdict) throw new Error("Not saved: no usable \"judge\" in the file. Run step 10b: `judge-input <id> <file.json>`, give its prompt to the opener-judge agent, and put its JSON answer ({ \"ranking\": [ { \"n\", \"reason\" } ] }, every text ranked once) in the file as \"judge\". If you changed any text since, run judge-input again.");
-  const openers = applyJudge(ranked, verdict, { owner_name: p.owner_name, facts: openerFacts(p), stale: staleNumbers(p) });
+  // Or, only when the agent couldn't be had (two failed tries), { "unavailable": "<why>" }: the writer's own ranking is saved, and says so.
+  const judged = readJudgeInFile(raw.judge, ranked.candidates.map((c) => c.text));
+  if (!judged) throw new Error("Not saved: no usable \"judge\" in the file. Run step 10b: `judge-input <id> <file.json>`, give its prompt to the opener-judge agent, and put its JSON answer ({ \"ranking\": [ { \"n\", \"reason\" } ] }, every text ranked once) in the file as \"judge\". If you changed any text since, run judge-input again. Only if the agent failed twice: \"judge\": { \"unavailable\": \"<why>\" }.");
+  const openers = "verdict" in judged
+    ? applyJudge(ranked, judged.verdict, { owner_name: p.owner_name, facts: openerFacts(p), stale: staleNumbers(p) })
+    : { ...ranked, picked_by: "writer" as const };
   if (!(await setOpeners(id, openers))) throw new Error("That didn't save.");
   const link = `${APP_URL}/p/${p.slug}`;
   return {
-    ok: true, id, default: openerMessage(openerText(openers)!, link), picked_by: openers.picked_by,
-    ranked: openers.candidates.map((c, i) => ({ position: i, hook: c.hook, judge_rank: c.judge?.rank ?? null, judge_reason: c.judge?.reason ?? null, total: scoreTotal(c), ...c.scores, default: i === openers.pick, alternate: i === openers.alt, text: c.text, characters: c.text.length })).sort((a, b) => (a.judge_rank ?? 99) - (b.judge_rank ?? 99)),
+    ok: true, id, default: openerMessage(openerText(openers)!, link), picked_by: openers.picked_by, ...("unavailable" in judged ? { judge_unavailable: judged.unavailable } : {}),
+    ranked: openers.candidates.map((c, i) => ({ position: i, hook: c.hook, judge_rank: c.judge?.rank ?? null, judge_reason: c.judge?.reason ?? null, total: scoreTotal(c), ...c.scores, default: i === openers.pick, alternate: i === openers.alt, text: c.text, characters: c.text.length })).sort((a, b) => (a.judge_rank ?? 99) - (b.judge_rank ?? 99) || b.total - a.total),
   };
 }
 
