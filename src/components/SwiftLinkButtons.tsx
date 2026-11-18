@@ -19,7 +19,8 @@ import { videoThumbnail, videoEmbed } from "@/lib/video";
 import { triggerSignupNudge } from "@/lib/nudge";
 import { trackLinkClick } from "@/lib/track-link-click";
 import { layoutTiles, resolveRowStyle, tileMedia, type SizedLink } from "@/lib/swiftlink-tiles";
-import { faviconFor } from "@/lib/link-brand";
+import { contactKind, faviconFor, fullHref, opensNewTab } from "@/lib/link-brand";
+import ContactGlyph from "@/components/ContactGlyph";
 import { fetchLinkPreview, type LinkPreview as Preview } from "@/lib/link-preview-client";
 
 // Fallback gradients for links with no preview image — picked by index so
@@ -78,13 +79,6 @@ function pickPicture(candidates: (string | null | undefined)[], failed: Record<s
     if (stage === 1) return { src: `/api/img-proxy?url=${encodeURIComponent(c)}&w=1200`, key: c };
   }
   return null;
-}
-
-function fullHref(url: string) {
-  const v = (url || "").trim();
-  if (!v) return "#";
-  if (/^(https?:|mailto:|tel:)/i.test(v)) return v;
-  return `https://${v.replace(/^\/+/, "")}`;
 }
 
 // Perceived lightness of the button color — a custom light button needs dark
@@ -392,7 +386,7 @@ export default function SwiftLinkButtons({
             <a
               key={i}
               href={href}
-              target="_blank"
+              target={opensNewTab(href) ? "_blank" : undefined}
               rel="noopener noreferrer"
               onClick={() => {
                 // No preventDefault anywhere near this: the navigation is the
@@ -409,6 +403,8 @@ export default function SwiftLinkButtons({
               >
                 {iconShown ? null : link.emoji ? (
                   <span className="text-[1rem] leading-none">{link.emoji}</span>
+                ) : contactKind(href) ? (
+                  <ContactGlyph kind={contactKind(href)!} color={labelColor} opacity={0.7} />
                 ) : (
                   <svg viewBox="0 0 24 24" fill="none" stroke={labelColor} strokeOpacity={0.7} strokeWidth={2} className="w-4 h-4">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
@@ -609,7 +605,7 @@ export default function SwiftLinkButtons({
           <a
             key={i}
             href={href}
-            target="_blank"
+            target={opensNewTab(href) ? "_blank" : undefined}
             rel="noopener noreferrer"
             onClick={() => {
               trackLinkClick({ username: trackFor, surface: "links", url: href, source: trackSource, label: link.label, suppress: suppressTracking });

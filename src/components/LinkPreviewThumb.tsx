@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { faviconFor } from "@/lib/link-brand";
+import { faviconFor, fullHref } from "@/lib/link-brand";
 import { videoThumbnail } from "@/lib/video";
 import { fetchLinkPreview, type LinkPreview } from "@/lib/link-preview-client";
 
@@ -13,21 +13,17 @@ import { fetchLinkPreview, type LinkPreview } from "@/lib/link-preview-client";
 // picture through the image proxy → the site's logo → a link glyph, so a row
 // never looks empty or broken.
 
-function fullHref(url: string) {
-  const v = (url || "").trim();
-  if (!v) return "";
-  if (/^https?:\/\//i.test(v)) return v;
-  return `https://${v.replace(/^\/+/, "")}`;
-}
-
 export default function LinkPreviewThumb({ url }: { url: string }) {
   const [pv, setPv] = useState<LinkPreview | null>(null);
   // 0 = the picture as-is, 1 = through /api/img-proxy, 2 = no picture.
   const [imgStage, setImgStage] = useState<0 | 1 | 2>(0);
   const [iconFailed, setIconFailed] = useState(false);
 
-  const href = fullHref(url);
-  const video = videoThumbnail(href);
+  // Empty stays "" here (the shared rule gives "#"), and only a web page is
+  // looked up: a mailto:/tel:/sms: link has no page to preview.
+  const shared = (url || "").trim() ? fullHref(url) : "";
+  const href = /^https?:\/\//i.test(shared) ? shared : "";
+  const video = href ? videoThumbnail(href) : null;
 
   useEffect(() => {
     // Clear the PREVIOUS url's preview before fetching the new one. Without

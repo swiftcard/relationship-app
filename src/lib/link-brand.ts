@@ -3,10 +3,12 @@
 // Pure and dependency-free so it can be unit-tested and used from both a server
 // component and a client one.
 
-/** Normalize a possibly-schemeless user-entered URL into something parseable. */
+/** Normalize a possibly-schemeless user-entered URL into something parseable.
+ *  Null for a contact link (mailto:/tel:/sms: or a bare email address): it has
+ *  no site, so no host line, no site logo and no monogram is read off it. */
 function toUrl(raw: string): URL | null {
   const v = (raw || "").trim();
-  if (!v) return null;
+  if (!v || contactKind(v)) return null;
   const withScheme = /^(https?:)?\/\//i.test(v) ? v.replace(/^\/\//, "https://") : `https://${v.replace(/^[a-z][a-z0-9+.-]*:\/*/i, "")}`;
   try {
     return new URL(withScheme);
@@ -120,9 +122,59 @@ export function brandBackground(label: string, color?: string): string {
   return color || "rgba(255,255,255,0.1)";
 }
 
-/** Normalize a user-entered link for use as an href. Matches the existing rule. */
+const CONTACT_SCHEME = /^(mailto|tel|sms):/i;
+// One @, a dot in the domain, no spaces, no slash: "na276@cornell.edu".
+const BARE_EMAIL = /^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/;
+
+/**
+ * The ONE rule for turning an owner-typed link into an href, used by the card
+ * page's link rows, the Swift Links page, the editor's thumbnails and the
+ * vCard. Until 2026-11-18 it kept only http(s), so an "Email me" button saved
+ * as mailto:… or as a bare address became https://na276@cornell.edu, a dead
+ * page.
+ *
+ *   ""                      → "#"
+ *   http(s)://…             → unchanged
+ *   mailto:/tel:/sms:…      → unchanged (trimmed)
+ *   a bare email address    → "mailto:" + it
+ *   anything else           → "https://" + it, any leading scheme or slashes
+ *                             stripped, so "javascript:alert(1)" can never
+ *                             come back as a javascript: href
+ */
 export function fullHref(url: string): string {
   const v = (url || "").trim();
   if (!v) return "#";
-  return /^https?:\/\//i.test(v) ? v : `https://${v.replace(/^[a-z][a-z0-9+.-]*:\/*/i, "")}`;
+  if (/^https?:\/\//i.test(v)) return v;
+  if (CONTACT_SCHEME.test(v)) return v;
+  if (BARE_EMAIL.test(v)) return `mailto:${v}`;
+  return `https://${v.replace(/^[a-z][a-z0-9+.-]*:\/*/i, "").replace(/^\/+/, "")}`;
+}
+
+export type ContactKind = "email" | "phone" | "text";
+
+/** What a contact link does, or null for a web link. Takes the raw value or
+ *  its fullHref. */
+export function contactKind(url: string): ContactKind | null {
+  const v = (url || "").trim();
+  const scheme = CONTACT_SCHEME.exec(v)?.[1]?.toLowerCase();
+  if (scheme) return scheme === "mailto" ? "email" : scheme === "tel" ? "phone" : "text";
+  return !/^https?:\/\//i.test(v) && BARE_EMAIL.test(v) ? "email" : null;
+}
+
+/** The address a contact link goes to, as a person reads it: the email
+ *  address or the number, without the scheme or any ?subject=. */
+export function contactAddress(url: string): string {
+  const href = fullHref(url);
+  const rest = href.replace(CONTACT_SCHEME, "").split("?")[0];
+  try {
+    return decodeURIComponent(rest);
+  } catch {
+    return rest;
+  }
+}
+
+/** True for a link that should open in a new tab: a web page. A mailto:/tel:/
+ *  sms: link opens an app; target=_blank opened a blank tab first on iPhone. */
+export function opensNewTab(href: string): boolean {
+  return /^https?:\/\//i.test(href);
 }

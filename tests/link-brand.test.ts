@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   hostLabel, faviconFor, monogramFor, monogramTint,
-  fullHref, brandBackground, iconHost,
+  fullHref, brandBackground, iconHost, contactKind, contactAddress, opensNewTab,
 } from "@/lib/link-brand";
 
 const root = process.cwd();
@@ -125,16 +125,78 @@ describe("iconHost", () => {
   });
 });
 
-describe("fullHref matches the rule the old component used", () => {
-  it("leaves absolute URLs alone", () => {
-    expect(fullHref("https://x.test/a")).toBe("https://x.test/a");
+describe("fullHref: the one rule for a link button's href", () => {
+  it("leaves http(s) alone, trimmed", () => {
+    expect(fullHref("https://x.com")).toBe("https://x.com");
+    expect(fullHref("  https://x.com  ")).toBe("https://x.com");
+    expect(fullHref("http://x.test/a")).toBe("http://x.test/a");
   });
   it("adds https to a bare domain", () => {
+    expect(fullHref("x.com")).toBe("https://x.com");
     expect(fullHref("x.test/a")).toBe("https://x.test/a");
+    expect(fullHref("//x.com")).toBe("https://x.com");
   });
-  it("neutralises a hostile scheme", () => {
-    expect(fullHref("javascript:alert(1)")).toBe("https://alert(1)");
+  it("keeps email, phone and text links (the dead https://na276@cornell.edu bug)", () => {
+    expect(fullHref("mailto:a@b.edu")).toBe("mailto:a@b.edu");
+    expect(fullHref(" mailto:na276@cornell.edu ")).toBe("mailto:na276@cornell.edu");
+    expect(fullHref("tel:+15551234567")).toBe("tel:+15551234567");
+    expect(fullHref("sms:+15551234567")).toBe("sms:+15551234567");
+  });
+  it("turns a bare email address into mailto:", () => {
+    expect(fullHref("a@b.edu")).toBe("mailto:a@b.edu");
+    expect(fullHref("na276@cornell.edu")).toBe("mailto:na276@cornell.edu");
+  });
+  it("does not mistake a web path with an @ for an email", () => {
+    expect(fullHref("medium.com/@ann")).toBe("https://medium.com/@ann");
+    expect(fullHref("a b@c.com")).toBe("https://a b@c.com");
+  });
+  it("empty is #", () => {
     expect(fullHref("")).toBe("#");
+    expect(fullHref("   ")).toBe("#");
+  });
+  it("never returns a javascript: href: the scheme is stripped and https added", () => {
+    expect(fullHref("javascript:alert(1)")).toBe("https://alert(1)");
+    expect(fullHref("JavaScript://alert(1)")).not.toMatch(/^javascript:/i);
+    expect(fullHref("data:text/html,x")).not.toMatch(/^data:/i);
+  });
+});
+
+describe("contact links have no site", () => {
+  it("knows what each one does", () => {
+    expect(contactKind("mailto:a@b.edu")).toBe("email");
+    expect(contactKind("a@b.edu")).toBe("email");
+    expect(contactKind("tel:+15551234567")).toBe("phone");
+    expect(contactKind("sms:+15551234567")).toBe("text");
+    expect(contactKind("https://x.com")).toBeNull();
+    expect(contactKind("x.com")).toBeNull();
+    expect(contactKind("https://user@x.com")).toBeNull();
+  });
+  it("no site logo, no host, no ? monogram is read off them", () => {
+    for (const u of ["mailto:na276@cornell.edu", "na276@cornell.edu", "tel:+15551234567", "sms:+15551234567"]) {
+      expect(faviconFor(u)).toBeNull();
+      expect(hostLabel(u)).toBe("");
+    }
+  });
+  it("reads the address as a person would", () => {
+    expect(contactAddress("mailto:a@b.edu?subject=Hi")).toBe("a@b.edu");
+    expect(contactAddress("a@b.edu")).toBe("a@b.edu");
+    expect(contactAddress("tel:+15551234567")).toBe("+15551234567");
+  });
+  it("only a web page opens in a new tab", () => {
+    expect(opensNewTab("https://x.com")).toBe(true);
+    expect(opensNewTab("mailto:a@b.edu")).toBe(false);
+    expect(opensNewTab("tel:+15551234567")).toBe(false);
+    expect(opensNewTab("sms:+15551234567")).toBe(false);
+  });
+  it("the card rows and the Swift Links page use the shared rule and drop target for them", () => {
+    for (const f of ["src/components/CardActionLinks.tsx", "src/components/SwiftLinkButtons.tsx"]) {
+      const src = code(f);
+      expect(src).not.toMatch(/function fullHref/);
+      expect(src).not.toMatch(/target="_blank"/);
+      expect(src).toMatch(/opensNewTab\(/);
+    }
+    expect(code("src/components/LinkPreviewThumb.tsx")).not.toMatch(/function fullHref/);
+    expect(code("src/components/LinkMark.tsx")).toMatch(/contactKind\(url\)/);
   });
 });
 

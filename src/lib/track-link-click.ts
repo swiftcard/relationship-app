@@ -55,8 +55,9 @@ export function linkTarget(url: string): string | null {
   // turn a malformed or relative value ("not a url", "#", "/about") into OUR
   // hostname — so a broken link would be recorded as a tap on swiftcard.me,
   // which is worse than recording nothing. Every tracked anchor already carries
-  // an absolute href (fullHref in lib/link-brand normalises owner input to
-  // https://), so nothing legitimate is lost.
+  // an absolute href (fullHref in lib/link-brand turns owner input into an
+  // https:// address, or a mailto:/tel:/sms: one, which is matched above), so
+  // nothing legitimate is lost.
   if (!/^https?:\/\//i.test(raw)) return null;
   try {
     const u = new URL(raw);

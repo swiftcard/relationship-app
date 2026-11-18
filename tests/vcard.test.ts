@@ -222,6 +222,22 @@ describe("a saved contact carries everything the card holds", () => {
     expect(buildVCard(full)).not.toContain("X-SOCIALPROFILE");
   });
 
+  it("leaves email and phone link buttons out of the web links (they are not web pages)", () => {
+    const rows = namedRows(buildVCard({
+      ...full,
+      links: [
+        { label: "Email me", url: "mailto:na276@cornell.edu" },
+        { label: "Write", url: "na276@cornell.edu" },
+        { label: "Call", url: "tel:+15551234567" },
+        { label: "Text", url: "sms:+15551234567" },
+        { label: "Listings", url: "coastlinehomes.com/listings" },
+      ],
+    }));
+    for (const label of ["Email me", "Write", "Call", "Text"]) expect(rows[label]).toBeUndefined();
+    expect(rows.Listings).toBe("https://coastlinehomes.com/listings");
+    expect(JSON.stringify(rows)).not.toContain("https://na276@");
+  });
+
   it("carries the SwiftCard link so the card outlives the save", () => {
     // Without this the contact is a dead end: the design, Swift Links and
     // everything else on the card become unreachable once the sheet closes.

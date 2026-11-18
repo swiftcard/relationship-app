@@ -3,7 +3,7 @@
 import { triggerSignupNudge } from "@/lib/nudge";
 import { trackLinkClick } from "@/lib/track-link-click";
 import LinkMark from "@/components/LinkMark";
-import { fullHref } from "@/lib/link-brand";
+import { fullHref, opensNewTab } from "@/lib/link-brand";
 
 type CardLink = { emoji?: string; label: string; url: string; kind?: "link" | "header" };
 
@@ -71,9 +71,13 @@ export default function CardActionLinks({
         <a
           key={i}
           href={fullHref(l.url)}
-          target="_blank"
+          // A web page opens in a new tab; mailto:/tel:/sms: open the mail,
+          // phone or messages app, and target=_blank there first opened a
+          // blank tab on iPhone.
+          target={opensNewTab(fullHref(l.url)) ? "_blank" : undefined}
           rel="noopener noreferrer"
           onClick={() => {
+            // The same href the row opens, so a mailto: tap records as "email".
             trackLinkClick({ username: trackFor, surface: "card", url: fullHref(l.url), source: trackSource, label: l.label, suppress: suppressTracking });
             triggerSignupNudge("link_button");
           }}
