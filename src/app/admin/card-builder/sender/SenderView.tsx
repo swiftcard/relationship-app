@@ -69,6 +69,8 @@ export default function SenderView({ settings: s, mac, outbox, now, done }: { se
             <label className="block"><span className="sc-field-label">Gap, at least (minutes)</span><input name="gap_min" type="number" min={1} max={120} defaultValue={s.gap_min} className={input} /></label>
             <label className="block"><span className="sc-field-label">Gap, at most (minutes)</span><input name="gap_max" type="number" min={1} max={240} defaultValue={s.gap_max} className={input} /></label>
           </div>
+          <label className="block max-w-[14rem]" id="gv-cap"><span className="sc-field-label">Google Voice texts a day, at most</span><input name="gv_daily_cap" type="number" min={0} max={MAX_DAILY_CAP} defaultValue={s.gv_daily_cap} className={input} /></label>
+          <p className="sc-t-caption adm-muted">You send these yourself from the Send from Google Voice list; the count is shown at its top. Google can restrict a personal Voice number that texts a lot of new people.</p>
           <p className="sc-t-caption adm-muted">New York time. Each gap is a random length between the two. A number that turns out not to be on iMessage is skipped, never sent as a green text, and a reply of &ldquo;stop&rdquo; puts them on the do-not-contact list.</p>
           <button type="submit" className="sc-btn sc-btn-filled sc-btn-block">Save the rules</button>
         </form>

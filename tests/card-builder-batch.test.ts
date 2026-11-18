@@ -24,7 +24,7 @@ describe("a CSV of prospects", () => {
 describe("the New batch form", () => {
   const form = (v: Record<string, string>) => (k: string) => v[k] ?? null;
   it("a target and a count, now or tonight", () => {
-    expect(parseBatchForm(form({ target: "realtors in Great Neck", count: "40", when: "tonight" }), null)).toEqual({ ok: true, value: { label: "realtors in Great Neck", wanted: 40, kind: "tonight", rows: [] } });
+    expect(parseBatchForm(form({ target: "realtors in Great Neck", count: "40", when: "tonight" }), null)).toEqual({ ok: true, value: { label: "realtors in Great Neck", wanted: 40, kind: "tonight", rows: [], sendWith: "imessage" } });
   });
   it(`caps the count at ${MAX_BATCH}`, () => {
     const r = parseBatchForm(form({ target: "mortgage teams in Manhattan", count: "500" }), null);

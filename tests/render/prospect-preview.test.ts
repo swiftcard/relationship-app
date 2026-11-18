@@ -1092,3 +1092,118 @@ describe.each([390, 1280])("/admin/card-builder/approve with opening texts, at %
     await page.close();
   });
 });
+
+// ── Google Voice, sent by hand (owner, 2026-11-17) ──────────────────────────
+
+describe.each([390, 1280])("Google Voice on Approve and its own list, at %ipx", (width) => {
+  const OPENERS = {
+    candidates: [{ hook: "listing" as const, uses: 1, text: "Hey Dana, Menash here. Saw your listing on Garden Pl in Brooklyn Heights, so I made you a card that shows it off. It's yours if you want it:", scores: { specificity: 9, human: 8, curiosity: 9 } }],
+    pick: 0, alt: null, edited: null, written_at: "2026-11-16T12:00:00Z",
+  };
+  const id = (n: number) => `d${n}${n}${n}${n}${n}${n}${n}-2222-4333-8444-555555555555`;
+  const ROWS: PreviewListRow[] = [
+    row({ id: id(1), status: "live", owner_name: "Voice Val", ...SOLID, openers: OPENERS, phone_kind: "mobile", batch_id: "gv-batch", updated_at: "2026-11-10T16:00:00Z" }),
+    row({ id: id(2), status: "live", owner_name: "Messages Mo", ...SOLID, openers: OPENERS, phone_kind: "mobile", phone: "(212) 555-0102" }),
+    row({ id: id(3), status: "live", owner_name: "Green Gail", ...SOLID, openers: OPENERS, phone_kind: "mobile", phone: "(212) 555-0103", not_imessage_at: "2026-11-10T16:00:00Z" }),
+    row({ id: id(4), status: "live", owner_name: "Office Oz", ...SOLID, openers: OPENERS, phone_kind: "office", phone: "(212) 555-0104", batch_id: "gv-batch" }),
+    row({ id: id(5), status: "live", owner_name: "Stopped Stu", ...SOLID, openers: OPENERS, phone_kind: "mobile", phone: "(212) 555-0105", batch_id: "gv-batch" }),
+    row({ id: id(6), status: "live", owner_name: "Sent Sasha Featherstonehaugh-Montgomery", ...SOLID, openers: OPENERS, phone_kind: "mobile", phone: "(212) 555-0106", sent_at: "2026-11-11T14:00:00Z", sent_channel: "google_voice" }),
+  ];
+  const ctx = (capReached = false) => ({ batchSendWith: new Map([["gv-batch", "google_voice" as const]]), blocks: new Map([[id(5), "do_not_contact" as const]]), gvCapReached: capReached, gvToday: capReached ? 20 : 3, gvCap: 20 });
+
+  async function gvMarkup(capReached = false): Promise<string> {
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { createElement } = await import("react");
+    const { default: AdminShell } = await import("@/app/admin/AdminShell");
+    const { default: GoogleVoiceView } = await import("@/app/admin/card-builder/google-voice/GoogleVoiceView");
+    const view = createElement(GoogleVoiceView, { list: { ready: true, rows: ROWS }, appUrl: "https://swiftcard.me", now: NOW, done: null, error: null, ctx: ctx(capReached) });
+    return renderToStaticMarkup(createElement(AdminShell, { email: "hello@swiftcard.me", unread: 0 }, view));
+  }
+
+  it("Approve: Google Voice leads for a Google Voice batch and off-iMessage numbers, sits beside Messages otherwise, never on an office line", async () => {
+    const page = await open(width, await approveMarkup(ROWS, { ctx: ctx() }), adminCss);
+    const m = await page.evaluate((ids) => {
+      const vw = window.innerWidth;
+      const spill: string[] = [];
+      document.querySelectorAll("[data-approve-card], [data-approve-card] *:not([inert] *)").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && (r.right > vw + 0.5 || r.left < -0.5)) spill.push(`${el.tagName}.${String(el.className).slice(0, 50)}`);
+      });
+      const card = (i: number) => document.querySelector(`#p-${ids[i]}`) as HTMLElement;
+      const first = (i: number) => (card(i).querySelector("[data-send-opener] .grid > *") as HTMLElement | null)?.getAttribute("data-google-voice") ? "gv" : "phone";
+      const filled = (i: number, sel: string) => card(i).querySelector(sel)?.className.includes("sc-btn-filled") ?? null;
+      return {
+        spill, sideways: document.documentElement.scrollWidth > vw,
+        gv: [0, 1, 2, 3].map((i) => !!card(i).querySelector("[data-google-voice]")),
+        firsts: [0, 1, 2].map(first),
+        gvFilled: [filled(0, "[data-google-voice]"), filled(1, "[data-google-voice]"), filled(2, "[data-google-voice]")],
+        queue: [0, 1, 2].map((i) => !!card(i).querySelector("[data-queue]")),
+        gvHref: card(0).querySelector("[data-google-voice]")?.getAttribute("href"),
+        gvTarget: card(0).querySelector("[data-google-voice]")?.getAttribute("target"),
+        switchTo: [card(0).querySelector("[data-switch-way]")?.getAttribute("data-switch-way"), card(1).querySelector("[data-switch-way]")?.getAttribute("data-switch-way"), card(3).querySelector("[data-switch-way]")],
+        stopped: card(4).querySelector("[data-number-block]")?.getAttribute("data-number-block"),
+        stoppedButtons: card(4).querySelectorAll("[data-google-voice], [data-one-tap='opener'], [data-queue]").length,
+        flag: (card(2).querySelector("[data-phone-flag]") as HTMLElement | null)?.innerText ?? "",
+        label: (card(0).querySelector("[data-google-voice]") as HTMLElement).innerText,
+      };
+    }, [id(1), id(2), id(3), id(4), id(5)]);
+    expect(m.spill).toEqual([]);
+    expect(m.sideways).toBe(false);
+    expect(m.gv).toEqual([true, true, true, false]);
+    expect(m.firsts).toEqual(["gv", "phone", "gv"]);
+    expect(m.gvFilled).toEqual([true, false, true]);
+    // A Google Voice prospect is never offered the Mac's queue; an off-iMessage number isn't either.
+    expect(m.queue).toEqual([false, true, false]);
+    expect(m.gvHref).toBe("https://voice.google.com/u/0/messages?itemId=t.%2B12125550199");
+    expect(m.gvTarget).toBe("_blank");
+    expect(m.switchTo).toEqual(["imessage", "google_voice", null]);
+    expect(m.stopped).toBe("do_not_contact");
+    expect(m.stoppedButtons).toBe(0);
+    expect(m.flag).toMatch(/Send it from Google Voice/);
+    expect(m.label).toBe("Send from Google Voice");
+    await page.close();
+  });
+
+  it("the list: today's count against the cap, the warning, one tap each, and They said stop on what went", async () => {
+    const page = await open(width, await gvMarkup(), adminCss);
+    const m = await page.evaluate(() => {
+      const vw = window.innerWidth;
+      const spill: string[] = [];
+      document.querySelectorAll("main *").forEach((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && (r.right > vw + 0.5 || r.left < -0.5)) spill.push(`${el.tagName}.${String(el.className).slice(0, 50)}`);
+      });
+      const btn = document.querySelector("[data-gv-row] [data-google-voice]") as HTMLElement | null;
+      return {
+        spill, sideways: document.documentElement.scrollWidth > vw,
+        today: (document.querySelector("[data-gv-today]") as HTMLElement).innerText,
+        note: (document.querySelector("[data-gv-note]") as HTMLElement).innerText,
+        rows: [...document.querySelectorAll("[data-gv-row]")].map((r) => (r.querySelector("p") as HTMLElement).innerText),
+        btnBox: btn ? Math.round(btn.getBoundingClientRect().height) : 0,
+        sent: [...document.querySelectorAll("[data-gv-sent]")].map((r) => ({ stop: !!r.querySelector("[data-said-stop]") })),
+      };
+    });
+    expect(m.spill).toEqual([]);
+    expect(m.sideways).toBe(false);
+    expect(m.today).toBe("3 of 20");
+    expect(m.note).toMatch(/Google can restrict a personal Google Voice number/);
+    // Only the Google Voice batch's textable, unblocked prospect: not the office line, not the stopped one, not the iMessage ones.
+    expect(m.rows).toEqual(["Voice Val"]);
+    expect(m.btnBox).toBeGreaterThanOrEqual(40);
+    expect(m.sent).toEqual([{ stop: true }]);
+    await page.close();
+  });
+
+  it("at the cap the button can't be tapped", async () => {
+    const page = await open(width, await gvMarkup(true), adminCss);
+    const m = await page.evaluate(() => ({
+      links: document.querySelectorAll("[data-gv-row] a[data-google-voice]").length,
+      capped: (document.querySelector("[data-google-voice-capped]") as HTMLElement | null)?.innerText ?? "",
+      note: (document.querySelector("[data-gv-note]") as HTMLElement).innerText,
+    }));
+    expect(m.links).toBe(0);
+    expect(m.capped).toBe("Today's Google Voice cap is reached");
+    expect(m.note).toMatch(/^Today's cap is reached/);
+    await page.close();
+  });
+});

@@ -10,6 +10,7 @@ import { isOutcomeStage, STAGE_LABELS, stageOf } from "@/lib/prospect-preview/pi
 import { previewState } from "@/lib/prospect-preview/real-view";
 import type { PreviewListRow } from "@/lib/prospect-preview/types";
 import CalledBox from "../../CalledBox";
+import { googleVoiceHref } from "@/lib/prospect-preview/google-voice";
 
 // ── The Call screen (server component, no data loading) ─────────────────────
 // Where the "[Owner] is viewing their card" alert lands. A notification can't
@@ -19,7 +20,7 @@ import CalledBox from "../../CalledBox";
 // thirty seconds of the call, then the buttons that record how it went.
 // page.tsx loads the preview and writes the brief (lib/prospect-preview/call.ts).
 
-const DONE: Record<string, string> = { saved: "Saved.", logged: "Logged." };
+const DONE: Record<string, string> = { saved: "Saved.", logged: "Logged.", stopped: "On the do-not-contact list. Nothing more goes to that number, and anything queued for it was taken back." };
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="flex gap-3"><dt className="adm-faint w-28 shrink-0">{label}</dt><dd className="min-w-0" style={{ overflowWrap: "anywhere" }}>{children}</dd></div>;
@@ -55,6 +56,18 @@ export default function CallView({ p, brief, voicemail, appUrl, now, done }: {
           </a>
           {p.sources.phone?.note && <p className="sc-t-caption adm-muted mt-1">{p.sources.phone.note}</p>}
           {p.email && <a href={`mailto:${p.email}`} className="adm-link sc-t-subhead mt-3 break-all">{p.email}</a>}
+          {p.sent_at && p.sent_channel === "google_voice" && (
+            <p className="sc-t-footnote adm-muted mt-3" data-sent-gv>
+              Texted from Google Voice {timeAgo(p.sent_at, now)}: their replies are there, not in Messages. <a className="adm-link" href={googleVoiceHref(p.phone)} target="_blank" rel="noopener noreferrer">Open Google Voice</a>
+            </p>
+          )}
+          {p.sent_at && (
+            <form method="post" action={post} className="mt-2">
+              <input type="hidden" name="action" value="stop" />
+              <input type="hidden" name="back" value={here} />
+              <button type="submit" className="sc-btn sc-btn-sm sc-btn-gray" data-said-stop>They said stop</button>
+            </form>
+          )}
         </div>
       </Section>
 

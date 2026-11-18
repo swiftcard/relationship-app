@@ -11,7 +11,7 @@ export const BATCH_CHUNK = 10;
 /** "Run overnight" starts at this hour, New York time. */
 export const OVERNIGHT_HOUR = 23;
 
-export type BatchRequest = { label: string; wanted: number; kind: "now" | "tonight"; rows: string[] };
+export type BatchRequest = { label: string; wanted: number; kind: "now" | "tonight"; rows: string[]; sendWith: "imessage" | "google_voice" };
 
 const cell = (v: unknown) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim() : "");
 
@@ -84,7 +84,9 @@ export function parseBatchForm(get: (k: string) => unknown, csvText: string | nu
   if (!wanted) return { ok: false, error: `How many? Anywhere from 1 to ${MAX_BATCH}.` };
   const kind = get("when") === "tonight" ? "tonight" : "now";
   const label = target || `CSV: ${rows.length} prospect${rows.length === 1 ? "" : "s"}`;
-  return { ok: true, value: { label, wanted, kind, rows } };
+  // "Send with": iMessage from the Mac unless Google Voice is picked (google-voice.ts).
+  const sendWith = get("send_with") === "google_voice" ? "google_voice" : "imessage";
+  return { ok: true, value: { label, wanted, kind, rows, sendWith } };
 }
 
 /** When a batch may start: now, or tonight at 11pm New York time (now, if it is already the middle of the night). */

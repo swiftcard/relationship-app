@@ -15,7 +15,21 @@ import type { PreviewListRow } from "./types";
 // not proof that the message caused them: with a handful of sends the table
 // says what happened, not what works. It says so on the screen.
 
-export type MessageEvent = { at: string; preview_id: string; kind: "edit" | "pick" | "sent"; message: string; variant: string | null; before: string | null; after: string | null };
+export type MessageEvent = {
+  at: string; preview_id: string; kind: "edit" | "pick" | "sent"; message: string; variant: string | null; before: string | null; after: string | null;
+  /** A send's way out: text (Messages, by hand or the Mac), email, google_voice. Null on older rows and the Mac's own: read by channelOf. */
+  channel?: string | null;
+};
+
+export const CHANNEL_LABELS: Record<string, string> = { text: "iMessage or text", google_voice: "Google Voice", email: "Email", linkedin: "LinkedIn" };
+
+/** Which way a send went. Rows from before the channel was kept are texts (or emails, or LinkedIn, by their message). */
+export function channelOf(e: Pick<MessageEvent, "message" | "channel">): string {
+  if (e.channel === "text" || e.channel === "email" || e.channel === "google_voice") return e.channel;
+  if (e.message === "email") return "email";
+  if (e.message.startsWith("linkedin")) return "linkedin";
+  return "text";
+}
 
 export type MessageStat = { message: string; variant: string | null; sent: number; viewed: number; picked_up: number; booked: number };
 
@@ -94,6 +108,8 @@ export type Batch = {
   run_after?: string | null; started_at?: string | null; chunks?: number; error?: string | null;
   /** Who builds it: the owner's Mac (free, on his Claude plan) or the server (paid per card). */
   engine?: "server" | "mac";
+  /** How its approved openers go: the Mac's iMessage outbox, or the owner's Google Voice list. */
+  send_with?: "imessage" | "google_voice";
   /** The offices found for it, best first, so a later chunk carries on down the same list. */
   candidates?: BatchCandidate[];
 };
@@ -159,7 +175,7 @@ export function batchPush(b: BatchBrief): { title: string; body: string } {
 
 export type OpenRate = { key: string; sent: number; opened: number };
 export type SegmentHookRate = { segment: string; hook: string; sent: number; opened: number };
-export type OpenerStats = { byHook: OpenRate[]; bySegment: OpenRate[]; bySegmentHook: SegmentHookRate[] };
+export type OpenerStats = { byHook: OpenRate[]; bySegment: OpenRate[]; bySegmentHook: SegmentHookRate[]; byChannel: OpenRate[] };
 
 /**
  * For every opener sent (the first one per prospect), did they really open
@@ -176,7 +192,7 @@ export function openerStats(events: MessageEvent[], rows: PreviewListRow[], batc
   for (const e of [...events].sort((a, b) => a.at.localeCompare(b.at))) {
     if (e.kind === "sent" && e.message === "opener" && !first.has(e.preview_id)) first.set(e.preview_id, e);
   }
-  const hook = new Map<string, OpenRate>(), seg = new Map<string, OpenRate>(), segHook = new Map<string, SegmentHookRate>();
+  const hook = new Map<string, OpenRate>(), seg = new Map<string, OpenRate>(), segHook = new Map<string, SegmentHookRate>(), chan = new Map<string, OpenRate>();
   const bump = (m: Map<string, OpenRate>, key: string, opened: boolean) => {
     const s = m.get(key) ?? { key, sent: 0, opened: 0 };
     s.sent++; if (opened) s.opened++;
@@ -190,12 +206,13 @@ export function openerStats(events: MessageEvent[], rows: PreviewListRow[], batc
     const segment = (r.batch_id && batchLabels.get(r.batch_id)) || "One at a time";
     bump(hook, k, opened);
     bump(seg, segment, opened);
+    bump(chan, channelOf(e), opened);
     const sh = segHook.get(`${segment}\u0000${k}`) ?? { segment, hook: k, sent: 0, opened: 0 };
     sh.sent++; if (opened) sh.opened++;
     segHook.set(`${segment}\u0000${k}`, sh);
   }
   const sort = (m: Map<string, OpenRate>) => [...m.values()].sort((a, b) => b.sent - a.sent || a.key.localeCompare(b.key));
-  return { byHook: sort(hook), bySegment: sort(seg), bySegmentHook: [...segHook.values()].sort((a, b) => a.segment.localeCompare(b.segment) || b.sent - a.sent || a.hook.localeCompare(b.hook)) };
+  return { byHook: sort(hook), bySegment: sort(seg), byChannel: sort(chan), bySegmentHook: [...segHook.values()].sort((a, b) => a.segment.localeCompare(b.segment) || b.sent - a.sent || a.hook.localeCompare(b.hook)) };
 }
 
 // ── What the writer is told about it (owner, 2026-11-17) ────────────────────
@@ -208,6 +225,8 @@ export type ResultRow = { hook?: string; segment?: string; label: string; sent: 
 export type OpenerResults = {
   by_hook: ResultRow[];
   by_segment: ResultRow[];
+  /** iMessage or text vs Google Voice: the same words from a different number. */
+  by_channel: ResultRow[];
   /** The hooks in the segment this prospect is in (their batch, or "One at a time"). */
   this_segment: { segment: string; by_hook: ResultRow[] } | null;
   how_to_use: string;
@@ -222,7 +241,8 @@ export function openerResults(stats: OpenerStats, segment: string | null = null)
   return {
     by_hook: stats.byHook.map((r) => hookRow(r.key, r.sent, r.opened)),
     by_segment: stats.bySegment.map((r) => ({ segment: r.key, label: r.key, sent: r.sent, opened: r.opened, rate: rate(r.sent, r.opened) })),
+    by_channel: (stats.byChannel ?? []).map((r) => ({ label: CHANNEL_LABELS[r.key] ?? r.key, sent: r.sent, opened: r.opened, rate: rate(r.sent, r.opened) })),
     this_segment: segment ? { segment, by_hook: inSeg.map((r) => hookRow(r.hook, r.sent, r.opened)) } : null,
-    how_to_use: "Sends are the first opener each prospect got; opened means they really opened their card after it. \"edit\" (Your edit) is the owner's own rewording, not a hook. Lean toward hooks that are getting opened in this prospect's segment, when this prospect's verified facts can carry them. A rate marked \"too few to tell\" is noise: don't lean on it. Never invent a fact to use a hook.",
+    how_to_use: "Sends are the first opener each prospect got; opened means they really opened their card after it. \"edit\" (Your edit) is the owner's own rewording, not a hook. by_channel is which number it came from (iMessage or Google Voice): it says nothing about the words. Lean toward hooks that are getting opened in this prospect's segment, when this prospect's verified facts can carry them. A rate marked \"too few to tell\" is noise: don't lean on it. Never invent a fact to use a hook.",
   };
 }

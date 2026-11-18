@@ -68,6 +68,12 @@ export default function BatchView({ batches, mac, now, done, error, progress = {
             <span className="sc-field-label">How many</span>
             <input name="count" type="number" inputMode="numeric" min={1} max={MAX_BATCH} defaultValue={25} className={input} />
           </label>
+          <fieldset className="flex flex-col gap-2" data-send-with>
+            <legend className="sc-field-label">Send with</legend>
+            <label className="flex items-center gap-3 sc-t-subhead"><input type="radio" name="send_with" value="imessage" defaultChecked className="w-5 h-5" style={{ accentColor: "var(--sc-tint)" }} />iMessage (my Mac)</label>
+            <label className="flex items-center gap-3 sc-t-subhead"><input type="radio" name="send_with" value="google_voice" className="w-5 h-5" style={{ accentColor: "var(--sc-tint)" }} />Google Voice</label>
+            <span className="sc-t-caption adm-muted">Google Voice: you send each opener yourself, one tap each, from the Send from Google Voice list. They never go to your Mac. You can switch any one prospect either way on Approve.</span>
+          </fieldset>
           <fieldset className="flex flex-col gap-2">
             <legend className="sc-field-label">When</legend>
             <label className="flex items-center gap-3 sc-t-subhead"><input type="radio" name="when" value="now" defaultChecked className="w-5 h-5" style={{ accentColor: "var(--sc-tint)" }} />Run now</label>
@@ -89,6 +95,7 @@ export default function BatchView({ batches, mac, now, done, error, progress = {
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="sc-t-headline min-w-0" style={{ overflowWrap: "anywhere" }}>{b.label}</p>
                     <StatusBadge tone={s.tone}>{s.text}</StatusBadge>
+                    {b.send_with === "google_voice" && <StatusBadge tone="neutral">Google Voice</StatusBadge>}
                   </div>
                   <p className="sc-t-footnote adm-muted">{built} of {b.wanted ?? "?"} built · asked {timeAgo(b.created_at, now)}{b.error ? ` · ${b.error}` : ""}</p>
                   {progress[b.id] && (

@@ -24,10 +24,12 @@ export type SenderSettings = {
   gap_min: number;
   gap_max: number;
   tz: string;
+  /** At most this many openers a day from Google Voice, sent by hand (google-voice.ts). Shown on the Google Voice list; the Mac ignores it. */
+  gv_daily_cap: number;
 };
 
 export const DEFAULT_SENDER: SenderSettings = {
-  paused: false, daily_cap: 20, start: "10:00", end: "17:30", days: [1, 2, 3, 4, 5], gap_min: 3, gap_max: 9, tz: "America/New_York",
+  paused: false, daily_cap: 20, start: "10:00", end: "17:30", days: [1, 2, 3, 4, 5], gap_min: 3, gap_max: 9, tz: "America/New_York", gv_daily_cap: 20,
 };
 export const MAX_DAILY_CAP = 100;
 
@@ -54,6 +56,7 @@ export function readSenderSettings(v: unknown): SenderSettings {
     daily_cap: int(r.daily_cap, 0, MAX_DAILY_CAP, d.daily_cap),
     start, end, days: days.length ? days : d.days, gap_min, gap_max,
     tz: typeof r.tz === "string" && r.tz ? r.tz : d.tz,
+    gv_daily_cap: int(r.gv_daily_cap, 0, MAX_DAILY_CAP, d.gv_daily_cap),
   };
 }
 

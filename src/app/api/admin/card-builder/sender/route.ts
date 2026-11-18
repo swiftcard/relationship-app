@@ -9,7 +9,8 @@ export const runtime = "nodejs";
 // POST /api/admin/card-builder/sender   action = settings | cancel
 //
 //   settings  the Mac sender's rules: paused, daily_cap, start, end, days[],
-//             gap_min, gap_max (lib/prospect-preview/send-window.ts)
+//             gap_min, gap_max (lib/prospect-preview/send-window.ts), and
+//             gv_daily_cap: the Google Voice list's daily number (sent by hand)
 //   cancel    id = an outbox row not yet sent
 //
 // Plain <form method="post">s: answers with a 303 back to the Sender page.
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
   }
   const s = readSenderSettings({
     paused: form.get("paused"), daily_cap: form.get("daily_cap"), start: form.get("start"), end: form.get("end"),
-    days: form.getAll("days").map(String), gap_min: form.get("gap_min"), gap_max: form.get("gap_max"),
+    days: form.getAll("days").map(String), gap_min: form.get("gap_min"), gap_max: form.get("gap_max"), gv_daily_cap: form.get("gv_daily_cap"),
   });
   return back((await saveSenderSettings(s)) ? "saved" : "failed");
 }

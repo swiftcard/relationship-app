@@ -11,6 +11,8 @@ import type { PreviewList } from "@/lib/prospect-preview/store";
 import type { PreviewListRow } from "@/lib/prospect-preview/types";
 import LinkedInButton from "../LinkedInButton";
 import OneTapSend from "../OneTapSend";
+import GoogleVoiceButton from "../GoogleVoiceButton";
+import { googleVoiceHref } from "@/lib/prospect-preview/google-voice";
 
 // ── Card Builder: Call and follow up (server component, no data loading) ────
 // Who needs something from the owner today, most urgent first, each with the
@@ -41,7 +43,9 @@ function FollowUps({ rows, now, linkOf, sender }: { rows: PreviewListRow[]; now:
             {f.send && words && <p className="sc-t-footnote adm-muted whitespace-pre-line" style={{ overflowWrap: "anywhere" }} data-follow-words={f.send}>{words}</p>}
             <div className="flex flex-wrap items-center gap-2">
               {f.send === "linkedin_dm" && words && r.linkedin_url && <LinkedInButton id={r.id} kind="linkedin_dm" words={words} profile={r.linkedin_url} className="sc-btn sc-btn-filled">Copy and open LinkedIn</LinkedInButton>}
-              {f.send && f.send !== "linkedin_dm" && words && <OneTapSend id={r.id} kind={f.send} href={smsHref(r.phone, words)} className="sc-btn sc-btn-filled">{SEND_LABEL[f.send]}</OneTapSend>}
+              {/* A nudge goes from the number the opener came from: Google Voice's thread, not a new one from the iPhone. */}
+              {(f.send === "nudge_no_view" || f.send === "nudge_viewed") && words && r.sent_channel === "google_voice" && <GoogleVoiceButton id={r.id} kind={f.send} words={words} href={googleVoiceHref(r.phone)} className="sc-btn sc-btn-filled">{SEND_LABEL[f.send]} from Google Voice</GoogleVoiceButton>}
+              {f.send && f.send !== "linkedin_dm" && words && !((f.send === "nudge_no_view" || f.send === "nudge_viewed") && r.sent_channel === "google_voice") && <OneTapSend id={r.id} kind={f.send} href={smsHref(r.phone, words)} className="sc-btn sc-btn-filled">{SEND_LABEL[f.send]}</OneTapSend>}
               {f.voicemail && <a href={telHref(r.phone)} className="sc-btn sc-btn-filled" data-follow-call><Icon name="phone" className="w-4 h-4" />Call {r.owner_name.split(/\s+/)[0]}</a>}
               <Link href={`/admin/card-builder/${f.screen}/${r.id}`} className="sc-btn sc-btn-gray">{SCREEN_LABEL[f.screen]}</Link>
             </div>

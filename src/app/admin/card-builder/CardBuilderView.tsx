@@ -6,7 +6,7 @@ import { StatusBadge } from "../_ui/badges";
 import { Icon } from "../_ui/icons";
 import { fmtDate, fmtDateTime, timeAgo } from "../_ui/format";
 import { telHref } from "@/lib/prospect-preview/input";
-import { messageStatLabel, type BatchBrief, type MessageStat, type OpenRate } from "@/lib/prospect-preview/learn";
+import { CHANNEL_LABELS, messageStatLabel, type BatchBrief, type MessageStat, type OpenRate } from "@/lib/prospect-preview/learn";
 import { openerStatLabel } from "@/lib/prospect-preview/opener";
 import { approvalQueue, followUps, STAGE_LABELS, STAGES, stageCounts, stageOf, type Stage } from "@/lib/prospect-preview/pipeline";
 import { assessQuality } from "@/lib/prospect-preview/quality";
@@ -91,7 +91,7 @@ function Row({ r, link, now }: { r: PreviewListRow; link: string; now: number })
             {r.email ? <> · <a className="adm-link" href={`mailto:${r.email}`}>{r.email}</a></> : null}
             {" · "}{r.status === "draft" ? "not published yet" : live ? `link expires ${fmtDate(r.expires_at, now)}` : r.status === "paused" ? "link paused" : `link expired ${fmtDate(r.expires_at, now)}`}
             {r.team_members.length ? ` · ${r.team_members.length} on the team` : ""}
-            {r.sent_at ? ` · link sent by ${r.sent_channel === "email" ? "email" : "text"} ${timeAgo(r.sent_at, now)}` : r.asked_at ? ` · asked ${timeAgo(r.asked_at, now)}` : ""}
+            {r.sent_at ? ` · link sent by ${r.sent_channel === "email" ? "email" : r.sent_channel === "google_voice" ? "Google Voice" : "text"} ${timeAgo(r.sent_at, now)}` : r.asked_at ? ` · asked ${timeAgo(r.asked_at, now)}` : ""}
           </p>
           <form method="post" action={`/api/admin/card-builder/${r.id}`} className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
             <input type="hidden" name="action" value="call" />
@@ -210,7 +210,7 @@ function OpenRates({ title, rows, label }: { title: string; rows: OpenRate[]; la
   );
 }
 
-export default function CardBuilderView({ list, appUrl, now, made, error, done, queueCount = 0, brief = null, stats = [], openRates = { byHook: [], bySegment: [] } }: {
+export default function CardBuilderView({ list, appUrl, now, made, error, done, queueCount = 0, brief = null, stats = [], openRates = { byHook: [], bySegment: [], byChannel: [] } }: {
   list: PreviewList;
   appUrl: string;
   /** The time the page was made (server), so the view stays pure. */
@@ -225,7 +225,7 @@ export default function CardBuilderView({ list, appUrl, now, made, error, done, 
   /** What happened after each kind of message (lib/prospect-preview/learn). */
   stats?: MessageStat[];
   /** Openers sent, and how many of those prospects then really opened their card. */
-  openRates?: { byHook: OpenRate[]; bySegment: OpenRate[] };
+  openRates?: { byHook: OpenRate[]; bySegment: OpenRate[]; byChannel?: OpenRate[] };
 }) {
   const linkOf = (slug: string) => `${appUrl}/p/${slug}`;
   const outcome = done ? DONE[done] ?? null : null;
@@ -261,6 +261,7 @@ export default function CardBuilderView({ list, appUrl, now, made, error, done, 
           <p className="sc-t-subhead flex flex-wrap gap-x-4 gap-y-1" data-more-links>
             <Link href="/admin/card-builder/batch" className="adm-link" data-new-batch-link>New batch (up to 100)</Link>
             <Link href="/admin/card-builder/sender" className="adm-link">iMessage sender</Link>
+            <Link href="/admin/card-builder/google-voice" className="adm-link" data-google-voice-link>Send from Google Voice</Link>
           </p>
 
           <details data-section="details">
@@ -285,6 +286,7 @@ export default function CardBuilderView({ list, appUrl, now, made, error, done, 
                     <p className="sc-t-footnote adm-muted">Opening texts: how many went out, and how many of those people then really opened their card.</p>
                     <OpenRates title="Hook" rows={openRates.byHook} label={openerStatLabel} />
                     <OpenRates title="Segment" rows={openRates.bySegment} label={(k) => k} />
+                    <OpenRates title="Sent with" rows={openRates.byChannel ?? []} label={(k) => CHANNEL_LABELS[k] ?? k} />
                   </div>
                 )}
               </Section>
