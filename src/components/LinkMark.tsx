@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { faviconFor, monogramFor, monogramTint } from "@/lib/link-brand";
+import { contactKind, faviconFor, monogramFor, monogramTint } from "@/lib/link-brand";
+import ContactGlyph from "@/components/ContactGlyph";
 
 // A link's little brand mark: its favicon, over a coloured monogram.
 //
@@ -29,6 +30,17 @@ export default function LinkMark({ url, size = 16 }: { url: string; size?: numbe
     const el = imgRef.current;
     if (el?.complete && el.naturalWidth > 0) setLoaded(true);
   }, [src]);
+
+  // An email, phone or text link has no site: its glyph, never a site logo or
+  // a "?" monogram (2026-11-18).
+  const contact = contactKind(url);
+  if (contact) {
+    return (
+      <span className="relative inline-grid place-items-center shrink-0 text-[#475569]" style={{ width: size, height: size }}>
+        <ContactGlyph kind={contact} size={size} />
+      </span>
+    );
+  }
 
   return (
     <span className="relative inline-grid place-items-center shrink-0" style={{ width: size, height: size }}>
