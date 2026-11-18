@@ -45,6 +45,7 @@
 import { useEffect, useRef, useState } from "react";
 import { detectNativeApp } from "@/lib/platform";
 import { shareNatively } from "@/lib/native-share";
+import { canShareContactCard, prepareContactCard, shareLinkWithContact, textWithContact } from "@/lib/native-contact-share";
 import { warmSharePreview } from "@/lib/share-preview";
 import { prefersShareSheet } from "@/lib/save-image";
 
@@ -169,6 +170,14 @@ export default function ShareMyInfoButton({ firstName, phone, email, cardOwner, 
     return () => { live = false; };
   }, [open, leadId, personalUrl, phone]);
 
+  // The iPhone app (1.0.7+) attaches the owner's contact card to a text, so
+  // someone who hasn't saved the owner can, and iMessage then switches the
+  // link on (lib/native-contact-share.ts). Download it while the menu is open
+  // so Messages opens without a wait. A no-op on the website and older apps.
+  useEffect(() => {
+    if (open && cardOwner && signer?.offline !== true) prepareContactCard({ slug: cardOwner, name: signer?.name });
+  }, [open, cardOwner, signer?.offline, signer?.name]);
+
   // Close the picker on outside click / Escape.
   useEffect(() => {
     if (!open) return;
@@ -215,7 +224,17 @@ export default function ShareMyInfoButton({ firstName, phone, email, cardOwner, 
   function openText() {
     if (!phone || !cardUrl || isDark) return;
     warmSharePreview(cardUrl);
-    window.location.assign(smsHref(phone, shareTextBody({ firstName, ownerName, cardUrl })));
+    const body = shareTextBody({ firstName, ownerName, cardUrl });
+    // In the iPhone app, Messages opens addressed and written with the
+    // owner's contact card attached. Decided synchronously: without the
+    // plugin (website, Android, an older app) the sms: link must ride the tap.
+    if (cardOwner && canShareContactCard()) {
+      void textWithContact({ phone, body, slug: cardOwner, name: signer?.name }).then((r) => {
+        if (r === "unavailable") window.location.assign(smsHref(phone, body));
+      });
+      return;
+    }
+    window.location.assign(smsHref(phone, body));
   }
 
   // Open a new email to the contact in the owner's mail app — subject, message
@@ -314,6 +333,8 @@ export default function ShareMyInfoButton({ firstName, phone, email, cardOwner, 
     // plugin falls through — closing the sheet used to open the web sheet
     // right after it (lib/native-share.ts).
     if (detectNativeApp()) {
+      // Messages gets the owner's contact card beside the link (1.0.7+).
+      if ((await shareLinkWithContact({ url, slug: cardOwner, name: signer?.name })) !== "unavailable") return;
       if ((await shareNatively({ url })) !== "unavailable") return;
     }
     // A phone opens its share sheet; a computer copies (lib/save-image

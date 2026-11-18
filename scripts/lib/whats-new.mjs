@@ -7,8 +7,9 @@
 // narrower list than "what changed in SwiftCard": every web improvement is
 // already live for users without an app update.
 //
-// 1.0.6 / build 17 (2026-10-02). One native change since the live build 16:
-// with no connection the app shows the saved card's QR code instead of a blank
-// screen (ios/App/App/OfflineCard.swift). Added 2026-10-06: the unread-count
-// badge on the app icon (ios/App/App/AppBadge.swift).
-export const WHATS_NEW = "Your QR code now works with no signal. Open SwiftCard without a connection and your card's QR code fills the screen, ready to scan. The app reloads by itself when you're back online. The SwiftCard icon now shows how many notifications you haven't read, and clears as you read them.";
+// 1.0.7 / build 18 (2026-11-18). One native change since build 17: a card
+// link texted from the app carries the owner's contact card, so someone who
+// hasn't saved the owner can tap it, save them, and the link turns tappable
+// (ios/App/App/ContactShare.swift). iMessage keeps links from unknown numbers
+// switched off until the recipient saves or replies to the sender.
+export const WHATS_NEW = "When you text your card link, your contact card now goes with it. iPhones keep links from numbers they haven't saved switched off, so someone you just met couldn't open yours. Now they tap your contact card, save you, and your link and its preview work right away.";

@@ -360,7 +360,7 @@ export default function WelcomePlan({
             {cardSlug && (
               <div className="mt-6 space-y-2 text-left">
                 <QRCodeModal url={qrScanUrl(liveUrl)} firstName={ownerFirstName} label="Show QR" variant="primary" contactPayload={contactPayload} />
-                <ShareButton url={liveUrl} title="My SwiftCard" text="Save my contact and connect with me instantly." label="Share link" variant="ghost" ownCard />
+                <ShareButton url={liveUrl} title="My SwiftCard" text="Save my contact and connect with me instantly." label="Share link" variant="ghost" contactCard={{ slug: cardSlug, name: cardName.trim() || null }} ownCard />
                 {/* Invisible: captures the card for its link preview (see NewCardShareCapture). */}
                 <NewCardShareCapture username={cardSlug} />
               </div>

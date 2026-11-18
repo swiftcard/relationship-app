@@ -39,6 +39,10 @@ class MainViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(AppReviewPlugin())
         // And again: src/lib/app-badge.ts is a no-op without it.
         bridge?.registerPluginInstance(AppBadgePlugin())
+        // And again: src/lib/native-contact-share.ts falls back to the plain
+        // link share without it, so a texted card arrives with no contact card
+        // and the link stays dead for anyone who hasn't saved the owner.
+        bridge?.registerPluginInstance(ContactSharePlugin())
 
         // No scroll indicators: the flashing bar on the right of every scroll
         // is drawn by iOS on the webview's scroll view — CSS can't reach it.

@@ -2196,7 +2196,7 @@ export default function NewCardWizard({ isPro, guest = false, isFirstCard = fals
                 2026-09-30). */}
             <div className="space-y-2 text-left">
               <QRCodeModal url={qrScanUrl(liveUrl)} firstName={name.trim().split(/\s+/)[0] || "me"} label="Show QR" variant="primary" />
-              <ShareButton url={liveUrl} title="My SwiftCard" text="Save my contact and connect with me instantly." label="Share link" variant="ghost" ownCard />
+              <ShareButton url={liveUrl} title="My SwiftCard" text="Save my contact and connect with me instantly." label="Share link" variant="ghost" contactCard={createdUsername ? { slug: createdUsername, name: name.trim() || null } : undefined} ownCard />
             </div>
             {/* Invisible: captures the new card for its link preview, so the
                 first link sent from here unfurls as the real card. */}

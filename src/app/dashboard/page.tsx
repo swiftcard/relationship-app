@@ -874,6 +874,7 @@ export default async function DashboardPage({
           label="Share link"
           variant="ghost"
           ownCard
+          contactCard={{ slug: activeUsername, name: String((activeSource as { name?: string | null }).name ?? "").trim() || null }}
         />
         <MoreShareOptions
           url={cardUrl}

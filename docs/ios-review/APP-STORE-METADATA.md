@@ -202,6 +202,12 @@ composed from it. A listing refresh means steps 1–3 in order, on a machine tha
 has the service-role key.
 
 ## Version
+- 1.0.7, build 18. "What's New": `When you text your card link, your contact card now goes with it. iPhones keep links from numbers they haven't saved switched off, so someone you just met couldn't open yours. Now they tap your contact card, save you, and your link and its preview work right away.` Native change:
+  ios/App/App/ContactShare.swift (2026-11-18). Share link and "Share from my
+  phone" attach the owner's .vcf for Messages only (every other app still gets
+  the bare link), and "Share by text" opens Messages addressed, written, with
+  the .vcf attached. Owner report: a link texted to someone just met arrived
+  dead (iMessage switches off links from unsaved numbers). Not yet uploaded.
 - 1.0.6, build 17. "What's New": `Your QR code now works with no signal. Open SwiftCard without a connection and your card's QR code fills the screen, ready to scan. The app reloads by itself when you're back online. The SwiftCard icon now shows how many notifications you haven't read, and clears as you read them.` Native changes:
   ios/App/App/OfflineCard.swift (offline QR over the webview on a
   connectivity failure) and ios/App/App/AppBadge.swift (unread-count icon

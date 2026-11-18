@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { detectNativeApp } from "@/lib/platform";
 import { shareNatively } from "@/lib/native-share";
+import { prepareContactCard, shareLinkWithContact } from "@/lib/native-contact-share";
 import { warmSharePreview } from "@/lib/share-preview";
 import { triggerSignupNudge } from "@/lib/nudge";
 
@@ -28,6 +29,16 @@ type Props = {
    * work, and the nightly sweep's http-404 finding (2026-10-06).
    */
   warm?: boolean;
+  /**
+   * The owner's OWN card (dashboard, the "card is live" steps). In the iPhone
+   * app (1.0.7+) Messages then gets this card's contact card beside the link,
+   * so someone who hasn't saved the owner can save them in one tap, which is
+   * what makes iMessage switch the link on (lib/native-contact-share.ts).
+   * Every other app still gets the link alone. Never set it for a card that
+   * isn't the sharer's: a visitor sharing someone's card isn't sending their
+   * own contact.
+   */
+  contactCard?: { slug: string; name?: string | null };
 };
 
 // `title` and `text` are accepted for backwards compatibility but intentionally
@@ -39,6 +50,7 @@ export default function ShareButton({
   variant = "primary",
   ownCard = false,
   warm = true,
+  contactCard,
 }: Props) {
   const [status, setStatus] = useState<"idle" | "copied">("idle");
 
@@ -52,6 +64,12 @@ export default function ShareButton({
   // prevents; the tap is the last moment we can act before the messenger
   // fetches the image on its own clock.
   useEffect(() => { if (warm) warmSharePreview(url); }, [url, warm]);
+
+  // Download the contact card before the tap, so the sheet opens at once. A
+  // no-op everywhere but the iPhone app with the ContactShare plugin.
+  const cardSlug = contactCard?.slug ?? "";
+  const cardName = contactCard?.name ?? null;
+  useEffect(() => { if (cardSlug) prepareContactCard({ slug: cardSlug, name: cardName }); }, [cardSlug, cardName]);
 
   async function handleShare() {
     if (warm) warmSharePreview(url);
@@ -67,7 +85,10 @@ export default function ShareButton({
     // no conversion moment at all. (The popup host only mounts on public
     // pages, so this stays a no-op on the owner's dashboard.)
     if (detectNativeApp()) {
-      const result = await shareNatively({ url });
+      // The owner's own card goes with its contact card for Messages
+      // (1.0.7+); an older app answers "unavailable" and shares as before.
+      let result = cardSlug ? await shareLinkWithContact({ url, slug: cardSlug, name: cardName }) : "unavailable";
+      if (result === "unavailable") result = await shareNatively({ url });
       if (result === "shared") {
         shared();
         triggerSignupNudge("share_card");
